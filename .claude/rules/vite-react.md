@@ -17,7 +17,7 @@ Stack: Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, R
 
 ## Architecture
 
-- Features: `src/features/<name>/` (api/, components/, hooks/, types.ts, constants.ts, index.ts)
+- Features: `src/features/<name>/` (api/, components/, hooks/, schemas/, types.ts, constants.ts, index.ts)
 - Auth: `src/features/auth/` (AuthProvider, ProtectedRoute, LoginCard)
 - Routing: `src/router.tsx` (definitions) + `src/pages/` (page components)
 - Shared: `src/lib/` (clients/, constants/, errors/, utils/) + `src/components/` (layout/, ui/, widgets/)

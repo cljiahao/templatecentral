@@ -137,7 +137,7 @@ export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
 
 ### Auth
 - Guard-based authentication (Passport.js + JWT) — apply guards at controller or route level, not globally (allows health checks)
-- NEVER return password hashes, JWT secrets, or internal database IDs in API responses
+- NEVER return password hashes, JWT secrets, or sensitive internal fields in API responses — public resource IDs are acceptable
 - Use short-lived JWTs with refresh tokens for session management
 
 ### Least Privilege

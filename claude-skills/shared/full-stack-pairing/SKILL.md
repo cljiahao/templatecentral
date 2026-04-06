@@ -25,8 +25,10 @@ Cross-stack guidance for connecting a templateCentral frontend to a templateCent
 The template already has `configure_cors()` in `src/app.py` using `api_settings.ALLOWED_CORS`. Production origins are driven by `CORS_ORIGINS` in `APISettings` (comma-separated). Update `src/.env`:
 
 ```env
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:5173
 ```
+
+> Use `5173` for Vite frontends, `3000` for Next.js frontends. For multiple origins: `CORS_ORIGINS=http://localhost:5173,http://localhost:3000`.
 
 No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, `["*"]` is used automatically.
 
@@ -90,8 +92,8 @@ BACKEND_URL=http://localhost:8000  # server-side direct calls
 #### Backend `.env`
 
 ```env
-# FastAPI — update CORS_ORIGINS in src/.env
-CORS_ORIGINS=http://localhost:3000
+# FastAPI — update CORS_ORIGINS in src/.env (use 5173 for Vite, 3000 for Next.js)
+CORS_ORIGINS=http://localhost:5173
 
 # NestJS — already in .env.example
 CLIENT_URL=http://localhost:5173

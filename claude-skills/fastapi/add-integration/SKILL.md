@@ -160,14 +160,25 @@ async def get_github_service() -> AsyncGenerator[GithubService, None]:
 
 ### 7. Wire Into Router
 
+First, add a tag to `src/api/tags.py`:
+
+```python
+class APITags(StrEnum):
+    # ... existing tags ...
+    GITHUB = "GitHub"
+```
+
+Then create the router:
+
 ```python
 from fastapi import APIRouter, Depends
 
 from api.dependencies.github import get_github_service
+from api.tags import APITags
 from integrations.github_schemas import GithubRepo
 from integrations.github_service import GithubService
 
-router = APIRouter(prefix="/github", tags=["GitHub"])
+router = APIRouter(prefix="/github", tags=[APITags.GITHUB])
 
 
 @router.get("/repos", response_model=list[GithubRepo])
