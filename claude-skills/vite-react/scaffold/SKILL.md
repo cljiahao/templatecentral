@@ -117,7 +117,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - Env vars via `import.meta.env.VITE_*`, centralized in `src/lib/constants/env.ts`
 
 ## Key Conventions
-- Named exports only — no exceptions
+- Named exports only (default exports allowed in tooling configs: `vite.config.ts`, `eslint.config.mjs`)
 - `function` declarations for components; `const` arrows for hooks/utilities
 - kebab-case filenames, PascalCase exports
 - Static data in `constants.ts`, never inline in components
@@ -129,11 +129,81 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 Update the Identity section with the actual project name and creation date. Add any user-specified customizations under "Project-Specific Notes".
 
-### 11. Task Management (Optional)
+### 11. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-Ask the user: *"Do you want structured task management for complex features?"*
+**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
 
-If yes, append this section to the project's `AGENTS.md`:
+Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+
+```markdown
+# <Project Name>
+
+Vite + React SPA scaffolded from templateCentral.
+
+## Build & Dev
+
+- `pnpm dev` — start dev server (http://localhost:3000)
+- `pnpm build` — production build
+- `pnpm test` — run Vitest + Testing Library suite
+- `pnpm lint` — ESLint 9
+- `pnpm format` — Prettier formatting
+
+## Architecture
+
+- Client-side SPA — no SSR, no API route handlers
+- Routes defined in `src/router.tsx` (React Router 7), not filesystem-based
+- Auth via `AuthProvider` context + `ProtectedRoute` guard; dev bypass when `ENV.IS_DEV`
+- Data fetching via TanStack React Query 5 hooks in features
+- Feature modules: `src/features/<name>/` (components, hooks, api, types)
+- UI primitives: `src/components/ui/` (shadcn/ui, `components.json` with `rsc: false`)
+- Composed widgets: `src/components/widgets/`
+- Barrel exports (`index.ts`) in all shared folders
+- Env vars via `import.meta.env.VITE_*`, centralized in `src/lib/constants/env.ts`
+
+## Conventions
+
+- Named exports only (default exports allowed in tooling configs: `vite.config.ts`, `eslint.config.mjs`)
+- `function` declarations for components; `const` arrows for hooks/utilities
+- kebab-case filenames, PascalCase exports
+- Pages are thin — compose from `features/` and `components/`
+- Static data in `constants.ts`, never inline in components
+
+## Workflow
+
+Use this decision tree for all tasks:
+
+| Task complexity | Approach |
+|----------------|----------|
+| Simple (add page, component, single-file change) | Follow templateCentral skills directly — see `claude-skills/vite-react/` in templateCentral repo |
+| Medium (add feature, add form) | Follow templateCentral skills — they have complete step-by-step instructions |
+| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
+| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
+
+**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
+
+## templateCentral Reference
+
+This project was scaffolded from `templateCentral/templates/vite-react`. Available skills for this stack:
+
+- `scaffold` — initial project setup (already done)
+- `add-page` — add a new page/route
+- `add-feature` — add a feature module
+- `add-component` — add a shared component
+- `add-form` — add a form with validation
+- `add-auth` — add/modify authentication
+- `add-integration` — add external API integration
+- `add-test` — add tests for existing code
+```
+
+Update the project name and customize the skills list if any don't apply.
+
+### 12. Task Management (Optional)
+
+Ask the user: *"Do you want structured task management for complex features? You have two options:"*
+
+**Option A — templateCentral built-in** (no plugin required):
+
+Append to the project's `AGENTS.md`:
 
 ```markdown
 ## Task Management
@@ -145,47 +215,35 @@ Protocol summary: Plan → Verify → Track → Explain → Document → Capture
 Skip for simple changes (single-file edits, scaffolding, quick fixes).
 ```
 
-## Template Details
+**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
 
-| Feature | Value |
-|---------|-------|
-| Build | Vite 8 |
-| UI | React 19, TypeScript 5.9 |
-| Styling | Tailwind CSS 4, tw-animate-css |
-| UI | shadcn/ui (new-york), Radix UI, Lucide icons |
-| Forms | React Hook Form + Zod |
-| Animation | Framer Motion |
-| Routing | React Router 7 |
-| State | TanStack React Query 5 |
-| Auth | AuthProvider context with dev bypass |
-| Toasts | Sonner |
-| Testing | Vitest, Testing Library |
-| Linting | ESLint 9, Prettier (organize-imports + tailwind) |
-| Docker | Multi-stage (Vite build → Nginx) |
+Tell the user to install Superpowers in their Claude Code session:
 
-## Files to Customize
+```bash
+/plugin marketplace add pcvelz/superpowers
+/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
+```
 
-| File | What to Change |
-|------|----------------|
-| `package.json` | `name`, `version`, add dependencies |
-| `index.html` | `<title>`, favicon |
-| `src/styles/globals.css` | Theme colors (CSS custom properties) |
-| `src/router.tsx` | Add/remove routes |
-| `src/components/layout/navbar.tsx` | Brand text, navigation links |
-| `src/components/layout/site-footer.tsx` | Credit text |
-| `src/lib/constants/routes.ts` | Page and API route definitions |
-| `components.json` | shadcn/ui style and color preferences |
-| `.env.example` / `.env` | Environment variables |
+Then append to the project's `AGENTS.md`:
 
-## Architecture Patterns
+```markdown
+## Task Management
 
-- **Feature modules**: `src/features/<name>/` for self-contained domain areas
-- **Thin pages**: `src/pages/` composes from features, handles no business logic
-- **Barrel exports**: `index.ts` files for clean imports (`@/lib/utils`, `@/lib/errors`, `@/features/example`)
-- **Layout composition**: `RootLayout` wraps `Navbar` + `<Outlet>` + `SiteFooter`
-- **Lib structure**: `utils/`, `constants/`, `errors/` under `src/lib/`
-- **Widgets**: Reusable composed components in `src/components/widgets/`
-- **UI primitives**: shadcn/ui components in `src/components/ui/` (managed via `npx shadcn@latest add`, `components.json` with `rsc: false`)
+- **Simple tasks** (add-page, add-component): use templateCentral skills directly
+- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
+```
+
+If the user doesn't want either, skip this step entirely.
+
+### 13. Remove Example Code (Optional)
+
+Once the project is verified and the user confirms it runs:
+- Delete `src/features/example/` directory
+- Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
+- Update `src/pages/index.ts` if it re-exports anything from the deleted feature
+
+Or use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
 
 ## Rules
 
@@ -198,5 +256,3 @@ Skip for simple changes (single-file edits, scaffolding, quick fixes).
 - NEVER copy `node_modules/` or `dist/` when scaffolding
 - NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
-- NEVER add server-side code (RSC, API route handlers, SSR) — this is a client-only SPA
-- NEVER use `process.env` — use `import.meta.env.VITE_*` for environment variables

@@ -9,7 +9,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 
 ## Dependencies
 
-Add to `requirements.txt`:
+Add to `src/requirements.txt`:
 - `python-jose[cryptography]` — JWT encoding/decoding
 - `passlib[bcrypt]` — Password hashing
 
@@ -63,7 +63,26 @@ class UserResponse(BaseResponseSchema):
     name: str = Field(description="User display name.")
 ```
 
-### 2. Create Security Module
+### 2. Extend Config
+
+Add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `APISettings` in **`src/core/config.py`**:
+
+```python
+class APISettings(BaseSettings):
+    # ... existing fields ...
+    SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
+```
+
+And add to `src/.env` (and `src/.env.default` as documentation):
+```
+SECRET_KEY=<generate with: openssl rand -hex 32>
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+> **Security**: `SECRET_KEY` has no default — Pydantic will raise a validation error at startup if unset, which is the correct behavior. NEVER use a hardcoded default like `"change-me"` for secrets.
+
+### 3. Create Security Module
 
 **`src/core/security.py`** — JWT token creation/verification and password hashing:
 
@@ -73,7 +92,7 @@ from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from core.config import settings
+from core.config import api_settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -92,23 +111,23 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=30))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode = {"sub": subject, "exp": expire}
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, api_settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> str | None:
     """Decode and validate a JWT token. Returns the subject or None."""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, api_settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
     except JWTError:
         return None
 ```
 
-### 3. Create Auth Dependency
+### 4. Create Auth Dependency
 
-**`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
+Create **`src/api/dependencies/`** directory (does not exist in base template), then add **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
 ```python
 from fastapi import Depends, HTTPException, status
@@ -132,7 +151,7 @@ async def get_current_user(
     return user_id
 ```
 
-### 4. Create Auth Service
+### 5. Create Auth Service
 
 **`src/api/services/auth_service.py`** — orchestrates registration and login:
 
@@ -163,7 +182,17 @@ def login_user(email: str, password: str) -> str:
     )
 ```
 
-### 5. Create Auth Router
+### 6. Add Auth Tag
+
+Add `AUTH` to the `APITags` enum in **`src/api/tags.py`**:
+
+```python
+class APITags(StrEnum):
+    # ... existing tags
+    AUTH = "auth"
+```
+
+### 7. Create Auth Router
 
 **`src/api/routers/auth.py`**:
 
@@ -192,7 +221,7 @@ async def login(body: LoginRequest) -> TokenResponse:
     return TokenResponse(access_token=token)
 ```
 
-### 6. Register the Router
+### 8. Register the Router
 
 Add the auth router to `src/api/routes.py`:
 
@@ -202,13 +231,7 @@ from api.routers import auth
 router.include_router(auth.router)
 ```
 
-### 7. Add Environment Variables
-
-Add to `.env` / config:
-- `SECRET_KEY` — Random string for JWT signing (generate with `openssl rand -hex 32`)
-- `ACCESS_TOKEN_EXPIRE_MINUTES` — Token expiry (default: 30)
-
-### 8. Protect Routes
+### 9. Protect Routes
 
 Use the `get_current_user` dependency on any endpoint that requires auth:
 
@@ -224,9 +247,7 @@ async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 
 ## Rules
 
-- **SECRET_KEY must be kept secret** — never commit to version control. Add to `.env` and `.gitignore`.
-- Follow the existing dependency flow: routers are thin, services orchestrate logic.
+- **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Always hash passwords with `passlib` — never store plaintext.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
-- Add `AUTH` to the `APITags` enum in `src/api/tags.py`.

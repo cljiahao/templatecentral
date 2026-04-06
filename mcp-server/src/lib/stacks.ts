@@ -97,10 +97,16 @@ export async function getSkillsForStack(stack: string): Promise<SkillInfo[]> {
 }
 
 export async function validateStack(stack: string): Promise<void> {
-  const stackDir = path.join(SKILLS_DIR, stack);
-  if (!(await dirExists(stackDir))) {
+  // "shared" is a special stack with cross-stack skills but no AGENT.md
+  if (stack === "shared") {
+    const stackDir = path.join(SKILLS_DIR, stack);
+    if (await dirExists(stackDir)) return;
+    throw new Error(`Stack 'shared' directory not found.`);
+  }
+  const agentFile = agentPath(stack);
+  if (!(await fileExists(agentFile))) {
     const stacks = await getStacks();
-    const available = stacks.map((s) => s.name).join(", ");
+    const available = [...stacks.map((s) => s.name), "shared"].join(", ");
     throw new Error(
       `Stack '${stack}' not found. Available stacks: ${available}`
     );

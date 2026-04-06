@@ -135,7 +135,6 @@ Confirm the build succeeds with no type errors. If adding a data-fetching page, 
 
 ## Rules
 
-- Pages are thin — compose from `features/` and `components/`. NEVER put data-fetching or business logic directly in page components
 - Always add `loading.tsx` for data-fetching routes — omitting causes a blank screen
 - One layout per concern — NEVER nest multiple layouts unless each serves a distinct purpose
 - Use route groups `(name)/` for shared layouts without URL impact

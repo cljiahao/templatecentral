@@ -43,8 +43,6 @@ export interface Task {
 
 ### 3. Define DTOs
 
-> **Why Zod DTOs**: `createZodDto` bridges Zod schemas with NestJS's validation pipeline. The schema validates at runtime (catching malformed requests), and `.partial()` derives the update DTO automatically — one source of truth for create and update validation.
-
 Create `src/modules/<name>/<name>.dto.ts`:
 
 ```typescript
@@ -63,8 +61,6 @@ export class UpdateTaskDto extends createZodDto(UpdateTaskSchema) {}
 ```
 
 ### 4. Create Repository
-
-> **Why a repository layer**: Even for simple cases, the repository isolates data access from business logic. When you later swap the in-memory Map for Prisma or TypeORM, only the repository changes — the service is untouched.
 
 Create `src/modules/<name>/<name>.repository.ts`:
 
@@ -257,11 +253,4 @@ After creating all files:
 
 ## Rules
 
-- Controllers are thin — accept request params/body, call service, return result; NEVER put business logic in controllers
-- Services orchestrate — contain business logic, call repositories
-- Repositories handle data — database queries and persistence only; NEVER skip the repository layer
-- DTOs use Zod — `createZodDto` from `nestjs-zod`, `.partial()` for updates; NEVER use `class-validator`
-- One module per feature — self-contained with its own controller, service, repository
 - NEVER forget to register the module in `app.module.ts` and export from `modules/index.ts`
-- NEVER forget `@ApiTags()` and `@ApiOperation()` — every endpoint must be documented
-- NEVER create modules that depend on each other circularly — rethink the domain boundaries

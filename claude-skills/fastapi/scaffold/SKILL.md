@@ -31,7 +31,7 @@ In `src/core/config.py`, update the `CommonSettings` defaults:
 
 ### 3. Create Environment Files
 
-Copy `.env.default` to create `src/.env`:
+Copy `src/.env.default` to create `src/.env`:
 
 ```bash
 cp src/.env.default src/.env
@@ -82,7 +82,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - **Created**: <date>
 
 ## Architecture Decisions
-- Layered dependency flow: `api/` → `logic/` → `models/`
+- Layered dependency flow: `api/` (routers → services) → `models/`
 - Pydantic schemas with camelCase aliases (`BaseSchema`)
 - Structured JSON logging with timed rotating file handler
 - Centralized exception → HTTP response mapping in `error_handler.py`
@@ -100,11 +100,73 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 Update the Identity section with the actual project name and creation date.
 
-### 7. Task Management (Optional)
+### 7. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-Ask the user: *"Do you want structured task management for complex features?"*
+**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
 
-If yes, append this section to the project's `AGENTS.md`:
+Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+
+```markdown
+# <Project Name>
+
+FastAPI backend scaffolded from templateCentral.
+
+## Build & Dev
+
+- `source .venv/bin/activate` — activate virtual environment
+- `cd src && python main.py` — start dev server (http://localhost:8000)
+- `pytest test/` — run test suite (from project root)
+- `ruff check src/` — lint
+
+## Architecture
+
+- Layered dependency flow: `api/` (routers → services) → `models/`
+- Pydantic v2 schemas with camelCase aliases (`BaseSchema`)
+- Structured JSON logging with timed rotating file handler
+- Centralized exception → HTTP response mapping in `error_handler.py`
+- Settings via Pydantic Settings with `src/.env` support
+
+## Conventions
+
+- snake_case for files/functions/variables; PascalCase for classes; UPPER_SNAKE_CASE for constants
+- Type annotations on all public function parameters and return types
+- Routers are thin — accept body, call service, return result
+- Absolute imports only; no wildcards; stdlib → third-party → local
+
+## Workflow
+
+Use this decision tree for all tasks:
+
+| Task complexity | Approach |
+|----------------|----------|
+| Simple (add endpoint, add schema, single-file change) | Follow templateCentral skills directly — see `claude-skills/fastapi/` in templateCentral repo |
+| Medium (add feature module, add integration, add database) | Follow templateCentral skills — they have complete step-by-step instructions |
+| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
+| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
+
+**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
+
+## templateCentral Reference
+
+This project was scaffolded from `templateCentral/templates/fastapi`. Available skills for this stack:
+
+- `scaffold` — initial project setup (already done)
+- `add-endpoint` — add a new API endpoint
+- `add-auth` — add authentication
+- `add-database` — add SQLAlchemy (SQL) or Beanie (MongoDB)
+- `add-integration` — add external API integration
+- `add-test` — add tests for existing code
+```
+
+Update the project name and customize the skills list if any don't apply.
+
+### 8. Task Management (Optional)
+
+Ask the user: *"Do you want structured task management for complex features? You have two options:"*
+
+**Option A — templateCentral built-in** (no plugin required):
+
+Append to the project's `AGENTS.md`:
 
 ```markdown
 ## Task Management
@@ -116,7 +178,28 @@ Protocol summary: Plan → Verify → Track → Explain → Document → Capture
 Skip for simple changes (single-file edits, scaffolding, quick fixes).
 ```
 
-### 8. Remove Example Code (Optional)
+**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
+
+Tell the user to install Superpowers in their Claude Code session:
+
+```bash
+/plugin marketplace add pcvelz/superpowers
+/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
+```
+
+Then append to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+- **Simple tasks** (add endpoint, add schema): use templateCentral skills directly
+- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
+```
+
+If the user doesn't want either, skip this step entirely.
+
+### 9. Remove Example Code (Optional)
 
 Once the project is verified, remove the example endpoint:
 - Delete `src/api/routers/example.py`
@@ -127,44 +210,13 @@ Once the project is verified, remove the example endpoint:
 - Remove the `example` import and `include_router` line from `src/api/routes.py`
 - Update `APITags` in `src/api/tags.py` to remove `EXAMPLE`
 
-## Architecture
-
-See `AGENT.md` for the full architecture diagram and dependency flow rules.
-
-## Template Details
-
-| Feature | Value |
-|---------|-------|
-| Framework | FastAPI 0.116 |
-| Server | Uvicorn (auto-reload in dev) |
-| Settings | Pydantic Settings with `.env` support |
-| Logging | JSON structured, timed rotating file handler |
-| Validation | Pydantic v2 with camelCase aliases |
-| Linting | Ruff (line-length 88, Python 3.12) |
-| Testing | pytest with importlib mode |
-| Docker | Multi-stage build (dev + prod targets) |
-
-## Files to Customize
-
-| File | What to Change |
-|------|----------------|
-| `src/core/config.py` | Project name, description, add settings |
-| `src/core/exceptions.py` | Add domain-specific exceptions |
-| `src/core/json/logging.json` | Log levels, handlers, formatters |
-| `src/api/tags.py` | Add API tag groups |
-| `src/api/routes.py` | Register new routers |
-| `src/requirements.txt` | Add project dependencies |
-| `src/.env.default` | Environment variables |
-| `pyproject.toml` | Ruff rules, pytest markers |
-
 ## Rules
 
 - Always create a virtual environment before installing dependencies; NEVER install packages globally
-- Always copy `.env.default` to `.env` before first run
-- Maintain the layered dependency flow: `api/` → `logic/` → `models/`; logic/ NEVER imports from api/, models/ NEVER imports from logic/
+- Always copy `src/.env.default` to `src/.env` before first run
 - Verify the API starts and Swagger docs render before handing off to the user
 - Remove example code only after the user confirms the project runs
-- NEVER copy `__pycache__/`, `log/`, `.env`, or `.venv/` when scaffolding
+- NEVER copy `__pycache__/`, `log/`, `src/.env`, or `.venv/` when scaffolding
 - NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
 - NEVER remove `conftest.py` or `factories/` when cleaning up example code — they're shared test infrastructure

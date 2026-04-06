@@ -54,10 +54,8 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 - `src/api/routers/example.py`
 - `src/api/schemas/request/example.py`
 - `src/api/schemas/response/example.py`
-- `src/api/services/example_service.py`
-- `src/logic/example_logic.py`
-- `src/models/example.py`
-- `src/constants/example_data.py`
+- `src/api/services/example.py`
+- `test/test_api/test_example.py`
 
 ### Imports to Remove
 
@@ -74,18 +72,20 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 ### Files to Delete
 
 - `src/modules/example/` (entire directory)
+- `test/modules/example.controller.spec.ts`
 
 ### Imports to Remove
 
-- `src/modules/index.ts` — remove `ExampleModule` export
+- `src/modules/index.ts` — remove `export * from './example/example.module'`
 - `src/app.module.ts` — remove `ExampleModule` from imports array
 
 ### Cleanup Checklist
 
-1. Delete `src/modules/example/`
+1. Delete `src/modules/example/` and `test/modules/example.controller.spec.ts`
 2. Edit `src/modules/index.ts` — remove export
 3. Edit `src/app.module.ts` — remove from imports
 4. Verify no remaining imports reference example module
+5. Run `pnpm test` to confirm no broken test imports
 
 ## Rules
 

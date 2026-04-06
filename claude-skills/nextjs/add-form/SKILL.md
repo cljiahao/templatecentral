@@ -52,7 +52,8 @@ export type ContactFormValues = z.infer<typeof contactFormSchema>;
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FormProvider, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
+import { Form } from '@/components/ui/form';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -63,7 +64,7 @@ import { CustomFormField } from '@/components/widgets';
 import {
   contactFormSchema,
   type ContactFormValues,
-} from '../schemas/contact-form.schema';
+} from '../schemas/contact.schema';
 
 export function ContactForm() {
   const form = useForm<ContactFormValues>({
@@ -83,7 +84,7 @@ export function ContactForm() {
   };
 
   return (
-    <FormProvider {...form}>
+    <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <CustomFormField name="name" label="Name">
           <Input placeholder="Your name" />
@@ -101,7 +102,7 @@ export function ContactForm() {
           {form.formState.isSubmitting ? 'Submitting...' : 'Submit'}
         </Button>
       </form>
-    </FormProvider>
+    </Form>
   );
 }
 ```
@@ -112,6 +113,12 @@ Add the form component to `src/features/<feature>/components/index.ts`:
 
 ```typescript
 export { ContactForm } from './contact-form';
+```
+
+Ensure the feature root barrel (`src/features/<feature>/index.ts`) re-exports components:
+
+```typescript
+export * from './components';
 ```
 
 ### 4. Use in a Page
@@ -135,7 +142,7 @@ export default function ContactPage() {
 
 - Always define the Zod schema in a separate file under `schemas/` — not inline in the component.
 - Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring automatically.
-- Use `FormProvider` (re-exported as `Form` from `ui/form.tsx`) to wrap the form — `CustomFormField` uses `useFormContext()`.
+- Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields to avoid uncontrolled-to-controlled warnings.
 - Use `toast.success()` / `toast.error()` from Sonner for user feedback — the `Toaster` is already in the root layout.
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.

@@ -31,19 +31,21 @@ src/app/api/
 
 Keep route handlers thin — delegate to server-side data access:
 
-> **Important**: Route handlers run on the server. They access data via `integrations/factories` (which wire clients into services) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `add-integration` skill for how clients, services, schemas, and factories work.
+> **Important**: Route handlers run on the server. They access data via `integrations/` (clients, services, factories) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `add-integration` skill for external APIs.
 >
-> **Note**: `DB()` in the examples below is a placeholder. If the user needs database access, create a database client and service via the `add-integration` skill first (e.g., a Prisma client in `integrations/clients/`, a DB service in `integrations/services/`, and a `DB()` factory in `integrations/factories.ts`). Replace `DB()` with your actual factory name.
+> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Prisma/Mongoose via the `add-database` skill, or external API clients via the `add-integration` skill.
 
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
-import { DB } from '@/integrations/factories';
+// Replace with your actual data access — e.g.:
+//   import { prisma } from '@/integrations/database';
+//   import { ProjectService } from '@/integrations/services/project-service';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const projects = await DB().getAll();
+    const projects = []; // ← Replace: e.g. await prisma.project.findMany()
     return NextResponse.json(projects);
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     // Always validate with Zod before using — see Step 5
-    const project = await DB().create(body);
+    const project = body; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);
@@ -71,7 +73,6 @@ For routes with resource IDs:
 ```ts
 // src/app/api/projects/[id]/route.ts
 import { handleApiError } from '@/lib/errors';
-import { DB } from '@/integrations/factories';
 import { NextResponse } from 'next/server';
 
 type Params = { params: Promise<{ id: string }> };
@@ -79,7 +80,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const project = await DB().getById(id);
+    const project = null; // ← Replace: e.g. await prisma.project.findUnique({ where: { id } })
     if (!project) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -108,6 +109,7 @@ For POST/PUT endpoints, validate the incoming body:
 
 ```ts
 import { z } from 'zod';
+import { handleApiError } from '@/lib/errors';
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -126,7 +128,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = await DB().create(parsed.data);
+    const project = parsed.data; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);

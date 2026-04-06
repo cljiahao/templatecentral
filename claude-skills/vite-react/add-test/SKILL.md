@@ -101,46 +101,53 @@ describe('ProjectForm', () => {
 
 ### 3. Service Tests
 
-For services that use `fetch`, mock at the `fetch` boundary:
+Test services by calling their methods directly. If the service uses `fetch` or an external client, mock at that boundary:
 
 ```ts
 // src/features/project/api/project-service.test.ts
+import { describe, expect, it } from 'vitest';
+import { ProjectService } from './project-service';
+
+describe('ProjectService', () => {
+  it('getAll returns all items', () => {
+    const result = ProjectService.getAll();
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toHaveProperty('id');
+  });
+
+  it('getById returns matching item', () => {
+    const result = ProjectService.getById('1');
+
+    expect(result).toBeDefined();
+    expect(result?.id).toBe('1');
+  });
+
+  it('getById returns undefined for unknown id', () => {
+    expect(ProjectService.getById('nonexistent')).toBeUndefined();
+  });
+});
+```
+
+For services that call `fetch` or an external API, stub `fetch` at the boundary:
+
+```ts
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ProjectService } from './project-service';
 
 const mockFetch = vi.fn();
 
-function jsonResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+describe('ProjectService (API-backed)', () => {
+  beforeEach(() => { vi.stubGlobal('fetch', mockFetch); });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-describe('ProjectService', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', mockFetch);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
-  it('getAll returns projects', async () => {
-    const projects = [{ id: '1', name: 'Alpha', status: 'active' }];
-    mockFetch.mockResolvedValue(jsonResponse(projects));
+  it('fetches projects from API', async () => {
+    const projects = [{ id: '1', name: 'Alpha' }];
+    mockFetch.mockResolvedValue(new Response(JSON.stringify(projects)));
 
     const result = await ProjectService.getAll();
-
     expect(result).toEqual(projects);
-    expect(mockFetch).toHaveBeenCalledOnce();
-  });
-
-  it('getAll throws APIError on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ message: 'Server error' }, 500));
-
-    await expect(ProjectService.getAll()).rejects.toThrow();
   });
 });
 ```
@@ -208,36 +215,28 @@ describe('useProjects', () => {
 
 ### 5. Integration Service Tests (External APIs)
 
-For integration services that use `FetchClient`, mock the client methods:
+If you've added external API integrations via the `add-integration` skill, test them by mocking the client:
 
 ```ts
-// src/integrations/services/github-service.test.ts
+// src/features/<name>/api/<name>-service.test.ts
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { GithubService } from './github-service';
-import type { GithubClient } from '../clients/github-client';
+import { NameService } from './<name>-service';
 
-function createMockClient(): GithubClient {
-  return {
-    getRepos: vi.fn(),
-    getRepo: vi.fn(),
-  } as unknown as GithubClient;
-}
+vi.mock('./<name>-client', () => ({
+  nameClient: { getItems: vi.fn(), getItem: vi.fn() },
+}));
 
-describe('GithubService', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+import { nameClient } from './<name>-client';
 
-  it('getRepos validates and returns repos', async () => {
-    const mockClient = createMockClient();
-    const rawRepos = [{ id: 1, name: 'repo', full_name: 'user/repo', private: false }];
-    vi.mocked(mockClient.getRepos).mockResolvedValue(rawRepos);
+describe('NameService', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
 
-    const service = new GithubService(mockClient);
-    const result = await service.getRepos();
+  it('fetches and returns items', async () => {
+    const mockData = [{ id: '1', title: 'Item' }];
+    vi.mocked(nameClient.getItems).mockResolvedValue(mockData);
 
-    expect(result).toEqual(rawRepos);
-    expect(mockClient.getRepos).toHaveBeenCalledOnce();
+    const result = await NameService.getItems();
+    expect(result).toEqual(mockData);
   });
 });
 ```
@@ -290,7 +289,6 @@ function createWrapper() {
 
 ## Rules
 
-- Co-locate tests next to source — `foo.ts` → `foo.test.ts`; NEVER put tests in a separate top-level directory
 - One concept per test — test a single behavior in each `it()` block
 - Mock at boundaries — mock `fetch`, service modules, or integration clients; NEVER mock internal utilities or React internals
 - Use Testing Library queries by role/text — `getByRole`, `getByText`, `getByLabelText`; NEVER use `querySelector` or test IDs unless no semantic alternative exists

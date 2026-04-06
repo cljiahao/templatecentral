@@ -72,49 +72,7 @@ npx shadcn@latest add <component-name>
 
 This installs into `src/components/ui/`. The project has a `components.json` with `rsc: false` for Vite compatibility. Do not manually create UI primitives.
 
-## Component Patterns
-
-### Use `function` declarations (default)
-```tsx
-export function StatusBadge({ status }: Props) {
-  return <span className="rounded-full px-2 py-1 text-xs">{status}</span>;
-}
-```
-
-### Use `React.memo` only when proven necessary
-```tsx
-export const ExpensiveList = React.memo(
-  function ExpensiveList({ items }: Props) {
-    return <ul>{items.map(item => <li key={item.id}>{item.name}</li>)}</ul>;
-  }
-);
-```
-
-### Props: composition over configuration
-Instead of boolean flags:
-```tsx
-// Avoid
-<Card variant="outlined" showHeader showFooter hasIcon />
-
-// Prefer
-<Card>
-  <CardHeader><Icon /><Title /></CardHeader>
-  <CardContent>...</CardContent>
-  <CardFooter>...</CardFooter>
-</Card>
-```
-
-### Static data in constants, not in components
-```ts
-// constants.ts
-export const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-] as const;
-
-// component.tsx
-import { STATUS_OPTIONS } from '../constants';
-```
+> For component patterns (`function` vs `const`, `React.memo`, composition over configuration, static data in constants), see `code-standards/SKILL.md`.
 
 ### 4. Validate
 
@@ -126,11 +84,7 @@ Confirm the build succeeds with no type errors and all tests pass.
 
 ## Rules
 
-All `code-standards/` rules apply. Key rules for components:
-
 - Always add to barrel `index.ts` when creating in shared folders — NEVER omit the barrel export
 - Don't prematurely extract — keep inline until a second consumer needs it; NEVER extract into `widgets/` until it has a second consumer
-- Don't use React.memo/useCallback/useMemo unless profiling confirms a problem (exception: context providers — see `code-standards`)
 - NEVER manually create files in `src/components/ui/` — use the shadcn CLI (`npx shadcn@latest add`)
 - NEVER add boolean flag props to configure variants — prefer composition with children
-- NEVER put data-fetching logic in components — use hooks from the feature's `hooks/` folder

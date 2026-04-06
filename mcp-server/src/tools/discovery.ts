@@ -15,6 +15,10 @@ export function registerDiscoveryTools(server: McpServer): void {
         (s) =>
           `- **${s.name}**: ${s.description} (${s.skillCount} skills, template: ${s.templateExists ? "available" : "missing"})`
       );
+      const sharedSkills = await getSkillsForStack("shared");
+      lines.push(
+        `- **shared**: Cross-stack skills usable by any subagent (${sharedSkills.length} skills, no template)`
+      );
 
       return {
         content: [
@@ -53,6 +57,10 @@ export function registerDiscoveryTools(server: McpServer): void {
         const lines = skills.map((sk) => `- **${sk.name}**: ${sk.description}`);
         sections.push(`## ${s.name}\n\n${lines.join("\n")}`);
       }
+      // Always include shared cross-stack skills
+      const sharedSkills = await getSkillsForStack("shared");
+      const sharedLines = sharedSkills.map((sk) => `- **${sk.name}**: ${sk.description}`);
+      sections.push(`## shared\n\n${sharedLines.join("\n")}`);
 
       return {
         content: [

@@ -216,29 +216,28 @@ export function LoginCard() {
 
 ### 5. Add Protected Routes
 
-In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`:
+In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`. The template already has `<BrowserRouter>` wrapping the route tree — edit only inside the existing `<Routes>`:
 
 ```typescript
 import { ProtectedRoute } from '@/features/auth';
 
-<Routes>
-  <Route element={<RootLayout />}>
-    {/* Public routes */}
-    <Route index element={<HomePage />} />
-    <Route path="login" element={<LoginPage />} />
+{/* Inside the existing <Routes> in router.tsx */}
+<Route element={<RootLayout />}>
+  {/* Public routes */}
+  <Route index element={<HomePage />} />
+  <Route path="login" element={<LoginPage />} />
 
-    {/* Protected routes */}
-    <Route element={<ProtectedRoute />}>
-      <Route path="dashboard" element={<DashboardPage />} />
-      {/* Add more protected routes here */}
-    </Route>
-
-    <Route path="*" element={<NotFoundPage />} />
+  {/* Protected routes */}
+  <Route element={<ProtectedRoute />}>
+    <Route path="dashboard" element={<DashboardPage />} />
+    {/* Add more protected routes here */}
   </Route>
-</Routes>
+
+  <Route path="*" element={<NotFoundPage />} />
+</Route>
 ```
 
-The template already has this structure — just add new protected routes inside the `<ProtectedRoute />` wrapper.
+Do NOT replace the entire `router.tsx` — only modify the route definitions inside the existing `<BrowserRouter>` and `<Routes>` wrappers.
 
 ### 6. Add a Sign-Out Button
 
@@ -261,10 +260,11 @@ export function SignOutButton() {
 ### 7. Validate
 
 1. Start the dev server (`pnpm dev`) — confirm no import errors
-2. Visit `/dashboard` directly — confirm redirect to `/login`
-3. On `/login`, click "Dev login" — confirm redirect to `/dashboard`
-4. If a backend is configured, test the full login/logout flow
-5. Run tests (`pnpm test`) — confirm no regressions
+2. In dev mode, the `AuthProvider` auto-authenticates (dev bypass) — confirm `/dashboard` loads without redirect
+3. On `/login`, confirm the dev login card renders and "Dev login" button works
+4. To test the real redirect flow, temporarily disable the dev bypass in `auth-provider.tsx` — visiting `/dashboard` while unauthenticated should redirect to `/login`
+5. If a backend is configured, test the full login/logout flow
+6. Run tests (`pnpm test`) — confirm no regressions
 
 ## Dev Bypass Behavior
 

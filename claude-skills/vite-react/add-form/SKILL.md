@@ -48,7 +48,8 @@ export type ContactFormValues = z.infer<typeof contactFormSchema>;
 
 ```tsx
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FormProvider, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
+import { Form } from '@/components/ui/form';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -59,7 +60,7 @@ import { CustomFormField } from '@/components/widgets';
 import {
   contactFormSchema,
   type ContactFormValues,
-} from '../schemas/contact-form.schema';
+} from '../schemas/contact.schema';
 
 export function ContactForm() {
   const form = useForm<ContactFormValues>({
@@ -79,7 +80,7 @@ export function ContactForm() {
   };
 
   return (
-    <FormProvider {...form}>
+    <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <CustomFormField name="name" label="Name">
           <Input placeholder="Your name" />
@@ -97,7 +98,7 @@ export function ContactForm() {
           {form.formState.isSubmitting ? 'Submitting...' : 'Submit'}
         </Button>
       </form>
-    </FormProvider>
+    </Form>
   );
 }
 ```
@@ -108,6 +109,12 @@ Add to `src/features/<feature>/components/index.ts`:
 
 ```typescript
 export { ContactForm } from './contact-form';
+```
+
+Ensure the feature root barrel (`src/features/<feature>/index.ts`) re-exports components:
+
+```typescript
+export * from './components';
 ```
 
 ### 4. Use in a Page
@@ -131,9 +138,6 @@ export function ContactPage() {
 
 - Always define the Zod schema in a separate file under `schemas/` — not inline.
 - Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring.
-- Use `FormProvider` to wrap the form — `CustomFormField` uses `useFormContext()`.
+- Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
-- No `'use client'` directive needed — Vite + React is fully client-side.
-- No server actions — submit via API call to your backend.
-- Named exports only — no `export default`.

@@ -18,23 +18,24 @@ A production-ready FastAPI backend template with layered design, Pydantic v2 sch
 Layered design with strict dependency rules:
 
 ```
-core/  (standalone — app infrastructure)
-api/  →  logic/  →  models/
-                       ↑
-              constants/  ←  utils/
+core/          (standalone — app infrastructure, config, logging)
+api/           →  models/
+ ├── routers/     ↑
+ ├── services/    utils/
+ └── schemas/
 ```
 
-- `logic/` never imports from `api/`
-- `models/` never imports from `logic/` or `api/`
-- `core/` is not imported by `logic/` or `models/`
+- `api/services/` contains business logic — called by `api/routers/`, never the reverse
+- `models/` never imports from `api/`
+- `core/` is standalone infrastructure — imported by `api/` but never by `models/`
+- `utils/` are pure helpers — importable by any layer
 
 ### Request Flow
 
 ```
 HTTP Request
   → Router (Pydantic validation)
-  → Service (orchestration)
-  → Logic (business rules)
+  → Service (business logic + orchestration)
   → Response
 ```
 
@@ -63,12 +64,10 @@ HTTP Request
 │   │   │   ├── base.py           # BaseSchema (camelCase, extra=forbid)
 │   │   │   ├── request/          # Request schemas
 │   │   │   └── response/         # Response schemas
-│   │   └── services/             # Orchestration (parse → logic → serialize)
+│   │   └── services/             # Business logic (parse → process → serialize)
 │   │       └── example.py        # Example service
-│   ├── logic/                    # Pure business logic (no API imports)
-│   ├── models/                   # Domain dataclasses (no API/logic imports)
+│   ├── models/                   # Domain dataclasses (no API imports)
 │   │   └── base.py               # BaseModel + BaseImmutableModel
-│   ├── constants/                # Static data, enums, lookup tables
 │   ├── utils/                    # Pure utility functions
 │   │   └── date.py               # Date conversion helpers
 │   └── core/                     # App infrastructure
@@ -78,16 +77,13 @@ HTTP Request
 │       ├── directory_manager.py  # Directory creation utilities
 │       └── json/
 │           └── logging.json      # Logging configuration
-└── test/                         # Tests (mirrors src/)
+└── test/                         # Tests
     ├── conftest.py               # Shared fixtures (TestClient)
     ├── factories/                # Factory functions for test data
     │   └── models.py
-    ├── test_api/                 # API endpoint tests
-    │   ├── test_health.py
-    │   └── test_example.py
-    ├── test_logic/               # Business logic tests
-    ├── test_models/              # Domain model tests
-    └── test_utils/               # Utility function tests
+    └── test_api/                 # API endpoint tests
+        ├── test_health.py
+        └── test_example.py
 ```
 
 ## Getting Started

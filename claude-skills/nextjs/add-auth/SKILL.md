@@ -65,16 +65,16 @@ Multiple providers can coexist — each guarded by its own env var check.
 
 ### 3. Add Environment Variables
 
-Update `.env.example` with the new provider's variables (commented out as documentation):
+Update `.env.example` with the new provider's variables (commented out as documentation, matching the template's convention):
 
 ```bash
 # Microsoft Entra ID
-AUTH_MICROSOFT_ENTRA_ID_ID=
-AUTH_MICROSOFT_ENTRA_ID_SECRET=
-AUTH_MICROSOFT_ENTRA_ID_ISSUER=
+# AUTH_MICROSOFT_ENTRA_ID_ID=
+# AUTH_MICROSOFT_ENTRA_ID_SECRET=
+# AUTH_MICROSOFT_ENTRA_ID_ISSUER=
 ```
 
-Add the actual values to `.env.local`:
+Add the actual values to `.env.local` (note: `AUTH_URL` is already in `.env.example` and defaults to `http://localhost:3000`):
 
 ```bash
 AUTH_SECRET=<generate with: npx auth secret>

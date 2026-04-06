@@ -25,10 +25,6 @@ export function agentPath(stack: string): string {
   return path.join(SKILLS_DIR, stack, "AGENT.md");
 }
 
-export function indexPath(stack: string): string {
-  return path.join(SKILLS_DIR, stack, "INDEX.md");
-}
-
 export function codeStandardsPath(stack: string): string {
   return path.join(SKILLS_DIR, stack, "code-standards", "SKILL.md");
 }

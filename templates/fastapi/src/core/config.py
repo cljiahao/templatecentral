@@ -24,6 +24,7 @@ class APISettings(BaseSettings):
 
     FASTAPI_ROOT: str = Field(default="")
     API_PORT: int = Field(default=8000)
+    CORS_ORIGINS: str = Field(default="http://localhost:3000")
     ALLOWED_CORS: list[str] = []
 
     def model_post_init(self, _) -> None:
@@ -33,9 +34,7 @@ class APISettings(BaseSettings):
     def _compute_allowed_cors(self) -> list[str]:
         if common_settings.ENVIRONMENT == "dev":
             return ["*"]
-        return [
-            "http://localhost:3000",
-        ]
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @field_validator("FASTAPI_ROOT", mode="before")
     def remove_trailing_slash(cls, value: str) -> str:

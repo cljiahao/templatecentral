@@ -16,15 +16,11 @@ test/
 ├── conftest.py           # Shared fixtures (TestClient)
 ├── factories/            # Factory functions for test data
 │   └── models.py
-├── test_api/             # API endpoint tests
-│   └── test_<endpoint>.py
-├── test_logic/           # Business logic tests
-│   └── test_<module>.py
-├── test_models/          # Domain model tests
-│   └── test_<model>.py
-└── test_utils/           # Utility function tests
-    └── test_<util>.py
+└── test_api/             # API endpoint tests
+    └── test_<endpoint>.py
 ```
+
+Add directories as needed: `test_services/` (business logic), `test_models/` (domain models), `test_utils/` (utilities).
 
 ## Test File Layout
 
@@ -40,11 +36,12 @@ test/
 
 ```python
 @pytest.mark.unit
-def test_withdrawal_raises_below_55(client: TestClient) -> None:
-    """Withdrawal before age 55 raises InvalidInputError."""
-    response = client.post("/withdraw", json={"age": 50, "amount": 1000})
+def test_example_rejects_invalid_payload(client: TestClient) -> None:
+    """POST /example with missing required field returns 422."""
+    response = client.post("/example", json={})
     assert response.status_code == 422
-    assert "age" in response.json()["detail"].lower()
+    errors = response.json()["detail"]
+    assert any("name" in str(e) for e in errors)
 ```
 
 ## Factories
@@ -52,12 +49,12 @@ def test_withdrawal_raises_below_55(client: TestClient) -> None:
 Create factory functions in `test/factories/` with sensible defaults:
 
 ```python
-def create_member(
-    name: str = "Alice",
-    age: int = 30,
+def create_example_request(
+    name: str = "World",
+    repeat_count: int = 1,
 ) -> dict:
-    """Create a member request payload with camelCase keys (matching API contract)."""
-    return {"name": name, "age": age}
+    """Create an example request payload with camelCase keys (matching API contract)."""
+    return {"name": name, "repeatCount": repeat_count}
 ```
 
 > **Why camelCase keys**: `BaseSchema` uses `alias_generator=to_camel`, so the API expects camelCase JSON. Factory return values must use camelCase keys (e.g., `"repeatCount"`) even though Python params use snake_case.
@@ -113,6 +110,4 @@ pytest test/test_api/           # API tests only
 - NEVER share mutable state between tests — each test constructs its own data
 - NEVER use `unittest.mock.patch` when `monkeypatch` is available — prefer pytest idioms
 - NEVER mock what you own — use real objects via factories; mock only external side effects
-- NEVER omit `match` in `pytest.raises()` — always assert the error message pattern
-- NEVER skip test docstrings — every test function needs a one-line description of expected behavior
 - NEVER depend on test execution order — tests must pass in any order or in isolation

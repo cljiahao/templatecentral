@@ -26,7 +26,25 @@ Environment → factories.ts → services/ → clients/ → schemas/
 
 ## Steps
 
-### 1. Create the Client
+### 1. Create Zod Schemas
+
+Define schemas first — the client and service will import types from here:
+
+```ts
+// src/integrations/schemas/github-schemas.ts
+import { z } from 'zod';
+
+export const githubRepoSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  full_name: z.string(),
+  private: z.boolean(),
+});
+
+export type GithubRepo = z.infer<typeof githubRepoSchema>;
+```
+
+### 2. Create the Client
 
 Extend the base `FetchClient` (at `src/integrations/clients/base/fetch-client.ts`) which handles response parsing, error mapping, and content-type negotiation:
 
@@ -48,24 +66,6 @@ export class GithubClient extends FetchClient {
     return this.request<GithubRepo>(`repos/${owner}/${repo}`);
   }
 }
-```
-
-> **Why extend FetchClient**: It handles JSON/binary/text content-type parsing, maps HTTP errors to `APIError` with status codes and response data, and provides typed `request<T>()`. You focus only on endpoint paths and types.
-
-### 2. Create Zod Schemas
-
-```ts
-// src/integrations/schemas/github-schemas.ts
-import { z } from 'zod';
-
-export const githubRepoSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  full_name: z.string(),
-  private: z.boolean(),
-});
-
-export type GithubRepo = z.infer<typeof githubRepoSchema>;
 ```
 
 ### 3. Create the Service
@@ -93,15 +93,18 @@ import { GithubClient } from './clients/github-client';
 import { GithubService } from './services/github-service';
 
 export function Github() {
+  if (!process.env.GITHUB_TOKEN) {
+    throw new Error('GITHUB_TOKEN is required');
+  }
   const client = new GithubClient(
     process.env.GITHUB_API_URL ?? 'https://api.github.com',
-    process.env.GITHUB_TOKEN ?? '',
+    process.env.GITHUB_TOKEN,
   );
   return new GithubService(client);
 }
 ```
 
-> **Naming convention**: Factory functions use PascalCase matching the integration name: `Github()`, `DB()`, `Stripe()`, `SSM()`.
+> **Naming convention**: Factory functions use PascalCase matching the integration name: `Github()`, `Stripe()`, `SSM()`. Database clients use the `add-database` skill, not `add-integration`.
 
 > **Alternative: Axios-based client** — For server-side integrations needing mTLS, API key headers, or request/response logging, use `createAxiosClient` from `src/integrations/clients/base/axios-client.ts` instead of extending `FetchClient`.
 
@@ -130,5 +133,5 @@ Confirm the build succeeds with no type errors. Verify the integration works end
 - Services contain business logic and call clients
 - Factories create configured service instances
 - Always throw `APIError` for HTTP failures (imported from `@/integrations/error`) — NEVER throw generic `Error`
-- Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets
+- Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets. Add commented placeholders to `.env.example` so other developers know what's needed.
 - NEVER consume integrations directly in components — go through feature services or API routes

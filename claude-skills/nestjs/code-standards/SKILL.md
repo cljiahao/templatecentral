@@ -5,8 +5,6 @@ description: Use when writing or reviewing TypeScript code in a NestJS project �
 
 # NestJS / TypeScript Code Standards
 
-Coding standards for NestJS projects scaffolded from templateCentral.
-
 ## Naming Conventions
 
 | Element | Convention | Example |
@@ -34,7 +32,7 @@ Each feature is a self-contained module under `src/modules/<name>/`:
 ├── <name>.module.ts       # @Module declaration
 ├── <name>.controller.ts   # HTTP endpoints (thin)
 ├── <name>.service.ts      # Business logic
-├── <name>.repository.ts   # Data access
+├── <name>.repository.ts   # Data access (optional — extract when query logic grows complex)
 ├── <name>.dto.ts          # Zod DTOs
 ├── <name>.types.ts        # TypeScript interfaces
 └── services/              # (optional) Sub-services for complex domains
@@ -118,15 +116,32 @@ export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
 - **Jest** — testing framework with ts-jest.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).
 
-## Rules
+## Security
 
-- **kebab-case** (dot-separated) filenames, **PascalCase** classes, **camelCase** methods
-- Named exports only — NEVER use `export default`
-- **`nestjs-zod`** with `createZodDto` for all DTOs — NEVER use `class-validator` or `class-transformer`
-- **One module per feature** — self-contained with controller, service, repository
-- Controllers are thin — delegate to services; NEVER put business logic in controllers
-- Swagger documentation on every endpoint — `@ApiTags()` + `@ApiOperation()`; NEVER skip `@ApiOperation()`
-- NEVER import controllers from services — dependency flows one way only
-- NEVER use `any` without justification — prefer `unknown` and narrow with type guards
-- NEVER create circular module dependencies — use `forwardRef()` only as a last resort
-- NEVER put database queries in services — use a repository layer
+### Environment & Secrets
+- All config via `src/config/env.config.ts` — access env vars through the centralized config object, not `process.env` scattered across services or controllers
+- Secrets (`JWT_SECRET`, `DATABASE_URL`) must be set in `.env` — NEVER hardcode fallback secrets like `'change-me'` in production code
+- Use `.env.example` for documentation only; keep actual secrets out of version control
+
+### Request Validation
+- Global `ZodValidationPipe` validates all incoming DTOs automatically — NEVER skip DTO typing on `@Body()` or `@Query()`
+- Use `z.string().min(1)` and similar constraints — NEVER accept unbounded strings without length limits
+
+### Security Headers
+- `helmet` is configured in `security.setup.ts` — NEVER remove or weaken CSP, HSTS, or frame-ancestors directives
+- Cache-Control headers are set to `no-store` — appropriate for API responses with sensitive data
+
+### CORS
+- Origins are restricted to `CLIENT_URL` — NEVER use `origin: '*'` in production
+- Only specific methods and headers are allowed — NEVER use `'*'` for methods or headers
+
+### Auth
+- Guard-based authentication (Passport.js + JWT) — apply guards at controller or route level, not globally (allows health checks)
+- NEVER return password hashes, JWT secrets, or internal database IDs in API responses
+- Use short-lived JWTs with refresh tokens for session management
+
+### Least Privilege
+- Controllers return DTOs, not raw entities — NEVER expose database models directly in responses
+- Repository results should be mapped through services before reaching controllers
+- NEVER log tokens, passwords, or PII in any environment
+

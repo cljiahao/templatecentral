@@ -5,8 +5,6 @@ description: Use when writing or reviewing any code in a Next.js project — cov
 
 # Next.js Code Standards
 
-Coding standards and conventions for Next.js projects scaffolded from templateCentral. Follow these rules when writing or reviewing code.
-
 ## File Naming
 
 All files use **kebab-case** (lowercase, hyphen-separated).
@@ -83,6 +81,8 @@ They form a **chain** — must be used together to be effective:
 2. Child wrapped with `React.memo`
 3. Using any of them in isolation adds overhead for zero gain
 
+**Exception**: Context providers that pass objects/functions as `value` should stabilize with `useMemo`/`useCallback` to prevent all consumers from re-rendering on every provider render.
+
 ## Data & Rendering Separation
 
 - Static data belongs in `constants.ts`
@@ -105,14 +105,24 @@ The template provides these shared utilities:
 - **Avoid**: `import { ProjectService } from '@/features/project/api/project-service'`
 - Direct imports are OK within the same feature
 
-## Rules
+## Security
 
-- **kebab-case** filenames, **PascalCase** components, **camelCase** functions/hooks
-- **Named exports** always — NEVER use `export default` except where Next.js requires it (pages, layouts, config files)
-- **`function` declarations** for components, `const` arrows for hooks/utilities
-- **Barrel exports** for features — `import { X } from '@/features/<name>'`. NEVER deep-import from features
-- **Static data** in `constants.ts`, NEVER inline in components
-- **Thin components** — delegate logic to hooks and services. NEVER put business logic in components
-- NEVER use `React.memo`, `useCallback`, or `useMemo` without profiling evidence — they add overhead in isolation. **Exception**: `useMemo`/`useCallback` are appropriate in React context providers to stabilize the context value and prevent unnecessary re-renders of all consumers
-- NEVER use `any` — use `unknown` and narrow with type guards
-- NEVER use inline styles — use Tailwind classes
+### Environment Variables
+- Server-only secrets (`AUTH_SECRET`, `DATABASE_URL`, API keys) use `process.env.SECRET_NAME` — NEVER prefix with `NEXT_PUBLIC_`
+- Client-safe values use `NEXT_PUBLIC_` prefix — assume anything with this prefix is visible to users
+- Generate `AUTH_SECRET` with `npx auth secret` — NEVER commit it or use a hardcoded placeholder in production
+
+### Input Validation
+- Validate all request bodies in API route handlers with Zod `safeParse()` — return 400 on failure, NEVER trust raw `request.json()`
+- Validate URL params and search params before use — they are user-controlled input
+
+### Auth & Route Protection
+- `proxy.ts` enforces auth for all routes not in `PUBLIC_PATHS` — NEVER duplicate auth checks in page components
+- API routes that need auth should check `auth()` from `@/auth` and return 401 if no session
+- NEVER expose user IDs or internal identifiers in client-side code without authorization checks
+
+### Least Privilege
+- API route handlers should only return the fields the client needs — NEVER send full database records to the browser
+- Use `select` or explicit field picking when querying data
+- NEVER log sensitive data (tokens, passwords, full request bodies with PII)
+

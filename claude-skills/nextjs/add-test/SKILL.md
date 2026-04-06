@@ -44,7 +44,7 @@ describe('GET /api/projects', () => {
 
 > **Why direct imports**: Next.js API route handlers are plain async functions that accept a `Request` and return a `Response`. Calling them directly is fast, requires no server setup, and gives full access to the response object.
 
-> **Note**: `DB` in the examples below is a placeholder factory. Replace it with the actual factory function from `@/integrations/factories` that your API routes use (created via the `add-integration` skill).
+> **Note**: `DataService` in the examples below is a **placeholder** — the template's `src/integrations/factories.ts` starts empty. Replace it with whatever data access layer you've added via the `add-database` or `add-integration` skill. The mock pattern shown (module-level `vi.mock`, `vi.mocked` for type-safety) applies to any service you create.
 
 ## Steps
 
@@ -62,29 +62,23 @@ Place tests in `__tests__/api/` matching the route path:
 
 ```ts
 import { GET } from '@/app/api/projects/route';
-import { DB } from '@/integrations/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/integrations/factories', () => ({
-  DB: vi.fn(),
+// Mock your data access layer — replace path and export with your actual service
+vi.mock('@/features/projects/api/project-service', () => ({
+  ProjectService: { getAll: vi.fn() },
 }));
 
-const mockDbService = {
-  getAll: vi.fn(),
-};
+import { ProjectService } from '@/features/projects/api/project-service';
 
 describe('GET /api/projects', () => {
-  beforeEach(() => {
-    vi.mocked(DB).mockReturnValue(mockDbService as unknown as ReturnType<typeof DB>);
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('should return projects with status 200', async () => {
     const mockProjects = [{ id: '1', name: 'Alpha' }];
-    mockDbService.getAll.mockResolvedValue(mockProjects);
+    vi.mocked(ProjectService.getAll).mockResolvedValue(mockProjects);
 
     const response = await GET();
     const data = await response.json();
@@ -94,7 +88,7 @@ describe('GET /api/projects', () => {
   });
 
   it('should return 500 when service throws', async () => {
-    mockDbService.getAll.mockRejectedValue(new Error('DB down'));
+    vi.mocked(ProjectService.getAll).mockRejectedValue(new Error('DB down'));
 
     const response = await GET();
 
@@ -107,16 +101,13 @@ describe('GET /api/projects', () => {
 
 ```ts
 import { POST } from '@/app/api/projects/route';
-import { DB } from '@/integrations/factories';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/integrations/factories', () => ({
-  DB: vi.fn(),
+vi.mock('@/features/projects/api/project-service', () => ({
+  ProjectService: { create: vi.fn() },
 }));
 
-const mockDbService = {
-  create: vi.fn(),
-};
+import { ProjectService } from '@/features/projects/api/project-service';
 
 function jsonRequest(url: string, body: unknown, method = 'POST'): Request {
   return new Request(url, {
@@ -127,10 +118,6 @@ function jsonRequest(url: string, body: unknown, method = 'POST'): Request {
 }
 
 describe('POST /api/projects', () => {
-  beforeEach(() => {
-    vi.mocked(DB).mockReturnValue(mockDbService as unknown as ReturnType<typeof DB>);
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -138,7 +125,7 @@ describe('POST /api/projects', () => {
   it('should create a project and return 201', async () => {
     const input = { name: 'New Project' };
     const created = { id: '1', ...input };
-    mockDbService.create.mockResolvedValue(created);
+    vi.mocked(ProjectService.create).mockResolvedValue(created);
 
     const response = await POST(jsonRequest('http://localhost/api/projects', input));
     const data = await response.json();
@@ -161,33 +148,26 @@ describe('POST /api/projects', () => {
 
 ```ts
 import { GET } from '@/app/api/projects/[id]/route';
-import { DB } from '@/integrations/factories';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/integrations/factories', () => ({
-  DB: vi.fn(),
+vi.mock('@/features/projects/api/project-service', () => ({
+  ProjectService: { getById: vi.fn() },
 }));
 
-const mockDbService = {
-  getById: vi.fn(),
-};
+import { ProjectService } from '@/features/projects/api/project-service';
 
 function makeParams<T extends Record<string, string>>(values: T) {
   return { params: Promise.resolve(values) };
 }
 
 describe('GET /api/projects/[id]', () => {
-  beforeEach(() => {
-    vi.mocked(DB).mockReturnValue(mockDbService as unknown as ReturnType<typeof DB>);
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('should return a project by ID', async () => {
     const project = { id: '1', name: 'Alpha' };
-    mockDbService.getById.mockResolvedValue(project);
+    vi.mocked(ProjectService.getById).mockResolvedValue(project);
 
     const request = new Request('http://localhost/api/projects/1');
     const response = await GET(request, makeParams({ id: '1' }));
@@ -198,7 +178,7 @@ describe('GET /api/projects/[id]', () => {
   });
 
   it('should return 404 when project not found', async () => {
-    mockDbService.getById.mockResolvedValue(null);
+    vi.mocked(ProjectService.getById).mockResolvedValue(null);
 
     const request = new Request('http://localhost/api/projects/999');
     const response = await GET(request, makeParams({ id: '999' }));
@@ -260,7 +240,7 @@ function makeParams<T extends Record<string, string>>(values: T) {
 
 - Test API route handlers only — NEVER write frontend component tests in this pattern
 - One concept per test — test a single behavior in each `it()` block
-- Mock at boundaries — mock `integrations/factories` (the factory functions that create services), not internal utilities
+- Mock at boundaries — mock your data access services (feature service modules, integration clients), not internal utilities
 - Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
 - Always call `vi.restoreAllMocks()` in `afterEach` — prevent mock leakage between tests
 - Use descriptive test names — `it('should return 404 when project not found')`

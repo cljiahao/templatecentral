@@ -5,7 +5,7 @@ description: Use when the user asks to create a new API route, add a POST/GET/PU
 
 # Add a FastAPI Endpoint
 
-Guide for adding a new API endpoint following the router → service → logic architecture.
+Guide for adding a new API endpoint following the router → service architecture.
 
 > **Placeholder names**: All examples use `my_endpoint`, `MyRequest`, `my_service`, etc. Replace these with your actual resource name throughout (e.g., for a `tasks` resource: `tasks.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
 
@@ -14,8 +14,6 @@ Guide for adding a new API endpoint following the router → service → logic a
 ### 1. Define Request/Response Schemas
 
 Create Pydantic schemas in `src/api/schemas/`. Request schemas inherit from `BaseRequestSchema` and response schemas from `BaseResponseSchema` (both defined in `src/api/schemas/base.py`). They share common config from `BaseSchema` — see the file for the full `ConfigDict`. Key behaviors: `extra="forbid"` rejects unknown fields, `alias_generator=to_camel` converts snake_case to camelCase, and `from_attributes=True` enables ORM-style attribute access. `BaseResponseSchema` additionally sets `serialize_by_alias=True` so responses serialize using camelCase.
-
-> **Why schemas first**: Defining the contract before implementation forces you to think about the API surface. `extra="forbid"` rejects unexpected fields at validation time, catching client bugs early. `to_camel` ensures the API speaks camelCase JSON while Python code uses snake_case.
 
 **Request** (`src/api/schemas/request/<name>.py`):
 ```python
@@ -45,9 +43,7 @@ class MyResponse(BaseResponseSchema):
 
 ### 2. Add Service Function
 
-Create the orchestration function in `src/api/services/<name>.py`. Services sit between the router and the logic layer — they parse schemas into domain models, call business logic, and serialize results back.
-
-> **Why a service layer**: Routers handle HTTP concerns (request/response). Logic handles business rules. The service bridges them, keeping both clean and independently testable.
+Create the service function in `src/api/services/<name>.py`. Services contain the business logic — they parse schemas, process data, and serialize results back.
 
 For simple endpoints, the service can process directly:
 
@@ -62,23 +58,22 @@ def run_my_service(request: MyRequest) -> MyResponse:
     return MyResponse(result=processed)
 ```
 
-For non-trivial endpoints with business logic, follow the full router → service → logic flow. The service converts Pydantic schemas to domain models, calls the logic layer, and serializes back:
+For non-trivial endpoints with business logic, the service converts Pydantic schemas to domain models, processes, and serializes back. Create domain models in `models/` as needed:
 
 ```python
 from api.schemas.request.my_request import MyRequest
 from api.schemas.response.my_response import MyResponse
-from logic.my_logic import process_item
 from models.my_model import MyItem
 
 
 def run_my_service(request: MyRequest) -> MyResponse:
-    """Parse schema → call logic with domain model → serialize result."""
+    """Parse schema → process with domain model → serialize result."""
     item = MyItem(field_name=request.field_name)
-    result = process_item(item)
-    return MyResponse(result=result.value)
+    result = item.process()
+    return MyResponse(result=result)
 ```
 
-> **When to use the logic layer**: If the endpoint has business rules, data transformations, or external interactions beyond simple field mapping, put that logic in `logic/` with plain Python domain models. The service bridges schemas and logic — it should never contain business rules itself.
+> Create `src/models/my_model.py` for domain models — `src/models/base.py` exists as the base. For complex processing, keep pure functions in the model or a utility module under `src/utils/`.
 
 ### 3. Add Router
 
@@ -153,11 +148,7 @@ After creating all files:
 
 ## Rules
 
-- **Routers are thin** — accept body, call service, return result. NEVER put business logic in routers.
-- **Services orchestrate** — parse schemas → call logic → serialize response.
-- **Schemas use camelCase** — `BaseSchema` converts `snake_case` ↔ `camelCase` automatically.
-- **No Pydantic in logic layer** — services convert to domain models via parsers. NEVER pass Pydantic schemas into the logic layer.
+- **Services contain business logic** — parse schemas → process → serialize response.
 - **One service function per endpoint**.
 - NEVER use raw `dict` or unvalidated data in services — always use Pydantic schemas or domain models
-- NEVER skip `response_model` on route decorators — always declare the response schema
 - NEVER forget to register the router in `src/api/routes.py` and add the tag to `src/api/tags.py`

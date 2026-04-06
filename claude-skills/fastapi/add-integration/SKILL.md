@@ -25,12 +25,21 @@ config → client → schemas → service → dependency injection → router
 
 ## Dependencies
 
-Add to `requirements.txt`:
+Add to `src/requirements.txt`:
 - `httpx` — Async HTTP client
 
 ## Steps
 
-### 1. Create the Client
+### 1. Create Integration Directories
+
+The base template does not include `src/integrations/` or `src/api/dependencies/`. Create them now:
+
+```bash
+mkdir -p src/integrations src/api/dependencies
+touch src/integrations/__init__.py src/api/dependencies/__init__.py
+```
+
+### 2. Create the Client
 
 **`src/integrations/<name>_client.py`**:
 
@@ -64,7 +73,7 @@ class GithubClient:
         await self._client.aclose()
 ```
 
-### 2. Define Response Schemas
+### 3. Define Response Schemas
 
 **`src/integrations/<name>_schemas.py`**:
 
@@ -84,7 +93,7 @@ class GithubRepo(BaseResponseSchema):
     stargazers_count: int = Field(default=0, description="Star count.")
 ```
 
-### 3. Create the Service
+### 4. Create the Service
 
 **`src/integrations/<name>_service.py`**:
 
@@ -110,7 +119,23 @@ class GithubService:
         return GithubRepo.model_validate(raw)
 ```
 
-### 4. Create a Dependency
+### 5. Add Config
+
+Add the API token to `APISettings` in **`src/core/config.py`**:
+
+```python
+class APISettings(BaseSettings):
+    # ... existing fields ...
+    GITHUB_API_URL: str = Field(default="https://api.github.com")
+    GITHUB_TOKEN: str
+```
+
+And add to `src/.env` (and `src/.env.default` as documentation):
+```
+GITHUB_TOKEN=your_token_here
+```
+
+### 6. Create a Dependency
 
 **`src/api/dependencies/<name>.py`**:
 
@@ -119,21 +144,21 @@ from collections.abc import AsyncGenerator
 
 from fastapi import Depends
 
-from core.config import settings
+from core.config import api_settings
 from integrations.github_client import GithubClient
 from integrations.github_service import GithubService
 
 
 async def get_github_service() -> AsyncGenerator[GithubService, None]:
     """Provide a GithubService instance with managed client lifecycle."""
-    client = GithubClient(base_url="https://api.github.com", token=settings.GITHUB_TOKEN)
+    client = GithubClient(base_url=api_settings.GITHUB_API_URL, token=api_settings.GITHUB_TOKEN)
     try:
         yield GithubService(client)
     finally:
         await client.close()
 ```
 
-### 5. Wire Into Router
+### 7. Wire Into Router
 
 ```python
 from fastapi import APIRouter, Depends
@@ -158,5 +183,4 @@ async def list_repos(service: GithubService = Depends(get_github_service)):
 - Client handles HTTP only — no business logic. Service handles business logic.
 - Use FastAPI dependencies for lifecycle management (create → yield → close).
 - Keep API tokens in environment variables / config — never hardcode.
-- Add `response_model` to all route decorators.
-- Place integration files in `src/integrations/` — not in `api/` or `logic/`.
+- Place integration files in `src/integrations/` — not in `api/`.

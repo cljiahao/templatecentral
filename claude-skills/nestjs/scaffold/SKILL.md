@@ -92,9 +92,9 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 ## Architecture Decisions
 - One module per feature under `src/modules/`
-- Controller → Service → Repository dependency flow
+- Controller → Service (→ Repository for complex queries); simple CRUD may use ORM directly in services
 - DTOs use `createZodDto` from `nestjs-zod` (no class-validator)
-- Global providers (pipes, filters, guards) in `app.module.ts`
+- Global pipes and filters in `app.module.ts`; auth guards at controller/route level
 - Setup functions (Swagger, security) in `src/config/setups/`
 
 ## Key Conventions
@@ -109,11 +109,75 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 Update the Identity section with the actual project name and creation date.
 
-### 7. Task Management (Optional)
+### 7. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-Ask the user: *"Do you want structured task management for complex features?"*
+**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
 
-If yes, append this section to the project's `AGENTS.md`:
+Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+
+```markdown
+# <Project Name>
+
+NestJS backend scaffolded from templateCentral.
+
+## Build & Dev
+
+- `pnpm start:dev` — start dev server (http://localhost:3000)
+- `pnpm build` — production build
+- `pnpm test` — run unit tests (Jest)
+- `pnpm test:e2e` — run e2e tests
+- `pnpm lint` — ESLint 9 + Prettier
+
+## Architecture
+
+- One module per feature under `src/modules/`
+- Controller → Service (→ Repository for complex queries); simple CRUD may use ORM directly in services
+- DTOs use `createZodDto` from `nestjs-zod` (no class-validator)
+- Global pipes and filters in `app.module.ts`; auth guards at controller/route level
+- Setup functions (Swagger, security) in `src/config/setups/`
+- Swagger docs at `/docs`
+
+## Conventions
+
+- kebab-case filenames (dot-separated), PascalCase classes, camelCase methods
+- Named exports only — no `export default`
+- Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
+- Barrel exports at `src/modules/index.ts`
+
+## Workflow
+
+Use this decision tree for all tasks:
+
+| Task complexity | Approach |
+|----------------|----------|
+| Simple (add endpoint, add DTO, single-file change) | Follow templateCentral skills directly — see `claude-skills/nestjs/` in templateCentral repo |
+| Medium (add module, add database, add integration) | Follow templateCentral skills — they have complete step-by-step instructions |
+| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
+| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
+
+**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
+
+## templateCentral Reference
+
+This project was scaffolded from `templateCentral/templates/nestjs`. Available skills for this stack:
+
+- `scaffold` — initial project setup (already done)
+- `add-module` — add a feature module with CRUD
+- `add-auth` — add authentication
+- `add-database` — add Prisma (SQL) or Mongoose (MongoDB)
+- `add-integration` — add external API integration
+- `add-test` — add tests for existing code
+```
+
+Update the project name and customize the skills list if any don't apply.
+
+### 8. Task Management (Optional)
+
+Ask the user: *"Do you want structured task management for complex features? You have two options:"*
+
+**Option A — templateCentral built-in** (no plugin required):
+
+Append to the project's `AGENTS.md`:
 
 ```markdown
 ## Task Management
@@ -125,7 +189,28 @@ Protocol summary: Plan → Verify → Track → Explain → Document → Capture
 Skip for simple changes (single-file edits, scaffolding, quick fixes).
 ```
 
-### 8. Remove Example Code (Optional)
+**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
+
+Tell the user to install Superpowers in their Claude Code session:
+
+```bash
+/plugin marketplace add pcvelz/superpowers
+/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
+```
+
+Then append to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+- **Simple tasks** (add endpoint, add DTO): use templateCentral skills directly
+- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
+```
+
+If the user doesn't want either, skip this step entirely.
+
+### 9. Remove Example Code (Optional)
 
 Once the project is verified, remove the example module:
 - Delete `src/modules/example/` directory
@@ -133,40 +218,11 @@ Once the project is verified, remove the example module:
 - Remove `ExampleModule` from the `imports` array in `src/app.module.ts`
 - Delete `test/modules/example.controller.spec.ts`
 
-## Architecture
-
-See `AGENT.md` for the full architecture diagram and dependency flow rules.
-
-## Template Details
-
-| Feature | Value |
-|---------|-------|
-| Framework | NestJS 11 |
-| HTTP Adapter | Fastify |
-| Validation | Zod + nestjs-zod |
-| API Docs | Swagger (available at `/docs`) |
-| Security | Helmet, CORS |
-| Testing | Jest |
-| Linting | ESLint 9 flat config, Prettier |
-| Docker | Multi-stage build (dev / stage / prod) |
-
-## Files to Customize
-
-| File | What to Change |
-|------|----------------|
-| `src/config/env.config.ts` | Add typed env variables |
-| `.env.example` | Add environment variable defaults |
-| `src/app.module.ts` | Register new modules, add global providers |
-| `src/modules/index.ts` | Export new modules |
-| `src/common/constants/` | Add shared constants |
-| `src/database/` | Add database connection (Prisma, TypeORM, MongoDB) |
-
 ## Rules
 
 - Always update `package.json` name before installing dependencies
 - Always copy `.env.example` to `.env` before first run
-- One module per feature — keep modules self-contained under `src/modules/`
-- Global providers (pipes, filters, guards) go in `app.module.ts`, not in individual modules
+- Global pipes and filters go in `app.module.ts`; auth guards at controller/route level (not global, so health checks remain unprotected)
 - Verify the API starts and Swagger docs at `/docs` render before handing off to the user
 - Remove example code only after the user confirms the project runs
 - NEVER copy `node_modules/`, `dist/`, or `.env` when scaffolding

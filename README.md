@@ -9,7 +9,7 @@ templateCentral/
 ├── AGENTS.md                       # Agent orchestration guide
 ├── README.md
 ├── claude-skills/                  # Claude skills (organized by stack)
-│   ├── nextjs/                     # All Next.js skills
+│   ├── nextjs/                     # All Next.js skills (11)
 │   │   ├── scaffold/               #   Scaffold a new project
 │   │   ├── code-standards/         #   Coding standards & conventions
 │   │   ├── add-feature/            #   Add a feature module
@@ -19,16 +19,17 @@ templateCentral/
 │   │   ├── add-integration/        #   Add a third-party integration
 │   │   ├── add-auth/               #   Add/configure authentication
 │   │   ├── add-test/               #   Add API route tests (Vitest)
-│   │   └── add-form/               #   Add a validated form
-│   ├── fastapi/                    # All FastAPI skills
+│   │   ├── add-form/               #   Add a validated form
+│   │   └── add-database/           #   Add Prisma (SQL) or Mongoose (MongoDB)
+│   ├── fastapi/                    # All FastAPI skills (7)
 │   │   ├── scaffold/               #   Scaffold a new project
 │   │   ├── code-standards/         #   Python/FastAPI coding standards
 │   │   ├── add-endpoint/           #   Add a FastAPI endpoint
 │   │   ├── add-test/               #   Add pytest tests
 │   │   ├── add-auth/               #   Add JWT authentication
-│   │   ├── add-database/           #   Add SQLAlchemy + Alembic
+│   │   ├── add-database/           #   Add SQLAlchemy (SQL) or Beanie (MongoDB)
 │   │   └── add-integration/        #   Add an external API integration
-│   ├── vite-react/                 # All Vite + React skills
+│   ├── vite-react/                 # All Vite + React skills (9)
 │   │   ├── scaffold/               #   Scaffold a new project
 │   │   ├── code-standards/         #   Coding standards & conventions
 │   │   ├── add-feature/            #   Add a feature module
@@ -38,13 +39,13 @@ templateCentral/
 │   │   ├── add-auth/               #   Add/configure authentication
 │   │   ├── add-test/               #   Add component/hook/service tests
 │   │   └── add-form/               #   Add a validated form
-│   ├── nestjs/                     # All NestJS skills
+│   ├── nestjs/                     # All NestJS skills (7)
 │   │   ├── scaffold/               #   Scaffold a new project
 │   │   ├── code-standards/         #   Coding standards & conventions
 │   │   ├── add-module/             #   Add a feature module with CRUD
 │   │   ├── add-test/               #   Add unit/e2e tests
 │   │   ├── add-auth/               #   Add JWT authentication
-│   │   ├── add-database/           #   Add Prisma ORM
+│   │   ├── add-database/           #   Add Prisma (SQL) or Mongoose (MongoDB)
 │   │   └── add-integration/        #   Add an external API integration
 │   └── shared/                     # Cross-stack skills
 │       ├── task-management/        #   Opt-in structured task management
@@ -68,13 +69,13 @@ templateCentral/
 
 ## Available Skills
 
-Skills are organized by stack. Each skill has YAML frontmatter (`name`, `description`) per the [Agent Skills spec](https://agentskills.io/specification). See each stack's index for the full listing:
+Skills are organized by stack. Each skill has YAML frontmatter (`name`, `description`) per the [Agent Skills spec](https://agentskills.io/specification). See each stack's `AGENT.md` for the skill routing table.
 
-- [Next.js skills](claude-skills/nextjs/INDEX.md) — 10 skills (scaffold, code-standards, add-feature, add-page, add-api-route, add-component, add-integration, add-auth, add-test, add-form)
-- [FastAPI skills](claude-skills/fastapi/INDEX.md) — 7 skills (scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration)
-- [Vite + React skills](claude-skills/vite-react/INDEX.md) — 9 skills (scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form)
-- [NestJS skills](claude-skills/nestjs/INDEX.md) — 7 skills (scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration)
-- [Shared skills](claude-skills/shared/INDEX.md) — 3 skills (task-management, full-stack-pairing, remove-example)
+- **Next.js** — 11 skills (scaffold, code-standards, add-feature, add-page, add-api-route, add-component, add-integration, add-auth, add-test, add-form, add-database)
+- **FastAPI** — 7 skills (scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration)
+- **Vite + React** — 9 skills (scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form)
+- **NestJS** — 7 skills (scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration)
+- **Shared** — 3 skills (task-management, full-stack-pairing, remove-example)
 
 ## Getting Started
 
@@ -130,4 +131,10 @@ cd src && python main.py
 
 ## Adding a New Template
 
-See the "Adding a New Stack" section in `AGENTS.md` for the full process, including creating the subagent definition (`AGENT.md`), skill index (`INDEX.md`), scaffold skill, detection table entry, and updating this README.
+To add a new stack:
+
+1. Create `templates/<stack>/` with all project files and a `README.md`
+2. Create `claude-skills/<stack>/` with `AGENT.md`, `code-standards/SKILL.md`, `scaffold/SKILL.md`, and additional skills
+3. Create `.claude/rules/<stack>.md` with path-scoped boundaries and architecture summary
+4. Add the stack to the detection table in `AGENTS.md`
+5. Update this README

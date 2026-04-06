@@ -11,6 +11,7 @@ const EXCLUDE_PATTERNS = new Set([
   ".next",
   ".venv",
   "__pycache__",
+  ".pytest_cache",
   ".env",
   ".env.local",
   "dist",

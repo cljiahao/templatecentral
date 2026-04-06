@@ -30,11 +30,9 @@ src/features/<feature-name>/
 └── index.ts                     # Barrel export
 ```
 
-> **Why this structure**: Each feature is self-contained — its own types, components, hooks, and API layer. This means you can delete a feature folder and nothing outside breaks. The barrel `index.ts` controls the public API, hiding internal details.
-
 ### 2. Create `types.ts`
 
-Define all TypeScript types and interfaces for this feature's domain first — this establishes the contract before any implementation:
+Define types and interfaces first — this establishes the contract before implementation:
 
 ```ts
 export interface ProjectItem {
@@ -46,7 +44,7 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Put all static data here — NOT in components. This prevents unnecessary re-renders and makes data reusable across the feature:
+Static data goes here — NOT in components:
 
 ```ts
 export const STATUS_OPTIONS = [
@@ -193,11 +191,7 @@ After creating all files:
 
 ## Rules
 
-All `code-standards/` rules apply. Key rules for features:
-
-- **Barrel imports** from outside: `import { X } from '@/features/<name>'`
 - **Direct imports** OK within the same feature
-- **Static data** in `constants.ts`, NEVER inline in components
 - If a component is used by 2+ features, promote it to `src/components/widgets/`
 - NEVER import from one feature into another — promote shared code to `components/widgets/` or `lib/`
 - NEVER place feature-specific components in `src/components/widgets/` until used by 2+ features

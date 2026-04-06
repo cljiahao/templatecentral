@@ -138,12 +138,10 @@ Confirm the build succeeds with no type errors and all tests pass.
 
 ## Rules
 
-- Pages are thin — compose from `features/` and `components/`; NEVER put data-fetching or business logic directly in page components
 - Always add to `src/pages/index.ts` barrel export
 - Always add to `src/lib/constants/routes.ts`
 - Always add the `<Route>` in `src/router.tsx` — the page won't be accessible otherwise
 - Protected pages MUST be nested inside `<Route element={<ProtectedRoute />}>` in `src/router.tsx` — otherwise unauthenticated users can access them
 - Use layout routes for shared navigation/chrome
-- Named exports only — NEVER use `export default`
 - NEVER hardcode route paths in components — use `PAGE_ROUTES` constants
 - NEVER create deeply nested route files — keep pages flat in `src/pages/`; nesting is in the router

@@ -82,7 +82,7 @@ Then run the test suite:
 pnpm test
 ```
 
-Confirm all tests pass (there may be zero tests initially — that is expected).
+Confirm all tests pass. The template includes a health check test (`__tests__/api/health.test.ts`) — verify it passes.
 
 ### 10. Generate Project AGENTS.md (MANDATORY)
 
@@ -120,11 +120,82 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 Update the Identity section with the actual project name and creation date. Add any user-specified customizations (custom routes, theme colors, navigation) under "Project-Specific Notes".
 
-### 11. Task Management (Optional)
+### 11. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-Ask the user: *"Do you want structured task management for complex features? (Recommended for projects with multiple contributors or long-lived features.)"*
+**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
 
-If yes, append this section to the project's `AGENTS.md`:
+Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+
+```markdown
+# <Project Name>
+
+Next.js 16 project scaffolded from templateCentral.
+
+## Build & Dev
+
+- `pnpm dev` — start dev server (Turbopack, http://localhost:3000)
+- `pnpm build` — production build
+- `pnpm test` — run Vitest suite
+- `pnpm lint` — ESLint 9
+- `pnpm format` — Prettier formatting
+- `pnpm check` — format + lint + typecheck (full quality gate)
+
+## Architecture
+
+- Route groups: `(public)/` for public pages, `dashboard/` for authenticated
+- Auth via NextAuth (Auth.js) with `proxy.ts` route protection; dev bypass when `isDev`
+- Feature modules: `src/features/<name>/` (components, hooks, api, types)
+- UI primitives: `src/components/ui/` (shadcn/ui, managed by CLI)
+- Composed widgets: `src/components/widgets/`
+- Barrel exports (`index.ts`) in all shared folders
+- Providers (SessionProvider, QueryClientProvider) in root `layout.tsx`
+
+## Conventions
+
+- Named exports only (except Next.js special files: pages, layouts, route handlers)
+- `function` declarations for components; `const` arrows for hooks/utilities
+- kebab-case filenames, PascalCase exports
+- Pages are thin — compose from `features/` and `components/`
+- Static data in `constants.ts`, never inline in components
+
+## Workflow
+
+Use this decision tree for all tasks:
+
+| Task complexity | Approach |
+|----------------|----------|
+| Simple (add page, component, API route, single-file change) | Follow templateCentral skills directly — see `claude-skills/nextjs/` in templateCentral repo |
+| Medium (add feature, add form, add integration) | Follow templateCentral skills — they have complete step-by-step instructions |
+| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
+| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
+
+**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
+
+## templateCentral Reference
+
+This project was scaffolded from `templateCentral/templates/nextjs`. Available skills for this stack:
+
+- `scaffold` — initial project setup (already done)
+- `add-page` — add a new page/route
+- `add-feature` — add a feature module
+- `add-component` — add a shared component
+- `add-api-route` — add an API route handler
+- `add-form` — add a form with validation
+- `add-auth` — add/modify authentication
+- `add-integration` — add external API integration
+- `add-database` — add Prisma (SQL) or Mongoose (MongoDB)
+- `add-test` — add tests for API route handlers (backend only)
+```
+
+Update the project name and customize the skills list if any don't apply.
+
+### 12. Task Management (Optional)
+
+Ask the user: *"Do you want structured task management for complex features? You have two options:"*
+
+**Option A — templateCentral built-in** (no plugin required):
+
+Append to the project's `AGENTS.md`:
 
 ```markdown
 ## Task Management
@@ -136,51 +207,33 @@ Protocol summary: Plan → Verify → Track → Explain → Document → Capture
 Skip for simple changes (single-file edits, scaffolding, quick fixes).
 ```
 
-## Template Details
+**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
 
-| Feature | Value |
-|---------|-------|
-| Framework | Next.js 16 with Turbopack |
-| UI | shadcn/ui (new-york), Tailwind CSS 4, Radix UI |
-| Language | TypeScript 5.9 |
-| State | React 19 RSC, TanStack React Query |
-| Forms | React Hook Form + Zod |
-| Animations | Framer Motion |
-| Theme | next-themes (dark/light) |
-| Toasts | Sonner |
-| Auth | NextAuth (Auth.js) with dev bypass |
-| HTTP | Axios |
-| Docker | Multi-stage (dev + prod standalone) |
-| Testing | Vitest (API route tests only) |
-| Linting | ESLint 9, Prettier (organize-imports + tailwind) |
+Tell the user to install Superpowers in their Claude Code session:
 
-## Files to Customize
+```bash
+/plugin marketplace add pcvelz/superpowers
+/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
+```
 
-| File | What to Change |
-|------|----------------|
-| `package.json` | `name`, `version`, add dependencies |
-| `src/app/layout.tsx` | `metadata.title`, `metadata.description`, fonts |
-| `src/app/(public)/page.tsx` | Landing page content |
-| `src/app/globals.css` | Theme colors (CSS custom properties) |
-| `src/components/layout/navbar.tsx` | Brand text, navigation links |
-| `src/components/layout/site-footer.tsx` | Credit text, footer links |
-| `src/lib/constants/routes.ts` | Page and API route definitions |
-| `components.json` | shadcn/ui style and color preferences |
-| `src/auth.ts` | Auth providers (add SSO providers here) |
-| `src/proxy.ts` | Public paths, redirect rules |
-| `Dockerfile` | Port, Node version, timezone |
-| `.env.example` / `.env.local` | Environment variables |
+Then append to the project's `AGENTS.md`:
 
-## Architecture Patterns
+```markdown
+## Task Management
 
-This template follows these conventions:
+- **Simple tasks** (add-page, add-component, add-api-route): use templateCentral skills directly
+- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
+```
 
-- **Route groups**: `(public)` for public pages, `dashboard` for authenticated
-- **Feature folders**: Add `src/features/<name>/` for domain-specific components
-- **Barrel exports**: `index.ts` files for clean imports (`@/lib/utils`, `@/features/example`, `@/components/layout`)
-- **Layout composition**: Providers (SessionProvider + QueryClient) in root layout; each route group has its own layout with Navbar + Footer
-- **Lib structure**: `utils/`, `constants/`, `errors/` under `src/lib/`
-- **Widgets**: Reusable composed components in `src/components/widgets/`
+If the user doesn't want either, skip this step entirely.
+
+### 13. Remove Example Code (Optional)
+
+Once the project is verified and the user confirms it runs:
+- Delete `src/features/example/` directory
+- Remove example imports from pages (e.g., `ExampleList` in the dashboard page)
+- Update barrel exports that re-export from the deleted feature
 
 ## Rules
 

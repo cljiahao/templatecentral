@@ -5,7 +5,9 @@ export const appConfig = {
     'API built with [NestJS](https://nestjs.com/) + Fastify',
   PROJECT_VERSION: process.env.PROJECT_VERSION || '0.1.0',
   ENVIRONMENT: process.env.ENVIRONMENT || 'dev',
-  PORT: parseInt(process.env.PORT ?? '3000', 10),
+  PORT: Number.isFinite(parseInt(process.env.PORT ?? '', 10))
+    ? parseInt(process.env.PORT!, 10)
+    : 3000,
 };
 
 export const serviceConfig = {

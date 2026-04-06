@@ -26,7 +26,25 @@ Create `src/integrations/` on first integration — this directory does not exis
 
 ## Steps
 
-### 1. Create the Client
+### 1. Create Zod Schemas
+
+Define schemas first — the client and service will import types from here:
+
+```ts
+// src/integrations/schemas/github-schemas.ts
+import { z } from 'zod';
+
+export const githubRepoSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  full_name: z.string(),
+  private: z.boolean(),
+});
+
+export type GithubRepo = z.infer<typeof githubRepoSchema>;
+```
+
+### 2. Create the Client
 
 Extend the base `FetchClient` (at `src/lib/clients/fetch-client.ts`) which handles response parsing, error mapping, and content-type negotiation:
 
@@ -50,24 +68,6 @@ export class GithubClient extends FetchClient {
 }
 ```
 
-> **Why extend FetchClient**: It handles JSON/binary/text content-type parsing, maps HTTP errors to `APIError` with status codes and response data, and provides typed `request<T>()`. You focus only on endpoint paths and types.
-
-### 2. Create Zod Schemas
-
-```ts
-// src/integrations/schemas/github-schemas.ts
-import { z } from 'zod';
-
-export const githubRepoSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  full_name: z.string(),
-  private: z.boolean(),
-});
-
-export type GithubRepo = z.infer<typeof githubRepoSchema>;
-```
-
 ### 3. Create the Service
 
 ```ts
@@ -87,7 +87,7 @@ export class GithubService {
 
 ### 4. Create a Configured Instance
 
-Since Vite uses `import.meta.env`, create the instance at the integrations root:
+Create the instance at the integrations root:
 
 ```ts
 // src/integrations/github.ts
@@ -97,26 +97,22 @@ import { GithubService } from './services/github-service';
 
 const client = new GithubClient(
   ENV.GITHUB_API_URL ?? 'https://api.github.com',
-  {
-    Authorization: `Bearer ${ENV.GITHUB_TOKEN ?? ''}`,
-    Accept: 'application/json',
-  },
+  { Accept: 'application/json' },
 );
 
 export const Github = new GithubService(client);
 ```
 
-> **Naming convention**: Exported instances use PascalCase matching the integration name: `Github`, `Stripe`, `Analytics`. This keeps imports consistent across the codebase.
-
-Add the env vars to `src/lib/constants/env.ts`:
+Add the env var to `src/lib/constants/env.ts` and add `VITE_GITHUB_API_URL=https://api.github.com` to `.env.example`:
 
 ```ts
 export const ENV = {
   // ... existing
   GITHUB_API_URL: import.meta.env.VITE_GITHUB_API_URL as string | undefined,
-  GITHUB_TOKEN: import.meta.env.VITE_GITHUB_TOKEN as string | undefined,
 } as const;
 ```
+
+> **Security**: NEVER put API tokens or secrets in `VITE_*` environment variables — they are embedded in the client bundle and visible to users. For APIs requiring authentication, route requests through your backend (see `full-stack-pairing` skill) and have the backend add the auth header. Only use `VITE_*` for non-sensitive config like API base URLs.
 
 ### 5. Consume via React Query Hook
 
@@ -150,6 +146,6 @@ Confirm the build succeeds with no type errors and all tests pass. Verify the in
 - Clients are thin — they only make HTTP requests; NEVER put business logic in clients
 - Schemas validate external responses with Zod — external data is untrusted; NEVER skip Zod validation on external API responses
 - Services contain business logic and call clients
-- Environment variables use `import.meta.env.VITE_*` (NEVER `process.env`), centralized in `src/lib/constants/env.ts`; NEVER hardcode API URLs or secrets
-- Always throw `APIError` for HTTP failures — NEVER throw generic `Error`
+- NEVER hardcode API URLs or secrets — centralize in `src/lib/constants/env.ts`
+- Throw `APIError` for HTTP failures — NEVER throw generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
 - NEVER consume integrations directly in components — go through React Query hooks in features

@@ -12,11 +12,7 @@ Create a new third-party API integration in a NestJS project scaffolded from tem
 - **Service name** — The external service (e.g., `github`, `stripe`, `openai`)
 - **Base URL** — The API base URL
 
-## Architecture
-
-```
-Config → HttpModule → Zod schemas → Injectable service → Module export
-```
+> **Placeholder names**: All examples use `github` as the integration name. Replace `github`/`Github` throughout with your actual service name (e.g., `stripe`/`Stripe`, `openai`/`Openai`). File names, class names, and imports must all match.
 
 ## Dependencies
 
@@ -60,7 +56,7 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
-import { githubRepoSchema, type GithubRepo } from './github-integration.schemas';
+import { githubRepoSchema, type GithubRepo } from './<name>-integration.schemas';
 
 @Injectable()
 export class GithubIntegrationService {
@@ -72,17 +68,28 @@ export class GithubIntegrationService {
     );
     return data.map((r: unknown) => githubRepoSchema.parse(r));
   }
-
-  async getRepo(owner: string, repo: string): Promise<GithubRepo> {
-    const { data } = await firstValueFrom(
-      this.http.get(`/repos/${owner}/${repo}`),
-    );
-    return githubRepoSchema.parse(data);
-  }
 }
 ```
 
-### 4. Create the Module
+### 4. Add Config
+
+Add the API token to `serviceConfig` in **`src/config/env.config.ts`**:
+
+```typescript
+export const serviceConfig = {
+  // ... existing fields ...
+  GITHUB_API_URL: process.env.GITHUB_API_URL ?? 'https://api.github.com',
+  GITHUB_TOKEN: process.env.GITHUB_TOKEN!,
+};
+```
+
+Add to `.env` and document in `.env.example`:
+```
+GITHUB_API_URL=https://api.github.com
+GITHUB_TOKEN=your_token_here
+```
+
+### 5. Create the Module
 
 **`src/modules/<name>-integration/<name>-integration.module.ts`**:
 
@@ -90,14 +97,15 @@ export class GithubIntegrationService {
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 
-import { GithubIntegrationService } from './github-integration.service';
+import { serviceConfig } from '../../config/env.config';
+import { GithubIntegrationService } from './<name>-integration.service';
 
 @Module({
   imports: [
     HttpModule.register({
-      baseURL: 'https://api.github.com',
+      baseURL: serviceConfig.GITHUB_API_URL,
       headers: {
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        Authorization: `Bearer ${serviceConfig.GITHUB_TOKEN}`,
       },
       timeout: 30000,
     }),
@@ -108,10 +116,18 @@ import { GithubIntegrationService } from './github-integration.service';
 export class GithubIntegrationModule {}
 ```
 
-### 5. Register in AppModule or Feature Module
+### 6. Export from Modules Barrel
+
+Add the integration module to `src/modules/index.ts`:
 
 ```typescript
-import { GithubIntegrationModule } from './modules/github-integration/github-integration.module';
+export * from './<name>-integration/<name>-integration.module';
+```
+
+### 7. Register in AppModule
+
+```typescript
+import { GithubIntegrationModule } from './modules';
 
 @Module({
   imports: [
@@ -122,31 +138,19 @@ import { GithubIntegrationModule } from './modules/github-integration/github-int
 export class AppModule {}
 ```
 
-### 6. Use in Other Services
+### 8. Validate
 
-Inject the integration service wherever needed:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { GithubIntegrationService } from '../github-integration/github-integration.service';
-
-@Injectable()
-export class ProjectService {
-  constructor(private readonly github: GithubIntegrationService) {}
-
-  async syncRepos() {
-    const repos = await this.github.listRepos();
-    // Process repos...
-  }
-}
+```bash
+pnpm start:dev
 ```
+
+Confirm the server starts with no DI or import errors.
 
 ## Rules
 
-- Use `@nestjs/axios` + `HttpModule` — not raw `axios` or `fetch`.
-- Validate all external responses with Zod schemas before returning to callers.
-- Configure `HttpModule.register()` with `baseURL`, auth headers, and timeout.
-- Export the service from the integration module so other modules can import it.
-- Keep API tokens in environment variables — never hardcode.
-- Integration modules are self-contained — each has its own module, service, and schemas.
-- Add `@ApiTags()` and `@ApiOperation()` if the integration exposes its own controller endpoints.
+- Use `@nestjs/axios` + `HttpModule` — not raw `axios` or `fetch`
+- Validate all external responses with Zod schemas — external data is untrusted
+- Configure `HttpModule.register()` with `baseURL`, auth headers, and timeout
+- Export the service from the integration module so other modules can import it
+- Keep API tokens in environment variables — NEVER hardcode
+- Integration modules are self-contained — each has its own module, service, and schemas

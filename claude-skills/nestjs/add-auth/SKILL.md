@@ -18,13 +18,13 @@ pnpm add -D @types/passport-jwt @types/bcrypt
 
 ### 1. Create Auth Module Directory
 
-Create `src/modules/auth/` with these files:
+Create `src/modules/auth/` with these files (flat — no subdirectories, matching the template's module structure):
 - `auth.module.ts`
 - `auth.controller.ts`
 - `auth.service.ts`
 - `auth.dto.ts`
-- `strategies/jwt.strategy.ts`
-- `guards/jwt-auth.guard.ts`
+- `jwt.strategy.ts`
+- `jwt-auth.guard.ts`
 
 ### 2. Define DTOs
 
@@ -55,14 +55,36 @@ export class LoginDto extends createZodDto(loginSchema) {}
 export class TokenDto extends createZodDto(tokenSchema) {}
 ```
 
-### 3. Create JWT Strategy
+### 3. Add Config
 
-**`src/modules/auth/strategies/jwt.strategy.ts`**:
+Add `JWT_SECRET` to `appConfig` in **`src/config/env.config.ts`**:
+
+```typescript
+export const appConfig = {
+  // ... existing fields ...
+  JWT_SECRET: process.env.JWT_SECRET!,
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '30m',
+};
+```
+
+And add to `.env`:
+```
+JWT_SECRET=<generate with: openssl rand -hex 32>
+JWT_EXPIRES_IN=30m
+```
+
+> **Security**: `JWT_SECRET` uses non-null assertion (`!`) to satisfy TypeScript. Note that `!` is erased at compile time — it does NOT cause a runtime error if the variable is missing. Add a startup check in `main.ts` bootstrap (e.g., `if (!appConfig.JWT_SECRET) throw new Error('JWT_SECRET is required')`) to fail fast. NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
+
+### 4. Create JWT Strategy
+
+**`src/modules/auth/jwt.strategy.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+
+import { appConfig } from '../../config/env.config';
 
 interface JwtPayload {
   sub: string;
@@ -75,7 +97,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'change-me',
+      secretOrKey: appConfig.JWT_SECRET,
     });
   }
 
@@ -85,9 +107,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 }
 ```
 
-### 4. Create Auth Guard
+### 5. Create Auth Guard
 
-**`src/modules/auth/guards/jwt-auth.guard.ts`**:
+**`src/modules/auth/jwt-auth.guard.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -97,7 +119,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class JwtAuthGuard extends AuthGuard('jwt') {}
 ```
 
-### 5. Create Auth Service
+### 6. Create Auth Service
 
 **`src/modules/auth/auth.service.ts`**:
 
@@ -131,7 +153,7 @@ export class AuthService {
 }
 ```
 
-### 6. Create Auth Controller
+### 7. Create Auth Controller
 
 **`src/modules/auth/auth.controller.ts`**:
 
@@ -161,7 +183,7 @@ export class AuthController {
 }
 ```
 
-### 7. Create Auth Module
+### 8. Create Auth Module
 
 **`src/modules/auth/auth.module.ts`**:
 
@@ -170,16 +192,17 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
+import { appConfig } from '../../config/env.config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'change-me',
-      signOptions: { expiresIn: '30m' },
+      secret: appConfig.JWT_SECRET,
+      signOptions: { expiresIn: appConfig.JWT_EXPIRES_IN },
     }),
   ],
   controllers: [AuthController],
@@ -189,12 +212,20 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 export class AuthModule {}
 ```
 
-### 8. Register in AppModule
+### 9. Export from Modules Barrel
+
+Add the auth module to `src/modules/index.ts`:
+
+```typescript
+export * from './auth/auth.module';
+```
+
+### 10. Register in AppModule
 
 Import `AuthModule` in `src/app.module.ts`:
 
 ```typescript
-import { AuthModule } from './modules/auth/auth.module';
+import { AuthModule } from './modules';
 
 @Module({
   imports: [
@@ -205,13 +236,13 @@ import { AuthModule } from './modules/auth/auth.module';
 export class AppModule {}
 ```
 
-### 9. Protect Routes
+### 11. Protect Routes
 
 Use the `JwtAuthGuard` on any controller or endpoint that requires authentication:
 
 ```typescript
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
@@ -234,12 +265,16 @@ getMe(@Req() req) {
 
 Add to `.env`:
 - `JWT_SECRET` — Random string for JWT signing (generate with `openssl rand -hex 32`)
+- `JWT_EXPIRES_IN` — Token expiry duration (default: `30m`)
+
+Also add placeholder entries to `.env.example`:
+```
+JWT_SECRET=<generate with: openssl rand -hex 32>
+JWT_EXPIRES_IN=30m
+```
 
 ## Rules
 
-- **JWT_SECRET must be kept secret** — never commit to version control.
-- Use `nestjs-zod` with `createZodDto` for DTOs — not `class-validator`.
-- Controllers delegate to services — no business logic in controllers.
+- **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
 - Always hash passwords with `bcrypt` — never store plaintext.
-- Add `@ApiTags('Auth')` and `@ApiOperation()` to all auth endpoints.
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.

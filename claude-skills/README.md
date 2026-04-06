@@ -2,15 +2,14 @@
 
 This directory contains SKILL.md files that instruct AI agents on how to scaffold projects and work within them.
 
-Skills are organized by stack. Each stack folder has an `INDEX.md` listing all available skills with descriptions.
+Skills are organized by stack. Each stack folder has an `AGENT.md` with a skill routing table listing all available skills.
 
 ## Directory Structure
 
 ```
 claude-skills/
-├── nextjs/                      # Next.js skills (10 skills)
-│   ├── AGENT.md                 #   Subagent definition
-│   ├── INDEX.md                 #   Skill index
+├── nextjs/                      # Next.js skills (11 skills)
+│   ├── AGENT.md                 #   Subagent definition + skill routing
 │   ├── scaffold/SKILL.md
 │   ├── code-standards/SKILL.md
 │   ├── add-feature/SKILL.md
@@ -20,10 +19,10 @@ claude-skills/
 │   ├── add-integration/SKILL.md
 │   ├── add-auth/SKILL.md
 │   ├── add-test/SKILL.md
-│   └── add-form/SKILL.md
+│   ├── add-form/SKILL.md
+│   └── add-database/SKILL.md
 ├── fastapi/                     # FastAPI skills (7 skills)
 │   ├── AGENT.md
-│   ├── INDEX.md
 │   ├── scaffold/SKILL.md
 │   ├── code-standards/SKILL.md
 │   ├── add-endpoint/SKILL.md
@@ -33,7 +32,6 @@ claude-skills/
 │   └── add-integration/SKILL.md
 ├── vite-react/                  # Vite + React skills (9 skills)
 │   ├── AGENT.md
-│   ├── INDEX.md
 │   ├── scaffold/SKILL.md
 │   ├── code-standards/SKILL.md
 │   ├── add-feature/SKILL.md
@@ -45,7 +43,6 @@ claude-skills/
 │   └── add-form/SKILL.md
 ├── nestjs/                      # NestJS skills (7 skills)
 │   ├── AGENT.md
-│   ├── INDEX.md
 │   ├── scaffold/SKILL.md
 │   ├── code-standards/SKILL.md
 │   ├── add-module/SKILL.md
@@ -54,7 +51,6 @@ claude-skills/
 │   ├── add-database/SKILL.md
 │   └── add-integration/SKILL.md
 └── shared/                      # Cross-stack skills (3 skills)
-    ├── INDEX.md
     ├── task-management/SKILL.md
     ├── full-stack-pairing/SKILL.md
     └── remove-example/SKILL.md
@@ -84,5 +80,5 @@ Followed by the full skill content with:
 1. Find or create the stack directory: `claude-skills/<stack>/`
 2. Create a subdirectory: `claude-skills/<stack>/<skill-name>/`
 3. Add a `SKILL.md` with frontmatter (`name`, `description`) and skill content
-4. Add the skill to the stack's `INDEX.md`
+4. Add the skill to the stack's `AGENT.md` skill routing table
 5. Update the "Available Skills" section in the root `README.md` — add the skill to the relevant stack's bullet and increment the skill count

@@ -5,8 +5,6 @@ description: Use when writing or reviewing Python code in a FastAPI project — 
 
 # FastAPI / Python Code Standards
 
-Coding standards for Python FastAPI projects scaffolded from templateCentral.
-
 ## Naming Conventions
 
 | Element | Convention | Example |
@@ -52,7 +50,7 @@ Coding standards for Python FastAPI projects scaffolded from templateCentral.
 ## Imports
 
 - Order: stdlib → third-party → local (separated by blank lines, enforced by Ruff).
-- Use absolute imports only: `from models.data import Tier`.
+- Use absolute imports only: `from models.base import BaseModel`.
 - Import specific names, not modules.
 - No wildcard imports (`from module import *`).
 - Avoid barrel re-exports in `__init__.py` unless stable public API.
@@ -77,25 +75,41 @@ Coding standards for Python FastAPI projects scaffolded from templateCentral.
 ## Dependency Rules
 
 ```
-core/  (standalone — app infrastructure)
-api/  →  logic/  →  models/
-                       ↑
-              constants/  ←  utils/
+core/          (standalone — app infrastructure, config, logging)
+api/           →  models/
+ ├── routers/     ↑
+ ├── services/    utils/
+ └── schemas/
 ```
 
-- `logic/` **never** imports from `api/`.
-- `models/` **never** imports from `logic/` or `api/`.
-- `core/` is **not** imported by `logic/` or `models/`.
+- `api/services/` contains business logic — called by `api/routers/`, never the reverse.
+- `models/` **never** imports from `api/`.
+- `core/` is standalone infrastructure — imported by `api/` but never by `models/`.
+- `utils/` are pure helpers — importable by any layer.
 
-## Rules
+## Security
 
-- **snake_case** for files/functions/variables, **PascalCase** for classes, **UPPER_SNAKE_CASE** for constants
-- **Type annotations** on all public function parameters and return types
-- **Pure functions** preferred — inputs → outputs, no side effects
-- **Absolute imports** only — `from models.data import Tier`; NEVER use wildcard imports
-- **Layered dependency flow** — `api/` → `logic/` → `models/`, never reversed; logic/ and models/ NEVER import from api/
-- **Routers are thin** — accept body, call service, return result
-- NEVER use `Optional[X]` — use `X | None` (Python 3.10+ syntax)
-- NEVER use `List`, `Dict`, `Tuple` from `typing` — use built-in `list`, `dict`, `tuple`
-- NEVER use bare `except:` or broad `except Exception:` except at application boundaries
-- NEVER catch and silently ignore exceptions — always log or re-raise
+### Environment & Secrets
+- All config via Pydantic `BaseSettings` — env vars loaded by `load_dotenv()` in `src/main.py`; NEVER use `os.environ` directly in application code
+- Secrets (`SECRET_KEY`, `DATABASE_URL`, API keys) go in `src/.env` — NEVER commit `src/.env` or hardcode secrets in source
+- Use `src/.env.default` for non-sensitive defaults only; secrets must be blank or absent
+
+### Input Validation
+- All request bodies validated by Pydantic schemas with `extra="forbid"` — rejects unexpected fields automatically
+- NEVER skip `response_model` — it filters outgoing data, preventing accidental exposure of internal fields
+- Validate path/query params with FastAPI's type annotations — NEVER cast raw strings manually
+
+### CORS
+- `ALLOWED_CORS` is `["*"]` in dev for convenience — in production, set `CORS_ORIGINS` env var (comma-separated origins); `_compute_allowed_cors()` in `src/core/config.py` reads it automatically
+- Always set `allow_credentials=True` if using cookie-based auth
+
+### Auth
+- Hash passwords with `bcrypt` or `passlib` — NEVER store plaintext passwords
+- JWT tokens should have short expiry; use refresh tokens for long sessions
+- NEVER return password hashes or internal IDs in API responses
+
+### Least Privilege
+- Services return Pydantic `response_model` objects — NEVER return raw ORM/database objects directly
+- Use `exclude` or explicit field selection to strip internal fields before returning
+- NEVER log full request bodies that may contain passwords or PII
+
