@@ -34,7 +34,7 @@ export abstract class FetchClient {
     body?: unknown,
     query: Record<string, string | number | boolean | undefined> = {}
   ): Promise<T> {
-    const url = new URL(`${this.baseUrl}/${path}`);
+    const url = new URL(`${this.baseUrl}/${path}`, window.location.origin);
 
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined) url.searchParams.set(k, String(v));

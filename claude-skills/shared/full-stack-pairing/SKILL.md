@@ -25,10 +25,10 @@ Cross-stack guidance for connecting a templateCentral frontend to a templateCent
 The template already has `configure_cors()` in `src/app.py` using `api_settings.ALLOWED_CORS`. Production origins are driven by `CORS_ORIGINS` in `APISettings` (comma-separated). Update `src/.env`:
 
 ```env
-CORS_ORIGINS=http://localhost:5173
+CORS_ORIGINS=http://localhost:3000
 ```
 
-> Use `5173` for Vite frontends, `3000` for Next.js frontends. For multiple origins: `CORS_ORIGINS=http://localhost:5173,http://localhost:3000`.
+> The templateCentral Vite template defaults to port `3000` (same as Next.js). For multiple origins: `CORS_ORIGINS=http://localhost:3000,http://localhost:3001`.
 
 No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, `["*"]` is used automatically.
 
@@ -37,12 +37,12 @@ No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS
 The template already configures CORS via `serviceConfig.CLIENT_URL` (from `src/config/env.config.ts`). Update `CLIENT_URL` in `.env`:
 
 ```env
-CLIENT_URL=http://localhost:5173
+CLIENT_URL=http://localhost:3000
 ```
 
-> **Port note**: Use `5173` for Vite frontends, `3000` for Next.js frontends. If pairing NestJS (port 3000) with Next.js (port 3000), change one to avoid conflict.
+> **Port note**: The templateCentral Vite template defaults to port `3000` (same as NestJS and Next.js). When pairing Vite or Next.js with NestJS, change one port to avoid conflict (e.g., set NestJS to `3001`).
 
-The template's `setupCors()` reads this automatically — no code changes needed unless you need multiple origins (comma-separated: `CLIENT_URL=http://localhost:5173,http://localhost:3000`).
+The template's `setupCors()` reads this automatically — no code changes needed unless you need multiple origins (comma-separated: `CLIENT_URL=http://localhost:3000,http://localhost:3001`).
 
 ### 2. Configure Frontend Proxy (Development)
 
@@ -92,14 +92,14 @@ BACKEND_URL=http://localhost:8000  # server-side direct calls
 #### Backend `.env`
 
 ```env
-# FastAPI — update CORS_ORIGINS in src/.env (use 5173 for Vite, 3000 for Next.js)
-CORS_ORIGINS=http://localhost:5173
+# FastAPI — update CORS_ORIGINS in src/.env
+CORS_ORIGINS=http://localhost:3000
 
 # NestJS — already in .env.example
-CLIENT_URL=http://localhost:5173
+CLIENT_URL=http://localhost:3000
 ```
 
-> **Port alignment**: FastAPI defaults to `8000`, NestJS defaults to `3000`. Ensure your proxy target port matches the backend you're pairing with. If both frontend and backend default to `3000`, change one.
+> **Port alignment**: FastAPI defaults to `8000`, NestJS defaults to `3000`, Vite defaults to `3000`, Next.js defaults to `3000`. Ensure your proxy target port matches the backend. When pairing NestJS with Vite or Next.js, change one port to avoid conflict.
 
 ### 4. Frontend HTTP Client
 

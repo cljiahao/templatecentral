@@ -15,8 +15,14 @@ ARG PORT=8000
 
 # ---- Base ----
 # Shared Debian-slim + Python foundation. Installs OS-level packages once.
+# The non-root user is created here so all downstream stages inherit it,
+# matching the hardening pattern used in the Next.js and Vite Dockerfiles.
 FROM ${PYTHON} AS base
 ARG APP_DIR
+ARG APP_UID
+ARG APP_GID
+ARG APP_USERNAME
+ARG APP_GROUPNAME
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -25,13 +31,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR ${APP_DIR}
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends tzdata && \
-    ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime && \
-    echo "Asia/Singapore" > /etc/timezone && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends tzdata \
+    && ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
+    && echo "Asia/Singapore" > /etc/timezone \
+    && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
+    && useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
+    && chown ${APP_UID}:${APP_GID} ${APP_DIR} \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---- Dependencies (dev) ----
 # Installs ALL Python packages (including dev deps like pytest, ruff, etc.)
@@ -75,15 +84,8 @@ RUN \
 FROM deps AS dev
 ARG PORT
 ARG APP_UID
-ARG APP_GID
-ARG APP_USERNAME
-ARG APP_GROUPNAME
 
 ENV PORT=${PORT}
-
-RUN groupadd -g ${APP_GID} ${APP_GROUPNAME} && \
-    useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} && \
-    chown ${APP_UID}:${APP_GID} ${APP_DIR}
 
 COPY ./ ./
 RUN chmod +x docker-entrypoint.sh
@@ -102,17 +104,11 @@ CMD ["dev"]
 FROM base AS prod
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
-ARG APP_GROUPNAME
 ARG APP_DIR
 ARG PORT
 
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}" \
     PORT=${PORT}
-
-RUN groupadd -g ${APP_GID} ${APP_GROUPNAME} && \
-    useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} && \
-    chown ${APP_UID}:${APP_GID} ${APP_DIR}
 
 COPY --chown=${APP_UID}:${APP_GID} --from=prod-deps ${APP_DIR}/.venv ./.venv
 

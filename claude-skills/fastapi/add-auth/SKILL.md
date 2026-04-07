@@ -10,7 +10,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 ## Dependencies
 
 Add to `src/requirements.txt`:
-- `python-jose[cryptography]` — JWT encoding/decoding
+- `PyJWT[crypto]` — JWT encoding/decoding
 - `passlib[bcrypt]` — Password hashing
 
 ## Steps
@@ -43,13 +43,13 @@ class LoginRequest(BaseRequestSchema):
 
 **`src/api/schemas/response/auth.py`**:
 ```python
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from api.schemas.base import BaseResponseSchema
 
 
-class TokenResponse(BaseResponseSchema):
-    """JWT token response."""
+class TokenResponse(BaseModel):
+    """JWT token response — uses plain BaseModel to preserve OAuth2-standard snake_case (RFC 6749)."""
 
     access_token: str = Field(description="JWT access token.")
     token_type: str = Field(default="bearer", description="Token type.")
@@ -89,7 +89,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```python
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from core.config import api_settings
@@ -121,7 +121,7 @@ def decode_access_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, api_settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 ```
 
@@ -204,7 +204,7 @@ from api.schemas.response.auth import TokenResponse, UserResponse
 from api.services.auth_service import login_user, register_user
 from api.tags import APITags
 
-router = APIRouter(prefix="/auth", tags=[APITags.AUTH])
+router = APIRouter(prefix="/auth")
 
 
 @router.post("/register", response_model=UserResponse)
@@ -227,8 +227,9 @@ Add the auth router to `src/api/routes.py`:
 
 ```python
 from api.routers import auth
+from api.tags import APITags
 
-router.include_router(auth.router)
+router.include_router(auth.router, tags=[APITags.AUTH])
 ```
 
 ### 9. Protect Routes

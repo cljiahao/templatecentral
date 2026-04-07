@@ -106,6 +106,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - Barrel exports (`index.ts`) for all shared folders
 - shadcn/ui primitives in `src/components/ui/` (managed by CLI)
 - Reusable composed widgets in `src/components/widgets/`
+- `/api/health` endpoint for Docker HEALTHCHECK and load balancer probes
 
 ## Key Conventions
 - Named exports only (except Next.js special files: pages, layouts, route handlers)
@@ -149,6 +150,7 @@ Next.js 16 project scaffolded from templateCentral.
 - Composed widgets: `src/components/widgets/`
 - Barrel exports (`index.ts`) in all shared folders
 - Providers (SessionProvider, QueryClientProvider) in root `layout.tsx`
+- `/api/health` endpoint for Docker HEALTHCHECK and load balancer probes
 
 ## Conventions
 
@@ -232,7 +234,7 @@ If the user doesn't want either, skip this step entirely.
 
 Once the project is verified and the user confirms it runs:
 - Delete `src/features/example/` directory
-- Remove example imports from pages (e.g., `ExampleList` in the dashboard page)
+- Remove the `ExampleList` import and usage from `src/app/dashboard/(overview)/page.tsx`
 - Update barrel exports that re-export from the deleted feature
 
 ## Rules

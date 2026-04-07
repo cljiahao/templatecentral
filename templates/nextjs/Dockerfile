@@ -16,9 +16,9 @@ ARG PORT=3000
 
 # ---- Base ----
 # Shared Alpine + Node foundation. All dependency/build stages inherit from here
-# so that OS-level packages (tzdata) are only installed once.
-# The non-root user is created here so /etc/passwd and /etc/group can be copied
-# into prod images that may not have `adduser`/`addgroup` (e.g. hardened images).
+# so that OS-level packages (tzdata, dumb-init, ca-certificates) are only
+# installed once. The non-root user is created here so /etc/passwd and
+# /etc/group can be copied into prod images that may not have `adduser`.
 FROM ${NODE} AS base
 ARG APP_DIR
 ARG APP_UID
@@ -30,13 +30,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR ${APP_DIR}
 
-RUN apk add --no-cache tzdata \
+RUN apk add --no-cache tzdata dumb-init ca-certificates \
     && apk upgrade --no-cache \
     && cp /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone
-
-RUN addgroup -g ${APP_GID} ${APP_GROUPNAME} && \
-    adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
+    && echo "Asia/Singapore" > /etc/timezone \
+    && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
+    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
 # ---- Prisma (conditional) ----
 # Copies prisma/ directory if it exists. When a project doesn't use Prisma,
@@ -89,6 +88,12 @@ CMD ["dev"]
 # Minimal Node.js image running the Next.js standalone server. Only the build
 # output is copied — no source code or node_modules in the final image.
 # Requires `output: "standalone"` in next.config.js.
+#
+# dumb-init runs as PID 1 to properly forward SIGTERM to Node.js, ensuring
+# graceful shutdown of database connections (Mongoose, Kysely/pg pools).
+#
+# /tmp is writable for Next.js cache; all other paths are read-only compatible
+# with ECS readonlyRootFilesystem: true.
 FROM base AS prod
 ARG APP_UID
 ARG APP_GID
@@ -104,7 +109,13 @@ COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/public ./public
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/.next/standalone ./
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/.next/static ./.next/static
 
+RUN mkdir -p /tmp/.next/cache && chown -R ${APP_UID}:${APP_GID} /tmp/.next
+
 EXPOSE ${PORT}
 USER ${APP_UID}
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["node", "-e", "fetch('http://localhost:' + process.env.PORT + '/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]

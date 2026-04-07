@@ -117,7 +117,7 @@ The template provides these shared utilities:
 - Validate URL params and search params before use — they are user-controlled input
 
 ### Auth & Route Protection
-- `proxy.ts` enforces auth for all routes not in `PUBLIC_PATHS` — NEVER duplicate auth checks in page components
+- `proxy.ts` uses `export const proxy = auth(...)` (Next.js 16 convention) to enforce auth for all routes not in `PUBLIC_PATHS` — NEVER duplicate auth checks in page components. Page components are protected by the proxy redirect; API routes should independently verify the session for defense-in-depth
 - API routes that need auth should check `auth()` from `@/auth` and return 401 if no session
 - NEVER expose user IDs or internal identifiers in client-side code without authorization checks
 

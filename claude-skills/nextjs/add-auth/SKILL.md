@@ -14,7 +14,7 @@ The scaffolded project includes a working auth setup out of the box:
 | File | Purpose |
 |------|---------|
 | `src/auth.ts` | NextAuth config — providers, JWT callbacks, session config |
-| `src/proxy.ts` | Next.js 16 proxy (replaces middleware) — redirects unauthenticated users to `/login` |
+| `src/proxy.ts` | Next.js 16 proxy (replaces middleware) — uses named `export const proxy` convention to redirect unauthenticated users to `/login` |
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth API route handler |
 | `src/features/auth/` | Auth feature module — `LoginCard`, `LoginButton`, `SignOutButton` |
 | `src/app/(public)/login/page.tsx` | Login page |
@@ -100,7 +100,7 @@ The `provider` string must match the NextAuth provider ID (lowercase, hyphenated
 
 ### 5. Customize Public Routes (Optional)
 
-In `src/proxy.ts` (the Next.js 16 proxy that replaces middleware), the `PUBLIC_PATHS` set controls which pages are accessible without auth. Add paths as needed:
+In `src/proxy.ts` (the Next.js 16 proxy, exported as `export const proxy`), the `PUBLIC_PATHS` set controls which pages are accessible without auth. Add paths as needed:
 
 ```typescript
 const PUBLIC_PATHS = new Set<string>([
@@ -110,7 +110,7 @@ const PUBLIC_PATHS = new Set<string>([
 ]);
 ```
 
-The `/api/auth/*` routes are always public (required for NextAuth).
+The `/api/auth/*` and `/api/health` routes are always public (required for NextAuth and Docker HEALTHCHECK respectively).
 
 ### 6. Access Session in Components
 
@@ -156,7 +156,7 @@ The Credentials provider and "Dev login" button are **only available when `isDev
 ```
 src/
 ├── auth.ts                              # NextAuth config (providers, callbacks)
-├── proxy.ts                             # Next.js 16 proxy — route protection (wraps auth())
+├── proxy.ts                             # Next.js 16 proxy — `export const proxy = auth(...)` for route protection
 ├── app/api/auth/[...nextauth]/route.ts  # NextAuth API handler
 ├── features/auth/
 │   ├── components/

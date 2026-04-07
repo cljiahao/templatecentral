@@ -24,7 +24,7 @@ Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, TanS
 | `add-auth/` | Configuring authentication — adding SSO providers, customizing login UI, protecting routes |
 | `add-test/` | Adding tests for API route handlers (backend only) |
 | `add-form/` | Adding a validated form (React Hook Form + Zod + CustomFormField) |
-| `add-database/` | Adding a database — Prisma (SQL) or Mongoose (MongoDB) |
+| `add-database/` | Adding a database — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB), with optional AWS IAM auth |
 
 ## Architecture & Code Standards
 

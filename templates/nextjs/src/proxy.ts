@@ -1,18 +1,19 @@
 import { auth } from '@/auth';
-import { PAGE_ROUTES } from '@/lib/constants/routes';
+import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
 import { NextResponse } from 'next/server';
 
 const PUBLIC_PATHS = new Set<string>([PAGE_ROUTES.HOME, PAGE_ROUTES.LOGIN]);
+const PUBLIC_API_PREFIXES = ['/api/auth', API_ROUTES.HEALTH];
 
 function isApiRoute(pathname: string): boolean {
   return pathname.startsWith('/api/');
 }
 
 function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname) || pathname.startsWith('/api/auth');
+  return PUBLIC_PATHS.has(pathname) || PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const isAuthenticated = !!req.auth;
 

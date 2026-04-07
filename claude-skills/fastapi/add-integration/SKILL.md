@@ -77,14 +77,16 @@ class GithubClient:
 
 **`src/integrations/<name>_schemas.py`**:
 
+Integration schemas must NOT inherit from `BaseResponseSchema` — it has `extra="forbid"` (rejects unknown fields from external APIs) and `alias_generator=to_camel` (transforms field names). Use plain `BaseModel` with `extra="ignore"` instead:
+
 ```python
-from pydantic import Field
-
-from api.schemas.base import BaseResponseSchema
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class GithubRepo(BaseResponseSchema):
-    """GitHub repository response."""
+class GithubRepo(BaseModel):
+    """GitHub repository response — uses plain BaseModel to preserve external API field names."""
+
+    model_config = ConfigDict(extra="ignore")
 
     id: int = Field(description="Repository ID.")
     full_name: str = Field(description="Full repository name (owner/repo).")
@@ -165,7 +167,7 @@ First, add a tag to `src/api/tags.py`:
 ```python
 class APITags(StrEnum):
     # ... existing tags ...
-    GITHUB = "GitHub"
+    GITHUB = "github"
 ```
 
 Then create the router:

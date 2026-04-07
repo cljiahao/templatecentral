@@ -19,7 +19,7 @@ FastAPI 0.116, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruff, pyte
 | `add-endpoint/` | Adding a new API endpoint |
 | `add-test/` | Adding tests for endpoints, logic, or utilities |
 | `add-auth/` | Adding JWT authentication with password hashing |
-| `add-database/` | Adding a database — SQLAlchemy (SQL) or Beanie (MongoDB) |
+| `add-database/` | Adding a database — SQLAlchemy (SQL) or Beanie (MongoDB), with optional AWS IAM auth |
 | `add-integration/` | Connecting to an external API (httpx + Pydantic schemas) |
 
 ## Architecture & Code Standards

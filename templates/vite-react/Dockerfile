@@ -18,15 +18,23 @@ ARG PORT=3000
 # ---- Base ----
 # Shared Alpine + Node foundation. All dependency/build stages inherit from here
 # so that OS-level packages (tzdata) are only installed once.
+# The non-root user is created here so /etc/passwd and /etc/group can be copied
+# into prod images that may not have `adduser`/`addgroup` (e.g. hardened images).
 FROM ${NODE} AS base
 ARG APP_DIR
+ARG APP_UID
+ARG APP_GID
+ARG APP_USERNAME
+ARG APP_GROUPNAME
 
 WORKDIR ${APP_DIR}
 
 RUN apk add --no-cache tzdata \
     && apk upgrade --no-cache \
     && cp /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone
+    && echo "Asia/Singapore" > /etc/timezone \
+    && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
+    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
 # ---- Dependencies ----
 # Installs ALL dependencies (including devDependencies like vite, typescript,
@@ -60,6 +68,7 @@ RUN \
 FROM deps AS dev
 ENV NODE_ENV="development"
 COPY ./ ./
+RUN apk add --no-cache curl
 RUN chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
@@ -77,12 +86,13 @@ ARG PORT
 
 ENV PORT=${PORT}
 
-RUN mkdir -p /run && \
-    addgroup -g ${APP_GID} ${APP_GROUPNAME} && \
-    adduser -S -u ${APP_UID} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME} && \
-    chown -R ${APP_UID}:${APP_GID} /run /var/cache/nginx /etc/nginx && \
-    chmod -R 755 /run /var/cache/nginx /etc/nginx && \
-    rm /etc/nginx/conf.d/default.conf
+RUN apk upgrade --no-cache \
+    && mkdir -p /run \
+    && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
+    && adduser -S -u ${APP_UID} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME} \
+    && chown -R ${APP_UID}:${APP_GID} /run /var/cache/nginx /etc/nginx \
+    && chmod -R 755 /run /var/cache/nginx /etc/nginx \
+    && rm /etc/nginx/conf.d/default.conf
 
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/dist /usr/share/nginx/html
 COPY --chown=${APP_UID}:${APP_GID} ./nginx.conf.template /etc/nginx/templates/nginx.conf.template

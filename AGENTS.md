@@ -13,7 +13,7 @@ Detect the stack from the user's request or project files, then read the subagen
 | Vite + React | `claude-skills/vite-react/AGENT.md` | `templates/vite-react/` |
 | NestJS | `claude-skills/nestjs/AGENT.md` | `templates/nestjs/` |
 
-Detection signals: `next.config.ts` → nextjs, `pyproject.toml`/FastAPI → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` → nestjs. If ambiguous, ask. Meta-tasks (auditing, adding stacks) stay with the orchestrator.
+Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi` or `src/app.py` importing `FastAPI` → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs. If ambiguous, ask. Meta-tasks (auditing, adding stacks) stay with the orchestrator.
 
 ## Subagent Boundaries
 

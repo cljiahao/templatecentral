@@ -101,7 +101,7 @@ describe('ProjectForm', () => {
 
 ### 3. Service Tests
 
-Test services by calling their methods directly. If the service uses `fetch` or an external client, mock at that boundary:
+Test services by calling their methods directly. The first example below is for **synchronous/in-memory services** (like the template's `ExampleService`). For **async services** that call `fetch` or an external API, see the second example with `mockFetch`:
 
 ```ts
 // src/features/project/api/project-service.test.ts

@@ -65,7 +65,8 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 
 1. Delete the files listed above
 2. Edit `src/api/routes.py` — remove example router registration
-3. Verify no remaining imports reference example modules
+3. Edit `src/api/tags.py` — remove the `EXAMPLE` entry from `APITags` (keep `MISC` and `INFRASTRUCTURE`)
+4. Verify no remaining imports reference example modules
 
 ## NestJS
 
@@ -77,13 +78,13 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 ### Imports to Remove
 
 - `src/modules/index.ts` — remove `export * from './example/example.module'`
-- `src/app.module.ts` — remove `ExampleModule` from imports array
+- `src/app.module.ts` — remove `ExampleModule` from both the `import` statement at the top of the file and the `@Module({ imports: [...] })` array
 
 ### Cleanup Checklist
 
 1. Delete `src/modules/example/` and `test/modules/example.controller.spec.ts`
 2. Edit `src/modules/index.ts` — remove export
-3. Edit `src/app.module.ts` — remove from imports
+3. Edit `src/app.module.ts` — remove `ExampleModule` from both the `import` statement and the `@Module({ imports })` array
 4. Verify no remaining imports reference example module
 5. Run `pnpm test` to confirm no broken test imports
 

@@ -5,5 +5,6 @@ export const PAGE_ROUTES = {
 } as const;
 
 export const API_ROUTES = {
-  HEALTH: '/api',
+  ROOT: '/api',
+  HEALTH: '/api/health',
 } as const;

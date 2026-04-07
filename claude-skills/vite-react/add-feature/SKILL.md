@@ -135,7 +135,6 @@ Export from barrel: `hooks/index.ts`
 export * from './components';
 export * from './hooks';
 export * from './constants';
-export type * from './types';
 export type { ProjectItem } from './types';
 ```
 
