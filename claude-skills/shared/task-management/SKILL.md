@@ -18,6 +18,8 @@ Skip this protocol when:
 - Single-file changes (rename, add a constant, fix a typo)
 - The user asks for something quick and specific
 
+For **test coverage workflow** (separate AI sessions for writing vs reviewing tests), see repository root `AGENTS.md` → **Independent test workflow** — complementary to this protocol, not a replacement.
+
 ## The 6 Steps
 
 ### Step 1: Plan

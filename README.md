@@ -2,6 +2,8 @@
 
 A repository of production-ready project templates and Claude skills for scaffolding new projects using AI agents and subagents.
 
+**Testing workflow:** For optional **tiered** use of separate AI sessions (test author vs selective test review) after scaffold or features — without changing the rule that tests ship in the same PR — see **`AGENTS.md` → Independent test workflow**.
+
 ## Repository Structure
 
 ```

@@ -21,7 +21,7 @@ Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi
 2. Copy template per skill; configure name/metadata; env **only** from `.env.example` / `.env.default` (no real secrets).
 3. Install deps per scaffold (**Node**: default **`pnpm`**, `corepack enable` if needed; **Python**: venv then activate — Windows `.venv\Scripts\activate`, Unix `source .venv/bin/activate`); run **Scaffold verification** gates; fix failures before project docs.
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
-5. Post-scaffold code changes: read the project’s `AGENTS.md` and stack **`code-standards/`** first.
+5. Post-scaffold code changes: read the project’s `AGENTS.md` and stack **`code-standards/`** first. After non-trivial work, consider **Independent test workflow** (Tier 1) — a fresh session focused on tests only.
 
 ## Backend testing policy
 
@@ -32,6 +32,19 @@ Stacks with a backend (**FastAPI**, **NestJS**, **Next.js** server/API code) **M
 - **Next.js** — Vitest for `src/app/api/**` and server-only logic they call (`test/api/`). **No** requirement to add tests for React components, pages, or client hooks.
 
 Subagents read their stack’s `code-standards` skill before writing code; those standards include this rule. **Vite + React** is out of scope for this policy (frontend template only).
+
+## Independent test workflow (recommended for AI sessions)
+
+Backend tests must still land in the **same change / PR** as the feature (**Backend testing policy** above). The tiers below are about **who runs which chat or agent session** to reduce shared blind spots — not about deferring tests to a later PR.
+
+| Tier | When | What to do |
+|------|------|------------|
+| **0 — Default** | Any implementation | Author adds tests in the same session; run **Scaffold verification** or project test/build commands. Often enough for small edits. |
+| **1 — Test author (new session)** | After scaffold or a non-trivial feature | Start a **fresh** agent/chat. Role: *you did not write the production code* — read the project `AGENTS.md`, stack **`add-test/`** and **`code-standards/`**, then add or strengthen tests (error/edge paths and assertions appropriate to the stack: API status/validation, services, or UI per skill). Merge into the same branch before merge. |
+| **2 — Test reviewer (another new session)** | **Selective** — auth, security-sensitive paths, payments, complex business rules, or pre-release hardening | Another fresh session reviews **only** the test files: missing cases, assertions that cannot fail, gaps vs stated behavior. **Not** required for every PR — use judgment to save time and tokens. |
+| **Cheap check** | Always | **CI** runs the suite; fix failures. Prefer this over a third LLM when coverage is straightforward. |
+
+**Token / cost note**: Tier 1 is a strong default for templateCentral-backed work. Tier 2 is **optional** quality insurance, not a mandatory third pass on every change.
 
 ## Security & secrets
 
