@@ -116,6 +116,10 @@ export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
 - **Jest** — testing framework with ts-jest.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).
 
+## Backend testing (mandatory)
+
+Same-change Jest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `add-module` / `add-test`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
+
 ## Security
 
 ### Environment & Secrets

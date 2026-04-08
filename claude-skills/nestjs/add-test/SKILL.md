@@ -7,6 +7,8 @@ description: Use when adding tests, test coverage is missing for controllers or 
 
 Guide for adding unit tests and e2e tests to a NestJS project scaffolded from templateCentral.
 
+**Policy**: Same-change Jest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
+
 ## Unit Tests
 
 Unit tests go in `test/modules/<name>.controller.spec.ts` or `test/modules/<name>.service.spec.ts`.

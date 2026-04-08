@@ -148,6 +148,7 @@ After creating all files:
 
 ## Rules
 
+- **Tests are mandatory** — never add or change an endpoint, service, or router without new or updated pytest coverage under `test/` in the same change.
 - **Services contain business logic** — parse schemas → process → serialize response.
 - **One service function per endpoint**.
 - NEVER use raw `dict` or unvalidated data in services — always use Pydantic schemas or domain models

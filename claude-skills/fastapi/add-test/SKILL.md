@@ -7,6 +7,8 @@ description: Use when adding tests to a FastAPI project, test coverage is missin
 
 Guide for writing tests in a FastAPI project scaffolded from templateCentral.
 
+**Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`).
+
 ## Test Structure
 
 Tests mirror `src/`:

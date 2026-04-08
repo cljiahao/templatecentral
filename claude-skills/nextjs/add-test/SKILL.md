@@ -7,14 +7,16 @@ description: Use when adding tests for Next.js API route handlers, test coverage
 
 Guide for writing tests for API route handlers in a Next.js project scaffolded from templateCentral. Tests cover server-side API logic only — not frontend components.
 
+**Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope.
+
 ## Test Structure
 
-Tests live in `__tests__/api/` mirroring `src/app/api/`:
+Tests live in `test/api/` mirroring `src/app/api/`:
 
 ```
-__tests__/
+test/
 └── api/
-    ├── health.test.ts              # GET /api (health check)
+    ├── health.test.ts              # GET /api + GET /api/health (probe paths)
     ├── <resource>/
     │   ├── route.test.ts           # GET, POST /api/<resource>
     │   └── [id]/
@@ -50,13 +52,13 @@ describe('GET /api/projects', () => {
 
 ### 1. Create the Test File
 
-Place tests in `__tests__/api/` matching the route path:
+Place tests in `test/api/` matching the route path:
 
 | Route | Test file |
 |-------|-----------|
-| `src/app/api/route.ts` | `__tests__/api/health.test.ts` |
-| `src/app/api/projects/route.ts` | `__tests__/api/projects/route.test.ts` |
-| `src/app/api/projects/[id]/route.ts` | `__tests__/api/projects/[id]/route.test.ts` |
+| `src/app/api/route.ts` and `src/app/api/health/route.ts` | `test/api/health.test.ts` (template tests both probe paths) |
+| `src/app/api/projects/route.ts` | `test/api/projects/route.test.ts` |
+| `src/app/api/projects/[id]/route.ts` | `test/api/projects/[id]/route.test.ts` |
 
 ### 2. Test GET Endpoints
 
@@ -206,7 +208,7 @@ Confirm the build succeeds and all tests pass.
 
 ## Naming
 
-- Files: `<name>.test.ts` — placed in `__tests__/api/` mirroring the route path
+- Files: `<name>.test.ts` under `test/api/`, mirroring the route path
 - Describe blocks: `describe('METHOD /api/<path>', ...)` — matches the HTTP method and route
 - Test names: `it('should <expected behavior>', ...)` — describes the outcome, not the implementation
 

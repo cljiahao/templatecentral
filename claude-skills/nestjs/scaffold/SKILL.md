@@ -19,7 +19,7 @@ Scaffold a new NestJS backend project from the templateCentral NestJS template.
 Copy the entire `templates/nestjs/` directory from this repository to the target directory. Exclude `node_modules/`, `dist/`, and `.env`.
 
 ```bash
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' <repo-root>/templates/nestjs/ <target-directory>/
+rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='.env.local' <repo-root>/templates/nestjs/ <target-directory>/
 ```
 
 ### 2. Update Project Settings
@@ -76,9 +76,15 @@ pnpm test:e2e
 
 **Checkpoint**: All tests must pass. If any fail, fix before proceeding.
 
+```bash
+pnpm build
+```
+
+**Checkpoint**: Production build must succeed before generating `AGENTS.md` — catches strict TypeScript errors.
+
 ### 6. Generate Project AGENTS.md (MANDATORY)
 
-**This step is NOT optional. Do NOT skip it. Scaffolding is incomplete without a project AGENTS.md.**
+**Required** — root `AGENTS.md` Project Memory; only after verification gates pass.
 
 Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, Copilot, Windsurf, etc.) permanent context about this specific project.
 
@@ -102,6 +108,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - Named exports only — no `export default`
 - Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
 - Barrel exports at `src/modules/index.ts`
+- **Testing**: New or changed controllers/services/repositories must include Jest tests in the same change (`pnpm test`; e2e when appropriate)
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
@@ -111,104 +118,17 @@ Update the Identity section with the actual project name and creation date.
 
 ### 7. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
+Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`. Write a **short** `CLAUDE.md` (architecture/conventions live in `AGENTS.md` only).
 
-```markdown
-# <Project Name>
+**Build & Dev** (verified commands), e.g.: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`.
 
-NestJS backend scaffolded from templateCentral.
-
-## Build & Dev
-
-- `pnpm start:dev` — start dev server (http://localhost:3000)
-- `pnpm build` — production build
-- `pnpm test` — run unit tests (Jest)
-- `pnpm test:e2e` — run e2e tests
-- `pnpm lint` — ESLint 9 + Prettier
-
-## Architecture
-
-- One module per feature under `src/modules/`
-- Controller → Service (→ Repository for complex queries); simple CRUD may use ORM directly in services
-- DTOs use `createZodDto` from `nestjs-zod` (no class-validator)
-- Global pipes and filters in `app.module.ts`; auth guards at controller/route level
-- Setup functions (Swagger, security) in `src/config/setups/`
-- Swagger docs at `/docs`
-
-## Conventions
-
-- kebab-case filenames (dot-separated), PascalCase classes, camelCase methods
-- Named exports only — no `export default`
-- Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
-- Barrel exports at `src/modules/index.ts`
-
-## Workflow
-
-Use this decision tree for all tasks:
-
-| Task complexity | Approach |
-|----------------|----------|
-| Simple (add endpoint, add DTO, single-file change) | Follow templateCentral skills directly — see `claude-skills/nestjs/` in templateCentral repo |
-| Medium (add module, add database, add integration) | Follow templateCentral skills — they have complete step-by-step instructions |
-| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
-| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
-
-**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
-
-## templateCentral Reference
-
-This project was scaffolded from `templateCentral/templates/nestjs`. Available skills for this stack:
-
-- `scaffold` — initial project setup (already done)
-- `add-module` — add a feature module with CRUD
-- `add-auth` — add authentication
-- `add-database` — add Prisma (SQL) or Mongoose (MongoDB)
-- `add-integration` — add external API integration
-- `add-test` — add tests for existing code
-```
-
-Update the project name and customize the skills list if any don't apply.
+**templateCentral skills**: `scaffold` (done), `add-module`, `add-auth`, `add-database`, `add-integration`, `add-test`. **Workflow**: `claude-skills/nestjs/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 
 ### 8. Task Management (Optional)
 
-Ask the user: *"Do you want structured task management for complex features? You have two options:"*
-
-**Option A — templateCentral built-in** (no plugin required):
-
-Append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-For complex, multi-step tasks (3+ files, architectural decisions), follow the task management protocol at `claude-skills/shared/task-management/SKILL.md` in templateCentral.
-
-Protocol summary: Plan → Verify → Track → Explain → Document → Capture Lessons.
-
-Skip for simple changes (single-file edits, scaffolding, quick fixes).
-```
-
-**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
-
-Tell the user to install Superpowers in their Claude Code session:
-
-```bash
-/plugin marketplace add pcvelz/superpowers
-/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
-```
-
-Then append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-- **Simple tasks** (add endpoint, add DTO): use templateCentral skills directly
-- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
-- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
-```
-
-If the user doesn't want either, skip this step entirely.
+Ask whether the user wants structured task management for complex features. If **yes**, append **Option A** or **Option B** from **Scaffold: optional Task Management** in repository root `AGENTS.md` (templateCentral). If **no**, skip.
 
 ### 9. Remove Example Code (Optional)
 
@@ -221,12 +141,11 @@ Once the project is verified, remove the example module:
 ## Rules
 
 - Always update `package.json` name before installing dependencies
-- Always copy `.env.example` to `.env` before first run
+- Always copy `.env.example` to `.env` before first run — **never** commit real secrets or paste JWT/DB credentials into `AGENTS.md` / `CLAUDE.md`
 - Global pipes and filters go in `app.module.ts`; auth guards at controller/route level (not global, so health checks remain unprotected)
 - Verify the API starts and Swagger docs at `/docs` render before handing off to the user
 - Remove example code only after the user confirms the project runs
 - NEVER copy `node_modules/`, `dist/`, or `.env` when scaffolding
-- NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
 - NEVER remove the `base/` module — it provides the health check endpoint
 - NEVER install packages globally — always use pnpm/npm within the project

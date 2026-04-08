@@ -17,7 +17,7 @@ Scaffold a new Vite + React SPA from the templateCentral Vite React template.
 ### 1. Copy the Template
 
 ```bash
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' <repo-root>/templates/vite-react/ <target-directory>/
+rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='.env.local' <repo-root>/templates/vite-react/ <target-directory>/
 ```
 
 ### 2. Update Project Name
@@ -86,15 +86,21 @@ pnpm dev
 
 Confirm the dev server starts at `http://localhost:3000`. **Do not proceed until the home page renders successfully.** If the dev server fails, check the terminal output for errors and fix before continuing.
 
-Optionally run tests to verify the template is healthy:
-
 ```bash
 pnpm test
 ```
 
+**Checkpoint**: All tests must pass.
+
+```bash
+pnpm build
+```
+
+**Checkpoint**: `pnpm build` must succeed before generating `AGENTS.md` — `tsc -b` catches type errors Vite dev can miss.
+
 ### 10. Generate Project AGENTS.md (MANDATORY)
 
-**This step is NOT optional. Do NOT skip it. Scaffolding is incomplete without a project AGENTS.md.**
+**Required** — root `AGENTS.md` Project Memory; only after verification gates pass.
 
 Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, Copilot, Windsurf, etc.) permanent context about this specific project.
 
@@ -122,6 +128,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - kebab-case filenames, PascalCase exports
 - Static data in `constants.ts`, never inline in components
 - Pages are thin — compose from `features/` and `components/`
+- **Env**: `VITE_*` is shipped to the browser — never API keys, tokens, or secrets (use server-side or proxy for those)
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
@@ -131,110 +138,17 @@ Update the Identity section with the actual project name and creation date. Add 
 
 ### 11. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
+Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`. Write a **short** `CLAUDE.md` (full detail in **`AGENTS.md`**).
 
-```markdown
-# <Project Name>
+**Build & Dev**, e.g.: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`.
 
-Vite + React SPA scaffolded from templateCentral.
-
-## Build & Dev
-
-- `pnpm dev` — start dev server (http://localhost:3000)
-- `pnpm build` — production build
-- `pnpm test` — run Vitest + Testing Library suite
-- `pnpm lint` — ESLint 9
-- `pnpm format` — Prettier formatting
-
-## Architecture
-
-- Client-side SPA — no SSR, no API route handlers
-- Routes defined in `src/router.tsx` (React Router 7), not filesystem-based
-- Auth via `AuthProvider` context + `ProtectedRoute` guard; dev bypass when `ENV.IS_DEV`
-- Data fetching via TanStack React Query 5 hooks in features
-- Feature modules: `src/features/<name>/` (components, hooks, api, types)
-- UI primitives: `src/components/ui/` (shadcn/ui, `components.json` with `rsc: false`)
-- Composed widgets: `src/components/widgets/`
-- Barrel exports (`index.ts`) in all shared folders
-- Env vars via `import.meta.env.VITE_*`, centralized in `src/lib/constants/env.ts`
-
-## Conventions
-
-- Named exports only (default exports allowed in tooling configs: `vite.config.ts`, `eslint.config.mjs`)
-- `function` declarations for components; `const` arrows for hooks/utilities
-- kebab-case filenames, PascalCase exports
-- Pages are thin — compose from `features/` and `components/`
-- Static data in `constants.ts`, never inline in components
-
-## Workflow
-
-Use this decision tree for all tasks:
-
-| Task complexity | Approach |
-|----------------|----------|
-| Simple (add page, component, single-file change) | Follow templateCentral skills directly — see `claude-skills/vite-react/` in templateCentral repo |
-| Medium (add feature, add form) | Follow templateCentral skills — they have complete step-by-step instructions |
-| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
-| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
-
-**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
-
-## templateCentral Reference
-
-This project was scaffolded from `templateCentral/templates/vite-react`. Available skills for this stack:
-
-- `scaffold` — initial project setup (already done)
-- `add-page` — add a new page/route
-- `add-feature` — add a feature module
-- `add-component` — add a shared component
-- `add-form` — add a form with validation
-- `add-auth` — add/modify authentication
-- `add-integration` — add external API integration
-- `add-test` — add tests for existing code
-```
-
-Update the project name and customize the skills list if any don't apply.
+**templateCentral skills**: `scaffold` (done), `add-page`, `add-feature`, `add-component`, `add-form`, `add-auth`, `add-integration`, `add-test`. **Workflow**: `claude-skills/vite-react/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 
 ### 12. Task Management (Optional)
 
-Ask the user: *"Do you want structured task management for complex features? You have two options:"*
-
-**Option A — templateCentral built-in** (no plugin required):
-
-Append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-For complex, multi-step tasks (3+ files, architectural decisions), follow the task management protocol at `claude-skills/shared/task-management/SKILL.md` in templateCentral.
-
-Protocol summary: Plan → Verify → Track → Explain → Document → Capture Lessons.
-
-Skip for simple changes (single-file edits, scaffolding, quick fixes).
-```
-
-**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
-
-Tell the user to install Superpowers in their Claude Code session:
-
-```bash
-/plugin marketplace add pcvelz/superpowers
-/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
-```
-
-Then append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-- **Simple tasks** (add-page, add-component): use templateCentral skills directly
-- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
-- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
-```
-
-If the user doesn't want either, skip this step entirely.
+Ask whether the user wants structured task management for complex features. If **yes**, append **Option A** or **Option B** from **Scaffold: optional Task Management** in repository root `AGENTS.md` (templateCentral). If **no**, skip.
 
 ### 13. Remove Example Code (Optional)
 
@@ -248,11 +162,10 @@ Or use the shared `remove-example` skill: `claude-skills/shared/remove-example/S
 ## Rules
 
 - Always update `package.json` name before installing dependencies
-- Always copy `.env.example` to `.env` before first run
+- Always copy `.env.example` to `.env` before first run — **never** commit `.env` or paste secrets into `AGENTS.md` / `CLAUDE.md`
 - Always update `index.html` title — it's the browser tab name (NEVER skip)
 - Routes are defined in `src/router.tsx`, not by filesystem convention
 - Verify the dev server starts and the home page renders before handing off to the user
 - Remove example code only after the user confirms the project runs
 - NEVER copy `node_modules/` or `dist/` when scaffolding
-- NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user

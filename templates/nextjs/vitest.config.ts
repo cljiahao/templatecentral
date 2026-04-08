@@ -14,7 +14,7 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     passWithNoTests: true,
-    include: ['__tests__/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
+    include: ['test/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

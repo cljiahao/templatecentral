@@ -21,7 +21,7 @@ A production-ready Next.js application template with shadcn/ui, Tailwind CSS, an
 ## Project Structure
 
 ```
-├── __tests__/api/               # API route handler tests (Vitest)
+├── test/api/                    # API route handler tests (Vitest)
 ├── src/proxy.ts                 # Next.js 16 proxy (replaces middleware — route protection, redirects)
 ├── .trivyignore.yaml            # Trivy CVE suppressions for Node.js base image
 ├── Dockerfile                   # Multi-stage build (base → prisma → deps → builder → dev/prod)
@@ -91,7 +91,7 @@ pnpm test:watch            # Watch mode (re-runs on change)
 pnpm test:coverage         # Run with coverage report
 ```
 
-Tests live in `__tests__/api/` and cover API route handlers (backend only). See `claude-skills/nextjs/add-test/SKILL.md` for conventions.
+Tests live in `test/api/` and cover API route handlers (backend only). See `claude-skills/nextjs/add-test/SKILL.md` for conventions.
 
 ## Docker
 

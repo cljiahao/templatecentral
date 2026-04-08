@@ -7,7 +7,7 @@ description: Use when the user is working on a complex, multi-step feature and t
 
 A structured workflow for complex, multi-step tasks. This protocol ensures the agent plans before acting, validates at each step, and leaves a trail for future agents.
 
-Task management is "enabled" when the project's `AGENTS.md` contains a `## Task Management` section referencing this protocol — scaffold skills add this section when the user opts in.
+Task management is "enabled" when the project's `AGENTS.md` contains a `## Task Management` section referencing this protocol — added at scaffold time if the user opts in (see repository root `AGENTS.md`, **Scaffold: optional Task Management**).
 
 Activate this protocol when:
 - The project's `AGENTS.md` has a `## Task Management` section **and** the task touches 3+ files or involves architectural decisions

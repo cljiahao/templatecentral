@@ -24,4 +24,5 @@ Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 5.9, Je
 
 ## Standards
 
-Read `code-standards/SKILL.md` for naming, DTOs, Swagger, DI patterns, and testing rules.
+- **Backend tests**: same-change Jest for API code (`test/`) — root `AGENTS.md`, `claude-skills/nestjs/code-standards/SKILL.md`.
+- Naming, DTOs, Swagger, DI: `code-standards/SKILL.md`.

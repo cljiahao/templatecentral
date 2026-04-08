@@ -19,7 +19,7 @@ Scaffold a new Next.js project from the templateCentral Next.js template.
 Copy the entire `templates/nextjs/` directory from this repository to the target directory. Do NOT copy `node_modules/` or `.next/`.
 
 ```bash
-rsync -av --exclude='node_modules' --exclude='.next' --exclude='.env' <repo-root>/templates/nextjs/ <target-directory>/
+rsync -av --exclude='node_modules' --exclude='.next' --exclude='.env' --exclude='.env.local' <repo-root>/templates/nextjs/ <target-directory>/
 ```
 
 ### 2. Update Project Name
@@ -82,11 +82,21 @@ Then run the test suite:
 pnpm test
 ```
 
-Confirm all tests pass. The template includes a health check test (`__tests__/api/health.test.ts`) — verify it passes.
+Confirm all tests pass. `test/api/health.test.ts` covers **`GET /api`** and **`GET /api/health`** (Docker HEALTHCHECK uses the latter).
+
+Then run a production compile:
+
+```bash
+pnpm build
+```
+
+**Checkpoint**: `pnpm build` must succeed before generating project docs — catches TypeScript and App Router issues that `pnpm dev` may not surface.
+
+Optional full gate: `pnpm check` (format + lint + typecheck).
 
 ### 10. Generate Project AGENTS.md (MANDATORY)
 
-**This step is NOT optional. Do NOT skip it. Scaffolding is incomplete without a project AGENTS.md.**
+**Required** — root `AGENTS.md` Project Memory; only after verification gates pass.
 
 Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, Copilot, Windsurf, etc.) permanent context about this specific project.
 
@@ -106,7 +116,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - Barrel exports (`index.ts`) for all shared folders
 - shadcn/ui primitives in `src/components/ui/` (managed by CLI)
 - Reusable composed widgets in `src/components/widgets/`
-- `/api/health` endpoint for Docker HEALTHCHECK and load balancer probes
+- Health JSON: `GET /api` (`src/app/api/route.ts`) and `GET /api/health` (`src/app/api/health/route.ts`); Docker HEALTHCHECK targets `/api/health`
 
 ## Key Conventions
 - Named exports only (except Next.js special files: pages, layouts, route handlers)
@@ -114,6 +124,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - kebab-case filenames, PascalCase exports
 - Static data in `constants.ts`, never inline in components
 - Pages are thin — compose from `features/` and `components/`
+- **Testing (API only)**: New or changed `src/app/api/**` handlers need Vitest tests under `test/api/` in the same change; no mandatory frontend tests
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
@@ -123,112 +134,17 @@ Update the Identity section with the actual project name and creation date. Add 
 
 ### 11. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
+Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`. Write a **short** `CLAUDE.md` (full architecture/conventions: **`AGENTS.md` only**).
 
-```markdown
-# <Project Name>
+**Build & Dev**, e.g.: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (optional full gate).
 
-Next.js 16 project scaffolded from templateCentral.
-
-## Build & Dev
-
-- `pnpm dev` — start dev server (Turbopack, http://localhost:3000)
-- `pnpm build` — production build
-- `pnpm test` — run Vitest suite
-- `pnpm lint` — ESLint 9
-- `pnpm format` — Prettier formatting
-- `pnpm check` — format + lint + typecheck (full quality gate)
-
-## Architecture
-
-- Route groups: `(public)/` for public pages, `dashboard/` for authenticated
-- Auth via NextAuth (Auth.js) with `proxy.ts` route protection; dev bypass when `isDev`
-- Feature modules: `src/features/<name>/` (components, hooks, api, types)
-- UI primitives: `src/components/ui/` (shadcn/ui, managed by CLI)
-- Composed widgets: `src/components/widgets/`
-- Barrel exports (`index.ts`) in all shared folders
-- Providers (SessionProvider, QueryClientProvider) in root `layout.tsx`
-- `/api/health` endpoint for Docker HEALTHCHECK and load balancer probes
-
-## Conventions
-
-- Named exports only (except Next.js special files: pages, layouts, route handlers)
-- `function` declarations for components; `const` arrows for hooks/utilities
-- kebab-case filenames, PascalCase exports
-- Pages are thin — compose from `features/` and `components/`
-- Static data in `constants.ts`, never inline in components
-
-## Workflow
-
-Use this decision tree for all tasks:
-
-| Task complexity | Approach |
-|----------------|----------|
-| Simple (add page, component, API route, single-file change) | Follow templateCentral skills directly — see `claude-skills/nextjs/` in templateCentral repo |
-| Medium (add feature, add form, add integration) | Follow templateCentral skills — they have complete step-by-step instructions |
-| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
-| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
-
-**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
-
-## templateCentral Reference
-
-This project was scaffolded from `templateCentral/templates/nextjs`. Available skills for this stack:
-
-- `scaffold` — initial project setup (already done)
-- `add-page` — add a new page/route
-- `add-feature` — add a feature module
-- `add-component` — add a shared component
-- `add-api-route` — add an API route handler
-- `add-form` — add a form with validation
-- `add-auth` — add/modify authentication
-- `add-integration` — add external API integration
-- `add-database` — add Prisma (SQL) or Mongoose (MongoDB)
-- `add-test` — add tests for API route handlers (backend only)
-```
-
-Update the project name and customize the skills list if any don't apply.
+**templateCentral skills**: `scaffold` (done), `add-page`, `add-feature`, `add-component`, `add-api-route`, `add-form`, `add-auth`, `add-integration`, `add-database`, `add-test`. **Workflow**: `claude-skills/nextjs/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 
 ### 12. Task Management (Optional)
 
-Ask the user: *"Do you want structured task management for complex features? You have two options:"*
-
-**Option A — templateCentral built-in** (no plugin required):
-
-Append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-For complex, multi-step tasks (3+ files, architectural decisions), follow the task management protocol at `claude-skills/shared/task-management/SKILL.md` in templateCentral.
-
-Protocol summary: Plan → Verify → Track → Explain → Document → Capture Lessons.
-
-Skip for simple changes (single-file edits, scaffolding, quick fixes).
-```
-
-**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
-
-Tell the user to install Superpowers in their Claude Code session:
-
-```bash
-/plugin marketplace add pcvelz/superpowers
-/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
-```
-
-Then append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-- **Simple tasks** (add-page, add-component, add-api-route): use templateCentral skills directly
-- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
-- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
-```
-
-If the user doesn't want either, skip this step entirely.
+Ask whether the user wants structured task management for complex features. If **yes**, append **Option A** or **Option B** from **Scaffold: optional Task Management** in repository root `AGENTS.md` (templateCentral). If **no**, skip.
 
 ### 13. Remove Example Code (Optional)
 
@@ -240,10 +156,9 @@ Once the project is verified and the user confirms it runs:
 ## Rules
 
 - Always update `package.json` name before installing dependencies — affects Docker image names and lockfiles
-- Always copy `.env.example` to `.env.local` before first run
+- Always copy `.env.example` to `.env.local` before first run — **never** commit `.env.local` or paste production secrets into generated `AGENTS.md` / `CLAUDE.md`
 - Keep the `(public)` and `dashboard` route group structure
 - Verify the dev server starts and the landing page renders before handing off to the user
 - Remove example code only after the user confirms the project runs
 - NEVER copy `node_modules/`, `.next/`, or `.env.local` — these are project-specific
-- NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user

@@ -6,6 +6,12 @@
 - Write and review Python code inside scaffolded FastAPI projects
 - Add endpoints, services, schemas, tests, and business logic
 
+**Secrets**: `src/.env` is gitignored — never commit it or paste values into `AGENTS.md` (root `AGENTS.md`).
+
+## Backend testing (mandatory)
+
+Routers, services, and API-facing domain logic: **pytest** in the same change. See `code-standards/`, `add-test/`.
+
 ## Stack
 
 FastAPI 0.116, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruff, pytest, Docker.

@@ -12,6 +12,7 @@ Stack: Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, R
 
 - Client-only SPA — NEVER add server-side code (SSR, RSC, API route handlers)
 - NEVER use `process.env` — use `import.meta.env.VITE_*` (centralized in `src/lib/constants/env.ts`)
+- NEVER put secrets, API keys, or tokens in `VITE_*` — they are embedded in the client bundle
 - NEVER use `export default` in application code (exception: tooling configs like `vite.config.ts`, `eslint.config.mjs`)
 - NEVER put data-fetching logic directly in components — use React Query hooks in features
 

@@ -116,6 +116,9 @@ The template provides these shared utilities:
 
 ## Security
 
+### Environment variables
+- `VITE_*` is embedded in the client bundle — never API keys, tokens, or backend secrets (see root `AGENTS.md`).
+
 ### Input Validation
 - Validate all form inputs with Zod schemas via React Hook Form — NEVER trust raw user input
 - Validate API response shapes with Zod `safeParse()` before rendering — malformed data from a backend should not crash the UI

@@ -11,6 +11,7 @@ Stack: Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 
 ## Boundaries
 
 - App Router only — NEVER use `pages/` router
+- NEVER put secrets or API keys in `NEXT_PUBLIC_*` — exposed to every browser
 - Server components by default — add `'use client'` only for interactivity
 - Use `npx shadcn@latest add` for UI primitives — NEVER install manually
 - Pages compose from features — NEVER put data-fetching in page components
@@ -24,4 +25,5 @@ Stack: Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 
 
 ## Standards
 
-Read `code-standards/SKILL.md` for naming, exports, component patterns, and performance rules.
+- **API tests**: same-change Vitest under `test/api/` for `src/app/api/**` (not React UI) — root `AGENTS.md`, `claude-skills/nextjs/code-standards/SKILL.md`.
+- Naming, exports, components: `code-standards/SKILL.md`.

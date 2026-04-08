@@ -19,7 +19,7 @@ Scaffold a new FastAPI backend project from the templateCentral FastAPI template
 Copy the entire `templates/fastapi/` directory from this repository to the target directory. Exclude `__pycache__/` and `log/`.
 
 ```bash
-rsync -av --exclude='__pycache__' --exclude='log' <repo-root>/templates/fastapi/ <target-directory>/
+rsync -av --exclude='__pycache__' --exclude='log' --exclude='.venv' --exclude='.env' <repo-root>/templates/fastapi/ <target-directory>/
 ```
 
 ### 2. Update Project Settings
@@ -67,9 +67,15 @@ pytest test/
 
 **Checkpoint**: All tests must pass. If any fail, fix before proceeding.
 
+```bash
+ruff check src/
+```
+
+**Checkpoint**: Ruff must be clean before generating `AGENTS.md`.
+
 ### 6. Generate Project AGENTS.md (MANDATORY)
 
-**This step is NOT optional. Do NOT skip it. Scaffolding is incomplete without a project AGENTS.md.**
+**Required** — root `AGENTS.md` Project Memory; only after verification gates pass.
 
 Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, Copilot, Windsurf, etc.) permanent context about this specific project.
 
@@ -93,6 +99,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - Routers are thin — accept body, call service, return result
 - Services orchestrate — parse → process → return
 - Absolute imports only; no wildcards; stdlib → third-party → local
+- **Testing**: New or changed API/services/domain logic must include pytest coverage in the same change (`pytest` from project root)
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
@@ -102,102 +109,22 @@ Update the Identity section with the actual project name and creation date.
 
 ### 7. Generate Project CLAUDE.md (MANDATORY for Claude Code users)
 
-**This step is NOT optional when the user uses Claude Code.** If the user uses only Cursor/Copilot/Windsurf (no Claude Code), skip this step — `AGENTS.md` is sufficient.
+Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Create `CLAUDE.md` in the project root. Claude Code reads this file automatically at session start and uses it as persistent project context.
+Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`. Write a **short** `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
 
-```markdown
-# <Project Name>
+Include **Build & Dev** with verified commands only, e.g.:
 
-FastAPI backend scaffolded from templateCentral.
-
-## Build & Dev
-
-- `source .venv/bin/activate` — activate virtual environment
-- `cd src && python main.py` — start dev server (http://localhost:8000)
-- `pytest test/` — run test suite (from project root)
+- `source .venv/bin/activate` — venv
+- `cd src && python main.py` — dev server (http://localhost:8000)
+- `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
-## Architecture
-
-- Layered dependency flow: `api/` (routers → services) → `models/`
-- Pydantic v2 schemas with camelCase aliases (`BaseSchema`)
-- Structured JSON logging with timed rotating file handler
-- Centralized exception → HTTP response mapping in `error_handler.py`
-- Settings via Pydantic Settings with `src/.env` support
-
-## Conventions
-
-- snake_case for files/functions/variables; PascalCase for classes; UPPER_SNAKE_CASE for constants
-- Type annotations on all public function parameters and return types
-- Routers are thin — accept body, call service, return result
-- Absolute imports only; no wildcards; stdlib → third-party → local
-
-## Workflow
-
-Use this decision tree for all tasks:
-
-| Task complexity | Approach |
-|----------------|----------|
-| Simple (add endpoint, add schema, single-file change) | Follow templateCentral skills directly — see `claude-skills/fastapi/` in templateCentral repo |
-| Medium (add feature module, add integration, add database) | Follow templateCentral skills — they have complete step-by-step instructions |
-| Complex (3+ files, architectural decisions, multi-step feature) | Use Superpowers plugin workflow: `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` |
-| Debugging | Use Superpowers `systematic-debugging` skill if installed, otherwise debug normally |
-
-**Important**: Regardless of which workflow is used, ALL code must follow the conventions above and the patterns in `AGENTS.md`.
-
-## templateCentral Reference
-
-This project was scaffolded from `templateCentral/templates/fastapi`. Available skills for this stack:
-
-- `scaffold` — initial project setup (already done)
-- `add-endpoint` — add a new API endpoint
-- `add-auth` — add authentication
-- `add-database` — add SQLAlchemy (SQL) or Beanie (MongoDB)
-- `add-integration` — add external API integration
-- `add-test` — add tests for existing code
-```
-
-Update the project name and customize the skills list if any don't apply.
+**templateCentral skills** (this stack): `scaffold` (done), `add-endpoint`, `add-auth`, `add-database`, `add-integration`, `add-test`. **Workflow**: simple/medium → `claude-skills/fastapi/`; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
 
 ### 8. Task Management (Optional)
 
-Ask the user: *"Do you want structured task management for complex features? You have two options:"*
-
-**Option A — templateCentral built-in** (no plugin required):
-
-Append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-For complex, multi-step tasks (3+ files, architectural decisions), follow the task management protocol at `claude-skills/shared/task-management/SKILL.md` in templateCentral.
-
-Protocol summary: Plan → Verify → Track → Explain → Document → Capture Lessons.
-
-Skip for simple changes (single-file edits, scaffolding, quick fixes).
-```
-
-**Option B — Superpowers plugin** (recommended for Claude Code users building complex features):
-
-Tell the user to install Superpowers in their Claude Code session:
-
-```bash
-/plugin marketplace add pcvelz/superpowers
-/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
-```
-
-Then append to the project's `AGENTS.md`:
-
-```markdown
-## Task Management
-
-- **Simple tasks** (add endpoint, add schema): use templateCentral skills directly
-- **Complex features** (3+ files, architectural decisions): use Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
-- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
-```
-
-If the user doesn't want either, skip this step entirely.
+Ask whether the user wants structured task management for complex features. If **yes**, append **Option A** or **Option B** from **Scaffold: optional Task Management** in repository root `AGENTS.md` (templateCentral). If **no**, skip.
 
 ### 9. Remove Example Code (Optional)
 
@@ -213,10 +140,9 @@ Once the project is verified, remove the example endpoint:
 ## Rules
 
 - Always create a virtual environment before installing dependencies; NEVER install packages globally
-- Always copy `src/.env.default` to `src/.env` before first run
+- Always copy `src/.env.default` to `src/.env` before first run — **never** commit `src/.env` or put secrets in generated `AGENTS.md` / `CLAUDE.md`
 - Verify the API starts and Swagger docs render before handing off to the user
 - Remove example code only after the user confirms the project runs
 - NEVER copy `__pycache__/`, `log/`, `src/.env`, or `.venv/` when scaffolding
-- NEVER scaffold into a non-empty directory without confirming with the user
 - NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
 - NEVER remove `conftest.py` or `factories/` when cleaning up example code — they're shared test infrastructure

@@ -6,6 +6,8 @@
 - Write and review code inside scaffolded Vite + React projects
 - Add features, pages, components, and external API integrations
 
+**Client env**: `VITE_*` is public in the browser — never secrets (see `code-standards/`, root `AGENTS.md`).
+
 ## Stack
 
 Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, Framer Motion, Vitest + Testing Library, Sonner, Docker (Nginx for prod).

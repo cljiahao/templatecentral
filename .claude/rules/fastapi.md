@@ -23,4 +23,5 @@ Stack: FastAPI 0.116, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruf
 
 ## Standards
 
-Read `code-standards/SKILL.md` for naming, types, imports, schema patterns, and testing rules.
+- **Backend tests**: same-change pytest for API code (`test/`) — root `AGENTS.md`, `claude-skills/fastapi/code-standards/SKILL.md`.
+- Naming, types, imports, schemas: `code-standards/SKILL.md`.

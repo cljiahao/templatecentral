@@ -92,4 +92,4 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 
 - Always verify with a search (grep for `example` or `Example`) after cleanup — stale imports cause build failures.
 - The example code is intentionally simple — it exists to demonstrate the architecture patterns, not as production code.
-- After removing example code, the project should still compile and run with no errors.
+- After cleanup, run that stack’s **tests and production build** (see repository root `AGENTS.md` → Scaffold verification) — the app must still compile and run with no errors.

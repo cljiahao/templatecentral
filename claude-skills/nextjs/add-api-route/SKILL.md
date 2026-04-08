@@ -143,16 +143,51 @@ export async function POST(request: Request) {
 - **Not Found**: Return `{ error: 'Not found' }` with status 404
 - **Validation**: Parse with Zod's `safeParse()` and return 400 with `error.flatten()` on failure
 
-### 6. Validate
+### 6. Add tests (mandatory)
+
+Create Vitest files under `test/api/` mirroring the route structure. Import handlers from the route module (same pattern as `test/api/health.test.ts`).
+
+Example for `src/app/api/projects/route.ts`:
+
+```ts
+// test/api/projects/route.test.ts
+import { GET, POST } from '@/app/api/projects/route';
+import { describe, expect, it } from 'vitest';
+
+describe('GET /api/projects', () => {
+  it('returns 200 and a list', async () => {
+    const response = await GET();
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('POST /api/projects', () => {
+  it('returns 400 on invalid body', async () => {
+    const request = new Request('http://localhost/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+  });
+});
+```
+
+Cover success paths and validation/error paths you implemented. Run `pnpm test` before handing off.
+
+### 7. Validate
 
 ```bash
 pnpm build
+pnpm test
 ```
 
-Confirm the build succeeds with no type errors. Verify the route responds correctly using `curl` or the browser.
+Confirm the build succeeds with no type errors, all tests pass, and the route responds correctly using `curl` or the browser.
 
 ## Rules
 
+- **Tests are mandatory** — never add or change `src/app/api/**` without new or updated tests under `test/api/` in the same change.
 - Keep route handlers thin — delegate to services. NEVER put business logic in route handlers
 - Always use `handleApiError()` for error responses — NEVER return raw error objects or stack traces
 - Use `NextResponse.json()` for all responses

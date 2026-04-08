@@ -6,6 +6,12 @@
 - Write and review TypeScript code inside scaffolded NestJS projects
 - Add modules, controllers, services, repositories, DTOs, and tests
 
+**Secrets**: keep JWT/DB credentials in `.env` (gitignored), never in generated docs (root `AGENTS.md`).
+
+## Backend testing (mandatory)
+
+Controllers, services, repositories, HTTP-facing guards/pipes: **Jest** in the same change (e2e when the skill requires). See `code-standards/`, `add-test/`.
+
 ## Stack
 
 NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 5.9, Jest, Docker.

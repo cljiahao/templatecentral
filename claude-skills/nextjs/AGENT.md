@@ -6,6 +6,12 @@
 - Write and review code inside scaffolded Next.js projects
 - Add features, pages, API routes, components, and third-party integrations
 
+**Secrets**: server-only in env without `NEXT_PUBLIC_` — that prefix is always client-visible (`code-standards/`, root `AGENTS.md`).
+
+## Backend testing (mandatory)
+
+`src/app/api/**` and the server-only code they call: add **Vitest** tests under `test/api/` in the same change (not UI). Details: `code-standards/`, `add-test/`.
+
 ## Stack
 
 Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, TanStack React Query, NextAuth (Auth.js), React Hook Form + Zod, Framer Motion, Axios, Docker.

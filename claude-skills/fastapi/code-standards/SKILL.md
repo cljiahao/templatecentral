@@ -72,6 +72,10 @@ description: Use when writing or reviewing Python code in a FastAPI project — 
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 
+## Backend testing (mandatory)
+
+Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `add-endpoint`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `pytest` from project root before handoff.
+
 ## Dependency Rules
 
 ```

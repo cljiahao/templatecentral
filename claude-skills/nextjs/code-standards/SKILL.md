@@ -105,11 +105,17 @@ The template provides these shared utilities:
 - **Avoid**: `import { ProjectService } from '@/features/project/api/project-service'`
 - Direct imports are OK within the same feature
 
+## Backend testing (mandatory for API code)
+
+- Vitest tests under `test/api/` (mirror `src/app/api/`) in the **same change** as new or changed route handlers — see `add-api-route`, `add-test`.
+- No mandatory tests for React UI under `src/features/**` or pages.
+- Run `pnpm test` (and `pnpm build` if types might drift) before handing off API work.
+
 ## Security
 
 ### Environment Variables
 - Server-only secrets (`AUTH_SECRET`, `DATABASE_URL`, API keys) use `process.env.SECRET_NAME` — NEVER prefix with `NEXT_PUBLIC_`
-- Client-safe values use `NEXT_PUBLIC_` prefix — assume anything with this prefix is visible to users
+- Client-safe values use `NEXT_PUBLIC_` prefix — assume anything with this prefix is visible to users; NEVER put API keys or tokens in `NEXT_PUBLIC_*`
 - Generate `AUTH_SECRET` with `npx auth secret` — NEVER commit it or use a hardcoded placeholder in production
 
 ### Input Validation
