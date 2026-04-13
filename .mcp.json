@@ -2,7 +2,7 @@
   "mcpServers": {
     "templatecentral": {
       "command": "node",
-      "args": ["./mcp-server/dist/index.js"]
+      "args": [ "./mcp-server/dist/index.js" ]
     }
   }
 }
