@@ -94,7 +94,7 @@ The template includes `src/lib/errors/handle-api-error.ts`. Enhance it to includ
 import { APIError } from '@/integrations/error';
 import { logError } from '@/lib/errors/error-log-handler';
 import { NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 const STATUS_MESSAGES: Record<number, string> = {
   400: 'Invalid request',
@@ -137,7 +137,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
-    const fieldErrors = error.flatten().fieldErrors as Record<string, string[]>;
+    const fieldErrors = z.flattenError(error).fieldErrors as Record<string, string[]>;
     return NextResponse.json(
       {
         error: 'Validation failed',
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       return handleApiError(
         'Failed to create project',
         parsed.error,
-        parsed.error.flatten().fieldErrors as Record<string, string[]>
+        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
       );
     }
 
@@ -459,12 +459,15 @@ app = FastAPI(title="My API")
 configure_exceptions(app)
 
 # Then add other middleware/routes
+# CORS: never use ["*"] with allow_credentials=True — forbidden by the CORS spec.
+# Use explicit origins and methods. In the FastAPI template, configure_cors() in
+# src/app.py handles this correctly using api_settings.ALLOWED_CORS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to specific origins in production
+    allow_origins=["http://localhost:3000"],  # explicit origins required with credentials
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Include routers
@@ -496,7 +499,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ZodSerializationException } from 'nestjs-zod';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 interface ErrorResponse {
   error: string;
@@ -523,7 +526,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        const fieldErrors = zodError.flatten()
+        const fieldErrors = z.flattenError(zodError)
           .fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',
@@ -781,7 +784,7 @@ pnpm test
 pnpm build
 
 # Test error boundary (client-side)
-npm run dev
+pnpm dev
 # Trigger unhandled error in browser console, verify error boundary displays
 ```
 
@@ -847,10 +850,10 @@ pytest -v
 
 ```bash
 # Test controller validation
-npm test
+pnpm test
 
 # Check Swagger docs at /api/docs includes error schemas
-npm run start:dev
+pnpm start:dev
 ```
 
 ### Vite + React
@@ -859,8 +862,8 @@ npm run start:dev
 # Trigger error boundary
 # Implementation included in test examples
 
-npm run test
-npm run build
+pnpm test
+pnpm build
 ```
 
 ## See Also

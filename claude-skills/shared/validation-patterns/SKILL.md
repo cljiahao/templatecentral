@@ -315,7 +315,7 @@ export async function loginAction(formData: unknown) {
   if (!parsed.success) {
     return {
       error: 'Validation failed',
-      fieldErrors: parsed.error.flatten().fieldErrors,
+      fieldErrors: z.flattenError(parsed.error).fieldErrors,
     };
   }
 
@@ -344,7 +344,7 @@ export async function POST(request: Request) {
         {
           error: 'Validation failed',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
             code: 'VALIDATION_ERROR',
           },
         },
@@ -385,7 +385,7 @@ export async function GET(request: Request) {
         {
           error: 'Invalid query parameters',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
           },
         },
         { status: 400 }
@@ -434,7 +434,7 @@ export async function POST(request: Request) {
         {
           error: 'Invalid file',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
           },
         },
         { status: 400 }
@@ -699,6 +699,7 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 ```ts
 // src/modules/projects/projects.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -754,17 +755,17 @@ export class ProjectsController {
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     // Validate file
     if (!file) {
-      throw new Error('File is required');
+      throw new BadRequestException('File is required');
     }
 
     const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
     if (!allowed.includes(file.mimetype)) {
-      throw new Error('File type not allowed');
+      throw new BadRequestException('File type not allowed');
     }
 
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error('File must be under 10MB');
+      throw new BadRequestException('File must be under 10MB');
     }
 
     // Safe to use: file.buffer, file.originalname
@@ -913,7 +914,7 @@ export function FileUploadForm() {
       });
 
       if (!validation.success) {
-        const firstError = Object.values(validation.error.flatten().fieldErrors)[0]?.[0];
+        const firstError = Object.values(z.flattenError(validation.error).fieldErrors)[0]?.[0];
         setError(firstError || 'Invalid file');
         return;
       }
@@ -1003,7 +1004,7 @@ export async function fetchProject(id: string): Promise<Project> {
 
 ```bash
 # Test form validation (client-side error before server)
-npm run dev
+pnpm dev
 # Fill form incorrectly, verify errors appear
 
 # Test API validation (server-side)
@@ -1028,26 +1029,26 @@ pytest -v -s
 ### NestJS
 
 ```bash
-npm run start:dev
+pnpm start:dev
 
 # Test Swagger docs with validation schemas
 curl -X POST http://localhost:3000/projects \
   -H "Content-Type: application/json" \
   -d '{"name": ""}'  # Should return 400
 
-npm test
+pnpm test
 ```
 
 ### Vite + React
 
 ```bash
-npm run dev
+pnpm dev
 
 # Test form validation (client shows error)
 # Submit invalid form, verify errors appear
 
 # Test API response validation (if API changes, error caught)
-npm run test
+pnpm test
 ```
 
 ## See Also

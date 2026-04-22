@@ -38,10 +38,15 @@ Keep route handlers thin — delegate to server-side data access:
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 // Replace with your actual data access — e.g.:
 //   import { prisma } from '@/integrations/database';
-//   import { ProjectService } from '@/integrations/services/project-service';
-import { NextResponse } from 'next/server';
+
+const CreateProjectSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+});
 
 export async function GET() {
   try {
@@ -55,16 +60,22 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    // Always validate with Zod before using — see Step 5
-    const project = body; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
+    const parsed = CreateProjectSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: z.flattenError(parsed.error) },
+        { status: 400 },
+      );
+    }
+
+    const project = parsed.data; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);
   }
 }
 ```
-
-> **Note**: The POST example above is simplified. For production routes, always validate the request body with Zod (see Step 5) before passing it to services.
 
 ### 3. Dynamic Segments
 
@@ -103,47 +114,14 @@ export const API_ROUTES = {
 } as const;
 ```
 
-### 5. Validate Request Body with Zod
-
-For POST/PUT endpoints, validate the incoming body:
-
-```ts
-import { z } from 'zod';
-import { handleApiError } from '@/lib/errors';
-
-const CreateProjectSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-});
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const parsed = CreateProjectSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten() },
-        { status: 400 },
-      );
-    }
-
-    const project = parsed.data; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
-    return NextResponse.json(project, { status: 201 });
-  } catch (error) {
-    return handleApiError('Failed to create project', error);
-  }
-}
-```
-
 ## Response Conventions
 
 - **Success**: Return data with appropriate status code (200, 201)
 - **Error**: Use `handleApiError()` which logs and returns consistent JSON error response
 - **Not Found**: Return `{ error: 'Not found' }` with status 404
-- **Validation**: Parse with Zod's `safeParse()` and return 400 with `error.flatten()` on failure
+- **Validation**: Parse with Zod's `safeParse()` and return 400 with `z.flattenError(error)` on failure
 
-### 6. Add tests (mandatory)
+### 5. Add tests (mandatory)
 
 Create Vitest files under `test/api/` mirroring the route structure. Import handlers from the route module (same pattern as `test/api/health.test.ts`).
 
@@ -176,7 +154,7 @@ describe('POST /api/projects', () => {
 
 Cover success paths and validation/error paths you implemented. Run `pnpm test` before handing off.
 
-### 7. Validate
+### 6. Validate
 
 ```bash
 pnpm build

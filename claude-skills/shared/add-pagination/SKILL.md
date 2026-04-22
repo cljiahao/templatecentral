@@ -121,8 +121,10 @@ export interface PaginationMetadata {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: PaginationMetadata;
+  data: {
+    items: T[];
+    pagination: PaginationMetadata;
+  };
 }
 ```
 
@@ -190,6 +192,7 @@ import { paginationSchema } from '@/lib/validation/schemas';
 import { PaginationService } from '@/lib/pagination/pagination-service';
 import { PaginatedResponse } from '@/lib/types/pagination';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 
 interface Project {
@@ -215,7 +218,7 @@ export async function GET(request: Request) {
       return handleApiError(
         'Invalid query parameters',
         parsed.error,
-        parsed.error.flatten().fieldErrors as Record<string, string[]>
+        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
       );
     }
 
@@ -559,7 +562,7 @@ export type PaginationParams = z.infer<typeof paginationSchema>;
 **2. Pagination Response DTO**
 
 ```ts
-// src/modules/projects/dto/paginated-response.dto.ts
+// src/common/dto/pagination.dto.ts
 export interface PaginationMetadata {
   page: number;
   limit: number;
@@ -568,8 +571,10 @@ export interface PaginationMetadata {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: PaginationMetadata;
+  data: {
+    items: T[];
+    pagination: PaginationMetadata;
+  };
 }
 ```
 
@@ -578,7 +583,7 @@ export interface PaginatedResponse<T> {
 ```ts
 // src/common/services/pagination.service.ts
 import { Injectable } from '@nestjs/common';
-import { PaginationMetadata } from '@/modules/projects/dto/paginated-response.dto';
+import type { PaginationMetadata } from '@/common/dto/pagination.dto';
 
 @Injectable()
 export class PaginationService {
@@ -628,7 +633,7 @@ import { z } from 'zod';
 import { ProjectsService } from './projects.service';
 import { PaginationService } from '@/common/services/pagination.service';
 import { PaginationDto } from './dto/pagination.dto';
-import { PaginatedResponse } from './dto/paginated-response.dto';
+import type { PaginationMetadata, PaginatedResponse } from '@/common/dto/pagination.dto';
 import { ProjectDto } from './dto/project.dto';
 
 const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'];
@@ -938,20 +943,20 @@ curl 'http://localhost:3000/projects?page=1&limit=10'
 curl 'http://localhost:3000/projects?page=-1&limit=10'
 # Expected 400 response
 
-npm test
+pnpm test
 ```
 
 ### Vite + React
 
 ```bash
-npm run dev
+pnpm dev
 
 # Component renders paginated list with prev/next controls
 # Clicking next fetches page 2
 # Previous button disabled on page 1
 # hasMore correctly controls Next button state
 
-npm run test
+pnpm test
 ```
 
 ## See Also
