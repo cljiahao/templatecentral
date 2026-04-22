@@ -63,6 +63,34 @@ const useUploadForm = () => {
 - **Extract when there's a second consumer** — don't prematurely extract
 - **Props: prefer composition over configuration** — split instead of adding boolean flags
 
+### Component Library — Check Before Building
+
+**Always check existing components before creating a new one.** The template ships with:
+
+**shadcn/ui primitives** (`src/components/ui/`) — use directly, never recreate:
+`accordion` · `avatar` · `button` · `card` · `checkbox` · `dialog` · `dropdown-menu` · `form` · `input` · `label` · `select` · `separator` · `skeleton` · `sonner` · `tabs` · `textarea`
+
+**Extended UI** (`src/components/ui/`) — built on shadcn primitives:
+- `button-group` — groups of related action buttons
+- `field` — form field wrapper with label + error message
+- `input-group` — input with prefix/suffix addon
+- `dropzone` (ui/shadcn-io/) — file upload zone
+
+**Widgets** (`src/components/widgets/`) — cross-feature, import via barrel:
+- `brand-logo` · `brand-text` — branded identity elements
+- `custom-card` — card with preset layout
+- `custom-dialog` — dialog with preset header/body layout
+- `custom-form-field` — field + Zod validation display
+- `link-list` — list of navigation/action links
+- `media-card` — card with image + content
+- `pill` — inline badge/tag
+- `theme-toggle-button` · `floating-shape` — UI chrome
+
+**Layout** (`src/components/layout/`) — app shell only:
+`navbar` · `site-footer` · `providers` · `theme-provider`
+
+To add a **new** shadcn primitive: `npx shadcn@latest add <name>` — NEVER install `@radix-ui/*` manually.
+
 ### Component Placement Decision Guide
 
 | Scenario | Location |
@@ -74,20 +102,13 @@ const useUploadForm = () => {
 
 ## Performance
 
-**Do NOT use React.memo, useCallback, useMemo by default.** Only after profiling confirms a problem.
+**Do NOT use React.memo, useCallback, useMemo by default** — only after profiling confirms a problem. They must be used as a chain to be effective; any single one in isolation adds overhead for zero gain.
 
-They form a **chain** — must be used together to be effective:
-1. Parent stabilizes handlers with `useCallback`
-2. Child wrapped with `React.memo`
-3. Using any of them in isolation adds overhead for zero gain
-
-**Exception**: Context providers that pass objects/functions as `value` should stabilize with `useMemo`/`useCallback` to prevent all consumers from re-rendering on every provider render.
+**Exception**: Context providers must stabilize objects/functions passed as `value` with `useMemo`/`useCallback`.
 
 ## Data & Rendering Separation
 
-- Static data belongs in `constants.ts`
-- Components only handle rendering
-- Static arrays, configuration objects, option lists → feature's `constants.ts`
+Static data → `constants.ts`. Components only render. Never inline arrays, config objects, or option lists in components.
 
 ## Utility Classes
 
@@ -114,21 +135,21 @@ The template provides these shared utilities:
 ## Security
 
 ### Environment Variables
-- Server-only secrets (`AUTH_SECRET`, `DATABASE_URL`, API keys) use `process.env.SECRET_NAME` — NEVER prefix with `NEXT_PUBLIC_`
-- Client-safe values use `NEXT_PUBLIC_` prefix — assume anything with this prefix is visible to users; NEVER put API keys or tokens in `NEXT_PUBLIC_*`
-- Generate `AUTH_SECRET` with `npx auth secret` — NEVER commit it or use a hardcoded placeholder in production
+- Server secrets (`AUTH_SECRET`, `DATABASE_URL`, API keys): `process.env.SECRET_NAME` — NEVER use `NEXT_PUBLIC_` prefix
+- Client-safe values only in `NEXT_PUBLIC_*` — treat as fully public; NEVER put keys or tokens there
+- Generate `AUTH_SECRET` with `npx auth secret` — NEVER hardcode or commit it
 
 ### Input Validation
-- Validate all request bodies in API route handlers with Zod `safeParse()` — return 400 on failure, NEVER trust raw `request.json()`
-- Validate URL params and search params before use — they are user-controlled input
+- Validate all request bodies with Zod `safeParse()` — return 400 on failure, NEVER trust raw `request.json()`
+- Validate URL/search params before use — user-controlled input
+- For complex validation patterns (file uploads, OWASP/CWE): use `shared/validation-patterns/SKILL.md`
 
 ### Auth & Route Protection
-- `proxy.ts` uses `export const proxy = auth(...)` (Next.js 16 convention) to enforce auth for all routes not in `PUBLIC_PATHS` — NEVER duplicate auth checks in page components. Page components are protected by the proxy redirect; API routes should independently verify the session for defense-in-depth
-- API routes that need auth should check `auth()` from `@/auth` and return 401 if no session
-- NEVER expose user IDs or internal identifiers in client-side code without authorization checks
+- `proxy.ts`: NEVER return JSON for unauthorized requests — `new Response(null, { status: 401 })` only
+- `proxy.ts` handles auth for pages; API routes independently call `auth()` from `@/auth` and return 401 — defense in depth
+- NEVER expose internal IDs or resource identifiers to the client without authorization checks
 
 ### Least Privilege
-- API route handlers should only return the fields the client needs — NEVER send full database records to the browser
-- Use `select` or explicit field picking when querying data
-- NEVER log sensitive data (tokens, passwords, full request bodies with PII)
+- Return only the fields the client needs — NEVER send full DB records to the browser
+- NEVER log tokens, passwords, or PII
 

@@ -30,7 +30,7 @@ CORS_ORIGINS=http://localhost:3000
 
 > The templateCentral Vite template defaults to port `3000` (same as Next.js). For multiple origins: `CORS_ORIGINS=http://localhost:3000,http://localhost:3001`.
 
-No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, `["*"]` is used automatically.
+No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, common localhost origins (`localhost:3000`, `localhost:5173`, `127.0.0.1` variants) are allowed automatically.
 
 #### NestJS (`src/config/setups/security.setup.ts`)
 
@@ -88,6 +88,8 @@ VITE_API_BASE_URL=/api
 NEXT_PUBLIC_BACKEND_URL=/api/external
 BACKEND_URL=http://localhost:8000  # server-side direct calls
 ```
+
+> **Security**: `NEXT_PUBLIC_BACKEND_URL` must be a **relative proxy path** (e.g., `/api/external`) — NEVER the actual backend server address (`http://...`). `NEXT_PUBLIC_*` vars are embedded in the client bundle and visible to users. Use `BACKEND_URL` (no `NEXT_PUBLIC_` prefix) for the real backend address — it stays server-side only.
 
 #### Backend `.env`
 

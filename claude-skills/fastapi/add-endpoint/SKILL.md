@@ -141,7 +141,7 @@ def test_my_endpoint_success(client: TestClient) -> None:
 ### 6. Validate
 
 After creating all files:
-1. Start the server from `src/` (`cd src && python main.py`) — confirm no import errors
+1. Start the server (`python src/main.py`) — confirm no import errors
 2. Open Swagger docs — verify the new endpoint appears under its tag
 3. Run tests from the project root (`pytest test/test_api/test_my_endpoint.py`) — confirm tests pass
 4. Run `ruff check src/` — confirm no lint errors

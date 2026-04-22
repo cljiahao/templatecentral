@@ -52,16 +52,14 @@ pip install -r requirements-dev.txt
 ### 5. Verify
 
 ```bash
-cd src
-python main.py
+python src/main.py
 ```
 
 Confirm the API starts at `http://localhost:8000` and Swagger docs are available. **Do not proceed until the API responds.**
 
-Run tests (from the project root, not from `src/`):
+Run tests (from the project root):
 
 ```bash
-cd ..
 pytest test/
 ```
 
@@ -116,7 +114,7 @@ Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`
 Include **Build & Dev** with verified commands only, e.g.:
 
 - `source .venv/bin/activate` — venv
-- `cd src && python main.py` — dev server (http://localhost:8000)
+- `python src/main.py` — dev server (http://localhost:8000)
 - `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
@@ -128,14 +126,12 @@ Ask whether the user wants structured task management for complex features. If *
 
 ### 9. Remove Example Code (Optional)
 
-Once the project is verified, remove the example endpoint:
-- Delete `src/api/routers/example.py`
-- Delete `src/api/schemas/request/example.py`
-- Delete `src/api/schemas/response/example.py`
-- Delete `src/api/services/example.py`
-- Delete `test/test_api/test_example.py`
-- Remove the `example` import and `include_router` line from `src/api/routes.py`
-- Update `APITags` in `src/api/tags.py` to remove `EXAMPLE`
+Once the project is verified, use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
+
+FastAPI-specific steps (the skill covers these):
+- Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
+- Remove `example` import and `include_router` from `src/api/routes.py`
+- Remove `EXAMPLE` from `APITags` in `src/api/tags.py`
 
 ## Rules
 

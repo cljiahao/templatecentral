@@ -61,12 +61,20 @@ cp .env.example .env.local
 
 ### 8. Install Dependencies
 
+Ensure the project directory is a git repo first — husky requires it to activate hooks:
+
+```bash
+git init
+```
+
+Then install:
+
 ```bash
 cd <target-directory>
 pnpm install
 ```
 
-**Checkpoint**: Verify installation completed without errors. If dependency conflicts occur, resolve them before proceeding.
+`pnpm install` automatically runs `prepare: husky`, which activates the pre-commit and pre-push hooks in `.husky/`. **Checkpoint**: Verify installation completed without errors. If dependency conflicts occur, resolve them before proceeding.
 
 ### 9. Verify
 
@@ -92,7 +100,13 @@ pnpm build
 
 **Checkpoint**: `pnpm build` must succeed before generating project docs — catches TypeScript and App Router issues that `pnpm dev` may not surface.
 
-Optional full gate: `pnpm check` (format + lint + typecheck).
+Then run the full quality gate:
+
+```bash
+pnpm check
+```
+
+**Checkpoint**: `pnpm check` (format + lint + typecheck) must pass before handing off.
 
 ### 10. Generate Project AGENTS.md (MANDATORY)
 
@@ -109,7 +123,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 - **Created**: <date>
 
 ## Architecture Decisions
-- Auth via NextAuth (Auth.js) with `proxy.ts` route protection (Next.js 16 proxy, replaces middleware); dev bypass when `isDev`
+- Auth via NextAuth (Auth.js) with `proxy.ts` route protection (`export const proxy = auth(...)`); dev bypass when `isDev`
 - Providers (SessionProvider, QueryClientProvider) in root `layout.tsx` — shared across all route groups
 - Route groups: `(public)/` for public pages, `dashboard/` for authenticated — each has its own Navbar + Footer shell
 - Feature modules under `src/features/<name>/`

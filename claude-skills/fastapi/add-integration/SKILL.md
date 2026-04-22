@@ -160,7 +160,7 @@ async def get_github_service() -> AsyncGenerator[GithubService, None]:
         await client.close()
 ```
 
-### 7. Wire Into Router
+### 7. Create the Router
 
 First, add a tag to `src/api/tags.py`:
 
@@ -170,7 +170,7 @@ class APITags(StrEnum):
     GITHUB = "github"
 ```
 
-Then create the router:
+Then create **`src/api/routers/<name>.py`**:
 
 ```python
 from fastapi import APIRouter, Depends
@@ -188,6 +188,19 @@ async def list_repos(service: GithubService = Depends(get_github_service)):
     """List authenticated user's GitHub repos."""
     return await service.list_repos()
 ```
+
+### 8. Register the Router
+
+Add the router to **`src/api/routes.py`**:
+
+```python
+from api.routers import example, github  # add the new import
+
+# in the router registration block:
+router.include_router(github.router, tags=[APITags.GITHUB])
+```
+
+The router will not be reachable until it is registered here — this step is mandatory.
 
 ## Rules
 

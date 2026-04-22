@@ -71,12 +71,20 @@ cp .env.example .env
 
 ### 8. Install Dependencies
 
+Ensure the project directory is a git repo first — husky requires it to activate hooks:
+
+```bash
+git init
+```
+
+Then install:
+
 ```bash
 cd <target-directory>
 pnpm install
 ```
 
-**Checkpoint**: Verify installation completed without errors. If dependency conflicts occur, resolve them before proceeding.
+`pnpm install` automatically runs `prepare: husky`, which activates the pre-commit and pre-push hooks in `.husky/`. **Checkpoint**: Verify installation completed without errors. If dependency conflicts occur, resolve them before proceeding.
 
 ### 9. Verify
 
@@ -97,6 +105,14 @@ pnpm build
 ```
 
 **Checkpoint**: `pnpm build` must succeed before generating `AGENTS.md` — `tsc -b` catches type errors Vite dev can miss.
+
+Then run the full quality gate:
+
+```bash
+pnpm check
+```
+
+**Checkpoint**: `pnpm check` (format + lint + typecheck) must pass before handing off.
 
 ### 10. Generate Project AGENTS.md (MANDATORY)
 
@@ -142,7 +158,7 @@ Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
 Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`. Write a **short** `CLAUDE.md` (full detail in **`AGENTS.md`**).
 
-**Build & Dev**, e.g.: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`.
+**Build & Dev**, e.g.: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck).
 
 **templateCentral skills**: `scaffold` (done), `add-page`, `add-feature`, `add-component`, `add-form`, `add-auth`, `add-integration`, `add-test`. **Workflow**: `claude-skills/vite-react/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 

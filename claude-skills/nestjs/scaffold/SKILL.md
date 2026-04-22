@@ -132,10 +132,12 @@ Ask whether the user wants structured task management for complex features. If *
 
 ### 9. Remove Example Code (Optional)
 
-Once the project is verified, remove the example module:
+Once the project is verified, use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
+
+NestJS-specific steps (the skill covers these):
 - Delete `src/modules/example/` directory
 - Remove `ExampleModule` import and reference from `src/modules/index.ts`
-- Remove `ExampleModule` from the `imports` array in `src/app.module.ts`
+- Remove `ExampleModule` from `imports` array in `src/app.module.ts`
 - Delete `test/modules/example.controller.spec.ts`
 
 ## Rules

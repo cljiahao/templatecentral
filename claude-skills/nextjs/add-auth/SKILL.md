@@ -14,7 +14,7 @@ The scaffolded project includes a working auth setup out of the box:
 | File | Purpose |
 |------|---------|
 | `src/auth.ts` | NextAuth config — providers, JWT callbacks, session config |
-| `src/proxy.ts` | Next.js 16 proxy (replaces middleware) — uses named `export const proxy` convention to redirect unauthenticated users to `/login` |
+| `src/proxy.ts` | Next.js 16 proxy — `export const proxy = auth(...)` redirects unauthenticated users to `/login` |
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth API route handler |
 | `src/features/auth/` | Auth feature module — `LoginCard`, `LoginButton`, `SignOutButton` |
 | `src/app/(public)/login/page.tsx` | Login page |
@@ -100,7 +100,7 @@ The `provider` string must match the NextAuth provider ID (lowercase, hyphenated
 
 ### 5. Customize Public Routes (Optional)
 
-In `src/proxy.ts` (the Next.js 16 proxy, exported as `export const proxy`), the `PUBLIC_PATHS` set controls which pages are accessible without auth. Add paths as needed:
+In `src/proxy.ts`, the `PUBLIC_PATHS` set controls which pages are accessible without auth. Add paths as needed:
 
 ```typescript
 const PUBLIC_PATHS = new Set<string>([
@@ -174,7 +174,7 @@ src/
 
 - NEVER hardcode secrets — always use environment variables
 - NEVER remove the `isDev` guard on the Credentials provider — it must only exist in development
-- NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })` (Next.js 16 proxy constraint)
+- NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })`
 - Always guard provider registration with env var checks — missing vars should silently skip the provider, not crash
 - Always generate `AUTH_SECRET` with `npx auth secret` — never use a weak or predictable value
 - Keep the dev bypass pattern: `isDev` → Credentials provider + "Dev login" button

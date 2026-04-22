@@ -73,7 +73,18 @@ JWT_SECRET=<generate with: openssl rand -hex 32>
 JWT_EXPIRES_IN=30m
 ```
 
-> **Security**: `JWT_SECRET` uses non-null assertion (`!`) to satisfy TypeScript. Note that `!` is erased at compile time — it does NOT cause a runtime error if the variable is missing. Add a startup check in `main.ts` bootstrap (e.g., `if (!appConfig.JWT_SECRET) throw new Error('JWT_SECRET is required')`) to fail fast. NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
+**Add a startup guard in `src/main.ts`** — the `!` assertion is erased at compile time and does NOT throw at runtime if the variable is missing:
+
+```typescript
+async function bootstrap() {
+  if (!appConfig.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  // ... rest of bootstrap
+}
+```
+
+NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
 
 ### 4. Create JWT Strategy
 

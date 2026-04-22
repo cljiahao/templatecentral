@@ -104,8 +104,9 @@ api/           →  models/
 - Validate path/query params with FastAPI's type annotations — NEVER cast raw strings manually
 
 ### CORS
-- `ALLOWED_CORS` is `["*"]` in dev for convenience — in production, set `CORS_ORIGINS` env var (comma-separated origins); `_compute_allowed_cors()` in `src/core/config.py` reads it automatically
-- Always set `allow_credentials=True` if using cookie-based auth
+- In dev, `ALLOWED_CORS` is a fixed list of localhost origins (`localhost:3000`, `localhost:5173`, `127.0.0.1` variants) — never `["*"]` with credentials (CORS spec forbids it)
+- In production, set `CORS_ORIGINS` env var (comma-separated origins); `_compute_allowed_cors()` in `src/core/config.py` reads it automatically
+- Always set explicit methods and headers alongside `allow_credentials=True` — wildcard `["*"]` for methods/headers is invalid with credentials per the CORS spec
 
 ### Auth
 - Hash passwords with `bcrypt` or `passlib` — NEVER store plaintext passwords

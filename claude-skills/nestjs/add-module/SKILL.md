@@ -107,7 +107,7 @@ Create `src/modules/<name>/<name>.service.ts`:
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { TaskRepository } from './<name>.repository';
-import type { CreateTaskDto, UpdateTaskDto } from './<name>.dto';
+import { CreateTaskDto, UpdateTaskDto } from './<name>.dto';
 import type { Task } from './<name>.types';
 
 @Injectable()
