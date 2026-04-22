@@ -33,7 +33,13 @@ class APISettings(BaseSettings):
 
     def _compute_allowed_cors(self) -> list[str]:
         if common_settings.ENVIRONMENT == "dev":
-            return ["*"]
+            return [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://localhost:5173",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5173",
+            ]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @field_validator("FASTAPI_ROOT", mode="before")

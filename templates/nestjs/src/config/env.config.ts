@@ -11,5 +11,5 @@ export const appConfig = {
 };
 
 export const serviceConfig = {
-  CLIENT_URL: (process.env.CLIENT_URL || 'http://localhost:5173').split(','),
+  CLIENT_URL: (process.env.CLIENT_URL || 'http://localhost:3000').split(','),
 };
