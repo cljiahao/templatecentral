@@ -14,7 +14,7 @@ Controllers, services, repositories, HTTP-facing guards/pipes: **Jest** in the s
 
 ## Stack
 
-NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 5.9, Jest, Docker.
+NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Jest, Docker.
 
 ## Skills Available
 
@@ -27,6 +27,19 @@ NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 5.9, Jest, Doc
 | `add-auth/` | Adding JWT authentication with Passport.js |
 | `add-database/` | Adding a database — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB), with optional AWS IAM auth |
 | `add-integration/` | Connecting to an external API (@nestjs/axios + Zod schemas) |
+
+## Shared Skills
+
+Cross-stack skills in `claude-skills/shared/` — use these instead of inventing patterns:
+
+| Skill | When to use |
+|-------|-------------|
+| `shared/validation-patterns/` | Endpoint input validation needing OWASP/CWE compliance |
+| `shared/add-error-handling/` | Consistent error responses and security boundaries across controllers |
+| `shared/full-stack-pairing/` | Wiring a frontend client to this NestJS backend (CORS, auth headers) |
+| `shared/task-management/` | Complex multi-step features — opt-in via project `AGENTS.md` |
+| `shared/remove-example/` | Removing template placeholder code after scaffold |
+| `shared/add-pagination/` | Adding offset or cursor-based pagination to endpoints |
 
 ## Architecture & Code Standards
 

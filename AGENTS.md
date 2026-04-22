@@ -52,6 +52,7 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 - **Never** paste live credentials into `AGENTS.md`, `CLAUDE.md`, generated docs, or chat output. Rotate any secret that was exposed.
 - **Never** commit private keys, `.pem` files, or SSH keys — if the project needs them locally, keep them out of git (`.gitignore`) and out of generated docs.
 - **Never** put secrets in `NEXT_PUBLIC_*` (Next.js) or `VITE_*` (Vite) — both are exposed in the client bundle.
+- **FastAPI**: In development, CORS allows `localhost:3000`, `localhost:5173`, and `127.0.0.1` variants automatically. In production, set `CORS_ORIGINS` env var (comma-separated) to your frontend's domain.
 - **Production**: Replace template dev placeholders in env (e.g. NextAuth `AUTH_SECRET`, JWT secrets) with strong values before deploy — call this out in handoff when templates use placeholders.
 - Follow each stack’s `code-standards` for auth, env vars, and least-privilege responses.
 
@@ -66,12 +67,10 @@ Do not write `AGENTS.md` or `CLAUDE.md` until the stack’s checks pass (fixes f
 
 | Stack | Required gates |
 |-------|------------------|
-| **Next.js** | `pnpm test`, `pnpm build` |
+| **Next.js** | `pnpm test`, `pnpm build`, `pnpm check` |
 | **NestJS** | `pnpm test`, `pnpm test:e2e`, `pnpm build` |
 | **FastAPI** | API responds, `pytest test/`, `ruff check src/` |
-| **Vite + React** | `pnpm dev` OK, `pnpm test`, `pnpm build` |
-
-Optional when `package.json` defines them: Next.js `pnpm check` (format + lint + typecheck); `pnpm lint` on Node stacks before handoff if not already covered above.
+| **Vite + React** | `pnpm dev` OK, `pnpm test`, `pnpm build`, `pnpm check` |
 
 ## Subagent Boundaries
 
@@ -85,11 +84,14 @@ Optional when `package.json` defines them: Next.js `pnpm check` (format + lint +
 
 ## Shared Skills
 
-Cross-stack skills available to all subagents — check `claude-skills/shared/` when a task doesn't fit a stack-specific skill:
+Cross-stack skills available to all subagents — each stack's `AGENT.md` lists which apply. Always check `claude-skills/shared/` before inventing a pattern from scratch:
 
 | Skill | When to use |
 |-------|-------------|
-| `shared/full-stack-pairing/` | Connecting a frontend to a backend (CORS, proxy, env wiring) |
+| `shared/validation-patterns/` | Forms, API endpoints, file uploads — OWASP/CWE-compliant Zod/Pydantic patterns |
+| `shared/add-error-handling/` | Consistent error responses and security boundaries; never expose stack traces |
+| `shared/full-stack-pairing/` | Connecting a frontend to a backend (CORS, proxy, env wiring, auth headers) |
+| `shared/add-pagination/` | Offset or cursor-based pagination for API routes and list UIs |
 | `shared/remove-example/` | Removing template example/placeholder code after scaffolding |
 | `shared/task-management/` | Complex multi-step features (3+ files, architectural decisions) — opt-in via project `AGENTS.md` |
 

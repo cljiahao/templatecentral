@@ -50,10 +50,13 @@ claude-skills/
 │   ├── add-auth/SKILL.md
 │   ├── add-database/SKILL.md
 │   └── add-integration/SKILL.md
-└── shared/                      # Cross-stack skills (3 skills)
+└── shared/                      # Cross-stack skills (6 skills)
     ├── task-management/SKILL.md
     ├── full-stack-pairing/SKILL.md
-    └── remove-example/SKILL.md
+    ├── remove-example/SKILL.md
+    ├── validation-patterns/SKILL.md
+    ├── add-error-handling/SKILL.md
+    └── add-pagination/SKILL.md
 ```
 
 ## Skill Format

@@ -10,7 +10,7 @@
 
 ## Stack
 
-Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, Framer Motion, Vitest + Testing Library, Sonner, Docker (Nginx for prod).
+Vite 8, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, Framer Motion, Vitest + Testing Library, Sonner, Docker (Nginx for prod).
 
 ## Skills Available
 
@@ -25,6 +25,19 @@ Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, React Ro
 | `add-auth/` | Configuring authentication — wiring auth backend, customizing login UI, protecting routes |
 | `add-test/` | Adding tests for components, hooks, or services |
 | `add-form/` | Adding a validated form (React Hook Form + Zod + CustomFormField) |
+
+## Shared Skills
+
+Cross-stack skills in `claude-skills/shared/` — use these instead of inventing patterns:
+
+| Skill | When to use |
+|-------|-------------|
+| `shared/validation-patterns/` | Forms and API responses needing OWASP/CWE-compliant validation |
+| `shared/add-error-handling/` | Consistent error boundaries and security-safe error display |
+| `shared/full-stack-pairing/` | Connecting this SPA to a backend (CORS, proxy, env wiring) |
+| `shared/task-management/` | Complex multi-step features — opt-in via project `AGENTS.md` |
+| `shared/remove-example/` | Removing template placeholder code after scaffold |
+| `shared/add-pagination/` | Adding pagination to lists and API consumers |
 
 ## Architecture & Code Standards
 

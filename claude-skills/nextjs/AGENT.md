@@ -14,7 +14,7 @@
 
 ## Stack
 
-Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, TanStack React Query, NextAuth (Auth.js), React Hook Form + Zod, Framer Motion, Axios, Docker.
+Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack React Query, NextAuth (Auth.js), React Hook Form + Zod, Framer Motion, Axios, Docker.
 
 ## Skills Available
 
@@ -31,6 +31,19 @@ Next.js 16, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, TanS
 | `add-test/` | Adding tests for API route handlers (backend only) |
 | `add-form/` | Adding a validated form (React Hook Form + Zod + CustomFormField) |
 | `add-database/` | Adding a database — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB), with optional AWS IAM auth |
+
+## Shared Skills
+
+Cross-stack skills in `claude-skills/shared/` — use these instead of inventing patterns:
+
+| Skill | When to use |
+|-------|-------------|
+| `shared/validation-patterns/` | Forms, API endpoints, file uploads needing OWASP/CWE-compliant validation |
+| `shared/add-error-handling/` | Consistent error responses and security boundaries across API routes |
+| `shared/full-stack-pairing/` | Wiring Next.js to an external backend (CORS, proxy, env) |
+| `shared/task-management/` | Complex multi-step features — opt-in via project `AGENTS.md` |
+| `shared/remove-example/` | Removing template placeholder code after scaffold |
+| `shared/add-pagination/` | Adding offset or cursor-based pagination to API routes |
 
 ## Architecture & Code Standards
 

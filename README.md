@@ -52,7 +52,10 @@ templateCentral/
 │   └── shared/                     # Cross-stack skills
 │       ├── task-management/        #   Opt-in structured task management
 │       ├── full-stack-pairing/     #   Connect frontend to backend (proxy, CORS, env vars)
-│       └── remove-example/         #   Remove example/demo code from scaffolded project
+│       ├── remove-example/         #   Remove example/demo code from scaffolded project
+│       ├── validation-patterns/    #   OWASP/CWE-compliant Zod/Pydantic validation patterns
+│       ├── add-error-handling/     #   Consistent error responses and security boundaries
+│       └── add-pagination/         #   Offset or cursor-based pagination for APIs and list UIs
 └── templates/                      # Project templates
     ├── nextjs/                     # Next.js 16 + React 19 + shadcn/ui + Tailwind
     ├── fastapi/                    # FastAPI + layered architecture + Pydantic v2
@@ -67,7 +70,7 @@ templateCentral/
 | **nextjs** | Next.js 16, React 19, shadcn/ui, Tailwind CSS 4, React Query, React Hook Form, Framer Motion, Docker | Ready |
 | **fastapi** | FastAPI 0.116, Pydantic v2 (camelCase schemas), layered architecture, Ruff, pytest, Docker | Ready |
 | **vite-react** | Vite 8, React 19, React Router 7, TanStack Query, shadcn/ui, Tailwind CSS 4, React Hook Form, Framer Motion, Docker | Ready |
-| **nestjs** | NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript 5.9, Jest, Docker | Ready |
+| **nestjs** | NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript 6, Jest, Docker | Ready |
 
 ## Available Skills
 
@@ -77,7 +80,7 @@ Skills are organized by stack. Each skill has YAML frontmatter (`name`, `descrip
 - **FastAPI** — 7 skills (scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration)
 - **Vite + React** — 9 skills (scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form)
 - **NestJS** — 7 skills (scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration)
-- **Shared** — 3 skills (task-management, full-stack-pairing, remove-example)
+- **Shared** — 6 skills (task-management, full-stack-pairing, remove-example, validation-patterns, add-error-handling, add-pagination)
 
 ## Getting Started
 
