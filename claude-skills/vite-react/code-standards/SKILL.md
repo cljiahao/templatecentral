@@ -50,6 +50,32 @@ const useUploadForm = () => {
 - **Extract when there's a second consumer** — don't prematurely extract
 - **Props: prefer composition over configuration** — split instead of adding boolean flags
 
+### Component Library — Check Before Building
+
+**Always check existing components before creating a new one.** The template ships with:
+
+**shadcn/ui primitives** (`src/components/ui/`) — use directly, never recreate:
+`accordion` · `avatar` · `button` · `card` · `checkbox` · `dialog` · `dropdown-menu` · `form` · `input` · `label` · `select` · `separator` · `skeleton` · `sonner` · `tabs` · `textarea`
+
+**Extended UI** (`src/components/ui/`) — built on shadcn primitives:
+- `button-group` — groups of related action buttons
+- `field` — form field wrapper with label + error message
+- `input-group` — input with prefix/suffix addon
+
+**Widgets** (`src/components/widgets/`) — cross-feature, import via barrel:
+- `brand-text` — branded typography element
+- `custom-card` — card with preset layout
+- `custom-dialog` — dialog with preset header/body layout
+- `custom-form-field` — field + Zod validation display
+- `link-list` — list of navigation/action links
+- `media-card` — card with image + content
+- `pill` — inline badge/tag
+
+**Layout** (`src/components/layout/`) — app shell only:
+`navbar` · `site-footer` · `providers` · `error-boundary`
+
+To add a **new** shadcn primitive: `npx shadcn@latest add <name>` — NEVER install `@radix-ui/*` manually.
+
 ### Component Placement Decision Guide
 
 | Scenario | Location |
@@ -61,20 +87,13 @@ const useUploadForm = () => {
 
 ## Performance
 
-**Do NOT use React.memo, useCallback, useMemo by default.** Only after profiling confirms a problem.
+**Do NOT use React.memo, useCallback, useMemo by default** — only after profiling confirms a problem. They must be used as a chain to be effective; any single one in isolation adds overhead for zero gain.
 
-They form a **chain** — must be used together to be effective:
-1. Parent stabilizes handlers with `useCallback`
-2. Child wrapped with `React.memo`
-3. Using any of them in isolation adds overhead for zero gain
-
-**Exception**: Context providers that pass objects/functions as `value` should stabilize with `useMemo`/`useCallback` to prevent all consumers from re-rendering on every provider render.
+**Exception**: Context providers must stabilize objects/functions passed as `value` with `useMemo`/`useCallback`.
 
 ## Data & Rendering Separation
 
-- Static data belongs in `constants.ts`
-- Components only handle rendering
-- Static arrays, configuration objects, option lists → feature's `constants.ts`
+Static data → `constants.ts`. Components only render. Never inline arrays, config objects, or option lists in components.
 
 ## Environment Variables
 
@@ -85,8 +104,14 @@ export const ENV = {
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL as string | undefined,
   IS_DEV: import.meta.env.DEV,
 } as const;
+
+export const getApiBaseUrl = (): string => {
+  if (!ENV.API_BASE_URL) throw new Error('VITE_API_BASE_URL is not set');
+  return ENV.API_BASE_URL;
+};
 ```
 
+- Use `getApiBaseUrl()` in services — it throws at startup if `VITE_API_BASE_URL` is missing, preventing silent runtime failures. NEVER use `ENV.API_BASE_URL ?? ''` as a fallback.
 - NEVER put secrets (API keys, tokens) in `VITE_*` variables — they are embedded in the client bundle and visible to users
 - Secrets belong on the backend; the SPA calls authenticated backend endpoints
 
@@ -116,19 +141,21 @@ The template provides these shared utilities:
 
 ## Security
 
-### Environment variables
-- `VITE_*` is embedded in the client bundle — never API keys, tokens, or backend secrets (see root `AGENTS.md`).
+### Environment Variables
+- `VITE_*` is embedded in the client bundle — NEVER put API keys, tokens, or secrets there
+- For APIs requiring auth, proxy through the backend; the SPA never holds credentials
 
 ### Input Validation
-- Validate all form inputs with Zod schemas via React Hook Form — NEVER trust raw user input
-- Validate API response shapes with Zod `safeParse()` before rendering — malformed data from a backend should not crash the UI
+- Validate all form inputs with Zod via React Hook Form — NEVER trust raw user input
+- Validate API response shapes with Zod `safeParse()` before rendering
+- For complex validation (file uploads, OWASP/CWE compliance): use `shared/validation-patterns/SKILL.md`
 
 ### Auth & Route Protection
-- Protected routes are wrapped with `<ProtectedRoute />` in `src/router.tsx` — NEVER rely on hiding navigation links as security
-- Auth tokens/sessions managed by `AuthProvider` — NEVER store tokens in `localStorage` (use `httpOnly` cookies from the backend)
-- NEVER make authorization decisions in the SPA — the backend must enforce access control
+- Protected routes wrapped with `<ProtectedRoute />` in `src/router.tsx` — NEVER rely on hiding nav links as security
+- NEVER store tokens in `localStorage` — use `httpOnly` cookies from the backend
+- NEVER make authorization decisions in the SPA — backend enforces all access control
 
 ### Least Privilege
-- NEVER store sensitive data in React state, URL params, or `sessionStorage` where it persists beyond the session
-- NEVER log tokens, credentials, or PII to the browser console in production
+- NEVER store sensitive data in React state, URL params, or `sessionStorage`
+- NEVER log tokens, credentials, or PII to the browser console
 

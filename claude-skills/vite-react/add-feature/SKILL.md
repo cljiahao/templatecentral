@@ -24,6 +24,8 @@ src/features/<feature-name>/
 │   └── index.ts
 ├── hooks/                       # React hooks (queries, mutations, local state)
 │   └── index.ts
+├── schemas/                     # Zod validation schemas (form inputs + API response shapes)
+│   └── index.ts
 ├── constants.ts                 # Static data (arrays, config objects, options)
 ├── types.ts                     # TypeScript interfaces and types
 └── index.ts                     # Barrel export
@@ -56,15 +58,15 @@ export const STATUS_OPTIONS = [
 
 Client-side services that fetch data from the backend API.
 
-> **Important**: `ENV.API_BASE_URL` is typed as `string | undefined` in the template. Before using it in services, ensure `VITE_API_BASE_URL` is set in `.env` — or add a non-undefined accessor to `env.ts` (e.g., a getter that throws if missing).
+> **`getApiBaseUrl()`** is pre-provided in `src/lib/constants/env.ts` — it throws at startup if `VITE_API_BASE_URL` is missing, preventing silent network failures at runtime. Always use it instead of `ENV.API_BASE_URL` directly.
 
 ```ts
 // api/project-service.ts
-import { ENV } from '@/lib/constants/env';
+import { getApiBaseUrl } from '@/lib/constants/env';
 import { APIError } from '@/lib/errors';
 import type { ProjectItem } from '../types';
 
-const API_BASE = ENV.API_BASE_URL ?? '';
+const API_BASE = getApiBaseUrl();
 
 export const ProjectService = {
   getAll: async (): Promise<ProjectItem[]> => {
@@ -88,6 +90,8 @@ export const ProjectService = {
 Export from barrel: `api/index.ts`
 
 ### 5. Create Components (in `components/`)
+
+**Before writing any UI, check the template's component library** (see `code-standards/SKILL.md` → *Component Library*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
 
 Feature-specific components. Use `function` declarations:
 
@@ -155,4 +159,4 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 - NEVER import from one feature into another — if shared, promote to `components/widgets/` or `lib/`
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
-- NEVER hardcode API URLs in services — use `ENV.API_BASE_URL` from `src/lib/constants/env.ts`
+- NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)

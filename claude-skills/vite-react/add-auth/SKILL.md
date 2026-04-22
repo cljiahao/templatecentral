@@ -43,11 +43,11 @@ The `AuthProvider` is provider-agnostic — it manages local state. You wire it 
 Create `src/features/auth/api/auth-service.ts` to handle backend communication:
 
 ```typescript
-import { ENV } from '@/lib/constants/env';
+import { getApiBaseUrl } from '@/lib/constants/env';
 import { APIError } from '@/lib/errors';
 import type { AuthUser } from '../types';
 
-const API_BASE = ENV.API_BASE_URL ?? '';
+const API_BASE = getApiBaseUrl();
 const AUTH_BASE = `${API_BASE}/auth`;
 
 export async function loginWithCredentials(
@@ -152,35 +152,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 ### 4. Add a Login Form
 
-Update `src/features/auth/components/login-card.tsx` to include a real login form alongside the dev bypass:
+Update `src/features/auth/components/login-card.tsx`. Use the project's canonical form pattern (React Hook Form + Zod + `CustomFormField`):
 
 ```typescript
-import { CustomCard } from '@/components/widgets';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Form } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { CustomCard, CustomFormField } from '@/components/widgets';
 import { ENV } from '@/lib/constants/env';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { loginWithCredentials } from '../api/auth-service';
 import { useAuth } from '../hooks/use-auth';
 
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type LoginFormValues = z.input<typeof loginSchema>;
+
 export function LoginCard() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    const form = new FormData(e.currentTarget);
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  const onSubmit = async (values: LoginFormValues) => {
+    setServerError(null);
     try {
-      const user = await loginWithCredentials(
-        form.get('email') as string,
-        form.get('password') as string
-      );
+      const user = await loginWithCredentials(values.email, values.password);
       login(user);
       navigate(PAGE_ROUTES.DASHBOARD);
     } catch {
-      setError('Invalid credentials');
+      setServerError('Invalid credentials');
     }
   };
 
@@ -191,17 +204,23 @@ export function LoginCard() {
 
   return (
     <CustomCard header="Sign In" description="Enter your credentials to continue.">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <input name="email" type="email" placeholder="Email" required
-          className="rounded-md border px-3 py-2" />
-        <input name="password" type="password" placeholder="Password" required
-          className="rounded-md border px-3 py-2" />
-        {error && <p className="text-sm text-red-500">{error}</p>}
-        <button type="submit"
-          className="rounded-md bg-primary px-4 py-2 font-medium text-white hover:bg-primary-hover">
-          Sign in
-        </button>
-      </form>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <CustomFormField name="email" label="Email">
+            <Input type="email" placeholder="you@example.com" />
+          </CustomFormField>
+
+          <CustomFormField name="password" label="Password">
+            <Input type="password" placeholder="Password" />
+          </CustomFormField>
+
+          {serverError && <p className="text-sm text-red-500">{serverError}</p>}
+
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
+          </Button>
+        </form>
+      </Form>
       {ENV.IS_DEV && (
         <button type="button"
           className="mt-4 w-full rounded-md border-2 bg-white px-4 py-3 text-sm text-gray-500 hover:bg-gray-100"
