@@ -119,6 +119,8 @@ Use these schemas in:
 
 ### 5. Create Components (in `components/`)
 
+**Before writing any UI, check the template's component library** (see `code-standards/SKILL.md` → *Component Library*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
+
 Feature-specific components. Use `function` declarations:
 
 ```tsx

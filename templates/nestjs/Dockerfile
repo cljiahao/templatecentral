@@ -1,12 +1,15 @@
 # ---- Global build arguments ----
-# NODE:           Base Node.js image (pinned for reproducible builds).
+# NODE:           Production Node.js image (pinned for reproducible builds).
 #                 Override with a hardened image via --build-arg NODE=dhi.io/...
+# NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
+#                 apk, adduser, etc.). Not overridden by CI.
 # APP_UID/GID:    Non-root user/group IDs for container security
 # APP_USERNAME:   Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the NestJS server listens on
 ARG NODE=node:24.14-alpine3.23
+ARG NODE_BUILD=node:24.14-alpine3.23
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -15,11 +18,10 @@ ARG APP_DIR=/app
 ARG PORT=3000
 
 # ---- Base ----
-# Shared Alpine + Node foundation. All dependency/build stages inherit from here
-# so that OS-level packages (tzdata, dumb-init, ca-certificates) are only
-# installed once. The non-root user is created here so /etc/passwd and
-# /etc/group can be copied into prod images that may not have `adduser`.
-FROM ${NODE} AS base
+# Alpine foundation for deps/builder/dev stages (uses NODE_BUILD).
+# OS packages (tzdata, dumb-init, ca-certificates) and the non-root user are
+# created here, then COPY'd into the prod stage which may be distroless.
+FROM ${NODE_BUILD} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
@@ -84,12 +86,13 @@ ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 
 # ---- Production ----
-# Minimal Node.js image running the compiled NestJS application. Only the
-# dist/ output and production node_modules are copied.
+# Uses NODE (hardened/distroless when CI overrides, Alpine otherwise).
+# No RUN commands — all setup via COPY from base/prod-deps/builder stages.
 #
-# dumb-init runs as PID 1 to properly forward SIGTERM to Node.js, ensuring
-# graceful shutdown of database connections (Mongoose, Kysely/pg pools).
-FROM base AS prod
+# dumb-init (PID 1) forwards SIGTERM for graceful shutdown of Fastify and
+# database connections (Prisma, Mongoose, Kysely/pg pools).
+# read-only compatible with ECS readonlyRootFilesystem: true.
+FROM ${NODE} AS prod
 ARG APP_UID
 ARG APP_GID
 ARG APP_DIR
@@ -98,6 +101,16 @@ ARG PORT
 ENV NODE_ENV="production" \
     NODE_OPTIONS=--max-old-space-size=384 \
     PORT=${PORT}
+
+WORKDIR ${APP_DIR}
+
+# OS-level setup from the Alpine base stage (user, timezone, certs, dumb-init)
+COPY --from=base /etc/passwd /etc/passwd
+COPY --from=base /etc/group /etc/group
+COPY --from=base /etc/localtime /etc/localtime
+COPY --from=base /etc/timezone /etc/timezone
+COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
+COPY --from=base /etc/ssl/certs/ /etc/ssl/certs/
 
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/package.json ./
 COPY --chown=${APP_UID}:${APP_GID} --from=prod-deps ${APP_DIR}/node_modules ./node_modules
