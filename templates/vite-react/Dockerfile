@@ -1,5 +1,9 @@
 # ---- Global build arguments ----
-# NODE:           Base Node.js image (pinned for reproducible builds)
+# NODE:           Node.js image tag (pinned for reproducible builds).
+#                 CI may override via --build-arg NODE=dhi.io/... but this only
+#                 affects the build stages, not prod (which uses NGINX).
+# NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
+#                 apk, adduser, etc.). Not overridden by CI.
 # NGINX:          Nginx image for serving the static Vite build output
 # APP_UID/GID:    Non-root user/group IDs for container security
 # APP_USERNAME:   Non-root username inside the container
@@ -7,6 +11,7 @@
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
 ARG NODE=node:24.14-alpine3.23
+ARG NODE_BUILD=node:24.14-alpine3.23
 ARG NGINX=nginx:1.28.2-alpine3.23
 ARG APP_UID=1001
 ARG APP_GID=1001
@@ -16,11 +21,9 @@ ARG APP_DIR=/app
 ARG PORT=3000
 
 # ---- Base ----
-# Shared Alpine + Node foundation. All dependency/build stages inherit from here
-# so that OS-level packages (tzdata) are only installed once.
-# The non-root user is created here so /etc/passwd and /etc/group can be copied
-# into prod images that may not have `adduser`/`addgroup` (e.g. hardened images).
-FROM ${NODE} AS base
+# Alpine foundation for deps/builder/dev stages (uses NODE_BUILD).
+# Timezone and non-root user are created here.
+FROM ${NODE_BUILD} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
@@ -38,8 +41,7 @@ RUN apk add --no-cache tzdata \
 
 # ---- Dependencies ----
 # Installs ALL dependencies (including devDependencies like vite, typescript,
-# postcss, etc.) which are required for the build step. Uses the auto-detected
-# package manager based on which lockfile is present.
+# postcss, etc.) for builder and dev stages.
 FROM base AS deps
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
 RUN \
@@ -50,8 +52,7 @@ RUN \
   fi
 
 # ---- Builder ----
-# Copies source code and runs the Vite build. The output lands in dist/ which
-# is the only artifact carried into the production image.
+# Runs the Vite build. Output lands in dist/ for the prod stage.
 FROM deps AS builder
 ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY ./ ./
@@ -74,8 +75,7 @@ ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 
 # ---- Production ----
-# Minimal Nginx image that serves the static dist/ output. No Node.js runtime
-# is present — this image only contains the built HTML/JS/CSS assets.
+# Minimal Nginx image serving static dist/ output. No Node.js runtime needed.
 FROM ${NGINX} AS prod
 ARG APP_UID
 ARG APP_GID
