@@ -6,7 +6,7 @@ paths:
 
 # NestJS Rules
 
-Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 5.9, Jest, Docker.
+Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Jest, Docker.
 
 ## Boundaries
 

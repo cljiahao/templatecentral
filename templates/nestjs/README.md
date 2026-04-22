@@ -13,7 +13,7 @@ Production-ready NestJS API template with Fastify, Zod validation, Swagger docs,
 | Security | Helmet, CORS |
 | Testing | Jest |
 | Linting | ESLint 9 (flat config), Prettier |
-| Language | TypeScript 5.9, ES2023 |
+| Language | TypeScript 6, ES2023 |
 | Docker | Multi-stage (dev / stage / prod) |
 
 ## Getting Started

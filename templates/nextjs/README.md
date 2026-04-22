@@ -6,7 +6,7 @@ A production-ready Next.js application template with shadcn/ui, Tailwind CSS, an
 
 - **Next.js 16** with Turbopack dev server
 - **React 19** with Server Components (RSC)
-- **TypeScript 5.9**
+- **TypeScript 6**
 - **Tailwind CSS 4** with `@tailwindcss/typography` and `tw-animate-css`
 - **shadcn/ui** (new-york style, neutral base, Lucide icons)
 - **Radix UI** primitives (Dialog, Accordion, Tabs, Select, Avatar, etc.)
@@ -22,7 +22,7 @@ A production-ready Next.js application template with shadcn/ui, Tailwind CSS, an
 
 ```
 ├── test/api/                    # API route handler tests (Vitest)
-├── src/proxy.ts                 # Next.js 16 proxy (replaces middleware — route protection, redirects)
+├── src/proxy.ts                 # Next.js 16 proxy — route protection (auth redirects, 401 for API)
 ├── .trivyignore.yaml            # Trivy CVE suppressions for Node.js base image
 ├── Dockerfile                   # Multi-stage build (base → prisma → deps → builder → dev/prod)
 ├── docker-entrypoint.sh         # Package manager auto-detection (pnpm/yarn/npm)
@@ -145,7 +145,7 @@ pnpm check           # Run all checks
 
 - `globals.css` — Theme colors (neutral palette by default), CSS custom properties
 - `layout.tsx` — Fonts, metadata, default theme
-- `src/proxy.ts` — Next.js 16 proxy for route protection (replaces middleware from Next.js 15)
+- `src/proxy.ts` — Next.js 16 proxy for route protection (`export const proxy = auth(...)`)
 - `lib/constants/routes.ts` — Page and API routes
 - `components.json` — shadcn/ui style and color preferences
 - `Dockerfile` — Port, Node version, timezone

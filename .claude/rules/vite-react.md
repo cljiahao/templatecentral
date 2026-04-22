@@ -6,7 +6,7 @@ paths:
 
 # Vite + React Rules
 
-Stack: Vite 8, React 19, TypeScript 5.9, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack Query 5, React Hook Form + Zod, Vitest + Testing Library, Docker (Nginx).
+Stack: Vite 8, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack Query 5, React Hook Form + Zod, Vitest + Testing Library, Docker (Nginx). Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
 
 ## Boundaries
 

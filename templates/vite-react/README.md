@@ -7,7 +7,7 @@ A production-ready Vite + React SPA starter with TypeScript, Tailwind CSS 4, Rea
 | Feature | Value |
 |---------|-------|
 | Build | Vite 8 |
-| UI | React 19, TypeScript 5.9 |
+| UI | React 19, TypeScript 6 |
 | Styling | Tailwind CSS 4, tw-animate-css, shadcn/ui (new-york) |
 | Routing | React Router 7 |
 | State | TanStack React Query 5 |
