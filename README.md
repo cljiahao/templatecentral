@@ -102,6 +102,26 @@ This works the same way for any stack — just describe what you need and the or
    > "Create a FastAPI project at ~/projects/my-api"
 4. The agent follows the same orchestration flow as Cursor
 
+### MCP Server (Claude Code / Claude Desktop)
+
+templateCentral ships with an MCP server that exposes scaffold and skill tools to any MCP-compatible client. A `.mcp.json` in the repo root auto-registers it when you open Claude Code inside this directory.
+
+**First-time setup** — build the server once:
+
+```bash
+cd mcp-server
+npm install
+npm run build
+```
+
+After that, no further steps are needed. Claude Code picks up the server automatically via `.mcp.json` on every session.
+
+**Available tools via MCP:**
+- `scaffold_project` — copy a template to a target path
+- `list_skills` / `get_skill` — browse and fetch skill instructions
+- `list_templates` / `get_agent_definition` / `get_code_standards`
+- `check_updates` / `preview_update` / `get_changelog`
+
 ### With Other AI Tools
 
 Any AI tool that reads `AGENTS.md` (Codex, Copilot, Windsurf, etc.) can use templateCentral. Open or point the tool at this repository and give it a natural language instruction. The orchestrator in `AGENTS.md` handles the rest.
@@ -132,6 +152,38 @@ cd /path/to/my-new-project
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cd src && python main.py
+```
+
+## Recommended Plugins
+
+None are required — install as needed. All are Claude Code plugins unless noted as MCP.
+
+| Plugin | Install | When to use | When to skip / turn off |
+|--------|---------|-------------|--------------------------|
+| **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
+| **superpowers** | `claude plugin marketplace add pcvelz/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
+| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templateCentral itself — use built-in markdown memory here instead (curated, auditable) |
+| **codegraph** | `npx @colbymchenry/codegraph` (Node 18+) | "What calls X / where does Y live" — add when grepping for definitions is a regular cost | Fresh scaffolds (< 5 features); structure is predictable from template |
+| **graphify** | `uv tool install graphifyy && graphify install` (Python 3.10+) | Codebase structure overview (communities, god nodes); use before codegraph for high-level orientation | Same threshold as codegraph |
+| **code-review-graph** | `pip install code-review-graph && code-review-graph install && code-review-graph build` (Python 3.10+) | PRs and refactors with non-obvious blast radius — queries callers, dependents, covering tests | Routine single-file edits |
+
+### Install order
+
+```bash
+# Day one (Claude Code plugins)
+claude plugin marketplace add JuliusBrussee/caveman
+claude plugin marketplace add pcvelz/superpowers
+
+# For scaffolded projects (not templateCentral itself — use built-in memory here)
+claude plugin marketplace add thedotmack/claude-mem
+claude plugin install claude-mem
+
+# After 5+ features (MCP servers — run inside your project)
+npx @colbymchenry/codegraph                                              # codegraph
+uv tool install graphifyy && graphify install                            # graphify
+pip install code-review-graph && code-review-graph install && code-review-graph build  # code-review-graph
+
+# When doing refactors or PRs — activate code-review-graph
 ```
 
 ## Adding a New Template

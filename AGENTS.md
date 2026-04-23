@@ -97,25 +97,20 @@ Cross-stack skills available to all subagents — each stack's `AGENT.md` lists 
 
 ## Scaffold: optional Task Management (single source of truth)
 
-Scaffold skills ask whether the user wants structured task management for **future** complex work. If **yes**, append to the **new project’s** `AGENTS.md` using **one** of the blocks below (not both). If **no**, skip.
+Ask whether the user wants structured task management. If **yes**, append **one** of the blocks below to the **new project’s** `AGENTS.md`. If **no**, skip.
 
 **Option A — templateCentral protocol** (no plugin):
 
 ```markdown
 ## Task Management
 
-For complex, multi-step tasks (3+ files, architectural decisions), follow the task management protocol at `claude-skills/shared/task-management/SKILL.md` in templateCentral.
-
-Protocol summary: Plan → Verify → Track → Explain → Document → Capture Lessons.
-
-Skip for simple changes (single-file edits, scaffolding, quick fixes).
+For complex tasks (3+ files, architectural decisions), follow `claude-skills/shared/task-management/SKILL.md` in templateCentral. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
 ```
 
-**Option B — Superpowers** (Claude Code; user installs in their session):
+**Option B — Superpowers** (Claude Code plugin):
 
 ```bash
-/plugin marketplace add pcvelz/superpowers
-/plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace
+claude plugin marketplace add pcvelz/superpowers
 ```
 
 Then append:
@@ -123,28 +118,39 @@ Then append:
 ```markdown
 ## Task Management
 
-- **Simple tasks**: use templateCentral skills for this stack (see project `AGENTS.md` / `CLAUDE.md` skill list)
-- **Complex features** (3+ files, architectural decisions): Superpowers workflow — `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
-- All code must follow the conventions in this file and the project's code-standards, regardless of workflow used
+- **Simple tasks**: use templateCentral skills for this stack
+- **Complex features** (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- All code must follow this file’s conventions and the stack’s code-standards
 ```
 
 ## Project Memory Requirement
 
-Every scaffolded project **MUST** get its own `AGENTS.md` at the root — scaffolding is not complete without it. It records the stack, template source, architecture decisions, and a "Project-Specific Notes" section. When working inside a scaffolded project, read its `AGENTS.md` first. When making significant decisions, append to "Project-Specific Notes".
+Every scaffolded project **MUST** get its own `AGENTS.md` at the root — scaffolding is not complete without it. Records stack, template source, architecture decisions, and a "Project-Specific Notes" section. Read it first on every session; append significant decisions as they happen.
 
-For **Claude Code users**, scaffold skills also generate a `CLAUDE.md` — see **Scaffold: CLAUDE.md (Claude Code)** below.
+For **Claude Code users**, also generate a `CLAUDE.md` (see below). Both coexist — `AGENTS.md` is the source of truth; `CLAUDE.md` is a short index, not a duplicate.
 
-Both files coexist — `AGENTS.md` is the source of truth for all AI agents; `CLAUDE.md` is a short Claude Code index (not a second copy of long architecture text).
+## Recommended plugins for new projects
+
+After scaffold verification passes, suggest these to the user. Do not install — user decides.
+
+**Day one:**
+- **caveman** (`claude plugin marketplace add JuliusBrussee/caveman`) — compresses output prose. **OFF** in sessions writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, docs).
+- **superpowers** (`claude plugin marketplace add pcvelz/superpowers`) — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
+- **claude-mem** (`claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem`) — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB. Install in the **scaffolded project**, not in templateCentral (templateCentral uses built-in markdown memory instead).
+
+**As the project grows (5+ features):**
+- **codegraph** (`npx @colbymchenry/codegraph`, Node 18+) — symbol navigation; add when grepping for definitions is a regular cost.
+- **graphify** (`uv tool install graphifyy && graphify install`, Python 3.10+) — structural overview; use before codegraph for orientation.
+- **code-review-graph** (`pip install code-review-graph && code-review-graph install && code-review-graph build`, Python 3.10+) — PR/refactor impact analysis; add when blast radius is non-obvious.
+
+Full decision rules: `README.md → Recommended Plugins`.
 
 ## Scaffold: CLAUDE.md (Claude Code only)
 
-Skip if the user does not use Claude Code. Add `CLAUDE.md` in the **new project** after `AGENTS.md` and after scaffold **verification gates** pass.
+Skip if the user does not use Claude Code. Add after `AGENTS.md` and after verification gates pass.
 
-**Rules (accuracy, security, tokens)**  
-- **Do not** duplicate Identity / Architecture / Key Conventions from `AGENTS.md` — include one line: full context is in **`AGENTS.md`**.  
-- **Do** include **Build & Dev** commands that were actually verified during scaffold (from template or scripts).  
-- **Do** include a **Workflow** line or tiny table: simple/medium → templateCentral stack skills; complex → Superpowers (`/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`) — same idea as above under Project Memory.  
-- **Do** include a **templateCentral skills** bullet list for that stack (from `claude-skills/<stack>/AGENT.md`).  
+- **Never** duplicate `AGENTS.md` content — one line: "Full context in `AGENTS.md`."
+- **Include**: verified Build & Dev commands; templateCentral skills list for this stack (from `claude-skills/<stack>/AGENT.md`); workflow line: simple/medium → templateCentral skills; complex → Superpowers.
 - **Never** put secrets or env values in `CLAUDE.md`.
 
-If templateCentral repo is not on disk, still write `AGENTS.md` and a minimal `CLAUDE.md` using the verified commands and local `AGENTS.md` content.
+If templateCentral is not on disk, write `AGENTS.md` and a minimal `CLAUDE.md` from verified commands and local content.
