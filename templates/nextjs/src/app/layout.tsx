@@ -1,7 +1,6 @@
 import { Providers, ThemeProvider } from '@/components/layout';
 import type { Metadata } from 'next';
 import { Geist_Mono, Lato } from 'next/font/google';
-import { Toaster } from 'sonner';
 import './globals.css';
 
 const lato = Lato({
@@ -35,10 +34,7 @@ export default function RootLayout({
           defaultTheme="light"
           disableTransitionOnChange
         >
-          <Providers>
-            {children}
-          </Providers>
-          <Toaster richColors />
+          <Providers>{children}</Providers>
         </ThemeProvider>
       </body>
     </html>

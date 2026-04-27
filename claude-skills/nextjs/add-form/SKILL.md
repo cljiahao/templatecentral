@@ -17,7 +17,7 @@ Create a validated form in a Next.js project scaffolded from templateCentral usi
 | `Form` (FormProvider) | `src/components/ui/form.tsx` |
 | `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
 | `Input`, `Textarea`, `Select` | `src/components/ui/` |
-| `Toaster` (Sonner) | Already in root layout |
+| `sonner` (Toaster) | **Not pre-installed** — add in Step 1 if forms need toast feedback |
 
 ## Inputs
 
@@ -26,7 +26,29 @@ Create a validated form in a Next.js project scaffolded from templateCentral usi
 
 ## Steps
 
-### 1. Define the Zod Schema
+### 1. Install sonner (if the form needs toast feedback)
+
+If the form will call `toast.success()` / `toast.error()`, run:
+
+```bash
+npx shadcn@latest add sonner
+```
+
+Then add `<Toaster richColors />` inside `<ThemeProvider>` in `src/app/layout.tsx`:
+
+```tsx
+import { Toaster } from 'sonner';
+// ...
+<ThemeProvider ...>
+  <Providers>{children}</Providers>
+  <Toaster richColors />
+</ThemeProvider>
+```
+
+Skip this step if sonner is already installed or the form doesn't need toast feedback.
+
+### 2. Define the Zod Schema
+
 
 Create the schema in the feature's `schemas/` directory:
 
@@ -46,7 +68,7 @@ export type ContactFormValues = z.input<typeof contactFormSchema>;
 
 > **Zod v4 note**: Use `z.input` (not `z.infer`) for form value types. `z.input` gives the **input** type (what the user types), while `z.infer` gives the **output** type (after transforms like `.default()`, `.coerce`). `useForm` works with input types.
 
-### 2. Create the Form Component
+### 3. Create the Form Component
 
 **`src/features/<feature>/components/<form-name>-form.tsx`**:
 
@@ -109,7 +131,7 @@ export function ContactForm() {
 }
 ```
 
-### 3. Export from Feature Barrel
+### 4. Export from Feature Barrel
 
 Add the form component to `src/features/<feature>/components/index.ts`:
 
@@ -123,7 +145,7 @@ Ensure the feature root barrel (`src/features/<feature>/index.ts`) re-exports co
 export * from './components';
 ```
 
-### 4. Use in a Page
+### 5. Use in a Page
 
 ```tsx
 import { ContactForm } from '@/features/<feature>';
@@ -146,7 +168,7 @@ export default function ContactPage() {
 - Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring automatically.
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields to avoid uncontrolled-to-controlled warnings.
-- Use `toast.success()` / `toast.error()` from Sonner for user feedback — the `Toaster` is already in the root layout.
+- Use `toast.success()` / `toast.error()` from Sonner for user feedback — install sonner and add `<Toaster />` to root layout first (see Step 1).
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
 - Add `'use client'` directive — forms are inherently interactive.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared/validation-patterns/SKILL.md`.

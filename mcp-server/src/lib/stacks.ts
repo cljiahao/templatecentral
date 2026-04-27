@@ -97,6 +97,14 @@ export async function getSkillsForStack(stack: string): Promise<SkillInfo[]> {
 }
 
 export async function validateStack(stack: string): Promise<void> {
+  // Reject any stack name that isn't a simple alphanumeric/hyphen slug.
+  // This prevents path traversal before any filesystem access occurs.
+  if (!/^[a-z0-9-]+$/.test(stack)) {
+    throw new Error(
+      `Invalid stack name '${stack}'. Stack names may only contain lowercase letters, digits, and hyphens.`
+    );
+  }
+
   // "shared" is a special stack with cross-stack skills but no AGENT.md
   if (stack === "shared") {
     const stackDir = path.join(SKILLS_DIR, stack);
