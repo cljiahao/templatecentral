@@ -6,7 +6,7 @@ paths:
 
 # Next.js Rules
 
-Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, NextAuth (Auth.js), React Hook Form + Zod. Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
+Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (Auth.js/NextAuth). Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
 
 ## Boundaries
 
@@ -16,13 +16,13 @@ Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4,
 - Server components by default — add `'use client'` only for interactivity
 - Use `npx shadcn@latest add` for UI primitives — NEVER install manually
 - Pages compose from features — NEVER put data-fetching in page components
-- `proxy.ts` (route protection): NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
+- `proxy.ts` (route protection, exists only after `nextjs-add-auth`): NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
 
 ## Architecture
 
 - App Router: `src/app/` (layouts, pages, API routes)
 - Features: `src/features/<name>/` (api/, components/, hooks/, schemas/, types.ts, constants.ts, index.ts)
-- Auth: `auth.ts` (config) + `proxy.ts` (route protection) + `features/auth/` (UI)
+- Auth (optional, added via `nextjs-add-auth`): `auth.ts` (config) + `proxy.ts` (route protection) + `features/auth/` (UI)
 - Integrations: `src/integrations/` (clients/base/, schemas/, services/, factories.ts)
 - Shared: `src/lib/` (constants/, errors/, utils/) + `src/components/` (layout/, ui/, widgets/)
 

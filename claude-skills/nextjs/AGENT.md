@@ -14,7 +14,7 @@
 
 ## Stack
 
-Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack React Query, NextAuth (Auth.js), React Hook Form + Zod, Framer Motion, Axios, Docker.
+Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack React Query, React Hook Form + Zod, Axios, Docker. Auth via `nextjs-add-auth` (Auth.js/NextAuth).
 
 ## Skills Available
 

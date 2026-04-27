@@ -170,7 +170,7 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 - Always use `handleApiError()` for error responses — NEVER return raw error objects or stack traces
 - Use `NextResponse.json()` for all responses
 - Use dynamic segments `[id]` for resource IDs
-- API routes are protected by `src/proxy.ts` by default — unauthenticated requests to non-public paths receive a 401 response automatically. Add route-level auth checks only when you need role-based or resource-level authorization beyond authentication
+- If `src/proxy.ts` exists (i.e. `nextjs-add-auth` has been run), unauthenticated requests to non-public paths are rejected automatically. Add route-level `auth()` checks only for role-based or resource-level authorization beyond authentication. If auth has not been added yet, all API routes are unprotected — run `nextjs-add-auth` first
 - NEVER use `request.json()` without validation — parse with Zod and return 400 on failure
 - NEVER expose internal error details in responses — rely on `handleApiError()` for generic messages
 - NEVER skip the routes constant — always add new API routes to `src/lib/constants/routes.ts`
