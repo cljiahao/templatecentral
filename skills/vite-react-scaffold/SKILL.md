@@ -656,6 +656,7 @@ server {
     server_name _;
     absolute_redirect off;
     server_tokens off;
+    autoindex off;
 
     root /usr/share/nginx/html;
     index index.html;
