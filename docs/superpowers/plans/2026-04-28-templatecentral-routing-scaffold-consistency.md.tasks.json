@@ -1,0 +1,52 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-28-templatecentral-routing-scaffold-consistency.md",
+  "tasks": [
+    {
+      "id": 14,
+      "subject": "Task 1: Fix FastAPI src/requirements.txt path in 5 files",
+      "status": "pending",
+      "description": "**Goal:** Remove all references to `src/requirements.txt` from skill instructions and the fastapi-scaffold Dockerfile.\n\n**Files:**\n- Modify: `skills/fastapi-add-auth/SKILL.md:12`\n- Modify: `skills/fastapi-add-database/SKILL.md:31,195,276,366,427`\n- Modify: `skills/fastapi-add-integration/SKILL.md:28`\n- Modify: `skills/shared-add-logging/SKILL.md:300`\n- Modify: `skills/fastapi-scaffold/SKILL.md:188,206,285`\n\n**Acceptance Criteria:**\n- [ ] `grep -r \"src/requirements.txt\" skills/` → zero results\n- [ ] `grep \"COPY src/requirements\" skills/fastapi-scaffold/SKILL.md` → zero results\n- [ ] Verification loop no longer lists `src/requirements.txt`\n\n**Verify:** `grep -r \"src/requirements.txt\" skills/` → no output\n\n```json:metadata\n{\"files\": [\"skills/fastapi-add-auth/SKILL.md\", \"skills/fastapi-add-database/SKILL.md\", \"skills/fastapi-add-integration/SKILL.md\", \"skills/shared-add-logging/SKILL.md\", \"skills/fastapi-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -r \\\"src/requirements.txt\\\" skills/\", \"acceptanceCriteria\": [\"grep -r src/requirements.txt skills/ returns zero results\", \"grep COPY src/requirements skills/fastapi-scaffold/SKILL.md returns zero results\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 2: Add 5 missing workflow skills to AGENTS.md routing table",
+      "status": "pending",
+      "description": "**Goal:** Make all 12 shared skills discoverable from AGENTS.md.\n\n**Files:**\n- Modify: `AGENTS.md` (Shared Skills table, after line 97)\n\n**Acceptance Criteria:**\n- [ ] `grep -c \"| \\`shared-\" AGENTS.md` → 12\n- [ ] All 5 new rows use exact `shared-` prefixed names\n- [ ] Each new row has a when-to-use clause\n\n**Verify:** `grep -c \"| \\`shared-\" AGENTS.md` → `12`\n\n```json:metadata\n{\"files\": [\"AGENTS.md\"], \"verifyCommand\": \"grep -c \\\"| \\\\`shared-\\\" AGENTS.md\", \"acceptanceCriteria\": [\"AGENTS.md Shared Skills table has 12 rows\", \"All 5 new rows use exact shared- prefixed names\", \"Each row has a when-to-use clause\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 3: Fix nextjs-scaffold frontmatter description",
+      "status": "pending",
+      "description": "**Goal:** Remove \"NextAuth\" from the skill description so agents don't assume auth is bundled.\n\n**Files:**\n- Modify: `skills/nextjs-scaffold/SKILL.md` (frontmatter line ~3)\n\n**Acceptance Criteria:**\n- [ ] description line contains no \"NextAuth\"\n- [ ] description line contains \"nextjs-add-auth\"\n\n**Verify:** `grep 'description:' skills/nextjs-scaffold/SKILL.md | head -1` → no NextAuth, contains nextjs-add-auth\n\n```json:metadata\n{\"files\": [\"skills/nextjs-scaffold/SKILL.md\"], \"verifyCommand\": \"grep 'description:' skills/nextjs-scaffold/SKILL.md | head -1\", \"acceptanceCriteria\": [\"description line contains no NextAuth\", \"description line contains nextjs-add-auth\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 4: Add post-scaffold agent workflow to fastapi-scaffold",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** fastapi-scaffold dispatches shared-build-agent, shared-test-agent, shared-update-agent after AGENTS.md is written, with bypass warning. Generated AGENTS.md includes drift-check note.\n\n**Files:**\n- Modify: `skills/fastapi-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] shared-build-agent present\n- [ ] shared-test-agent present\n- [ ] shared-update-agent present\n- [ ] shared-drift-check in AGENTS.md template\n- [ ] bypass warning present\n\n**Verify:** `grep -c 'shared-build-agent\\|shared-test-agent\\|shared-update-agent' skills/fastapi-scaffold/SKILL.md` → 3+\n\n```json:metadata\n{\"files\": [\"skills/fastapi-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -c 'shared-build-agent\\\\|shared-test-agent\\\\|shared-update-agent' skills/fastapi-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"shared-build-agent present\", \"shared-test-agent present\", \"shared-update-agent present\", \"shared-drift-check present in AGENTS.md template\", \"bypass warning present\"]}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 5: Add post-scaffold agent workflow to nestjs-scaffold",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** nestjs-scaffold dispatches the three agent skills with bypass warning. Generated AGENTS.md includes drift-check note.\n\n**Files:**\n- Modify: `skills/nestjs-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] shared-build-agent present\n- [ ] shared-test-agent present\n- [ ] shared-update-agent present\n- [ ] shared-drift-check in AGENTS.md template\n- [ ] bypass warning present\n\n**Verify:** `grep -c 'shared-build-agent\\|shared-test-agent\\|shared-update-agent' skills/nestjs-scaffold/SKILL.md` → 3+\n\n```json:metadata\n{\"files\": [\"skills/nestjs-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -c 'shared-build-agent\\\\|shared-test-agent\\\\|shared-update-agent' skills/nestjs-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"shared-build-agent present\", \"shared-test-agent present\", \"shared-update-agent present\", \"shared-drift-check present in AGENTS.md template\", \"bypass warning present\"]}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 6: Add post-scaffold agent workflow to vite-react-scaffold",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** vite-react-scaffold dispatches the three agent skills with bypass warning. Generated AGENTS.md includes drift-check note.\n\n**Files:**\n- Modify: `skills/vite-react-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] shared-build-agent present\n- [ ] shared-test-agent present\n- [ ] shared-update-agent present\n- [ ] shared-drift-check in AGENTS.md template\n- [ ] bypass warning present\n\n**Verify:** `grep -c 'shared-build-agent\\|shared-test-agent\\|shared-update-agent' skills/vite-react-scaffold/SKILL.md` → 3+\n\n```json:metadata\n{\"files\": [\"skills/vite-react-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -c 'shared-build-agent\\\\|shared-test-agent\\\\|shared-update-agent' skills/vite-react-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"shared-build-agent present\", \"shared-test-agent present\", \"shared-update-agent present\", \"shared-drift-check present in AGENTS.md template\", \"bypass warning present\"]}\n```"
+    },
+    {
+      "id": 20,
+      "subject": "Task 7: Standardise nextjs-scaffold Step 7 agent dispatch",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** Use shared- prefixed names, add missing shared-test-agent, remove redundant second build-agent, add bypass warning, fix drift-check reference.\n\n**Files:**\n- Modify: `skills/nextjs-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] All agent refs use shared- prefix\n- [ ] shared-test-agent added\n- [ ] bypass warning present\n- [ ] shared-drift-check used\n\n**Verify:** `grep 'build-agent\\|update-agent\\|test-agent' skills/nextjs-scaffold/SKILL.md | grep -v 'shared-'` → no output\n\n```json:metadata\n{\"files\": [\"skills/nextjs-scaffold/SKILL.md\"], \"verifyCommand\": \"grep 'build-agent\\\\|update-agent\\\\|test-agent' skills/nextjs-scaffold/SKILL.md | grep -v 'shared-'\", \"acceptanceCriteria\": [\"all agent refs use shared- prefix\", \"shared-test-agent added\", \"bypass warning present\", \"shared-drift-check used instead of drift-check\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-28T00:00:00.000Z"
+}
