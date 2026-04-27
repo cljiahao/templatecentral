@@ -17,7 +17,7 @@ version: "1.0.0"
 
 ### Dependencies
 
-Install these with `pnpm`. Claude resolves latest compatible versions at scaffold time. The update-agent will freshen them immediately after scaffold.
+Install these with `pnpm`. Claude resolves latest compatible versions at scaffold time. The `shared-update-agent` will freshen them immediately after scaffold.
 
 **Runtime:**
 `@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `next`, `next-themes`, `react`, `react-dom`, `react-hook-form`, `tailwind-merge`, `zod`
@@ -1703,7 +1703,7 @@ Create `AGENTS.md` at the project root with this exact content (update Identity 
 ```markdown
 <!-- templateCentral: nextjs@1.0.0 -->
 
-> **Session start:** Invoke the `drift-check` skill to check for templateCentral convention and dependency updates before starting work.
+> **Session start:** Run `shared-drift-check` to check for templateCentral convention and dependency updates before starting work.
 
 # <Project Name>
 
@@ -1741,11 +1741,13 @@ Create `AGENTS.md` at the project root with this exact content (update Identity 
 
 ### 7. Dispatch agents
 
-After AGENTS.md is written, dispatch in order:
+After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. **build-agent** — run `pnpm build && pnpm check`, verify no errors
-2. **update-agent** — freshen all dependencies to latest patch/minor versions
-3. **build-agent** — verify build still passes after dep updates
+1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
+2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test`)
+3. `shared-update-agent` — freshen all dependencies to latest compatible versions
+
+**If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
 ---
 
@@ -1765,4 +1767,4 @@ After AGENTS.md is written, dispatch in order:
 ### 1.0.0
 - Initial plugin release — hybrid rules + verbatim scaffold approach
 - Replaces MCP-based `scaffold_project` file copy
-- update-agent replaces lockfile for dependency freshness
+- shared-update-agent replaces lockfile for dependency freshness
