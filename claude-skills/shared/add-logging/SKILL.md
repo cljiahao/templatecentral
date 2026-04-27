@@ -5,7 +5,7 @@ description: Use to wire structured, JSON-formatted logging into any templateCen
 
 # Add Structured Logging
 
-Wire structured JSON logging into your project at the right level of detail. All stacks emit machine-readable logs with consistent field names, controlled via the `LOG_LEVEL` environment variable (default: `info`). Sensitive data is never logged, regardless of tier.
+Wire structured JSON logging into your project at the right level of detail. All stacks emit machine-readable logs with consistent field names. Sensitive data is never logged, regardless of tier.
 
 ## When to Use
 
@@ -48,7 +48,7 @@ Each tier adds to all lower tiers. Implementing Tier 3 means implementing Tier 1
 
 | Event | Required fields |
 |-------|----------------|
-| Endpoint request/response | `method`, `path`, `status_code`, `duration_ms`, `user_id` |
+| Endpoint request/response | `method`, `path`, `status_code`, `duration_ms` |
 | Unhandled exception | `path`, `error` (message only), full stack trace (server-side only) |
 | App startup | `port`, `environment` |
 | App shutdown | `environment` |
@@ -75,12 +75,11 @@ Each tier adds to all lower tiers. Implementing Tier 3 means implementing Tier 1
 
 ## Environment Variable
 
-All stacks read `LOG_LEVEL` (default: `info`). Valid values: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+Log level is configured per stack:
 
-Set in `.env` / `.env.local`:
-```
-LOG_LEVEL=info
-```
+- **NestJS**: reads `LOG_LEVEL` env var (default: `info`). Valid values: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Set in `.env`: `LOG_LEVEL=info`
+- **Next.js**: reads `LOG_LEVEL` env var (default: `info`). Valid values: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Set in `.env.local`: `LOG_LEVEL=info`
+- **FastAPI**: log level is configured per-environment in `src/core/json/logging.json` (`dev`=DEBUG, `uat`/`prod`=INFO). No `LOG_LEVEL` env var — the `ENVIRONMENT` variable selects the log level profile.
 
 ---
 
@@ -96,14 +95,14 @@ LOG_LEVEL=info
 
 #### Tier 1 — Base
 
-Wrap every route handler with `withLogging`. It logs `method`, `path`, `status_code`, `duration_ms`, and catches unhandled exceptions automatically.
+Wrap every route handler with `withLogging`. It logs `method`, `path`, `status_code`, `duration_ms` (one argument — the handler function), and catches unhandled exceptions automatically.
 
 ```ts
 // src/app/api/health/route.ts  (already done in template — follow this pattern)
 import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
-export const GET = withLogging('health.get', async () => {
+export const GET = withLogging(async () => {
   return NextResponse.json({ status: 'ok' });
 });
 ```
@@ -135,17 +134,20 @@ import { logger } from '@/lib/logger';
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // ...existing config...
   callbacks: {
+    async jwt({ token, trigger }) {
+      // Only log token refresh when explicitly triggered — NOT on every auth() call
+      // WARNING: session callback fires on EVERY auth() call; do NOT log token refresh there
+      if (trigger === 'update') {
+        logger.info({ event: 'auth.token_refresh', user_id: token?.sub }, 'Token refresh');
+      }
+      return token;
+    },
     async signIn({ user, account }) {
       logger.info(
         { user_id: user.id, method: account?.provider ?? 'credentials' },
         'Login success'
       );
       return true;
-    },
-    async session({ session, token }) {
-      // token refresh — log on each renewal
-      logger.info({ user_id: token.sub }, 'Token refresh');
-      return session;
     },
   },
   events: {
@@ -174,10 +176,10 @@ import { auth } from '@/auth';
 import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 
-export const GET = withLogging('admin.get', async (req) => {
+export const GET = withLogging(async (req) => {
   const session = await auth();
   if (!session?.user) {
-    logger.warn({ path: '/api/admin', required_role: 'admin' }, 'Access denied');
+    logger.warn({ user_id: session?.user?.id, path: '/api/admin', required_role: 'admin' }, 'Access denied');
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   // ...
@@ -233,26 +235,36 @@ logger.info({ user_id: session.user.id, project_id: project.id }, 'Project creat
 
 #### Tier 3 — Verbose (+ Tier 1 + Tier 2)
 
-**Slow DB queries** — add Prisma middleware in `src/lib/db.ts`:
+**Slow DB queries** — add Prisma 5 `$extends` in `src/lib/db.ts`:
 
 ```ts
 // src/lib/db.ts
 import { logger } from '@/lib/logger';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prismaBase = new PrismaClient();
 
-prisma.$use(async (params, next) => {
-  const start = Date.now();
-  const result = await next(params);
-  const duration = Date.now() - start;
-  if (duration > 500) {
-    logger.warn(
-      { query_name: `${params.model}.${params.action}`, duration_ms: duration },
-      'Slow DB query'
-    );
-  }
-  return result;
+// Prisma 5+ slow query logging (replaces deprecated $use)
+const prisma = prismaBase.$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const start = Date.now();
+        const result = await query(args);
+        const duration = Date.now() - start;
+        if (duration > 500) {
+          logger.warn({
+            event: 'db.slow_query',
+            model,
+            operation,
+            duration_ms: duration,
+            // NEVER log: args (may contain PII or sensitive data)
+          });
+        }
+        return result;
+      },
+    },
+  },
 });
 
 export { prisma };
@@ -329,7 +341,7 @@ from core.config import api_settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("App starting", extra={"port": api_settings.PORT, "environment": api_settings.ENVIRONMENT})
+    logger.info("App starting", extra={"port": api_settings.API_PORT, "environment": api_settings.ENVIRONMENT})
     yield
     logger.info("App shutdown", extra={"environment": api_settings.ENVIRONMENT})
 
@@ -464,7 +476,8 @@ def before_cursor_execute(conn, cursor, statement, parameters, context, executem
 def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     total_ms = round((time.monotonic() - conn.info["query_start_time"].pop()) * 1000)
     if total_ms > 500:
-        query_name = context.compiled.string[:50] if hasattr(context, "compiled") else "unknown"
+        # Use operation class name as a label — never log SQL text or bound parameters
+        query_name = str(context.statement.__class__.__name__) if hasattr(context, "statement") else "unknown"
         logger.warning(
             "Slow DB query",
             extra={"query_name": query_name, "duration_ms": total_ms},
@@ -530,25 +543,32 @@ LoggerModule.forRoot({
 }),
 ```
 
-Unhandled exceptions — add `logger.error` in your `HttpExceptionFilter` for 5xx status codes:
+Unhandled exceptions — update your `HttpExceptionFilter` to extend `BaseExceptionFilter` and log 5xx errors:
 
 ```ts
-// src/common/filters/http-exception.filter.ts  (extend existing filter)
-import { Logger } from 'nestjs-pino';
+// src/common/filters/http-exception.filter.ts
+import { Logger, Catch, ArgumentsHost, HttpException } from '@nestjs/common';
+import { BaseExceptionFilter } from '@nestjs/core';
+import { ZodSerializationException } from 'nestjs-zod';
+import { ZodError } from 'zod';
 
 @Catch(HttpException)
-export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: Logger) {}
+export class HttpExceptionFilter extends BaseExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
     const status = exception.getStatus();
-    if (status >= 500) {
-      this.logger.error(
-        { path: host.switchToHttp().getRequest().url, error: exception.message },
-        'Unhandled exception'
-      );
+
+    if (exception instanceof ZodSerializationException) {
+      const zodError: unknown = exception.getZodError();
+      if (zodError instanceof ZodError) {
+        this.logger.error(`ZodSerializationException: ${zodError.message}`);
+      }
+    } else if (status >= 500) {
+      this.logger.error(`HTTP ${status}: ${exception.message}`);
     }
-    // ... rest of filter
+
+    super.catch(exception, host);
   }
 }
 ```
@@ -641,40 +661,33 @@ export class AuthService {
 }
 ```
 
-**Outbound HTTP calls** — create an `HttpService` interceptor:
+**Outbound HTTP calls** — create an interceptor that wraps the outbound handler:
 
 ```ts
-// src/common/interceptors/http-logging.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
+// src/common/interceptors/outbound-http-logging.interceptor.ts
+import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 
 @Injectable()
-export class HttpLoggingInterceptor implements NestInterceptor {
-  constructor(private readonly logger: Logger) {}
+export class OutboundHttpLoggingInterceptor implements NestInterceptor {
+  private readonly logger = new Logger('OutboundHttp');
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const start = Date.now();
-    const req = context.switchToHttp().getRequest();
-    const safeUrl = req.url.split('?')[0]; // strip query secrets
-
     return next.handle().pipe(
       tap(() => {
-        const res = context.switchToHttp().getResponse();
-        this.logger.log(
-          {
-            method: req.method,
-            url: safeUrl,
-            status_code: res.statusCode,
-            duration_ms: Date.now() - start,
-          },
-          'Outbound HTTP'
-        );
-      })
+        // Log after the observable completes (response returned from HttpService call)
+        this.logger.log({
+          event: 'http.outbound',
+          duration_ms: Date.now() - start,
+        });
+      }),
     );
   }
 }
 ```
+
+> **Note**: For more detailed logging (url, status_code), wrap `HttpService.get/post` directly in a service method and time the call there — interceptors do not have access to the outbound URL or response status.
 
 **Key domain events** — log in service methods for state changes:
 
@@ -689,34 +702,43 @@ async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
 
 #### Tier 3 — Verbose (+ Tier 1 + Tier 2)
 
-**Slow DB queries** — add Prisma middleware:
+**Slow DB queries** — use Prisma 5 `$extends` in your `PrismaService`:
 
 ```ts
 // src/common/prisma/prisma.service.ts  (extend existing PrismaService)
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor(private readonly logger: Logger) {
-    super();
-  }
+  private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
     await this.$connect();
-    this.$use(async (params, next) => {
-      const start = Date.now();
-      const result = await next(params);
-      const duration = Date.now() - start;
-      if (duration > 500) {
-        this.logger.warn(
-          { query_name: `${params.model}.${params.action}`, duration_ms: duration },
-          'Slow DB query'
-          // Never log: params.args (contains SQL/values)
-        );
-      }
-      return result;
+  }
+
+  // Prisma 5+ slow query logging (replaces deprecated $use)
+  withSlowQueryLogging() {
+    return this.$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ model, operation, args, query }) {
+            const start = Date.now();
+            const result = await query(args);
+            const duration = Date.now() - start;
+            if (duration > 500) {
+              this.logger.warn({
+                event: 'db.slow_query',
+                model,
+                operation,
+                duration_ms: duration,
+                // NEVER log: args (may contain PII or sensitive data)
+              });
+            }
+            return result;
+          },
+        },
+      },
     });
   }
 }
