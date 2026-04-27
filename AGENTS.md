@@ -6,18 +6,18 @@ templateCentral is a toolkit of project templates and skills for scaffolding new
 
 Detect the stack from the user's request or project files, then read the subagent's `AGENT.md` to find the right skill:
 
-| Stack | Subagent | Template |
-|-------|----------|----------|
-| Next.js | `claude-skills/nextjs/AGENT.md` | `templates/nextjs/` |
-| FastAPI | `claude-skills/fastapi/AGENT.md` | `templates/fastapi/` |
-| Vite + React | `claude-skills/vite-react/AGENT.md` | `templates/vite-react/` |
-| NestJS | `claude-skills/nestjs/AGENT.md` | `templates/nestjs/` |
+| Stack | Scaffold skill |
+|-------|----------------|
+| Next.js | `nextjs-scaffold` |
+| FastAPI | `fastapi-scaffold` |
+| Vite + React | `vite-react-scaffold` |
+| NestJS | `nestjs-scaffold` |
 
 Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi` or `src/app.py` defining the FastAPI app → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs. If ambiguous, ask. Meta-tasks (auditing, adding stacks) stay with the orchestrator.
 
 ## Scaffolding flow (order matters)
 
-1. Confirm stack → read `claude-skills/<stack>/AGENT.md` and `scaffold/SKILL.md`.
+1. Confirm stack → use the `<stack>-scaffold` skill.
 2. Copy template per skill; configure name/metadata; env **only** from `.env.example` / `.env.default` (no real secrets).
 3. Install deps per scaffold (**Node**: default **`pnpm`**, `corepack enable` if needed; **Python**: venv then activate — Windows `.venv\Scripts\activate`, Unix `source .venv/bin/activate`); run **Scaffold verification** gates; fix failures before project docs.
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
@@ -84,17 +84,17 @@ Do not write `AGENTS.md` or `CLAUDE.md` until the stack’s checks pass (fixes f
 
 ## Shared Skills
 
-Cross-stack skills available to all subagents — each stack's `AGENT.md` lists which apply. Always check `claude-skills/shared/` before inventing a pattern from scratch:
+Cross-stack skills available to all subagents. Always use a `shared-*` skill before inventing a pattern from scratch:
 
 | Skill | When to use |
 |-------|-------------|
-| `shared/validation-patterns/` | Forms, API endpoints, file uploads — OWASP/CWE-compliant Zod/Pydantic patterns |
-| `shared/add-error-handling/` | Consistent error responses and security boundaries; never expose stack traces |
-| `shared/add-logging/` | Structured JSON logging at three cumulative tiers (base, standard, verbose); hardcoded prohibition list for sensitive data |
-| `shared/full-stack-pairing/` | Connecting a frontend to a backend (CORS, proxy, env wiring, auth headers) |
-| `shared/add-pagination/` | Offset or cursor-based pagination for API routes and list UIs |
-| `shared/remove-example/` | Removing template example/placeholder code after scaffolding |
-| `shared/task-management/` | Complex multi-step features (3+ files, architectural decisions) — opt-in via project `AGENTS.md` |
+| `shared-validation-patterns` | Forms, API endpoints, file uploads — OWASP/CWE-compliant Zod/Pydantic patterns |
+| `shared-add-error-handling` | Consistent error responses and security boundaries; never expose stack traces |
+| `shared-add-logging` | Structured JSON logging at three cumulative tiers (base, standard, verbose); hardcoded prohibition list for sensitive data |
+| `shared-full-stack-pairing` | Connecting a frontend to a backend (CORS, proxy, env wiring, auth headers) |
+| `shared-add-pagination` | Offset or cursor-based pagination for API routes and list UIs |
+| `shared-remove-example` | Removing template example/placeholder code after scaffolding |
+| `shared-task-management` | Complex multi-step features (3+ files, architectural decisions) — opt-in via project `AGENTS.md` |
 
 ## Scaffold: optional Task Management (single source of truth)
 
@@ -105,7 +105,7 @@ Ask whether the user wants structured task management. If **yes**, append **one*
 ```markdown
 ## Task Management
 
-For complex tasks (3+ files, architectural decisions), follow `claude-skills/shared/task-management/SKILL.md` in templateCentral. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
+For complex tasks (3+ files, architectural decisions), use the `shared-task-management` skill. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
 ```
 
 **Option B — Superpowers** (Claude Code plugin):
@@ -151,7 +151,7 @@ Full decision rules: `README.md → Recommended Plugins`.
 Skip if the user does not use Claude Code. Add after `AGENTS.md` and after verification gates pass.
 
 - **Never** duplicate `AGENTS.md` content — one line: "Full context in `AGENTS.md`."
-- **Include**: verified Build & Dev commands; templateCentral skills list for this stack (from `claude-skills/<stack>/AGENT.md`); workflow line: simple/medium → templateCentral skills; complex → Superpowers.
+- **Include**: verified Build & Dev commands; templateCentral skills list for this stack (e.g. `<stack>-scaffold`, `<stack>-add-auth`); workflow line: simple/medium → templateCentral skills; complex → Superpowers.
 - **Never** put secrets or env values in `CLAUDE.md`.
 
 If templateCentral is not on disk, write `AGENTS.md` and a minimal `CLAUDE.md` from verified commands and local content.

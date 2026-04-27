@@ -1,7 +1,6 @@
 ---
 paths:
-  - "templates/vite-react/**"
-  - "claude-skills/vite-react/**"
+  - "skills/vite-react-*/**"
 ---
 
 # Vite + React Rules

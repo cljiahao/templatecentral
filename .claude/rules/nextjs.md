@@ -1,7 +1,6 @@
 ---
 paths:
-  - "templates/nextjs/**"
-  - "claude-skills/nextjs/**"
+  - "skills/nextjs-*/**"
 ---
 
 # Next.js Rules
@@ -28,5 +27,5 @@ Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4,
 
 ## Standards
 
-- **API tests**: same-change Vitest under `test/api/` for `src/app/api/**` (not React UI) — root `AGENTS.md`, `claude-skills/nextjs/code-standards/SKILL.md`.
+- **API tests**: same-change Vitest under `test/api/` for `src/app/api/**` (not React UI) — root `AGENTS.md`, `nextjs-code-standards` skill.
 - Naming, exports, components: `code-standards/SKILL.md`.

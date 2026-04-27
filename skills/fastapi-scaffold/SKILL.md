@@ -16,7 +16,7 @@ Scaffold a new FastAPI backend project from the templateCentral FastAPI template
 
 ### 1. Copy the Template
 
-Copy the entire `templates/fastapi/` directory from this repository to the target directory. Exclude `__pycache__/` and `log/`.
+Copy the FastAPI template files to the target directory. Exclude `__pycache__/` and `log/`.
 
 ```bash
 rsync -av --exclude='__pycache__' --exclude='log' --exclude='.venv' --exclude='.env' <repo-root>/templates/fastapi/ <target-directory>/
@@ -82,7 +82,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 ## Identity
 - **Stack**: FastAPI 0.116, Python 3.12, Pydantic v2, Uvicorn, Ruff, pytest
-- **Scaffolded from**: templateCentral/templates/fastapi
+- **Scaffolded from**: templateCentral fastapi-scaffold skill
 - **Created**: <date>
 
 ## Architecture Decisions
@@ -118,7 +118,7 @@ Include **Build & Dev** with verified commands only, e.g.:
 - `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
-**templateCentral skills** (this stack): `scaffold` (done), `add-endpoint`, `add-auth`, `add-database`, `add-integration`, `add-test`. **Workflow**: simple/medium → `claude-skills/fastapi/`; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
 
 ### 8. Task Management (Optional)
 
@@ -126,7 +126,7 @@ Ask whether the user wants structured task management for complex features. If *
 
 ### 9. Remove Example Code (Optional)
 
-Once the project is verified, use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
+Once the project is verified, use the `shared-remove-example` skill.
 
 FastAPI-specific steps (the skill covers these):
 - Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`

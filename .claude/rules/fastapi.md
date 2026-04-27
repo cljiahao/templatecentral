@@ -1,7 +1,6 @@
 ---
 paths:
-  - "templates/fastapi/**"
-  - "claude-skills/fastapi/**"
+  - "skills/fastapi-*/**"
 ---
 
 # FastAPI Rules
@@ -23,5 +22,5 @@ Stack: FastAPI 0.116, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruf
 
 ## Standards
 
-- **Backend tests**: same-change pytest for API code (`test/`) — root `AGENTS.md`, `claude-skills/fastapi/code-standards/SKILL.md`.
+- **Backend tests**: same-change pytest for API code (`test/`) — root `AGENTS.md`, `fastapi-code-standards` skill.
 - Naming, types, imports, schemas: `code-standards/SKILL.md`.

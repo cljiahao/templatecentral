@@ -125,7 +125,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 ## Identity
 - **Stack**: Vite 8, React 19, TypeScript, shadcn/ui, Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, AuthProvider
-- **Scaffolded from**: templateCentral/templates/vite-react
+- **Scaffolded from**: templateCentral vite-react-scaffold skill
 - **Created**: <date>
 - **Type**: Client-side SPA (no SSR, no API route handlers)
 
@@ -160,7 +160,7 @@ Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`
 
 **Build & Dev**, e.g.: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck).
 
-**templateCentral skills**: `scaffold` (done), `add-page`, `add-feature`, `add-component`, `add-form`, `add-auth`, `add-integration`, `add-test`. **Workflow**: `claude-skills/vite-react/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
+**templateCentral skills**: `vite-react-scaffold` (done), `vite-react-add-page`, `vite-react-add-feature`, `vite-react-add-component`, `vite-react-add-form`, `vite-react-add-auth`, `vite-react-add-integration`, `vite-react-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 
 ### 12. Task Management (Optional)
 
@@ -173,7 +173,7 @@ Once the project is verified and the user confirms it runs:
 - Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
 - Update `src/pages/index.ts` if it re-exports anything from the deleted feature
 
-Or use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
+Or use the `shared-remove-example` skill.
 
 ## Rules
 

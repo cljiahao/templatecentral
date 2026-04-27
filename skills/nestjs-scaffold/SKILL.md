@@ -16,7 +16,7 @@ Scaffold a new NestJS backend project from the templateCentral NestJS template.
 
 ### 1. Copy the Template
 
-Copy the entire `templates/nestjs/` directory from this repository to the target directory. Exclude `node_modules/`, `dist/`, and `.env`.
+Copy the NestJS template files to the target directory. Exclude `node_modules/`, `dist/`, and `.env`.
 
 ```bash
 rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='.env.local' <repo-root>/templates/nestjs/ <target-directory>/
@@ -93,7 +93,7 @@ Create `AGENTS.md` in the project root. This gives any AI agent (Cursor, Codex, 
 
 ## Identity
 - **Stack**: NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript, Jest
-- **Scaffolded from**: templateCentral/templates/nestjs
+- **Scaffolded from**: templateCentral nestjs-scaffold skill
 - **Created**: <date>
 
 ## Architecture Decisions
@@ -124,7 +124,7 @@ Follow **Scaffold: CLAUDE.md (Claude Code only)** in repository root `AGENTS.md`
 
 **Build & Dev** (verified commands), e.g.: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`.
 
-**templateCentral skills**: `scaffold` (done), `add-module`, `add-auth`, `add-database`, `add-integration`, `add-test`. **Workflow**: `claude-skills/nestjs/` vs Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
+**templateCentral skills**: `nestjs-scaffold` (done), `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`. **Never** secrets in `CLAUDE.md`.
 
 ### 8. Task Management (Optional)
 
@@ -132,7 +132,7 @@ Ask whether the user wants structured task management for complex features. If *
 
 ### 9. Remove Example Code (Optional)
 
-Once the project is verified, use the shared `remove-example` skill: `claude-skills/shared/remove-example/SKILL.md`.
+Once the project is verified, use the `shared-remove-example` skill.
 
 NestJS-specific steps (the skill covers these):
 - Delete `src/modules/example/` directory
