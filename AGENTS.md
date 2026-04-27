@@ -95,10 +95,10 @@ Cross-stack skills available to all subagents. Always use a `shared-*` skill bef
 | `shared-add-pagination` | Offset or cursor-based pagination for API routes and list UIs |
 | `shared-remove-example` | Removing template example/placeholder code after scaffolding |
 | `shared-task-management` | Complex multi-step features (3+ files, architectural decisions) — opt-in via project `AGENTS.md` |
-| `shared-build-agent` | After any code change — confirm the project compiles clean |
-| `shared-test-agent` | After any code change — run the full test suite |
+| `shared-build-agent` | After scaffold or feature work — confirm the project compiles clean |
+| `shared-test-agent` | After any code change — write tests for new code then run the full test suite |
 | `shared-review-agent` | After non-trivial feature work — review code against templateCentral standards |
-| `shared-update-agent` | Periodically or before releases — update deps to latest compatible versions |
+| `shared-update-agent` | After scaffold, before releases, or when drift-check flags deps — update deps to latest compatible versions |
 | `shared-drift-check` | At session start on an existing project — check convention version and dependency freshness |
 
 ## Scaffold: optional Task Management (single source of truth)
