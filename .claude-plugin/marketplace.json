@@ -1,14 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "templatecentral",
-  "description": "Production-ready project scaffolding for Next.js, Vite-React, FastAPI, and NestJS",
+  "description": "Production-ready project scaffolding for Next.js, Vite-React, FastAPI, and NestJS. Install once as a plugin — scaffold anywhere without cloning the repo.",
   "owner": {
     "name": "Clarence"
   },
   "plugins": [
     {
       "name": "templatecentral",
-      "description": "Scaffold Next.js, Vite-React, FastAPI, and NestJS projects with agent-driven build, update, review, and test pipelines",
+      "description": "46 skills for scaffolding and extending Next.js, Vite-React, FastAPI, and NestJS projects with agent-driven build, update, review, and test pipelines",
       "source": "./",
       "category": "productivity"
     }

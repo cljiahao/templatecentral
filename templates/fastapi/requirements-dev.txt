@@ -1,8 +1,0 @@
--r requirements.txt
-
-# Testing
-pytest>=8.4.1
-httpx>=0.28.1
-
-# Formatting & Linting
-ruff>=0.14.10
