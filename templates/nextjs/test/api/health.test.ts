@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
 
 import { GET as getRootHealth } from '@/app/api/route';
 import { GET as getHealthPath } from '@/app/api/health/route';
 
-function makeRequest(url: string): Request {
-  return new Request(url);
+function makeRequest(url: string): NextRequest {
+  return new NextRequest(url);
 }
 
 describe('GET /api (root health)', () => {

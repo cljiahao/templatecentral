@@ -8,6 +8,7 @@ export const logError = (logLabel: string, error: unknown): void => {
       error_type: 'APIError',
       message: error.message,
       status_code: error.statusCode,
+      data: error.data,
     });
     return;
   }

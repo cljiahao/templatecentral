@@ -12,3 +12,5 @@ export function mergeHandlers<Args extends readonly unknown[]>(
     handlers.forEach((fn) => fn?.(...args));
   };
 }
+
+export { withLogging } from './with-logging';
