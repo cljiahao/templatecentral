@@ -1527,9 +1527,24 @@ Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
+
+## Session Start
+Run `shared-drift-check` at the start of each session to check for convention or dependency drift.
 ```
 
 Update `Identity` with the actual project name and creation date.
+
+### 6b. Post-scaffold agent workflow
+
+After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+
+1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build`)
+2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
+3. `shared-update-agent` — freshen any deps that have newer compatible versions
+
+**If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
+
+---
 
 ### 7. Generate CLAUDE.md (Optional — Claude Code users only)
 
