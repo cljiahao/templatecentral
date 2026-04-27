@@ -18,8 +18,8 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter(),
     { bufferLogs: true },
   );
-  app.useLogger(app.get(Logger));
   const logger = app.get(Logger);
+  app.useLogger(logger);
 
   setupSecurity(app);
   logger.log('Security middleware configured');
