@@ -65,8 +65,3 @@ dist/
 .vercel
 coverage/
 
-# Plugin skills flat copies — generated from claude-skills/, not tracked except pinned files
-skills/*/
-!skills/nextjs-scaffold/
-!skills/nextjs-add-auth/
-!skills/nextjs-add-page/

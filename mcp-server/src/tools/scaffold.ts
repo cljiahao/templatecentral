@@ -31,7 +31,7 @@ Agent: read \`claude-skills/nextjs/AGENT.md\` to find the right skill for each t
 ## Architecture Decisions
 
 - App Router only (\`src/app/\`); no \`pages/\` directory
-- Route protection via \`src/proxy.ts\` (\`export const proxy = auth(...)\`)
+- Route groups: \`(public)/\` for public pages; run \`nextjs-add-auth\` skill to add \`dashboard/\` and auth
 - Feature-first structure: \`src/features/<name>/\` (api/, components/, hooks/, schemas/)
 - Integration layer: \`src/integrations/\` for all external API clients
 - Server components by default; \`'use client'\` only for interactivity
