@@ -27,7 +27,7 @@ pnpm add react react-dom react-router @tanstack/react-query \
 pnpm add -D vite @vitejs/plugin-react typescript \
   @types/react @types/react-dom \
   tailwindcss @tailwindcss/postcss @tailwindcss/typography tw-animate-css \
-  eslint eslint-plugin-react-hooks globals typescript-eslint eslint-config-prettier prettier \
+  eslint @eslint/js eslint-plugin-react-hooks globals typescript-eslint prettier \
   prettier-plugin-organize-imports prettier-plugin-tailwindcss \
   vitest @vitest/coverage-v8 @testing-library/react @testing-library/jest-dom \
   @testing-library/user-event jsdom husky postcss
