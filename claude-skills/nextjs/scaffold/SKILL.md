@@ -20,7 +20,7 @@ version: "1.0.0"
 Install these with `pnpm`. Claude resolves latest compatible versions at scaffold time. The update-agent will freshen them immediately after scaffold.
 
 **Runtime:**
-`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `framer-motion`, `lucide-react`, `next`, `next-auth`, `next-themes`, `radix-ui`, `react`, `react-dom`, `react-dropzone`, `react-hook-form`, `sonner`, `tailwind-merge`, `zod`
+`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `next`, `next-themes`, `react`, `react-dom`, `react-hook-form`, `tailwind-merge`, `zod`
 
 **Dev:**
 `@tailwindcss/postcss`, `@tailwindcss/typography`, `@types/node`, `@types/react`, `@types/react-dom`, `@vitest/coverage-v8`, `eslint`, `eslint-config-next`, `eslint-config-prettier`, `husky`, `prettier`, `prettier-plugin-organize-imports`, `prettier-plugin-tailwindcss`, `tailwindcss`, `tw-animate-css`, `typescript`, `vitest`
@@ -74,10 +74,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 │   └── api/
 │       └── health.test.ts              [generate — tests GET /api and GET /api/health]
 └── src/
-    ├── auth.ts                         [verbatim — Part C]
-    ├── proxy.ts                        [verbatim — Part C]
     ├── app/
-    │   ├── globals.css                 [generate — Tailwind 4 directives + CSS vars]
+    │   ├── globals.css                 [generate — Tailwind 4 directives + CSS vars + animate-float keyframe]
     │   ├── layout.tsx                  [generate — root layout with Providers + ThemeProvider]
     │   ├── (public)/
     │   │   ├── layout.tsx              [generate — public layout with Navbar + Footer]
@@ -86,13 +84,6 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │   │   ├── route.ts                [generate — GET /api returns { status: 'ok', service: name }]
     │   │   └── health/
     │   │       └── route.ts            [generate — GET /api/health returns { status: 'healthy' }]
-    │   ├── auth/
-    │   │   └── [...nextauth]/
-    │   │       └── route.ts            [generate — export { GET, POST } from next-auth/providers]
-    │   └── dashboard/
-    │       ├── layout.tsx              [generate — dashboard layout with Navbar + Footer]
-    │       └── (overview)/
-    │           └── page.tsx            [generate — dashboard page importing ExampleList]
     ├── components/
     │   ├── layout/
     │   │   ├── navbar.tsx              [generate — uses BrandLogo, BrandText, LinkList, ThemeToggleButton]
@@ -143,6 +134,16 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 - **Pages compose** from features and widgets — no data fetching in page components
 - **shadcn components**: use `npx shadcn@latest add <component>` — never install manually
 - Install shadcn with `new-york` style and CSS variables
+- **`src/app/globals.css`**: After Tailwind directives and CSS vars, append:
+  ```css
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-15px) rotate(5deg); }
+  }
+  .animate-float {
+    animation: float 10s ease-in-out infinite;
+  }
+  ```
 
 ---
 
@@ -324,21 +325,6 @@ CMD ["node", "server.js"]
 ```
 # App
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-# Auth — REQUIRED: generate secret with: npx auth secret
-# WARNING: AUTH_SECRET must be set in production — sessions are insecure without it
-AUTH_URL=http://localhost:3000
-AUTH_SECRET=
-
-# Auth Providers (uncomment and fill for your provider)
-# Microsoft Entra ID
-# AUTH_MICROSOFT_ENTRA_ID_ID=
-# AUTH_MICROSOFT_ENTRA_ID_SECRET=
-# AUTH_MICROSOFT_ENTRA_ID_ISSUER=
-
-# Google
-# AUTH_GOOGLE_ID=
-# AUTH_GOOGLE_SECRET=
 
 # Database (if using Prisma)
 # DATABASE_URL=
@@ -861,14 +847,7 @@ export function Pill({ children, variant = 'outline' }: PillProps) {
 ### `src/components/widgets/floating-shape.tsx`
 
 ```tsx
-'use client';
-
 import { cn } from '@/lib/utils';
-import {
-  motion,
-  type TargetAndTransition,
-  type Transition,
-} from 'framer-motion';
 import Image from 'next/image';
 
 interface FloatingShapeProps {
@@ -876,8 +855,6 @@ interface FloatingShapeProps {
   alt?: string;
   imageClassName?: string;
   className?: string;
-  animate?: TargetAndTransition;
-  transition?: Transition;
 }
 
 export function FloatingShape({
@@ -885,16 +862,12 @@ export function FloatingShape({
   alt = 'default-square',
   imageClassName,
   className,
-  animate = { y: [0, -15, 0], rotate: [0, 5, 0] },
-  transition = { duration: 10, repeat: Infinity, ease: 'easeInOut' },
 }: FloatingShapeProps) {
   return (
-    <motion.div
-      animate={animate}
-      transition={transition}
+    <div
       className={cn(
         className,
-        'pointer-events-none absolute hidden opacity-80 xl:block'
+        'pointer-events-none absolute hidden opacity-80 xl:block animate-float'
       )}
     >
       <Image
@@ -903,7 +876,7 @@ export function FloatingShape({
         fill
         className={cn(imageClassName, 'object-contain')}
       />
-    </motion.div>
+    </div>
   );
 }
 ```
@@ -998,56 +971,37 @@ export function LinkList({ links, className }: LinkListProps) {
 ```tsx
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 export function ThemeToggleButton() {
   const { theme, setTheme } = useTheme();
-
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
-  };
-
-  const iconVariants = {
-    initial: { y: -50, opacity: 0 },
-    animate: { y: 0, opacity: 1 },
-    exit: { y: 50, opacity: 0 },
-  };
+  const isDark = theme === 'dark';
 
   return (
     <button
-      onClick={toggleTheme}
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className="relative overflow-hidden rounded-full bg-gray-200 p-5 transition-colors duration-100 dark:bg-gray-800 dark:text-gray-200"
       aria-label="Toggle theme"
     >
-      <AnimatePresence mode="wait">
-        {theme === 'dark' ? (
-          <motion.span
-            key="moon"
-            variants={iconVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ type: 'spring', stiffness: 1000, damping: 15, mass: 0.3 }}
-            className="flex-center absolute inset-0"
-          >
-            <Sun className="h-5 w-5" fill="currentColor" />
-          </motion.span>
-        ) : (
-          <motion.span
-            key="sun"
-            variants={iconVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ type: 'spring', stiffness: 1000, damping: 15, mass: 0.3 }}
-            className="flex-center absolute inset-0"
-          >
-            <Moon className="h-5 w-5" fill="currentColor" />
-          </motion.span>
-        )}
-      </AnimatePresence>
+      <span
+        className="flex-center absolute inset-0 transition-all duration-200"
+        style={{
+          opacity: isDark ? 1 : 0,
+          transform: isDark ? 'translateY(0)' : 'translateY(-50%)',
+        }}
+      >
+        <Sun className="h-5 w-5" fill="currentColor" />
+      </span>
+      <span
+        className="flex-center absolute inset-0 transition-all duration-200"
+        style={{
+          opacity: isDark ? 0 : 1,
+          transform: isDark ? 'translateY(50%)' : 'translateY(0)',
+        }}
+      >
+        <Moon className="h-5 w-5" fill="currentColor" />
+      </span>
     </button>
   );
 }
@@ -1059,7 +1013,6 @@ export function ThemeToggleButton() {
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SessionProvider } from 'next-auth/react';
 import { useState, type ReactNode } from 'react';
 
 interface ProvidersProps {
@@ -1080,9 +1033,7 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <SessionProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </SessionProvider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 }
 ```
@@ -1442,140 +1393,6 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
 }
 ```
 
-### `src/proxy.ts`
-
-```ts
-import { auth } from '@/auth';
-import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
-import { NextResponse } from 'next/server';
-
-const PUBLIC_PATHS = new Set<string>([PAGE_ROUTES.HOME, PAGE_ROUTES.LOGIN]);
-const PUBLIC_API_PREFIXES = ['/api/auth', API_ROUTES.HEALTH];
-
-function isApiRoute(pathname: string): boolean {
-  return pathname.startsWith('/api/');
-}
-
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname) || PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
-}
-
-export const proxy = auth((req) => {
-  const { pathname } = req.nextUrl;
-  const isAuthenticated = !!req.auth;
-
-  if (!isAuthenticated && !isPublicRoute(pathname)) {
-    if (isApiRoute(pathname)) {
-      return new Response(null, { status: 401 });
-    }
-    return NextResponse.redirect(new URL(PAGE_ROUTES.LOGIN, req.url));
-  }
-
-  if (isAuthenticated && pathname === PAGE_ROUTES.LOGIN) {
-    return NextResponse.redirect(new URL(PAGE_ROUTES.DASHBOARD, req.url));
-  }
-
-  return NextResponse.next();
-});
-
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|ico|webp)$).*)',
-  ],
-};
-```
-
-### `src/auth.ts`
-
-```ts
-import { isDev } from '@/lib/constants/env';
-import NextAuth, { type NextAuthConfig } from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
-
-const DEV_USER = {
-  id: 'dev',
-  name: 'Dev User',
-  email: 'dev@local',
-  image: null as string | null,
-};
-
-function getProviders(): NextAuthConfig['providers'] {
-  const providers: NextAuthConfig['providers'] = [];
-
-  // --- Add your SSO providers here ---
-  // Example: Microsoft Entra ID
-  // const hasEntraId =
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER;
-  //
-  // if (hasEntraId) {
-  //   providers.push(
-  //     MicrosoftEntraID({
-  //       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
-  //       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET!,
-  //       issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER!,
-  //     })
-  //   );
-  // }
-
-  if (isDev) {
-    providers.push(
-      Credentials({
-        name: 'Dev',
-        credentials: {
-          email: { label: 'Email', type: 'text' },
-          password: { label: 'Password', type: 'password' },
-        },
-        async authorize() {
-          return DEV_USER;
-        },
-      })
-    );
-  }
-
-  return providers;
-}
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: getProviders(),
-  callbacks: {
-    async jwt({ token, user, profile }) {
-      if (user) {
-        token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
-        token.image = user.image;
-      }
-
-      if (profile?.picture) {
-        token.image = profile.picture;
-      }
-
-      return token;
-    },
-
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.name = token.name as string;
-        session.user.email = token.email as string;
-        session.user.image = token.image as string;
-      }
-
-      return session;
-    },
-
-    authorized: async ({ auth }) => !!auth,
-  },
-  trustHost: true,
-  session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE },
-  jwt: { maxAge: SESSION_MAX_AGE },
-});
-```
-
 ### `src/lib/errors/handle-api-error.ts`
 
 ```ts
@@ -1739,7 +1556,6 @@ After AGENTS.md is written, dispatch in order:
 - Always update `package.json` name before `pnpm install` — affects Docker image names and lockfiles
 - Always copy `.env.example` to `.env.local` before first run — never commit `.env.local`
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
-- Never return JSON from `proxy.ts` for unauthorized requests — use `new Response(null, { status: 401 })`
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time
 - Remove `src/features/example/` after user confirms the project runs (use `remove-example` skill)
