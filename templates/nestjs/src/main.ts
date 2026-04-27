@@ -7,7 +7,7 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { ConsoleLogger, Logger } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
@@ -16,14 +16,10 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    {
-      logger: new ConsoleLogger({
-        logLevels: ['error', 'warn', 'log', 'debug', 'verbose'],
-        prefix: appConfig.PROJECT_NAME,
-      }),
-    },
+    { bufferLogs: true },
   );
-  const logger = new Logger('Bootstrap');
+  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
 
   setupSecurity(app);
   logger.log('Security middleware configured');
