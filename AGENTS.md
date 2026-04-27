@@ -1,6 +1,6 @@
 # AGENTS.md — templateCentral
 
-templateCentral is a toolkit of project templates and skills for scaffolding new applications. It is NOT an application itself.
+templateCentral is a plugin of production-ready scaffolding skills for creating new applications. It is NOT an application itself.
 
 ## Stack Detection
 
@@ -18,7 +18,7 @@ Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi
 ## Scaffolding flow (order matters)
 
 1. Confirm stack → use the `<stack>-scaffold` skill.
-2. Copy template per skill; configure name/metadata; env **only** from `.env.example` / `.env.default` (no real secrets).
+2. Generate all project files from verbatim blocks per skill; configure name/metadata; env **only** from `.env.example` / `.env.default` (no real secrets).
 3. Install deps per scaffold (**Node**: default **`pnpm`**, `corepack enable` if needed; **Python**: venv then activate — Windows `.venv\Scripts\activate`, Unix `source .venv/bin/activate`); run **Scaffold verification** gates; fix failures before project docs.
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
 5. Post-scaffold code changes: read the project’s `AGENTS.md` and stack **`code-standards/`** first. After non-trivial work, consider **Independent test workflow** (Tier 1) — a fresh session focused on tests only.

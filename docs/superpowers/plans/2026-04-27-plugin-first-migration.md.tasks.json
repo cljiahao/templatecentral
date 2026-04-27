@@ -4,14 +4,14 @@
     {
       "id": 5,
       "subject": "Task 1: Flatten claude-skills/ into skills/",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Create all 46 skills as flat directories under `skills/<stack>-<skill>/SKILL.md`, then delete `claude-skills/` entirely.\n\n**Files:**\n- Create: 43 new `skills/<stack>-<skill>/SKILL.md` files\n- Delete: `claude-skills/` (entire directory)\n\n**Acceptance Criteria:**\n- [ ] `find skills -name SKILL.md | wc -l` returns 46\n- [ ] `claude-skills/` directory is gone\n- [ ] Zero content changes to skill text\n\n**Verify:** `find skills -name SKILL.md | wc -l` → `46`\n\n```json:metadata\n{\"files\": [\"skills/\", \"claude-skills/\"], \"verifyCommand\": \"find skills -name SKILL.md | wc -l\", \"acceptanceCriteria\": [\"46 SKILL.md files in skills/\", \"claude-skills/ deleted\", \"zero content diff\"]}\n```",
       "activeForm": "Flattening skill structure"
     },
     {
       "id": 6,
       "subject": "Task 2: Update cross-references inside all skills",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [5],
       "description": "**Goal:** Remove every reference to `claude-skills/` paths and `templates/` paths inside skill files.\n\n**Files:**\n- Modify: any `skills/*/SKILL.md` with stale path strings\n- Modify: `.claude/rules/*.md`, `AGENTS.md` (root)\n\n**Verify:** `grep -r \"claude-skills/\\|templates/\" skills/ | grep -v \"COPY\\|ADD\\|FROM\"` → zero output\n\n```json:metadata\n{\"files\": [\"skills/\", \".claude/rules/\", \"AGENTS.md\"], \"verifyCommand\": \"grep -r 'claude-skills/' skills/ | wc -l\", \"acceptanceCriteria\": [\"zero claude-skills/ refs\", \"zero templates/ refs (except Docker COPY)\"]}\n```",
       "activeForm": "Updating skill cross-references"
@@ -19,7 +19,7 @@
     {
       "id": 7,
       "subject": "Task 3: Rewrite NextJS scaffold — promote [generate] to [verbatim]",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Convert security-critical [generate] files to [verbatim]; remove all version pins.\n\n**Files:**\n- Modify: `skills/nextjs-scaffold/SKILL.md`\n\n**Verify:** Scaffold test project → `pnpm build` passes.\n\n```json:metadata\n{\"files\": [\"skills/nextjs-scaffold/SKILL.md\"], \"verifyCommand\": \"pnpm build\", \"acceptanceCriteria\": [\"layout.tsx verbatim\", \"API routes verbatim\", \"zero version pins\", \"pnpm build passes\"]}\n```",
       "activeForm": "Rewriting NextJS scaffold skill"
@@ -27,7 +27,7 @@
     {
       "id": 8,
       "subject": "Task 4: Rewrite FastAPI scaffold — full verbatim, no rsync",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Replace `rsync templates/fastapi/` with fully self-contained verbatim skill.\n\n**Files:**\n- Modify: `skills/fastapi-scaffold/SKILL.md` (full rewrite)\n\n**Verify:** Scaffold test → `pytest test/ -v` all green, `ruff check src/` zero errors.\n\n```json:metadata\n{\"files\": [\"skills/fastapi-scaffold/SKILL.md\"], \"verifyCommand\": \"pytest test/ -v && ruff check src/\", \"acceptanceCriteria\": [\"zero rsync refs\", \"all security files verbatim\", \"no version pins\", \"all tests pass\"]}\n```",
       "activeForm": "Rewriting FastAPI scaffold skill"
@@ -35,7 +35,7 @@
     {
       "id": 9,
       "subject": "Task 5: Rewrite NestJS scaffold — full verbatim, no rsync",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Replace `rsync templates/nestjs/` with fully self-contained verbatim skill. No dist/ included.\n\n**Files:**\n- Modify: `skills/nestjs-scaffold/SKILL.md` (full rewrite)\n\n**Verify:** `pnpm build && pnpm test && pnpm test:e2e` all pass.\n\n```json:metadata\n{\"files\": [\"skills/nestjs-scaffold/SKILL.md\"], \"verifyCommand\": \"pnpm build && pnpm test\", \"acceptanceCriteria\": [\"zero rsync refs\", \"no dist/ in skill\", \"security files verbatim\", \"build + tests pass\"]}\n```",
       "activeForm": "Rewriting NestJS scaffold skill"
@@ -43,7 +43,7 @@
     {
       "id": 10,
       "subject": "Task 6: Rewrite Vite-React scaffold — full verbatim, no rsync",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Replace `rsync templates/vite-react/` with fully self-contained verbatim skill.\n\n**Files:**\n- Modify: `skills/vite-react-scaffold/SKILL.md` (full rewrite)\n\n**Verify:** `pnpm build && pnpm test` all pass.\n\n```json:metadata\n{\"files\": [\"skills/vite-react-scaffold/SKILL.md\"], \"verifyCommand\": \"pnpm build && pnpm test\", \"acceptanceCriteria\": [\"zero rsync refs\", \"nginx security headers verbatim\", \"env.ts uses import.meta.env only\", \"build + tests pass\"]}\n```",
       "activeForm": "Rewriting Vite-React scaffold skill"
@@ -51,7 +51,7 @@
     {
       "id": 11,
       "subject": "Task 7: Delete templates/ and mcp-server/; update plugin.json to v2",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [7, 8, 9, 10],
       "description": "**Goal:** Remove templates/ and mcp-server/; register all 46 skills in plugin.json v2.0.0.\n\n**Files:**\n- Delete: `templates/`, `mcp-server/`, `.mcp.json`\n- Modify: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `README.md`\n\n**Verify:** `find . -name '*.ts' -path '*/mcp-server/*' | wc -l` → 0\n\n```json:metadata\n{\"files\": [\"templates/\", \"mcp-server/\", \".mcp.json\", \".claude-plugin/plugin.json\", \"README.md\"], \"verifyCommand\": \"find . -name '*.ts' -path '*/mcp-server/*' | wc -l\", \"acceptanceCriteria\": [\"templates/ gone\", \"mcp-server/ gone\", \"plugin.json v2.0.0 with 46 skills\"]}\n```",
       "activeForm": "Removing legacy dirs and upgrading plugin"
@@ -59,11 +59,11 @@
     {
       "id": 12,
       "subject": "Task 8: End-to-end smoke test — all four stacks",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [11],
       "description": "**Goal:** Verify every scaffold skill produces a working project with zero repo file dependency.\n\n**Files:** No repo files modified — verification only.\n\n**Verify:** All four build+test commands pass in isolated /tmp directories.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"see plan steps\", \"acceptanceCriteria\": [\"all 4 stacks build\", \"all 4 stacks pass tests\", \"AGENTS.md version comments correct\", \"zero broken imports\"]}\n```",
       "activeForm": "Running smoke tests"
     }
   ],
-  "lastUpdated": "2026-04-27T00:00:00.000Z"
+  "lastUpdated": "2026-04-27T18:00:00.000Z"
 }
