@@ -1,6 +1,6 @@
 ---
-name: add-feature
-description: Use when adding a new domain area (e.g., projects, auth, analytics) that needs its own components, hooks, API services, and types under src/features/.
+name: nextjs-add-feature
+description: Use when adding a new domain area to a Next.js project (e.g., projects, auth, analytics) that needs its own components, hooks, API services, and types under src/features/
 ---
 
 # Add a Feature Module
@@ -199,3 +199,10 @@ After creating all files:
 - NEVER place feature-specific components in `src/components/widgets/` until used by 2+ features
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
+
+## After Writing Code
+
+Dispatch in order:
+1. `build-agent` — validate compilation
+2. `review-agent` — check code standards
+3. `test-agent` — write and run tests
