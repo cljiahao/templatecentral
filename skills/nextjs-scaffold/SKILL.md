@@ -59,11 +59,11 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 ├── .env.example                        [verbatim — Part B]
 ├── .env.local                          [copy from .env.example]
 ├── package.json                        [generate — use dep list above]
-├── postcss.config.mjs                  [generate]
+├── postcss.config.mjs                  [verbatim — Part B]
 ├── eslint.config.mjs                   [generate — extends next/core-web-vitals + prettier]
 ├── prettier.config.mjs                 [generate — with organize-imports + tailwindcss plugins]
-├── vitest.config.ts                    [generate]
-├── .gitignore                          [generate — standard Next.js gitignore]
+├── vitest.config.ts                    [verbatim — Part B]
+├── .gitignore                          [verbatim — Part B]
 ├── .husky/
 │   ├── pre-commit                      [generate — pnpm format:check && pnpm lint]
 │   └── pre-push                        [generate — pnpm test]
@@ -77,14 +77,14 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 └── src/
     ├── app/
     │   ├── globals.css                 [generate — Tailwind 4 directives + CSS vars + animate-float keyframe]
-    │   ├── layout.tsx                  [generate — root layout with Providers + ThemeProvider]
+    │   ├── layout.tsx                  [verbatim — Part C]
     │   ├── (public)/
     │   │   ├── layout.tsx              [generate — public layout with Navbar + Footer]
     │   │   └── page.tsx                [generate — landing page using widgets]
     │   ├── api/
-    │   │   ├── route.ts                [generate — GET /api returns { status: 'ok', service: name }]
+    │   │   ├── route.ts                [verbatim — Part C]
     │   │   └── health/
-    │   │       └── route.ts            [generate — GET /api/health returns { status: 'healthy' }]
+    │   │       └── route.ts            [verbatim — Part C]
     ├── components/
     │   ├── layout/
     │   │   ├── navbar.tsx              [generate — uses BrandLogo, BrandText, LinkList, ThemeToggleButton]
@@ -114,9 +114,10 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │           ├── fetch-client.ts     [verbatim — Part C]
     │           └── https-agent.ts      [verbatim — Part C]
     └── lib/
-        ├── utils.ts                    [generate — cn() using clsx + tailwind-merge]
+        ├── utils/
+        │   └── index.ts                [verbatim — Part C]
         ├── constants/
-        │   ├── env.ts                  [generate — isDev constant]
+        │   ├── env.ts                  [verbatim — Part C]
         │   └── routes.ts               [generate — PAGE_ROUTES + API_ROUTES]
         └── errors/
             ├── handle-api-error.ts     [verbatim — Part C]
@@ -349,6 +350,95 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
 # Third-party API tokens
 # API_KEY=
+```
+
+### `.gitignore`
+
+```
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env
+.env.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+```
+
+### `vitest.config.ts`
+
+```ts
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vitest/config';
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(rootDir, 'src'),
+    },
+  },
+  test: {
+    globals: false,
+    environment: 'node',
+    passWithNoTests: true,
+    include: ['test/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      exclude: ['**/*.test.ts', '**/*.d.ts', '**/index.ts'],
+    },
+  },
+});
+```
+
+### `postcss.config.mjs`
+
+```mjs
+const config = {
+  plugins: {
+    '@tailwindcss/postcss': {},
+  },
+};
+
+export default config;
 ```
 
 ---
@@ -1474,6 +1564,83 @@ export const logError = (logLabel: string, error: unknown): void => {
 };
 ```
 
+### `src/app/layout.tsx`
+
+```tsx
+import { Providers, ThemeProvider } from '@/components/layout';
+import type { Metadata } from 'next';
+import { Geist_Mono, Lato } from 'next/font/google';
+import './globals.css';
+
+const lato = Lato({
+  variable: '--font-lato',
+  subsets: ['latin'],
+  weight: ['100', '300', '400', '700', '900'],
+});
+
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+});
+
+export const metadata: Metadata = {
+  title: '<project-name>',
+  description: 'A Next.js application',
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning className="no-scrollbar">
+      <body className={`${lato.variable} ${geistMono.variable} relative antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### `src/app/api/route.ts` and `src/app/api/health/route.ts`
+
+Both files are identical:
+
+```ts
+import { type NextRequest, NextResponse } from 'next/server';
+
+export async function GET(_req: NextRequest): Promise<NextResponse> {
+  return NextResponse.json(
+    { status: 'ok', timestamp: new Date().toISOString() },
+    { status: 200 },
+  );
+}
+```
+
+### `src/lib/utils/index.ts`
+
+```ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+### `src/lib/constants/env.ts`
+
+```ts
+export const API_BASE =
+  process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+
+export const isDev = process.env.NODE_ENV === 'development';
+export const isProd = process.env.NODE_ENV === 'production';
+```
+
 ---
 
 ## Scaffold Steps
@@ -1515,6 +1682,19 @@ cp .env.example .env.local
 ```
 
 Never commit `.env.local`.
+
+### 5b. Run verification gate before generating AGENTS.md
+
+Do not generate AGENTS.md until this passes:
+
+```bash
+pnpm typecheck   # zero errors
+pnpm lint        # zero errors  
+pnpm test        # all tests pass
+```
+
+If typecheck fails with module-not-found errors, a `pnpm add` is missing.
+If lint fails, a generated file violates the eslint config.
 
 ### 6. Write project AGENTS.md
 
