@@ -1,25 +1,27 @@
 import { APIError } from '@/integrations/error';
+import { logger } from '@/lib/logger';
 
 export const logError = (logLabel: string, error: unknown): void => {
   if (error instanceof APIError) {
-    console.error(`${logLabel}:`, {
+    logger.error({
+      label: logLabel,
+      error_type: 'APIError',
       message: error.message,
-      statusCode: error.statusCode,
-      data: error.data,
-      timestamp: new Date().toISOString(),
+      status_code: error.statusCode,
     });
     return;
   }
   if (error instanceof Error) {
-    console.error(`${logLabel}:`, {
+    logger.error({
+      label: logLabel,
+      error_type: 'Error',
       message: error.message,
-      timestamp: new Date().toISOString(),
     });
     return;
   }
-
-  console.error(`${logLabel}:`, {
+  logger.error({
+    label: logLabel,
+    error_type: 'unknown',
     message: String(error),
-    timestamp: new Date().toISOString(),
   });
 };
