@@ -28,7 +28,7 @@ If the user says "database" without specifying, ask: *"Do you need a SQL databas
 
 ### A1. Install Dependencies
 
-Add to `src/requirements.txt`:
+Add to `requirements.txt`:
 
 ```
 sqlalchemy
@@ -192,7 +192,7 @@ Confirm all tests pass. Skip to [Rules](#rules).
 
 ### B1. Install Dependencies
 
-Add to `src/requirements.txt`:
+Add to `requirements.txt`:
 
 ```
 beanie
@@ -273,7 +273,7 @@ app = FastAPI(lifespan=lifespan, ...)
 
 **`src/models/user.py`** (example):
 
-If using `EmailStr`, add `email-validator` to `src/requirements.txt`.
+If using `EmailStr`, add `email-validator` to `requirements.txt`.
 
 ```python
 from beanie import Document
@@ -363,7 +363,7 @@ Install the additional package:
 boto3
 ```
 
-Add to `src/requirements.txt`, then replace the engine creation in `src/database/session.py`:
+Add to `requirements.txt`, then replace the engine creation in `src/database/session.py`:
 
 ```python
 import boto3
@@ -424,7 +424,7 @@ Install the additional package:
 pymongo[aws]
 ```
 
-Add to `src/requirements.txt`. The `pymongo[aws]` extra installs `pymongo-auth-aws`, which enables the `MONGODB-AWS` auth mechanism. Then update the connection string in `src/database/mongo.py`:
+Add to `requirements.txt`. The `pymongo[aws]` extra installs `pymongo-auth-aws`, which enables the `MONGODB-AWS` auth mechanism. Then update the connection string in `src/database/mongo.py`:
 
 ```python
 # For DocumentDB: mongodb://${HOST}:27017/${DB}?authSource=...&tls=true

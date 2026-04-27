@@ -185,7 +185,6 @@ RUN apt-get update \
 # into a virtual environment. Used by the dev stage.
 FROM base AS deps
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
-COPY src/requirements*.txt ./src/
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
@@ -203,7 +202,6 @@ RUN \
 # This venv is what ships in the final prod image.
 FROM base AS prod-deps
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
-COPY src/requirements*.txt ./src/
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
@@ -282,7 +280,7 @@ WORKERS="${WORKERS:-2}"
 
 detect_framework() {
   DEPS_CONTENT=""
-  for f in requirements.txt src/requirements.txt requirements/*.txt pyproject.toml setup.py setup.cfg; do
+  for f in requirements.txt requirements/*.txt pyproject.toml setup.py setup.cfg; do
     if [ -f "$f" ]; then
       DEPS_CONTENT="$DEPS_CONTENT $(cat "$f")"
     fi

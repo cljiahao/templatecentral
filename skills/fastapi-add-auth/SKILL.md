@@ -9,7 +9,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 
 ## Dependencies
 
-Add to `src/requirements.txt`:
+Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
 - `passlib[bcrypt]` — Password hashing
 

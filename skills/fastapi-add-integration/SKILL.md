@@ -25,7 +25,7 @@ config → client → schemas → service → dependency injection → router
 
 ## Dependencies
 
-Add to `src/requirements.txt`:
+Add to `requirements.txt`:
 - `httpx` — Async HTTP client
 
 ## Steps
