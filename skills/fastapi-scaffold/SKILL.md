@@ -43,6 +43,7 @@ pip freeze > requirements.txt
 ├── .env.example                            [verbatim]
 ├── pyproject.toml                          [verbatim]
 ├── requirements.txt                        [generate — pip freeze output]
+├── requirements-dev.txt                    [generate — package names, no pins]
 ├── README.md                               [generate]
 ├── AGENTS.md                               [generate — after verification gate]
 ├── src/
@@ -1369,8 +1370,7 @@ class BaseSchema(BaseModel):
         from_attributes=True,
         validate_assignment=True,
         validate_default=True,
-        validate_by_name=True,
-        validate_by_alias=True,
+        populate_by_name=True,
         alias_generator=to_camel,
     )
 
