@@ -1,0 +1,9 @@
+{
+  "name": "templatecentral",
+  "description": "Production-ready project scaffolding for Next.js, Vite-React, FastAPI, and NestJS with agent-driven build, update, review, and test pipelines",
+  "version": "1.0.0",
+  "author": {
+    "name": "Clarence"
+  },
+  "keywords": ["scaffold", "nextjs", "fastapi", "nestjs", "vite-react", "templates", "boilerplate"]
+}
