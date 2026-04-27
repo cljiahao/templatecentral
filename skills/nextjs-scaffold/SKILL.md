@@ -52,6 +52,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 ```
 <project-name>/
 ├── Dockerfile                          [verbatim — Part B]
+├── docker-entrypoint.sh                [verbatim — Part B]
 ├── next.config.ts                      [verbatim — Part B]
 ├── tsconfig.json                       [verbatim — Part B]
 ├── components.json                     [verbatim — Part B]
@@ -318,6 +319,23 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]
+```
+
+### `docker-entrypoint.sh`
+
+```sh
+#!/bin/sh
+
+# Check for Yarn lock file
+if [ -f "yarn.lock" ]; then
+  exec yarn "$@"
+# Check for pnpm lock file
+elif [ -f "pnpm-lock.yaml" ]; then
+  exec sh -c "corepack enable pnpm && pnpm \"$@\""
+# Default to npm
+else
+  exec npm "$@"
+fi
 ```
 
 ### `.env.example`

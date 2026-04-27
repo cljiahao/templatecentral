@@ -53,7 +53,7 @@ Note: `export default` is required by Next.js for pages.
 
 ### 3. Add a Loading State (Required for Data-Fetching Pages)
 
-Always add `loading.tsx` alongside pages that fetch data:
+Always add `loading.tsx` alongside pages that fetch data. If `skeleton` is not yet installed, run `npx shadcn@latest add skeleton` first.
 
 ```tsx
 // src/app/dashboard/analytics/loading.tsx
