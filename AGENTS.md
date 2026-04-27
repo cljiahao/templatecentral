@@ -90,6 +90,7 @@ Cross-stack skills available to all subagents — each stack's `AGENT.md` lists 
 |-------|-------------|
 | `shared/validation-patterns/` | Forms, API endpoints, file uploads — OWASP/CWE-compliant Zod/Pydantic patterns |
 | `shared/add-error-handling/` | Consistent error responses and security boundaries; never expose stack traces |
+| `shared/add-logging/` | Structured JSON logging at three cumulative tiers (base, standard, verbose); hardcoded prohibition list for sensitive data |
 | `shared/full-stack-pairing/` | Connecting a frontend to a backend (CORS, proxy, env wiring, auth headers) |
 | `shared/add-pagination/` | Offset or cursor-based pagination for API routes and list UIs |
 | `shared/remove-example/` | Removing template example/placeholder code after scaffolding |
