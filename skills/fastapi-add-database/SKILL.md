@@ -456,3 +456,129 @@ MONGODB_DB_NAME=mydb
 ```
 
 > Motor resolves IAM credentials automatically from the EC2/ECS instance role, environment variables, or AWS config profile. No explicit credential handling is needed in application code. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
+
+---
+
+## Completing Auth Integration
+
+> **Only apply this section if `fastapi-add-auth` was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+
+### Step A — Create `src/models/user.py`
+
+```python
+from uuid import uuid4
+
+from sqlalchemy import Column, DateTime, String
+from sqlalchemy.sql import func
+
+from database.base import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: str = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    email: str = Column(String, unique=True, nullable=False, index=True)
+    hashed_password: str = Column(String, nullable=False)
+    name: str = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+```
+
+### Step B — Create `src/api/repositories/user_repository.py`
+
+```python
+from sqlalchemy.orm import Session
+
+from models.user import User
+
+
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.query(User).filter(User.email == email).first()
+
+
+def get_user_by_id(db: Session, user_id: str) -> User | None:
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def create_user(db: Session, email: str, hashed_password: str, name: str) -> User:
+    user = User(email=email, hashed_password=hashed_password, name=name)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+```
+
+### Step C — Replace stubs in `src/api/services/auth_service.py`
+
+```python
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from api.repositories.user_repository import create_user, get_user_by_email
+from core.security import create_access_token, hash_password, verify_password
+
+
+def register_user(db: Session, email: str, password: str, name: str) -> dict:
+    if get_user_by_email(db, email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered.",
+        )
+    user = create_user(
+        db=db,
+        email=email,
+        hashed_password=hash_password(password),
+        name=name,
+    )
+    return {"id": str(user.id), "email": user.email, "name": user.name}
+
+
+def login_user(db: Session, email: str, password: str) -> str:
+    user = get_user_by_email(db, email)
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials.",
+        )
+    return create_access_token(subject=str(user.id))
+```
+
+### Step D — Replace `src/api/routers/auth.py`
+
+```python
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from api.dependencies.auth import get_current_user
+from api.repositories.user_repository import get_user_by_id
+from api.schemas.request.auth import LoginRequest, RegisterRequest
+from api.schemas.response.auth import TokenResponse, UserResponse
+from api.services.auth_service import login_user, register_user
+from api.tags import APITags
+from database.session import get_db
+
+router = APIRouter(prefix="/auth")
+
+
+@router.post("/register", response_model=UserResponse)
+def register(body: RegisterRequest, db: Session = Depends(get_db)) -> UserResponse:
+    """Register a new user account."""
+    user = register_user(db=db, email=body.email, password=body.password, name=body.name)
+    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    """Authenticate and receive a JWT token."""
+    token = login_user(db=db, email=body.email, password=body.password)
+    return TokenResponse(access_token=token)
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
+    """Get the current authenticated user."""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return UserResponse(id=str(user.id), email=user.email, name=user.name)
+```
