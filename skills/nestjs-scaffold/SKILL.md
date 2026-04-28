@@ -1557,6 +1557,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build`)
 2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
 3. `shared-update-agent` — freshen any deps that have newer compatible versions
+4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
