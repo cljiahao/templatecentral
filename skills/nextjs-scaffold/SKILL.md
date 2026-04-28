@@ -1749,6 +1749,28 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
+### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
+
+Skip if the user does not use Claude Code — `AGENTS.md` is enough.
+
+Write a short `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
+
+Include **Build & Dev** with verified commands:
+- `pnpm dev` — dev server (http://localhost:3000)
+- `pnpm build` — production build
+- `pnpm test` — tests
+- `pnpm check` — type check + lint
+
+**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+
+### 9. Remove example code (optional)
+
+Once the project is verified and the user confirms it runs, use the `shared-remove-example` skill.
+
+Next.js-specific steps (the skill covers these):
+- Delete `src/features/example/` directory
+- Remove the example route import from `src/app/` if present
+
 ---
 
 ## Rules

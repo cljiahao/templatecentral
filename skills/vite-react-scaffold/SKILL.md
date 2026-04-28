@@ -288,6 +288,9 @@ COPY --chown=${APP_UID}:${APP_GID} ./nginx.conf.template /etc/nginx/templates/ng
 EXPOSE ${PORT}
 USER ${APP_UID}
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O/dev/null "http://localhost:${PORT:-3000}/" || exit 1
+
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
