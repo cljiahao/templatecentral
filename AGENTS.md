@@ -4,7 +4,7 @@ templateCentral is a plugin of production-ready scaffolding skills for creating 
 
 ## Task Routing
 
-Detect the stack from project files or user request (`next.config.ts` → nextjs, `requirements.txt` with fastapi → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs). If ambiguous, ask. Meta-tasks (auditing templateCentral itself) stay with the orchestrator.
+Detect the stack from project files or user request (`next.config.ts/js/mjs` → nextjs, `requirements.txt` with fastapi → fastapi, `vite.config.ts/js` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs). If ambiguous, ask. Meta-tasks (auditing templateCentral itself) stay with the orchestrator.
 
 ### New project → scaffold skill
 

@@ -115,6 +115,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │   ├── error.ts                    [verbatim — Part C]
     │   ├── schemas/
     │   │   └── .gitkeep                [verbatim — empty]
+    │   ├── services/
+    │   │   └── .gitkeep                [verbatim — empty]
     │   └── clients/
     │       └── base/
     │           ├── axios-client.ts     [verbatim — Part C]
@@ -128,6 +130,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
         │   ├── env.ts                  [verbatim — Part C]
         │   └── routes.ts               [generate — PAGE_ROUTES + API_ROUTES]
         └── errors/
+            ├── index.ts                [verbatim — Part C]
             ├── handle-api-error.ts     [verbatim — Part C]
             └── error-log-handler.ts    [verbatim — Part C]
 ```
@@ -1531,6 +1534,13 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
 
   return client;
 }
+```
+
+### `src/lib/errors/index.ts`
+
+```ts
+export { handleApiError } from './handle-api-error';
+export { logError } from './error-log-handler';
 ```
 
 ### `src/lib/errors/handle-api-error.ts`
