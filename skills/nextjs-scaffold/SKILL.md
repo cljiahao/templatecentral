@@ -2098,7 +2098,7 @@ The `shared-remove-example` skill handles both steps automatically.
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time
-- Remove `src/features/example/` after user confirms the project runs (use `remove-example` skill)
+- Remove example code after user confirms the project runs — use the `shared-remove-example` skill (handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`)
 
 ---
 
