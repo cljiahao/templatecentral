@@ -135,9 +135,9 @@ The template provides these shared utilities:
 ## Security
 
 ### Environment Variables
-- Server secrets (`AUTH_SECRET`, `DATABASE_URL`, API keys): `process.env.SECRET_NAME` — NEVER use `NEXT_PUBLIC_` prefix
+- Server secrets (`BETTER_AUTH_SECRET`, `DATABASE_URL`, API keys): `process.env.SECRET_NAME` — NEVER use `NEXT_PUBLIC_` prefix
 - Client-safe values only in `NEXT_PUBLIC_*` — treat as fully public; NEVER put keys or tokens there
-- Generate `AUTH_SECRET` with `npx auth secret` — NEVER hardcode or commit it
+- Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — NEVER hardcode or commit it
 
 ### Input Validation
 - Validate all request bodies with Zod `safeParse()` — return 400 on failure, NEVER trust raw `request.json()`

@@ -5,18 +5,20 @@ description: Use when the user wants to add authentication, configure an SSO pro
 
 # Add Auth to Next.js
 
-Add authentication to a Next.js project scaffolded from templateCentral. This skill creates the full auth stack from scratch: NextAuth config, route protection middleware, login UI, and dashboard route group.
+Add authentication to a Next.js project scaffolded from templateCentral. Uses **better-auth** — a TypeScript-first auth library with full type safety, SSO, and email/password support.
 
 ## Files this skill creates
 
 ```
 src/
-├── auth.ts                                        ← NextAuth config (verbatim — do not generate)
-├── proxy.ts                                       ← route protection middleware (verbatim — do not generate)
+├── lib/
+│   ├── auth.ts                                        ← better-auth server config (verbatim — do not generate)
+│   └── auth-client.ts                                 ← better-auth client config (verbatim — do not generate)
+├── proxy.ts                                           ← route protection middleware (verbatim — do not generate)
 └── app/
     ├── api/
     │   └── auth/
-    │       └── [...nextauth]/
+    │       └── [...all]/
     │           └── route.ts
     ├── (public)/
     │   └── login/
@@ -38,117 +40,97 @@ src/features/
 ## Files this skill modifies
 
 ```
-.env.example                         ← adds AUTH_URL, AUTH_SECRET, provider var stubs
+.env.example                         ← adds BETTER_AUTH_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL
 .env.local                           ← same vars (fill actual values)
 src/lib/constants/routes.ts          ← adds PAGE_ROUTES.LOGIN, PAGE_ROUTES.DASHBOARD
-src/components/layout/providers.tsx  ← adds SessionProvider wrapping QueryClientProvider
 AGENTS.md                            ← adds auth architecture notes
 ```
 
+> **`providers.tsx` does NOT need modification** — better-auth manages session state via `authClient.useSession()`; no `SessionProvider` wrapper is required.
+
 ## Steps
 
-### 1. Install next-auth
+### 1. Install better-auth
 
 ```bash
-pnpm add next-auth
+pnpm add better-auth
 ```
 
-### 2. Write `src/auth.ts` (verbatim — do not generate)
-
-Security-critical file. Write exactly as shown — do not let the model generate this.
-
-```ts
-import { isDev } from '@/lib/constants/env';
-import NextAuth, { type NextAuthConfig } from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
-
-const DEV_USER = {
-  id: 'dev',
-  name: 'Dev User',
-  email: 'dev@local',
-  image: null as string | null,
-};
-
-function getProviders(): NextAuthConfig['providers'] {
-  const providers: NextAuthConfig['providers'] = [];
-
-  // --- Add your SSO providers here ---
-  // Example: Microsoft Entra ID
-  // const hasEntraId =
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
-  //   process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER;
-  //
-  // if (hasEntraId) {
-  //   providers.push(
-  //     MicrosoftEntraID({
-  //       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
-  //       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET!,
-  //       issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER!,
-  //     })
-  //   );
-  // }
-
-  if (isDev) {
-    providers.push(
-      Credentials({
-        name: 'Dev',
-        credentials: {
-          email: { label: 'Email', type: 'text' },
-          password: { label: 'Password', type: 'password' },
-        },
-        async authorize() {
-          return DEV_USER;
-        },
-      })
-    );
-  }
-
-  return providers;
-}
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: getProviders(),
-  callbacks: {
-    async jwt({ token, user, profile }) {
-      if (user) {
-        token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
-        token.image = user.image;
-      }
-      if (profile?.picture) {
-        token.image = profile.picture;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.name = token.name as string;
-        session.user.email = token.email as string;
-        session.user.image = token.image as string;
-      }
-      return session;
-    },
-    authorized: async ({ auth }) => !!auth,
-  },
-  trustHost: true,
-  session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE },
-  jwt: { maxAge: SESSION_MAX_AGE },
-});
-```
-
-### 3. Write `src/proxy.ts` (verbatim — do not generate)
+### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
 Security-critical file. Write exactly as shown.
 
 ```ts
-import { auth } from '@/auth';
+import { betterAuth } from 'better-auth';
+import { nextCookies } from 'better-auth/next-js';
+
+export const auth = betterAuth({
+  appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'My App',
+  baseURL: process.env.BETTER_AUTH_URL,
+  secret: process.env.BETTER_AUTH_SECRET,
+
+  emailAndPassword: {
+    enabled: true,
+    disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
+    minPasswordLength: 8,
+    autoSignIn: true,
+  },
+
+  socialProviders: {
+    // --- Add your SSO providers here ---
+    // Uncomment and supply env vars for each provider you want to enable.
+    //
+    // google: {
+    //   clientId: process.env.GOOGLE_CLIENT_ID!,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    // },
+    // github: {
+    //   clientId: process.env.GITHUB_CLIENT_ID!,
+    //   clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    // },
+    // microsoft: {
+    //   clientId: process.env.MICROSOFT_CLIENT_ID!,
+    //   clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+    //   tenantId: 'common', // or a specific tenant ID for single-tenant apps
+    // },
+  },
+
+  session: {
+    expiresIn: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60,              // 5-minute client-side cache
+    },
+  },
+
+  plugins: [nextCookies()], // must be last
+});
+```
+
+> **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. Adapters for Prisma, Drizzle, and Kysely are available — see [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+
+### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
+
+```ts
+import { createAuthClient } from 'better-auth/react';
+
+export const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+});
+```
+
+### 4. Write `src/proxy.ts` (verbatim — do not generate)
+
+Security-critical file. Write exactly as shown.
+
+```ts
+import { auth } from '@/lib/auth';
 import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs'; // required — better-auth session validation needs Node.js
 
 const PUBLIC_PATHS = new Set<string>([PAGE_ROUTES.HOME, PAGE_ROUTES.LOGIN]);
 const PUBLIC_API_PREFIXES = ['/api/auth', API_ROUTES.HEALTH];
@@ -164,23 +146,28 @@ function isPublicRoute(pathname: string): boolean {
   );
 }
 
-export const proxy = auth((req) => {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isAuthenticated = !!req.auth;
 
-  if (!isAuthenticated && !isPublicRoute(pathname)) {
+  if (isPublicRoute(pathname)) {
+    return NextResponse.next();
+  }
+
+  const session = await auth.api.getSession({ headers: req.headers });
+
+  if (!session) {
     if (isApiRoute(pathname)) {
       return new Response(null, { status: 401 });
     }
     return NextResponse.redirect(new URL(PAGE_ROUTES.LOGIN, req.url));
   }
 
-  if (isAuthenticated && pathname === PAGE_ROUTES.LOGIN) {
+  if (pathname === PAGE_ROUTES.LOGIN) {
     return NextResponse.redirect(new URL(PAGE_ROUTES.DASHBOARD, req.url));
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
@@ -189,15 +176,16 @@ export const config = {
 };
 ```
 
-### 4. Create `src/app/api/auth/[...nextauth]/route.ts`
+### 5. Create `src/app/api/auth/[...all]/route.ts`
 
 ```ts
-import { handlers } from '@/auth';
+import { auth } from '@/lib/auth';
+import { toNextJsHandler } from 'better-auth/next-js';
 
-export const { GET, POST } = handlers;
+export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-### 5. Add `PAGE_ROUTES.LOGIN` and `PAGE_ROUTES.DASHBOARD` to `src/lib/constants/routes.ts`
+### 6. Add `PAGE_ROUTES.LOGIN` and `PAGE_ROUTES.DASHBOARD` to `src/lib/constants/routes.ts`
 
 Open the file and add the two routes to the `PAGE_ROUTES` object:
 
@@ -210,7 +198,7 @@ export const PAGE_ROUTES = {
 } as const;
 ```
 
-### 6. Create `src/app/(public)/login/page.tsx`
+### 7. Create `src/app/(public)/login/page.tsx`
 
 ```tsx
 import { LoginCard } from '@/features/auth';
@@ -224,7 +212,7 @@ export default function LoginPage() {
 }
 ```
 
-### 7. Create `src/app/dashboard/layout.tsx`
+### 8. Create `src/app/dashboard/layout.tsx`
 
 ```tsx
 import { Navbar } from '@/components/layout/navbar';
@@ -242,7 +230,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 }
 ```
 
-### 8. Create `src/app/dashboard/(overview)/page.tsx`
+### 9. Create `src/app/dashboard/(overview)/page.tsx`
 
 ```tsx
 export default function DashboardPage() {
@@ -254,32 +242,35 @@ export default function DashboardPage() {
 }
 ```
 
-### 9. Create `src/features/auth/` components
+### 10. Create `src/features/auth/` components
 
-**`src/features/auth/components/login-button.tsx`:**
+**`src/features/auth/components/login-button.tsx`** — SSO sign-in:
 
 ```tsx
 'use client';
 
-import { signIn } from 'next-auth/react';
+import { authClient } from '@/lib/auth-client';
 import type { ComponentProps } from 'react';
 
 import { Button } from '@/components/ui/button';
 
 interface LoginButtonProps extends ComponentProps<typeof Button> {
-  provider: string;
-  redirectTo?: string;
+  provider: 'google' | 'github' | 'microsoft';
+  callbackURL?: string;
   label?: string;
 }
 
 export function LoginButton({
   provider,
-  redirectTo = '/dashboard',
+  callbackURL = '/dashboard',
   label = 'Sign in',
   ...buttonProps
 }: LoginButtonProps) {
   return (
-    <Button onClick={() => signIn(provider, { redirectTo })} {...buttonProps}>
+    <Button
+      onClick={() => authClient.signIn.social({ provider, callbackURL })}
+      {...buttonProps}
+    >
       {label}
     </Button>
   );
@@ -291,7 +282,8 @@ export function LoginButton({
 ```tsx
 'use client';
 
-import { signOut } from 'next-auth/react';
+import { authClient } from '@/lib/auth-client';
+import { useRouter } from 'next/navigation';
 import type { ComponentProps } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -305,8 +297,15 @@ export function SignOutButton({
   children = 'Sign out',
   ...buttonProps
 }: SignOutButtonProps) {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    router.push(redirectTo);
+  }
+
   return (
-    <Button onClick={() => signOut({ redirectTo })} {...buttonProps}>
+    <Button onClick={handleSignOut} {...buttonProps}>
       {children}
     </Button>
   );
@@ -316,23 +315,49 @@ export function SignOutButton({
 **`src/features/auth/components/login-card.tsx`:**
 
 ```tsx
-import { CustomCard } from '@/components/widgets/custom-card';
+'use client';
+
+import { authClient } from '@/lib/auth-client';
 import { isDev } from '@/lib/constants/env';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
+import { useRouter } from 'next/navigation';
+
+import { Button } from '@/components/ui/button';
+import { CustomCard } from '@/components/widgets/custom-card';
 import { LoginButton } from './login-button';
 
+const DEV_EMAIL = 'dev@local';
+const DEV_PASSWORD = 'dev-password-local';
+
 export function LoginCard() {
+  const router = useRouter();
+
+  async function handleDevLogin() {
+    const { error } = await authClient.signIn.email({
+      email: DEV_EMAIL,
+      password: DEV_PASSWORD,
+    });
+
+    if (error) {
+      // First run: account does not exist yet — create it (autoSignIn: true signs in immediately)
+      await authClient.signUp.email({
+        email: DEV_EMAIL,
+        password: DEV_PASSWORD,
+        name: 'Dev User',
+      });
+    }
+
+    router.push(PAGE_ROUTES.DASHBOARD);
+  }
+
   return (
     <CustomCard header="Sign in" className="w-full max-w-sm">
       <div className="flex flex-col gap-3">
         {/* Add SSO provider buttons here — one LoginButton per provider */}
         {isDev && (
-          <LoginButton
-            provider="credentials"
-            redirectTo={PAGE_ROUTES.DASHBOARD}
-            label="Dev login (bypass auth)"
-            variant="outline"
-          />
+          <Button onClick={handleDevLogin} variant="outline">
+            Dev login (bypass auth)
+          </Button>
         )}
       </div>
     </CustomCard>
@@ -354,100 +379,107 @@ export { SignOutButton } from './signout-button';
 export * from './components';
 ```
 
-### 10. Update `src/components/layout/providers.tsx`
-
-Add `SessionProvider` wrapping `QueryClientProvider`:
-
-```tsx
-'use client';
-
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SessionProvider } from 'next-auth/react';
-import { useState, type ReactNode } from 'react';
-
-interface ProvidersProps {
-  children: ReactNode;
-}
-
-export function Providers({ children }: ProvidersProps) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60 * 1000,
-            refetchOnWindowFocus: false,
-          },
-        },
-      })
-  );
-
-  return (
-    <SessionProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </SessionProvider>
-  );
-}
-```
-
 ### 11. Update `.env.example` and `.env.local`
 
 Add to both files:
 
 ```
-# Auth — REQUIRED: generate secret with: npx auth secret
-# WARNING: AUTH_SECRET must be set in production — sessions are insecure without it
-AUTH_URL=http://localhost:3000
-AUTH_SECRET=
+# Auth — REQUIRED: generate secret with: openssl rand -base64 32
+# WARNING: BETTER_AUTH_SECRET must be set in production — sessions are insecure without it
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=
+
+# App URL (used by auth-client for SSO callbacks)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Auth Providers (uncomment and fill for your provider)
-# Microsoft Entra ID
-# AUTH_MICROSOFT_ENTRA_ID_ID=
-# AUTH_MICROSOFT_ENTRA_ID_SECRET=
-# AUTH_MICROSOFT_ENTRA_ID_ISSUER=
-
 # Google
-# AUTH_GOOGLE_ID=
-# AUTH_GOOGLE_SECRET=
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+
+# GitHub
+# GITHUB_CLIENT_ID=
+# GITHUB_CLIENT_SECRET=
+
+# Microsoft Entra ID
+# MICROSOFT_CLIENT_ID=
+# MICROSOFT_CLIENT_SECRET=
 ```
 
 ### 12. Update project `AGENTS.md`
 
-Add the following under `## Architecture Decisions`:
+Add under `## Architecture Decisions`:
 
 ```markdown
-- Auth via NextAuth (Auth.js) with `proxy.ts` route protection (`export const proxy = auth(...)`); dev bypass when `isDev`
-- `SessionProvider` wraps `QueryClientProvider` in root `layout.tsx`
+- Auth via better-auth with `proxy.ts` route protection (`export async function proxy`); dev bypass with email/password when `isDev`
+- `authClient` (src/lib/auth-client.ts) handles client-side session via `authClient.useSession()` — no SessionProvider needed
 - Route groups: `(public)/` for public pages, `dashboard/` for authenticated pages
+- Sessions: stateless JWE cookies by default; add database adapter (via nextjs-add-database) for session revocation
 ```
 
-### 13. Adding an SSO provider (for the user to complete)
+### 13. Session usage patterns
 
-To add an SSO provider, open `src/auth.ts` and uncomment the relevant block in `getProviders()`. Each provider is guarded by env var checks — add the actual credentials to `.env.local`.
+**Server Component or API route:**
 
-Common providers:
+```ts
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
-| Provider | Import | Required env vars |
-|----------|--------|-------------------|
-| Microsoft Entra ID | `next-auth/providers/microsoft-entra-id` | `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER` |
-| Google | `next-auth/providers/google` | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` |
-| GitHub | `next-auth/providers/github` | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` |
+const session = await auth.api.getSession({ headers: await headers() });
+if (!session) redirect(PAGE_ROUTES.LOGIN);
 
-Full list: https://authjs.dev/getting-started/providers
+const { user } = session;
+// user.id, user.name, user.email, user.image
+```
 
-After adding a provider, add a `LoginButton` for it in `src/features/auth/components/login-card.tsx`.
+**Unauthenticated API response (never JSON — information-disclosure risk):**
+
+```ts
+if (!session) return new Response(null, { status: 401 });
+```
+
+**Client Component hook:**
+
+```tsx
+'use client';
+
+import { authClient } from '@/lib/auth-client';
+
+export function UserAvatar() {
+  const { data: session, isPending } = authClient.useSession();
+
+  if (isPending) return <Skeleton />;
+  if (!session) return null;
+
+  return <Avatar name={session.user.name} image={session.user.image} />;
+}
+```
+
+### 14. Adding an SSO provider
+
+Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.local`. Then add a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`.
+
+| Provider | Config key | Required env vars | Callback URL |
+|----------|------------|-------------------|--------------|
+| Google | `google` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `/api/auth/callback/google` |
+| GitHub | `github` | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `/api/auth/callback/github` |
+| Microsoft | `microsoft` | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | `/api/auth/callback/microsoft` |
+
+Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
 ## Security Rules
 
 - NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })`. JSON responses create information-disclosure vectors.
-- NEVER remove the `isDev` guard on the Credentials provider — it must only exist in development.
+- NEVER remove `disableSignUp: process.env.NODE_ENV === 'production'` — open registration in production is a security risk unless intentional.
+- NEVER remove the `isDev` guard on the dev login button — it must only render in development.
 - NEVER hardcode secrets — always environment variables.
-- NEVER expose `AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
-- Always guard SSO provider registration with env var checks — missing vars silently skip, never crash.
-- Always generate `AUTH_SECRET` with `npx auth secret` — never use a weak or predictable value.
+- NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
+- `export const runtime = 'nodejs'` in `proxy.ts` is mandatory — better-auth session validation requires the Node.js runtime.
+- Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 
 ## After Writing Code
 
 Dispatch in order:
-1. `build-agent` — validate compilation
-2. `review-agent` — check code standards
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards
