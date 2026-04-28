@@ -466,6 +466,7 @@ MONGODB_DB_NAME=mydb
 ### Step A — Create `src/models/user.py`
 
 ```python
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import DateTime, String
@@ -482,7 +483,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
 ### Step B — Create `src/api/repositories/user_repository.py`
@@ -557,7 +558,7 @@ def get_user(db: Session, user_id: str) -> dict:
 ### Step D — Replace `src/api/routers/auth.py`
 
 ```python
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from api.dependencies.auth import get_current_user
