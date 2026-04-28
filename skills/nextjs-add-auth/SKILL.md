@@ -104,6 +104,14 @@ export const auth = betterAuth({
     },
   },
 
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: 'lax',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+    },
+  },
+
   plugins: [nextCookies()], // must be last
 });
 ```
