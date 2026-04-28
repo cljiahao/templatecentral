@@ -1,0 +1,31 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-29-templatecentral-audit.md",
+  "tasks": [
+    {
+      "id": 16,
+      "subject": "Task 1: nextjs-scaffold — dashboard tree + verbatim example feature",
+      "status": "pending",
+      "description": "**Goal:** Add `src/app/dashboard/` to the scaffold tree, replace `[generate]` example feature with 13 verbatim files, sharpen routes.ts spec, update AGENTS.md template.\n\n**Files:**\n- Modify: `skills/nextjs-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] Dashboard layout.tsx and (overview)/page.tsx appear as [verbatim — Part C] in tree\n- [ ] src/features/example/ lists all 13 files as [verbatim — Part C]\n- [ ] routes.ts annotation specifies HOME:'/', DASHBOARD:'/dashboard', HEALTH:'/api/health'\n- [ ] AGENTS.md template mentions dashboard/ as authenticated route group\n- [ ] Part C contains all 13 example feature files + 2 dashboard files verbatim\n- [ ] Step 9 references dashboard/(overview)/page.tsx, removes stale \"if present\" qualifier\n\n**Verify:** `grep 'generate.*example' skills/nextjs-scaffold/SKILL.md` → 0 matches\n\n```json:metadata\n{\"files\": [\"skills/nextjs-scaffold/SKILL.md\"], \"verifyCommand\": \"grep 'generate.*example' skills/nextjs-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"[generate] example entry gone\", \"15 new [verbatim] entries added\", \"dashboard/ in tree\", \"Part C has all 13 example + 2 dashboard blocks\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 2: nextjs-add-auth — conditional dashboard + additive routes step",
+      "status": "pending",
+      "blockedBy": [16],
+      "description": "**Goal:** Make Step 6 additive-only and Steps 8+9 conditional on whether scaffold already created the dashboard.\n\n**Files:**\n- Modify: `skills/nextjs-add-auth/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] Step 6 heading says \"Add PAGE_ROUTES.LOGIN\" only\n- [ ] Steps 8+9 have skip notices\n- [ ] File list marks dashboard/ as conditional\n\n**Verify:** `grep 'Skip this step' skills/nextjs-add-auth/SKILL.md` → 2 matches\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-auth/SKILL.md\"], \"verifyCommand\": \"grep 'Skip this step' skills/nextjs-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"Step 6 heading updated\", \"Steps 8+9 have skip notices\", \"File list marks dashboard as conditional\"]}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 3: fastapi-add-auth — async def → def for all route handlers",
+      "status": "pending",
+      "description": "**Goal:** Change all four async def signatures to def.\n\n**Files:**\n- Modify: `skills/fastapi-add-auth/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] 0 async def occurrences in file\n\n**Verify:** `grep 'async def' skills/fastapi-add-auth/SKILL.md` → 0 matches\n\n```json:metadata\n{\"files\": [\"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep 'async def' skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"0 async def occurrences\"]}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 4: fastapi-add-database — add Completing Auth Integration section",
+      "status": "pending",
+      "description": "**Goal:** Append optional section completing auth stubs once database is available.\n\n**Files:**\n- Modify: `skills/fastapi-add-database/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] \"Completing Auth Integration\" section exists\n- [ ] No 501 responses in section\n- [ ] get_user_by_id present in repository\n- [ ] All 3 handlers have db injection\n\n**Verify:** `grep 'Completing Auth Integration' skills/fastapi-add-database/SKILL.md` → 1 match\n\n```json:metadata\n{\"files\": [\"skills/fastapi-add-database/SKILL.md\"], \"verifyCommand\": \"grep 'Completing Auth Integration' skills/fastapi-add-database/SKILL.md\", \"acceptanceCriteria\": [\"Section exists\", \"No 501 responses\", \"get_user_by_id present\", \"all 3 handlers have db injection\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-29T00:00:00Z"
+}
