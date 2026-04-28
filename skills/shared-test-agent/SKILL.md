@@ -15,10 +15,10 @@ Same as `build-agent`: check for `next.config.ts`, `next.config.js`, or `next.co
 
 1. Detect stack
 2. Load the stack's `add-test` skill:
-   - Next.js → `nextjs/add-test`
-   - Vite-React → `vite-react/add-test`
-   - FastAPI → `fastapi/add-test`
-   - NestJS → `nestjs/add-test`
+   - Next.js → `nextjs-add-test`
+   - Vite-React → `vite-react-add-test`
+   - FastAPI → `fastapi-add-test`
+   - NestJS → `nestjs-add-test`
 3. Identify newly added code (files written in this session)
 4. Write tests following the `add-test` skill conventions
 5. Run the full test suite:
@@ -61,7 +61,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: `nextjs/add-feature`, `nextjs/add-api-route`, `vite-react/add-feature`, `fastapi/add-endpoint`, `nestjs/add-module`.
+Dispatched by: `nextjs-add-feature`, `nextjs-add-api-route`, `vite-react-add-feature`, `fastapi-add-endpoint`, `nestjs-add-module`.
 
 ## Changelog
 ### 1.0.0

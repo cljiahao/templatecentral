@@ -807,7 +807,7 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 
 ## See Also
 
-- `shared/add-error-handling` — Unified error response schema; `logError` integration
-- `shared/validation-patterns` — Zod/Pydantic validation before any log call
+- `shared-add-error-handling` — Unified error response schema; `logError` integration
+- `shared-validation-patterns` — Zod/Pydantic validation before any log call
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes

@@ -26,7 +26,7 @@ Implement consistent pagination across your stack. All list endpoints return pag
 
 ## Unified Pagination Response Schema
 
-All list endpoints return this shape (matches Phase 1 `shared/add-error-handling` format):
+All list endpoints return this shape (matches Phase 1 `shared-add-error-handling` format):
 
 **Success response:** (status 200)
 ```json
@@ -55,7 +55,7 @@ All list endpoints return this shape (matches Phase 1 `shared/add-error-handling
     - `total` — Total count of items (may be approximate for performance)
     - `hasMore` — Boolean: true if more pages exist after this one
 
-**Error response:** (status 400, 422, etc.) — See `shared/add-error-handling`
+**Error response:** (status 400, 422, etc.) — See `shared-add-error-handling`
 ```json
 {
   "error": "Invalid query parameters",
@@ -70,7 +70,7 @@ All list endpoints return this shape (matches Phase 1 `shared/add-error-handling
 
 ## Rules
 
-1. **All pagination params must be validated** — Use Zod (TypeScript) or Pydantic (Python) schema from `shared/validation-patterns`
+1. **All pagination params must be validated** — Use Zod (TypeScript) or Pydantic (Python) schema from `shared-validation-patterns`
 2. **Limit must have a maximum** — Enforce max (e.g., max 100 items per request)
 3. **Default limit must be reasonable** — If omitted, use sensible default (10-20 items)
 4. **Sort field must be from a whitelist** — Never allow user input directly in ORDER BY; validate against allowed fields
@@ -961,7 +961,7 @@ pnpm test
 
 ## See Also
 
-- `shared/add-error-handling` — Pagination errors use unified error response schema
-- `shared/validation-patterns` — Pagination query params validated with Zod/Pydantic
+- `shared-add-error-handling` — Pagination errors use unified error response schema
+- `shared-validation-patterns` — Pagination query params validated with Zod/Pydantic
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Add pagination to new list endpoints
 - Stack-specific `code-standards` — Database indexing best practices for sort fields

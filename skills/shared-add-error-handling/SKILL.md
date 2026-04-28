@@ -866,7 +866,7 @@ pnpm build
 
 ## See Also
 
-- `shared/add-logging` — Integrate structured logging with error handlers
-- `shared/validation-patterns` — Zod/Pydantic schemas for validation errors
+- `shared-add-logging` — Integrate structured logging with error handlers
+- `shared-validation-patterns` — Zod/Pydantic schemas for validation errors
 - Stack-specific `code-standards` — Security and error handling guidance
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Use error handling in new routes

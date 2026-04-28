@@ -1065,7 +1065,7 @@ pnpm test
 
 ## See Also
 
-- `shared/add-error-handling` — Transform validation errors to consistent response format
-- `shared/add-logging` — Log validation failures with context
+- `shared-add-error-handling` — Transform validation errors to consistent response format
+- `shared-add-logging` — Log validation failures with context
 - Stack-specific `code-standards` — Type annotation and schema standards
 - Stack-specific `add-api-route`, `add-endpoint`, `add-form` — Use validation patterns in new routes/forms
