@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Your logic here: await prisma.project.create({ data: parsed.data })
+    // Your logic here: const [project] = await db.insert(projects).values(parsed.data).returning()
     const project = { id: '1', ...parsed.data };
 
     return NextResponse.json({ data: project }, { status: 201 });
@@ -578,7 +578,7 @@ import { NotFoundException } from '@/common/exceptions/not-found.exception';
 @Injectable()
 export class ProjectsService {
   async getProject(id: string) {
-    const project = null; // replace with: await this.prisma.project.findUnique({ where: { id } })
+    const project = null; // replace with: await this.drizzle.db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
     
     if (!project) {
       throw new NotFoundException('Project not found');

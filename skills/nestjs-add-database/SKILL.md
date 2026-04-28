@@ -1,6 +1,6 @@
 ---
 name: nestjs-add-database
-description: Use when the user wants to add a database to a NestJS project — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments.
+description: Use when the user wants to add a database to a NestJS project — Drizzle (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments (Kysely).
 ---
 
 # Add Database to NestJS
@@ -15,75 +15,139 @@ Ask the user which database they need, then follow the corresponding section:
 
 | Database type | ORM/ODM | Section |
 |--------------|---------|---------|
-| PostgreSQL, MySQL, SQLite | Prisma | [Section A](#section-a-prisma-sql) |
+| PostgreSQL, MySQL, SQLite | Drizzle | [Section A](#section-a-drizzle-sql) |
 | PostgreSQL, MySQL | Kysely | [Section B](#section-b-kysely-sql) |
 | MongoDB | Mongoose | [Section C](#section-c-mongoose-mongodb) |
 
-> **How to choose SQL ORM**: Use **Prisma** (Section A) for the best developer experience — auto-migrations, generated types, Prisma Studio. Use **Kysely** (Section B) if you need full SQL control and best performance. If unsure, start with Prisma.
+> **How to choose SQL ORM**: Use **Drizzle** (Section A) for new projects — lightweight, zero-dependency, full TypeScript inference, excellent edge support. Use **Kysely** (Section B) if you need AWS IAM authentication or strict compliance requiring full SQL control. If unsure, use Drizzle.
 
 If the user says "database" without specifying, ask: *"Do you need a SQL database (PostgreSQL, MySQL, SQLite) or MongoDB?"*
 
-> **AWS IAM authentication**: If the user explicitly requires AWS IAM database authentication for compliance, each section includes an "IAM Auth Variant" with the additional packages and configuration needed. Do NOT install IAM packages unless the user requests it.
+> **AWS IAM authentication**: Only Kysely (Section B) and Mongoose (Section C) include IAM Auth Variants. If AWS IAM database authentication is required for compliance, use Kysely. Do NOT install IAM packages unless the user requests it.
 
 ---
 
-## Section A: Prisma (SQL)
+## Section A: Drizzle (SQL)
 
 ### A1. Install Dependencies
 
 ```bash
-pnpm add @prisma/client
-pnpm add -D prisma
+pnpm add drizzle-orm postgres
+pnpm add -D drizzle-kit
 ```
 
-### A2. Initialize Prisma
+### A2. Add Database Scripts
 
-```bash
-npx prisma init
-```
+Add to `package.json`:
 
-This creates:
-- `prisma/schema.prisma` — schema definition
-- `.env` — with a `DATABASE_URL` placeholder
-
-### A3. Create PrismaService
-
-**`src/database/prisma.service.ts`**:
-
-```typescript
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  async onModuleInit() {
-    await this.$connect();
-  }
-
-  async onModuleDestroy() {
-    await this.$disconnect();
+```json
+{
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   }
 }
 ```
 
-### A4. Create DatabaseModule
+### A3. Create Drizzle Config
+
+**`drizzle.config.ts`** (project root):
+
+```ts
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/database/schema.ts',
+  out: './drizzle',
+  dialect: 'postgresql',
+  dbCredentials: { url: process.env.DATABASE_URL! },
+});
+```
+
+> `drizzle.config.ts` reads `process.env` directly — it runs as a standalone CLI command outside NestJS, so it cannot use `serviceConfig`.
+
+### A4. Define Schema
+
+**`src/database/schema.ts`**:
+
+```typescript
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+```
+
+### A5. Create DrizzleService
+
+**`src/database/drizzle.service.ts`**:
+
+```typescript
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
+import postgres from 'postgres';
+
+import { serviceConfig } from '../config/env.config';
+import * as schema from './schema';
+
+@Injectable()
+export class DrizzleService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DrizzleService.name);
+  private readonly client: ReturnType<typeof postgres>;
+  readonly db: ReturnType<typeof drizzle<typeof schema>>;
+
+  constructor() {
+    this.client = postgres(serviceConfig.DATABASE_URL);
+    this.db = drizzle(this.client, { schema });
+  }
+
+  async onModuleInit() {
+    try {
+      await this.db.execute(sql`SELECT 1`);
+      this.logger.log('Database connection verified');
+    } catch (error) {
+      this.logger.error('Database connection failed', error);
+      throw error;
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.client.end();
+  }
+}
+```
+
+### A6. Create DatabaseModule
 
 **`src/database/database.module.ts`**:
 
 ```typescript
 import { Global, Module } from '@nestjs/common';
 
-import { PrismaService } from './prisma.service';
+import { DrizzleService } from './drizzle.service';
 
 @Global()
 @Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
+  providers: [DrizzleService],
+  exports: [DrizzleService],
 })
 export class DatabaseModule {}
 ```
 
-### A5. Register in AppModule
+### A7. Register in AppModule
 
 Import `DatabaseModule` in `src/app.module.ts`:
 
@@ -99,32 +163,9 @@ import { DatabaseModule } from './database/database.module';
 export class AppModule {}
 ```
 
-### A6. Define Schema
+### A8. Configure Environment
 
-Edit `prisma/schema.prisma`:
-
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"  // or "sqlite", "mysql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-```
-
-### A7. Configure Environment
-
-Prisma reads `DATABASE_URL` from `.env` directly. For consistency with the NestJS template's config pattern, also register it in `serviceConfig` in `src/config/env.config.ts`:
+Add `DATABASE_URL` to `serviceConfig` in `src/config/env.config.ts`:
 
 ```typescript
 export const serviceConfig = {
@@ -139,49 +180,54 @@ Add to `.env` and `.env.example`:
 DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
-### A8. Generate Client & Migrate
+### A9. Generate & Run Migrations
 
 ```bash
-npx prisma generate
-npx prisma migrate dev --name init
+pnpm db:generate  # generate SQL migration files from schema
+pnpm db:migrate   # apply pending migrations to the database
 ```
 
-### A9. Usage
+For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
 
-Inject `PrismaService` in any module's service:
+### A10. Usage
+
+Inject `DrizzleService` in any module's service:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '../../database/prisma.service';
+import { DrizzleService } from '../../database/drizzle.service';
+import { users } from '../../database/schema';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly drizzle: DrizzleService) {}
 
   findAll() {
-    return this.prisma.user.findMany();
+    return this.drizzle.db.select().from(users);
   }
 
   findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    return this.drizzle.db.select().from(users).where(eq(users.id, id)).then((r) => r[0] ?? null);
   }
 
   create(data: { email: string; name: string }) {
-    return this.prisma.user.create({ data });
+    return this.drizzle.db.insert(users).values(data).returning();
   }
 }
 ```
 
-### A10. Validate
+> Import `eq` from `drizzle-orm`: `import { eq } from 'drizzle-orm';`
+
+### A11. Validate
 
 ```bash
-pnpm build && pnpm test
+pnpm db:generate && pnpm build && pnpm test
 ```
 
-Confirm the build succeeds and all tests pass. Skip to [Rules](#rules).
+Confirm the migration file was generated, build succeeds, and all tests pass. Skip to [Rules](#rules).
 
-> **Note**: Prisma does not natively support AWS IAM database authentication. If compliance requires IAM auth, use **Kysely** (Section B) instead.
+> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (Section B) instead.
 
 ---
 
@@ -720,30 +766,8 @@ Confirm the build succeeds and all tests pass.
 - **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
 - **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
 - `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
-- Place database services (`PrismaService`, `KyselyService`) and `DatabaseModule` in `src/database/`.
+- Place database services (`DrizzleService`, `KyselyService`) and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Prisma**: Always use `prisma migrate dev` for schema changes. Run `prisma generate` after every schema change. Does not support AWS IAM auth natively — use Kysely if IAM is required.
-- **Prisma 6 — not found handling**: `NotFoundError` was removed in Prisma 6 — do NOT import it from `@prisma/client`. Use one of these patterns instead:
-
-  **Option A — null check (preferred for simple cases):**
-  ```ts
-  const record = await this.prisma.model.findUnique({ where: { id } });
-  if (!record) throw new NotFoundException(`Record ${id} not found`);
-  ```
-
-  **Option B — throw on not found (cleaner in service methods):**
-  ```ts
-  import { Prisma } from '@prisma/client';
-  try {
-    const record = await this.prisma.model.findUniqueOrThrow({ where: { id } });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      throw new NotFoundException(`Record ${id} not found`);
-    }
-    throw error;
-  }
-  ```
-
-  Note: `findUniqueOrThrow` is incompatible with sequential (array-style) `$transaction` — use interactive transactions (`$transaction(async (tx) => { ... })`) if rollback on not-found is needed.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
 - **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor — no query code changes needed.
 - **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use `MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties` — no schema or query code changes needed.

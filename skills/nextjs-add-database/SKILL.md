@@ -1,6 +1,6 @@
 ---
 name: nextjs-add-database
-description: Use when the user wants to add a database to a Next.js project — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments.
+description: Use when the user wants to add a database to a Next.js project — Drizzle (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments (Kysely).
 ---
 
 # Add Database to Next.js
@@ -15,126 +15,150 @@ Ask the user which database they need, then follow the corresponding section:
 
 | Database type | ORM/ODM | Section |
 |--------------|---------|---------|
-| PostgreSQL, MySQL, SQLite | Prisma | [Section A](#section-a-prisma-sql) |
+| PostgreSQL, MySQL, SQLite | Drizzle | [Section A](#section-a-drizzle-sql) |
 | PostgreSQL, MySQL | Kysely | [Section B](#section-b-kysely-sql) |
 | MongoDB | Mongoose | [Section C](#section-c-mongoose-mongodb) |
 
-> **How to choose SQL ORM**: Use **Prisma** (Section A) for the best developer experience — auto-migrations, generated types, Prisma Studio. Use **Kysely** (Section B) if you need full SQL control and best serverless performance. If unsure, start with Prisma.
+> **How to choose SQL ORM**: Use **Drizzle** (Section A) for new projects — lightweight, zero-dependency, full TypeScript inference, excellent edge support. Use **Kysely** (Section B) if you need AWS IAM authentication or strict compliance requiring full SQL control. If unsure, use Drizzle.
 
 If the user says "database" without specifying, ask: *"Do you need a SQL database (PostgreSQL, MySQL, SQLite) or MongoDB?"*
 
-> **AWS IAM authentication**: If the user explicitly requires AWS IAM database authentication for compliance, each section includes an "IAM Auth Variant" with the additional packages and configuration needed. Do NOT install IAM packages unless the user requests it.
+> **AWS IAM authentication**: Only Kysely (Section B) and Mongoose (Section C) include IAM Auth Variants. If AWS IAM database authentication is required for compliance, use Kysely. Do NOT install IAM packages unless the user requests it.
 
 ---
 
-## Section A: Prisma (SQL)
+## Section A: Drizzle (SQL)
 
 ### A1. Install Dependencies
 
 ```bash
-pnpm add @prisma/client
-pnpm add -D prisma
+pnpm add drizzle-orm postgres
+pnpm add -D drizzle-kit
 ```
 
-### A2. Initialize Prisma
+### A2. Add Database Scripts
 
-```bash
-npx prisma init
+Add to `package.json`:
+
+```json
+{
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  }
+}
 ```
 
-This creates `prisma/schema.prisma` and adds `DATABASE_URL` to `.env`. Keep it in `.env` — Prisma CLI (`npx prisma generate`, `npx prisma migrate`) reads `.env` by default, not `.env.local`. Add a placeholder to `.env.example` and add `.env` to `.gitignore` if not already present.
+### A3. Create Drizzle Config
 
-### A3. Create Prisma Client Singleton
-
-**`src/integrations/database/prisma-client.ts`**:
+**`drizzle.config.ts`** (project root):
 
 ```ts
-import { PrismaClient } from '@prisma/client';
+import { defineConfig } from 'drizzle-kit';
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export default defineConfig({
+  schema: './src/integrations/database/schema.ts',
+  out: './drizzle',
+  dialect: 'postgresql',
+  dbCredentials: { url: process.env.DATABASE_URL! },
+});
 ```
 
-> **Why the singleton**: Next.js hot-reloads in development, which creates new `PrismaClient` instances on every reload. The `globalThis` cache prevents connection exhaustion.
+### A4. Define Schema
 
-### A4. Create Barrel Export
+**`src/integrations/database/schema.ts`**:
+
+```ts
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+```
+
+### A5. Create Database Client
+
+**`src/integrations/database/db-client.ts`**:
+
+```ts
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+
+import * as schema from './schema';
+
+const globalForDb = globalThis as unknown as { db: ReturnType<typeof drizzle> };
+
+const client = postgres(process.env.DATABASE_URL!);
+
+export const db = globalForDb.db ?? drizzle(client, { schema });
+
+if (process.env.NODE_ENV !== 'production') globalForDb.db = db;
+```
+
+> **Why the singleton**: Next.js hot-reloads in development, which creates new connection pools on every reload. The `globalThis` cache prevents connection exhaustion.
+
+### A6. Create Barrel Export
 
 **`src/integrations/database/index.ts`**:
 
 ```ts
-export { prisma } from './prisma-client';
+export { db } from './db-client';
+export * from './schema';
 ```
 
-### A5. Add Factory Function
+### A7. Add Factory Function
 
 Add to **`src/integrations/factories.ts`**:
 
 ```ts
-import { prisma } from './database/prisma-client';
+import { db } from './database/db-client';
 
 export function DB() {
-  return prisma;
+  return db;
 }
 ```
 
-### A6. Define Schema
+### A8. Configure Environment
 
-Edit `prisma/schema.prisma`:
-
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"  // or "sqlite", "mysql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-```
-
-### A7. Configure Environment
-
-Add to `.env` (Prisma CLI reads this) and `.env.example`:
+Add to `.env.local` and `.env.example`:
 
 ```env
 DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
-For SQLite, use:
-```env
-DATABASE_URL="file:./dev.db"
-```
-
-### A8. Generate Client & Migrate
+### A9. Generate & Run Migrations
 
 ```bash
-npx prisma generate
-npx prisma migrate dev --name init
+pnpm db:generate  # generate SQL migration files from schema
+pnpm db:migrate   # apply pending migrations to the database
 ```
 
-### A9. Usage
+For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
+
+### A10. Usage
 
 **In API routes** (for client-side fetching via React Query):
 
 ```ts
 // src/app/api/users/route.ts
 import { NextResponse } from 'next/server';
-import { prisma } from '@/integrations/database';
+import { db, users } from '@/integrations/database';
 
 export async function GET() {
-  const users = await prisma.user.findMany();
-  return NextResponse.json(users);
+  const all = await db.select().from(users);
+  return NextResponse.json(all);
 }
 ```
 
@@ -142,11 +166,11 @@ export async function GET() {
 
 ```tsx
 // src/app/dashboard/users/page.tsx
-import { prisma } from '@/integrations/database';
+import { db, users } from '@/integrations/database';
 
 export default async function UsersPage() {
-  const users = await prisma.user.findMany();
-  return <UserList users={users} />;
+  const all = await db.select().from(users);
+  return <UserList users={all} />;
 }
 ```
 
@@ -154,19 +178,20 @@ export default async function UsersPage() {
 
 ```ts
 import { DB } from '@/integrations/factories';
+import { users } from '@/integrations/database';
 
-const users = await DB().user.findMany();
+const all = await DB().select().from(users);
 ```
 
-### A10. Validate
+### A11. Validate
 
 ```bash
-npx prisma generate && pnpm build
+pnpm db:generate && pnpm build
 ```
 
-Confirm the build succeeds with no type errors. Skip to [Rules](#rules).
+Confirm the migration file was generated and the build succeeds with no type errors. Skip to [Rules](#rules).
 
-> **Note**: Prisma does not natively support AWS IAM database authentication. If compliance requires IAM auth, use **Kysely** (Section B) instead.
+> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (Section B) instead.
 
 ---
 
@@ -624,28 +649,6 @@ Confirm the build succeeds with no type errors.
 - Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
 - NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Prisma**: Always run `prisma generate` after schema changes; use `prisma migrate dev` for development migrations. Keep `DATABASE_URL` in `.env` (Prisma CLI reads `.env` by default). Add `*.db` to `.gitignore` for SQLite — NEVER ignore the `prisma/` directory itself. Does not support AWS IAM auth natively — use Kysely if IAM is required.
-- **Prisma 6 — not found handling**: `NotFoundError` was removed in Prisma 6 — do NOT import it from `@prisma/client`. Use one of these patterns instead:
-
-  **Option A — null check (preferred for simple cases):**
-  ```ts
-  const record = await prisma.model.findUnique({ where: { id } });
-  if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  ```
-
-  **Option B — throw on not found (useful inside service layers):**
-  ```ts
-  import { Prisma } from '@prisma/client';
-  try {
-    const record = await prisma.model.findUniqueOrThrow({ where: { id } });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    throw error;
-  }
-  ```
-
-  Note: `findUniqueOrThrow` is incompatible with sequential (array-style) `$transaction` — use interactive transactions (`$transaction(async (tx) => { ... })`) if rollback on not-found is needed.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
 - **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism — no schema or query code changes needed.

@@ -5,7 +5,7 @@ paths:
 
 # FastAPI Rules
 
-Stack: FastAPI 0.116, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruff, pytest, Docker.
+Stack: FastAPI 0.136+, Python 3.12, Pydantic v2 (camelCase schemas), Uvicorn, Ruff, pytest, Docker.
 
 ## Boundaries
 

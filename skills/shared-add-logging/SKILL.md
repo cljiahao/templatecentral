@@ -221,39 +221,36 @@ logger.info({ user_id: session.user.id, project_id: project.id }, 'Project creat
 
 #### Tier 3 — Verbose (+ Tier 1 + Tier 2)
 
-**Slow DB queries** — add Prisma 5 `$extends` in `src/lib/db.ts`:
+**Slow DB queries** — add a timing wrapper in `src/lib/utils/with-slow-query-log.ts`:
 
 ```ts
-// src/lib/db.ts
+// src/lib/utils/with-slow-query-log.ts
 import { logger } from '@/lib/logger';
-import { PrismaClient } from '@prisma/client';
 
-const prismaBase = new PrismaClient();
+export async function withSlowQueryLog<T>(
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const start = Date.now();
+  const result = await fn();
+  const duration = Date.now() - start;
+  if (duration > 500) {
+    logger.warn({ event: 'db.slow_query', name, duration_ms: duration });
+    // NEVER log query params — may contain PII or sensitive data
+  }
+  return result;
+}
+```
 
-// Prisma 5+ slow query logging (replaces deprecated $use)
-const prisma = prismaBase.$extends({
-  query: {
-    $allModels: {
-      async $allOperations({ model, operation, args, query }) {
-        const start = Date.now();
-        const result = await query(args);
-        const duration = Date.now() - start;
-        if (duration > 500) {
-          logger.warn({
-            event: 'db.slow_query',
-            model,
-            operation,
-            duration_ms: duration,
-            // NEVER log: args (may contain PII or sensitive data)
-          });
-        }
-        return result;
-      },
-    },
-  },
-});
+Usage in API routes or Server Components:
 
-export { prisma };
+```ts
+import { withSlowQueryLog } from '@/lib/utils/with-slow-query-log';
+import { db, projects } from '@/integrations/database';
+
+const rows = await withSlowQueryLog('projects.findAll', () =>
+  db.select().from(projects)
+);
 ```
 
 **Sanitized request context** — extend `withLogging` or add inline at the top of route handlers:
@@ -680,7 +677,10 @@ export class OutboundHttpLoggingInterceptor implements NestInterceptor {
 ```ts
 // src/modules/projects/projects.service.ts  (example — adapt to your domain)
 async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
-  const project = await this.prisma.project.create({ data: { ...dto, userId } });
+  const [project] = await this.drizzle.db
+    .insert(projects)
+    .values({ ...dto, userId })
+    .returning();
   this.logger.log({ user_id: userId, project_id: project.id }, 'Project created');
   return project;
 }
@@ -688,47 +688,31 @@ async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
 
 #### Tier 3 — Verbose (+ Tier 1 + Tier 2)
 
-**Slow DB queries** — use Prisma 5 `$extends` in your `PrismaService`:
+**Slow DB queries** — add a timing wrapper method to `DrizzleService` in `src/database/drizzle.service.ts`:
 
 ```ts
-// src/common/prisma/prisma.service.ts  (extend existing PrismaService)
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+// src/database/drizzle.service.ts  (extend existing DrizzleService)
+// Add this method to the class body:
 
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  private readonly logger = new Logger(PrismaService.name);
-
-  async onModuleInit() {
-    await this.$connect();
+async timedQuery<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const start = Date.now();
+  const result = await fn();
+  const duration = Date.now() - start;
+  if (duration > 500) {
+    this.logger.warn({ event: 'db.slow_query', name, duration_ms: duration });
+    // NEVER log query params — may contain PII or sensitive data
   }
-
-  // Prisma 5+ slow query logging (replaces deprecated $use)
-  withSlowQueryLogging() {
-    const { logger } = this; // capture before $extends — `this` is not bound inside the callback
-    return this.$extends({
-      query: {
-        $allModels: {
-          async $allOperations({ model, operation, args, query }) {
-            const start = Date.now();
-            const result = await query(args);
-            const duration = Date.now() - start;
-            if (duration > 500) {
-              logger.warn({
-                event: 'db.slow_query',
-                model,
-                operation,
-                duration_ms: duration,
-                // NEVER log: args (may contain PII or sensitive data)
-              });
-            }
-            return result;
-          },
-        },
-      },
-    });
-  }
+  return result;
 }
+```
+
+Usage in service methods:
+
+```ts
+// src/modules/projects/projects.service.ts
+const rows = await this.drizzle.timedQuery('projects.findAll', () =>
+  this.drizzle.db.select().from(projects)
+);
 ```
 
 **Sanitized request context** — extend `LoggerModule` `customProps`:

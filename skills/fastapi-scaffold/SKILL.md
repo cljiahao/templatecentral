@@ -1718,7 +1718,7 @@ Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill
 # <Project Name>
 
 ## Identity
-- **Stack**: FastAPI 0.116, Python 3.12, Pydantic v2, Uvicorn, Ruff, pytest
+- **Stack**: FastAPI 0.136+, Python 3.12, Pydantic v2, Uvicorn, Ruff, pytest
 - **Scaffolded from**: templateCentral fastapi-scaffold skill
 - **Created**: <date>
 

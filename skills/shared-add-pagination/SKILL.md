@@ -81,7 +81,7 @@ All list endpoints return this shape (matches Phase 1 `shared-add-error-handling
 
 ## Implementation
 
-### Next.js (TypeScript + Prisma + Zod)
+### Next.js (TypeScript + Drizzle + Zod)
 
 **1. Reusable Pagination Schema (From validation-patterns)**
 
@@ -162,15 +162,15 @@ export class PaginationService {
   }
 
   /**
-   * Parse sort parameter to Prisma orderBy format
+   * Parse sort parameter into a field/direction pair.
    * @param sort - Sort string: "asc_name" or "desc_createdAt"
    * @param allowedFields - Whitelist of allowed field names
-   * @returns Prisma orderBy object or null if invalid
+   * @returns { field, direction } or null if invalid — caller maps to ORM-specific orderBy
    */
   static parseSortParam(
     sort: string | undefined,
     allowedFields: string[]
-  ): Record<string, 'asc' | 'desc'> | null {
+  ): { field: string; direction: 'asc' | 'desc' } | null {
     if (!sort) return null;
 
     const [direction, field] = sort.split('_');
@@ -178,7 +178,7 @@ export class PaginationService {
       return null; // Invalid sort - caller should reject
     }
 
-    return { [field]: direction as 'asc' | 'desc' };
+    return { field, direction: direction as 'asc' | 'desc' };
   }
 }
 ```
@@ -190,18 +190,19 @@ export class PaginationService {
 import { handleApiError } from '@/lib/errors';
 import { paginationSchema } from '@/lib/validation/schemas';
 import { PaginationService } from '@/lib/pagination/pagination-service';
-import { PaginatedResponse } from '@/lib/types/pagination';
 import { NextResponse } from 'next/server';
+import { asc, count, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
+import { db, projects } from '@/integrations/database';
 
-interface Project {
-  id: string;
-  name: string;
-  description: string | null;
-}
+const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
+type SortField = typeof ALLOWED_SORT_FIELDS[number];
 
-const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'];
+const SORT_COLUMNS: Record<SortField, typeof projects.name | typeof projects.createdAt | typeof projects.updatedAt> = {
+  name: projects.name,
+  createdAt: projects.createdAt,
+  updatedAt: projects.updatedAt,
+};
 
 export async function GET(request: Request) {
   try {
@@ -212,7 +213,6 @@ export async function GET(request: Request) {
       sort: searchParams.get('sort'),
     };
 
-    // Validate pagination params
     const parsed = paginationSchema.safeParse(queryParams);
     if (!parsed.success) {
       return handleApiError(
@@ -224,45 +224,38 @@ export async function GET(request: Request) {
 
     const { page, limit, sort } = parsed.data;
 
-    // Validate sort field against whitelist
-    const orderBy = PaginationService.parseSortParam(sort, ALLOWED_SORT_FIELDS);
-    if (sort && !orderBy) {
+    const sortParam = PaginationService.parseSortParam(sort, [...ALLOWED_SORT_FIELDS]);
+    if (sort && !sortParam) {
       return NextResponse.json(
         {
           error: 'Invalid sort field',
-          details: {
-            fieldErrors: {
-              sort: [`Must be one of: ${ALLOWED_SORT_FIELDS.join(', ')}`],
-            },
-          },
+          details: { fieldErrors: { sort: [`Must be one of: ${ALLOWED_SORT_FIELDS.join(', ')}`] } },
         },
         { status: 400 }
       );
     }
 
-    // Query projects with pagination
-    const offset = PaginationService.calculateOffset(page, limit);
-    const [projects, total] = await Promise.all([
-      prisma.project.findMany({
-        skip: offset,
-        take: limit,
-        orderBy: orderBy || { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      }),
-      prisma.project.count(), // Indexed query on table
-    ]);
+    const orderByCol = sortParam
+      ? sortParam.direction === 'asc'
+        ? asc(SORT_COLUMNS[sortParam.field as SortField])
+        : desc(SORT_COLUMNS[sortParam.field as SortField])
+      : desc(projects.createdAt);
 
-    // Build response with pagination metadata (matches Phase 1 unified schema)
-    const paginationMetadata = PaginationService.createMetadata(page, limit, total);
+    const offset = PaginationService.calculateOffset(page, limit);
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select({ id: projects.id, name: projects.name, description: projects.description })
+        .from(projects)
+        .orderBy(orderByCol)
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(projects),
+    ]);
 
     return NextResponse.json({
       data: {
-        items: projects,
-        pagination: paginationMetadata,
+        items: rows,
+        pagination: PaginationService.createMetadata(page, limit, Number(total)),
       },
     });
   } catch (error) {

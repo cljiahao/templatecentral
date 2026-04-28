@@ -33,15 +33,15 @@ Keep route handlers thin — delegate to server-side data access:
 
 > **Important**: Route handlers run on the server. They access data via `integrations/` (clients, services, factories) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `add-integration` skill for external APIs.
 >
-> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Prisma/Mongoose via the `add-database` skill, or external API clients via the `add-integration` skill.
+> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Drizzle/Mongoose via the `add-database` skill, or external API clients via the `add-integration` skill.
 
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-// Replace with your actual data access — e.g.:
-//   import { prisma } from '@/integrations/database';
+// Replace with your actual data access — e.g. (after running nextjs-add-database):
+//   import { db, projects } from '@/integrations/database';
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -50,8 +50,8 @@ const CreateProjectSchema = z.object({
 
 export async function GET() {
   try {
-    const projects = []; // ← Replace: e.g. await prisma.project.findMany()
-    return NextResponse.json(projects);
+    const rows = []; // ← Replace: e.g. await db.select().from(projects)
+    return NextResponse.json(rows);
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
   }
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = parsed.data; // ← Replace: e.g. await prisma.project.create({ data: parsed.data })
+    const project = parsed.data; // ← Replace: e.g. await db.insert(projects).values(parsed.data).returning()
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);
@@ -91,7 +91,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const project = null; // ← Replace: e.g. await prisma.project.findUnique({ where: { id } })
+    const project = null; // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
     if (!project) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
