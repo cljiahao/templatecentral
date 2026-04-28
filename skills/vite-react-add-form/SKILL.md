@@ -141,4 +141,4 @@ export function ContactPage() {
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
-- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared/validation-patterns/SKILL.md`.
+- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.

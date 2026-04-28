@@ -169,4 +169,4 @@ export default function ContactPage() {
 - Use `toast.success()` / `toast.error()` from Sonner for user feedback — install sonner and add `<Toaster />` to root layout first (see Step 1).
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
 - Add `'use client'` directive — forms are inherently interactive.
-- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared/validation-patterns/SKILL.md`.
+- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.

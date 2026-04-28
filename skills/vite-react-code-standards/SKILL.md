@@ -161,7 +161,7 @@ The template provides these shared utilities:
 ### Input Validation
 - Validate all form inputs with Zod via React Hook Form — NEVER trust raw user input
 - Validate API response shapes with Zod `safeParse()` before rendering
-- For complex validation (file uploads, OWASP/CWE compliance): use `shared/validation-patterns/SKILL.md`
+- For complex validation (file uploads, OWASP/CWE compliance): use `shared-validation-patterns`
 
 ### Auth & Route Protection
 - Protected routes wrapped with `<ProtectedRoute />` in `src/router.tsx` — NEVER rely on hiding nav links as security

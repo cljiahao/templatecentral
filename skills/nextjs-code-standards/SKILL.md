@@ -155,7 +155,7 @@ The template provides these shared utilities:
 ### Input Validation
 - Validate all request bodies with Zod `safeParse()` — return 400 on failure, NEVER trust raw `request.json()`
 - Validate URL/search params before use — user-controlled input
-- For complex validation patterns (file uploads, OWASP/CWE): use `shared/validation-patterns/SKILL.md`
+- For complex validation patterns (file uploads, OWASP/CWE): use `shared-validation-patterns`
 
 ### Auth & Route Protection
 - These rules apply only after `nextjs-add-auth` has been run (i.e. `src/proxy.ts` and `src/auth.ts` exist).

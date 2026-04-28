@@ -136,5 +136,5 @@ Confirm the build succeeds with no type errors. Verify the integration works end
 - Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets. Add commented placeholders to `.env.example` so other developers know what's needed.
 - NEVER put API keys or tokens in `NEXT_PUBLIC_*` — they are exposed to every browser. Server-side integrations use `process.env` without the prefix. For APIs requiring auth from the browser, proxy through a Next.js API route.
 - NEVER consume integrations directly in components — go through feature services or API routes
-- For wiring this integration to a frontend SPA: use `shared/full-stack-pairing/SKILL.md`
-- For complex Zod response validation patterns: use `shared/validation-patterns/SKILL.md`
+- For wiring this integration to a frontend SPA: use `shared-full-stack-pairing`
+- For complex Zod response validation patterns: use `shared-validation-patterns`
