@@ -1,0 +1,18 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-28-templatecentral-audit.md",
+  "tasks": [
+    {
+      "id": 9,
+      "subject": "Task 1: Fix shared-drift-check routing table",
+      "status": "pending",
+      "description": "**Goal:** Replace four slash-format skill names with dash-format so agents can correctly load scaffold skills.\n\n**Files:**\n- Modify: `skills/shared-drift-check/SKILL.md:30-33`\n\n**Acceptance Criteria:**\n- [ ] All four skill name entries use dash format (e.g. `nextjs-scaffold`)\n- [ ] No slashes remain in the routing table\n- [ ] No other lines changed\n\n**Verify:** `grep 'scaffold' skills/shared-drift-check/SKILL.md` → all four rows show dash format\n\n```json:metadata\n{\"files\": [\"skills/shared-drift-check/SKILL.md\"], \"verifyCommand\": \"grep 'scaffold' skills/shared-drift-check/SKILL.md\", \"acceptanceCriteria\": [\"All 4 entries use dash format\", \"No slashes in routing table\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 2: Restore 4 missing files to nextjs-scaffold",
+      "status": "pending",
+      "description": "**Goal:** Add hooks/index.ts, lib/constants/index.ts, integrations/schemas/.gitkeep, and integrations/factories.ts to directory tree and Part C verbatim blocks.\n\n**Files:**\n- Modify: `skills/nextjs-scaffold/SKILL.md` (tree ~lines 109-127, Part C after line 1668)\n\n**Acceptance Criteria:**\n- [ ] Tree shows `src/hooks/index.ts [verbatim — Part C]`\n- [ ] Tree shows `src/integrations/factories.ts [verbatim — Part C]`\n- [ ] Tree shows `src/integrations/schemas/.gitkeep [verbatim — empty]`\n- [ ] Tree shows `src/lib/constants/index.ts [verbatim — Part C]`\n- [ ] Part C has verbatim blocks for hooks/index.ts, lib/constants/index.ts, integrations/factories.ts\n\n**Verify:** `grep -n 'hooks/index\\|factories\\|schemas/.gitkeep\\|constants/index' skills/nextjs-scaffold/SKILL.md` → 9 matches\n\n```json:metadata\n{\"files\": [\"skills/nextjs-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -n 'hooks/index\\\\|factories\\\\|schemas/.gitkeep\\\\|constants/index' skills/nextjs-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"4 new tree entries present\", \"3 new Part C verbatim blocks present\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-28T00:00:00.000Z"
+}
