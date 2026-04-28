@@ -23,7 +23,7 @@ src/
     ├── (public)/
     │   └── login/
     │       └── page.tsx
-    └── dashboard/
+    └── dashboard/           ← only if not already created by scaffold
         ├── layout.tsx
         └── (overview)/
             └── page.tsx
@@ -195,16 +195,14 @@ import { toNextJsHandler } from 'better-auth/next-js';
 export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-### 6. Add `PAGE_ROUTES.LOGIN` and `PAGE_ROUTES.DASHBOARD` to `src/lib/constants/routes.ts`
+### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
 
-Open the file and add the two routes to the `PAGE_ROUTES` object:
+Add `LOGIN` to the existing `PAGE_ROUTES` object. `HOME` and `DASHBOARD` are already present from the scaffold — do not add them again:
 
 ```ts
 export const PAGE_ROUTES = {
-  HOME: '/',
+  // ... existing HOME: '/' and DASHBOARD: '/dashboard' entries
   LOGIN: '/login',
-  DASHBOARD: '/dashboard',
-  // ... existing routes
 } as const;
 ```
 
@@ -222,7 +220,9 @@ export default function LoginPage() {
 }
 ```
 
-### 8. Create `src/app/dashboard/layout.tsx`
+### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
+
+> **Skip this step** if `src/app/dashboard/layout.tsx` already exists — present when the project was scaffolded with templateCentral. The `proxy.ts` allowlist protects `/dashboard` automatically once this skill completes; no structural change is needed.
 
 ```tsx
 import { Navbar } from '@/components/layout/navbar';
@@ -240,7 +240,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 }
 ```
 
-### 9. Create `src/app/dashboard/(overview)/page.tsx`
+### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
+
+> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; `shared-remove-example` cleans it up when the user is ready.
+
+If creating fresh (non-scaffold project):
 
 ```tsx
 export default function DashboardPage() {
