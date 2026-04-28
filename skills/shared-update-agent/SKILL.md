@@ -29,7 +29,10 @@ FastAPI: read `requirements.txt`.
 5. Run `pnpm install`
 6. Dispatch `build-agent`
 7. If build fails → rollback (see Rollback below)
-8. Report results (see Reporting below)
+8. Run `pnpm audit --audit-level=high`
+   - Report any high/critical CVEs under "Security advisories" in the results summary
+   - Do NOT auto-rollback — advisories are report-only; the user decides next steps
+9. Report results (see Reporting below)
 
 ### FastAPI
 
@@ -43,7 +46,11 @@ FastAPI: read `requirements.txt`.
 5. Run `pip install -r requirements.txt`
 6. Dispatch `build-agent`
 7. If build fails → rollback
-8. Report results
+8. Run `pip-audit --requirement requirements.txt` if `pip-audit` is available
+   - If `pip-audit` is not installed: add note "pip-audit not installed — CVE check skipped" to report
+   - Report any vulnerabilities under "Security advisories" in the results summary
+   - Do NOT auto-rollback — advisories are report-only; the user decides next steps
+9. Report results
 
 ## Rollback
 
@@ -57,6 +64,8 @@ If `build-agent` reports failure after applying all updates:
 6. Report which package could not be updated and its current vs attempted version
 
 ## Reporting
+
+If security advisories are found, list them under "Security advisories". If none found, omit the block entirely.
 
 ```
 Update agent complete — Next.js
@@ -73,6 +82,9 @@ Could not update (build failed after bump):
 - some-package 2.1.0 → 2.3.0  ← rolled back, build broke
 
 Build: passed
+
+Security advisories:
+- (none) or list of CVEs found
 ```
 
 ## Callers
