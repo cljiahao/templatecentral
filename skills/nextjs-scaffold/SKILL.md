@@ -81,6 +81,10 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │   ├── (public)/
     │   │   ├── layout.tsx              [generate — public layout with Navbar + Footer]
     │   │   └── page.tsx                [generate — landing page using widgets]
+    │   ├── dashboard/
+    │   │   ├── layout.tsx              [verbatim — Part C]
+    │   │   └── (overview)/
+    │   │       └── page.tsx            [verbatim — Part C]
     │   ├── api/
     │   │   ├── route.ts                [verbatim — Part C]
     │   │   └── health/
@@ -107,7 +111,22 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │       ├── theme-toggle-button.tsx [verbatim — Part C]
     │       └── index.ts                [verbatim — Part C]
     ├── features/
-    │   └── example/                   [generate — minimal example with types, service, hook, component]
+    │   └── example/
+    │       ├── index.ts                [verbatim — Part C]
+    │       ├── types.ts                [verbatim — Part C]
+    │       ├── constants.ts            [verbatim — Part C]
+    │       ├── api/
+    │       │   ├── index.ts            [verbatim — Part C]
+    │       │   └── example-service.ts  [verbatim — Part C]
+    │       ├── components/
+    │       │   ├── index.ts            [verbatim — Part C]
+    │       │   ├── example-card.tsx    [verbatim — Part C]
+    │       │   └── example-list.tsx    [verbatim — Part C]
+    │       ├── hooks/
+    │       │   ├── index.ts            [verbatim — Part C]
+    │       │   └── use-example-items.query.ts  [verbatim — Part C]
+    │       └── schemas/
+    │           └── index.ts            [verbatim — Part C]
     ├── hooks/
     │   └── index.ts                    [verbatim — Part C]
     ├── integrations/
@@ -128,7 +147,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
         ├── constants/
         │   ├── index.ts                [verbatim — Part C]
         │   ├── env.ts                  [verbatim — Part C]
-        │   └── routes.ts               [generate — PAGE_ROUTES + API_ROUTES]
+        │   └── routes.ts               [generate — PAGE_ROUTES (HOME:'/', DASHBOARD:'/dashboard') + API_ROUTES (HEALTH:'/api/health'); nextjs-add-auth appends LOGIN:'/login' — do not add it here]
         └── errors/
             ├── index.ts                [verbatim — Part C]
             ├── handle-api-error.ts     [verbatim — Part C]
@@ -1704,6 +1723,200 @@ export * from './routes';
 // Added by nextjs-add-integration — one export per integration.
 ```
 
+### `src/features/example/types.ts`
+
+```ts
+export interface ExampleItem {
+  id: string;
+  title: string;
+  description: string;
+  status: 'active' | 'inactive';
+}
+```
+
+### `src/features/example/constants.ts`
+
+```ts
+import type { ExampleItem } from './types';
+
+export const EXAMPLE_ITEMS: ExampleItem[] = [
+  {
+    id: '1',
+    title: 'Feature Pattern',
+    description: 'Add features under src/features/<name>/ with api/, components/, hooks/, schemas/.',
+    status: 'active',
+  },
+  {
+    id: '2',
+    title: 'React Query',
+    description: 'Data-fetching hooks live in features/hooks/ and wrap TanStack Query.',
+    status: 'active',
+  },
+  {
+    id: '3',
+    title: 'shadcn/ui',
+    description: 'Add UI primitives with: npx shadcn@latest add <component>',
+    status: 'inactive',
+  },
+];
+```
+
+### `src/features/example/api/example-service.ts`
+
+```ts
+import { EXAMPLE_ITEMS } from '../constants';
+import type { ExampleItem } from '../types';
+
+export function getExampleItems(): Promise<ExampleItem[]> {
+  return Promise.resolve(EXAMPLE_ITEMS);
+}
+```
+
+### `src/features/example/api/index.ts`
+
+```ts
+export { getExampleItems } from './example-service';
+```
+
+### `src/features/example/hooks/use-example-items.query.ts`
+
+```ts
+import { useQuery } from '@tanstack/react-query';
+
+import { getExampleItems } from '../api/example-service';
+
+export function useExampleItems() {
+  return useQuery({
+    queryKey: ['example-items'],
+    queryFn: getExampleItems,
+  });
+}
+```
+
+### `src/features/example/hooks/index.ts`
+
+```ts
+export { useExampleItems } from './use-example-items.query';
+```
+
+### `src/features/example/components/example-card.tsx`
+
+```tsx
+import { CustomCard } from '@/components/widgets';
+
+import type { ExampleItem } from '../types';
+
+interface ExampleCardProps {
+  item: ExampleItem;
+}
+
+export function ExampleCard({ item }: ExampleCardProps) {
+  return (
+    <CustomCard>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold">{item.title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+            item.status === 'active'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          {item.status}
+        </span>
+      </div>
+    </CustomCard>
+  );
+}
+```
+
+### `src/features/example/components/example-list.tsx`
+
+```tsx
+'use client';
+
+import { useExampleItems } from '../hooks/use-example-items.query';
+import { ExampleCard } from './example-card';
+
+export function ExampleList() {
+  const { data: items, isLoading } = useExampleItems();
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!items?.length) return <p className="text-sm text-muted-foreground">No items found.</p>;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <ExampleCard key={item.id} item={item} />
+      ))}
+    </div>
+  );
+}
+```
+
+### `src/features/example/components/index.ts`
+
+```ts
+export { ExampleCard } from './example-card';
+export { ExampleList } from './example-list';
+```
+
+### `src/features/example/schemas/index.ts`
+
+```ts
+export {};
+```
+
+### `src/features/example/index.ts`
+
+```ts
+export * from './components';
+export * from './hooks';
+export type { ExampleItem } from './types';
+```
+
+### `src/app/dashboard/layout.tsx`
+
+```tsx
+import { Navbar } from '@/components/layout/navbar';
+import { SiteFooter } from '@/components/layout/site-footer';
+import type { ReactNode } from 'react';
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <main className="flex-1">{children}</main>
+      <SiteFooter />
+    </div>
+  );
+}
+```
+
+### `src/app/dashboard/(overview)/page.tsx`
+
+```tsx
+import { ExampleList } from '@/features/example';
+
+export default function DashboardPage() {
+  return (
+    <div className="max-w-site mx-auto w-full px-6 py-12">
+      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <p className="mt-2 text-muted-foreground">
+        Example feature — remove with the <code>shared-remove-example</code> skill after
+        confirming the scaffold works.
+      </p>
+      <div className="mt-8">
+        <ExampleList />
+      </div>
+    </div>
+  );
+}
+```
+
 ---
 
 ## Scaffold Steps
@@ -1777,7 +1990,7 @@ Create `AGENTS.md` at the project root with this exact content (update Identity 
 
 ## Architecture Decisions
 - Providers (QueryClientProvider) in root `layout.tsx`
-- Route groups: `(public)/` for public pages
+- Route groups: `(public)/` for public pages; `dashboard/` for authenticated pages (protected by `proxy.ts` once `nextjs-add-auth` is run)
 - Feature modules under `src/features/<name>/`
 - Barrel exports (`index.ts`) for all shared folders
 - shadcn/ui primitives in `src/components/ui/` (managed by CLI)
@@ -1872,7 +2085,9 @@ Once the project is verified and the user confirms it runs, use the `shared-remo
 
 Next.js-specific steps (the skill covers these):
 - Delete `src/features/example/` directory
-- Remove the example route import from `src/app/` if present
+- Remove `ExampleList` import from `src/app/dashboard/(overview)/page.tsx`
+
+The `shared-remove-example` skill handles both steps automatically.
 
 ---
 
