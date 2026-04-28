@@ -710,7 +710,7 @@ export class ProjectsController {
 **1. Pagination Hook**
 
 ```ts
-// src/hooks/usePagination.ts
+// src/lib/utils/use-pagination.ts
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -767,7 +767,7 @@ export function usePagination(
 
 ```tsx
 // src/features/projects/components/projects-list.tsx
-import { usePagination } from '@/hooks/usePagination';
+import { usePagination } from '@/lib/utils/use-pagination';
 import { fetchProjects } from '@/api/projects';
 
 export function ProjectsList() {
@@ -934,7 +934,7 @@ pytest -v
 ### NestJS
 
 ```bash
-npm start:dev
+pnpm start:dev
 
 # Test paginated endpoint
 curl 'http://localhost:3000/projects?page=1&limit=10'

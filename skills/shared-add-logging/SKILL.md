@@ -705,6 +705,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   // Prisma 5+ slow query logging (replaces deprecated $use)
   withSlowQueryLogging() {
+    const { logger } = this; // capture before $extends — `this` is not bound inside the callback
     return this.$extends({
       query: {
         $allModels: {
@@ -713,7 +714,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
             const result = await query(args);
             const duration = Date.now() - start;
             if (duration > 500) {
-              this.logger.warn({
+              logger.warn({
                 event: 'db.slow_query',
                 model,
                 operation,

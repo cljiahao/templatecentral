@@ -129,7 +129,7 @@ def decode_access_token(token: str) -> str | None:
 
 ### 4. Create Auth Dependency
 
-Create **`src/api/dependencies/`** directory (does not exist in base template), then add **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
+Create **`src/api/dependencies/`** directory (does not exist in base template), then add both **`src/api/dependencies/__init__.py`** (empty, marks the directory as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
 ```python
 from fastapi import Depends, HTTPException, status
