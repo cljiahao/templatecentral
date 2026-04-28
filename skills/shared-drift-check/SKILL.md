@@ -56,7 +56,7 @@ Current:      nextjs@1.2.0
 
 What changed since your project was scaffolded:
 ### 1.2.0
-- Updated proxy.ts to use new NextAuth v5 session callback signature
+- Updated proxy.ts to use better-auth session check (auth.api.getSession)
 - Added error-boundary pattern to layout.tsx
 
 ### 1.1.0

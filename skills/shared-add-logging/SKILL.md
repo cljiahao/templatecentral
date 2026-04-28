@@ -125,65 +125,51 @@ Unhandled exceptions are already captured by `logError` in `src/lib/errors/error
 
 #### Tier 2 — Standard (+ Tier 1)
 
-**Auth events** — add logging inside `src/auth.ts` callbacks:
+**Auth events** — wrap the auth API route handler to log sign-in and sign-out events:
 
 ```ts
-// src/auth.ts  (extend existing NextAuth config)
+// src/app/api/auth/[...all]/route.ts
+import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { toNextJsHandler } from 'better-auth/next-js';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  // ...existing config...
-  callbacks: {
-    async jwt({ token, trigger }) {
-      // Only log token refresh when explicitly triggered — NOT on every auth() call
-      // WARNING: session callback fires on EVERY auth() call; do NOT log token refresh there
-      if (trigger === 'update') {
-        logger.info({ event: 'auth.token_refresh', user_id: token?.sub }, 'Token refresh');
-      }
-      return token;
-    },
-    async signIn({ user, account }) {
-      logger.info(
-        { user_id: user.id, method: account?.provider ?? 'credentials' },
-        'Login success'
-      );
-      return true;
-    },
-  },
-  events: {
-    async signOut({ token }) {
-      logger.info({ user_id: token?.sub }, 'Logout');
-    },
-  },
-});
-```
+const { GET: _GET, POST: _POST } = toNextJsHandler(auth);
 
-For login failures, add in the `authorize` callback (credentials provider):
+export { GET: _GET as GET };
 
-```ts
-// inside CredentialsProvider authorize()
-if (!user) {
-  logger.warn({ reason: 'invalid_credentials', ip: req?.headers?.['x-forwarded-for'] ?? 'unknown' }, 'Login failure');
-  return null;
+export async function POST(req: Request) {
+  const url = new URL(req.url);
+  const path = url.pathname.replace('/api/auth', '');
+
+  const response = await _POST(req.clone() as Request);
+
+  if (path.startsWith('/sign-in') && response.status === 200) {
+    logger.info({ event: 'auth.login_success', path }, 'Login success');
+  } else if (path.startsWith('/sign-in') && response.status !== 200) {
+    logger.warn(
+      { event: 'auth.login_failure', path, status: response.status },
+      'Login failure'
+    );
+  } else if (path.startsWith('/sign-out')) {
+    logger.info({ event: 'auth.logout' }, 'Logout');
+  }
+
+  return response;
 }
 ```
 
-For access denied, log in auth middleware / route guard:
+For access denied, log in `proxy.ts` (route protection middleware):
 
 ```ts
-// src/app/api/admin/route.ts — example protected route
-import { auth } from '@/auth';
-import { logger } from '@/lib/logger';
-import { NextResponse } from 'next/server';
-
-export const GET = withLogging(async (req) => {
-  const session = await auth();
-  if (!session?.user) {
-    logger.warn({ user_id: session?.user?.id, path: '/api/admin', required_role: 'admin' }, 'Access denied');
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+// src/proxy.ts — inside proxy(), after session check
+if (!session) {
+  if (isApiRoute(pathname)) {
+    logger.warn({ event: 'auth.access_denied', path: pathname }, 'Unauthenticated API request');
+    return new Response(null, { status: 401 });
   }
-  // ...
-});
+  logger.info({ event: 'auth.redirect_to_login', path: pathname }, 'Redirecting to login');
+  return NextResponse.redirect(new URL(PAGE_ROUTES.LOGIN, req.url));
+}
 ```
 
 **Outbound HTTP calls** — create a fetch wrapper in `src/integrations/clients/`:
