@@ -30,6 +30,8 @@ FastAPI: read `requirements.txt`.
 6. Dispatch `build-agent`
 7. If build fails → rollback (see Rollback below)
 8. Run `pnpm audit --audit-level=high`
+   - A non-zero exit due to found advisories is expected — record them and continue to step 9
+   - If the command fails for a non-advisory reason (network error, registry unreachable): add "pnpm audit failed — CVE check skipped" to the report and continue to step 9
    - Report any high/critical CVEs under "Security advisories" in the results summary
    - Do NOT auto-rollback — advisories are report-only; the user decides next steps
 9. Report results (see Reporting below)
@@ -84,7 +86,7 @@ Could not update (build failed after bump):
 Build: passed
 
 Security advisories:
-- (none) or list of CVEs found
+- some-package 2.3.0: GHSA-xxxx-xxxx-xxxx (high) — upgrade to 2.3.1 or higher
 ```
 
 ## Callers
