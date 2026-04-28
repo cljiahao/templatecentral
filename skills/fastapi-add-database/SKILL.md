@@ -488,6 +488,8 @@ class User(Base):
 
 ### Step B — Create `src/api/repositories/user_repository.py`
 
+> Create the `api/repositories/` directory if it does not already exist.
+
 ```python
 from sqlalchemy.orm import Session
 

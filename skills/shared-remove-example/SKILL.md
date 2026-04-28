@@ -24,7 +24,7 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 ### Cleanup Checklist
 
 1. Delete `src/features/example/`
-2. Edit `src/app/dashboard/(overview)/page.tsx` — remove example imports, replace grid with placeholder
+2. Edit `src/app/dashboard/(overview)/page.tsx` — remove `ExampleList` import and usage, replace with placeholder content
 3. Verify no remaining imports reference `@/features/example`
 
 ## Vite + React
