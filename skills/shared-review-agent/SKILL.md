@@ -20,9 +20,37 @@ Check for `next.config.ts` → Next.js, `vite.config.ts` → Vite-React, `nest-c
    - Vite-React → `vite-react-code-standards`
    - FastAPI → `fastapi-code-standards`
    - NestJS → `nestjs-code-standards`
-4. Identify changed files (files written or edited in this session)
-5. Review each changed file against both layers — quality principles first, then style rules
-6. Report violations (see Reporting below)
+4. Identify files to review (see **Scoping** below)
+5. Review each file against both layers — quality principles first, then style rules
+6. Report violations (see **Reporting** below)
+7. Update `.claude/review-baseline.md` (see **Baseline** below)
+
+## Scoping
+
+Check for `.claude/review-baseline.md` in the project root before identifying files.
+
+**If the baseline file exists:**
+- Read `last-reviewed-commit` from it
+- Run `git diff <last-reviewed-commit>..HEAD --name-only` to get committed changes since baseline
+- Add any files written or edited this session that are not yet committed
+- Deduplicate — this union is your review scope
+
+**If no baseline file exists:**
+- Fall back to all files written or edited this session
+
+If the resulting scope is empty (no changes since baseline, no session edits), report `No changes since last review — nothing to check.` and stop. Do not update the baseline.
+
+## Baseline
+
+After completing the review (whether violations were found or not), write or overwrite `.claude/review-baseline.md` in the project root:
+
+```
+last-reviewed-commit: <git rev-parse HEAD>
+stack: <detected stack>
+reviewed-at: <YYYY-MM-DD>
+```
+
+If the project has no commits yet, skip writing the baseline.
 
 ## What to check
 
@@ -71,6 +99,9 @@ Rules:
 Dispatched by: `nextjs-add-feature`, `nextjs-add-auth`.
 
 ## Changelog
+### 1.2.0
+- Added baseline scoping: uses `git diff <last-reviewed-commit>..HEAD` instead of full session files after first scaffold review
+- Writes/updates `.claude/review-baseline.md` after each review run
 ### 1.1.0
 - Added Layer 1 quality checks (YAGNI, dead code, boundary validation, least privilege, no secrets)
 - Updated stack detection to use full skill names

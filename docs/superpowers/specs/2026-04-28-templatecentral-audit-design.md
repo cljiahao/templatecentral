@@ -16,8 +16,7 @@ Full audit of all 46 skills, root `AGENTS.md`, plugin manifests, and git history
 ### What is clean (no changes needed)
 
 - No literal TODO stubs anywhere in any skill
-- No stale `next-auth` or `templates/` references in skills
-- No stale `next-auth` references (cleaned in prior commits)
+- No stale `next-auth` or `templates/` references in skills (cleaned in prior commits)
 - Version markers (`<!-- templateCentral: nextjs@1.0.0 -->`) correctly match each scaffold skill's `version: "1.0.0"` frontmatter field
 - Auth stubs in `fastapi-add-auth` and `nestjs-add-auth` are intentional, clearly documented — leave as-is
 - Code quality section duplication across skills and `AGENTS.md` is intentional for agent access — leave as-is
