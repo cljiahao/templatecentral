@@ -1,5 +1,5 @@
 ---
-name: drift-check
+name: shared-drift-check
 description: Use when starting a session on a project scaffolded by templateCentral — checks convention version and optionally dependency drift
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: add-component
+name: nextjs-add-component
 description: Use when creating a new React component and unsure whether it belongs in features/, widgets/, layout/, or ui/, or when adding a shared component with barrel exports.
 ---
 

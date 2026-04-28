@@ -1,5 +1,5 @@
 ---
-name: update-agent
+name: shared-update-agent
 description: Use when updating project dependencies to latest compatible versions after scaffolding or when convention drift is detected
 ---
 

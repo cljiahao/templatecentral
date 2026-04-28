@@ -1,5 +1,5 @@
 ---
-name: add-form
+name: vite-react-add-form
 description: Use when adding a form with validation to a Vite + React project — covers React Hook Form setup, Zod schema definition, CustomFormField usage, and toast notifications.
 ---
 

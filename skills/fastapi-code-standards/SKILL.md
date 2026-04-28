@@ -1,5 +1,5 @@
 ---
-name: code-standards
+name: fastapi-code-standards
 description: Use when writing or reviewing Python code in a FastAPI project — covers naming, types, imports, error handling, and layer dependency rules.
 ---
 

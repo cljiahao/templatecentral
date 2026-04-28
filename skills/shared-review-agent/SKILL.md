@@ -1,5 +1,5 @@
 ---
-name: review-agent
+name: shared-review-agent
 description: Use when reviewing newly written code against templateCentral code standards for the detected stack
 ---
 

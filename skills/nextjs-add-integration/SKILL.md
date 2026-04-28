@@ -1,5 +1,5 @@
 ---
-name: add-integration
+name: nextjs-add-integration
 description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenAI) and need a client, Zod response schemas, service layer, and factory pattern.
 ---
 

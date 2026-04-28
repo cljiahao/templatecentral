@@ -1,5 +1,5 @@
 ---
-name: add-test
+name: vite-react-add-test
 description: Use when adding tests for components, hooks, or services in a Vite + React project — covers Vitest unit tests, Testing Library component tests, and React Query hook tests.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: add-auth
+name: nestjs-add-auth
 description: Use when the user wants to add authentication, JWT tokens, password hashing, or user login/registration to a NestJS project.
 ---
 

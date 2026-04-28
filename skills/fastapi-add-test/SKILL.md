@@ -1,5 +1,5 @@
 ---
-name: add-test
+name: fastapi-add-test
 description: Use when adding tests to a FastAPI project, test coverage is missing for endpoints or logic, or the user asks to write unit/integration tests.
 ---
 

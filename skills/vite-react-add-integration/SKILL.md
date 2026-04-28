@@ -1,5 +1,5 @@
 ---
-name: add-integration
+name: vite-react-add-integration
 description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenAI) from a Vite + React SPA and need a typed client, Zod response schemas, and service layer.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: add-integration
+name: nestjs-add-integration
 description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenAI) from a NestJS project and need an HTTP client module, Zod schemas, and injectable service.
 ---
 

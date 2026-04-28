@@ -1,5 +1,5 @@
 ---
-name: code-standards
+name: nestjs-code-standards
 description: Use when writing or reviewing TypeScript code in a NestJS project — covers naming, decorators, module structure, Zod DTOs, and dependency rules.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: add-database
+name: nestjs-add-database
 description: Use when the user wants to add a database to a NestJS project — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments.
 ---
 
@@ -136,7 +136,7 @@ export const serviceConfig = {
 Add to `.env` and `.env.example`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
 ### A8. Generate Client & Migrate
@@ -473,7 +473,7 @@ export const serviceConfig = {
 Add to `.env` and `.env.example`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
 ### B8. Usage

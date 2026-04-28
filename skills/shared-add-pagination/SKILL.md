@@ -1,5 +1,5 @@
 ---
-name: add-pagination
+name: shared-add-pagination
 description: Use when building list endpoints with multiple pages — covers offset-based pagination, response envelopes, CWE-400 resource exhaustion prevention, and per-stack implementations.
 ---
 

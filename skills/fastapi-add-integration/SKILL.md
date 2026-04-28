@@ -1,5 +1,5 @@
 ---
-name: add-integration
+name: fastapi-add-integration
 description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenAI) from a FastAPI project and need an async HTTP client, Pydantic response schemas, and service layer.
 ---
 

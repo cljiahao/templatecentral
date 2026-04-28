@@ -1,5 +1,5 @@
 ---
-name: add-test
+name: nestjs-add-test
 description: Use when adding tests, test coverage is missing for controllers or services, or the user asks to write unit or e2e tests.
 ---
 

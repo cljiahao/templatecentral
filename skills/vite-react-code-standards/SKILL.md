@@ -1,5 +1,5 @@
 ---
-name: code-standards
+name: vite-react-code-standards
 description: Use when writing or reviewing any code in a Vite + React project — covers file naming, export style, function vs const, component placement, and performance rules.
 ---
 

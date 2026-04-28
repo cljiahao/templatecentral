@@ -1,5 +1,5 @@
 ---
-name: add-database
+name: fastapi-add-database
 description: Use when the user wants to add a database to a FastAPI project — SQLAlchemy for SQL databases (PostgreSQL, MySQL, SQLite) or Beanie for MongoDB. Supports optional AWS IAM authentication for compliance environments.
 ---
 

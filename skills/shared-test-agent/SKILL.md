@@ -1,5 +1,5 @@
 ---
-name: test-agent
+name: shared-test-agent
 description: Use when writing and running tests for newly added code following the stack's test conventions
 ---
 

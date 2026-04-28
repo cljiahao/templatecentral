@@ -1,5 +1,5 @@
 ---
-name: add-error-handling
+name: shared-add-error-handling
 description: Use to add consistent error handling and response schemas across all stacks — covers unified error responses, security boundaries, logging integration, and per-stack implementation patterns.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: add-page
+name: nextjs-add-page
 description: Use when adding a new URL route, creating a public or dashboard page, or the user asks to add a page with loading/error states in a Next.js app.
 ---
 

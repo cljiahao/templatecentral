@@ -1,5 +1,5 @@
 ---
-name: add-database
+name: nextjs-add-database
 description: Use when the user wants to add a database to a Next.js project — Prisma (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments.
 ---
 
@@ -108,7 +108,7 @@ model User {
 Add to `.env` (Prisma CLI reads this) and `.env.example`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
 For SQLite, use:
@@ -371,7 +371,7 @@ Run migrations with: `npx tsx src/integrations/database/migrate.ts`
 Add to `.env` and `.env.example`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```
 
 ### B7. Usage

@@ -1,5 +1,5 @@
 ---
-name: add-page
+name: vite-react-add-page
 description: Use when adding a new URL route, creating a page component, or the user asks to add a page to a Vite + React SPA.
 ---
 

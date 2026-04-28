@@ -1,5 +1,5 @@
 ---
-name: add-feature
+name: vite-react-add-feature
 description: Use when adding a new domain area (e.g., projects, auth, analytics) that needs its own components, hooks, API services, and types under src/features/.
 ---
 

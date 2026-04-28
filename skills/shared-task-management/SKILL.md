@@ -1,5 +1,5 @@
 ---
-name: task-management
+name: shared-task-management
 description: Use when the user is working on a complex, multi-step feature and the project's AGENTS.md has task management enabled, or the user explicitly requests structured task management. Not for simple scaffolding or single-file changes.
 ---
 
