@@ -101,8 +101,6 @@ export function ContactForm() {
   });
 
   const onSubmit = (values: ContactFormValues) => {
-    // TODO: replace with actual submission logic
-    console.log(values);
     toast.success('Form submitted successfully!');
     form.reset();
   };

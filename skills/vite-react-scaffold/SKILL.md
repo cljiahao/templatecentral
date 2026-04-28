@@ -2928,6 +2928,22 @@ Only after the verification gate passes. Line 1 must be the templateCentral mark
 - Pages are thin — compose from `features/` and `components/`
 - **Env**: `VITE_*` is shipped to the browser — never API keys, tokens, or secrets (use server-side or proxy for those)
 
+## Code Quality
+
+Every agent writing or modifying code must follow these before marking a task done:
+
+- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
+- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
+- **SRP** — One responsibility per file and function. Pages compose; features fetch; components render. Never mix.
+- **SoC** — UI from data-fetching, validation from business logic, env config from components — keep them separate.
+- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
+- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
+- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
+- **Validate at every boundary** — Form inputs, API responses, env vars: always validate with Zod. Never trust external data.
+- **Fail loudly** — No empty catch blocks. Surface errors to the user or log with context; never swallow silently.
+- **Least privilege** — Request only the data the view needs. Strip unused fields from API responses before storing.
+- **No secrets in code** — No tokens, passwords, or keys in `VITE_*` or any client file. Use server-side or proxy.
+
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
@@ -2948,6 +2964,23 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
+
+### 7c. Install Claude Code plugins
+
+**Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman
+claude plugin marketplace add thedotmack/claude-mem
+claude plugin install claude-mem
+claude plugin marketplace add obra/superpowers
+```
+
+- **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
+- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
+- **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
+
+**If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
 
 ---
 

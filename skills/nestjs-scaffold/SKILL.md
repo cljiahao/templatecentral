@@ -1525,6 +1525,22 @@ Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
 - Barrel exports at `src/modules/index.ts`
 - **Testing**: New or changed controllers/services/repositories must include Jest tests in the same change (`pnpm test`; e2e when appropriate)
 
+## Code Quality
+
+Every agent writing or modifying code must follow these before marking a task done:
+
+- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
+- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
+- **SRP** — One responsibility per file and function. Controllers handle HTTP; services handle business logic; never mix.
+- **SoC** — Keep concerns separate: HTTP from business logic, DTO validation from domain logic, config from implementation.
+- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
+- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
+- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
+- **Validate at every boundary** — User input, API responses, env vars: always validate with Zod (`createZodDto`). Never trust external data.
+- **Fail loudly** — No empty catch blocks. Log with context; return meaningful HTTP status codes.
+- **Least privilege** — Return only the fields the caller needs. Never expose internal IDs without auth checks.
+- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
+
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
@@ -1546,6 +1562,23 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
+### 6c. Install Claude Code plugins
+
+**Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman
+claude plugin marketplace add thedotmack/claude-mem
+claude plugin install claude-mem
+claude plugin marketplace add obra/superpowers
+```
+
+- **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
+- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
+- **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
+
+**If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
+
 ---
 
 ### 7. Generate CLAUDE.md (Optional — Claude Code users only)
@@ -1559,6 +1592,10 @@ Include:
 - **templateCentral skills**: `nestjs-scaffold` (done), `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`
 - **Workflow**: simple/medium → templateCentral skills; complex → Superpowers
 - NEVER put secrets in `CLAUDE.md`
+
+### 7b. Optional: Task management
+
+Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in templateCentral's root `AGENTS.md`. If no, skip.
 
 ### 8. Remove Example Code (Optional)
 

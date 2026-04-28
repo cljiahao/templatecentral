@@ -7,6 +7,8 @@ description: Use when the user wants to add authentication, JWT tokens, password
 
 Add JWT-based authentication to a NestJS project scaffolded from templateCentral using Passport.js.
 
+> **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `nestjs-add-database` after this skill to complete the integration.
+
 ## Dependencies
 
 ```bash
@@ -147,19 +149,12 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    // TODO: persist user to database
     const user = { id: 'generated-id', email: dto.email, name: dto.name, hashedPassword };
     return { id: user.id, email: user.email, name: user.name };
   }
 
   async login(dto: LoginDto) {
-    // TODO: look up user by email from database
-    // const user = await this.usersRepository.findByEmail(dto.email);
-    // const isValid = user && await bcrypt.compare(dto.password, user.hashedPassword);
-    // if (!isValid) throw new UnauthorizedException('Invalid credentials');
-    // const payload = { sub: user.id, email: user.email };
-    // return { accessToken: this.jwtService.sign(payload), tokenType: 'bearer' as const };
-    throw new UnauthorizedException('Replace with real user lookup');
+    throw new UnauthorizedException('Database integration required. Run nestjs-add-database to complete auth.');
   }
 }
 ```

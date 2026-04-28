@@ -209,8 +209,7 @@ export async function GET(
     const session = await auth();
 
     // Check project exists AND user has access
-    // (In real app: const project = await prisma.project.findUnique({ where: { id } }))
-    const project = { id, name: 'Sample', ownerId: 'user-1' };
+    const project = { id, name: 'Sample', ownerId: 'user-1' }; // replace with real DB lookup
 
     // Return 404 for BOTH missing AND unauthorized (same response)
     // Never say "you don't have access" — could reveal resource exists
@@ -579,8 +578,7 @@ import { NotFoundException } from '@/common/exceptions/not-found.exception';
 @Injectable()
 export class ProjectsService {
   async getProject(id: string) {
-    // const project = await this.prisma.project.findUnique({ where: { id } });
-    const project = null; // Simulated
+    const project = null; // replace with: await this.prisma.project.findUnique({ where: { id } })
     
     if (!project) {
       throw new NotFoundException('Project not found');

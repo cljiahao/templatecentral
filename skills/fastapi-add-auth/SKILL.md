@@ -7,6 +7,8 @@ description: Use when the user wants to add authentication, JWT tokens, password
 
 Add JWT-based authentication to a FastAPI project scaffolded from templateCentral.
 
+> **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `fastapi-add-database` after this skill to complete the integration.
+
 ## Dependencies
 
 Add to `requirements.txt`:
@@ -153,7 +155,7 @@ async def get_current_user(
 
 ### 5. Create Auth Service
 
-**`src/api/services/auth_service.py`** — orchestrates registration and login:
+**`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `fastapi-add-database`.
 
 ```python
 from fastapi import HTTPException, status
@@ -162,23 +164,17 @@ from core.security import create_access_token, hash_password, verify_password
 
 
 def register_user(email: str, password: str, name: str) -> dict:
-    """Register a new user. Replace with real DB logic."""
+    """Register a new user. Persist to database after running fastapi-add-database."""
     hashed = hash_password(password)
-    # TODO: persist user to database
     user_id = "generated-id"
     return {"id": user_id, "email": email, "name": name, "hashed_password": hashed}
 
 
 def login_user(email: str, password: str) -> str:
-    """Authenticate user and return JWT. Replace with real DB lookup."""
-    # TODO: look up user by email from database
-    # Example: user = get_user_by_email(email)
-    # if not user or not verify_password(password, user.hashed_password):
-    #     raise HTTPException(status_code=401, detail="Invalid credentials.")
-    # return create_access_token(subject=user.id)
+    """Authenticate user and return JWT. Implement DB lookup after running fastapi-add-database."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Replace with real user lookup.",
+        detail="Database integration required. Run fastapi-add-database to complete auth.",
     )
 ```
 
@@ -241,9 +237,11 @@ from api.dependencies.auth import get_current_user
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
-    """Get the current authenticated user."""
-    # TODO: look up user by user_id
-    ...
+    """Get the current authenticated user. Implement DB lookup after running fastapi-add-database."""
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Database integration required. Run fastapi-add-database to complete auth.",
+    )
 ```
 
 ## Rules

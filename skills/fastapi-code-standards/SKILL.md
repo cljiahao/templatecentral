@@ -5,6 +5,19 @@ description: Use when writing or reviewing Python code in a FastAPI project — 
 
 # FastAPI / Python Code Standards
 
+## Code Quality (enforce before marking any task done)
+
+- **YAGNI** — only what the task requires; no speculative helpers or files
+- **DRY** — extract at second repetition; inline if only one callsite
+- **SRP** — one responsibility per file/function; routers route, services orchestrate, models model
+- **SoC** — routing separate from business logic; schema conversion in the service layer
+- **No premature abstractions** — wait for the third callsite
+- **No dead code** — no commented-out code, unused imports, or TODO stubs
+- **Validate at boundaries** — Pydantic for all user input, API responses, and env vars
+- **Fail loudly** — no bare `except`; log with context; return meaningful HTTP status codes
+- **Least privilege** — use `response_model` to strip internal fields; never expose raw DB rows
+- **No secrets** — no hardcoded tokens or keys; env vars only; document in `.env.example`
+
 ## Naming Conventions
 
 | Element | Convention | Example |

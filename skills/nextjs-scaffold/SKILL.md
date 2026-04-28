@@ -90,7 +90,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │   │   ├── navbar.tsx              [generate — uses BrandLogo, BrandText, LinkList, ThemeToggleButton]
     │   │   ├── site-footer.tsx         [generate — simple footer with credit text]
     │   │   ├── providers.tsx           [verbatim — Part C]
-    │   │   └── theme-provider.tsx      [verbatim — Part C]
+    │   │   ├── theme-provider.tsx      [verbatim — Part C]
+    │   │   └── index.ts                [verbatim — Part C]
     │   ├── ui/
     │   │   └── field.tsx               [verbatim — Part C]
     │   └── widgets/
@@ -103,7 +104,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │       ├── link-list.tsx           [verbatim — Part C]
     │       ├── media-card.tsx          [verbatim — Part C]
     │       ├── pill.tsx                [verbatim — Part C]
-    │       └── theme-toggle-button.tsx [verbatim — Part C]
+    │       ├── theme-toggle-button.tsx [verbatim — Part C]
+    │       └── index.ts                [verbatim — Part C]
     ├── features/
     │   └── example/                   [generate — minimal example with types, service, hook, component]
     ├── integrations/
@@ -1115,6 +1117,21 @@ export function ThemeToggleButton() {
 }
 ```
 
+### `src/components/widgets/index.ts`
+
+```ts
+export { BrandLogo } from './brand-logo';
+export { BrandText } from './brand-text';
+export { CustomCard } from './custom-card';
+export { CustomDialog } from './custom-dialog';
+export { CustomFormField } from './custom-form-field';
+export { FloatingShape } from './floating-shape';
+export { LinkList } from './link-list';
+export { MediaCard } from './media-card';
+export { Pill } from './pill';
+export { ThemeToggleButton } from './theme-toggle-button';
+```
+
 ### `src/components/layout/providers.tsx`
 
 ```tsx
@@ -1160,6 +1177,15 @@ export function ThemeProvider({
 }: React.ComponentProps<typeof NextThemesProvider>) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }
+```
+
+### `src/components/layout/index.ts`
+
+```ts
+export { Navbar } from './navbar';
+export { SiteFooter } from './site-footer';
+export { Providers } from './providers';
+export { ThemeProvider } from './theme-provider';
 ```
 
 ### `src/integrations/error.ts`
@@ -1735,6 +1761,22 @@ Create `AGENTS.md` at the project root with this exact content (update Identity 
 - `pnpm test` — run tests
 - `pnpm check` — format + lint + typecheck
 
+## Code Quality
+
+Every agent writing or modifying code must follow these before marking a task done:
+
+- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
+- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
+- **SRP** — One responsibility per file and function. Route handlers handle HTTP; services handle business logic; never mix.
+- **SoC** — UI from data-fetching, validation from business logic, config from implementation — keep them separate.
+- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
+- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
+- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
+- **Validate at every boundary** — User input, API responses, env vars: always validate with Zod. Never trust external data.
+- **Fail loudly** — No empty catch blocks. Log with context; return meaningful status codes.
+- **Least privilege** — Return only the fields the caller needs. Never send full DB records to the browser.
+- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
+
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 ```
@@ -1751,6 +1793,23 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
+### 7b. Install Claude Code plugins
+
+**Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman
+claude plugin marketplace add thedotmack/claude-mem
+claude plugin install claude-mem
+claude plugin marketplace add obra/superpowers
+```
+
+- **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
+- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
+- **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
+
+**If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
+
 ### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
@@ -1764,6 +1823,10 @@ Include **Build & Dev** with verified commands:
 - `pnpm check` — type check + lint
 
 **templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+
+### 8b. Optional: Task management
+
+Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in templateCentral's root `AGENTS.md`. If no, skip.
 
 ### 9. Remove example code (optional)
 

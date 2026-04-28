@@ -40,7 +40,7 @@ templateCentral/
 ├── AGENTS.md                       # Agent orchestration guide
 ├── README.md
 ├── .claude-plugin/                 # Plugin manifest
-│   ├── plugin.json                 # v2.0.0 — lists all 46 skills
+│   ├── plugin.json                 # v2.1.0 — lists all 46 skills
 │   └── marketplace.json
 ├── skills/                         # All 46 skills (flat <stack>-<skill> naming)
 │   ├── nextjs-scaffold/SKILL.md
@@ -68,7 +68,7 @@ None are required — install as needed. All are Claude Code plugins unless note
 | Plugin | Install | When to use | When to skip / turn off |
 |--------|---------|-------------|--------------------------|
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
-| **superpowers** | `claude plugin marketplace add pcvelz/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
+| **superpowers** | `claude plugin marketplace add obra/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
 | **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templateCentral itself — use built-in markdown memory here instead (curated, auditable) |
 | **codegraph** | `npx @colbymchenry/codegraph` (Node 18+) | "What calls X / where does Y live" — add when grepping for definitions is a regular cost | Fresh scaffolds (< 5 features); structure is predictable from template |
 | **graphify** | `uv tool install graphifyy && graphify install` (Python 3.10+) | Codebase structure overview (communities, god nodes); use before codegraph for high-level orientation | Same threshold as codegraph |
@@ -79,7 +79,7 @@ None are required — install as needed. All are Claude Code plugins unless note
 ```bash
 # Day one (Claude Code plugins)
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add pcvelz/superpowers
+claude plugin marketplace add obra/superpowers
 
 # For scaffolded projects (not templateCentral itself — use built-in memory here)
 claude plugin marketplace add thedotmack/claude-mem

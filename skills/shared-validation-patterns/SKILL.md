@@ -319,8 +319,7 @@ export async function loginAction(formData: unknown) {
     };
   }
 
-  // Your auth logic here
-  // await authenticate(parsed.data.email, parsed.data.password);
+  // Call your auth logic here using parsed.data
 
   return { success: true };
 }
@@ -352,8 +351,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Your auth logic
-    // const session = await authenticate(parsed.data);
+    // Call your auth logic here using parsed.data
 
     return NextResponse.json({ data: { success: true } }, { status: 200 });
   } catch (error) {
@@ -443,7 +441,7 @@ export async function POST(request: Request) {
 
     // Safe to use: parsed.data.name, file bytes
     const buffer = await file.arrayBuffer();
-    // const url = await storage.upload(parsed.data.name, buffer);
+    // Call your storage upload logic here using parsed.data.name and buffer
 
     return NextResponse.json(
       { url: 'https://example.com/file.pdf' },

@@ -2,18 +2,50 @@
 
 templateCentral is a plugin of production-ready scaffolding skills for creating new applications. It is NOT an application itself.
 
-## Stack Detection
+## Task Routing
 
-Detect the stack from the user's request or project files, then invoke the matching scaffold skill:
+Detect the stack from project files or user request (`next.config.ts` → nextjs, `requirements.txt` with fastapi → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs). If ambiguous, ask. Meta-tasks (auditing templateCentral itself) stay with the orchestrator.
 
-| Stack | Scaffold skill |
-|-------|----------------|
-| Next.js | `nextjs-scaffold` |
-| FastAPI | `fastapi-scaffold` |
-| Vite + React | `vite-react-scaffold` |
-| NestJS | `nestjs-scaffold` |
+### New project → scaffold skill
 
-Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi` or `src/app.py` defining the FastAPI app → fastapi, `vite.config.ts` → vite-react, `nest-cli.json` or `@nestjs/core` in `package.json` → nestjs. If ambiguous, ask. Meta-tasks (auditing, adding stacks) stay with the orchestrator.
+| User wants | Skill |
+|------------|-------|
+| New Next.js app | `nextjs-scaffold` |
+| New FastAPI backend | `fastapi-scaffold` |
+| New Vite + React SPA | `vite-react-scaffold` |
+| New NestJS API | `nestjs-scaffold` |
+
+### Existing project → add-* skill
+
+| Task | Next.js | FastAPI | NestJS | Vite+React |
+|------|---------|---------|--------|-----------|
+| Authentication & login | `nextjs-add-auth` | `fastapi-add-auth` | `nestjs-add-auth` | `vite-react-add-auth` |
+| Database | `nextjs-add-database` | `fastapi-add-database` | `nestjs-add-database` | — |
+| Page / screen | `nextjs-add-page` | — | — | `vite-react-add-page` |
+| Feature module | `nextjs-add-feature` | — | `nestjs-add-module` | `vite-react-add-feature` |
+| API route / endpoint | `nextjs-add-api-route` | `fastapi-add-endpoint` | — | — |
+| UI component | `nextjs-add-component` | — | — | `vite-react-add-component` |
+| Form | `nextjs-add-form` | — | — | `vite-react-add-form` |
+| External integration | `nextjs-add-integration` | `fastapi-add-integration` | `nestjs-add-integration` | `vite-react-add-integration` |
+| Tests | `nextjs-add-test` | `fastapi-add-test` | `nestjs-add-test` | `vite-react-add-test` |
+| Code standards review | `nextjs-code-standards` | `fastapi-code-standards` | `nestjs-code-standards` | `vite-react-code-standards` |
+
+### Cross-stack tasks → shared-* skill
+
+| Task | Skill |
+|------|-------|
+| Confirm project builds clean | `shared-build-agent` |
+| Write and run tests for new code | `shared-test-agent` |
+| Review code against standards | `shared-review-agent` |
+| Update dependencies | `shared-update-agent` |
+| Check convention/dep freshness (session start) | `shared-drift-check` |
+| Add structured JSON logging | `shared-add-logging` |
+| Add consistent error handling | `shared-add-error-handling` |
+| Add input validation (forms, APIs, uploads) | `shared-validation-patterns` |
+| Add pagination | `shared-add-pagination` |
+| Connect frontend to backend | `shared-full-stack-pairing` |
+| Remove template example code | `shared-remove-example` |
+| Plan complex multi-step features | `shared-task-management` |
 
 ## Scaffolding flow (order matters)
 
@@ -22,6 +54,22 @@ Detection signals: `next.config.ts` → nextjs, `requirements.txt` with `fastapi
 3. Install deps per scaffold (**Node**: default **`pnpm`**, `corepack enable` if needed; **Python**: venv then activate — Windows `.venv\Scripts\activate`, Unix `source .venv/bin/activate`); run **Scaffold verification** gates; fix failures before project docs.
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
 5. Post-scaffold code changes: read the project’s `AGENTS.md` and stack **`code-standards/`** first. After non-trivial work, consider **Independent test workflow** (Tier 1) — a fresh session focused on tests only.
+
+## Code Quality (applies to every agent writing code)
+
+These rules are not optional. Every subagent writing or modifying code must follow them before marking a task done.
+
+- **YAGNI.** Write only what the current task requires. No extra methods, helpers, abstractions, or files "that might be useful later." Future tasks will add what they need.
+- **DRY.** Don't duplicate logic. If the same logic appears in two places, extract it. If it appears once, inline it — don't extract prematurely.
+- **SRP.** Every file, function, and module does one thing. A route handler handles HTTP; a service handles business logic; a repository handles data access. Never mix layers.
+- **SoC.** Keep concerns separate at every level — UI from data fetching, validation from business logic, config from implementation. A change in one layer must not force changes in another.
+- **No premature abstractions.** Two similar things is a coincidence. Three is a pattern worth extracting. Don't abstract until the third callsite exists.
+- **No dead code.** Don't leave commented-out code, unused imports, unused variables, or TODO stubs.
+- **No tech debt shortcuts.** Don't write `// fix later`, `// temp`, or workarounds that leave the codebase worse than you found it.
+- **Validate at every boundary.** User input, API responses, env vars, file uploads — always validate with Zod (TS) or Pydantic (Python). Never trust external data.
+- **Fail loudly, not silently.** Don't swallow errors with empty catch blocks. Log with context; return meaningful status codes.
+- **Least privilege.** Return only the fields the caller needs. Never send full DB records to the browser. Never expose internal IDs without auth checks.
+- **No secrets in code.** No hardcoded tokens, passwords, connection strings, or API keys — ever. Use env vars; document them in `.env.example`.
 
 ## Backend testing policy
 
@@ -82,25 +130,6 @@ Do not write `AGENTS.md` or `CLAUDE.md` until the stack’s checks pass (fixes f
 - NEVER scaffold into a **non-empty** target directory without explicit user confirmation (avoid overwriting existing apps)
 - NEVER disable TLS verification in application code, HTTP clients, or scaffold scripts (`verify=False`, `NODE_TLS_REJECT_UNAUTHORIZED=0`, etc.) unless the user explicitly approves a **narrow, documented dev-only** exception
 
-## Shared Skills
-
-Cross-stack skills available to all subagents. Always use a `shared-*` skill before inventing a pattern from scratch:
-
-| Skill | When to use |
-|-------|-------------|
-| `shared-validation-patterns` | Forms, API endpoints, file uploads — OWASP/CWE-compliant Zod/Pydantic patterns |
-| `shared-add-error-handling` | Consistent error responses and security boundaries; never expose stack traces |
-| `shared-add-logging` | Structured JSON logging at three cumulative tiers (base, standard, verbose); hardcoded prohibition list for sensitive data |
-| `shared-full-stack-pairing` | Connecting a frontend to a backend (CORS, proxy, env wiring, auth headers) |
-| `shared-add-pagination` | Offset or cursor-based pagination for API routes and list UIs |
-| `shared-remove-example` | Removing template example/placeholder code after scaffolding |
-| `shared-task-management` | Complex multi-step features (3+ files, architectural decisions) — opt-in via project `AGENTS.md` |
-| `shared-build-agent` | After scaffold or feature work — confirm the project compiles clean |
-| `shared-test-agent` | After any code change — write tests for new code then run the full test suite |
-| `shared-review-agent` | After non-trivial feature work — review code against templateCentral standards |
-| `shared-update-agent` | After scaffold, before releases, or when drift-check flags deps — update deps to latest compatible versions |
-| `shared-drift-check` | At session start on an existing project — check convention version and dependency freshness |
-
 ## Scaffold: optional Task Management (single source of truth)
 
 Ask whether the user wants structured task management. If **yes**, append **one** of the blocks below to the **new project’s** `AGENTS.md`. If **no**, skip.
@@ -113,13 +142,9 @@ Ask whether the user wants structured task management. If **yes**, append **one*
 For complex tasks (3+ files, architectural decisions), use the `shared-task-management` skill. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
 ```
 
-**Option B — Superpowers** (Claude Code plugin):
+**Option B — Superpowers** (Claude Code plugin — already installed by scaffold):
 
-```bash
-claude plugin marketplace add pcvelz/superpowers
-```
-
-Then append:
+Append to the project's `AGENTS.md`:
 
 ```markdown
 ## Task Management
@@ -137,12 +162,12 @@ For **Claude Code users**, also generate a `CLAUDE.md` (see below). Both coexist
 
 ## Recommended plugins for new projects
 
-After scaffold verification passes, suggest these to the user. Do not install — user decides.
+**caveman**, **claude-mem**, and **superpowers** are installed by default in the post-scaffold step (each scaffold skill handles this for Claude Code users). Growth-stage plugins are opt-in — suggest them as the project matures.
 
-**Day one:**
+**Installed by default (all stacks, Claude Code users only):**
 - **caveman** (`claude plugin marketplace add JuliusBrussee/caveman`) — compresses output prose. **OFF** in sessions writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, docs).
-- **superpowers** (`claude plugin marketplace add pcvelz/superpowers`) — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
-- **claude-mem** (`claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem`) — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB. Install in the **scaffolded project**, not in templateCentral (templateCentral uses built-in markdown memory instead).
+- **claude-mem** (`claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem`) — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not templateCentral (templateCentral uses built-in markdown memory instead).
+- **superpowers** (`claude plugin marketplace add obra/superpowers`) — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **As the project grows (5+ features):**
 - **codegraph** (`npx @colbymchenry/codegraph`, Node 18+) — symbol navigation; add when grepping for definitions is a regular cost.

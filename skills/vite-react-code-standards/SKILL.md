@@ -5,6 +5,19 @@ description: Use when writing or reviewing any code in a Vite + React project �
 
 # Vite + React Code Standards
 
+## Code Quality (enforce before marking any task done)
+
+- **YAGNI** — only what the task requires; no speculative helpers or files
+- **DRY** — extract at second repetition; inline if only one callsite
+- **SRP** — one responsibility per file/function; pages compose, features fetch, components render
+- **SoC** — UI separate from data-fetching; validation separate from business logic
+- **No premature abstractions** — wait for the third callsite
+- **No dead code** — no commented-out code, unused imports, or TODO stubs
+- **Validate at boundaries** — Zod for all form inputs, API responses, and env vars
+- **Fail loudly** — no empty catch blocks; surface errors to the user or log with context
+- **Least privilege** — request only data the view needs; strip unused fields from API responses
+- **No secrets** — no tokens or keys in `VITE_*` or any client file; use server-side or proxy
+
 ## File Naming
 
 All files use **kebab-case** (lowercase, hyphen-separated). No exceptions — unlike Next.js, Vite has no special file naming conventions.

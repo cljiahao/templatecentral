@@ -5,6 +5,19 @@ description: Use when writing or reviewing any code in a Next.js project — cov
 
 # Next.js Code Standards
 
+## Code Quality (enforce before marking any task done)
+
+- **YAGNI** — only what the task requires; no speculative helpers or files
+- **DRY** — extract at second repetition; inline if only one callsite
+- **SRP** — one responsibility per file/function; route handlers do HTTP, services do logic
+- **SoC** — UI separate from data-fetching; validation separate from business logic
+- **No premature abstractions** — wait for the third callsite
+- **No dead code** — no commented-out code, unused imports, or TODO stubs
+- **Validate at boundaries** — Zod for all user input, API responses, and env vars
+- **Fail loudly** — no empty catch blocks; log with context; return meaningful status codes
+- **Least privilege** — return only needed fields; never send full DB records to the browser
+- **No secrets** — no hardcoded tokens or keys; env vars only; document in `.env.example`
+
 ## File Naming
 
 All files use **kebab-case** (lowercase, hyphen-separated).

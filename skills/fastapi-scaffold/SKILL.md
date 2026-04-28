@@ -1666,18 +1666,18 @@ def test_health_returns_ok(client: TestClient) -> None:
 
 ## Scaffold Steps
 
-### Step 1 — Create target directory and write all files
+### 1. Create target directory and write all files
 
 Create `<target-directory>/` and write every file listed in the Directory Structure above. Use verbatim content from Parts B and C exactly. Generate `requirements-dev.txt`, `README.md` per conventions. Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4.
 
-### Step 2 — Update project settings
+### 2. Update project settings
 
 In `src/core/config.py`, update the `CommonSettings` defaults:
 - `PROJECT_NAME` — Set to the project name supplied by the user
 - `PROJECT_DESCRIPTION` — Set to a relevant one-sentence description
 - `PROJECT_VERSION` — Set to `"v0.1.0"` (or user's preferred version)
 
-### Step 3 — Create environment file
+### 3. Create environment file
 
 ```bash
 cp src/.env.default src/.env
@@ -1685,7 +1685,7 @@ cp src/.env.default src/.env
 
 Update values as needed (project name, port, etc.). Never commit `src/.env`.
 
-### Step 4 — Set up virtual environment and install dependencies
+### 4. Set up virtual environment and install dependencies
 
 ```bash
 python -m venv .venv
@@ -1699,7 +1699,7 @@ pip freeze > requirements.txt
 
 **Checkpoint**: Run `pip check` to detect dependency conflicts. Fix before proceeding.
 
-### Step 5 — Verification gate (do not proceed until this passes)
+### 5. Verification gate (do not proceed until this passes)
 
 ```bash
 python src/main.py &    # starts server; confirm http://localhost:8000 responds
@@ -1709,7 +1709,7 @@ ruff check src/         # zero lint errors
 
 **Do not generate AGENTS.md until all three checks pass.**
 
-### Step 6 — Generate AGENTS.md (mandatory — after gate passes)
+### 6. Generate AGENTS.md (mandatory — after gate passes)
 
 Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill in the project name and current date:
 
@@ -1736,6 +1736,22 @@ Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill
 - Absolute imports only; no wildcards; stdlib → third-party → local
 - **Testing**: New or changed API/services/domain logic must include pytest coverage in the same change (`pytest` from project root)
 
+## Code Quality
+
+Every agent writing or modifying code must follow these before marking a task done:
+
+- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
+- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
+- **SRP** — One responsibility per file and function. Routers route; services orchestrate; models model. Never mix layers.
+- **SoC** — Keep concerns separate: routing from business logic, schema conversion in the service layer, config from implementation.
+- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
+- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
+- **No tech debt shortcuts** — No `# fix later`, `# temp`, or workarounds that degrade the codebase.
+- **Validate at every boundary** — User input, API responses, env vars: always validate with Pydantic. Never trust external data.
+- **Fail loudly** — No bare `except` or empty exception handlers. Log with context; return meaningful HTTP status codes.
+- **Least privilege** — Return only the fields the caller needs. Use `response_model` to strip internal fields.
+- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
+
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
@@ -1743,7 +1759,7 @@ Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill
 Run `shared-drift-check` at the start of each session to check for convention or dependency drift.
 ```
 
-### Step 6b — Post-scaffold agent workflow
+### 6b. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -1755,9 +1771,26 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
+### 6c. Install Claude Code plugins
+
+**Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman
+claude plugin marketplace add thedotmack/claude-mem
+claude plugin install claude-mem
+claude plugin marketplace add obra/superpowers
+```
+
+- **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
+- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
+- **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
+
+**If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
+
 ---
 
-### Step 7 — Generate CLAUDE.md (optional — Claude Code users only)
+### 7. Generate CLAUDE.md (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
@@ -1771,11 +1804,11 @@ Include **Build & Dev** with verified commands only:
 
 **templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
 
-### Step 8 — Task management (optional)
+### 8. Task management (optional)
 
 Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in repository root `AGENTS.md` (templateCentral). If no, skip.
 
-### Step 9 — Remove example code (optional)
+### 9. Remove example code (optional)
 
 Once the project is verified, use the `shared-remove-example` skill.
 

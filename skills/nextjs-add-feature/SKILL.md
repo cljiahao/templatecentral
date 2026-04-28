@@ -203,6 +203,6 @@ After creating all files:
 ## After Writing Code
 
 Dispatch in order:
-1. `build-agent` — validate compilation
-2. `review-agent` — check code standards
-3. `test-agent` — write and run tests
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards
+3. `shared-test-agent` — write and run tests

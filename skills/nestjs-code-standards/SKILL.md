@@ -5,6 +5,19 @@ description: Use when writing or reviewing TypeScript code in a NestJS project �
 
 # NestJS / TypeScript Code Standards
 
+## Code Quality (enforce before marking any task done)
+
+- **YAGNI** — only what the task requires; no speculative helpers or files
+- **DRY** — extract at second repetition; inline if only one callsite
+- **SRP** — one responsibility per file/function; controllers handle HTTP, services handle logic
+- **SoC** — HTTP separate from business logic; DTO validation separate from domain logic
+- **No premature abstractions** — wait for the third callsite
+- **No dead code** — no commented-out code, unused imports, or TODO stubs
+- **Validate at boundaries** — Zod (`createZodDto`) for all DTOs, API responses, and env vars
+- **Fail loudly** — no empty catch blocks; log with context; return meaningful HTTP status codes
+- **Least privilege** — return only needed fields; never expose internal IDs without auth checks
+- **No secrets** — no hardcoded tokens or keys; env vars only; document in `.env.example`
+
 ## Naming Conventions
 
 | Element | Convention | Example |
