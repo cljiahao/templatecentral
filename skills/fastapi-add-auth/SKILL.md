@@ -140,7 +140,7 @@ from core.security import decode_access_token
 bearer_scheme = HTTPBearer()
 
 
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> str:
     """Extract and validate the current user from the JWT token."""
@@ -204,14 +204,14 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(body: RegisterRequest) -> UserResponse:
+def register(body: RegisterRequest) -> UserResponse:
     """Register a new user account."""
     user = register_user(email=body.email, password=body.password, name=body.name)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest) -> TokenResponse:
+def login(body: LoginRequest) -> TokenResponse:
     """Authenticate and receive a JWT token."""
     token = login_user(email=body.email, password=body.password)
     return TokenResponse(access_token=token)
@@ -236,7 +236,7 @@ Use the `get_current_user` dependency on any endpoint that requires auth:
 from api.dependencies.auth import get_current_user
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
+def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     """Get the current authenticated user. Implement DB lookup after running fastapi-add-database."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
