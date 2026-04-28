@@ -4,7 +4,7 @@ templateCentral is a plugin of production-ready scaffolding skills for creating 
 
 ## Stack Detection
 
-Detect the stack from the user's request or project files, then read the subagent's `AGENT.md` to find the right skill:
+Detect the stack from the user's request or project files, then invoke the matching scaffold skill:
 
 | Stack | Scaffold skill |
 |-------|----------------|

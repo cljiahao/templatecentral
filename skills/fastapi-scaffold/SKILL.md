@@ -171,7 +171,7 @@ WORKDIR ${APP_DIR}
 
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends tzdata \
+    && apt-get install -y --no-install-recommends tzdata dumb-init \
     && ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
     && echo "Asia/Singapore" > /etc/timezone \
     && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
@@ -254,7 +254,10 @@ RUN chmod +x docker-entrypoint.sh
 EXPOSE ${PORT}
 USER ${APP_UID}
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:' + str(__import__('os').environ.get('PORT', 8000)) + '/health')" || exit 1
+
+ENTRYPOINT ["dumb-init", "--", "./docker-entrypoint.sh"]
 CMD ["prod"]
 ```
 
