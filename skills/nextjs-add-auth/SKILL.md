@@ -42,7 +42,7 @@ src/features/
 ```
 .env.example                         ← adds BETTER_AUTH_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL
 .env.local                           ← same vars (fill actual values)
-src/lib/constants/routes.ts          ← adds PAGE_ROUTES.LOGIN, PAGE_ROUTES.DASHBOARD
+src/lib/constants/routes.ts          ← adds PAGE_ROUTES.LOGIN (HOME and DASHBOARD already exist from scaffold)
 AGENTS.md                            ← adds auth architecture notes
 ```
 
