@@ -78,9 +78,11 @@ Access params in the page:
 
 ```tsx
 import { useParams } from 'react-router';
+import { NotFoundPage } from '@/pages/not-found';
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  if (!id) return <NotFoundPage />;
   // ...
 }
 ```

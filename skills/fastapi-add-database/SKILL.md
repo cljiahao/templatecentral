@@ -171,11 +171,13 @@ from database.session import get_db
 from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
-async def list_users(db: Session = Depends(get_db)):
+def list_users(db: Session = Depends(get_db)):
     stmt = select(User)
     return db.scalars(stmt).all()
 ```
 
+> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free. `async def` with sync SQLAlchemy also works (FastAPI wraps sync dependencies via `run_in_threadpool`), but `def` is cleaner and consistent with the scaffold convention.
+>
 > **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema. This ensures serialization and prevents leaking internal fields.
 
 ### A9. Validate

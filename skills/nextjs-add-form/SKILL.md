@@ -100,7 +100,9 @@ export function ContactForm() {
     },
   });
 
-  const onSubmit = (values: ContactFormValues) => {
+  const onSubmit = async (values: ContactFormValues) => {
+    // Replace with your server action or API call:
+    // await submitContact(values);
     toast.success('Form submitted successfully!');
     form.reset();
   };

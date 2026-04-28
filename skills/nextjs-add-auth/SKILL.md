@@ -53,8 +53,10 @@ AGENTS.md                            ← adds auth architecture notes
 ### 1. Install better-auth
 
 ```bash
-pnpm add better-auth
+pnpm add better-auth@latest
 ```
+
+> **Security**: Versions 1.6.5–1.6.6 contained critical security patches. Always install `better-auth@latest` (≥ 1.6.6) — never pin to an older version.
 
 ### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 

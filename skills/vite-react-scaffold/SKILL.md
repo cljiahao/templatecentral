@@ -173,7 +173,27 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 ### Generation Conventions
 
-**`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Copy all `scripts`, `dependencies`, `devDependencies`, and `"packageManager"` fields verbatim from the template, except replace `"vite-react-template"` with the actual project name.
+**`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Use the dependency list above and the scripts block below. Set `"packageManager"` to the current pnpm version (`pnpm --version`).
+
+**Scripts to include in `package.json`:**
+```json
+{
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "prepare": "husky",
+  "format": "prettier --write .",
+  "format:check": "prettier --check .",
+  "lint": "eslint .",
+  "lint:fix": "eslint . --fix",
+  "typecheck": "tsc --noEmit",
+  "check": "pnpm format:check && pnpm lint && pnpm typecheck",
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:ci": "vitest run --reporter=verbose",
+  "test:coverage": "vitest run --coverage"
+}
+```
 
 **`README.md`** — generated; short description of the project, list of key commands (`pnpm dev`, `pnpm build`, `pnpm test`, `pnpm check`).
 

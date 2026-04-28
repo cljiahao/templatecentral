@@ -356,7 +356,7 @@ fi
 # App
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
-# Database (if using Prisma)
+# Database (if using Drizzle — added by nextjs-add-database)
 # DATABASE_URL=
 
 # Third-party API tokens

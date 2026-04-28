@@ -524,7 +524,7 @@ async def list_projects(
 
 ---
 
-### NestJS (TypeScript + Prisma + Zod)
+### NestJS (TypeScript + Drizzle + Zod)
 
 **1. Pagination DTO**
 
@@ -596,7 +596,7 @@ export class PaginationService {
   parseSortParam(
     sort: string | undefined,
     allowedFields: string[]
-  ): Record<string, 'asc' | 'desc'> | null {
+  ): { field: string; direction: 'asc' | 'desc' } | null {
     if (!sort) return null;
 
     const [direction, field] = sort.split('_');
@@ -604,7 +604,7 @@ export class PaginationService {
       return null;
     }
 
-    return { [field]: direction as 'asc' | 'desc' };
+    return { field, direction: direction as 'asc' | 'desc' };
   }
 }
 ```
@@ -676,7 +676,7 @@ export class ProjectsController {
     const [projects, total] = await this.projectsService.getProjects(
       offset,
       query.limit,
-      orderBy
+      orderBy  // { field, direction } | null
     );
 
     // Build response
@@ -692,6 +692,48 @@ export class ProjectsController {
         pagination: metadata,
       },
     };
+  }
+}
+```
+
+**5. Service with Drizzle**
+
+```ts
+// src/modules/projects/projects.service.ts
+import { Injectable } from '@nestjs/common';
+import { asc, count, desc } from 'drizzle-orm';
+
+import { DrizzleService } from '@/database/drizzle.service';
+import { projects } from '@/database/schema';
+
+type SortField = 'name' | 'createdAt' | 'updatedAt';
+const SORT_COLUMNS = {
+  name: projects.name,
+  createdAt: projects.createdAt,
+  updatedAt: projects.updatedAt,
+} as const;
+
+@Injectable()
+export class ProjectsService {
+  constructor(private readonly drizzle: DrizzleService) {}
+
+  async getProjects(
+    offset: number,
+    limit: number,
+    sortParam: { field: string; direction: 'asc' | 'desc' } | null,
+  ): Promise<[typeof projects.$inferSelect[], number]> {
+    const orderByCol = sortParam
+      ? sortParam.direction === 'asc'
+        ? asc(SORT_COLUMNS[sortParam.field as SortField])
+        : desc(SORT_COLUMNS[sortParam.field as SortField])
+      : desc(projects.createdAt);
+
+    const [rows, [{ total }]] = await Promise.all([
+      this.drizzle.db.select().from(projects).orderBy(orderByCol).limit(limit).offset(offset),
+      this.drizzle.db.select({ total: count() }).from(projects),
+    ]);
+
+    return [rows, Number(total)];
   }
 }
 ```

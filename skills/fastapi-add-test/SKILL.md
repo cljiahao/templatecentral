@@ -15,7 +15,7 @@ Tests mirror `src/`:
 
 ```
 test/
-├── conftest.py           # Shared fixtures (TestClient)
+├── conftest.py           # Shared fixtures (TestClient) — created by scaffold
 ├── factories/            # Factory functions for test data
 │   └── models.py
 └── test_api/             # API endpoint tests
@@ -23,6 +23,49 @@ test/
 ```
 
 Add directories as needed: `test_services/` (business logic), `test_models/` (domain models), `test_utils/` (utilities).
+
+## Fixtures
+
+The scaffold generates `test/conftest.py` with a `client` fixture:
+
+```python
+"""Root conftest — shared fixtures available to all tests."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app import app
+
+
+@pytest.fixture()
+def client() -> TestClient:
+    """FastAPI test client."""
+    return TestClient(app)
+```
+
+Extend it for database tests by overriding dependencies:
+
+```python
+# test/conftest.py — add after the existing client fixture
+
+@pytest.fixture()
+def db_client(monkeypatch) -> TestClient:
+    """TestClient with a clean in-memory database for each test."""
+    from database.session import get_db
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from database.base import Base
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    TestSession = sessionmaker(bind=engine)
+    session = TestSession()
+
+    app.dependency_overrides[get_db] = lambda: session
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+    session.close()
+```
 
 ## Test File Layout
 
