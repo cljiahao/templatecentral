@@ -723,5 +723,27 @@ Confirm the build succeeds and all tests pass.
 - Place database services (`PrismaService`, `KyselyService`) and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
 - **Prisma**: Always use `prisma migrate dev` for schema changes. Run `prisma generate` after every schema change. Does not support AWS IAM auth natively — use Kysely if IAM is required.
+- **Prisma 6 — not found handling**: `NotFoundError` was removed in Prisma 6 — do NOT import it from `@prisma/client`. Use one of these patterns instead:
+
+  **Option A — null check (preferred for simple cases):**
+  ```ts
+  const record = await this.prisma.model.findUnique({ where: { id } });
+  if (!record) throw new NotFoundException(`Record ${id} not found`);
+  ```
+
+  **Option B — throw on not found (cleaner in service methods):**
+  ```ts
+  import { Prisma } from '@prisma/client';
+  try {
+    const record = await this.prisma.model.findUniqueOrThrow({ where: { id } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new NotFoundException(`Record ${id} not found`);
+    }
+    throw error;
+  }
+  ```
+
+  Note: `findUniqueOrThrow` is incompatible with sequential (array-style) `$transaction` — use interactive transactions (`$transaction(async (tx) => { ... })`) if rollback on not-found is needed.
 - **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor — no query code changes needed.
 - **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use `MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties` — no schema or query code changes needed.
