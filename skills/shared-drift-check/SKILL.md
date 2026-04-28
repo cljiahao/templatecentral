@@ -27,10 +27,10 @@ Load the scaffold skill for the detected stack and read its `version` frontmatte
 
 | Marker stack | Scaffold skill |
 |---|---|
-| `nextjs` | `nextjs/scaffold` |
-| `vite-react` | `vite-react/scaffold` |
-| `fastapi` | `fastapi/scaffold` |
-| `nestjs` | `nestjs/scaffold` |
+| `nextjs` | `nextjs-scaffold` |
+| `vite-react` | `vite-react-scaffold` |
+| `fastapi` | `fastapi-scaffold` |
+| `nestjs` | `nestjs-scaffold` |
 
 Current scaffold skill version = the `version` field value.
 
