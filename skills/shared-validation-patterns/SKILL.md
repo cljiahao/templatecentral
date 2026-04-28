@@ -66,13 +66,27 @@ export const fileUploadSchema = z.object({
   name: z
     .string()
     .refine(
-      (name) => !name.includes('..') && !name.startsWith('/'),
+      (name) => {
+        try {
+          const decoded = decodeURIComponent(name);
+          return !decoded.includes('..') && !decoded.startsWith('/') && !decoded.startsWith('./');
+        } catch {
+          return false;
+        }
+      },
       'Invalid filename'
     )
     .refine(
       (name) => {
         const ext = name.split('.').pop()?.toLowerCase();
-        const blocked = ['exe', 'sh', 'bat', 'cmd', 'dll'];
+        const blocked = [
+          'exe', 'com', 'scr', 'pif', 'msi', 'msp',  // Windows executables
+          'bat', 'cmd', 'vbs', 'ps1', 'hta',           // Windows scripts
+          'sh', 'bash', 'zsh', 'csh',                  // Unix shells
+          'php', 'php3', 'php4', 'php5', 'phtml',      // PHP variants
+          'jsp', 'jspx', 'jnlp', 'jar',                // Java
+          'dll', 'so', 'dylib',                         // Libraries
+        ];
         return !blocked.includes(ext || '');
       },
       'File type not allowed'
