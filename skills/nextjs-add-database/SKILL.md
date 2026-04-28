@@ -625,5 +625,27 @@ Confirm the build succeeds with no type errors.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
 - NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
 - **Prisma**: Always run `prisma generate` after schema changes; use `prisma migrate dev` for development migrations. Keep `DATABASE_URL` in `.env` (Prisma CLI reads `.env` by default). Add `*.db` to `.gitignore` for SQLite — NEVER ignore the `prisma/` directory itself. Does not support AWS IAM auth natively — use Kysely if IAM is required.
+- **Prisma 6 — not found handling**: `NotFoundError` was removed in Prisma 6 — do NOT import it from `@prisma/client`. Use one of these patterns instead:
+
+  **Option A — null check (preferred for simple cases):**
+  ```ts
+  const record = await prisma.model.findUnique({ where: { id } });
+  if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  ```
+
+  **Option B — throw on not found (useful inside service layers):**
+  ```ts
+  import { Prisma } from '@prisma/client';
+  try {
+    const record = await prisma.model.findUniqueOrThrow({ where: { id } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    throw error;
+  }
+  ```
+
+  Note: `findUniqueOrThrow` is incompatible with sequential (array-style) `$transaction` — use interactive transactions (`$transaction(async (tx) => { ... })`) if rollback on not-found is needed.
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
 - **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism — no schema or query code changes needed.
