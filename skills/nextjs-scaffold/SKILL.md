@@ -108,8 +108,13 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │       └── index.ts                [verbatim — Part C]
     ├── features/
     │   └── example/                   [generate — minimal example with types, service, hook, component]
+    ├── hooks/
+    │   └── index.ts                    [verbatim — Part C]
     ├── integrations/
+    │   ├── factories.ts                [verbatim — Part C]
     │   ├── error.ts                    [verbatim — Part C]
+    │   ├── schemas/
+    │   │   └── .gitkeep                [verbatim — empty]
     │   └── clients/
     │       └── base/
     │           ├── axios-client.ts     [verbatim — Part C]
@@ -119,6 +124,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
         ├── utils/
         │   └── index.ts                [verbatim — Part C]
         ├── constants/
+        │   ├── index.ts                [verbatim — Part C]
         │   ├── env.ts                  [verbatim — Part C]
         │   └── routes.ts               [generate — PAGE_ROUTES + API_ROUTES]
         └── errors/
@@ -1667,6 +1673,27 @@ export const isDev = process.env.NODE_ENV === 'development';
 export const isProd = process.env.NODE_ENV === 'production';
 ```
 
+### `src/hooks/index.ts`
+
+```ts
+export {};
+```
+
+### `src/lib/constants/index.ts`
+
+```ts
+export * from './env';
+export * from './routes';
+```
+
+### `src/integrations/factories.ts`
+
+```ts
+// Integration factory functions.
+// Each factory returns a configured service instance.
+// Added by nextjs-add-integration — one export per integration.
+```
+
 ---
 
 ## Scaffold Steps
@@ -1788,6 +1815,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
 2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test`)
 3. `shared-update-agent` — freshen all dependencies to latest compatible versions
+4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
