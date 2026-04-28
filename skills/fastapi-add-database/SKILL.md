@@ -468,7 +468,8 @@ MONGODB_DB_NAME=mydb
 ```python
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from database.base import Base
@@ -477,11 +478,11 @@ from database.base import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: str = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    email: str = Column(String, unique=True, nullable=False, index=True)
-    hashed_password: str = Column(String, nullable=False)
-    name: str = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
 ### Step B — Create `src/api/repositories/user_repository.py`
@@ -514,7 +515,7 @@ def create_user(db: Session, email: str, hashed_password: str, name: str) -> Use
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from api.repositories.user_repository import create_user, get_user_by_email
+from api.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
 from core.security import create_access_token, hash_password, verify_password
 
 
@@ -541,6 +542,16 @@ def login_user(db: Session, email: str, password: str) -> str:
             detail="Invalid credentials.",
         )
     return create_access_token(subject=str(user.id))
+
+
+def get_user(db: Session, user_id: str) -> dict:
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+    return {"id": str(user.id), "email": user.email, "name": user.name}
 ```
 
 ### Step D — Replace `src/api/routers/auth.py`
@@ -550,11 +561,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.dependencies.auth import get_current_user
-from api.repositories.user_repository import get_user_by_id
 from api.schemas.request.auth import LoginRequest, RegisterRequest
 from api.schemas.response.auth import TokenResponse, UserResponse
-from api.services.auth_service import login_user, register_user
-from api.tags import APITags
+from api.services.auth_service import login_user, register_user, get_user
 from database.session import get_db
 
 router = APIRouter(prefix="/auth")
@@ -577,8 +586,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 @router.get("/me", response_model=UserResponse)
 def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
     """Get the current authenticated user."""
-    user = get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    return UserResponse(id=str(user.id), email=user.email, name=user.name)
+    user = get_user(db=db, user_id=user_id)
+    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
