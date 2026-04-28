@@ -1544,6 +1544,8 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
+**If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
+
 ---
 
 ### 7. Generate CLAUDE.md (Optional — Claude Code users only)
