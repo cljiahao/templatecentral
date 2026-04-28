@@ -9,7 +9,7 @@ Write tests for newly added code using the stack's `add-test` skill conventions.
 
 ## Stack Detection
 
-Same as `build-agent`: check for `next.config.ts`, `vite.config.ts`, `nest-cli.json`, `requirements.txt` containing `fastapi`.
+Same as `build-agent`: check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
 
 ## Steps
 

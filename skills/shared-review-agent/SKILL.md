@@ -9,7 +9,7 @@ Review changed files against two layers: (1) universal code quality principles f
 
 ## Stack Detection
 
-Check for `next.config.ts` → Next.js, `vite.config.ts` → Vite-React, `nest-cli.json` → NestJS, `requirements.txt` containing `fastapi` → FastAPI.
+Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
 
 ## Steps
 

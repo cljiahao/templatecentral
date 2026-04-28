@@ -13,7 +13,7 @@ Check project root for these files in order:
 
 | File present | Stack |
 |---|---|
-| `next.config.ts` or `next.config.js` | Next.js |
+| `next.config.ts`, `next.config.js`, or `next.config.mjs` | Next.js |
 | `vite.config.ts` or `vite.config.js` (no `next.config`) | Vite-React |
 | `nest-cli.json` | NestJS |
 | `requirements.txt` containing `fastapi` | FastAPI |
@@ -65,7 +65,7 @@ Rules:
 If no stack can be determined, report:
 
 ```
-Build agent: could not detect stack. No next.config.ts, vite.config.ts, nest-cli.json, or fastapi in requirements.txt found at project root.
+Build agent: could not detect stack. No next.config.ts/.js/.mjs, vite.config.ts/.js, nest-cli.json, or fastapi in requirements.txt found at project root.
 ```
 
 Do not attempt to run any build command.
