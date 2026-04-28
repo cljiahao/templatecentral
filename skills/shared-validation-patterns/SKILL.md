@@ -718,6 +718,14 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
 **2. Controller with Validation**
 
+> **File uploads with Fastify**: The NestJS template uses Fastify — `FileInterceptor` from `@nestjs/platform-express` is incompatible. File uploads require `@fastify/multipart` (`pnpm add @fastify/multipart`) and registering it in `main.ts` before `app.listen()`:
+> ```ts
+> // src/main.ts — add before app.listen()
+> app.getHttpAdapter().getInstance().register(import('@fastify/multipart'), {
+>   limits: { fileSize: 10 * 1024 * 1024 },
+> });
+> ```
+
 ```ts
 // src/modules/projects/projects.controller.ts
 import {
@@ -728,12 +736,11 @@ import {
   Post,
   Param,
   Query,
-  UploadedFile,
-  UseInterceptors,
+  Req,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import type { FastifyRequest } from 'fastify';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { z } from 'zod';
@@ -773,24 +780,29 @@ export class ProjectsController {
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    // Validate file
-    if (!file) {
+  @ApiOperation({ summary: 'Upload a file' })
+  async uploadFile(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new BadRequestException('File is required');
+    }
+
+    const data = await req.file();
+    if (!data) {
       throw new BadRequestException('File is required');
     }
 
     const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!allowed.includes(file.mimetype)) {
+    if (!allowed.includes(data.mimetype)) {
       throw new BadRequestException('File type not allowed');
     }
 
+    const buffer = await data.toBuffer();
     const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (buffer.length > maxSize) {
       throw new BadRequestException('File must be under 10MB');
     }
 
-    // Safe to use: file.buffer, file.originalname
+    // Safe to use: buffer, data.filename, data.mimetype
     return { message: 'File uploaded' };
   }
 }
