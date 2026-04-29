@@ -2528,13 +2528,13 @@ Never commit `.env.local`.
 Do not generate AGENTS.md until this passes:
 
 ```bash
-pnpm typecheck   # zero errors
-pnpm lint        # zero errors  
+pnpm build       # production build — zero errors
+pnpm check       # format + lint + typecheck — zero errors
 pnpm test        # all tests pass
 ```
 
-If typecheck fails with module-not-found errors, a `pnpm add` is missing.
-If lint fails, a generated file violates the eslint config.
+If build fails with module-not-found errors, a `pnpm add` is missing.
+If check fails, a generated file violates the eslint or prettier config.
 
 ### 6. Write project AGENTS.md
 

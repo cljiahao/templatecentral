@@ -2916,7 +2916,7 @@ Do NOT generate `AGENTS.md` until ALL of these pass:
 
 ```bash
 pnpm build        # zero errors
-pnpm typecheck    # zero errors
+pnpm check        # format + lint + typecheck — zero errors
 pnpm test         # all tests pass
 ```
 
