@@ -784,26 +784,23 @@ Confirm the build succeeds and all tests pass.
 
 **Step A — Add `hashedPassword` to `src/database/schema.ts`**
 
-Add the `hashedPassword` column to the `users` table and regenerate + apply the migration:
+Add the `hashedPassword` column to the existing `users` table (add only the highlighted line — preserve any other tables in the file):
 
 ```typescript
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
-
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  hashedPassword: text('hashed_password').notNull(),
+  hashedPassword: text('hashed_password').notNull(), // add this line
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdateFn(() => new Date()),
 });
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 ```
+
+Then run:
 
 ```bash
 pnpm db:generate
