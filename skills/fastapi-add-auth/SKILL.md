@@ -262,3 +262,16 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
+
+## Validate
+
+```bash
+pytest test/ -v     # auth tests pass
+ruff check src/     # zero lint errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate the server starts and tests pass
+2. `shared-review-agent` — check code standards

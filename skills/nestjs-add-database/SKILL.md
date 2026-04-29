@@ -1074,3 +1074,16 @@ import { User, UserSchema } from './schemas/user.schema';
 })
 export class AuthModule {}
 ```
+
+## Validate
+
+```bash
+pnpm build    # zero compile errors
+pnpm test     # database integration tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

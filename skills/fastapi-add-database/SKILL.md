@@ -719,3 +719,16 @@ async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     user = await get_user(user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
+
+## Validate
+
+```bash
+pytest test/ -v     # database integration tests pass
+ruff check src/     # zero lint errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate the server starts and tests pass
+2. `shared-review-agent` — check code standards

@@ -702,6 +702,7 @@ export default tseslint.config(
   "compilerOptions": {
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,

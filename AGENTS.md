@@ -55,6 +55,20 @@ Detect the stack from project files or user request (`next.config.ts/js/mjs` →
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
 5. Post-scaffold code changes: read the project’s `AGENTS.md` and stack **`code-standards/`** first. After non-trivial work, consider **Independent test workflow** (Tier 1) — a fresh session focused on tests only.
 
+### What to add after scaffolding
+
+If the user’s request included specific feature requirements, invoke the corresponding skill immediately after verification gates pass:
+
+| User wants | First skill | Then |
+|------------|-------------|------|
+| Auth only | `<stack>-add-auth` | — |
+| Database only | `<stack>-add-database` | — |
+| Auth + database | `<stack>-add-auth` first, then `<stack>-add-database` | Order matters — database skill completes the auth stub |
+| Logging | `shared-add-logging` | — |
+| Error handling | `shared-add-error-handling` | — |
+
+**Auth + database ordering**: `fastapi-add-auth` and `nestjs-add-auth` create a stub `AuthService` that raises 501/`NOT_IMPLEMENTED` until a database is wired. Always run `add-auth` before `add-database` when both are requested — the database skill’s "Completing Auth Integration" section activates the stub with real DB calls. Running them in the wrong order means the integration section has no stub to complete.
+
 ## Code Quality (applies to every agent writing code)
 
 These rules are not optional. Every subagent writing or modifying code must follow them before marking a task done.

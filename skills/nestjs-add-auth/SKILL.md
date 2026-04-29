@@ -288,3 +288,16 @@ JWT_EXPIRES_IN=30m
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
+
+## Validate
+
+```bash
+pnpm build    # zero compile errors
+pnpm test     # auth tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

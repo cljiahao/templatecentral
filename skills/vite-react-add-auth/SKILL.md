@@ -320,3 +320,16 @@ src/
 - Always use `credentials: 'include'` in fetch calls to send cookies to the backend
 - Always redirect to `/login` on 401 responses — the `ProtectedRoute` handles this for navigation, but API calls should also handle 401s gracefully
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+pnpm test     # auth tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

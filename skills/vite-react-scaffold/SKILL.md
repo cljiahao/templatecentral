@@ -20,7 +20,7 @@ version: "1.0.0"
 Install runtime and dev dependencies with NO version pins:
 
 ```bash
-pnpm add react react-dom react-router@^7.12.0 @tanstack/react-query \
+pnpm add react react-dom react-router@^7.14.2 @tanstack/react-query \
   class-variance-authority clsx tailwind-merge lucide-react radix-ui \
   @hookform/resolvers@^5.0.0 react-hook-form zod sonner motion
 
@@ -175,10 +175,10 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 **`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Use the dependency list above and the scripts block below. Set `"packageManager"` to the current pnpm version (`pnpm --version`).
 
-**Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
+**Engines field to include in package.json** (Vite 8 requires Node.js 22.12+ — see [Vite 8 release notes](https://vitejs.dev/blog/announcing-vite8)):
 ```json
 {
-  "engines": { "node": ">=22.0.0" }
+  "engines": { "node": ">=22.12.0" }
 }
 ```
 

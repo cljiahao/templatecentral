@@ -107,7 +107,7 @@ pip freeze > requirements.txt
 
 ### Generation Conventions
 
-**[generate] README.md** — Generate a project README with: project name, brief description, stack (FastAPI, Python 3.12, Pydantic v2, Uvicorn, Ruff, pytest, Docker), quick-start commands (`source .venv/bin/activate`, `python src/main.py`, `pytest test/`, `ruff check src/`), and a note that example code can be removed with the `remove-example` skill.
+**[generate] README.md** — Generate a project README with: project name, brief description, stack (FastAPI, Python 3.13, Pydantic v2, Uvicorn, Ruff, pytest, Docker), quick-start commands (`source .venv/bin/activate`, `python src/main.py`, `pytest test/`, `ruff check src/`), and a note that example code can be removed with the `remove-example` skill.
 
 **[generate] AGENTS.md** — Generated only after the verification gate passes (Step 5). See Step 6 for exact content. Must begin with `<!-- templateCentral: fastapi@1.0.0 -->` as line 1.
 
@@ -143,7 +143,7 @@ pytest-asyncio
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-ARG PYTHON=python:3.12.10-slim
+ARG PYTHON=python:3.13.3-slim
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -642,7 +642,7 @@ CORS_ORIGINS=http://localhost:3000
 ```toml
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 extend-select = ["I"]
@@ -1724,7 +1724,7 @@ Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill
 # <Project Name>
 
 ## Identity
-- **Stack**: FastAPI 0.136+, Python 3.12, Pydantic v2, Uvicorn, Ruff, pytest
+- **Stack**: FastAPI 0.136+, Python 3.13, Pydantic v2, Uvicorn, Ruff, pytest
 - **Scaffolded from**: templateCentral fastapi-scaffold skill
 - **Created**: <date>
 
