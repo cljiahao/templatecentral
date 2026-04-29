@@ -137,7 +137,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
-    // .flatten() is deprecated in Zod v4; use z.treeifyError(error) for new code
+    // .flatten() deprecated in Zod v4; use z.flattenError(error) for new code
     const fieldErrors = error.flatten().fieldErrors as Record<string, string[]>;
     return NextResponse.json(
       {
@@ -580,7 +580,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        // .flatten() is deprecated in Zod v4; use z.treeifyError(zodError) for new code
+        // .flatten() deprecated in Zod v4; use z.flattenError(zodError) for new code
         const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',

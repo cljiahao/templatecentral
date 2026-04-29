@@ -96,7 +96,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: `nextjs-add-feature`, `nextjs-add-auth`.
+Dispatched by: all four scaffold skills (post-scaffold review), `nextjs-add-feature`, `nextjs-add-auth`, and any skill that produces a significant code change.
 
 ## Changelog
 ### 1.2.0
