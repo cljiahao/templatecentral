@@ -838,3 +838,13 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 - `shared-validation-patterns` — Zod/Pydantic validation before any log call
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes
+
+## Validate
+
+Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

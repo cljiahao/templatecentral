@@ -998,3 +998,13 @@ pnpm test
 - `shared-validation-patterns` — Pagination query params validated with Zod/Pydantic
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Add pagination to new list endpoints
 - Stack-specific `code-standards` — Database indexing best practices for sort fields
+
+## Validate
+
+Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

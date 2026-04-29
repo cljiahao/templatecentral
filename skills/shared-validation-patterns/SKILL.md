@@ -1086,3 +1086,13 @@ pnpm test
 - `shared-add-logging` — Log validation failures with context
 - Stack-specific `code-standards` — Type annotation and schema standards
 - Stack-specific `add-api-route`, `add-endpoint`, `add-form` — Use validation patterns in new routes/forms
+
+## Validate
+
+Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

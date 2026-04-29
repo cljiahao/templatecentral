@@ -56,7 +56,7 @@ AGENTS.md                            ← adds auth architecture notes
 pnpm add better-auth@latest
 ```
 
-> **Security**: Versions 1.6.5 and 1.6.6 had CVEs. Always install `better-auth@latest` (≥ 1.6.7) — never pin to an older version.
+> **Security**: Versions prior to 1.6.9 have multiple CVEs (auth bypass, prototype pollution, SSRF). Always install `better-auth@latest` (≥ 1.6.9) — never pin to an older version.
 
 ### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 

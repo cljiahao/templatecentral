@@ -86,3 +86,15 @@ Confirm the build succeeds with no type errors.
 
 - Don't prematurely extract — keep inline until a second consumer needs it. NEVER extract to `widgets/` until it has a second consumer
 - NEVER add boolean flag props to configure variants — prefer composition with children
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

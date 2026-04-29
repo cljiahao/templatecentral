@@ -142,3 +142,15 @@ export function ContactPage() {
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

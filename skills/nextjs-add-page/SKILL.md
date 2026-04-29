@@ -142,3 +142,15 @@ Confirm the build succeeds with no type errors. If adding a data-fetching page, 
 - Use route groups `(name)/` for shared layouts without URL impact
 - NEVER use `'use client'` in `page.tsx` components — prefer server components. Note: `error.tsx` requires `'use client'` (Next.js constraint)
 - NEVER create pages outside the established route groups (`(public)/` or `dashboard/`) without reason
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

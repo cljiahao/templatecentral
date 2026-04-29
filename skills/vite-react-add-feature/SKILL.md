@@ -160,3 +160,16 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
 - NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+pnpm test     # tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

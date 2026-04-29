@@ -160,3 +160,16 @@ Confirm the server starts with no DI or import errors.
 - Export the service from the integration module so other modules can import it
 - Keep API tokens in environment variables — NEVER hardcode
 - Integration modules are self-contained — each has its own module, service, and schemas
+
+## Validate
+
+```bash
+pnpm build    # zero compile errors
+pnpm test     # tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

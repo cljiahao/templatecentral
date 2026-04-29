@@ -941,3 +941,13 @@ pnpm build
 - `shared-validation-patterns` — Zod/Pydantic schemas for validation errors
 - Stack-specific `code-standards` — Security and error handling guidance
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Use error handling in new routes
+
+## Validate
+
+Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

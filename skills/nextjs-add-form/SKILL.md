@@ -172,3 +172,15 @@ export default function ContactPage() {
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
 - Add `'use client'` directive — forms are inherently interactive.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

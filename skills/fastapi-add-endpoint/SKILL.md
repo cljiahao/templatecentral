@@ -153,3 +153,16 @@ After creating all files:
 - **One service function per endpoint**.
 - NEVER use raw `dict` or unvalidated data in services — always use Pydantic schemas or domain models
 - NEVER forget to register the router in `src/api/routes.py` and add the tag to `src/api/tags.py`
+
+## Validate
+
+```bash
+pytest test/ -v     # tests pass
+ruff check src/     # zero lint errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate the server starts and tests pass
+2. `shared-review-agent` — check code standards

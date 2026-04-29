@@ -149,3 +149,16 @@ Confirm the build succeeds with no type errors and all tests pass. Verify the in
 - NEVER hardcode API URLs or secrets — centralize in `src/lib/constants/env.ts`
 - Throw `APIError` for HTTP failures — NEVER throw generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
 - NEVER consume integrations directly in components — go through React Query hooks in features
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+pnpm test     # tests pass
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

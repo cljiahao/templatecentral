@@ -215,3 +215,16 @@ The router will not be reachable until it is registered here — this step is ma
 - Use FastAPI dependencies for lifecycle management (create → yield → close).
 - Keep API tokens in environment variables / config — never hardcode.
 - Place integration files in `src/integrations/` — not in `api/`.
+
+## Validate
+
+```bash
+pytest test/ -v     # tests pass
+ruff check src/     # zero lint errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate the server starts and tests pass
+2. `shared-review-agent` — check code standards

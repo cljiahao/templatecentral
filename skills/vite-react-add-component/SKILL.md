@@ -88,3 +88,15 @@ Confirm the build succeeds with no type errors and all tests pass.
 - Don't prematurely extract — keep inline until a second consumer needs it; NEVER extract into `widgets/` until it has a second consumer
 - NEVER manually create files in `src/components/ui/` — use the shadcn CLI (`npx shadcn@latest add`)
 - NEVER add boolean flag props to configure variants — prefer composition with children
+
+## Validate
+
+```bash
+pnpm build    # zero errors
+```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards
