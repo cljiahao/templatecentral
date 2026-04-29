@@ -40,7 +40,7 @@ export const githubRepoSchema = z.object({
   id: z.number(),
   full_name: z.string(),
   description: z.string().nullable(),
-  html_url: z.string().url(),
+  html_url: z.url(),
   stargazers_count: z.number().default(0),
 });
 
