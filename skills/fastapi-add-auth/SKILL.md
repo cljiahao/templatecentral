@@ -118,6 +118,8 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
+    if len(plain_password.encode()) > 72:
+        return False  # bcrypt 5.0 raises ValueError for >72 bytes; no valid hash exists
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 

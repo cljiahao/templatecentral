@@ -1707,9 +1707,10 @@ pip freeze > requirements.txt
 ### 5. Verification gate (do not proceed until this passes)
 
 ```bash
-python src/main.py &    # starts server; confirm http://localhost:8000 responds
-pytest test/ -v         # all tests must pass
-ruff check src/         # zero lint errors
+python src/main.py &      # starts server; confirm http://localhost:8000 responds
+pytest test/ -v           # all tests must pass
+ruff check src/           # zero lint errors
+ruff format --check src/  # zero formatting drift
 ```
 
 **Do not generate AGENTS.md until all three checks pass.**
@@ -1739,7 +1740,13 @@ Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill
 - Routers are thin — accept body, call service, return result
 - Services orchestrate — parse → process → return
 - Absolute imports only; no wildcards; stdlib → third-party → local
-- **Testing**: New or changed API/services/domain logic must include pytest coverage in the same change (`pytest` from project root)
+- **Testing**: New or changed API/services/domain logic must include pytest coverage in the same change (`pytest test/ -v` from project root)
+
+## Commands
+- `python src/main.py` — development server
+- `pytest test/ -v` — run tests
+- `ruff check src/` — lint
+- `ruff format src/` — format
 
 ## Code Quality
 

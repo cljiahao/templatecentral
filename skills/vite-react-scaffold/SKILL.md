@@ -2960,6 +2960,12 @@ Only after the verification gate passes. Line 1 must be the templateCentral mark
 - Pages are thin — compose from `features/` and `components/`
 - **Env**: `VITE_*` is shipped to the browser — never API keys, tokens, or secrets (use server-side or proxy for those)
 
+## Commands
+- `pnpm dev` — development server
+- `pnpm build` — production build (`tsc -b && vite build`)
+- `pnpm test` — run tests
+- `pnpm check` — format + lint + typecheck
+
 ## Code Quality
 
 Every agent writing or modifying code must follow these before marking a task done:
@@ -2989,7 +2995,7 @@ Update Identity with actual project name and creation date. Add any user-specifi
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm typecheck`)
+1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
 2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test`)
 3. `shared-update-agent` — freshen any deps that have newer compatible versions
 4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point

@@ -1524,6 +1524,13 @@ Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
 - Barrel exports at `src/modules/index.ts`
 - **Testing**: New or changed controllers/services/repositories must include Jest tests in the same change (`pnpm test`; e2e when appropriate)
 
+## Commands
+- `pnpm start:dev` — development server with hot reload
+- `pnpm build` — compile TypeScript
+- `pnpm test` — run unit tests
+- `pnpm test:e2e` — run e2e tests
+- `pnpm check` — format + lint + typecheck
+
 ## Code Quality
 
 Every agent writing or modifying code must follow these before marking a task done:
