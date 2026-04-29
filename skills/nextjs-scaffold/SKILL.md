@@ -45,6 +45,13 @@ Install these with `pnpm`. Claude resolves latest compatible versions at scaffol
 }
 ```
 
+**Engines field to include in package.json** (Next.js 16 requires Node.js ≥ 20.9.0):
+```json
+{
+  "engines": { "node": ">=20.9.0" }
+}
+```
+
 ### Directory Structure
 
 Generate this structure. Files marked `[generate]` are written by Claude from conventions. Files marked `[verbatim]` are written exactly from Part B or Part C below.
@@ -216,7 +223,8 @@ export default nextConfig;
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"] },
+    "types": ["node"]
   },
   "include": [
     "next-env.d.ts",

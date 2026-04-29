@@ -23,7 +23,7 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
 # Install runtime deps (no versions — resolves latest)
-pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart python-json-logger
+pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart "python-json-logger>=3.3.0,<4.0"
 
 # Install dev deps
 pip install pytest httpx ruff mypy pytest-asyncio
@@ -121,7 +121,7 @@ pydantic
 pydantic-settings
 python-dotenv
 python-multipart
-python-json-logger
+python-json-logger>=3.3.0,<4.0
 pytest
 httpx
 ruff
@@ -1696,7 +1696,7 @@ Update values as needed (project name, port, etc.). Never commit `src/.env`.
 python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
-pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart python-json-logger
+pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart "python-json-logger>=3.3.0,<4.0"
 pip install pytest httpx ruff mypy pytest-asyncio
 
 pip freeze > requirements.txt

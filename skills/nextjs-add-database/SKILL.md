@@ -36,6 +36,8 @@ pnpm add drizzle-orm postgres
 pnpm add -D drizzle-kit
 ```
 
+> **Security**: drizzle-orm 0.45.2 fixed a SQL injection vulnerability in `sql.identifier()` and `sql.as()`. Use `>=0.45.2`.
+
 ### A2. Add Database Scripts
 
 Add to `package.json`:
@@ -240,7 +242,7 @@ export const db = globalForKysely.db ?? new Kysely<Database>({
 if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 ```
 
-> **Why the singleton**: Same as Prisma — Next.js hot-reloads in development. The `globalThis` cache prevents connection exhaustion.
+> **Why the singleton**: Next.js hot-reloads modules in development. The `globalThis` cache prevents connection exhaustion.
 
 #### IAM Auth Variant
 
@@ -492,7 +494,7 @@ export async function connectDB(): Promise<typeof mongoose> {
 }
 ```
 
-> **Why the cached pattern**: Same reason as Prisma — Next.js hot-reloads in development. The `globalThis` cache prevents opening duplicate MongoDB connections.
+> **Why the cached pattern**: Next.js hot-reloads modules in development. The `globalThis` cache prevents opening duplicate MongoDB connections.
 
 #### IAM Auth Variant
 

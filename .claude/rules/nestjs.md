@@ -11,7 +11,7 @@ Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Jest
 
 - NEVER use `class-validator` or `class-transformer` — use `nestjs-zod` with `createZodDto`
 - NEVER put business logic in controllers — delegate to services only
-- For simple CRUD, services may use Prisma/Mongoose directly; extract a repository layer when query logic grows complex
+- For simple CRUD, services may use Drizzle/Kysely/Mongoose directly; extract a repository layer when query logic grows complex
 - NEVER skip Swagger docs — every endpoint needs `@ApiTags()` + `@ApiOperation()`
 - NEVER use Express APIs — this uses Fastify; use `app.inject()` for e2e tests
 

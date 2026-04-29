@@ -142,7 +142,7 @@ Ask whether the user wants structured task management. If **yes**, append **one*
 For complex tasks (3+ files, architectural decisions), use the `shared-task-management` skill. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
 ```
 
-**Option B — Superpowers** (Claude Code plugin — already installed by scaffold):
+**Option B — Superpowers** (Claude Code plugin — already installed if you're using Claude Code with this plugin):
 
 Append to the project's `AGENTS.md`:
 
@@ -150,7 +150,7 @@ Append to the project's `AGENTS.md`:
 ## Task Management
 
 - **Simple tasks**: use templateCentral skills for this stack
-- **Complex features** (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`
+- **Complex features** (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan` (verify slash command syntax for your installed superpowers version)
 - All code must follow this file’s conventions and the stack’s code-standards
 ```
 

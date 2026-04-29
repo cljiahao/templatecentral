@@ -137,6 +137,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
+    // .flatten() is deprecated in Zod v4; use z.treeifyError(error) for new code
     const fieldErrors = error.flatten().fieldErrors as Record<string, string[]>;
     return NextResponse.json(
       {
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
       return handleApiError(
         'Failed to create project',
         parsed.error,
-        parsed.error.flatten().fieldErrors as Record<string, string[]>
+        parsed.error.flatten().fieldErrors as Record<string, string[]> // .flatten() deprecated in Zod v4; still works
       );
     }
 
@@ -579,6 +580,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
+        // .flatten() is deprecated in Zod v4; use z.treeifyError(zodError) for new code
         const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',

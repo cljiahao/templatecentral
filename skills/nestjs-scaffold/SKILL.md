@@ -20,8 +20,8 @@ version: "1.0.0"
 Install runtime dependencies (no version pins):
 
 ```bash
-pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify @nestjs/swagger \
-  @fastify/helmet dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
+pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
+  @fastify/helmet@^13.0.0 dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
 pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/jest @types/node \
   eslint eslint-config-prettier eslint-plugin-prettier globals husky \
@@ -205,7 +205,7 @@ CMD ["dev"]
 # No RUN commands — all setup via COPY from base/prod-deps/builder stages.
 #
 # dumb-init (PID 1) forwards SIGTERM for graceful shutdown of Fastify and
-# database connections (Prisma, Mongoose, Kysely/pg pools).
+# database connections (Mongoose, Kysely/pg pools).
 # read-only compatible with ECS readonlyRootFilesystem: true.
 FROM ${NODE} AS prod
 ARG APP_UID
@@ -693,9 +693,8 @@ export default tseslint.config(
 ```json
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolvePackageJsonExports": true,
+    "module": "commonjs",
+    "moduleResolution": "node10",
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,
@@ -717,7 +716,8 @@ export default tseslint.config(
     "typeRoots": [
       "./node_modules/@types",
       "./src/common/types"
-    ]
+    ],
+    "types": ["node"]
   },
   "include": [
     "src/**/*",

@@ -38,7 +38,6 @@ import { z } from 'zod';
 
 // Basic types
 export const emailSchema = z
-  .string()
   .email('Invalid email address')
   .toLowerCase();
 
@@ -49,11 +48,9 @@ export const passwordSchema = z
   .regex(/[0-9]/, 'Password must contain a number');
 
 export const uuidSchema = z
-  .string()
   .uuid('Invalid UUID');
 
 export const urlSchema = z
-  .string()
   .url('Invalid URL');
 
 export const dateSchema = z
@@ -166,12 +163,12 @@ export const paginationSchema = z.object({
 });
 
 // External API response
-export const externalApiUserSchema = z.object({
+export const externalApiUserSchema = z.looseObject({
   id: z.number().or(z.string()),
   email: emailSchema,
   name: z.string().optional(),
   createdAt: z.string().optional(),
-}).passthrough(); // Allow extra fields, but require these
+}); // z.looseObject allows extra fields (replaces z.object(...).passthrough(), deprecated in Zod v4)
 ```
 
 **Schema Composition:**
@@ -226,7 +223,6 @@ import { z } from 'zod';
 
 export const LoginFormSchema = z.object({
   email: z
-    .string()
     .email('Invalid email address')
     .toLowerCase(),
   password: z
@@ -339,7 +335,7 @@ export async function loginAction(formData: unknown) {
   if (!parsed.success) {
     return {
       error: 'Validation failed',
-      fieldErrors: parsed.error.flatten().fieldErrors,
+      fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
     };
   }
 
@@ -367,7 +363,7 @@ export async function POST(request: Request) {
         {
           error: 'Validation failed',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
             code: 'VALIDATION_ERROR',
           },
         },
@@ -407,7 +403,7 @@ export async function GET(request: Request) {
         {
           error: 'Invalid query parameters',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
           },
         },
         { status: 400 }
@@ -456,7 +452,7 @@ export async function POST(request: Request) {
         {
           error: 'Invalid file',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
           },
         },
         { status: 400 }
@@ -923,7 +919,7 @@ const fileUploadSchema = z.object({
     .refine((name) => !name.includes('\x00'), 'Invalid filename'),
   size: z.number().max(10 * 1024 * 1024, 'File must be under 10MB'),
   type: z.enum(['image/jpeg', 'image/png', 'application/pdf'], {
-    errorMap: () => ({ message: 'Only JPEG, PNG, and PDF files allowed' }),
+    error: () => ({ message: 'Only JPEG, PNG, and PDF files allowed' }),
   }),
 });
 
@@ -1003,7 +999,7 @@ export function FileUploadForm() {
 import { z } from 'zod';
 
 const projectSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string(),
   description: z.string().optional(),
   createdAt: z.string().datetime(),

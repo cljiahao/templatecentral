@@ -20,16 +20,16 @@ version: "1.0.0"
 Install runtime and dev dependencies with NO version pins:
 
 ```bash
-pnpm add react react-dom react-router @tanstack/react-query \
+pnpm add react react-dom react-router@^7.12.0 @tanstack/react-query \
   class-variance-authority clsx tailwind-merge lucide-react radix-ui \
-  @hookform/resolvers react-hook-form zod sonner framer-motion
+  @hookform/resolvers@^5.0.0 react-hook-form zod sonner framer-motion
 
 pnpm add -D vite @vitejs/plugin-react typescript \
   @types/react @types/react-dom \
   tailwindcss @tailwindcss/postcss @tailwindcss/typography tw-animate-css \
   eslint @eslint/js eslint-plugin-react-hooks globals typescript-eslint prettier \
   prettier-plugin-organize-imports prettier-plugin-tailwindcss \
-  vitest @vitest/coverage-v8 @testing-library/react @testing-library/jest-dom \
+  vitest @vitest/coverage-v8 @testing-library/react @testing-library/dom @testing-library/jest-dom \
   @testing-library/user-event jsdom husky postcss
 ```
 
@@ -787,7 +787,6 @@ export default defineConfig({
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -1802,7 +1801,7 @@ interface CustomCardProps {
 
 export function CustomCard({ header, description, children, className }: CustomCardProps) {
   return (
-    <div className={cn('rounded-lg border bg-white p-6 shadow-sm', className)}>
+    <div className={cn('rounded-lg border bg-white p-6 shadow-xs', className)}>
       <h3 className="text-lg font-semibold">{header}</h3>
       {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       {children && <div className="mt-4">{children}</div>}
@@ -2433,7 +2432,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
       data-slot="input-group"
       role="group"
       className={cn(
-        'group/input-group border-input relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-none',
+        'group/input-group border-input relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-hidden',
         'h-9 min-w-0 has-[>textarea]:h-auto',
         'has-[>[data-align=inline-start]]:[&>input]:pl-2',
         'has-[>[data-align=inline-end]]:[&>input]:pr-2',

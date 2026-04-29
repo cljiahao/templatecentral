@@ -12,7 +12,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 ## Dependencies
 
 Add to `requirements.txt`:
-- `PyJWT[crypto]` — JWT encoding/decoding
+- `PyJWT[crypto]>=2.12.0` — JWT encoding/decoding
 - `bcrypt` — Password hashing (use directly; passlib is unmaintained and incompatible with bcrypt ≥ 4.1.1)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 

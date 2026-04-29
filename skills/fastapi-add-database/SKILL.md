@@ -198,10 +198,9 @@ Add to `requirements.txt`:
 
 ```
 beanie
-motor
 ```
 
-> **Beanie** is an async ODM for MongoDB built on Motor (async driver) and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem.
+> **Beanie** is an async ODM for MongoDB built on PyMongo's async driver and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Motor is no longer required — Beanie 2.0 uses the PyMongo async driver directly.
 
 ### B2. Create MongoDB Connection
 
@@ -209,16 +208,16 @@ motor
 
 ```python
 from beanie import init_beanie
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from core.config import api_settings
 
-mongo_client: AsyncIOMotorClient | None = None
+mongo_client: AsyncMongoClient | None = None
 
 
 async def init_mongo() -> None:
     global mongo_client
-    mongo_client = AsyncIOMotorClient(api_settings.MONGODB_URL)
+    mongo_client = AsyncMongoClient(api_settings.MONGODB_URL)
     db = mongo_client[api_settings.MONGODB_DB_NAME]
 
     from models import DOCUMENT_MODELS
@@ -418,7 +417,7 @@ DATABASE_NAME=mydb
 AWS_REGION=us-east-1
 ```
 
-#### Beanie/Motor (MongoDB) — IAM Auth
+#### Beanie/PyMongo (MongoDB) — IAM Auth
 
 Install the additional package:
 
@@ -431,7 +430,7 @@ Add to `requirements.txt`. The `pymongo[aws]` extra installs `pymongo-auth-aws`,
 ```python
 # For DocumentDB: mongodb://${HOST}:27017/${DB}?authSource=...&tls=true
 # For Atlas:      mongodb+srv://${HOST}/${DB}?authSource=...
-mongo_client = AsyncIOMotorClient(
+mongo_client = AsyncMongoClient(
     f"mongodb://{api_settings.MONGODB_HOST}:27017/{api_settings.MONGODB_DB_NAME}"
     "?authSource=%24external&authMechanism=MONGODB-AWS&tls=true"
 )
@@ -455,7 +454,7 @@ MONGODB_HOST=your-cluster.region.docdb.amazonaws.com
 MONGODB_DB_NAME=mydb
 ```
 
-> Motor resolves IAM credentials automatically from the EC2/ECS instance role, environment variables, or AWS config profile. No explicit credential handling is needed in application code. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
+> PyMongo's `AsyncMongoClient` resolves IAM credentials automatically from the EC2/ECS instance role, environment variables, or AWS config profile via the `pymongo-auth-aws` package (installed by `pymongo[aws]`). No explicit credential handling is needed in application code. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
 
 ---
 

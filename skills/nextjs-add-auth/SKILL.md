@@ -56,7 +56,7 @@ AGENTS.md                            ← adds auth architecture notes
 pnpm add better-auth@latest
 ```
 
-> **Security**: Versions 1.6.5–1.6.6 contained critical security patches. Always install `better-auth@latest` (≥ 1.6.6) — never pin to an older version.
+> **Security**: Versions 1.6.5 and 1.6.6 had CVEs. Always install `better-auth@latest` (≥ 1.6.7) — never pin to an older version.
 
 ### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
@@ -118,7 +118,7 @@ export const auth = betterAuth({
 });
 ```
 
-> **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. Adapters for Prisma, Drizzle, and Kysely are available — see [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+> **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. Adapters for Drizzle and Kysely are available — see [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
 ### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
 
