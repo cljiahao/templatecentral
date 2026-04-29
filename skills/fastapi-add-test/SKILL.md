@@ -31,6 +31,8 @@ The scaffold generates `test/conftest.py` with a `client` fixture:
 ```python
 """Root conftest — shared fixtures available to all tests."""
 
+from collections.abc import Generator
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -38,9 +40,10 @@ from app import app
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     """FastAPI test client."""
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 ```
 
 Extend it for database tests by overriding dependencies:

@@ -1252,7 +1252,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (user: AuthUser) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -1273,7 +1273,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(authUser);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     setUser(null);
   }, []);
 

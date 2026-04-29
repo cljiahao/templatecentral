@@ -77,11 +77,19 @@ class APISettings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
 ```
 
-And add to `src/.env` (and `src/.env.default` as documentation):
+Add to `src/.env` (real value — never commit):
+```
+SECRET_KEY=
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+Document in `src/.env.default`:
 ```
 SECRET_KEY=<generate with: openssl rand -hex 32>
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
+
+> Run `openssl rand -hex 32` and paste the output as `SECRET_KEY`.
 
 > **Security**: `SECRET_KEY` has no default — Pydantic will raise a validation error at startup if unset, which is the correct behavior. NEVER use a hardcoded default like `"change-me"` for secrets.
 

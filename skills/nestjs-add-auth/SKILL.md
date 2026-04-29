@@ -69,11 +69,13 @@ export const appConfig = {
 };
 ```
 
-And add to `.env`:
+Add to `.env` (generate real value — never commit):
 ```
-JWT_SECRET=<generate with: openssl rand -hex 32>
+JWT_SECRET=
 JWT_EXPIRES_IN=30m
 ```
+
+> Run `openssl rand -hex 32` and paste the output as `JWT_SECRET`.
 
 **Add a startup guard in `src/main.ts`** — the `!` assertion is erased at compile time and does NOT throw at runtime if the variable is missing:
 
@@ -269,11 +271,13 @@ getMe(@Req() req) {
 
 ## Environment Variables
 
-Add to `.env`:
-- `JWT_SECRET` — Random string for JWT signing (generate with `openssl rand -hex 32`)
-- `JWT_EXPIRES_IN` — Token expiry duration (default: `30m`)
+Add to `.env` (real value — never commit):
+```
+JWT_SECRET=
+JWT_EXPIRES_IN=30m
+```
 
-Also add placeholder entries to `.env.example`:
+Document in `.env.example`:
 ```
 JWT_SECRET=<generate with: openssl rand -hex 32>
 JWT_EXPIRES_IN=30m
