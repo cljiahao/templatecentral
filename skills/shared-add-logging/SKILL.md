@@ -581,7 +581,7 @@ bootstrap();
 ```ts
 // src/common/guards/jwt-auth.guard.ts  (or passport local strategy)
 import { Logger } from 'nestjs-pino';
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()

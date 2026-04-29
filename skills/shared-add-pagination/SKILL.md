@@ -403,7 +403,6 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 ```python
 # src/lib/pagination/pagination_service.py
-from typing import Any
 
 class PaginationService:
     """Pagination utilities for consistent pagination across endpoints."""
@@ -455,7 +454,7 @@ class PaginationService:
 
 ```python
 # src/api/projects/routes.py
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -475,7 +474,7 @@ async def list_projects(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     sort: str | None = Query(default=None, pattern=r'^(asc|desc)_\w+$'),
-    session: AsyncSession = get_session(),
+    session: AsyncSession = Depends(get_session),
 ) -> PaginatedResponse[ProjectResponse]:
     """List projects with pagination.
     

@@ -21,7 +21,7 @@ Install runtime dependencies (no version pins):
 
 ```bash
 pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify @nestjs/swagger \
-  dotenv helmet nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
+  @fastify/helmet dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
 pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/jest @types/node \
   eslint eslint-config-prettier eslint-plugin-prettier globals husky \
@@ -790,7 +790,7 @@ async function bootstrap(): Promise<void> {
   const logger = app.get(Logger);
   app.useLogger(logger);
 
-  setupSecurity(app);
+  await setupSecurity(app);
   logger.log('Security middleware configured');
 
   setupCors(app);
@@ -962,40 +962,31 @@ export * from './setups/security.setup';
 ### `src/config/setups/security.setup.ts`
 
 ```typescript
-import helmet from 'helmet';
-import { INestApplication } from '@nestjs/common';
-import { serviceConfig } from '..';
+import fastifyHelmet from '@fastify/helmet';
+import type { INestApplication } from '@nestjs/common';
+import type { FastifyInstance } from 'fastify';
 
-export function setupSecurity(app: INestApplication): void {
-  app.use(
-    helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-      contentSecurityPolicy: {
-        directives: {
-          'base-uri': ["'none'"],
-          'frame-ancestors': ["'none'"],
-        },
+export async function setupSecurity(app: INestApplication): Promise<void> {
+  const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
+
+  await fastify.register(fastifyHelmet, {
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+      directives: {
+        'base-uri': ["'none'"],
+        'frame-ancestors': ["'none'"],
       },
-      hsts: { maxAge: 31536000 },
-      frameguard: { action: 'deny' },
-    }),
-  );
-
-  app.use(
-    (
-      _req: unknown,
-      res: { setHeader: (name: string, value: string) => void },
-      next: () => void,
-    ) => {
-      res.setHeader(
-        'Cache-Control',
-        'no-cache, no-store, must-revalidate, private',
-      );
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      next();
     },
-  );
+    hsts: { maxAge: 31536000 },
+    frameguard: { action: 'deny' },
+  });
+
+  fastify.addHook('onSend', async (_request, reply, payload) => {
+    void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+    void reply.header('Pragma', 'no-cache');
+    void reply.header('Expires', '0');
+    return payload;
+  });
 }
 
 export function setupCors(app: INestApplication): void {

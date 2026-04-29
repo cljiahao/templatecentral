@@ -339,7 +339,7 @@ export async function loginAction(formData: unknown) {
   if (!parsed.success) {
     return {
       error: 'Validation failed',
-      fieldErrors: z.flattenError(parsed.error).fieldErrors,
+      fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
 
@@ -367,7 +367,7 @@ export async function POST(request: Request) {
         {
           error: 'Validation failed',
           details: {
-            fieldErrors: z.flattenError(parsed.error).fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors,
             code: 'VALIDATION_ERROR',
           },
         },
@@ -407,7 +407,7 @@ export async function GET(request: Request) {
         {
           error: 'Invalid query parameters',
           details: {
-            fieldErrors: z.flattenError(parsed.error).fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors,
           },
         },
         { status: 400 }
@@ -456,7 +456,7 @@ export async function POST(request: Request) {
         {
           error: 'Invalid file',
           details: {
-            fieldErrors: z.flattenError(parsed.error).fieldErrors,
+            fieldErrors: parsed.error.flatten().fieldErrors,
           },
         },
         { status: 400 }
@@ -559,7 +559,6 @@ from fastapi import APIRouter, Query, status, UploadFile, File
 from pydantic import ValidationError
 
 from core.exceptions import InvalidInputError
-from core.logging import log_request, log_error
 from .schemas import CreateProjectRequest, ProjectResponse, PaginationQuery
 
 router = APIRouter(prefix="/projects", tags=["projects"])

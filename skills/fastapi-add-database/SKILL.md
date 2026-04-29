@@ -171,7 +171,7 @@ from database.session import get_db
 from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)):
+def list_users(db: Session = Depends(get_db)) -> list[UserResponse]:
     stmt = select(User)
     return db.scalars(stmt).all()
 ```

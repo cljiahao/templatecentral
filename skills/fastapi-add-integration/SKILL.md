@@ -189,7 +189,7 @@ router = APIRouter(prefix="/github", tags=[APITags.GITHUB])
 
 
 @router.get("/repos", response_model=list[GithubRepo])
-async def list_repos(service: GithubService = Depends(get_github_service)):
+async def list_repos(service: GithubService = Depends(get_github_service)) -> list[GithubRepo]:
     """List authenticated user's GitHub repos."""
     return await service.list_repos()
 ```

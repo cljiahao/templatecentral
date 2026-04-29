@@ -13,7 +13,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 
 Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
-- `passlib[bcrypt]` — Password hashing
+- `bcrypt` — Password hashing (use directly; passlib is unmaintained and incompatible with bcrypt ≥ 4.1.1)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
 ## Steps
@@ -100,24 +100,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```python
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 from core.config import api_settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password."""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
@@ -257,5 +255,5 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
-- Always hash passwords with `passlib` — never store plaintext.
+- Always hash passwords with `bcrypt` — never store plaintext.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.

@@ -159,21 +159,27 @@ function isPublicRoute(pathname: string): boolean {
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (isPublicRoute(pathname)) {
+  // Short-circuit for public routes that are not the login page
+  if (isPublicRoute(pathname) && pathname !== PAGE_ROUTES.LOGIN) {
     return NextResponse.next();
   }
 
   const session = await auth.api.getSession({ headers: req.headers });
 
+  // Handle /login: redirect authenticated users to dashboard, allow others through
+  if (pathname === PAGE_ROUTES.LOGIN) {
+    if (session) {
+      return NextResponse.redirect(new URL(PAGE_ROUTES.DASHBOARD, req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Protected routes: require authentication
   if (!session) {
     if (isApiRoute(pathname)) {
       return new Response(null, { status: 401 });
     }
     return NextResponse.redirect(new URL(PAGE_ROUTES.LOGIN, req.url));
-  }
-
-  if (pathname === PAGE_ROUTES.LOGIN) {
-    return NextResponse.redirect(new URL(PAGE_ROUTES.DASHBOARD, req.url));
   }
 
   return NextResponse.next();

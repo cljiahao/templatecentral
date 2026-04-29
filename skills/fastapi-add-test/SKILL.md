@@ -52,7 +52,7 @@ Extend it for database tests by overriding dependencies:
 # test/conftest.py — add after the existing client fixture
 
 @pytest.fixture()
-def db_client(monkeypatch) -> TestClient:
+def db_client(monkeypatch) -> Generator[TestClient, None, None]:
     """TestClient with a clean in-memory database for each test."""
     from database.session import get_db
     from sqlalchemy import create_engine
@@ -63,9 +63,11 @@ def db_client(monkeypatch) -> TestClient:
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine)
     session = TestSession()
-
     app.dependency_overrides[get_db] = lambda: session
-    yield TestClient(app)
+
+    with TestClient(app) as test_client:
+        yield test_client
+
     app.dependency_overrides.clear()
     session.close()
 ```

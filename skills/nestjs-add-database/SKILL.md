@@ -465,8 +465,7 @@ Create a migration runner at **`src/database/migrate.ts`**:
 ```typescript
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { Kysely, PostgresDialect } from 'kysely';
-import { FileMigrationProvider, Migrator } from 'kysely/migration';
+import { FileMigrationProvider, Migrator, Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 
 import { serviceConfig } from '../config/env.config';
@@ -915,7 +914,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 }
 ```
 
-Run: `pnpm db:migrate`
+Run: `pnpm migrate`
 
 **Step B — Replace `src/modules/auth/auth.service.ts`**
 
