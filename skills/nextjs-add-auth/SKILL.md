@@ -403,7 +403,8 @@ Add to both files:
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=
 
-# App URL (used by auth-client for SSO callbacks)
+# App — used by auth.ts (appName) and auth-client.ts (baseURL)
+NEXT_PUBLIC_APP_NAME=My App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Auth Providers (uncomment and fill for your provider)

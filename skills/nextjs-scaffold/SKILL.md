@@ -53,6 +53,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 <project-name>/
 ├── Dockerfile                          [verbatim — Part B]
 ├── docker-entrypoint.sh                [verbatim — Part B]
+├── .dockerignore                       [verbatim — Part B]
 ├── next.config.ts                      [verbatim — Part B]
 ├── tsconfig.json                       [verbatim — Part B]
 ├── components.json                     [verbatim — Part B]
@@ -367,6 +368,217 @@ elif [ -f "pnpm-lock.yaml" ]; then
 else
   exec npm "$@"
 fi
+```
+
+### `.dockerignore`
+
+```
+# ==============================================================================
+# NEXT.JS DOCKER IGNORE - Production Optimized
+# ==============================================================================
+
+# Version Control
+.git
+.gitignore
+.gitattributes
+.gitmodules
+
+# Dependencies (will be installed in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Next.js Build Outputs & Cache
+.next/
+out/
+dist/
+build/
+.vercel/
+.swc/
+
+# Environment Variables (security)
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.vscode-test
+.history/
+.fleet/
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime Data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Testing & Coverage
+coverage/
+*.lcov
+.nyc_output/
+.jest/
+test-results/
+playwright-report/
+test-results.xml
+junit.xml
+.vitest/
+
+# Cache Directories
+.npm/
+.yarn/
+.pnpm/
+.eslintcache
+.cache/
+.parcel-cache/
+.turbo/
+.next-cache/
+
+# Build Tool Cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Development Tools & Storybook
+.storybook-out/
+.chromatic/
+storybook-static/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Docker Related (don't copy into image)
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+docker-compose*.yaml
+.docker/
+
+# CI/CD Configuration
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+.azuredevops/
+.buildkite/
+bitbucket-pipelines.yml
+jenkins/
+Jenkinsfile*
+
+# Documentation
+README*.md
+CHANGELOG*.md
+CONTRIBUTING*.md
+LICENSE*
+SECURITY*.md
+CODE_OF_CONDUCT*.md
+docs/
+.docs/
+
+# Security & Certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.secrets/
+
+# TypeScript
+*.tsbuildinfo
+.tscache/
+
+# Rust (for Next.js SWC)
+target/
+Cargo.lock
+
+# WebAssembly
+*.wasm
+
+# Analysis & Profiling
+.analyze/
+bundle-analyzer/
+lighthouse/
+.bundle-analyzer/
+
+# Monitoring & Analytics
+.sentry/
+newrelic.js
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+.db/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Kubernetes
+*.kubeconfig
+k8s/
+kubernetes/
+
+# AWS & Cloud
+.aws/
+.serverless/
+
+# Sentry
+.sentryclirc
+
+# ==============================================================================
+# EXCEPTIONS - Files to include despite patterns above
+# ==============================================================================
+
+# Package manager lock files (needed for reproducible builds)
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
+!bun.lockb
+
+# Essential config files that might match broader patterns
+!next.config.*
+!tailwind.config.*
+!postcss.config.*
+!.eslintrc.*
+!.prettierrc*
+!tsconfig*.json
+!jest.config.*
+!playwright.config.*
 ```
 
 ### `.env.example`
@@ -2257,7 +2469,7 @@ pnpm install
 `components.json` was written in Step 1 — no interactive init needed. Add primitives directly:
 
 ```bash
-npx shadcn@latest add button card dialog input label select separator tabs textarea
+npx shadcn@latest add button card dialog form input label select separator tabs textarea
 ```
 
 ### 5. Copy `.env.example` to `.env.local`

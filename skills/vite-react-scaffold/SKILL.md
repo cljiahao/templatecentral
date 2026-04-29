@@ -107,7 +107,7 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
     │       ├── constants.ts                [verbatim]
     │       ├── api/
     │       │   ├── index.ts                [verbatim]
-    │       │   └── example-service.ts      [verbatim]
+    │       │   ├── example-service.ts      [verbatim]
     │       │   └── example-service.test.ts [verbatim]
     │       ├── components/
     │       │   ├── index.ts                [verbatim]

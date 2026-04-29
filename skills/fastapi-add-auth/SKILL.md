@@ -14,6 +14,7 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
 - `passlib[bcrypt]` — Password hashing
+- `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
 ## Steps
 
@@ -23,7 +24,7 @@ Create request/response schemas for auth endpoints.
 
 **`src/api/schemas/request/auth.py`**:
 ```python
-from pydantic import Field
+from pydantic import EmailStr, Field
 
 from api.schemas.base import BaseRequestSchema
 
@@ -31,7 +32,7 @@ from api.schemas.base import BaseRequestSchema
 class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
-    email: str = Field(description="User email address.")
+    email: EmailStr = Field(description="User email address.")
     password: str = Field(min_length=8, description="User password.")
     name: str = Field(description="User display name.")
 
@@ -39,7 +40,7 @@ class RegisterRequest(BaseRequestSchema):
 class LoginRequest(BaseRequestSchema):
     """Login request."""
 
-    email: str = Field(description="User email address.")
+    email: EmailStr = Field(description="User email address.")
     password: str = Field(description="User password.")
 ```
 

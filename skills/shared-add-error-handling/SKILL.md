@@ -196,7 +196,7 @@ Rule #9: Return 404 for both missing resources AND unauthorized access (never re
 
 ```ts
 // src/app/api/projects/[id]/route.ts
-import { auth } from '@/auth';
+import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';
 import { NextResponse } from 'next/server';
 
@@ -668,11 +668,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logError('ErrorBoundary caught an error', {
-      message: error.message,
-      stack: import.meta.env.DEV ? error.stack : undefined,
-      componentStack: errorInfo.componentStack,
-    });
+    logError('ErrorBoundary caught an error', error);
+    if (import.meta.env.DEV) {
+      console.error('Component stack:', errorInfo.componentStack);
+    }
   }
 
   handleRetry = () => {
@@ -718,10 +717,7 @@ import { logError } from './error-log-handler';
 export function setupAsyncErrorHandler() {
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason;
-    logError('Unhandled promise rejection', {
-      message: error?.message || String(error),
-      stack: import.meta.env.DEV ? error?.stack : undefined,
-    });
+    logError('Unhandled promise rejection', error instanceof Error ? error : new Error(String(error)));
   });
 }
 
@@ -746,15 +742,37 @@ export const queryClient = new QueryClient({
     mutations: {
       onError: (error) => {
         if (error instanceof Error) {
-          logError('Mutation failed', {
-            message: error.message,
-            stack: import.meta.env.DEV ? error.stack : undefined,
-          });
+          logError('Mutation failed', error);
         }
       },
     },
   },
 });
+```
+
+Then update `src/components/layout/providers.tsx` to use this singleton instead of creating its own:
+
+```tsx
+import { queryClient } from '@/lib/clients/query-client';
+import { AuthProvider } from '@/features/auth';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode } from 'react';
+import { Toaster } from 'sonner';
+
+interface ProvidersProps {
+  children: ReactNode;
+}
+
+export function Providers({ children }: ProvidersProps) {
+  return (
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster position="top-right" />
+      </QueryClientProvider>
+    </AuthProvider>
+  );
+}
 ```
 
 ## Testing / Verification

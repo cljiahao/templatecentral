@@ -132,9 +132,14 @@ class APISettings(BaseSettings):
     GITHUB_TOKEN: str
 ```
 
-And add to `src/.env` (and `src/.env.default` as documentation):
+Add to `src/.env` (real token — never commit):
 ```
-GITHUB_TOKEN=your_token_here
+GITHUB_TOKEN=
+```
+
+Document in `src/.env.default`:
+```
+GITHUB_TOKEN=your_github_token_here
 ```
 
 ### 6. Create a Dependency
@@ -197,7 +202,7 @@ Add the router to **`src/api/routes.py`**:
 from api.routers import example, github  # add the new import
 
 # in the router registration block:
-router.include_router(github.router, tags=[APITags.GITHUB])
+router.include_router(github.router)
 ```
 
 The router will not be reachable until it is registered here — this step is mandatory.

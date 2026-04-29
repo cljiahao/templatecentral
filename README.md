@@ -42,14 +42,12 @@ templateCentral/
 ├── .claude-plugin/                 # Plugin manifest
 │   ├── plugin.json                 # v2.1.0 — lists all 46 skills
 │   └── marketplace.json
-├── skills/                         # All 46 skills (flat <stack>-<skill> naming)
-│   ├── nextjs-scaffold/SKILL.md
-│   ├── fastapi-scaffold/SKILL.md
-│   ├── nestjs-scaffold/SKILL.md
-│   ├── vite-react-scaffold/SKILL.md
-│   └── ... (42 more)
-└── docs/
-    └── superpowers/                # Implementation plans and specs
+└── skills/                         # All 46 skills (flat <stack>-<skill> naming)
+    ├── nextjs-scaffold/SKILL.md
+    ├── fastapi-scaffold/SKILL.md
+    ├── nestjs-scaffold/SKILL.md
+    ├── vite-react-scaffold/SKILL.md
+    └── ... (42 more)
 ```
 
 ## Adding a New Skill

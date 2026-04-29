@@ -83,10 +83,16 @@ export const serviceConfig = {
 };
 ```
 
-Add to `.env` and document in `.env.example`:
+Add to `.env` (real token — never commit):
 ```
 GITHUB_API_URL=https://api.github.com
-GITHUB_TOKEN=your_token_here
+GITHUB_TOKEN=
+```
+
+Document in `.env.example` (placeholder for documentation):
+```
+GITHUB_API_URL=https://api.github.com
+GITHUB_TOKEN=your_github_token_here
 ```
 
 ### 5. Create the Module

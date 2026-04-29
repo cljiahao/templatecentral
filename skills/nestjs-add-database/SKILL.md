@@ -195,6 +195,7 @@ Inject `DrizzleService` in any module's service:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 
 import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
@@ -897,7 +898,7 @@ export type UserUpdate = Updateable<UsersTable>;
 **If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/002_add_auth.ts`:
 
 ```typescript
-import { type Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -905,10 +906,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('hashed_password', 'text', (col) => col.notNull().defaultTo(''))
     .execute();
   // Remove the temporary default — hashed_password must not have a default in production
-  await db.schema
-    .alterTable('users')
-    .alterColumn('hashed_password', (col) => col.dropDefault())
-    .execute();
+  await sql`ALTER TABLE users ALTER COLUMN hashed_password DROP DEFAULT`.execute(db);
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {

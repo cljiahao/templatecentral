@@ -47,6 +47,8 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 2. Edit `src/pages/dashboard.tsx` — remove example imports, replace with placeholder
 3. Verify no remaining imports reference `@/features/example`
 
+> **Note:** `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. If you have run `vite-react-add-auth` you may replace the dev stub with the real backend implementation; otherwise leave it as-is.
+
 ## FastAPI
 
 ### Files to Delete

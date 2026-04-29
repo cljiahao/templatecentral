@@ -633,7 +633,7 @@ ENVIRONMENT=dev
 FASTAPI_ROOT=api
 API_PORT=8000
 
-# CORS (comma-separated origins for production; ignored in dev where * is used)
+# CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 ```
 
@@ -678,7 +678,7 @@ FASTAPI_ROOT=
 # Ports
 API_PORT=8000
 
-# CORS (comma-separated origins for production; ignored in dev where * is used)
+# CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 ```
 
@@ -1290,6 +1290,7 @@ router.include_router(example.router, tags=[APITags.EXAMPLE])
     tags=[APITags.MISC],
     summary="Home Route",
     description="A simple home route returning a welcome message.",
+    response_model=dict[str, str],
 )
 def home() -> dict[str, str]:
     """Simple home route."""
@@ -1301,6 +1302,7 @@ def home() -> dict[str, str]:
     tags=[APITags.MISC],
     summary="Health Check",
     description="A simple health check returning an OK status.",
+    response_model=dict[str, str],
 )
 def health() -> dict[str, str]:
     """Health check endpoint."""
@@ -1526,6 +1528,8 @@ def date_to_year_month(d: date) -> str:
 ```python
 """Root conftest — shared fixtures available to all tests."""
 
+from collections.abc import Generator
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -1533,9 +1537,10 @@ from app import app
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     """FastAPI test client."""
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 ```
 
 ### `test/factories/__init__.py`

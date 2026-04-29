@@ -158,9 +158,9 @@ The template provides these shared utilities:
 - For complex validation patterns (file uploads, OWASP/CWE): use `shared-validation-patterns`
 
 ### Auth & Route Protection
-- These rules apply only after `nextjs-add-auth` has been run (i.e. `src/proxy.ts` and `src/auth.ts` exist).
+- These rules apply only after `nextjs-add-auth` has been run (i.e. `src/proxy.ts` and `src/lib/auth.ts` exist).
 - `proxy.ts`: NEVER return JSON for unauthorized requests — `new Response(null, { status: 401 })` only
-- `proxy.ts` handles auth for pages; API routes independently call `auth()` from `@/auth` and return 401 — defense in depth
+- `proxy.ts` handles auth for pages; API routes independently call `auth()` from `@/lib/auth` and return 401 — defense in depth
 - NEVER expose internal IDs or resource identifiers to the client without authorization checks
 
 ### Least Privilege

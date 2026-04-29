@@ -284,7 +284,7 @@ export const db = globalForKysely.db ?? new Kysely<Database>({
 if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 ```
 
-IAM environment variables (add to `.env` and `.env.example`):
+IAM environment variables (add to `.env.local` and `.env.example`):
 
 ```env
 DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
@@ -393,7 +393,7 @@ Run migrations with: `npx tsx src/integrations/database/migrate.ts`
 
 ### B6. Configure Environment
 
-Add to `.env` and `.env.example`:
+Add to `.env.local` and `.env.example`:
 
 ```env
 DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"

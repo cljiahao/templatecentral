@@ -59,12 +59,12 @@ Add `DATABASE_URL` to `APISettings` in **`src/core/config.py`**:
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    DATABASE_URL: str = Field(default="sqlite:///./app.db")
+    DATABASE_URL: str = Field(description="Database connection URL — must be set in environment")
 ```
 
-Add to `src/.env` (and `src/.env.default` as documentation):
+Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
-DATABASE_URL=sqlite:///./app.db
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DBNAME
 ```
 
 ### A4. Create Database Session
@@ -239,11 +239,11 @@ Add to `APISettings` in **`src/core/config.py`**:
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    MONGODB_URL: str = Field(default="mongodb://localhost:27017")
-    MONGODB_DB_NAME: str = Field(default="mydb")
+    MONGODB_URL: str = Field(description="MongoDB connection URL — must be set in environment")
+    MONGODB_DB_NAME: str = Field(description="MongoDB database name")
 ```
 
-Add to `src/.env` (and `src/.env.default` as documentation):
+Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
 MONGODB_URL=mongodb://localhost:27017
 MONGODB_DB_NAME=mydb
@@ -480,9 +480,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
-    email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
