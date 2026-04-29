@@ -73,14 +73,14 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 │       └── default-square.svg          [generate — simple placeholder SVG]
 ├── test/
 │   └── api/
-│       └── health.test.ts              [generate — tests GET /api and GET /api/health]
+│       └── health.test.ts              [verbatim — Part C]
 └── src/
     ├── app/
-    │   ├── globals.css                 [generate — Tailwind 4 directives + CSS vars + animate-float keyframe]
+    │   ├── globals.css                 [verbatim — Part C]
     │   ├── layout.tsx                  [verbatim — Part C]
     │   ├── (public)/
-    │   │   ├── layout.tsx              [generate — public layout with Navbar + Footer]
-    │   │   └── page.tsx                [generate — landing page using widgets]
+    │   │   ├── layout.tsx              [verbatim — Part C]
+    │   │   └── page.tsx                [verbatim — Part C, update branding in Step 2]
     │   ├── dashboard/
     │   │   ├── layout.tsx              [verbatim — Part C]
     │   │   └── (overview)/
@@ -91,8 +91,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │   │       └── route.ts            [verbatim — Part C]
     ├── components/
     │   ├── layout/
-    │   │   ├── navbar.tsx              [generate — uses BrandLogo, BrandText, LinkList, ThemeToggleButton]
-    │   │   ├── site-footer.tsx         [generate — simple footer with credit text]
+    │   │   ├── navbar.tsx              [verbatim — Part C, update branding in Step 2]
+    │   │   ├── site-footer.tsx         [verbatim — Part C, update branding in Step 2]
     │   │   ├── providers.tsx           [verbatim — Part C]
     │   │   ├── theme-provider.tsx      [verbatim — Part C]
     │   │   └── index.ts                [verbatim — Part C]
@@ -1915,6 +1915,315 @@ export default function DashboardPage() {
     </div>
   );
 }
+```
+
+### `src/app/globals.css`
+
+```css
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Fonts & radius */
+  --font-sans: var(--font-lato);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* App colors */
+  --color-black: var(--black);
+  --color-white: var(--white);
+
+  /* Surface */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Actions */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+
+  /* Utility */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+
+  /* Form */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --black: #101010;
+  --white: #f9f9f9;
+  --radius: 0.625rem;
+
+  --background: var(--white);
+  --foreground: var(--black);
+  --card: var(--white);
+  --card-foreground: var(--black);
+  --popover: var(--white);
+  --popover-foreground: var(--black);
+
+  --primary: var(--color-neutral-900);
+  --primary-foreground: var(--white);
+  --primary-hover: var(--color-neutral-800);
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-neutral-900);
+  --secondary-hover: var(--color-neutral-200);
+  --accent: var(--color-neutral-100);
+  --accent-foreground: var(--color-neutral-900);
+  --accent-hover: var(--color-neutral-200);
+
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+
+  --border: var(--color-neutral-300);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: var(--black);
+  --foreground: var(--white);
+  --card: var(--black);
+  --card-foreground: var(--white);
+  --popover: var(--black);
+  --popover-foreground: var(--white);
+
+  --primary: var(--white);
+  --primary-foreground: var(--color-neutral-900);
+  --primary-hover: var(--color-neutral-200);
+  --secondary: var(--color-neutral-800);
+  --secondary-foreground: var(--color-neutral-100);
+  --secondary-hover: var(--color-neutral-700);
+  --accent: var(--color-neutral-800);
+  --accent-foreground: var(--color-neutral-100);
+  --accent-hover: var(--color-neutral-700);
+
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+    @apply bg-background;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  .hw-full { @apply h-full w-full; }
+  .flex-between { @apply flex items-center justify-between; }
+  .flex-center { @apply flex items-center justify-center; }
+  .flex-start { @apply flex items-start justify-start; }
+  .flex-end { @apply flex justify-end; }
+  .max-w-site { @apply max-w-[1184px]; }
+  .max-w-content { @apply max-w-[1000px]; }
+  .bg-brand-gradient { @apply from-primary via-primary to-primary bg-linear-to-r; }
+  .text-brand-gradient { @apply from-primary via-primary to-primary bg-linear-to-r bg-clip-text text-transparent; }
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(5deg); }
+}
+.animate-float { animation: float 10s ease-in-out infinite; }
+```
+
+### `src/app/(public)/layout.tsx`
+
+```tsx
+import { Navbar, SiteFooter } from '@/components/layout';
+
+export default function PublicLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <main className="flex flex-1 flex-col">{children}</main>
+      <SiteFooter />
+    </div>
+  );
+}
+```
+
+### `src/app/(public)/page.tsx`
+
+> Update brand text (`template`/`Central` spans and the description paragraph) in Step 2.
+
+```tsx
+export default function Home() {
+  return (
+    <div className="flex-center min-h-screen flex-col gap-6">
+      <h1 className="text-4xl font-bold tracking-tight lg:text-6xl">
+        <span className="text-brand-gradient">template</span>
+        <span>Central</span>
+      </h1>
+      <p className="text-muted-foreground max-w-md text-center text-lg">
+        A production-ready Next.js template with shadcn/ui, Tailwind CSS, and
+        everything you need to build modern web applications.
+      </p>
+    </div>
+  );
+}
+```
+
+### `src/components/layout/navbar.tsx`
+
+> Update the two brand `<span>` elements and the Dashboard button text in Step 2.
+
+```tsx
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+import { Button } from '@/components/ui/button';
+import { LinkList, type LinkItem } from '@/components/widgets';
+import { PAGE_ROUTES } from '@/lib/constants/routes';
+import { cn } from '@/lib/utils';
+
+const defaultNavLinks: LinkItem[] = [];
+
+export function Navbar() {
+  const pathname = usePathname();
+  const rootPath = `/${pathname.split('/')[1]}`;
+  const isDashboard = rootPath === PAGE_ROUTES.DASHBOARD;
+
+  return (
+    <nav
+      className={cn(
+        isDashboard
+          ? 'sticky top-0 z-50 w-full'
+          : 'max-w-site fixed inset-x-0 top-0 z-50 mx-auto pt-10',
+      )}
+    >
+      <div
+        className={cn(
+          'flex-between min-h-20 bg-white px-6 py-3 shadow-lg',
+          isDashboard ? 'border-b' : 'rounded-2xl border',
+        )}
+      >
+        <Link href={PAGE_ROUTES.HOME} className="text-xl font-bold tracking-tight">
+          <span className="text-brand-gradient">template</span>
+          <span>Central</span>
+        </Link>
+
+        <div className="flex items-center gap-4">
+          {defaultNavLinks.length > 0 && (
+            <LinkList links={defaultNavLinks} className="hover:text-primary transition-colors" />
+          )}
+          <Button
+            asChild
+            className="bg-primary hover:bg-primary-hover h-12 rounded-lg px-6 py-3 font-bold text-white"
+          >
+            <Link href={PAGE_ROUTES.DASHBOARD}>Dashboard</Link>
+          </Button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+```
+
+### `src/components/layout/site-footer.tsx`
+
+> Update `creditText` default in Step 2.
+
+```tsx
+import { LinkList, type LinkItem } from '@/components/widgets';
+
+interface SiteFooterProps {
+  creditText?: string;
+  links?: LinkItem[];
+}
+
+const defaultLinks: LinkItem[] = [
+  { label: 'Contact Us', href: '#' },
+];
+
+export function SiteFooter({
+  creditText = 'Built with templateCentral',
+  links = defaultLinks,
+}: SiteFooterProps) {
+  return (
+    <footer className="w-full bg-black">
+      <div className="flex-between px-6 py-6">
+        <p className="text-sm text-white">{creditText}</p>
+        <LinkList links={links} className="text-sm text-white" />
+      </div>
+    </footer>
+  );
+}
+```
+
+### `test/api/health.test.ts`
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
+
+import { GET as getRootHealth } from '@/app/api/route';
+import { GET as getHealthPath } from '@/app/api/health/route';
+
+function makeRequest(url: string): NextRequest {
+  return new NextRequest(url);
+}
+
+describe('GET /api (root health)', () => {
+  it('returns ok with 200', async () => {
+    const response = await getRootHealth(makeRequest('http://localhost/api'));
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.status).toBe('ok');
+    expect(data.timestamp).toBeDefined();
+  });
+});
+
+describe('GET /api/health (Docker / probe path)', () => {
+  it('returns ok with 200', async () => {
+    const response = await getHealthPath(makeRequest('http://localhost/api/health'));
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.status).toBe('ok');
+    expect(data.timestamp).toBeDefined();
+  });
+});
 ```
 
 ---
