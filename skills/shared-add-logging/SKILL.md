@@ -526,32 +526,73 @@ LoggerModule.forRoot({
 }),
 ```
 
-Unhandled exceptions — update your `HttpExceptionFilter` to extend `BaseExceptionFilter` and log 5xx errors:
+Unhandled exceptions — update your `HttpExceptionFilter` (from `shared-add-error-handling`) to add 5xx logging. Replace the existing file:
 
 ```ts
 // src/common/filters/http-exception.filter.ts
-import { Logger, Catch, ArgumentsHost, HttpException } from '@nestjs/common';
-import { BaseExceptionFilter } from '@nestjs/core';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
 
+interface ErrorResponse {
+  error: string;
+  details?: {
+    fieldErrors?: Record<string, string[]>;
+    code?: string;
+  };
+}
+
 @Catch(HttpException)
-export class HttpExceptionFilter extends BaseExceptionFilter {
+export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
 
+    let errorResponse: ErrorResponse = {
+      error: exception.message || 'An error occurred',
+    };
+
     if (exception instanceof ZodSerializationException) {
-      const zodError: unknown = exception.getZodError();
+      const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        this.logger.error(`ZodSerializationException: ${zodError.message}`);
+        const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
+        errorResponse = {
+          error: 'Validation failed',
+          details: { fieldErrors, code: 'VALIDATION_ERROR' },
+        };
+        this.logger.warn(`Validation error: ${zodError.message}`);
       }
-    } else if (status >= 500) {
+    } else if (status === HttpStatus.BAD_REQUEST) {
+      errorResponse.details = { code: 'BAD_REQUEST' };
+    } else if (status === HttpStatus.UNAUTHORIZED) {
+      errorResponse = { error: 'Authentication required' };
+    } else if (status === HttpStatus.FORBIDDEN) {
+      errorResponse = { error: 'Access denied' };
+    } else if (status === HttpStatus.NOT_FOUND) {
+      errorResponse = { error: 'Resource not found' };
+    } else if (status === HttpStatus.CONFLICT) {
+      errorResponse.details = { code: 'CONFLICT' };
+    } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
+      errorResponse = { error: 'Too many requests' };
+      void reply.header('Retry-After', '60');
+    }
+
+    if (status >= 500) {
       this.logger.error(`HTTP ${status}: ${exception.message}`);
     }
 
-    super.catch(exception, host);
+    void reply.status(status).send(errorResponse);
   }
 }
 ```

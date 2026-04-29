@@ -977,8 +977,8 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': ["'none'"],
       },
     },
-    hsts: { maxAge: 31536000 },
-    frameguard: { action: 'deny' },
+    strictTransportSecurity: { maxAge: 31536000 },
+    xFrameOptions: { action: 'deny' },
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
@@ -1581,7 +1581,7 @@ Write a short `CLAUDE.md` (architecture and conventions live in `AGENTS.md` only
 
 Include:
 - **Build & Dev** verified commands: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`
-- **templateCentral skills**: `nestjs-scaffold` (done), `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`
+- **templateCentral skills**: `nestjs-scaffold` (done), `nestjs-code-standards`, `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`
 - **Workflow**: simple/medium → templateCentral skills; complex → Superpowers
 - NEVER put secrets in `CLAUDE.md`
 

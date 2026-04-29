@@ -1808,7 +1808,7 @@ Include **Build & Dev** with verified commands only:
 - `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
-**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-code-standards`, `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
 
 ### 8. Task management (optional)
 

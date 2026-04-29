@@ -140,8 +140,6 @@ import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs'; // required — better-auth session validation needs Node.js
-
 const PUBLIC_PATHS = new Set<string>([PAGE_ROUTES.HOME, PAGE_ROUTES.LOGIN]);
 const PUBLIC_API_PREFIXES = ['/api/auth', API_ROUTES.HEALTH];
 
@@ -496,7 +494,6 @@ Full provider list: https://www.better-auth.com/docs/authentication/social-sign-
 - NEVER remove the `isDev` guard on the dev login button — it must only render in development.
 - NEVER hardcode secrets — always environment variables.
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
-- `export const runtime = 'nodejs'` in `proxy.ts` is mandatory — better-auth session validation requires the Node.js runtime.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 
 ## After Writing Code

@@ -137,7 +137,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
-    const fieldErrors = z.flattenError(error).fieldErrors as Record<string, string[]>;
+    const fieldErrors = error.flatten().fieldErrors as Record<string, string[]>;
     return NextResponse.json(
       {
         error: 'Validation failed',
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       return handleApiError(
         'Failed to create project',
         parsed.error,
-        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
+        parsed.error.flatten().fieldErrors as Record<string, string[]>
       );
     }
 
@@ -224,16 +224,71 @@ export async function GET(
 }
 ```
 
-**3. Error Boundary Component**
+**3. Error Boundary Components**
+
+Class-based `ErrorBoundary` for catching synchronous React render errors:
+
+```tsx
+// src/components/layout/error-boundary.tsx
+'use client';
+
+import { Component, type ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+          <h1 className="text-2xl font-bold">Something went wrong</h1>
+          <p className="text-muted-foreground max-w-md text-sm">
+            {process.env.NODE_ENV === 'development'
+              ? this.state.error.message
+              : 'An unexpected error occurred. Please try again later.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+          >
+            Reload page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+Functional `AsyncErrorBoundary` for catching unhandled promise rejections:
 
 ```tsx
 // src/components/layout/error-boundary-async.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface AsyncErrorBoundaryProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
@@ -496,9 +551,9 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
-import { z, ZodError } from 'zod';
+import { ZodError } from 'zod';
 
 interface ErrorResponse {
   error: string;
@@ -514,19 +569,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   catch(exception: HttpException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+    const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
 
     let errorResponse: ErrorResponse = {
       error: exception.message || 'An error occurred',
     };
 
-    // Handle Zod validation errors
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        const fieldErrors = z.flattenError(zodError)
-          .fieldErrors as Record<string, string[]>;
+        const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',
           details: { fieldErrors, code: 'VALIDATION_ERROR' },
@@ -545,16 +598,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.details = { code: 'CONFLICT' };
     } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
       errorResponse = { error: 'Too many requests' };
-      // Set Retry-After header for rate limit (client uses for backoff)
-      response.setHeader('Retry-After', '60');
+      void reply.header('Retry-After', '60');
     }
 
-    this.logger.log(
-      `HTTP ${status}: ${exception.message}`,
-      'HttpExceptionFilter'
-    );
+    this.logger.log(`HTTP ${status}: ${exception.message}`, 'HttpExceptionFilter');
 
-    response.status(status).json(errorResponse);
+    void reply.status(status).send(errorResponse);
   }
 }
 ```
@@ -810,19 +859,19 @@ pnpm dev
 ```typescript
 // test/error-boundary.test.tsx
 import { render, screen } from '@testing-library/react';
-import { AsyncErrorBoundary } from '@/components/layout/error-boundary-async';
+import { ErrorBoundary } from '@/components/layout/error-boundary';
 
-describe('AsyncErrorBoundary', () => {
-  it('displays fallback UI when error occurs', async () => {
-    // Trigger unhandled rejection
+describe('ErrorBoundary', () => {
+  it('displays fallback UI when render error occurs', () => {
     const ThrowComponent = () => {
       throw new Error('Test error');
+      return null;
     };
 
     render(
-      <AsyncErrorBoundary>
+      <ErrorBoundary>
         <ThrowComponent />
-      </AsyncErrorBoundary>
+      </ErrorBoundary>
     );
 
     // In development, error message is shown
@@ -837,12 +886,13 @@ describe('AsyncErrorBoundary', () => {
   it('shows reload button', () => {
     const ThrowComponent = () => {
       throw new Error('Test');
+      return null;
     };
 
     render(
-      <AsyncErrorBoundary>
+      <ErrorBoundary>
         <ThrowComponent />
-      </AsyncErrorBoundary>
+      </ErrorBoundary>
     );
 
     expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument();

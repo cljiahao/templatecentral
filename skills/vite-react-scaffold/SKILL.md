@@ -3017,7 +3017,7 @@ Skip if the user does not use Claude Code.
 
 Write a short `CLAUDE.md` referencing `AGENTS.md` for full detail. Include:
 - **Build & Dev**: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck)
-- **templateCentral skills**: `vite-react-scaffold` (done), `vite-react-add-page`, `vite-react-add-feature`, `vite-react-add-component`, `vite-react-add-form`, `vite-react-add-auth`, `vite-react-add-integration`, `vite-react-add-test`
+- **templateCentral skills**: `vite-react-scaffold` (done), `vite-react-code-standards`, `vite-react-add-page`, `vite-react-add-feature`, `vite-react-add-component`, `vite-react-add-form`, `vite-react-add-auth`, `vite-react-add-integration`, `vite-react-add-test`
 - **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`
 - NEVER put secrets in `CLAUDE.md`
 

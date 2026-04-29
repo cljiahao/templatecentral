@@ -2602,7 +2602,7 @@ Include **Build & Dev** with verified commands:
 - `pnpm test` — tests
 - `pnpm check` — type check + lint
 
-**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-code-standards`, `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
 
 ### 8b. Optional: Task management
 

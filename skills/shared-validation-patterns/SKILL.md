@@ -911,7 +911,7 @@ export function CreateProjectForm() {
 
 ```tsx
 // src/features/projects/components/file-upload-form.tsx
-import { useState } from 'react';
+import { type ChangeEvent, useState } from 'react';
 import { z } from 'zod';
 
 const fileUploadSchema = z.object({
@@ -931,7 +931,7 @@ export function FileUploadForm() {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0];
     if (!file) return;
 

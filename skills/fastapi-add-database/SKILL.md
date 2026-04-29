@@ -461,7 +461,11 @@ MONGODB_DB_NAME=mydb
 
 ## Completing Auth Integration
 
-> **Only apply this section if `fastapi-add-auth` was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only apply this section if `fastapi-add-auth` was run before this skill.** It replaces the 501 stubs with real database-backed implementations. Choose the subsection that matches your database choice.
+
+---
+
+### SQLAlchemy (Section A) — Steps
 
 ### Step A — Create `src/models/user.py`
 
@@ -591,5 +595,127 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
     """Get the current authenticated user."""
     user = get_user(db=db, user_id=user_id)
+    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
+```
+
+---
+
+### Beanie (Section B) — Steps
+
+### Step A — Update `src/models/user.py` and register it
+
+If `email-validator` is not yet in `requirements.txt`, add it first (`EmailStr` requires it).
+
+```python
+# src/models/user.py
+from datetime import datetime, timezone
+
+from beanie import Document
+from pydantic import EmailStr, Field
+
+
+class User(Document):
+    email: EmailStr
+    hashed_password: str
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Settings:
+        name = "users"
+        indexes = ["email"]
+```
+
+Update `src/models/__init__.py`:
+
+```python
+from models.user import User
+
+DOCUMENT_MODELS = [User]
+```
+
+### Step B — Replace stubs in `src/api/services/auth_service.py`
+
+```python
+from fastapi import HTTPException, status
+from beanie import PydanticObjectId
+
+from core.security import create_access_token, hash_password, verify_password
+from models.user import User
+
+
+async def register_user(email: str, password: str, name: str) -> dict:
+    if await User.find_one(User.email == email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered.",
+        )
+    user = await User(
+        email=email,
+        hashed_password=hash_password(password),
+        name=name,
+    ).insert()
+    return {"id": str(user.id), "email": user.email, "name": user.name}
+
+
+async def login_user(email: str, password: str) -> str:
+    user = await User.find_one(User.email == email)
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials.",
+        )
+    return create_access_token(subject=str(user.id))
+
+
+async def get_user(user_id: str) -> dict:
+    try:
+        oid = PydanticObjectId(user_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+    user = await User.get(oid)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+    return {"id": str(user.id), "email": user.email, "name": user.name}
+```
+
+### Step C — Replace `src/api/routers/auth.py`
+
+No session dependency is needed — Beanie manages its own connection via the lifespan event:
+
+```python
+from fastapi import APIRouter, Depends
+
+from api.dependencies.auth import get_current_user
+from api.schemas.request.auth import LoginRequest, RegisterRequest
+from api.schemas.response.auth import TokenResponse, UserResponse
+from api.services.auth_service import get_user, login_user, register_user
+
+router = APIRouter(prefix="/auth")
+
+
+@router.post("/register", response_model=UserResponse)
+async def register(body: RegisterRequest) -> UserResponse:
+    """Register a new user account."""
+    user = await register_user(email=body.email, password=body.password, name=body.name)
+    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(body: LoginRequest) -> TokenResponse:
+    """Authenticate and receive a JWT token."""
+    token = await login_user(email=body.email, password=body.password)
+    return TokenResponse(access_token=token)
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
+    """Get the current authenticated user."""
+    user = await get_user(user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```

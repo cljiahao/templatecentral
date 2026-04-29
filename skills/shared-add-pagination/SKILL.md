@@ -394,9 +394,12 @@ class PaginationMetadata(BaseModel):
     total: int
     hasMore: bool
 
-class PaginatedResponse(BaseModel, Generic[T]):
-    data: list[T]
+class PaginatedData(BaseModel, Generic[T]):
+    items: list[T]
     pagination: PaginationMetadata
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    data: PaginatedData[T]
 ```
 
 **3. Pagination Service**
@@ -461,7 +464,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_session
 from core.exceptions import InvalidInputError
 from lib.pagination.pagination_service import PaginationService
-from lib.types.pagination import PaginatedResponse, PaginationMetadata
+from lib.types.pagination import PaginatedData, PaginatedResponse, PaginationMetadata
 from models.project import Project as ProjectModel
 from .schemas import ProjectResponse
 
@@ -510,8 +513,10 @@ async def list_projects(
 
     pagination_metadata = PaginationService.create_metadata(page, limit, total)
     return PaginatedResponse(
-        data=[ProjectResponse.model_validate(p) for p in projects],
-        pagination=PaginationMetadata(**pagination_metadata),
+        data=PaginatedData(
+            items=[ProjectResponse.model_validate(p) for p in projects],
+            pagination=PaginationMetadata(**pagination_metadata),
+        )
     )
 ```
 
