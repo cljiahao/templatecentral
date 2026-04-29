@@ -100,6 +100,7 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 - **Never** paste live credentials into `AGENTS.md`, `CLAUDE.md`, generated docs, or chat output. Rotate any secret that was exposed.
 - **Never** commit private keys, `.pem` files, or SSH keys — if the project needs them locally, keep them out of git (`.gitignore`) and out of generated docs.
 - **Never** put secrets in `NEXT_PUBLIC_*` (Next.js) or `VITE_*` (Vite) — both are exposed in the client bundle.
+- **Next.js**: Always keep `next` on a current version — CVE-2025-55182 (Dec 2025 RSC RCE, critical) required a Next.js 16.x patch. Use `pnpm update next` regularly.
 - **FastAPI**: In development, CORS allows `localhost:3000`, `localhost:5173`, and `127.0.0.1` variants automatically. In production, set `CORS_ORIGINS` env var (comma-separated) to your frontend's domain.
 - **Production**: Replace template dev placeholders in env (e.g. better-auth `BETTER_AUTH_SECRET`, JWT secrets) with strong values before deploy — call this out in handoff when templates use placeholders.
 - Follow each stack’s `code-standards` for auth, env vars, and least-privilege responses.

@@ -22,7 +22,7 @@ Install runtime and dev dependencies with NO version pins:
 ```bash
 pnpm add react react-dom react-router@^7.12.0 @tanstack/react-query \
   class-variance-authority clsx tailwind-merge lucide-react radix-ui \
-  @hookform/resolvers@^5.0.0 react-hook-form zod sonner framer-motion
+  @hookform/resolvers@^5.0.0 react-hook-form zod sonner motion
 
 pnpm add -D vite @vitejs/plugin-react typescript \
   @types/react @types/react-dom \

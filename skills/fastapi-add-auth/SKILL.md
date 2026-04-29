@@ -102,6 +102,7 @@ from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
+from fastapi import HTTPException
 
 from core.config import api_settings
 
@@ -110,6 +111,8 @@ ALGORITHM = "HS256"
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password."""
+    if len(password.encode()) > 72:
+        raise HTTPException(status_code=400, detail="Password must be 72 characters or fewer")
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 

@@ -45,10 +45,10 @@ Install these with `pnpm`. Claude resolves latest compatible versions at scaffol
 }
 ```
 
-**Engines field to include in package.json** (Next.js 16 requires Node.js ≥ 20.9.0):
+**Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
 ```json
 {
-  "engines": { "node": ">=20.9.0" }
+  "engines": { "node": ">=22.0.0" }
 }
 ```
 
@@ -155,7 +155,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
         ├── constants/
         │   ├── index.ts                [verbatim — Part C]
         │   ├── env.ts                  [verbatim — Part C]
-        │   └── routes.ts               [generate — PAGE_ROUTES (HOME:'/', DASHBOARD:'/dashboard') + API_ROUTES (HEALTH:'/api/health'); nextjs-add-auth appends LOGIN:'/login' — do not add it here]
+        │   └── routes.ts               [generate — PAGE_ROUTES (HOME:'/', DASHBOARD:'/dashboard') + API_ROUTES (ROOT:'/api', HEALTH:'/api/health'); nextjs-add-auth appends LOGIN:'/login' — do not add it here]
         └── errors/
             ├── index.ts                [verbatim — Part C]
             ├── handle-api-error.ts     [verbatim — Part C]
@@ -1782,6 +1782,7 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
 ### `src/lib/errors/index.ts`
 
 ```ts
+export { APIError } from '@/integrations/error';
 export { handleApiError } from './handle-api-error';
 export { logError } from './error-log-handler';
 ```

@@ -693,8 +693,8 @@ export default tseslint.config(
 ```json
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node10",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,
@@ -965,6 +965,7 @@ export * from './setups/security.setup';
 import fastifyHelmet from '@fastify/helmet';
 import type { INestApplication } from '@nestjs/common';
 import type { FastifyInstance } from 'fastify';
+import { serviceConfig } from '..';
 
 export async function setupSecurity(app: INestApplication): Promise<void> {
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
