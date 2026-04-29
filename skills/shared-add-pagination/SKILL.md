@@ -455,16 +455,14 @@ class PaginationService:
 
 ```python
 # src/api/projects/routes.py
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import ValidationError
 
 from core.database import get_session
 from core.exceptions import InvalidInputError
 from lib.pagination.pagination_service import PaginationService
-from lib.validation.schemas import PaginationParams
-from lib.types.pagination import PaginatedResponse
+from lib.types.pagination import PaginatedResponse, PaginationMetadata
 from models.project import Project as ProjectModel
 from .schemas import ProjectResponse
 
@@ -472,13 +470,13 @@ router = APIRouter(prefix='/projects', tags=['projects'])
 
 ALLOWED_SORT_FIELDS = ['name', 'created_at', 'updated_at']
 
-@router.get('', response_model=dict)  # Returns wrapped response
+@router.get('', response_model=PaginatedResponse[ProjectResponse])
 async def list_projects(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     sort: str | None = Query(default=None, pattern=r'^(asc|desc)_\w+$'),
     session: AsyncSession = get_session(),
-) -> dict:
+) -> PaginatedResponse[ProjectResponse]:
     """List projects with pagination.
     
     Query parameters are validated by Pydantic Query() constraints.
@@ -511,15 +509,11 @@ async def list_projects(
     count_result = await session.execute(count_stmt)
     total = count_result.scalar()
 
-    # Build response (matches Phase 1 unified schema)
     pagination_metadata = PaginationService.create_metadata(page, limit, total)
-    
-    return {
-        'data': {
-            'items': [ProjectResponse.model_validate(p) for p in projects],
-            'pagination': pagination_metadata,
-        }
-    }
+    return PaginatedResponse(
+        data=[ProjectResponse.model_validate(p) for p in projects],
+        pagination=PaginationMetadata(**pagination_metadata),
+    )
 ```
 
 ---

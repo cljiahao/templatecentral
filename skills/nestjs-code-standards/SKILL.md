@@ -146,7 +146,7 @@ Same-change Jest for controllers, services, repositories, HTTP guards/pipes (`te
 
 ### Security Headers
 - `helmet` is configured in `security.setup.ts` — NEVER remove or weaken CSP, HSTS, or frame-ancestors directives
-- Cache-Control headers are set to `no-store` — appropriate for API responses with sensitive data
+- Cache-Control headers are set to `no-cache, no-store, must-revalidate, private` — appropriate for API responses with sensitive data
 
 ### CORS
 - Origins are restricted to `CLIENT_URL` — NEVER use `origin: '*'` in production
