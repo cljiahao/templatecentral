@@ -771,3 +771,311 @@ Confirm the build succeeds and all tests pass.
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
 - **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor — no query code changes needed.
 - **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use `MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties` — no schema or query code changes needed.
+
+---
+
+## Completing Auth Integration
+
+> **Only apply this section if `nestjs-add-auth` was run before this skill.**
+> It replaces the in-memory stubs with real database-backed implementations.
+> Follow only the sub-section that matches your chosen database.
+
+### Drizzle path
+
+**Step A — Add `hashedPassword` to `src/database/schema.ts`**
+
+Add the `hashedPassword` column to the `users` table and regenerate + apply the migration:
+
+```typescript
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  hashedPassword: text('hashed_password').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+```
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+```
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { eq } from 'drizzle-orm';
+
+import { DrizzleService } from '../../database/drizzle.service';
+import { users } from '../../database/schema';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly drizzle: DrizzleService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const [existing] = await this.drizzle.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, dto.email))
+      .limit(1);
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const [user] = await this.drizzle.db
+      .insert(users)
+      .values({ email: dto.email, name: dto.name, hashedPassword })
+      .returning({ id: users.id, email: users.email, name: users.name });
+    return user;
+  }
+
+  async login(dto: LoginDto) {
+    const [user] = await this.drizzle.db
+      .select()
+      .from(users)
+      .where(eq(users.email, dto.email))
+      .limit(1);
+    if (!user || !(await bcrypt.compare(dto.password, user.hashedPassword))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user.id, email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — `src/modules/auth/auth.module.ts` requires no changes**
+
+`DrizzleService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`. Confirm `DatabaseModule` is registered in `AppModule` (the scaffold handles this).
+
+---
+
+### Kysely path
+
+**Step A — Update `src/database/types.ts` and add migration**
+
+Add `hashed_password` to `UsersTable`:
+
+```typescript
+import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
+
+export interface Database {
+  users: UsersTable;
+}
+
+export interface UsersTable {
+  id: Generated<string>;
+  email: string;
+  name: string;
+  hashed_password: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type User = Selectable<UsersTable>;
+export type NewUser = Insertable<UsersTable>;
+export type UserUpdate = Updateable<UsersTable>;
+```
+
+**If `001_initial.ts` has not been applied yet:** add `hashed_password text NOT NULL` directly to the `createTable` call in `001_initial.ts`.
+
+**If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/002_add_auth.ts`:
+
+```typescript
+import { type Kysely } from 'kysely';
+
+export async function up(db: Kysely<unknown>): Promise<void> {
+  await db.schema
+    .alterTable('users')
+    .addColumn('hashed_password', 'text', (col) => col.notNull().defaultTo(''))
+    .execute();
+  // Remove the temporary default — hashed_password must not have a default in production
+  await db.schema
+    .alterTable('users')
+    .alterColumn('hashed_password', (col) => col.dropDefault())
+    .execute();
+}
+
+export async function down(db: Kysely<unknown>): Promise<void> {
+  await db.schema.alterTable('users').dropColumn('hashed_password').execute();
+}
+```
+
+Run: `pnpm db:migrate`
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+
+import { KyselyService } from '../../database/kysely.service';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly db: KyselyService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', dto.email)
+      .executeTakeFirst();
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const user = await this.db
+      .insertInto('users')
+      .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
+      .returning(['id', 'email', 'name'])
+      .executeTakeFirstOrThrow();
+    return user;
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.db
+      .selectFrom('users')
+      .selectAll()
+      .where('email', '=', dto.email)
+      .executeTakeFirst();
+    if (!user || !(await bcrypt.compare(dto.password, user.hashed_password))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user.id, email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — `src/modules/auth/auth.module.ts` requires no changes**
+
+`KyselyService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`.
+
+---
+
+### Mongoose path
+
+**Step A — Create `src/modules/auth/schemas/user.schema.ts`**
+
+```typescript
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { type HydratedDocument } from 'mongoose';
+
+export type UserDocument = HydratedDocument<User>;
+
+@Schema({ timestamps: true })
+export class User {
+  @Prop({ required: true, unique: true })
+  email: string;
+
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ required: true })
+  hashedPassword: string;
+}
+
+export const UserSchema = SchemaFactory.createForClass(User);
+```
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectModel } from '@nestjs/mongoose';
+import * as bcrypt from 'bcrypt';
+import { Model } from 'mongoose';
+
+import { User, type UserDocument } from './schemas/user.schema';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.userModel.findOne({ email: dto.email }).exec();
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const user = await this.userModel.create({
+      email: dto.email,
+      name: dto.name,
+      hashedPassword,
+    });
+    return { id: user._id.toString(), email: user.email, name: user.name };
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.userModel.findOne({ email: dto.email }).exec();
+    if (!user || !(await bcrypt.compare(dto.password, user.hashedPassword))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user._id.toString(), email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — Update `src/modules/auth/auth.module.ts`**
+
+Add `MongooseModule.forFeature` to `imports` and register the `User` schema:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+import { PassportModule } from '@nestjs/passport';
+
+import { appConfig } from '../../config/env.config';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './jwt.strategy';
+import { User, UserSchema } from './schemas/user.schema';
+
+@Module({
+  imports: [
+    PassportModule,
+    JwtModule.register({
+      secret: appConfig.JWT_SECRET,
+      signOptions: { expiresIn: appConfig.JWT_EXPIRES_IN },
+    }),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService],
+})
+export class AuthModule {}
+```
