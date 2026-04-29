@@ -122,7 +122,7 @@ api/           →  models/
 - Always set explicit methods and headers alongside `allow_credentials=True` — wildcard `["*"]` for methods/headers is invalid with credentials per the CORS spec
 
 ### Auth
-- Hash passwords with `bcrypt` or `passlib` — NEVER store plaintext passwords
+- Hash passwords with `bcrypt` directly — NEVER store plaintext passwords (`passlib` is unmaintained and incompatible with bcrypt ≥ 4.1.1)
 - JWT tokens should have short expiry; use refresh tokens for long sessions
 - NEVER return password hashes or internal IDs in API responses
 

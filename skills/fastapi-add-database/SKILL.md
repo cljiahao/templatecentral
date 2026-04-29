@@ -324,7 +324,7 @@ async def get_user(user_id: str):
 
 @router.post("/users", response_model=UserResponse, status_code=201)
 async def create_user(payload: CreateUserRequest):
-    user = User(**payload.model_dump(), hashed_password="...")  # hash with bcrypt/passlib in production
+    user = User(**payload.model_dump(), hashed_password="...")  # hash with bcrypt in production
     await user.insert()
     return user
 ```

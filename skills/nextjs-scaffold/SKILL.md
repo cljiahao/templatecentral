@@ -694,14 +694,16 @@ Write these files exactly as shown. Do not modify.
 ```tsx
 'use client';
 
-import { cva, type VariantProps } from 'class-variance-authority';
+import type { ComponentProps, ReactNode } from 'react';
 import { useMemo } from 'react';
+
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-function FieldSet({ className, ...props }: React.ComponentProps<'fieldset'>) {
+function FieldSet({ className, ...props }: ComponentProps<'fieldset'>) {
   return (
     <fieldset
       data-slot="field-set"
@@ -719,7 +721,7 @@ function FieldLegend({
   className,
   variant = 'legend',
   ...props
-}: React.ComponentProps<'legend'> & { variant?: 'legend' | 'label' }) {
+}: ComponentProps<'legend'> & { variant?: 'legend' | 'label' }) {
   return (
     <legend
       data-slot="field-legend"
@@ -735,7 +737,7 @@ function FieldLegend({
   );
 }
 
-function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
+function FieldGroup({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="field-group"
@@ -776,7 +778,7 @@ function Field({
   className,
   orientation = 'vertical',
   ...props
-}: React.ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
+}: ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
   return (
     <div
       role="group"
@@ -788,7 +790,7 @@ function Field({
   );
 }
 
-function FieldContent({ className, ...props }: React.ComponentProps<'div'>) {
+function FieldContent({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="field-content"
@@ -804,7 +806,7 @@ function FieldContent({ className, ...props }: React.ComponentProps<'div'>) {
 function FieldLabel({
   className,
   ...props
-}: React.ComponentProps<typeof Label>) {
+}: ComponentProps<typeof Label>) {
   return (
     <Label
       data-slot="field-label"
@@ -819,7 +821,7 @@ function FieldLabel({
   );
 }
 
-function FieldTitle({ className, ...props }: React.ComponentProps<'div'>) {
+function FieldTitle({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="field-label"
@@ -832,7 +834,7 @@ function FieldTitle({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function FieldDescription({ className, ...props }: React.ComponentProps<'p'>) {
+function FieldDescription({ className, ...props }: ComponentProps<'p'>) {
   return (
     <p
       data-slot="field-description"
@@ -851,7 +853,7 @@ function FieldSeparator({
   children,
   className,
   ...props
-}: React.ComponentProps<'div'> & { children?: React.ReactNode }) {
+}: ComponentProps<'div'> & { children?: ReactNode }) {
   return (
     <div
       data-slot="field-separator"
@@ -880,7 +882,7 @@ function FieldError({
   children,
   errors,
   ...props
-}: React.ComponentProps<'div'> & {
+}: ComponentProps<'div'> & {
   errors?: Array<{ message?: string } | undefined>;
 }) {
   const content = useMemo(() => {
@@ -1169,10 +1171,12 @@ export function MediaCard({
 ### `src/components/widgets/pill.tsx`
 
 ```tsx
+import type { ReactNode } from 'react';
+
 import { cn } from '@/lib/utils';
 
 interface PillProps {
-  children: React.ReactNode;
+  children: ReactNode;
   variant?: 'outline' | 'solid';
 }
 
@@ -1840,6 +1844,8 @@ export const logError = (logLabel: string, error: unknown): void => {
 ### `src/app/layout.tsx`
 
 ```tsx
+import type { ReactNode } from 'react';
+
 import { Providers, ThemeProvider } from '@/components/layout';
 import type { Metadata } from 'next';
 import { Geist_Mono, Lato } from 'next/font/google';
@@ -1864,7 +1870,7 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="no-scrollbar">
@@ -2281,9 +2287,11 @@ export default function DashboardPage() {
 ### `src/app/(public)/layout.tsx`
 
 ```tsx
+import type { ReactNode } from 'react';
+
 import { Navbar, SiteFooter } from '@/components/layout';
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />

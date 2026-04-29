@@ -563,9 +563,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
 ```ts
 // src/common/exceptions/not-found.exception.ts
+// Name with a domain prefix to avoid shadowing @nestjs/common's built-in NotFoundException
 import { HttpException, HttpStatus } from '@nestjs/common';
 
-export class NotFoundException extends HttpException {
+export class AppNotFoundException extends HttpException {
   constructor(message: string = 'Resource not found') {
     super(message, HttpStatus.NOT_FOUND);
   }
@@ -573,7 +574,7 @@ export class NotFoundException extends HttpException {
 
 // src/modules/projects/projects.service.ts
 import { Injectable } from '@nestjs/common';
-import { NotFoundException } from '@/common/exceptions/not-found.exception';
+import { AppNotFoundException } from '@/common/exceptions/not-found.exception';
 
 @Injectable()
 export class ProjectsService {
@@ -581,7 +582,7 @@ export class ProjectsService {
     const project = null; // replace with: await this.drizzle.db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
     
     if (!project) {
-      throw new NotFoundException('Project not found');
+      throw new AppNotFoundException('Project not found');
     }
     
     return project;
