@@ -358,7 +358,7 @@ Create a migration runner script at **`src/integrations/database/migrate.ts`**:
 ```ts
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { FileMigrationProvider, Migrator } from 'kysely';
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 
 import { db } from './kysely-client';
 

@@ -465,7 +465,8 @@ Create a migration runner at **`src/database/migrate.ts`**:
 ```typescript
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { FileMigrationProvider, Migrator, PostgresDialect, Kysely } from 'kysely';
+import { Kysely, PostgresDialect } from 'kysely';
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { Pool } from 'pg';
 
 import { serviceConfig } from '../config/env.config';
