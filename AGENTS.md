@@ -171,7 +171,7 @@ For **Claude Code users**, also generate a `CLAUDE.md` (see below). Both coexist
 - **superpowers** (`claude plugin marketplace add obra/superpowers`) — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **As the project grows (5+ features):**
-- **codegraph** (`npx @colbymchenry/codegraph`, Node 18+) — symbol navigation; add when grepping for definitions is a regular cost.
+- **codegraph** (`npx @colbymchenry/codegraph`, Node 22+) — symbol navigation; add when grepping for definitions is a regular cost.
 - **graphify** (`uv tool install graphifyy && graphify install`, Python 3.10+) — structural overview; use before codegraph for orientation.
 - **code-review-graph** (`pip install code-review-graph && code-review-graph install && code-review-graph build`, Python 3.10+) — PR/refactor impact analysis; add when blast radius is non-obvious.
 

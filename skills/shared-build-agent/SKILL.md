@@ -26,7 +26,7 @@ If ambiguous (multiple markers), check `package.json` `dependencies` field for `
 |---|---|
 | Next.js | `pnpm build && pnpm check` |
 | Vite-React | `pnpm build && pnpm check` |
-| NestJS | `pnpm build` |
+| NestJS | `pnpm build && pnpm check` |
 | FastAPI | `ruff check src/ && pytest test/` |
 
 ## Steps

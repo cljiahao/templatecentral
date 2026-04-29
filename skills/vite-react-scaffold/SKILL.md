@@ -175,11 +175,18 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 **`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Use the dependency list above and the scripts block below. Set `"packageManager"` to the current pnpm version (`pnpm --version`).
 
+**Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
+```json
+{
+  "engines": { "node": ">=22.0.0" }
+}
+```
+
 **Scripts to include in `package.json`:**
 ```json
 {
   "dev": "vite",
-  "build": "vite build",
+  "build": "tsc -b && vite build",
   "preview": "vite preview",
   "prepare": "husky",
   "format": "prettier --write .",

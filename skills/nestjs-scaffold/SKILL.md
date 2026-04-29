@@ -102,6 +102,13 @@ pnpm install   # activates husky via prepare script
 
 **`package.json`** — Generate with the project name substituted into `"name"`. Use the scripts, jest config, and dependency list exactly matching the template structure. No version pins on deps (pnpm resolves latest compatible).
 
+**Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
+```json
+{
+  "engines": { "node": ">=22.0.0" }
+}
+```
+
 **`README.md`** — Generate a brief project README: project name as heading, one-line description, stack badge line (NestJS, Fastify, TypeScript, Zod), and quick-start commands (`pnpm install`, `pnpm start:dev`, `pnpm build`, `pnpm test`).
 
 **`AGENTS.md`** — Generated only after the verification gate passes (Step 5). Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1. See Step 6 for full template.
