@@ -1,4 +1,4 @@
-# templateCentral
+# templatecentral
 
 Production-ready project scaffolding for **Next.js**, **Vite + React**, **FastAPI**, and **NestJS**. Install once as a Claude Code plugin — scaffold anywhere without cloning the repo.
 
@@ -10,7 +10,7 @@ Push this repo to GitHub, then anyone can install directly from your GitHub user
 
 ```bash
 # Add your GitHub repo as a marketplace source
-claude plugin marketplace add cljiahao/templateCentral
+claude plugin marketplace add cljiahao/templatecentral
 
 # Then install the plugin
 claude plugin install templatecentral
@@ -66,7 +66,7 @@ Skills are organized by stack. Each skill has YAML frontmatter (`name`, `descrip
 ## Repository Structure
 
 ```
-templateCentral/
+templatecentral/
 ├── AGENTS.md                       # Agent orchestration guide
 ├── README.md
 ├── .claude-plugin/                 # Plugin manifest
@@ -97,7 +97,7 @@ None are required — install as needed. All are Claude Code plugins unless note
 |--------|---------|-------------|--------------------------|
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
 | **superpowers** | `claude plugin marketplace add obra/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
-| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templateCentral itself — use built-in markdown memory here instead (curated, auditable) |
+| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templatecentral itself — use built-in markdown memory here instead (curated, auditable) |
 | **codegraph** | `npx @colbymchenry/codegraph` (Node 18+) | "What calls X / where does Y live" — add when grepping for definitions is a regular cost | Fresh scaffolds (< 5 features); structure is predictable from template |
 | **graphify** | `uv tool install graphifyy && graphify install` (Python 3.10+) | Codebase structure overview (communities, god nodes); use before codegraph for high-level orientation | Same threshold as codegraph |
 | **code-review-graph** | `pip install code-review-graph && code-review-graph install && code-review-graph build` (Python 3.10+) | PRs and refactors with non-obvious blast radius — queries callers, dependents, covering tests | Routine single-file edits |
@@ -109,7 +109,7 @@ None are required — install as needed. All are Claude Code plugins unless note
 claude plugin marketplace add JuliusBrussee/caveman
 claude plugin marketplace add obra/superpowers
 
-# For scaffolded projects (not templateCentral itself — use built-in memory here)
+# For scaffolded projects (not templatecentral itself — use built-in memory here)
 claude plugin marketplace add thedotmack/claude-mem
 claude plugin install claude-mem
 
