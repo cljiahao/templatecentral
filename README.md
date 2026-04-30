@@ -13,7 +13,7 @@ Push this repo to GitHub, then anyone can install directly from your GitHub user
 claude plugin marketplace add cljiahao/templateCentral
 
 # Then install the plugin
-claude plugin install templatecentral@templatecentral
+claude plugin install templatecentral
 ```
 
 The `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` files are already included — no extra setup needed.
