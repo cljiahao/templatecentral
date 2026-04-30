@@ -835,7 +835,7 @@ export class AuthService {
       .limit(1);
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
     const [user] = await this.drizzle.db
       .insert(users)
       .values({ email: dto.email, name: dto.name, hashedPassword })
@@ -941,7 +941,7 @@ export class AuthService {
       .executeTakeFirst();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
     const user = await this.db
       .insertInto('users')
       .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
@@ -1021,7 +1021,7 @@ export class AuthService {
     const existing = await this.userModel.findOne({ email: dto.email }).exec();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
     const user = await this.userModel.create({
       email: dto.email,
       name: dto.name,

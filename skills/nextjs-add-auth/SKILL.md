@@ -66,6 +66,10 @@ Security-critical file. Write exactly as shown.
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
 
+if (!process.env.BETTER_AUTH_SECRET) {
+  throw new Error('BETTER_AUTH_SECRET environment variable is required — generate with: openssl rand -base64 32');
+}
+
 export const auth = betterAuth({
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'My App',
   baseURL: process.env.BETTER_AUTH_URL,
@@ -487,6 +491,26 @@ Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.l
 
 Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
+## Rate Limiting (Required for Production)
+
+IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
+
+```bash
+pnpm add @upstash/ratelimit @upstash/redis
+```
+
+In `src/proxy.ts`, add a rate-limit check before the auth call on `/api/auth/sign-in`:
+
+```typescript
+// Rate limit sign-in attempts (IM8 AS-4: max 3/15 min)
+if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
+  const { success } = await ratelimit.limit(request.ip ?? 'anonymous');
+  if (!success) return new Response(null, { status: 429 });
+}
+```
+
+For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
+
 ## Security Rules
 
 - NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })`. JSON responses create information-disclosure vectors.
@@ -495,6 +519,7 @@ Full provider list: https://www.better-auth.com/docs/authentication/social-sign-
 - NEVER hardcode secrets — always environment variables.
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
+- **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live (IM8 AS-4).
 
 ## After Writing Code
 

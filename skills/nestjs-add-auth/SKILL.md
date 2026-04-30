@@ -150,7 +150,7 @@ export class AuthService {
   constructor(private readonly jwtService: JwtService) {}
 
   async register(dto: RegisterDto) {
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
     const user = { id: 'generated-id', email: dto.email, name: dto.name, hashedPassword };
     return { id: user.id, email: user.email, name: user.name };
   }
@@ -283,11 +283,34 @@ JWT_SECRET=<generate with: openssl rand -hex 32>
 JWT_EXPIRES_IN=30m
 ```
 
+## Rate Limiting (Required for Production)
+
+IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. Install `@nestjs/throttler`:
+
+```bash
+pnpm add @nestjs/throttler
+```
+
+Register globally in `AppModule` (import + guard):
+
+```typescript
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+
+@Module({
+  imports: [
+    ThrottlerModule.forRoot([{ ttl: 900_000, limit: 3 }]), // 3 attempts per 15 min
+  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
+```
+
 ## Rules
 
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
+- **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live (IM8 AS-4).
 
 ## Validate
 

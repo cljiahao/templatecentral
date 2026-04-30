@@ -256,12 +256,34 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     )
 ```
 
+## Rate Limiting (Required for Production)
+
+IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. Add `slowapi>=0.1.9` to `requirements.txt`, then:
+
+```python
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
+
+limiter = Limiter(key_func=get_remote_address)
+# In app.py:
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# On auth endpoints:
+@router.post("/login")
+@limiter.limit("3/15minutes")
+async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
+```
+
 ## Rules
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
+- **Rate limiting is mandatory for production** — add `slowapi` before going live (IM8 AS-4).
 
 ## Validate
 
