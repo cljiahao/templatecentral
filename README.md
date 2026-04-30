@@ -91,32 +91,20 @@ To contribute a new skill:
 
 ## Recommended Plugins
 
-None are required — install as needed. All are Claude Code plugins unless noted as MCP.
+**superpowers is required** — templatecentral's skills depend on it. The others are optional but recommended.
 
 | Plugin | Install | When to use | When to skip / turn off |
 |--------|---------|-------------|--------------------------|
+| **superpowers** ⚠️ required | `claude plugin marketplace add obra/superpowers` | Always — templatecentral skills call into the superpowers skill chain | — |
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
-| **superpowers** | `claude plugin marketplace add obra/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
 | **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templatecentral itself — use built-in markdown memory here instead (curated, auditable) |
-| **codegraph** | `npx @colbymchenry/codegraph` (Node 18+) | "What calls X / where does Y live" — add when grepping for definitions is a regular cost | Fresh scaffolds (< 5 features); structure is predictable from template |
-| **graphify** | `uv tool install graphifyy && graphify install` (Python 3.10+) | Codebase structure overview (communities, god nodes); use before codegraph for high-level orientation | Same threshold as codegraph |
-| **code-review-graph** | `pip install code-review-graph && code-review-graph install && code-review-graph build` (Python 3.10+) | PRs and refactors with non-obvious blast radius — queries callers, dependents, covering tests | Routine single-file edits |
-
-### Install order
 
 ```bash
-# Day one (Claude Code plugins)
-claude plugin marketplace add JuliusBrussee/caveman
+# Required
 claude plugin marketplace add obra/superpowers
 
-# For scaffolded projects (not templatecentral itself — use built-in memory here)
+# Optional
+claude plugin marketplace add JuliusBrussee/caveman
 claude plugin marketplace add thedotmack/claude-mem
 claude plugin install claude-mem
-
-# After 5+ features (MCP servers — run inside your project)
-npx @colbymchenry/codegraph                                              # codegraph
-uv tool install graphifyy && graphify install                            # graphify
-pip install code-review-graph && code-review-graph install && code-review-graph build  # code-review-graph
-
-# When doing refactors or PRs — activate code-review-graph
 ```
