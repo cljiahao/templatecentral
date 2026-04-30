@@ -10,10 +10,10 @@ Push this repo to GitHub, then anyone can install directly from your GitHub user
 
 ```bash
 # Add your GitHub repo as a marketplace source
-claude plugin marketplace add your-github-username/templateCentral
+claude plugin marketplace add cljiahao/templateCentral
 
 # Then install the plugin
-claude plugin install templatecentral@your-github-username-templatecentral
+claude plugin install templatecentral@templatecentral
 ```
 
 The `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` files are already included — no extra setup needed.
@@ -31,6 +31,14 @@ To submit for listing: https://clau.de/plugin-directory-submission
 ---
 
 Either way, the plugin registers 46 skills that Claude Code picks up automatically.
+
+## Updating
+
+```bash
+claude plugin update templatecentral
+```
+
+This pulls the latest version from the source it was installed from (GitHub or the official marketplace). Run it whenever new skills or fixes are released.
 
 ## Usage
 
