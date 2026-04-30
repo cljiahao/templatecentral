@@ -4,11 +4,33 @@ Production-ready project scaffolding for **Next.js**, **Vite + React**, **FastAP
 
 ## Install
 
+### From GitHub (available now)
+
+Push this repo to GitHub, then anyone can install directly from your GitHub username/repo:
+
+```bash
+# Add your GitHub repo as a marketplace source
+claude plugin marketplace add your-github-username/templateCentral
+
+# Then install the plugin
+claude plugin install templatecentral@your-github-username-templatecentral
+```
+
+The `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` files are already included — no extra setup needed.
+
+### From the Official Marketplace (once published)
+
+If listed on the Anthropic plugin marketplace, users can install with a single command:
+
 ```bash
 claude plugin marketplace add templatecentral
 ```
 
-That's it. The plugin registers 46 skills that Claude Code picks up automatically.
+To submit for listing: https://clau.de/plugin-directory-submission
+
+---
+
+Either way, the plugin registers 46 skills that Claude Code picks up automatically.
 
 ## Usage
 
