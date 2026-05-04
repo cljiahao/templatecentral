@@ -20,7 +20,7 @@ version: "1.0.0"
 Install these with `pnpm`. Claude resolves latest compatible versions at scaffold time. The `shared-update-agent` will freshen them immediately after scaffold.
 
 **Runtime:**
-`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `next`, `next-themes`, `react`, `react-dom`, `react-hook-form`, `tailwind-merge`, `zod`
+`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `motion`, `next`, `next-themes`, `react`, `react-dom`, `react-hook-form`, `sonner`, `tailwind-merge`, `zod`
 
 **Dev:**
 `@tailwindcss/postcss`, `@tailwindcss/typography`, `@types/node`, `@types/react`, `@types/react-dom`, `@vitest/coverage-v8`, `eslint`, `eslint-config-next`, `eslint-config-prettier`, `husky`, `prettier`, `prettier-plugin-organize-imports`, `prettier-plugin-tailwindcss`, `tailwindcss`, `tw-animate-css`, `typescript`, `vitest`
@@ -72,6 +72,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 ├── prettier.config.mjs                 [generate — with organize-imports + tailwindcss plugins]
 ├── vitest.config.ts                    [verbatim — Part B]
 ├── .gitignore                          [verbatim — Part B]
+├── .npmrc                              [verbatim — Part B]
 ├── .husky/
 │   ├── pre-commit                      [generate — pnpm format:check && pnpm lint]
 │   └── pre-push                        [generate — pnpm test]
@@ -647,6 +648,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+```
+
+### `.npmrc`
+
+```
+# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
+# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
+blockExoticSubdeps=true
 ```
 
 ### `vitest.config.ts`
@@ -1391,6 +1400,7 @@ export { ThemeToggleButton } from './theme-toggle-button';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { Toaster } from 'sonner';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -1410,7 +1420,10 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <Toaster position="top-right" />
+    </QueryClientProvider>
   );
 }
 ```
@@ -1950,16 +1963,7 @@ export * from './routes';
  *
  * Pattern: Environment → factories.ts → clients/ → services/ → schemas/
  *
- * Example usage:
- *
- *   import { createAxiosClient } from '@/integrations/clients/base/axios-client';
- *
- *   export const myApiClient = createAxiosClient({
- *     baseURL: process.env.MY_API_URL!,
- *     apiKey: { 'x-api-key': process.env.MY_API_KEY! },
- *   });
- *
- * For fetch-based clients, extend FetchClient:
+ * Default to FetchClient for simple REST APIs:
  *
  *   import { FetchClient } from '@/integrations/clients/base/fetch-client';
  *
@@ -1973,6 +1977,16 @@ export * from './routes';
  *     process.env.MY_API_URL!,
  *     { Authorization: `Bearer ${process.env.MY_TOKEN}` }
  *   );
+ *
+ * Switch to createAxiosClient only when you need complex HTTPS requirements
+ * (mutual TLS, certificate pinning, per-request interceptor chains):
+ *
+ *   import { createAxiosClient } from '@/integrations/clients/base/axios-client';
+ *
+ *   export const myApiClient = createAxiosClient({
+ *     baseURL: process.env.MY_API_URL!,
+ *     apiKey: { 'x-api-key': process.env.MY_API_KEY! },
+ *   });
  */
 ```
 
@@ -2512,7 +2526,7 @@ pnpm install
 `components.json` was written in Step 1 — no interactive init needed. Add primitives directly:
 
 ```bash
-npx shadcn@latest add button card dialog form input label select separator tabs textarea
+npx shadcn@latest add button card dialog form input label select separator sonner tabs textarea
 ```
 
 ### 5. Copy `.env.example` to `.env.local`

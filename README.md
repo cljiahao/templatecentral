@@ -91,16 +91,16 @@ To contribute a new skill:
 
 ## Recommended Plugins
 
-**superpowers is required** — templatecentral's skills depend on it. The others are optional but recommended.
+**superpowers is strongly recommended** — templatecentral integrates with the superpowers brainstorm → plan → execute workflow for complex multi-file features. The others are optional but recommended.
 
 | Plugin | Install | When to use | When to skip / turn off |
 |--------|---------|-------------|--------------------------|
-| **superpowers** ⚠️ required | `claude plugin marketplace add obra/superpowers` | Always — templatecentral skills call into the superpowers skill chain | — |
+| **superpowers** ⭐ recommended | `claude plugin marketplace add obra/superpowers` | Complex features (3+ files) — provides brainstorm → plan → execute workflow that templatecentral skills reference | Simple one-file edits |
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
 | **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templatecentral itself — use built-in markdown memory here instead (curated, auditable) |
 
 ```bash
-# Required
+# Strongly recommended
 claude plugin marketplace add obra/superpowers
 
 # Optional

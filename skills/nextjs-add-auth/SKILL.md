@@ -78,7 +78,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
-    minPasswordLength: 8,
+    minPasswordLength: 12, // IM8 AS-5 / NIST SP 800-63B minimum
     autoSignIn: true,
   },
 
@@ -102,7 +102,7 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 30 * 24 * 60 * 60, // 30 days
+    expiresIn: 30 * 24 * 60 * 60, // 30 days (AAL1) — IM8 AS-11: AAL2 systems reduce to 43200 (12h) + 30-min inactivity; AAL3 use 28800 (8h) + 15-min inactivity
     updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
     cookieCache: {
       enabled: true,

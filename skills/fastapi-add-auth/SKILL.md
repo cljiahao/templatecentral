@@ -33,7 +33,7 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=8, description="User password.")
+    password: str = Field(min_length=12, description="User password — minimum 12 characters (IM8 AS-5 / NIST SP 800-63B).")
     name: str = Field(description="User display name.")
 
 
@@ -113,7 +113,7 @@ def hash_password(password: str) -> str:
     """Hash a plaintext password."""
     if len(password.encode()) > 72:
         raise HTTPException(status_code=400, detail="Password must be 72 characters or fewer")
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")  # cost 12 — OWASP minimum
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

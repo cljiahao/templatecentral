@@ -21,7 +21,7 @@ Install runtime and dev dependencies with NO version pins:
 
 ```bash
 pnpm add react react-dom react-router@^7.14.2 @tanstack/react-query \
-  class-variance-authority clsx tailwind-merge lucide-react radix-ui \
+  class-variance-authority clsx tailwind-merge lucide-react \
   @hookform/resolvers@^5.0.0 react-hook-form zod sonner motion
 
 pnpm add -D vite @vitejs/plugin-react typescript \
@@ -56,6 +56,7 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 ├── docker-entrypoint.sh                    [verbatim]
 ├── .dockerignore                           [verbatim]
 ├── .gitignore                              [verbatim]
+├── .npmrc                                  [verbatim]
 ├── .env.example                            [verbatim]
 ├── .env                                    [copy from .env.example]
 ├── .prettierrc                             [verbatim]
@@ -624,6 +625,14 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+```
+
+### `.npmrc`
+
+```
+# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
+# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
+blockExoticSubdeps=true
 ```
 
 ### `.env.example`
@@ -2085,7 +2094,7 @@ Custom component (not managed by shadcn CLI):
 import type { ComponentProps } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
+import { Slot } from '@radix-ui/react-slot';
 
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils/index';

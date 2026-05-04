@@ -38,7 +38,7 @@ import { z } from 'zod';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(8),
+  password: z.string().min(12), // 12-char minimum — IM8 AS-5 / NIST SP 800-63B baseline
   name: z.string().min(1),
 });
 

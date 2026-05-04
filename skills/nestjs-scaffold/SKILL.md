@@ -20,7 +20,7 @@ version: "1.0.0"
 Install runtime dependencies (no version pins):
 
 ```bash
-pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
+pnpm add @nestjs/common@^11.1.19 @nestjs/core@^11.1.19 @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
   @fastify/helmet@^13.0.0 dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
 pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/jest @types/node \
@@ -35,6 +35,8 @@ git init
 pnpm install   # activates husky via prepare script
 ```
 
+> **NestJS 11.1.19+** ships with Fastify v5. This skill pins `@nestjs/platform-fastify@^11.1.19` — do not lower this pin to earlier 11.x releases, as those shipped Fastify v4 (EOL June 2025).
+
 ### Directory Structure
 
 ```
@@ -43,6 +45,7 @@ pnpm install   # activates husky via prepare script
 ├── docker-entrypoint.sh                [verbatim — Part B]
 ├── .dockerignore                       [verbatim — Part B]
 ├── .gitignore                          [verbatim — Part B]
+├── .npmrc                              [verbatim — Part B]
 ├── .env.example                        [verbatim — Part B]
 ├── .prettierrc                         [verbatim — Part B]
 ├── eslint.config.mjs                   [verbatim — Part B]
@@ -633,6 +636,14 @@ PORT=3000
 CLIENT_URL=http://localhost:3000
 ```
 
+### `.npmrc`
+
+```
+# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
+# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
+blockExoticSubdeps=true
+```
+
 ### `.prettierrc`
 
 ```json
@@ -986,7 +997,7 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': ["'none'"],
       },
     },
-    strictTransportSecurity: { maxAge: 31536000 },
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true }, // IM8 AS-10
     xFrameOptions: { action: 'deny' },
   });
 
