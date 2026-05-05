@@ -1,110 +1,162 @@
 # templatecentral
+**One prompt. Four stacks. Production-ready every time.**
 
-Production-ready project scaffolding for **Next.js**, **Vite + React**, **FastAPI**, and **NestJS**. Install once as a Claude Code plugin — scaffold anywhere without cloning the repo.
+[![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
+
+<!-- DEMO: Replace this comment block with a GIF once you have a recording.
+     Recommended: ~30s clip of Claude responding to "Scaffold a Next.js project at ~/projects/my-app"
+     from blank terminal to working app.
+     <img src="docs/assets/demo.gif" alt="templatecentral demo" width="100%" /> -->
+
+---
+
+## Before / After
+
+| Without templatecentral | With templatecentral |
+|:---|:---|
+| Pick a starter template, strip boilerplate | `"Scaffold a Next.js project at ~/projects/my-app"` |
+| Configure TypeScript, ESLint, and Prettier by hand | App Router, shadcn/ui, TanStack Query — wired and working |
+| Set up Docker, Vitest, and Husky pre-commit hooks | Docker, Vitest, Husky — done |
+| Write project docs for your AI agent | `AGENTS.md` + `CLAUDE.md` written automatically |
+| ~45 minutes of setup decisions | ~60 seconds, zero decisions |
+
+---
 
 ## Install
 
 ### From GitHub (available now)
 
-Push this repo to GitHub, then anyone can install directly from your GitHub username/repo:
-
 ```bash
-# Add your GitHub repo as a marketplace source
 claude plugin marketplace add cljiahao/templatecentral
-
-# Then install the plugin
 claude plugin install templatecentral
 ```
 
-The `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` files are already included — no extra setup needed.
-
-### From the Official Marketplace (once published)
-
-If listed on the Anthropic plugin marketplace, users can install with a single command:
+### From the Official Marketplace *(coming soon)*
 
 ```bash
 claude plugin marketplace add templatecentral
 ```
 
-To submit for listing: https://clau.de/plugin-directory-submission
+Either way, 46 skills are registered automatically — no extra setup.
 
----
-
-Either way, the plugin registers 46 skills that Claude Code picks up automatically.
-
-## Updating
+### Updating
 
 ```bash
 claude plugin update templatecentral
 ```
 
-This pulls the latest version from the source it was installed from (GitHub or the official marketplace). Run it whenever new skills or fixes are released.
+---
 
 ## Usage
 
 Ask Claude to scaffold a project:
 
-> "Scaffold a new Next.js project at ~/projects/my-app"
-> "Create a FastAPI API at ~/Desktop/my-api"
-> "Set up a NestJS backend in ~/work/my-service"
-> "Scaffold a Vite React SPA at ~/projects/my-spa"
+```
+"Scaffold a new Next.js project at ~/projects/my-app"
+"Create a FastAPI API at ~/Desktop/my-api"
+"Set up a NestJS backend in ~/work/my-service"
+"Scaffold a Vite React SPA at ~/projects/my-spa"
+```
 
-Claude reads the appropriate scaffold skill, creates every file verbatim or from precise generation rules, installs dependencies, runs the verification gate, and writes a project `AGENTS.md` — all in one shot.
+Claude reads the scaffold skill, generates every file, installs dependencies, runs verification gates, and writes `AGENTS.md` — all in one shot.
+
+---
+
+## What You Get
+
+Each scaffold produces a complete, working project — not a bare starter.
+
+### Next.js
+✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod
+✅ Prettier + ESLint + Husky pre-commit · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example` · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### Vite + React
+✅ React 18 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
+✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### FastAPI
+✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Mypy
+✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### NestJS
+✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Jest + e2e tests
+✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+
+> Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
+
+---
 
 ## Available Skills (46)
-
-Skills are organized by stack. Each skill has YAML frontmatter (`name`, `description`).
 
 | Stack | Skills |
 |-------|--------|
 | **Next.js** (11) | scaffold, code-standards, add-feature, add-page, add-api-route, add-component, add-integration, add-auth, add-test, add-form, add-database |
-| **FastAPI** (7) | scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration |
 | **Vite + React** (9) | scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form |
+| **FastAPI** (7) | scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration |
 | **NestJS** (7) | scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration |
 | **Shared** (12) | add-error-handling, add-logging, add-pagination, build-agent, drift-check, full-stack-pairing, remove-example, review-agent, task-management, test-agent, update-agent, validation-patterns |
+
+---
+
+## Works With
+
+**[superpowers](https://github.com/obra/superpowers) is strongly recommended** — templatecentral integrates with the superpowers brainstorm → plan → execute workflow for complex multi-file features.
+
+```bash
+claude plugin marketplace add obra/superpowers
+```
+
+| Task complexity | Workflow |
+|:---|:---|
+| Simple (1–2 files) | templatecentral skill directly |
+| Complex (3+ files, architectural decisions) | superpowers brainstorm → plan → execute |
+
+**Optional plugins:**
+
+| Plugin | Install | When to use |
+|--------|---------|-------------|
+| **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Reduce output tokens during exploration and Q&A |
+| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` | Persist session context across scaffolded projects |
+
+---
 
 ## Repository Structure
 
 ```
 templatecentral/
-├── AGENTS.md                       # Agent orchestration guide
-├── README.md
-├── .claude-plugin/                 # Plugin manifest
-│   ├── plugin.json                 # v2.1.0 — lists all 46 skills
-│   └── marketplace.json
-└── skills/                         # All 46 skills (flat <stack>-<skill> naming)
-    ├── nextjs-scaffold/SKILL.md
-    ├── fastapi-scaffold/SKILL.md
-    ├── nestjs-scaffold/SKILL.md
-    ├── vite-react-scaffold/SKILL.md
-    └── ... (42 more)
+├── .claude-plugin/
+│   ├── plugin.json          # Plugin manifest — lists all 46 skills
+│   └── marketplace.json     # Anthropic marketplace metadata
+├── skills/                  # All 46 skills (flat <stack>-<skill> naming)
+│   ├── nextjs-scaffold/SKILL.md
+│   ├── fastapi-scaffold/SKILL.md
+│   └── ... (44 more)
+└── AGENTS.md                # Agent orchestration guide
 ```
+
+---
 
 ## Adding a New Skill
 
-To contribute a new skill:
+Contributions welcome — especially new stacks and coverage gaps.
 
 1. Create `skills/<stack>-<skill>/SKILL.md` with frontmatter (`name`, `description`)
 2. Add the skill name to `.claude-plugin/plugin.json` under `"skills"`
-3. Create `.claude/rules/<stack>.md` if a new stack is added
-4. Open a PR
+3. If adding a new stack, create `.claude/rules/<stack>.md`
+4. Open a PR — CI will validate your skill's frontmatter automatically
 
-## Recommended Plugins
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-**superpowers is strongly recommended** — templatecentral integrates with the superpowers brainstorm → plan → execute workflow for complex multi-file features. The others are optional but recommended.
+---
 
-| Plugin | Install | When to use | When to skip / turn off |
-|--------|---------|-------------|--------------------------|
-| **superpowers** ⭐ recommended | `claude plugin marketplace add obra/superpowers` | Complex features (3+ files) — provides brainstorm → plan → execute workflow that templatecentral skills reference | Simple one-file edits |
-| **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
-| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templatecentral itself — use built-in markdown memory here instead (curated, auditable) |
+## ⭐ Star This Repo
 
-```bash
-# Strongly recommended
-claude plugin marketplace add obra/superpowers
+If templatecentral saves you setup time, a star helps others find it.
 
-# Optional
-claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
-```
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=cljiahao/templatecentral&type=Date)](https://star-history.com/#cljiahao/templatecentral&Date)
