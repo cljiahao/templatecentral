@@ -9,6 +9,10 @@ Add a database to a Next.js project scaffolded from templateCentral.
 
 > **Opt-in only**: Do not add database support unless the user explicitly requests it. The base template is intentionally database-free.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## Choose Your Database
 
 Ask the user which database they need, then follow the corresponding section:
@@ -26,6 +30,19 @@ If the user says "database" without specifying, ask: *"Do you need a SQL databas
 > **AWS IAM authentication**: Only Kysely (Section B) and Mongoose (Section C) include IAM Auth Variants. If AWS IAM database authentication is required for compliance, use Kysely. Do NOT install IAM packages unless the user requests it.
 
 ---
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ## Section A: Drizzle (SQL)
 

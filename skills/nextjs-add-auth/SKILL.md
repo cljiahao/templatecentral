@@ -7,6 +7,10 @@ description: Use when the user wants to add authentication, configure an SSO pro
 
 Add authentication to a Next.js project scaffolded from templateCentral. Uses **better-auth** — a TypeScript-first auth library with full type safety, SSO, and email/password support.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## Files this skill creates
 
 ```
@@ -49,6 +53,17 @@ AGENTS.md                            ← adds auth architecture notes
 > **`providers.tsx` does NOT need modification** — better-auth manages session state via `authClient.useSession()`; no `SessionProvider` wrapper is required.
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Install better-auth
 

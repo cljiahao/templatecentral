@@ -7,6 +7,10 @@ description: Use when adding a new URL route, creating a public or dashboard pag
 
 Create a new page/route in a Next.js project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Route path** — The URL path (e.g., `/settings`, `/dashboard/analytics`)
@@ -14,6 +18,17 @@ Create a new page/route in a Next.js project scaffolded from templateCentral.
 - **Has data fetching** — Whether the page loads data
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Determine the Route Location
 

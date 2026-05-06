@@ -7,6 +7,10 @@ description: Use when adding a form with validation to a Next.js project — cov
 
 Create a validated form in a Next.js project scaffolded from templateCentral using React Hook Form, Zod, and the existing `CustomFormField` widget.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## What the Template Already Provides
 
 | Dependency / Component | Location |
@@ -25,6 +29,17 @@ Create a validated form in a Next.js project scaffolded from templateCentral usi
 - **Fields** — List of field names, types, and validation rules
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Install sonner (if the form needs toast feedback)
 

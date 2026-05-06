@@ -9,6 +9,30 @@ Guide for writing tests for API route handlers in a Next.js project scaffolded f
 
 **Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file.
+
+If not found → ⛔ STOP. Tell the user: "No API routes found. Run
+`templatecentral:nextjs-add-api-route` first, then return here."
+
+If found → proceed to Step 1.
+
 ## Test Structure
 
 Tests live in `test/api/` mirroring `src/app/api/`:

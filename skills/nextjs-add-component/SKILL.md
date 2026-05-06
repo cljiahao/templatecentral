@@ -7,6 +7,10 @@ description: Use when creating a new React component and unsure whether it belon
 
 Create a new component in a Next.js project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Component name** — PascalCase name (e.g., `StatusBadge`, `UserAvatar`)
@@ -24,6 +28,17 @@ First, determine where the component belongs:
 | App shell | `src/components/layout/` | `Navbar`, `SiteFooter` |
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create the Component File
 

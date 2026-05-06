@@ -7,12 +7,27 @@ description: Use when the user needs a new server-side API endpoint under src/ap
 
 Create a new API route handler in a Next.js project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Resource name** — The API resource (e.g., `projects`, `users`)
 - **HTTP methods** — Which methods to support (GET, POST, PUT, DELETE, PATCH)
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create the Route File
 
