@@ -104,7 +104,7 @@ or any `.ts` file under `src/features/*/api/` for Vite + React).
 If none found → ⛔ STOP. Tell the user: "No API routes or endpoints found. Add some
 first, then return here to add pagination."
 
-If found → proceed to Step 1.
+If found → proceed to the stack-specific implementation below.
 
 ### Next.js (TypeScript + Drizzle + Zod)
 
