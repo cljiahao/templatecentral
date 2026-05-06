@@ -535,6 +535,7 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live (IM8 AS-4).
+- **Password hashing (IM8 AS-6)**: better-auth uses bcrypt by default (acceptable). For any custom hashing outside better-auth, prefer Argon2id (`argon2` package) — ranked above bcrypt by OWASP and IM8 AS-6.
 
 ## After Writing Code
 

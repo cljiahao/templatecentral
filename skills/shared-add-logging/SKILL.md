@@ -110,10 +110,10 @@ the marker.
 
 #### Tier 1 — Base
 
-Wrap every route handler with `withLogging`. It logs `method`, `path`, `status_code`, `duration_ms` (one argument — the handler function), and catches unhandled exceptions automatically.
+Wrap every route handler with `withLogging`. It logs `method`, `path`, `status`, `duration_ms`, and `requestId` per request, and catches unhandled exceptions automatically.
 
 ```ts
-// src/app/api/health/route.ts  (already done in template — follow this pattern)
+// Apply this pattern to every route handler in src/app/api/
 import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
@@ -853,6 +853,10 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 - `shared-validation-patterns` — Zod/Pydantic validation before any log call
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes
+
+## Production Requirement (IM8 LM-1)
+
+Ship logs to a separate, tamper-evident system (e.g. AWS CloudWatch, Datadog, OpenSearch Ingestion) — writing to local disk only does not satisfy IM8 LM-1, which requires log storage isolated from the application host.
 
 ## Validate
 

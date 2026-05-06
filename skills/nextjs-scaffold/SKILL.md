@@ -20,10 +20,10 @@ version: "1.0.0"
 Install these with `pnpm`. Claude resolves latest compatible versions at scaffold time. The `shared-update-agent` will freshen them immediately after scaffold.
 
 **Runtime:**
-`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `motion`, `next`, `next-themes`, `react`, `react-dom`, `react-hook-form`, `sonner`, `tailwind-merge`, `zod`
+`@hookform/resolvers`, `@tanstack/react-query`, `axios`, `class-variance-authority`, `clsx`, `lucide-react`, `motion`, `next`, `next-themes`, `pino`, `pino-http`, `react`, `react-dom`, `react-hook-form`, `sonner`, `tailwind-merge`, `zod`
 
 **Dev:**
-`@tailwindcss/postcss`, `@tailwindcss/typography`, `@types/node`, `@types/react`, `@types/react-dom`, `@vitest/coverage-v8`, `eslint`, `eslint-config-next`, `eslint-config-prettier`, `husky`, `prettier`, `prettier-plugin-organize-imports`, `prettier-plugin-tailwindcss`, `tailwindcss`, `tw-animate-css`, `typescript`, `vitest`
+`@tailwindcss/postcss`, `@tailwindcss/typography`, `@types/node`, `@types/react`, `@types/react-dom`, `@vitest/coverage-v8`, `eslint`, `eslint-config-next`, `eslint-config-prettier`, `husky`, `pino-pretty`, `prettier`, `prettier-plugin-organize-imports`, `prettier-plugin-tailwindcss`, `tailwindcss`, `tw-animate-css`, `typescript`, `vitest`
 
 **Scripts to include in package.json:**
 ```json
@@ -151,8 +151,10 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
     │           ├── fetch-client.ts     [verbatim — Part C]
     │           └── https-agent.ts      [verbatim — Part C]
     └── lib/
+        ├── logger.ts                   [verbatim — Part C]
         ├── utils/
-        │   └── index.ts                [verbatim — Part C]
+        │   ├── index.ts                [verbatim — Part C]
+        │   └── with-logging.ts         [verbatim — Part C]
         ├── constants/
         │   ├── index.ts                [verbatim — Part C]
         │   ├── env.ts                  [verbatim — Part C]
@@ -199,7 +201,25 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  reactStrictMode: true
+  reactStrictMode: true,
+
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // HSTS — IM8 AS-10. Only active over HTTPS; Next.js strips this header over HTTP automatically.
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          // CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
@@ -382,142 +402,57 @@ fi
 ### `.dockerignore`
 
 ```
-# ==============================================================================
-# NEXT.JS DOCKER IGNORE - Production Optimized
-# ==============================================================================
-
-# Version Control
-.git
-.gitignore
-.gitattributes
-.gitmodules
-
-# Dependencies (will be installed in container)
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 .pnpm-store/
 
-# Next.js Build Outputs & Cache
+# Build outputs
 .next/
 out/
 dist/
 build/
 .vercel/
 .swc/
+.turbo/
 
-# Environment Variables (security)
+# Environment variables — never copy secrets into image
 .env
 .env.*
 !.env.example
 !.env.local.example
 
-# IDE and Editor Files
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.project
-.classpath
-.settings/
-.vscode-test
-.history/
-.fleet/
 
-# OS Generated Files
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-desktop.ini
 
 # Logs
 *.log
 logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
 
-# Runtime Data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Testing & Coverage
+# Testing & coverage
 coverage/
-*.lcov
 .nyc_output/
-.jest/
 test-results/
-playwright-report/
-test-results.xml
-junit.xml
-.vitest/
 
-# Cache Directories
+# Cache
 .npm/
 .yarn/
 .pnpm/
 .eslintcache
 .cache/
-.parcel-cache/
-.turbo/
-.next-cache/
 
-# Build Tool Cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Development Tools & Storybook
-.storybook-out/
-.chromatic/
-storybook-static/
-
-# Temporary Files
-tmp/
-temp/
-*.tmp
-*.temp
-
-# Docker Related (don't copy into image)
-.dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
-.docker/
-
-# CI/CD Configuration
-.github/
-.gitlab-ci.yml
-.travis.yml
-.circleci/
-.azuredevops/
-.buildkite/
-bitbucket-pipelines.yml
-jenkins/
-Jenkinsfile*
-
-# Documentation
-README*.md
-CHANGELOG*.md
-CONTRIBUTING*.md
-LICENSE*
-SECURITY*.md
-CODE_OF_CONDUCT*.md
-docs/
-.docs/
-
-# Security & Certificates
+# Security — never copy certs or keys
 *.pem
 *.key
 *.crt
@@ -525,69 +460,28 @@ docs/
 *.pfx
 .secrets/
 
-# TypeScript
+# CI/CD config (not needed in image)
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Docs
+README*.md
+docs/
+
+# TypeScript build cache
 *.tsbuildinfo
-.tscache/
-
-# Rust (for Next.js SWC)
-target/
-Cargo.lock
-
-# WebAssembly
-*.wasm
-
-# Analysis & Profiling
-.analyze/
-bundle-analyzer/
-lighthouse/
-.bundle-analyzer/
-
-# Monitoring & Analytics
-.sentry/
-newrelic.js
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-.db/
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Kubernetes
-*.kubeconfig
-k8s/
-kubernetes/
-
-# AWS & Cloud
-.aws/
-.serverless/
-
-# Sentry
-.sentryclirc
 
 # ==============================================================================
-# EXCEPTIONS - Files to include despite patterns above
+# EXCEPTIONS
 # ==============================================================================
-
-# Package manager lock files (needed for reproducible builds)
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
-!bun.lockb
-
-# Essential config files that might match broader patterns
 !next.config.*
 !tailwind.config.*
 !postcss.config.*
-!.eslintrc.*
-!.prettierrc*
 !tsconfig*.json
-!jest.config.*
-!playwright.config.*
 ```
 
 ### `.env.example`
@@ -1527,8 +1421,10 @@ export interface HttpsAgentOptions {
   passphrase?: string;
 }
 
+// Respect explicit opt-out (NODE_TLS_REJECT_UNAUTHORIZED=0) but default to true in all envs.
+// Never use NODE_ENV to disable TLS — staging/UAT servers have valid certs and should be verified.
 const DEFAULT_AGENT_OPTIONS: HttpsAgentOptions = {
-  rejectUnauthorized: process.env.NODE_ENV === 'production',
+  rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
   keepAlive: true,
   maxSockets: 50,
 };
@@ -1837,29 +1733,22 @@ export const handleApiError = (label: string, error: unknown) => {
 
 ```ts
 import { APIError } from '@/integrations/error';
+import { logger } from '@/lib/logger';
 
 export const logError = (logLabel: string, error: unknown): void => {
   if (error instanceof APIError) {
-    console.error(`${logLabel}:`, {
+    logger.error({
+      label: logLabel,
       message: error.message,
       statusCode: error.statusCode,
-      data: error.data,
-      timestamp: new Date().toISOString(),
     });
     return;
   }
   if (error instanceof Error) {
-    console.error(`${logLabel}:`, {
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
+    logger.error({ label: logLabel, message: error.message });
     return;
   }
-
-  console.error(`${logLabel}:`, {
-    message: String(error),
-    timestamp: new Date().toISOString(),
-  });
+  logger.error({ label: logLabel, message: String(error) });
 };
 ```
 
@@ -1906,9 +1795,7 @@ export default function RootLayout({
 }
 ```
 
-### `src/app/api/route.ts` and `src/app/api/health/route.ts`
-
-Both files are identical:
+### `src/app/api/route.ts`
 
 ```ts
 import { type NextRequest, NextResponse } from 'next/server';
@@ -1918,6 +1805,63 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     { status: 'ok', timestamp: new Date().toISOString() },
     { status: 200 },
   );
+}
+```
+
+### `src/app/api/health/route.ts`
+
+Identical to `src/app/api/route.ts` above — write the same content to both paths.
+
+### `src/lib/logger.ts`
+
+```ts
+import pino from 'pino';
+
+export const logger = pino({
+  level: process.env.LOG_LEVEL ?? 'info',
+  ...(process.env.NODE_ENV !== 'production' && {
+    transport: {
+      target: 'pino-pretty',
+      options: { colorize: true, singleLine: true },
+    },
+  }),
+});
+```
+
+### `src/lib/utils/with-logging.ts`
+
+```ts
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+
+import { logger } from '@/lib/logger';
+
+type RouteHandler = (
+  req: NextRequest,
+  ctx?: { params?: Promise<Record<string, string>> }
+) => Promise<NextResponse>;
+
+export function withLogging(handler: RouteHandler): RouteHandler {
+  return async (req, ctx) => {
+    const start = Date.now();
+    const { method } = req;
+    const path = new URL(req.url).pathname;
+    const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID();
+
+    try {
+      const res = await handler(req, ctx);
+      logger.info({ requestId, method, path, status: res.status, duration_ms: Date.now() - start });
+      return res;
+    } catch (err) {
+      logger.error({
+        requestId,
+        method,
+        path,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  };
 }
 ```
 
@@ -2604,6 +2548,7 @@ Every agent writing or modifying code must follow these before marking a task do
 - **Fail loudly** — No empty catch blocks. Log with context; return meaningful status codes.
 - **Least privilege** — Return only the fields the caller needs. Never send full DB records to the browser.
 - **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
+- **Secrets in production (IM8 AS-8)**: Use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager in production. Flat `.env` files are for local development only.
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->

@@ -23,9 +23,9 @@ Install runtime dependencies (no version pins):
 pnpm add @nestjs/common@^11.1.19 @nestjs/core@^11.1.19 @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
   @fastify/helmet@^13.0.0 dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
-pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/jest @types/node \
-  eslint eslint-config-prettier eslint-plugin-prettier globals husky \
-  jest pino-pretty prettier ts-jest ts-node typescript typescript-eslint
+pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/node \
+  @vitest/coverage-v8 eslint eslint-config-prettier eslint-plugin-prettier \
+  globals husky pino-pretty prettier ts-node typescript typescript-eslint vitest
 ```
 
 Then initialize husky:
@@ -50,6 +50,8 @@ pnpm install   # activates husky via prepare script
 ├── .prettierrc                         [verbatim — Part B]
 ├── eslint.config.mjs                   [verbatim — Part B]
 ├── nest-cli.json                       [verbatim — Part B]
+├── vitest.config.ts                    [verbatim — Part B]
+├── vitest.config.e2e.ts                [verbatim — Part B]
 ├── tsconfig.json                       [verbatim — Part B]
 ├── tsconfig.build.json                 [verbatim — Part B]
 ├── .husky/
@@ -95,7 +97,6 @@ pnpm install   # activates husky via prepare script
 │           └── example.types.ts        [verbatim — Part C]
 └── test/
     ├── app.e2e-spec.ts                 [verbatim — Part C]
-    ├── jest-e2e.json                   [verbatim — Part C]
     └── modules/
         ├── base.controller.spec.ts     [verbatim — Part C]
         └── example.controller.spec.ts  [verbatim — Part C]
@@ -103,7 +104,31 @@ pnpm install   # activates husky via prepare script
 
 ### Generation Conventions
 
-**`package.json`** — Generate with the project name substituted into `"name"`. Use the scripts, jest config, and dependency list exactly matching the template structure. No version pins on deps (pnpm resolves latest compatible).
+**`package.json`** — Generate with the project name substituted into `"name"`. Include these exact scripts:
+
+```json
+{
+  "scripts": {
+    "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
+    "lint:check": "eslint \"{src,test}/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm run format:check && pnpm run lint:check && pnpm run typecheck",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts --passWithNoTests",
+    "test:coverage": "vitest run --coverage"
+  }
+}
+```
+
+No version pins on deps — pnpm resolves latest compatible.
 
 **Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
 ```json
@@ -284,215 +309,86 @@ esac
 ### `.dockerignore`
 
 ```
-# ==============================================================================
-# NESTJS DOCKER IGNORE - Production Optimized
-# ==============================================================================
-
-# Version Control
-.git
-.gitignore
-.gitattributes
-.gitmodules
-
-# Dependencies (will be installed in container)
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 .pnpm-store/
 
-# NestJS Build Outputs & Cache
+# Build outputs
 dist/
 build/
 .build/
 .swc/
 
-# Environment Variables (security)
+# Environment variables — never copy secrets into image
 .env
 .env.*
 !.env.example
 !.env.local.example
 
-# IDE and Editor Files
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.project
-.classpath
-.settings/
-.vscode-test
-.history/
 
-# OS Generated Files
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-desktop.ini
 
 # Logs
 *.log
 logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-pnpm-debug.log*
 
-# Runtime Data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Testing & Coverage
+# Testing & coverage
 coverage/
-*.lcov
 .nyc_output/
-.jest/
 test/
 test-results/
-e2e/
 *.spec.ts
 *.test.ts
 *.e2e-spec.ts
-**/__tests__/
-**/__mocks__/
-test-results.xml
-junit.xml
 
-# Cache Directories
+# Cache
 .npm/
 .yarn/
 .pnpm/
 .eslintcache
 .cache/
-.parcel-cache/
-.turbo/
 
-# Microbundle & Build Tool Cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Temporary Files
-tmp/
-temp/
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# Docker Related (don't copy into image)
-.dockerignore
-Dockerfile*
-docker-compose*.yml
-docker-compose*.yaml
-.docker/
-
-# CI/CD Configuration
-.github/
-.gitlab-ci.yml
-.travis.yml
-.circleci/
-.azuredevops/
-.buildkite/
-bitbucket-pipelines.yml
-jenkins/
-Jenkinsfile*
-
-# Documentation
-README*.md
-CHANGELOG*.md
-CONTRIBUTING*.md
-LICENSE*
-SECURITY*.md
-CODE_OF_CONDUCT*.md
-docs/
-.docs/
-
-# Security & Certificates
+# Security — never copy certs or keys
 *.pem
 *.key
 *.crt
-*.cer
 *.p12
 *.pfx
 .secrets/
-secret.txt
-key.txt
 
-# TypeScript
+# CI/CD config (not needed in image)
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Docs
+README*.md
+docs/
+
+# TypeScript build cache
 *.tsbuildinfo
-.tscache/
-
-# Analysis & Profiling
-.analyze/
-bundle-analyzer/
-lighthouse/
-.bundle-analyzer/
-
-# Monitoring & Analytics
-.sentry/
-newrelic.js
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-.db/
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Kubernetes
-*.kubeconfig
-k8s/
-kubernetes/
-
-# AWS
-.aws/
-.serverless/
-
-# Sentry
-.sentryclirc
-
-# Development Tools (not needed for build)
-.eslintrc.js
-.prettierrc
-.prettierignore
-.editorconfig
-
-# Other Projects/Versions
-v1/
 
 # ==============================================================================
-# EXCEPTIONS - Files to include despite patterns above
+# EXCEPTIONS
 # ==============================================================================
-
-# Package manager lock files (needed for reproducible builds)
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
-!bun.lockb
-
-# Essential NestJS config files
 !nest-cli.json
 !tsconfig.json
 !tsconfig.build.json
-
-# Essential config files
-!.eslintrc.js
-!.prettierrc*
 !.npmrc
 ```
 
@@ -706,6 +602,42 @@ export default tseslint.config(
 }
 ```
 
+### `vitest.config.ts`
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: false,
+    environment: 'node',
+    passWithNoTests: true,
+    include: ['test/**/*.{spec,test}.ts', 'src/**/*.spec.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.ts'],
+      exclude: ['**/*.spec.ts', '**/*.d.ts', 'src/main.ts'],
+    },
+  },
+});
+```
+
+### `vitest.config.e2e.ts`
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: false,
+    environment: 'node',
+    passWithNoTests: true,
+    include: ['test/**/*.e2e-spec.ts'],
+  },
+});
+```
+
 ### `tsconfig.json`
 
 ```json
@@ -850,6 +782,7 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? 'info',
+        genReqId: () => crypto.randomUUID(), // correlation ID for IM8 audit trail
         transport:
           appConfig.ENVIRONMENT !== 'prod' && appConfig.ENVIRONMENT !== 'uat'
             ? { target: 'pino-pretty', options: { singleLine: true } }
@@ -993,6 +926,11 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       directives: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:', 'https:'],
+        'object-src': ["'none'"],
         'base-uri': ["'none'"],
         'frame-ancestors': ["'none'"],
       },
@@ -1028,6 +966,8 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { appConfig } from '..';
 
 export function setupSwagger(app: INestApplication): void {
+  if (process.env.NODE_ENV === 'production') return;
+
   const options = new DocumentBuilder()
     .setTitle(appConfig.PROJECT_NAME)
     .setDescription(appConfig.PROJECT_DESCRIPTION)
@@ -1100,7 +1040,7 @@ export class BaseService {
   }
 
   getHealth(): { status: string } {
-    return { status: 'OK' };
+    return { status: 'ok' };
   }
 }
 ```
@@ -1302,6 +1242,7 @@ export interface ExampleItem {
 ### `test/app.e2e-spec.ts`
 
 ```typescript
+import { afterAll, beforeAll, describe, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   FastifyAdapter,
@@ -1342,32 +1283,16 @@ describe('AppController (e2e)', () => {
       .inject({ method: 'GET', url: '/health' })
       .then((result) => {
         expect(result.statusCode).toBe(200);
-        expect(JSON.parse(result.payload)).toEqual({ status: 'OK' });
+        expect(JSON.parse(result.payload)).toEqual({ status: 'ok' });
       });
   });
 });
 ```
 
-### `test/jest-e2e.json`
-
-```json
-{
-  "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "..",
-  "testEnvironment": "node",
-  "testMatch": ["<rootDir>/test/**/*.e2e-spec.ts"],
-  "transform": {
-    "^.+\\.(t|j)s$": ["ts-jest", {
-      "tsconfig": "<rootDir>/tsconfig.json",
-      "diagnostics": false
-    }]
-  }
-}
-```
-
 ### `test/modules/base.controller.spec.ts`
 
 ```typescript
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BaseController } from '../../src/modules/base/base.controller';
 import { BaseService } from '../../src/modules/base/base.service';
@@ -1388,8 +1313,8 @@ describe('BaseController', () => {
     expect(controller.getHello()).toBe('Hello World!');
   });
 
-  it('should return health status OK', () => {
-    expect(controller.checkHealth()).toEqual({ status: 'OK' });
+  it('should return health status ok', () => {
+    expect(controller.checkHealth()).toEqual({ status: 'ok' });
   });
 });
 ```
@@ -1397,6 +1322,7 @@ describe('BaseController', () => {
 ### `test/modules/example.controller.spec.ts`
 
 ```typescript
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExampleController } from '../../src/modules/example/example.controller';
 import { ExampleService } from '../../src/modules/example/example.service';
@@ -1518,7 +1444,7 @@ Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
 # <Project Name>
 
 ## Identity
-- **Stack**: NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript, Jest
+- **Stack**: NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript, Vitest
 - **Scaffolded from**: templateCentral nestjs-scaffold skill
 - **Created**: <date>
 
@@ -1534,7 +1460,7 @@ Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
 - Named exports only — no `export default`
 - Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
 - Barrel exports at `src/modules/index.ts`
-- **Testing**: New or changed controllers/services/repositories must include Jest tests in the same change (`pnpm test`; e2e when appropriate)
+- **Testing**: New or changed controllers/services/repositories must include Vitest tests in the same change (`pnpm test`; e2e when appropriate)
 
 ## Commands
 - `pnpm start:dev` — development server with hot reload
@@ -1558,6 +1484,7 @@ Every agent writing or modifying code must follow these before marking a task do
 - **Fail loudly** — No empty catch blocks. Log with context; return meaningful HTTP status codes.
 - **Least privilege** — Return only the fields the caller needs. Never expose internal IDs without auth checks.
 - **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
+- **Secrets in production (IM8 AS-8)**: Use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager in production. Flat `.env` files are for local development only.
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
