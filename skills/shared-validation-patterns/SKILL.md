@@ -7,6 +7,10 @@ description: Use to add consistent input validation across all stacks — covers
 
 Implement consistent input validation at all entry points: form submissions, API endpoints, query parameters, file uploads, and external API responses. Use Zod (TypeScript) or Pydantic (Python) to enforce type safety and prevent common vulnerabilities (SQL injection, XSS, path traversal).
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
 ## When to Use
 
 - Creating forms with client and server validation
@@ -212,6 +216,17 @@ const eventSchema = z.discriminatedUnion('type', [
 10. **JSX auto-escapes** — React JSX prevents XSS; only use `dangerouslySetInnerHTML` for trusted content
 
 ## Implementation
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### Next.js (TypeScript + React + Zod)
 

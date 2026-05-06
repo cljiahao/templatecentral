@@ -7,6 +7,10 @@ description: Use to wire structured, JSON-formatted logging into any templateCen
 
 Wire structured JSON logging into your project at the right level of detail. All stacks emit machine-readable logs with consistent field names. Sensitive data is never logged, regardless of tier.
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
 ## When to Use
 
 - Setting up logging from scratch after scaffolding a new project
@@ -84,6 +88,17 @@ Log level is configured per stack:
 ---
 
 ## Implementation
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### Next.js
 

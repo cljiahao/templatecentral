@@ -7,6 +7,10 @@ description: Use when building list endpoints with multiple pages — covers off
 
 Implement consistent pagination across your stack. All list endpoints return paginated responses with metadata. Pagination prevents resource exhaustion (CWE-400) by enforcing limits and defaults.
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
 ## When to Use
 
 - Building API endpoints that return lists (projects, users, products, etc.)
@@ -80,6 +84,27 @@ All list endpoints return this shape (matches Phase 1 `shared-add-error-handling
 8. **Total count careful** — For large tables, consider approximate count or bounded estimation (no full table scans)
 
 ## Implementation
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Confirm the project contains at least one route handler file
+(e.g. any `.ts` file under `src/app/api/` for Next.js, any `.py` file under
+`src/routers/` for FastAPI, any controller file under `src/modules/` for NestJS,
+or any `.ts` file under `src/features/*/api/` for Vite + React).
+
+If none found → ⛔ STOP. Tell the user: "No API routes or endpoints found. Add some
+first, then return here to add pagination."
+
+If found → proceed to Step 1.
 
 ### Next.js (TypeScript + Drizzle + Zod)
 

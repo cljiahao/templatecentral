@@ -7,6 +7,10 @@ description: Use to add consistent error handling and response schemas across al
 
 Implement consistent, secure error handling across your stack. All errors return a unified response schema with appropriate HTTP status codes. Errors are logged server-side with context; sensitive details are never exposed to clients in production.
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
 ## When to Use
 
 - Adding a new API route or endpoint that needs error handling
@@ -82,6 +86,17 @@ All errors return this shape (regardless of stack):
 9. **404 for both missing and unauthorized resources** — Never reveal whether a resource exists if user lacks access
 
 ## Implementation
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### Next.js
 
