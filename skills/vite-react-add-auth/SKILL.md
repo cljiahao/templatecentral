@@ -7,6 +7,10 @@ description: Use when the user wants to add authentication, configure an auth pr
 
 Configure authentication in a Vite + React SPA scaffolded from templateCentral. The template ships with a generic `AuthProvider` context — this skill covers integrating real auth backends, customizing the login UI, and protecting routes.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
 ## What the Template Already Provides
 
 The scaffolded project includes a working auth setup out of the box:
@@ -25,6 +29,17 @@ The scaffolded project includes a working auth setup out of the box:
 In **development mode** (`ENV.IS_DEV`), the user is auto-authenticated as a dev user — no backend needed.
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Choose an Auth Strategy
 

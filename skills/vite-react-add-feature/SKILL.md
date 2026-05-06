@@ -7,11 +7,26 @@ description: Use when adding a new domain area (e.g., projects, auth, analytics)
 
 Create a new self-contained feature module in a Vite + React project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Feature name** — The domain name (e.g., `project`, `auth`, `dashboard`)
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create the Feature Directory Structure
 

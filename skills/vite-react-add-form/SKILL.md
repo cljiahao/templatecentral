@@ -7,6 +7,10 @@ description: Use when adding a form with validation to a Vite + React project �
 
 Create a validated form in a Vite + React SPA scaffolded from templateCentral using React Hook Form, Zod, and the `CustomFormField` widget.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
 ## What the Template Provides
 
 | Dependency / Component | Location |
@@ -25,6 +29,17 @@ Create a validated form in a Vite + React SPA scaffolded from templateCentral us
 - **Fields** — List of field names, types, and validation rules
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Define the Zod Schema
 

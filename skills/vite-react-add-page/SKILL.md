@@ -7,12 +7,27 @@ description: Use when adding a new URL route, creating a page component, or the 
 
 Create a new page/route in a Vite + React project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Route path** — The URL path (e.g., `/settings`, `/dashboard/analytics`)
 - **Has data fetching** — Whether the page loads data via React Query
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create the Page Component
 

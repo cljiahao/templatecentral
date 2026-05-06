@@ -7,6 +7,10 @@ description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenA
 
 Create a new third-party API integration in a Vite + React project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Service name** — The external service (e.g., `github`, `stripe`, `weather`)
@@ -25,6 +29,17 @@ ENV → services/ → clients/ → schemas/
 Create `src/integrations/` on first integration — this directory does not exist in the base template. The base `FetchClient` lives in `src/lib/clients/fetch-client.ts`.
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create Zod Schemas
 

@@ -7,6 +7,32 @@ description: Use when adding tests for components, hooks, or services in a Vite 
 
 Guide for writing tests in a Vite + React project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Confirm `src/features/` or `src/components/` contains at least
+one `.tsx` file.
+
+If not found → ⛔ STOP. Tell the user: "No components or features found. Add some
+using `templatecentral:vite-react-add-feature` or `templatecentral:vite-react-add-component`
+first, then return here."
+
+If found → proceed to Step 1.
+
 ## Test Structure
 
 Tests are **co-located** next to the source file they test:
