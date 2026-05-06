@@ -1,0 +1,38 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-06-templatecentral-audit-round3.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: CVE Note Removals",
+      "status": "pending",
+      "description": "**Goal:** Delete three hardcoded CVE/version-pin blocks from database and auth skills.\n\n**Files:**\n- Modify: `skills/nestjs-add-database/SKILL.md` (line 56)\n- Modify: `skills/nextjs-add-database/SKILL.md` (line 56)\n- Modify: `skills/nextjs-add-auth/SKILL.md` (line 74)\n\n**Acceptance Criteria:**\n- [ ] `drizzle-orm 0.45.2` string is gone from both database skill files\n- [ ] `better-auth` CVE block is gone from `nextjs-add-auth/SKILL.md`\n- [ ] No other content in those files changed\n\n**Verify:** `grep -n \"drizzle-orm 0.45\\|better-auth.*1\\.6\\|Versions prior\" skills/nestjs-add-database/SKILL.md skills/nextjs-add-database/SKILL.md skills/nextjs-add-auth/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"skills/nestjs-add-database/SKILL.md\", \"skills/nextjs-add-database/SKILL.md\", \"skills/nextjs-add-auth/SKILL.md\"], \"verifyCommand\": \"grep -n \\\"drizzle-orm 0.45\\\\|better-auth.*1\\\\.6\\\\|Versions prior\\\" skills/nestjs-add-database/SKILL.md skills/nextjs-add-database/SKILL.md skills/nextjs-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"drizzle-orm 0.45.2 string gone from both database skills\", \"better-auth CVE block gone from nextjs-add-auth\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: IM8 Label Sweep — Auth Skills",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Remove all IM8 codes and attributions from the three auth skills, keeping the security guidance intact.\n\n**Files:**\n- Modify: `skills/nextjs-add-auth/SKILL.md` (6 locations: lines 96, 120, 511, 520, 537, 538)\n- Modify: `skills/nestjs-add-auth/SKILL.md` (3 locations: lines 56, 303, 328)\n- Modify: `skills/fastapi-add-auth/SKILL.md` (3 locations: lines 51, 276, 301)\n\n**Acceptance Criteria:**\n- [ ] No `IM8` string remains in any of the three files\n- [ ] Rate limiting guidance, password length guidance, and Argon2id note are all still present\n- [ ] NIST SP 800-63B reference is retained in all inline comments where it appeared alongside IM8\n\n**Verify:** `grep -n \"IM8\" skills/nextjs-add-auth/SKILL.md skills/nestjs-add-auth/SKILL.md skills/fastapi-add-auth/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-auth/SKILL.md\", \"skills/nestjs-add-auth/SKILL.md\", \"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep -n \\\"IM8\\\" skills/nextjs-add-auth/SKILL.md skills/nestjs-add-auth/SKILL.md skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"No IM8 string in any of the three auth skill files\", \"NIST SP 800-63B retained\", \"Argon2id note preserved\", \"rate limiting guidance preserved\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: IM8 Label Sweep — Scaffold and Support Skills",
+      "status": "pending",
+      "description": "**Goal:** Remove all remaining IM8 references from scaffold skills and support skills.\n\n**Files:**\n- Modify: `skills/shared-add-logging/SKILL.md` (2 locations — header + body at lines 857-859)\n- Modify: `AGENTS.md` (1 location — line 121)\n- Modify: `skills/nextjs-scaffold/SKILL.md` (2 locations — lines 215, 2551)\n- Modify: `skills/fastapi-scaffold/SKILL.md` (1 location — line 1766)\n- Modify: `skills/nestjs-scaffold/SKILL.md` (3 locations — lines 785, 938, 1487)\n- Modify: `skills/vite-react-scaffold/SKILL.md` (1 location — line 2993)\n- Modify: `skills/shared-add-ai-security/SKILL.md` (1 location — line 271)\n\n**Acceptance Criteria:**\n- [ ] No `IM8` string remains in any of the seven files\n- [ ] Log isolation guidance still present in `shared-add-logging/SKILL.md`\n- [ ] File upload malware scanning note still present in `AGENTS.md`\n- [ ] All four scaffold vault notes updated to vendor-neutral wording\n- [ ] HSTS comments retain \"HSTS\" but drop IM8 code\n\n**Verify:** `grep -n \"IM8\" skills/shared-add-logging/SKILL.md AGENTS.md skills/nextjs-scaffold/SKILL.md skills/fastapi-scaffold/SKILL.md skills/nestjs-scaffold/SKILL.md skills/vite-react-scaffold/SKILL.md skills/shared-add-ai-security/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"skills/shared-add-logging/SKILL.md\", \"AGENTS.md\", \"skills/nextjs-scaffold/SKILL.md\", \"skills/fastapi-scaffold/SKILL.md\", \"skills/nestjs-scaffold/SKILL.md\", \"skills/vite-react-scaffold/SKILL.md\", \"skills/shared-add-ai-security/SKILL.md\"], \"verifyCommand\": \"grep -n \\\"IM8\\\" skills/shared-add-logging/SKILL.md AGENTS.md skills/nextjs-scaffold/SKILL.md skills/fastapi-scaffold/SKILL.md skills/nestjs-scaffold/SKILL.md skills/vite-react-scaffold/SKILL.md skills/shared-add-ai-security/SKILL.md\", \"acceptanceCriteria\": [\"No IM8 string in any of the seven files\", \"Log isolation guidance preserved\", \"Malware scanning note preserved\", \"Vault notes are vendor-neutral\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: OWASP 2025 Reference Audit",
+      "status": "pending",
+      "description": "**Goal:** Verify all OWASP references in skill files are current for the 2025 ranking; correct any that cite stale 2021 rank numbers.\n\n**Files:** All files containing `OWASP` (determined by grep at runtime).\n\n**Acceptance Criteria:**\n- [ ] No references to 2021-specific rank numbers that conflict with 2025 ranking\n- [ ] `shared-add-ai-security` OWASP LLM Top 10 v2.0 reference unchanged\n\n**Verify:** `grep -rn \"OWASP\" skills/ AGENTS.md` — review each match for stale rank numbers\n\n```json:metadata\n{\"files\": [\"skills/**/*.md\", \"AGENTS.md\"], \"verifyCommand\": \"grep -rn \\\"OWASP\\\" skills/ AGENTS.md\", \"acceptanceCriteria\": [\"No stale 2021 rank numbers cited alongside OWASP\", \"OWASP LLM Top 10 v2.0 reference unchanged\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Version Bump and CHANGELOG",
+      "status": "pending",
+      "blockedBy": [1, 2, 3, 4],
+      "description": "**Goal:** Bump plugin version to 2.3.0 and record Round 3 changes in CHANGELOG.md.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json`\n- Modify: `CHANGELOG.md`\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` version is `\"2.3.0\"`\n- [ ] CHANGELOG has `[2.3.0]` entry dated 2026-05-06\n- [ ] Final `grep -rn \"IM8\" skills/ AGENTS.md` returns zero output\n\n**Verify:** `grep '\"version\"' .claude-plugin/plugin.json && grep '\\[2.3.0\\]' CHANGELOG.md` → both return a match\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2.3.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.3.0\", \"CHANGELOG has [2.3.0] entry\", \"grep -rn IM8 skills/ AGENTS.md returns zero output\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-06T00:00:00Z"
+}
