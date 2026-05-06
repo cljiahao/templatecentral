@@ -98,7 +98,7 @@ the marker.
 
 **Context check:** Confirm the project contains at least one route handler file
 (e.g. any `.ts` file under `src/app/api/` for Next.js, any `.py` file under
-`src/routers/` for FastAPI, any controller file under `src/modules/` for NestJS,
+`src/api/routers/` for FastAPI, any controller file under `src/modules/` for NestJS,
 or any `.ts` file under `src/features/*/api/` for Vite + React).
 
 If none found → ⛔ STOP. Tell the user: "No API routes or endpoints found. Add some

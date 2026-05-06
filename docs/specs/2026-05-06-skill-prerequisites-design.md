@@ -157,7 +157,7 @@ or generate files.
 |---|---|---|
 | `nextjs-add-test` | `src/app/api/` has at least one `.ts` route handler | "No API routes found. Run `nextjs-add-api-route` first." |
 | `vite-react-add-test` | `src/features/` or `src/components/` has at least one `.tsx` file | "No components or features found. Add some first." |
-| `fastapi-add-test` | `src/routers/` has at least one `.py` file | "No routers found. Run `fastapi-add-endpoint` first." |
+| `fastapi-add-test` | `src/api/routers/` has at least one `.py` file | "No routers found. Run `fastapi-add-endpoint` first." |
 | `nestjs-add-test` | `src/modules/` has at least one subdirectory | "No modules found. Run `nestjs-add-module` first." |
 | `shared-remove-example` | `src/features/example/` exists | "No example code found — nothing to remove." |
 | `shared-add-pagination` | At least one route handler file exists in the project | "No API routes found. Add endpoints first, then add pagination." |
