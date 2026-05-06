@@ -20,11 +20,11 @@ version: "1.0.0"
 Install runtime and dev dependencies with NO version pins:
 
 ```bash
-pnpm add react react-dom react-router@^7.14.2 @tanstack/react-query \
+pnpm add react react-dom react-router@^7.15.0 @tanstack/react-query \
   class-variance-authority clsx tailwind-merge lucide-react \
   @hookform/resolvers@^5.0.0 react-hook-form zod sonner motion
 
-pnpm add -D vite @vitejs/plugin-react typescript \
+pnpm add -D vite @vitejs/plugin-react@^6.0.0 typescript \
   @types/react @types/react-dom \
   tailwindcss @tailwindcss/postcss @tailwindcss/typography tw-animate-css \
   eslint @eslint/js eslint-plugin-react-hooks globals typescript-eslint prettier \
