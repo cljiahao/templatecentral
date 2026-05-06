@@ -27,10 +27,9 @@ Requires a project scaffolded with any templateCentral scaffold skill. See Step 
 - [ ] **Path traversal prevention** — File validation errors check `../` patterns; never log raw file paths from user input
 - [ ] **Auth bypass prevention** — 401/403 responses do not reveal whether resource exists; "Not found" for both missing and unauthorized resources
 - [ ] **Rate limit headers included** — 429 responses include `Retry-After` header; no stack traces
-- [ ] **Unhandled exceptions caught globally** — No raw exception objects returned; all errors go through unified handler
+- [ ] **Unhandled exceptions caught globally (OWASP A10:2025)** — No raw exception objects returned; all errors go through unified handler. Stack traces and internal messages surfacing to clients are an A10:2025 violation — log full detail server-side only, return generic messages to clients
 - [ ] **Logging excludes request bodies** — Never log raw `request.json()` or form data; log only status, path, duration, user ID
 - [ ] **Environment-based detail levels** — Development: include stack traces; Production: generic messages only
-- [ ] **Unhandled exceptions (OWASP A10:2025)** — Never let exceptions surface raw to clients — stack traces and internal messages are an OWASP A10:2025 violation. All error handlers must return generic user-facing messages; log full detail server-side only
 
 ## Unified Error Response Schema
 
