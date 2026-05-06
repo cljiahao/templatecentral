@@ -9,6 +9,10 @@ Add JWT-based authentication to a NestJS project scaffolded from templateCentral
 
 > **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `nestjs-add-database` after this skill to complete the integration.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+
 ## Dependencies
 
 ```bash
@@ -17,6 +21,17 @@ pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create Auth Module Directory
 

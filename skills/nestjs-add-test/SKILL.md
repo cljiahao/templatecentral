@@ -9,6 +9,30 @@ Guide for adding unit tests and e2e tests to a NestJS project scaffolded from te
 
 **Policy**: Same-change Jest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Confirm `src/modules/` exists and contains at least one subdirectory.
+
+If not found → ⛔ STOP. Tell the user: "No modules found. Run
+`templatecentral:nestjs-add-module` first, then return here."
+
+If found → proceed to Step 1.
+
 ## Unit Tests
 
 Unit tests go in `test/modules/<name>.controller.spec.ts` or `test/modules/<name>.service.spec.ts`.

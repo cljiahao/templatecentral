@@ -9,6 +9,23 @@ Add a database to a NestJS project scaffolded from templateCentral.
 
 > **Opt-in only**: Do not add database support unless the user explicitly requests it. The template has an empty `src/database/` directory ready for database modules.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 ## Choose Your Database
 
 Ask the user which database they need, then follow the corresponding section:

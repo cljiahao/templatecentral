@@ -7,6 +7,10 @@ description: Use when the user asks to create a new feature module, add CRUD end
 
 Guide for adding a new feature module following the controller → service → repository architecture.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+
 ## Naming Convention
 
 Replace `<name>` throughout using these rules:
@@ -20,6 +24,17 @@ Replace `<name>` throughout using these rules:
 | Swagger tag | Title case plural | `@ApiTags('Tasks')` |
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create Module Directory
 
