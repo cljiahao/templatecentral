@@ -72,9 +72,25 @@ After showing the convention report, ask the user:
 
 > "Dependency drift check is available. This fetches current versions from npm for all packages in your package.json. Run it? (y/n)"
 
-If user declines: done.
+If user declines: skip to Step 6.
 
 If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch `update-agent`.
+
+## Step 6 — Security Audit
+
+After Step 5 (or after Step 4 if user declined Step 5), ask:
+
+> "Security audit available — checks installed packages against the OSV/NVD vulnerability database. Run it? (y/n)"
+
+**If user accepts:**
+
+- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running `shared-update-agent` to patch.
+- **Python projects**: run `pip install pip-audit && pip-audit -r requirements.txt`. Report findings.
+
+If zero vulnerabilities: report "No known vulnerabilities found."
+If findings: list package name, severity, CVE, and whether a fix is available. Do not auto-upgrade — let the user decide.
+
+If user declines: done.
 
 ## Escape Hatch
 
