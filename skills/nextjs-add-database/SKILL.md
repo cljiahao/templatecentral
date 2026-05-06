@@ -53,8 +53,6 @@ pnpm add drizzle-orm postgres
 pnpm add -D drizzle-kit
 ```
 
-> **Security**: drizzle-orm 0.45.2 fixed a SQL injection vulnerability in `sql.identifier()` and `sql.as()`. Use `>=0.45.2`.
-
 ### A2. Add Database Scripts
 
 Add to `package.json`:

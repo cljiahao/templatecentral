@@ -71,8 +71,6 @@ the marker.
 pnpm add better-auth@latest
 ```
 
-> **Security**: Versions prior to 1.6.9 have multiple CVEs (auth bypass, prototype pollution, SSRF). Always install `better-auth@latest` (≥ 1.6.9) — never pin to an older version.
-
 ### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
 Security-critical file. Write exactly as shown.
