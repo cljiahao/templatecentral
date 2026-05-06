@@ -53,7 +53,7 @@ import { z } from 'zod';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(12), // 12-char minimum — IM8 AS-5 / NIST SP 800-63B baseline
+  password: z.string().min(12), // 12-char minimum — NIST SP 800-63B baseline
   name: z.string().min(1),
 });
 
@@ -300,7 +300,7 @@ JWT_EXPIRES_IN=30m
 
 ## Rate Limiting (Required for Production)
 
-IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. Install `@nestjs/throttler`:
+Industry best practice: max 3 failed auth attempts per 15 minutes. Install `@nestjs/throttler`:
 
 ```bash
 pnpm add @nestjs/throttler
@@ -325,7 +325,7 @@ import { APP_GUARD } from '@nestjs/core';
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
-- **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live (IM8 AS-4).
+- **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
 
 ## Validate
 

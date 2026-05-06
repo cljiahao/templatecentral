@@ -91,7 +91,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
-    minPasswordLength: 12, // IM8 AS-5 / NIST SP 800-63B minimum
+    minPasswordLength: 12, // NIST SP 800-63B minimum
     autoSignIn: true,
   },
 
@@ -115,7 +115,7 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 30 * 24 * 60 * 60, // 30 days (AAL1) — IM8 AS-11: AAL2 systems reduce to 43200 (12h) + 30-min inactivity; AAL3 use 28800 (8h) + 15-min inactivity
+    expiresIn: 30 * 24 * 60 * 60, // 30 days (AAL1) — AAL2 systems reduce to 43200 (12h) + 30-min inactivity; AAL3 use 28800 (8h) + 15-min inactivity
     updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
     cookieCache: {
       enabled: true,
@@ -506,7 +506,7 @@ Full provider list: https://www.better-auth.com/docs/authentication/social-sign-
 
 ## Rate Limiting (Required for Production)
 
-IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
+Industry best practice: max 3 failed auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
 
 ```bash
 pnpm add @upstash/ratelimit @upstash/redis
@@ -515,7 +515,7 @@ pnpm add @upstash/ratelimit @upstash/redis
 In `src/proxy.ts`, add a rate-limit check before the auth call on `/api/auth/sign-in`:
 
 ```typescript
-// Rate limit sign-in attempts (IM8 AS-4: max 3/15 min)
+// Rate limit sign-in attempts (max 3/15 min)
 if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
   const { success } = await ratelimit.limit(request.ip ?? 'anonymous');
   if (!success) return new Response(null, { status: 429 });
@@ -532,8 +532,8 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - NEVER hardcode secrets — always environment variables.
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
-- **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live (IM8 AS-4).
-- **Password hashing (IM8 AS-6)**: better-auth uses bcrypt by default (acceptable). For any custom hashing outside better-auth, prefer Argon2id (`argon2` package) — ranked above bcrypt by OWASP and IM8 AS-6.
+- **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
+- **Password hashing**: better-auth uses bcrypt by default (acceptable). For any custom hashing outside better-auth, prefer Argon2id (`argon2` package) — ranked above bcrypt by OWASP.
 
 ## After Writing Code
 

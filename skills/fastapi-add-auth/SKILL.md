@@ -48,7 +48,7 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=12, description="User password — minimum 12 characters (IM8 AS-5 / NIST SP 800-63B).")
+    password: str = Field(min_length=12, description="User password — minimum 12 characters (NIST SP 800-63B).")
     name: str = Field(description="User display name.")
 
 
@@ -273,7 +273,7 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 
 ## Rate Limiting (Required for Production)
 
-IM8 AS-4 mandates max 3 failed auth attempts per 15 minutes. Add `slowapi>=0.1.9` to `requirements.txt`, then:
+Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi>=0.1.9` to `requirements.txt`, then:
 
 ```python
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -298,7 +298,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Always hash passwords with `bcrypt` — never store plaintext.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
-- **Rate limiting is mandatory for production** — add `slowapi` before going live (IM8 AS-4).
+- **Rate limiting is mandatory for production** — add `slowapi` before going live.
 
 ## Validate
 
