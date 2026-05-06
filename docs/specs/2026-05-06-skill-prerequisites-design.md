@@ -27,6 +27,10 @@ with no guard — producing mismatched files, broken imports, and wasted work.
 5. **AI-DLC aligned** — mirrors the aidlc-workflows pattern: mandatory prerequisite
    stages, `⛔ GATE` at human decision points, autonomous execution after each gate,
    state tracked by a marker file.
+6. **Agent-first** — skills are invoked by agents, not directly by users. Step 0 is
+   a safety net against agent context mistakes, not a UX prompt for humans. Path
+   discovery (e.g. mono repo layout) is an execution concern handled in Inputs/Steps,
+   not a prerequisite gate.
 
 ---
 
@@ -79,8 +83,8 @@ Step 0 — check for marker (agent, forced — no exceptions)
 
 ## Step 0 Templates
 
-Step 0 is inserted into every applicable skill **before Step 1**, after any `## Inputs`
-section. It is compact and uniform — all resolution logic lives in `shared-migrate`.
+Step 0 is inserted into every applicable skill **after `## Inputs`, before Step 1**.
+It is compact and uniform — all resolution logic lives in `shared-migrate`.
 
 ### Variant A — Stack-specific (26 skills)
 
@@ -106,10 +110,15 @@ the marker.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 ```
 
-### Variant B — Any-stack (5 skills)
+### Variant B — Any-stack (6 skills)
 
 Used by `shared-add-error-handling`, `shared-add-logging`, `shared-add-pagination`,
-`shared-validation-patterns`, `shared-remove-example`.
+`shared-validation-patterns`, `shared-remove-example`, and `shared-full-stack-pairing`.
+
+Step 0 checks only the **current working directory** for a marker. Path discovery
+(identifying a second project in a mono repo, asking for the backend path, etc.) is
+handled in the skill's `## Inputs` section — it is an execution concern, not a
+prerequisite gate.
 
 ```markdown
 ## Prerequisites
@@ -120,7 +129,7 @@ Requires a project scaffolded with any templateCentral scaffold skill. See Step 
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md` at the current directory.
 
 If found → proceed to Step 1.
 
@@ -130,38 +139,19 @@ the marker.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 ```
 
-### Variant C — Two-stack, hard stop (1 skill)
-
-Used by `shared-full-stack-pairing`. No adopt option — adopting two projects
-simultaneously is out of scope for shared-migrate.
-
-```markdown
-## Prerequisites
-
-Requires two templateCentral-scaffolded projects — one frontend (Next.js or Vite + React)
-and one backend (FastAPI or NestJS). Ask the user for both project paths if not obvious.
-
-## Steps
-
-### Step 0 — Verify context
-
-Check `AGENTS.md` in both the frontend and backend directories for a
-`<!-- templateCentral:` marker.
-
-If both found → proceed to Step 1.
-
-If either is missing → ⛔ STOP. Do not generate any files. Tell the user which
-project needs to be scaffolded or adopted first (via `templatecentral:shared-migrate`),
-then re-invoke this skill.
-```
+**Note for `shared-full-stack-pairing`:** When running from a mono repo root with no
+marker at root level, the skill's `## Inputs` section handles discovery — the agent
+scans immediate subdirectories for templateCentral markers to identify the frontend
+and backend paths before Step 1 begins. Step 0 only validates whether the current
+context is resolvable; path discovery is not a prerequisite concern.
 
 ---
 
 ## Context Prerequisites (soft checks, per-skill)
 
 Some skills produce no useful output if specific code doesn't exist yet. These checks
-run as part of Step 0, after the marker check. They are hard stops — agents do not
-proceed or generate files.
+run **after** the marker check in Step 0. They are hard stops — agents do not proceed
+or generate files.
 
 | Skill | Check | Stop message |
 |---|---|---|
@@ -176,19 +166,18 @@ proceed or generate files.
 
 ## Recommended Prerequisites (advisory, per-skill)
 
-These are best-practice sequencing suggestions surfaced to the human by the agent.
-They are not blocking — teams have valid reasons to sequence differently.
-
-The agent must surface these, not silently skip them:
+Best-practice sequencing suggestions surfaced to the human by the agent. Not blocking —
+teams have valid reasons to sequence differently. The agent must surface these, not
+silently skip them:
 
 > "Before proceeding: `shared-add-error-handling` and `shared-add-logging` are not
 > yet detected in this project. Adding them first means new features inherit shared
 > infrastructure from the start. Run them now, or continue without them?"
 
 Skills that surface this advisory:
-- All feature/page/component "add-*" skills → recommend `shared-add-error-handling`,
+- All feature/page/component `add-*` skills → recommend `shared-add-error-handling`,
   `shared-add-logging`
-- All integration "add-*" skills → recommend `shared-add-logging`
+- All integration `add-*` skills → recommend `shared-add-logging`
 
 ---
 
@@ -199,7 +188,7 @@ capability — not in the initial release.
 
 ### Phase 1 — Detect (agent, autonomous)
 
-1. Scan for stack signals:
+1. Scan for stack signals in the current directory:
    - `next.config.ts` or `next.config.js` → Next.js
    - `vite.config.ts` with React plugin → Vite + React
    - `pyproject.toml` with FastAPI dependency → FastAPI
@@ -265,7 +254,7 @@ Do not proceed until the user responds.
 
 ## Skill Mapping
 
-### Variant A — Stack-specific
+### Variant A — Stack-specific (26 skills)
 
 | Stack | Skills |
 |---|---|
@@ -274,16 +263,12 @@ Do not proceed until the user responds.
 | `fastapi` | `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-endpoint`, `fastapi-add-integration`, `fastapi-add-test` |
 | `nestjs` | `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-module`, `nestjs-add-test` |
 
-### Variant B — Any-stack
+### Variant B — Any-stack (6 skills)
 
 `shared-add-error-handling`, `shared-add-logging`, `shared-add-pagination`,
-`shared-validation-patterns`, `shared-remove-example`
+`shared-validation-patterns`, `shared-remove-example`, `shared-full-stack-pairing`
 
-### Variant C — Two-stack
-
-`shared-full-stack-pairing`
-
-### Not modified
+### Not modified (12 skills)
 
 | Skill | Reason |
 |---|---|
