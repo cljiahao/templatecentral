@@ -135,6 +135,8 @@ export const auth = betterAuth({
 });
 ```
 
+> **better-auth ≥1.6**: `freshAge` is measured from session `createdAt`, not last activity. If you set a short `freshAge` (e.g. 43200 for AAL2 flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
+
 > **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. Adapters for Drizzle and Kysely are available — see [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
 ### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)

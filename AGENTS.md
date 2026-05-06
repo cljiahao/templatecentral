@@ -122,6 +122,8 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 
 ## Supply chain & reproducibility
 
+Supply chain attacks are OWASP A03:2025 — the third most critical web application risk category. Maintain an SBOM and run `pnpm audit` / `pip-audit` in CI on every dependency update.
+
 - **Node projects**: Use the package manager the scaffold documents (**pnpm** for current templates); after first `pnpm install`, **commit the new lockfile**. Do not delete lockfiles or switch npm/pnpm/yarn without explicit user approval.
 - **pnpm version**: Ensure the `"packageManager"` field in scaffolded `package.json` targets **pnpm ≥10.33.2**; run `pnpm --version` to verify before first install.
 - **Python projects**: Install from the template’s `requirements-dev.txt` (or equivalent); do not loosen version pins without user approval.

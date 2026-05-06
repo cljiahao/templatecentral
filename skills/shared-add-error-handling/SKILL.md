@@ -30,6 +30,7 @@ Requires a project scaffolded with any templateCentral scaffold skill. See Step 
 - [ ] **Unhandled exceptions caught globally** — No raw exception objects returned; all errors go through unified handler
 - [ ] **Logging excludes request bodies** — Never log raw `request.json()` or form data; log only status, path, duration, user ID
 - [ ] **Environment-based detail levels** — Development: include stack traces; Production: generic messages only
+- [ ] **Unhandled exceptions (OWASP A10:2025)** — Never let exceptions surface raw to clients — stack traces and internal messages are an OWASP A10:2025 violation. All error handlers must return generic user-facing messages; log full detail server-side only
 
 ## Unified Error Response Schema
 

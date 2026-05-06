@@ -306,6 +306,23 @@ Dispatch in order:
 1. `shared-build-agent` — validate the project still compiles
 2. `shared-review-agent` — check code standards and security patterns
 
+## AWS Responsible AI Lens
+
+The AWS Responsible AI Lens (re:Invent 2025) defines 10 dimensions for evaluating production AI systems. Use it alongside OWASP LLM Top 10 for pre-launch reviews:
+
+- **Controllability** — ability to override, retrain, or shut down the model
+- **Privacy** — data minimization, consent, and PII handling
+- **Security** — prompt injection, adversarial input, model extraction defense
+- **Safety** — preventing harmful outputs across user populations
+- **Veracity** — factual accuracy, hallucination detection, grounding
+- **Robustness** — performance under distribution shift and edge inputs
+- **Fairness** — equitable outcomes across demographic groups
+- **Explainability** — traceability from input to output decision
+- **Transparency** — disclosure of AI involvement to end users
+- **Governance** — audit trails, policy enforcement, accountability
+
+No single framework covers everything — OWASP LLM Top 10 focuses on attack vectors; the Responsible AI Lens focuses on systemic trustworthiness. Run both checklists before shipping AI features to production.
+
 ## Rules
 
 - Apply controls proportional to capability: A (simple) needs LLM01, 02, 05, 10; B (RAG) adds LLM08; C (agentic) adds LLM06
