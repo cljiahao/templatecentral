@@ -25,16 +25,16 @@ the marker.
 - Marker now present → proceed to context check below.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-**Context check:** Verify the example directory exists for the detected stack:
+**Context check:** Verify the example code exists for the detected stack:
 
-| Stack | Example directory to check |
+| Stack | What to check |
 |---|---|
-| `nextjs` | `src/features/example/` |
-| `vite-react` | `src/features/example/` |
-| `fastapi` | `src/example/` |
-| `nestjs` | `src/modules/example/` |
+| `nextjs` | `src/features/example/` directory exists |
+| `vite-react` | `src/features/example/` directory exists |
+| `fastapi` | `src/api/routers/example.py` file exists |
+| `nestjs` | `src/modules/example/` directory exists |
 
-If the directory does not exist → ⛔ STOP. Tell the user: "No example code found —
+If the check fails → ⛔ STOP. Tell the user: "No example code found —
 nothing to remove. The example may have already been removed."
 
 If found → proceed to the section for your detected stack below.
