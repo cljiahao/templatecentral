@@ -1763,7 +1763,7 @@ Every agent writing or modifying code must follow these before marking a task do
 - **Fail loudly** — No bare `except` or empty exception handlers. Log with context; return meaningful HTTP status codes.
 - **Least privilege** — Return only the fields the caller needs. Use `response_model` to strip internal fields.
 - **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
-- **Secrets in production (IM8 AS-8)**: Use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager in production. Flat `.env` / `.env.default` files are for local development only.
+- **Secrets in production**: Use a secrets manager appropriate to your cloud platform — flat `.env` / `.env.default` files are for local development only.
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->

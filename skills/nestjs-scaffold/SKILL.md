@@ -782,7 +782,7 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? 'info',
-        genReqId: () => crypto.randomUUID(), // correlation ID for IM8 audit trail
+        genReqId: () => crypto.randomUUID(), // correlation ID
         transport:
           appConfig.ENVIRONMENT !== 'prod' && appConfig.ENVIRONMENT !== 'uat'
             ? { target: 'pino-pretty', options: { singleLine: true } }
@@ -935,7 +935,7 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': ["'none'"],
       },
     },
-    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true }, // IM8 AS-10
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
     xFrameOptions: { action: 'deny' },
   });
 
@@ -1484,7 +1484,7 @@ Every agent writing or modifying code must follow these before marking a task do
 - **Fail loudly** — No empty catch blocks. Log with context; return meaningful HTTP status codes.
 - **Least privilege** — Return only the fields the caller needs. Never expose internal IDs without auth checks.
 - **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
-- **Secrets in production (IM8 AS-8)**: Use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager in production. Flat `.env` files are for local development only.
+- **Secrets in production**: Use a secrets manager appropriate to your cloud platform — flat `.env` files are for local development only.
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->

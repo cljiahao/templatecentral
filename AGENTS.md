@@ -118,7 +118,7 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 - **FastAPI**: In development, CORS allows `localhost:3000`, `localhost:5173`, and `127.0.0.1` variants automatically. In production, set `CORS_ORIGINS` env var (comma-separated) to your frontend's domain.
 - **Production**: Replace template dev placeholders in env (e.g. better-auth `BETTER_AUTH_SECRET`, JWT secrets) with strong values before deploy — call this out in handoff when templates use placeholders.
 - Follow each stack’s `code-standards` for auth, env vars, and least-privilege responses.
-- **File uploads (IM8 AS-12)**: Scan uploaded files for malware (ClamAV or a cloud scanning service such as AWS GuardDuty Malware Protection) before writing to storage.
+- **File uploads**: Scan uploaded files for malware (ClamAV or a cloud scanning service such as AWS GuardDuty Malware Protection) before writing to storage.
 
 ## Supply chain & reproducibility
 

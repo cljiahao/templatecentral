@@ -854,9 +854,9 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes
 
-## Production Requirement (IM8 LM-1)
+## Production Requirement
 
-Ship logs to a separate, tamper-evident system (e.g. AWS CloudWatch, Datadog, OpenSearch Ingestion) — writing to local disk only does not satisfy IM8 LM-1, which requires log storage isolated from the application host.
+Ship logs to a separate, tamper-evident system (e.g. AWS CloudWatch, Datadog, OpenSearch Ingestion) — writing to local disk only is not sufficient; production log storage must be isolated from the application host.
 
 ## Validate
 

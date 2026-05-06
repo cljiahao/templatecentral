@@ -268,7 +268,7 @@ const response = await openai.chat.completions.create({
   temperature: 0.7,
 });
 
-// Per-user rate limiting (same pattern as IM8 AS-4 in nextjs-add-auth)
+// Per-user rate limiting
 // Use @upstash/ratelimit or infrastructure-layer rate limiting
 ```
 

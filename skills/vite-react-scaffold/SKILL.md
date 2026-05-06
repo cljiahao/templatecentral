@@ -2990,7 +2990,7 @@ Every agent writing or modifying code must follow these before marking a task do
 - **Fail loudly** — No empty catch blocks. Surface errors to the user or log with context; never swallow silently.
 - **Least privilege** — Request only the data the view needs. Strip unused fields from API responses before storing.
 - **No secrets in code** — No tokens, passwords, or keys in `VITE_*` or any client file. Use server-side or proxy.
-- **Secrets in production (IM8 AS-8)**: Backend secrets must use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager in production. Never put backend secrets in `VITE_*` env vars or any client-side code.
+- **Secrets in production**: Backend secrets must use a secrets manager appropriate to your cloud platform. Never put backend secrets in `VITE_*` env vars or any client-side code.
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
