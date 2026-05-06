@@ -7,6 +7,20 @@ description: Use when connecting a frontend (Next.js or Vite + React) to a backe
 
 Cross-stack guidance for connecting a templateCentral frontend to a templateCentral backend.
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
+## Inputs
+
+- **Frontend project path** — current directory if running from inside the frontend
+  project, or ask if running from a mono repo root. The agent should scan immediate
+  subdirectories for a `<!-- templateCentral:` marker to identify the frontend path
+  automatically before asking.
+- **Backend project path** — ask the user. The agent should scan immediate
+  subdirectories for a second `<!-- templateCentral:` marker to suggest the backend
+  path.
+
 ## Supported Pairings
 
 | Frontend | Backend | Proxy Method |
@@ -17,6 +31,17 @@ Cross-stack guidance for connecting a templateCentral frontend to a templateCent
 | Next.js | NestJS | Next.js `rewrites` in `next.config.ts` |
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Set Up the Backend CORS
 

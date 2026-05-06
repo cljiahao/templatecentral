@@ -7,6 +7,38 @@ description: Use when the user wants to remove the example/demo code from a scaf
 
 Per-stack cleanup steps for removing the example/demo code from a templateCentral-scaffolded project.
 
+## Prerequisites
+
+Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+
+If found → note the detected stack from the marker (nextjs / vite-react / fastapi /
+nestjs) and proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Verify the example directory exists for the detected stack:
+
+| Stack | Example directory to check |
+|---|---|
+| `nextjs` | `src/features/example/` |
+| `vite-react` | `src/features/example/` |
+| `fastapi` | `src/example/` |
+| `nestjs` | `src/modules/example/` |
+
+If the directory does not exist → ⛔ STOP. Tell the user: "No example code found —
+nothing to remove. The example may have already been removed."
+
+If found → proceed to the section for your detected stack below.
+
 ## Next.js
 
 ### Files to Delete
