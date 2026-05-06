@@ -935,7 +935,7 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': ["'none'"],
       },
     },
-    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true }, // HSTS
     xFrameOptions: { action: 'deny' },
   });
 
