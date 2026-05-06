@@ -1,0 +1,54 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-06-skill-prerequisites.md",
+  "tasks": [
+    {
+      "id": 7,
+      "subject": "Task 0: Create shared-migrate skill",
+      "status": "pending",
+      "description": "**Goal:** New skill that resolves missing templateCentral markers via a human-gated adopt/migrate flow, then returns control to the invoking skill.\n\n**Files:**\n- Create: `skills/shared-migrate/SKILL.md`\n\n**Verify:** `grep -c \"Phase\" skills/shared-migrate/SKILL.md` → `3`\n\n```json:metadata\n{\"files\": [\"skills/shared-migrate/SKILL.md\"], \"verifyCommand\": \"grep -c \\\"Phase\\\" skills/shared-migrate/SKILL.md\", \"acceptanceCriteria\": [\"Phase 1 detects all 4 stacks\", \"Phase 2 gate does not auto-proceed\", \"Phase 3-A writes marker\", \"Phase 3-B loops back\", \"Phase 3-C exits cleanly\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 1: Add Step 0 to Next.js skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Prerequisites + Step 0 (Variant A, nextjs@) to all 9 nextjs-add-* skills.\n\n**Files:** skills/nextjs-add-{api-route,auth,component,database,feature,form,integration,page,test}/SKILL.md\n\n**Verify:** `grep -l 'Step 0' skills/nextjs-add-*/SKILL.md | wc -l` → 9\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-api-route/SKILL.md\",\"skills/nextjs-add-auth/SKILL.md\",\"skills/nextjs-add-component/SKILL.md\",\"skills/nextjs-add-database/SKILL.md\",\"skills/nextjs-add-feature/SKILL.md\",\"skills/nextjs-add-form/SKILL.md\",\"skills/nextjs-add-integration/SKILL.md\",\"skills/nextjs-add-page/SKILL.md\",\"skills/nextjs-add-test/SKILL.md\"], \"verifyCommand\": \"grep -l 'Step 0' skills/nextjs-add-*/SKILL.md | wc -l\", \"acceptanceCriteria\": [\"All 9 have ## Prerequisites\", \"All 9 have Step 0\", \"nextjs-add-test has context check\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 2: Add Step 0 to Vite+React skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Prerequisites + Step 0 (Variant A, vite-react@) to all 7 vite-react-add-* skills.\n\n**Files:** skills/vite-react-add-{auth,component,feature,form,integration,page,test}/SKILL.md\n\n**Verify:** `grep -l 'Step 0' skills/vite-react-add-*/SKILL.md | wc -l` → 7\n\n```json:metadata\n{\"files\": [\"skills/vite-react-add-auth/SKILL.md\",\"skills/vite-react-add-component/SKILL.md\",\"skills/vite-react-add-feature/SKILL.md\",\"skills/vite-react-add-form/SKILL.md\",\"skills/vite-react-add-integration/SKILL.md\",\"skills/vite-react-add-page/SKILL.md\",\"skills/vite-react-add-test/SKILL.md\"], \"verifyCommand\": \"grep -l 'Step 0' skills/vite-react-add-*/SKILL.md | wc -l\", \"acceptanceCriteria\": [\"All 7 have Step 0\", \"vite-react-add-test has context check\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 3: Add Step 0 to FastAPI skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Prerequisites + Step 0 (Variant A, fastapi@) to all 5 fastapi-add-* skills.\n\n**Files:** skills/fastapi-add-{auth,database,endpoint,integration,test}/SKILL.md\n\n**Verify:** `grep -l 'Step 0' skills/fastapi-add-*/SKILL.md | wc -l` → 5\n\n```json:metadata\n{\"files\": [\"skills/fastapi-add-auth/SKILL.md\",\"skills/fastapi-add-database/SKILL.md\",\"skills/fastapi-add-endpoint/SKILL.md\",\"skills/fastapi-add-integration/SKILL.md\",\"skills/fastapi-add-test/SKILL.md\"], \"verifyCommand\": \"grep -l 'Step 0' skills/fastapi-add-*/SKILL.md | wc -l\", \"acceptanceCriteria\": [\"All 5 have Step 0\", \"fastapi-add-test has context check\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 4: Add Step 0 to NestJS skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Prerequisites + Step 0 (Variant A, nestjs@) to all 5 nestjs-add-* skills.\n\n**Files:** skills/nestjs-add-{auth,database,integration,module,test}/SKILL.md\n\n**Verify:** `grep -l 'Step 0' skills/nestjs-add-*/SKILL.md | wc -l` → 5\n\n```json:metadata\n{\"files\": [\"skills/nestjs-add-auth/SKILL.md\",\"skills/nestjs-add-database/SKILL.md\",\"skills/nestjs-add-integration/SKILL.md\",\"skills/nestjs-add-module/SKILL.md\",\"skills/nestjs-add-test/SKILL.md\"], \"verifyCommand\": \"grep -l 'Step 0' skills/nestjs-add-*/SKILL.md | wc -l\", \"acceptanceCriteria\": [\"All 5 have Step 0\", \"nestjs-add-test has context check\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 5: Add Step 0 to shared Implementation skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Variant B Prerequisites + Step 0 inside ## Implementation for 4 shared skills.\n\n**Files:** skills/shared-add-{error-handling,logging,pagination}/SKILL.md, skills/shared-validation-patterns/SKILL.md\n\n**Verify:** count → 4\n\n```json:metadata\n{\"files\": [\"skills/shared-add-error-handling/SKILL.md\",\"skills/shared-add-logging/SKILL.md\",\"skills/shared-add-pagination/SKILL.md\",\"skills/shared-validation-patterns/SKILL.md\"], \"verifyCommand\": \"grep -l 'Step 0' skills/shared-add-error-handling/SKILL.md skills/shared-add-logging/SKILL.md skills/shared-add-pagination/SKILL.md skills/shared-validation-patterns/SKILL.md | wc -l\", \"acceptanceCriteria\": [\"All 4 have Step 0 in Implementation\", \"shared-add-pagination has context check\"]}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 6: Update special shared skills",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add Variant B Step 0 to shared-full-stack-pairing (+ Inputs) and shared-remove-example (new ## Steps + stack-aware context check).\n\n**Files:** skills/shared-full-stack-pairing/SKILL.md, skills/shared-remove-example/SKILL.md\n\n**Verify:** `grep 'Step 0' skills/shared-full-stack-pairing/SKILL.md skills/shared-remove-example/SKILL.md`\n\n```json:metadata\n{\"files\": [\"skills/shared-full-stack-pairing/SKILL.md\",\"skills/shared-remove-example/SKILL.md\"], \"verifyCommand\": \"grep 'Step 0' skills/shared-full-stack-pairing/SKILL.md skills/shared-remove-example/SKILL.md\", \"acceptanceCriteria\": [\"shared-full-stack-pairing has Step 0 + Inputs with mono repo note\", \"shared-remove-example has Step 0 with stack-aware context check\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-06T00:00:00Z"
+}
