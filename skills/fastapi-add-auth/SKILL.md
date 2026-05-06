@@ -273,7 +273,7 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 
 ## Rate Limiting (Required for Production)
 
-Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi>=0.1.9` to `requirements.txt`, then:
+Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi` to `requirements.txt`, then:
 
 ```python
 from slowapi import Limiter, _rate_limit_exceeded_handler

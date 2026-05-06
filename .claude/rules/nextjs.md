@@ -5,7 +5,7 @@ paths:
 
 # Next.js Rules
 
-Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (better-auth). Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
+Stack: Next.js 16, React 19, TypeScript 6, Node.js ≥20.9.0, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (better-auth). Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
 
 ## Boundaries
 
