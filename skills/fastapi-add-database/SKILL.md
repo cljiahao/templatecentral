@@ -9,6 +9,10 @@ Add a database to a FastAPI project scaffolded from templateCentral.
 
 > **Opt-in only**: Do not add database support unless the user explicitly requests it. The base template is intentionally database-free.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+
 ## Choose Your Database
 
 Ask the user which database they need, then follow the corresponding section:
@@ -21,6 +25,21 @@ Ask the user which database they need, then follow the corresponding section:
 If the user says "database" without specifying, ask: *"Do you need a SQL database (PostgreSQL, MySQL, SQLite) or MongoDB?"*
 
 > **AWS IAM authentication**: If the user explicitly requires AWS IAM database authentication for compliance, see the [AWS IAM Considerations](#aws-iam-considerations) section in Rules for the additional packages and configuration. Do NOT install IAM packages unless the user requests it.
+
+---
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ---
 

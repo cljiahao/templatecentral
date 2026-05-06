@@ -9,7 +9,22 @@ Guide for adding a new API endpoint following the router → service architectur
 
 > **Placeholder names**: All examples use `my_endpoint`, `MyRequest`, `my_service`, etc. Replace these with your actual resource name throughout (e.g., for a `tasks` resource: `tasks.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Define Request/Response Schemas
 

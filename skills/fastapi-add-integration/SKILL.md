@@ -7,6 +7,10 @@ description: Use when connecting to an external API (e.g., GitHub, Stripe, OpenA
 
 Create a new third-party API integration in a FastAPI project scaffolded from templateCentral.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+
 ## Inputs
 
 - **Service name** — The external service (e.g., `github`, `stripe`, `openai`)
@@ -29,6 +33,17 @@ Add to `requirements.txt`:
 - `httpx` — Async HTTP client
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Create Integration Directories
 

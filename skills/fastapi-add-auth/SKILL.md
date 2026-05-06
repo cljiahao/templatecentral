@@ -9,6 +9,10 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 
 > **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `fastapi-add-database` after this skill to complete the integration.
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+
 ## Dependencies
 
 Add to `requirements.txt`:
@@ -17,6 +21,17 @@ Add to `requirements.txt`:
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
 ## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Add Auth Schemas
 

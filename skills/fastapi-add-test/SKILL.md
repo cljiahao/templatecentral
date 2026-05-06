@@ -9,6 +9,30 @@ Guide for writing tests in a FastAPI project scaffolded from templateCentral.
 
 **Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`).
 
+## Prerequisites
+
+Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+
+## Steps
+
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to context check below.
+
+If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to context check below.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
+**Context check:** Confirm `src/api/routers/` contains at least one `.py` file.
+
+If not found → ⛔ STOP. Tell the user: "No routers found. Run
+`templatecentral:fastapi-add-endpoint` first, then return here."
+
+If found → proceed to Step 1.
+
 ## Test Structure
 
 Tests mirror `src/`:
