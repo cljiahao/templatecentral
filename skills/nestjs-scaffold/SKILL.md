@@ -149,8 +149,9 @@ No version pins on deps — pnpm resolves latest compatible.
 
 ```dockerfile
 # ---- Global build arguments ----
-# NODE:           Production Node.js image (pinned for reproducible builds).
-#                 Override with a hardened image via --build-arg NODE=dhi.io/...
+# NODE:           Production Node.js image. Uses a floating major tag so patch
+#                 updates are picked up automatically; pin to a digest in CI
+#                 for reproducible builds. Override via --build-arg NODE=...
 # NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
 #                 apk, adduser, etc.). Not overridden by CI.
 # APP_UID/GID:    Non-root user/group IDs for container security

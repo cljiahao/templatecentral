@@ -215,9 +215,9 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 ```dockerfile
 # ---- Global build arguments ----
-# NODE:           Node.js image tag (pinned for reproducible builds).
-#                 CI may override via --build-arg NODE=dhi.io/... but this only
-#                 affects the build stages, not prod (which uses NGINX).
+# NODE:           Node.js image tag. Uses a floating major tag so patch updates
+#                 are picked up automatically; pin to a digest in CI for
+#                 reproducible builds. Build stages only — prod uses NGINX.
 # NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
 #                 apk, adduser, etc.). Not overridden by CI.
 # NGINX:          Nginx image for serving the static Vite build output
