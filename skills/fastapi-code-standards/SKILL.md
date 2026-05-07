@@ -89,7 +89,7 @@ description: Use when writing or reviewing Python code in a FastAPI project — 
 
 Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `add-endpoint`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `pytest` from project root before handoff.
 
-Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI requires `Content-Type: application/json` by default, and `json=` sets it automatically.
+Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI 0.132+ requires `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
 
 ## Dependency Rules
 
