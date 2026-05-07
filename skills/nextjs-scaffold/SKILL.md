@@ -73,6 +73,7 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
 ├── vitest.config.ts                    [verbatim — Part B]
 ├── .gitignore                          [verbatim — Part B]
 ├── .npmrc                              [verbatim — Part B]
+├── pnpm-workspace.yaml                 [verbatim — Part B]
 ├── .husky/
 │   ├── pre-commit                      [generate — pnpm format:check && pnpm lint]
 │   └── pre-push                        [generate — pnpm test]
@@ -548,9 +549,19 @@ next-env.d.ts
 ### `.npmrc`
 
 ```
-# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
-# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
-blockExoticSubdeps=true
+# Auth and registry settings only (pnpm 11+).
+# All other pnpm settings live in pnpm-workspace.yaml.
+```
+
+### `pnpm-workspace.yaml`
+
+```yaml
+# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# Auth/registry settings belong in .npmrc; all other settings belong here.
+
+# Block git-URL, tarball, and local-path dependencies.
+# Primary mitigation against dependency confusion and supply-chain attacks.
+blockExoticSubdeps: true
 ```
 
 ### `vitest.config.ts`

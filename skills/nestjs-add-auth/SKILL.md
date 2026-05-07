@@ -15,12 +15,11 @@ Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0
 
 ## Dependencies
 
-`argon2` is a native Node addon — pnpm blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
+`argon2` is a native Node addon — pnpm blocks native builds by default. Before installing, add the following to `pnpm-workspace.yaml` in the project root (create the file if it doesn't exist):
 
-```json
-"pnpm": {
-  "allowBuilds": { "argon2": true }
-}
+```yaml
+allowBuilds:
+  argon2: true
 ```
 
 Then install:
@@ -336,6 +335,7 @@ import { APP_GUARD } from '@nestjs/core';
 - Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
+- **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` uses `req.ip`, which Fastify only patches from `X-Forwarded-For` when `trustProxy` is active (set via `TRUST_PROXY` in the scaffold). Without it, all proxied requests share the proxy's IP and hit the same rate bucket.
 
 ## Validate
 

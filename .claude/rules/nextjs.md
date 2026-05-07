@@ -5,7 +5,7 @@ paths:
 
 # Next.js Rules
 
-Stack: Next.js 16, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (better-auth). Package manager: **pnpm 11** (pinned in `packageManager` field — do not use npm or yarn). Native addons: use `"pnpm": { "allowBuilds": { "<pkg>": true } }` in `package.json`.
+Stack: Next.js 16, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (better-auth). Package manager: **pnpm 11** (pinned in `packageManager` field — do not use npm or yarn). Native addons: add `allowBuilds:\n  <pkg>: true` to `pnpm-workspace.yaml` (pnpm 11 no longer reads the `pnpm` field from `package.json`).
 
 ## Boundaries
 

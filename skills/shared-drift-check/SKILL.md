@@ -88,7 +88,7 @@ After Step 5 (or after Step 4 if user declined Step 5), ask:
 - **Python projects**: run `pip install pip-audit && pip-audit -r requirements.txt`. Report findings.
 
 If zero vulnerabilities: report "No known vulnerabilities found."
-If findings: list package name, severity, CVE, and whether a fix is available. Do not auto-upgrade — let the user decide.
+If findings: list package name, severity, advisory identifier, and whether a fix is available. Do not auto-upgrade — let the user decide.
 
 If user declines: done.
 

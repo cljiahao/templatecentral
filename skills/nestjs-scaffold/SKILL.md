@@ -20,8 +20,8 @@ version: "1.0.0"
 Install runtime dependencies (no version pins):
 
 ```bash
-pnpm add @nestjs/common@^11.1.19 @nestjs/core@^11.1.19 @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
-  @fastify/helmet@^13.0.0 dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
+pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
+  @fastify/helmet dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
 pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/node \
   @vitest/coverage-v8 eslint eslint-config-prettier eslint-plugin-prettier \
@@ -58,6 +58,7 @@ pnpm install   # activates husky via prepare script
 │   ├── pre-commit                      [verbatim — Part B]
 │   └── pre-push                        [verbatim — Part B]
 ├── package.json                        [generate]
+├── pnpm-workspace.yaml                 [verbatim — Part B]
 ├── README.md                           [generate]
 ├── AGENTS.md                           [generate — after verification gate]
 ├── src/
@@ -536,9 +537,19 @@ TRUST_PROXY=
 ### `.npmrc`
 
 ```
-# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
-# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
-blockExoticSubdeps=true
+# Auth and registry settings only (pnpm 11+).
+# All other pnpm settings live in pnpm-workspace.yaml.
+```
+
+### `pnpm-workspace.yaml`
+
+```yaml
+# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# Auth/registry settings belong in .npmrc; all other settings belong here.
+
+# Block git-URL, tarball, and local-path dependencies.
+# Primary mitigation against dependency confusion and supply-chain attacks.
+blockExoticSubdeps: true
 ```
 
 ### `.prettierrc`

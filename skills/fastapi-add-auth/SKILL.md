@@ -299,6 +299,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 - Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
+- **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Without `TRUST_PROXY`, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
 
 ## Validate
 

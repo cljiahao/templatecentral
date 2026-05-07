@@ -17,14 +17,14 @@ version: "1.0.0"
 
 ### Dependencies
 
-Install runtime and dev dependencies (pin only where a minimum version is required for breaking-change safety):
+Install runtime and dev dependencies (no version pins — `shared-update-agent` freshens them after scaffold):
 
 ```bash
-pnpm add react react-dom react-router@^7.15.0 @tanstack/react-query \
+pnpm add react react-dom react-router @tanstack/react-query \
   class-variance-authority clsx tailwind-merge lucide-react \
-  @hookform/resolvers@^5.0.0 react-hook-form zod sonner motion
+  @hookform/resolvers react-hook-form zod sonner motion
 
-pnpm add -D vite @vitejs/plugin-react@^6.0.0 typescript \
+pnpm add -D vite @vitejs/plugin-react typescript \
   @types/react @types/react-dom \
   tailwindcss @tailwindcss/postcss @tailwindcss/typography tw-animate-css \
   eslint @eslint/js eslint-plugin-react-hooks globals typescript-eslint prettier \
@@ -57,6 +57,7 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 ├── .dockerignore                           [verbatim]
 ├── .gitignore                              [verbatim]
 ├── .npmrc                                  [verbatim]
+├── pnpm-workspace.yaml                     [verbatim]
 ├── .env.example                            [verbatim]
 ├── .env                                    [copy from .env.example]
 ├── .prettierrc                             [verbatim]
@@ -630,9 +631,19 @@ yarn-error.log*
 ### `.npmrc`
 
 ```
-# Blocks git-URL, tarball, and local-path dependencies from entering the install graph.
-# Primary mitigation against dependency confusion and supply chain attacks (pnpm v9+).
-blockExoticSubdeps=true
+# Auth and registry settings only (pnpm 11+).
+# All other pnpm settings live in pnpm-workspace.yaml.
+```
+
+### `pnpm-workspace.yaml`
+
+```yaml
+# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# Auth/registry settings belong in .npmrc; all other settings belong here.
+
+# Block git-URL, tarball, and local-path dependencies.
+# Primary mitigation against dependency confusion and supply-chain attacks.
+blockExoticSubdeps: true
 ```
 
 ### `.env.example`
