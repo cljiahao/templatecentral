@@ -108,10 +108,10 @@ Never allow PII or credentials to enter LLM context. Strip before sending.
 ```ts
 // Redact common PII patterns before sending to the model
 const PII_PATTERNS: Array<[RegExp, string]> = [
-  [/\b[A-Z]\d{7}[A-Z]\b/g, '[NRIC]'],                           // Singapore NRIC
+  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],                            // National ID — adapt regex to your jurisdiction's format
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],   // Credit card
   [/\b[\w.+-]+@[\w-]+\.\w{2,}\b/g, '[EMAIL]'],
-  [/\b\+?65[\s-]?\d{4}[\s-]?\d{4}\b/g, '[PHONE]'],
+  [/\b\+?\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],    // International phone — adapt to expected formats
 ];
 
 export function redactPII(text: string): string {
