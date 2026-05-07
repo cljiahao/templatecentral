@@ -17,7 +17,7 @@ Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 
 
 Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
-- `bcrypt` — Password hashing (use directly; passlib is unmaintained and incompatible with bcrypt ≥ 4.1.1)
+- `argon2-cffi` — Password hashing (argon2id algorithm; OWASP/NIST SP 800-63B recommended)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
 ## Steps
@@ -115,27 +115,26 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```python
 from datetime import datetime, timedelta, timezone
 
-import bcrypt
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 import jwt
-from fastapi import HTTPException
 
 from core.config import api_settings
 
 ALGORITHM = "HS256"
 
+_ph = PasswordHasher()  # argon2id, OWASP-recommended defaults
+
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password."""
-    if len(password.encode()) > 72:
-        raise HTTPException(status_code=400, detail="Password must be 72 characters or fewer")
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")  # cost 12 — OWASP minimum
+    return _ph.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    if len(plain_password.encode()) > 72:
-        return False  # bcrypt 5.0 raises ValueError for >72 bytes; no valid hash exists
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    try:
+        return _ph.verify(hashed_password, plain_password)
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
@@ -297,7 +296,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
-- Always hash passwords with `bcrypt` — never store plaintext. For new projects, prefer `argon2id` (OWASP and NIST SP 800-63B recommendation) — it is memory-hard and more resistant to GPU-based attacks than bcrypt. Use the `argon2-cffi` package for Python; bcrypt remains acceptable if already in use.
+- Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 

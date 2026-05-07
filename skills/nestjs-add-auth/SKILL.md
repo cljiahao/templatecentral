@@ -15,19 +15,19 @@ Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0
 
 ## Dependencies
 
-`bcrypt` is a native Node addon — pnpm 10 blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
+`argon2` is a native Node addon — pnpm 10 blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
 
 ```json
 "pnpm": {
-  "onlyBuiltDependencies": ["bcrypt"]
+  "onlyBuiltDependencies": ["argon2"]
 }
 ```
 
 Then install:
 
 ```bash
-pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt bcrypt
-pnpm add -D @types/passport-jwt @types/bcrypt
+pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt argon2
+pnpm add -D @types/passport-jwt
 ```
 
 ## Steps
@@ -166,7 +166,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {}
 ```typescript
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 
 import type { RegisterDto, LoginDto } from './auth.dto';
 
@@ -175,7 +175,7 @@ export class AuthService {
   constructor(private readonly jwtService: JwtService) {}
 
   async register(dto: RegisterDto) {
-    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
     const user = { id: 'generated-id', email: dto.email, name: dto.name, hashedPassword };
     return { id: user.id, email: user.email, name: user.name };
   }
@@ -333,7 +333,7 @@ import { APP_GUARD } from '@nestjs/core';
 ## Rules
 
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
-- Always hash passwords with `bcrypt` — never store plaintext. For new projects, prefer `argon2id` (OWASP and NIST SP 800-63B recommendation) — it is memory-hard and more resistant to GPU-based attacks than bcrypt. Use the `argon2` npm package; bcrypt remains acceptable if already in use.
+- Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
 
