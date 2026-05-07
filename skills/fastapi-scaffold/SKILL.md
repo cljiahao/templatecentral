@@ -732,6 +732,34 @@ from core.config import common_settings, api_settings
 from error_handler import configure_exceptions
 
 
+_SECURITY_HEADERS = [
+    (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"x-xss-protection", b"0"),  # Disable legacy XSS auditor (exploitable in older browsers)
+]
+
+
+class SecurityHeadersMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def _send(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(_SECURITY_HEADERS)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, _send)
+
+
 class ForwardedHostMiddleware:
     """Patches scope['server'] from X-Forwarded-Host so request.base_url reflects the public hostname.
 
@@ -769,6 +797,10 @@ def configure_cors(app: FastAPI) -> None:
     )
 
 
+def configure_security_headers(app: FastAPI) -> None:
+    app.add_middleware(SecurityHeadersMiddleware)
+
+
 def configure_proxy_headers(app: FastAPI) -> None:
     """Enables reverse-proxy header trust when TRUST_PROXY is set.
 
@@ -799,6 +831,7 @@ def start_application() -> FastAPI:
         },
     )
 
+    configure_security_headers(app)
     configure_cors(app)
     configure_proxy_headers(app)
     configure_exceptions(app)

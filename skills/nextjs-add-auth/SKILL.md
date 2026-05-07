@@ -68,7 +68,7 @@ the marker.
 ### 1. Install better-auth
 
 ```bash
-pnpm add better-auth@latest
+pnpm add better-auth@^1.6.9
 ```
 
 ### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
