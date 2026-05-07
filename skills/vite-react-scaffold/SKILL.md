@@ -807,7 +807,8 @@ export default defineConfig({
     "noUncheckedIndexedAccess": true,
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": [] // TypeScript 6 default; add @types/* package names here if globally-visible types are needed
   },
   "include": ["src", "vite-env.d.ts", "vite.config.ts"]
 }
