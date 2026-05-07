@@ -1,0 +1,37 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-07-templatecentral-audit-round6.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Security Accuracy",
+      "status": "pending",
+      "description": "**Goal:** Fix password min_length mismatch (8→12) in shared-validation-patterns and add PyJWT algorithm whitelist comment in fastapi-add-auth.\n\n**Files:**\n- Modify: `skills/shared-validation-patterns/SKILL.md:556`\n- Modify: `skills/fastapi-add-auth/SKILL.md:148-154`\n\n**Acceptance Criteria:**\n- [ ] `shared-validation-patterns/SKILL.md` has `min_length=12` (not `min_length=8`)\n- [ ] `fastapi-add-auth/SKILL.md` has a comment above `algorithms=[ALGORITHM]` explaining it is a security whitelist\n\n**Verify:** `grep \"min_length=12\" skills/shared-validation-patterns/SKILL.md && grep \"whitelist\" skills/fastapi-add-auth/SKILL.md` → one match each\n\n```json:metadata\n{\"files\": [\"skills/shared-validation-patterns/SKILL.md\", \"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"min_length=12\\\" skills/shared-validation-patterns/SKILL.md && grep \\\"whitelist\\\" skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"shared-validation-patterns has min_length=12\", \"fastapi-add-auth has algorithm whitelist comment\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: better-auth v1.5 + Drizzle rc.1 Accuracy",
+      "status": "pending",
+      "description": "**Goal:** Note @better-auth/drizzle as separate package in nextjs-add-auth, and extend Drizzle RC callout in both database skills with rc.1 casing API breaking change.\n\n**Files:**\n- Modify: `skills/nextjs-add-auth/SKILL.md:140`\n- Modify: `skills/nextjs-add-database/SKILL.md:49`\n- Modify: `skills/nestjs-add-database/SKILL.md:49`\n\n**Acceptance Criteria:**\n- [ ] `nextjs-add-auth/SKILL.md` callout names `@better-auth/drizzle` as a separate package\n- [ ] `nextjs-add-database/SKILL.md` RC callout mentions rc.1 casing API change\n- [ ] `nestjs-add-database/SKILL.md` RC callout mentions rc.1 casing API change\n\n**Verify:** `grep \"@better-auth/drizzle\" skills/nextjs-add-auth/SKILL.md && grep \"casing\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md` → matches in all three files\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-auth/SKILL.md\", \"skills/nextjs-add-database/SKILL.md\", \"skills/nestjs-add-database/SKILL.md\"], \"verifyCommand\": \"grep \\\"@better-auth/drizzle\\\" skills/nextjs-add-auth/SKILL.md && grep \\\"casing\\\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md\", \"acceptanceCriteria\": [\"nextjs-add-auth names @better-auth/drizzle as separate package\", \"nextjs-add-database RC callout mentions rc.1 casing change\", \"nestjs-add-database RC callout mentions rc.1 casing change\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: pnpm Native Addon Build Permissions",
+      "status": "pending",
+      "description": "**Goal:** Add pnpm.onlyBuiltDependencies config step to nestjs-add-auth so bcrypt's native build isn't silently skipped by pnpm 10.\n\n**Files:**\n- Modify: `skills/nestjs-add-auth/SKILL.md` (Dependencies section, lines 17–21)\n\n**Acceptance Criteria:**\n- [ ] `nestjs-add-auth/SKILL.md` Dependencies section includes a step to add `\"pnpm\": { \"onlyBuiltDependencies\": [\"bcrypt\"] }` to `package.json` before running `pnpm add`\n\n**Verify:** `grep \"onlyBuiltDependencies\" skills/nestjs-add-auth/SKILL.md` → one match\n\n```json:metadata\n{\"files\": [\"skills/nestjs-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"onlyBuiltDependencies\\\" skills/nestjs-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"nestjs-add-auth Dependencies section includes pnpm.onlyBuiltDependencies for bcrypt\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: TypeScript 6 tsconfig Explicit types Field",
+      "status": "pending",
+      "description": "**Goal:** Add explicit \"types\": [] to the vite-react-scaffold tsconfig so TypeScript 6's changed default doesn't silently drop global type packages.\n\n**Files:**\n- Modify: `skills/vite-react-scaffold/SKILL.md:808-814`\n\n**Acceptance Criteria:**\n- [ ] `vite-react-scaffold/SKILL.md` tsconfig includes `\"types\": []`\n\n**Verify:** `grep '\"types\"' skills/vite-react-scaffold/SKILL.md` → at least one match in the tsconfig block\n\n```json:metadata\n{\"files\": [\"skills/vite-react-scaffold/SKILL.md\"], \"verifyCommand\": \"grep '\\\"types\\\"' skills/vite-react-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"vite-react-scaffold tsconfig includes explicit \\\"types\\\": [] field\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Version Bump and CHANGELOG",
+      "status": "pending",
+      "blockedBy": [1, 2, 3, 4],
+      "description": "**Goal:** Bump plugin version from 2.5.0 to 2.6.0 and record all Round 6 changes in CHANGELOG.md.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json`\n- Modify: `CHANGELOG.md`\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` version is \"2.6.0\"\n- [ ] `CHANGELOG.md` has `[2.6.0]` entry dated 2026-05-07\n\n**Verify:** `grep '\"version\"' .claude-plugin/plugin.json && grep '\\[2.6.0\\]' CHANGELOG.md` → both match\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2.6.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.6.0\", \"CHANGELOG has [2.6.0] entry dated 2026-05-07\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-07T09:30:00Z"
+}
