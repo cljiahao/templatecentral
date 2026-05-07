@@ -506,7 +506,7 @@ Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.l
 
 Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
-> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin was removed in better-auth 1.6.
+> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin was removed in better-auth 1.6. See: https://www.better-auth.com/docs/plugins/oauth-provider
 
 ## Rate Limiting (Required for Production)
 
