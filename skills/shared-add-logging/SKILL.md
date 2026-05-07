@@ -665,6 +665,7 @@ For login/logout events, log in your auth service:
 
 ```ts
 // src/modules/auth/auth.service.ts
+import * as argon2 from 'argon2';
 import { Logger } from 'nestjs-pino';
 import { Injectable } from '@nestjs/common';
 
@@ -688,7 +689,7 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || !(await argon2.verify(user.passwordHash, password))) {
       this.logger.warn(
         { reason: 'invalid_credentials' },
         'Login failure'
