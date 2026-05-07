@@ -832,7 +832,7 @@ pnpm db:migrate
 ```typescript
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { eq } from 'drizzle-orm';
 
 import { DrizzleService } from '../../database/drizzle.service';
@@ -854,7 +854,7 @@ export class AuthService {
       .limit(1);
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
     const [user] = await this.drizzle.db
       .insert(users)
       .values({ email: dto.email, name: dto.name, hashedPassword })
@@ -868,7 +868,7 @@ export class AuthService {
       .from(users)
       .where(eq(users.email, dto.email))
       .limit(1);
-    if (!user || !(await bcrypt.compare(dto.password, user.hashedPassword))) {
+    if (!user || !(await argon2.verify(user.hashedPassword, dto.password))) {
       throw new UnauthorizedException('Invalid credentials.');
     }
     return {
@@ -940,7 +940,7 @@ Run: `pnpm migrate`
 ```typescript
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 
 import { KyselyService } from '../../database/kysely.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
@@ -960,7 +960,7 @@ export class AuthService {
       .executeTakeFirst();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
     const user = await this.db
       .insertInto('users')
       .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
@@ -975,7 +975,7 @@ export class AuthService {
       .selectAll()
       .where('email', '=', dto.email)
       .executeTakeFirst();
-    if (!user || !(await bcrypt.compare(dto.password, user.hashed_password))) {
+    if (!user || !(await argon2.verify(user.hashed_password, dto.password))) {
       throw new UnauthorizedException('Invalid credentials.');
     }
     return {
@@ -1023,7 +1023,7 @@ export const UserSchema = SchemaFactory.createForClass(User);
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { Model } from 'mongoose';
 
 import { User, type UserDocument } from './schemas/user.schema';
@@ -1040,7 +1040,7 @@ export class AuthService {
     const existing = await this.userModel.findOne({ email: dto.email }).exec();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await bcrypt.hash(dto.password, 12); // OWASP minimum; increase if server load allows
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
     const user = await this.userModel.create({
       email: dto.email,
       name: dto.name,
@@ -1051,7 +1051,7 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.userModel.findOne({ email: dto.email }).exec();
-    if (!user || !(await bcrypt.compare(dto.password, user.hashedPassword))) {
+    if (!user || !(await argon2.verify(user.hashedPassword, dto.password))) {
       throw new UnauthorizedException('Invalid credentials.');
     }
     return {
