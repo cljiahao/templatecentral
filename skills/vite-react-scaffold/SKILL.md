@@ -250,10 +250,8 @@ ARG APP_GROUPNAME
 
 WORKDIR ${APP_DIR}
 
-RUN apk add --no-cache tzdata \
-    && apk upgrade --no-cache \
-    && cp /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone \
+# TZ defaults to UTC — override via TZ env var in your deploy config if needed
+RUN apk upgrade --no-cache \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
     && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 

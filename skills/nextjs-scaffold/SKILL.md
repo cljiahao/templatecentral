@@ -304,13 +304,12 @@ ARG APP_USERNAME
 ARG APP_GROUPNAME
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# TZ defaults to UTC — override via TZ env var in your deploy config if needed
 
 WORKDIR ${APP_DIR}
 
-RUN apk add --no-cache tzdata dumb-init ca-certificates \
+RUN apk add --no-cache dumb-init ca-certificates \
     && apk upgrade --no-cache \
-    && cp /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
     && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
@@ -361,8 +360,6 @@ WORKDIR ${APP_DIR}
 
 COPY --from=base /etc/passwd /etc/passwd
 COPY --from=base /etc/group /etc/group
-COPY --from=base /etc/localtime /etc/localtime
-COPY --from=base /etc/timezone /etc/timezone
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=base /etc/ssl/certs/ /etc/ssl/certs/
 

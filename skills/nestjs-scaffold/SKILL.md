@@ -170,7 +170,7 @@ ARG PORT=3000
 
 # ---- Base ----
 # Alpine foundation for deps/builder/dev stages (uses NODE_BUILD).
-# OS packages (tzdata, dumb-init, ca-certificates) and the non-root user are
+# OS packages (dumb-init, ca-certificates) and the non-root user are
 # created here, then COPY'd into the prod stage which may be distroless.
 FROM ${NODE_BUILD} AS base
 ARG APP_DIR
@@ -181,10 +181,9 @@ ARG APP_GROUPNAME
 
 WORKDIR ${APP_DIR}
 
-RUN apk add --no-cache tzdata dumb-init ca-certificates \
+# TZ defaults to UTC — override via TZ env var in your deploy config if needed
+RUN apk add --no-cache dumb-init ca-certificates \
     && apk upgrade --no-cache \
-    && cp /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
     && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
@@ -255,11 +254,9 @@ ENV NODE_ENV="production" \
 
 WORKDIR ${APP_DIR}
 
-# OS-level setup from the Alpine base stage (user, timezone, certs, dumb-init)
+# OS-level setup from the Alpine base stage (user, certs, dumb-init)
 COPY --from=base /etc/passwd /etc/passwd
 COPY --from=base /etc/group /etc/group
-COPY --from=base /etc/localtime /etc/localtime
-COPY --from=base /etc/timezone /etc/timezone
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=base /etc/ssl/certs/ /etc/ssl/certs/
 

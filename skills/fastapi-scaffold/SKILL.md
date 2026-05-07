@@ -166,14 +166,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
+# TZ defaults to UTC — override via TZ env var in your deploy config if needed
 
 WORKDIR ${APP_DIR}
 
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends tzdata dumb-init \
-    && ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime \
-    && echo "Asia/Singapore" > /etc/timezone \
+    && apt-get install -y --no-install-recommends dumb-init \
     && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
     && useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
     && chown ${APP_UID}:${APP_GID} ${APP_DIR} \
