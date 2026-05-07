@@ -5,7 +5,7 @@ paths:
 
 # Vite + React Rules
 
-Stack: Vite 8, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack Query 5, React Hook Form + Zod, Vitest + Testing Library, Docker (Nginx). Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
+Stack: Vite 8, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tailwind CSS 4, React Router 7, TanStack Query 5, React Hook Form + Zod, Vitest + Testing Library, Docker (Nginx). Package manager: **pnpm 11** (pinned in `packageManager` field — do not use npm or yarn). Native addons: use `"pnpm": { "allowBuilds": { "<pkg>": true } }` in `package.json`.
 
 ## Boundaries
 

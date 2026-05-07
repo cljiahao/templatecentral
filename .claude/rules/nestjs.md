@@ -5,7 +5,7 @@ paths:
 
 # NestJS Rules
 
-Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Node.js ≥24, Jest, Docker.
+Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Node.js ≥24, Jest, Docker. Package manager: **pnpm 11** (pinned in `packageManager` field). Native addons: use `"pnpm": { "allowBuilds": { "<pkg>": true } }` in `package.json`.
 
 ## Boundaries
 

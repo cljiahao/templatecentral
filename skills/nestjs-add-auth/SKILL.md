@@ -15,11 +15,11 @@ Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0
 
 ## Dependencies
 
-`argon2` is a native Node addon — pnpm 10 blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
+`argon2` is a native Node addon — pnpm blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
 
 ```json
 "pnpm": {
-  "onlyBuiltDependencies": ["argon2"]
+  "allowBuilds": { "argon2": true }
 }
 ```
 
