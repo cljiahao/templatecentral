@@ -154,7 +154,8 @@ Generate this structure. Files marked `[generate]` are written by Claude from co
         ├── logger.ts                   [verbatim — Part C]
         ├── utils/
         │   ├── index.ts                [verbatim — Part C]
-        │   └── with-logging.ts         [verbatim — Part C]
+        │   ├── with-logging.ts         [verbatim — Part C]
+        │   └── request-origin.ts       [verbatim — Part C]
         ├── constants/
         │   ├── index.ts                [verbatim — Part C]
         │   ├── env.ts                  [verbatim — Part C]
@@ -486,6 +487,9 @@ docs/
 ```
 # App
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+TRUST_PROXY=
 
 # Database (if using Drizzle — added by nextjs-add-database)
 # DATABASE_URL=
@@ -1870,6 +1874,23 @@ import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+```
+
+### `src/lib/utils/request-origin.ts`
+
+```ts
+import { type NextRequest } from 'next/server';
+
+export function getAppOrigin(request: NextRequest): string {
+  const trustProxy = process.env.TRUST_PROXY;
+  const proto = (trustProxy
+    ? request.headers.get('x-forwarded-proto')?.split(',')[0].trim()
+    : undefined) ?? request.nextUrl.protocol.replace(/:$/, '');
+  const host = (trustProxy
+    ? (request.headers.get('x-forwarded-host') ?? request.headers.get('host'))
+    : undefined) ?? request.nextUrl.host;
+  return `${proto}://${host}`;
 }
 ```
 

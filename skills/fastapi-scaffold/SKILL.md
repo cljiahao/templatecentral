@@ -634,6 +634,9 @@ API_PORT=8000
 
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
+
+# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+TRUST_PROXY=
 ```
 
 ### `pyproject.toml`
@@ -722,10 +725,31 @@ if __name__ == "__main__":
 import textwrap
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.routes import router
 from core.config import common_settings, api_settings
 from error_handler import configure_exceptions
+
+
+class ForwardedHostMiddleware:
+    """Patches scope['server'] from X-Forwarded-Host so request.base_url reflects the public hostname.
+
+    uvicorn's ProxyHeadersMiddleware handles X-Forwarded-Proto and X-Forwarded-For but not
+    X-Forwarded-Host, leaving request.base_url with the internal container hostname.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            headers = dict(scope["headers"])
+            if b"x-forwarded-host" in headers:
+                host = headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
+                port = scope.get("server", (host, 80))[1]
+                scope["server"] = (host, port)
+        await self.app(scope, receive, send)
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -743,6 +767,19 @@ def configure_cors(app: FastAPI) -> None:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
+
+
+def configure_proxy_headers(app: FastAPI) -> None:
+    """Enables reverse-proxy header trust when TRUST_PROXY is set.
+
+    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments.
+    Set TRUST_PROXY to a VPC CIDR (e.g. 10.0.0.0/8) or * in AppCentral deployments.
+    """
+    if not api_settings.TRUST_PROXY:
+        return
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    app.add_middleware(ForwardedHostMiddleware)
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
 
 
 def start_application() -> FastAPI:
@@ -763,6 +800,7 @@ def start_application() -> FastAPI:
     )
 
     configure_cors(app)
+    configure_proxy_headers(app)
     configure_exceptions(app)
     app.include_router(router)
 
@@ -912,6 +950,7 @@ class APISettings(BaseSettings):
     API_PORT: int = Field(default=8000)
     CORS_ORIGINS: str = Field(default="http://localhost:3000")
     ALLOWED_CORS: list[str] = []
+    TRUST_PROXY: str = Field(default="")
 
     def model_post_init(self, _) -> None:
         """Compute allowed CORS origins after initialization."""

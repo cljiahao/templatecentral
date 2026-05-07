@@ -528,6 +528,9 @@ PORT=3000
 
 # CORS
 CLIENT_URL=http://localhost:3000
+
+# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+TRUST_PROXY=
 ```
 
 ### `.npmrc`
@@ -731,9 +734,10 @@ import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
 async function bootstrap(): Promise<void> {
+  const trustProxy = process.env.TRUST_PROXY as string | undefined;
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter(trustProxy ? { trustProxy } : {}),
     { bufferLogs: true },
   );
   const logger = app.get(Logger);
