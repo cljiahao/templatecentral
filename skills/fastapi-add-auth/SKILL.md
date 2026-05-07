@@ -148,6 +148,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
 def decode_access_token(token: str) -> str | None:
     """Decode and validate a JWT token. Returns the subject or None."""
     try:
+        # algorithms is a security whitelist — never omit or use ["none"]; omitting allows algorithm confusion attacks
         payload = jwt.decode(token, api_settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
     except jwt.PyJWTError:
