@@ -260,7 +260,7 @@ RUN apk upgrade --no-cache \
 # Installs ALL dependencies (including devDependencies like vite, typescript,
 # postcss, etc.) for builder and dev stages.
 FROM base AS deps
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* pnpm-workspace.yaml* ./
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
@@ -564,6 +564,7 @@ release/
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
+!pnpm-workspace.yaml
 !bun.lockb
 
 # Essential config files that might match broader patterns

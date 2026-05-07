@@ -316,7 +316,7 @@ RUN apk add --no-cache dumb-init ca-certificates \
     && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
 FROM base AS deps
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* pnpm-workspace.yaml* ./
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
@@ -477,6 +477,7 @@ docs/
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
+!pnpm-workspace.yaml
 !next.config.*
 !tailwind.config.*
 !postcss.config.*

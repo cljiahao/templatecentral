@@ -192,7 +192,7 @@ RUN apk add --no-cache dumb-init ca-certificates \
 # Installs ALL dependencies (including devDependencies like TypeScript, jest, etc.)
 # Used by the builder (needs TypeScript, build tools) and the dev stage.
 FROM base AS deps
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* pnpm-workspace.yaml* ./
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
@@ -204,7 +204,7 @@ RUN \
 # Installs production-only dependencies. These node_modules ship in the final
 # prod image alongside the compiled dist/. No devDependencies in production.
 FROM base AS prod-deps
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* pnpm-workspace.yaml* ./
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile --prod; \
   elif [ -f yarn.lock ]; then yarn --frozen-lockfile --production; \
@@ -385,6 +385,7 @@ docs/
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
+!pnpm-workspace.yaml
 !nest-cli.json
 !tsconfig.json
 !tsconfig.build.json
