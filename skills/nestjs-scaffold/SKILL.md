@@ -734,7 +734,10 @@ import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
 async function bootstrap(): Promise<void> {
-  const trustProxy = process.env.TRUST_PROXY as string | undefined;
+  const trustProxyEnv = process.env.TRUST_PROXY;
+  // Fastify requires boolean true for "trust all"; does not accept the string "*"
+  const trustProxy: boolean | string | undefined =
+    trustProxyEnv === '*' ? true : trustProxyEnv;
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(trustProxy ? { trustProxy } : {}),
