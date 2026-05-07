@@ -953,13 +953,13 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
       },
     },
     strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true }, // HSTS
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     xFrameOptions: { action: 'deny' },
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
     void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
-    void reply.header('Pragma', 'no-cache');
-    void reply.header('Expires', '0');
+    void reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;
   });
 }

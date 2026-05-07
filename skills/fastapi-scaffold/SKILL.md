@@ -737,6 +737,7 @@ _SECURITY_HEADERS = [
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
     (b"x-xss-protection", b"0"),  # Disable legacy XSS auditor (exploitable in older browsers)
 ]
 
