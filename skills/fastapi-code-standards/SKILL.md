@@ -81,7 +81,7 @@ description: Use when writing or reviewing Python code in a FastAPI project — 
 
 ## Tooling
 
-- **Ruff** — linting + isort (line-length 88, Python 3.12).
+- **Ruff** — linting + isort (line-length 88, target version configured in `ruff.toml`).
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 

@@ -16,7 +16,7 @@ Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 
 ## Dependencies
 
 Add to `requirements.txt`:
-- `PyJWT[crypto]>=2.12.0` — JWT encoding/decoding
+- `PyJWT[crypto]` — JWT encoding/decoding
 - `bcrypt` — Password hashing (use directly; passlib is unmaintained and incompatible with bcrypt ≥ 4.1.1)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
