@@ -167,3 +167,6 @@ The template provides these shared utilities:
 - Return only the fields the client needs — NEVER send full DB records to the browser
 - NEVER log tokens, passwords, or PII
 
+### Request APIs (Next.js 16)
+- All Next.js Request APIs (`cookies()`, `headers()`, route `params`, and `searchParams`) return Promises in Next.js 16 — always `await` them. Sync access is a TypeScript error and runtime failure.
+

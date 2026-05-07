@@ -506,6 +506,8 @@ Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.l
 
 Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
+> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin was removed in better-auth 1.6.
+
 ## Rate Limiting (Required for Production)
 
 Industry best practice: max 3 failed auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
