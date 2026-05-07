@@ -665,9 +665,9 @@ For login/logout events, log in your auth service:
 
 ```ts
 // src/modules/auth/auth.service.ts
+import { Injectable } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import * as argon2 from 'argon2';
-import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
