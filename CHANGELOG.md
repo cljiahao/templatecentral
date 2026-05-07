@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.6.0] — 2026-05-07
+
+### Fixed
+- `shared-validation-patterns`: password `min_length` corrected from 8 to 12 to match all auth skill policies
+- `fastapi-add-auth`: added algorithm whitelist comment to `jwt.decode()` — explains why `algorithms=` must never be omitted or broadened
+- `nextjs-add-auth`: noted `@better-auth/drizzle` ships as a separate package since better-auth v1.5
+- `nextjs-add-database`, `nestjs-add-database`: extended Drizzle v1 RC callout with rc.1 casing API breaking change and migration guide link
+- `nestjs-add-auth`: added `pnpm.onlyBuiltDependencies` step for bcrypt — pnpm 10 blocks native builds by default
+- `vite-react-scaffold`: added explicit `"types": []` to tsconfig — TypeScript 6 changed default from all visible `@types` to empty array
+
+---
+
 ## [2.5.0] — 2026-05-07
 
 ### Fixed
