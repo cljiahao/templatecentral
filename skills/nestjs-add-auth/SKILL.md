@@ -333,7 +333,7 @@ import { APP_GUARD } from '@nestjs/core';
 ## Rules
 
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
-- Always hash passwords with `bcrypt` — never store plaintext.
+- Always hash passwords with `bcrypt` — never store plaintext. For new projects, prefer `argon2id` (OWASP and NIST SP 800-63B recommendation) — it is memory-hard and more resistant to GPU-based attacks than bcrypt. Use the `argon2` npm package; bcrypt remains acceptable if already in use.
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
 

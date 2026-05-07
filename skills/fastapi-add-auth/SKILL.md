@@ -297,7 +297,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
-- Always hash passwords with `bcrypt` — never store plaintext.
+- Always hash passwords with `bcrypt` — never store plaintext. For new projects, prefer `argon2id` (OWASP and NIST SP 800-63B recommendation) — it is memory-hard and more resistant to GPU-based attacks than bcrypt. Use the `argon2-cffi` package for Python; bcrypt remains acceptable if already in use.
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 
