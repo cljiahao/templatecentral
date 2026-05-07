@@ -46,6 +46,8 @@ If the user says "database" without specifying, ask: *"Do you need a SQL databas
 
 ## Section A: Drizzle (SQL)
 
+> **Drizzle ORM version**: Drizzle ORM v1 is currently in release candidate — verify stable release at [drizzle.team](https://drizzle.team) before production use.
+
 ### A1. Install Dependencies
 
 ```bash
