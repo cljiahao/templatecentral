@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.10.0] — 2026-05-07
+
+### Fixed
+- `nestjs-add-database`: migrated all three AuthService replacement blocks (Drizzle, Kysely, Mongoose) from bcrypt to argon2id — resolves functional contradiction with nestjs-add-auth argon2 migration
+- `fastapi-add-database`: updated placeholder comment from bcrypt to argon2id reference
+- `nextjs-add-auth`: removed bcrypt hedge from password hashing rule — argon2id is the clear recommendation
+- `shared-add-logging`: updated illustrative auth example from bcrypt.compare to argon2.verify
+- `fastapi-code-standards`: removed FastAPI version number from Content-Type note — now version-agnostic
+
+### Changed
+- `fastapi-scaffold`, `shared-add-logging`: removed python-json-logger version floor from skills — version now in fastapi rules
+- `fastapi-add-database`: removed pymongo version floor from skill — version now in fastapi rules
+- `.claude/rules/fastapi.md`: added python-json-logger ≥4.0 and pymongo ≥4.0 to stack definition
+
+---
+
 ## [2.9.0] — 2026-05-07
 
 ### Fixed
