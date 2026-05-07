@@ -135,7 +135,7 @@ export const auth = betterAuth({
 });
 ```
 
-> **better-auth ≥1.6**: `freshAge` is measured from session `createdAt`, not last activity. If you set a short `freshAge` (e.g. 43200 for AAL2 flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
+> `freshAge` is measured from session `createdAt`, not last activity. If you set a short `freshAge` (e.g. 43200 for AAL2 flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
 > **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. The Drizzle adapter is a separate package (`@better-auth/drizzle` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
@@ -506,7 +506,7 @@ Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.l
 
 Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
-> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin was removed in better-auth 1.6. See: https://www.better-auth.com/docs/plugins/oauth-provider
+> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin has been removed. See: https://www.better-auth.com/docs/plugins/oauth-provider
 
 ## Rate Limiting (Required for Production)
 
