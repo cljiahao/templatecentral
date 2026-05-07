@@ -46,7 +46,7 @@ If the user says "database" without specifying, ask: *"Do you need a SQL databas
 
 ## Section A: Drizzle (SQL)
 
-> **Drizzle ORM version**: Drizzle ORM v1 is currently in release candidate — verify stable release at [drizzle.team](https://drizzle.team) before production use. In rc.1, the `casing` option was removed from the `drizzle()` instance; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1**: The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
 ### A1. Install Dependencies
 
