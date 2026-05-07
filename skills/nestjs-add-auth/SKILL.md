@@ -15,6 +15,16 @@ Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0
 
 ## Dependencies
 
+`bcrypt` is a native Node addon — pnpm 10 blocks native builds by default. Before installing, add the following to `package.json` (top-level, alongside `"scripts"`):
+
+```json
+"pnpm": {
+  "onlyBuiltDependencies": ["bcrypt"]
+}
+```
+
+Then install:
+
 ```bash
 pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
