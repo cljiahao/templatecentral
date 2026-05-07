@@ -176,10 +176,10 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 **`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Use the dependency list above and the scripts block below. Set `"packageManager"` to the current pnpm version (`pnpm --version`).
 
-**Engines field to include in package.json** (Vite 8 requires Node.js 22.12+ — see [Vite 8 release notes](https://vitejs.dev/blog/announcing-vite8)):
+**Engines field to include in package.json** (use the Node version from `.claude/rules/vite-react.md` — the rules file is the single source of truth; e.g. `">=24"`):
 ```json
 {
-  "engines": { "node": ">=22.12.0" }
+  "engines": { "node": ">=24" }
 }
 ```
 
@@ -226,8 +226,8 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
-ARG NODE=node:24.14-alpine3.23
-ARG NODE_BUILD=node:24.14-alpine3.23
+ARG NODE=node:24-alpine
+ARG NODE_BUILD=node:24-alpine
 ARG NGINX=nginx:1.28.2-alpine3.23
 ARG APP_UID=1001
 ARG APP_GID=1001

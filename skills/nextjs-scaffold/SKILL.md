@@ -45,10 +45,10 @@ Install these with `pnpm`. Claude resolves latest compatible versions at scaffol
 }
 ```
 
-**Engines field to include in package.json** (Node.js 22 is Active LTS as of 2026-04-30):
+**Engines field to include in package.json** (use the Node version from `.claude/rules/nextjs.md` — the rules file is the single source of truth; e.g. `">=24"`):
 ```json
 {
-  "engines": { "node": ">=22.0.0" }
+  "engines": { "node": ">=24" }
 }
 ```
 
@@ -287,8 +287,8 @@ export default nextConfig;
 ### `Dockerfile`
 
 ```dockerfile
-ARG NODE=node:24.14-alpine3.23
-ARG NODE_BUILD=node:24.14-alpine3.23
+ARG NODE=node:24-alpine
+ARG NODE_BUILD=node:24-alpine
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
