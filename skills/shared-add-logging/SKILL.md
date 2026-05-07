@@ -295,7 +295,7 @@ logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
 ### FastAPI
 
 **What already exists in the template:**
-- `python-json-logger>=4.0` in `requirements.txt`
+- `python-json-logger` in `requirements.txt`
 - `src/core/logging.py` — full logging setup
 - `src/core/json/logging.json` — JSON formatter config
 - Import via `from core.logging import logger`

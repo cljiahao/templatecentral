@@ -217,7 +217,7 @@ Add to `requirements.txt`:
 
 ```
 beanie
-pymongo>=4.0
+pymongo
 ```
 
 > **Beanie** is an async ODM for MongoDB built on PyMongo's async driver and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Motor is no longer required — Beanie 2.0 uses the PyMongo async driver directly.
