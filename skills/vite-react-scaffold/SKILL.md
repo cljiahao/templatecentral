@@ -176,6 +176,8 @@ Note: Custom UI components (`field.tsx`, `button-group.tsx`, `input-group.tsx`) 
 
 **`package.json`** — generated file; use project name (lowercase kebab-case) as `"name"`. Use the dependency list above and the scripts block below. Set `"packageManager"` to the current pnpm version (`pnpm --version`).
 
+> **`@vitejs/plugin-react` v6**: Uses Oxc for React Refresh transforms — no Babel config or `@babel/core` needed. To use the React Compiler, add `@rolldown/plugin-babel` with `reactCompilerPreset` instead of configuring Babel directly.
+
 **Engines field to include in package.json** (use the Node version from `.claude/rules/vite-react.md` — the rules file is the single source of truth; e.g. `">=24"`):
 ```json
 {
