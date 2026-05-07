@@ -130,10 +130,10 @@ Pin model identifiers explicitly. Never use `latest` or version-free aliases in 
 
 ```ts
 // ❌ Never
-const model = 'gpt-4';
+const model = 'gpt-4o';  // bare alias — behaviour changes without notice
 
-// ✅ Always
-const model = 'gpt-4o-2024-11-20';  // pinned snapshot
+// ✅ Always — pin a specific dated snapshot from your provider's model catalogue
+const model = 'gpt-4o-2024-08-06';  // example only — use your provider's current snapshot
 ```
 
 For open-source / self-hosted models: verify checksums against the provider's published hash before loading.
@@ -262,7 +262,7 @@ Every LLM call must have explicit token limits and a per-user rate limit.
 ```ts
 // Always set max_tokens — never allow uncapped completions
 const response = await openai.chat.completions.create({
-  model: 'gpt-4o-2024-11-20',
+  model: 'gpt-4o-2024-08-06',  // example only — use your provider's current snapshot
   messages,
   max_tokens: 1000,    // explicit cap — never omit
   temperature: 0.7,
