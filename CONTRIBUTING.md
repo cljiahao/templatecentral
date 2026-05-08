@@ -49,10 +49,11 @@ Add the skill name to `.claude-plugin/plugin.json` under `"skills"`:
 ## Pull Request Checklist
 
 - [ ] `SKILL.md` has valid `name` and `description` frontmatter
-- [ ] Skill is listed in `.claude-plugin/plugin.json`
+- [ ] No version pins in skill body — floors/pins belong in `.claude/rules/*.md` only
+- [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] README updated if skill count changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`
-- [ ] CI passes (frontmatter validation runs automatically)
+- [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
 
 ## Commit Style
 
