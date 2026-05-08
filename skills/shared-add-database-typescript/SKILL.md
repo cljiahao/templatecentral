@@ -40,7 +40,7 @@ Scan the conversation for compliance signals:
 
 ---
 
-## Section A: Drizzle (SQL — standard auth)
+## Section A: Drizzle (SQL)
 
 > **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
@@ -421,7 +421,7 @@ Confirm the migration file was generated and the build succeeds with no type err
 
 ---
 
-## Section B: Kysely (SQL — high compliance + AWS IAM)
+## Section B: Kysely (SQL)
 
 Kysely is a type-safe SQL query builder with full SQL control and minimal overhead. It defaults to standard password authentication. If the user requires AWS IAM auth, see the IAM variant below.
 
@@ -445,6 +445,8 @@ Add a migration script to `package.json`:
 ```
 
 #### B2. Create KyselyService
+
+> **Complete B7 (Configure Environment) before this step** — `serviceConfig.DATABASE_URL` must be defined before creating the service.
 
 **`src/database/kysely.service.ts`**:
 
@@ -493,7 +495,7 @@ If the user requires AWS IAM authentication, install the additional package:
 pnpm add @aws-sdk/rds-signer
 ```
 
-Replace the constructor in `kysely.service.ts` with:
+Replace the entire contents of `kysely.service.ts` with:
 
 ```typescript
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -695,7 +697,7 @@ async function migrate() {
 migrate();
 ```
 
-Run migrations with: `npx tsx src/database/migrate.ts`
+Run migrations with: `pnpm migrate`
 
 #### B7. Configure Environment
 
@@ -947,7 +949,7 @@ async function migrate() {
 migrate();
 ```
 
-Run migrations with: `npx tsx src/integrations/database/migrate.ts`
+Run migrations with: `pnpm migrate`
 
 #### B6. Configure Environment
 
