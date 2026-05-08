@@ -1,6 +1,7 @@
 ---
 name: nestjs-add-test
 description: Use when adding tests to a NestJS project — test coverage is missing for controllers or services, or the user asks to write unit or e2e tests.
+disable-model-invocation: true
 ---
 
 # Add NestJS Tests

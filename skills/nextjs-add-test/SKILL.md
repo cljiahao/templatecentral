@@ -1,6 +1,7 @@
 ---
 name: nextjs-add-test
 description: Use when adding tests for Next.js API route handlers, test coverage is missing for endpoints, or the user asks to write unit tests for backend API logic.
+disable-model-invocation: true
 ---
 
 # Add API Route Tests (Vitest)
