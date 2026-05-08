@@ -113,7 +113,7 @@ sqlalchemy_url = (
 config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 ```
 
-### Step 5 — Update `.env` and `.env.default`
+### Step 5 — Update `src/.env` and `src/.env.default`
 
 Remove `DATABASE_URL`. Add:
 
@@ -555,7 +555,15 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 
 ### Step 9 — Update query code in API routes and Server Components
 
-Drizzle → Kysely query translation (same table as NestJS section above).
+Drizzle → Kysely query translation reference:
+
+| Drizzle | Kysely |
+|---|---|
+| `drizzle.db.select().from(users)` | `db.selectFrom('users').selectAll().execute()` |
+| `drizzle.db.select().from(users).where(eq(users.id, id))` | `db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst()` |
+| `drizzle.db.insert(users).values(data).returning()` | `db.insertInto('users').values(data).returningAll().executeTakeFirstOrThrow()` |
+| `drizzle.db.update(users).set(data).where(eq(users.id, id))` | `db.updateTable('users').set(data).where('id', '=', id).returningAll().executeTakeFirstOrThrow()` |
+| `drizzle.db.delete(users).where(eq(users.id, id))` | `db.deleteFrom('users').where('id', '=', id).executeTakeFirst()` |
 
 Also update `src/integrations/factories.ts` if it exports a `DB()` function:
 
