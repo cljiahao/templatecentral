@@ -5,7 +5,7 @@ paths:
 
 # NestJS Rules
 
-Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Node.js ≥24, Jest, Docker. Package manager: **pnpm 11** (pinned in `packageManager` field). Native addons: add `allowBuilds:\n  <pkg>: true` to `pnpm-workspace.yaml` (pnpm 11 no longer reads the `pnpm` field from `package.json`).
+Stack: NestJS 11, Fastify adapter (≥v5 — requires `@nestjs/platform-fastify ≥11.1.19`), Zod + nestjs-zod, Swagger, TypeScript 6, Node.js ≥24, Vitest, Docker. Package manager: **pnpm 11** (pinned in `packageManager` field). Native addons: add `allowBuilds:\n  <pkg>: true` to `pnpm-workspace.yaml` (pnpm 11 no longer reads the `pnpm` field from `package.json`).
 
 ## Boundaries
 
@@ -23,5 +23,5 @@ Stack: NestJS 11, Fastify adapter, Zod + nestjs-zod, Swagger, TypeScript 6, Node
 
 ## Standards
 
-- **Backend tests**: same-change Jest for API code (`test/`) — root `AGENTS.md`, `nestjs-code-standards` skill.
+- **Backend tests**: same-change Vitest for API code (`test/`) — root `AGENTS.md`, `nestjs-code-standards` skill.
 - Naming, DTOs, Swagger, DI: `code-standards/SKILL.md`.

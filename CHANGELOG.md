@@ -10,6 +10,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.13.1] — 2026-05-08
+
+### Security
+- `nestjs-add-auth`: `JwtStrategy` constructor now includes `algorithms: ['HS256']` — prevents algorithm confusion attacks where `passport-jwt` could accept unexpected signing algorithms
+- `nextjs-add-auth`: `request.ip` in Upstash rate-limiting example now has a `TRUST_PROXY` note — without it, all clients share the reverse-proxy IP as the rate-limit key, making per-client limiting ineffective; one-hop (`TRUST_PROXY=true`) and two-hop (`TRUST_PROXY=2`) topologies documented
+
+### Fixed
+- **NestJS stack — Vitest migration (completing 2.2.0)**: `.claude/rules/nestjs.md`, `nestjs-add-module`, `nestjs-code-standards` updated "Jest" → "Vitest"; `nestjs-add-test` migrated `jest.fn()` → `vi.fn()`, `jest.spyOn()` → `vi.spyOn()` with `import { vi } from 'vitest'`; `jest-e2e.json` reference replaced with `vitest.config.e2e.ts`
+- `nestjs-add-auth`: `ttl: 900_000` → `ttl: minutes(15)` using `@nestjs/throttler` `minutes()` helper — semantically equivalent, more readable
+- `nestjs-scaffold`: `...globals.jest` removed from ESLint config template — project uses Vitest with `globals: false`; the Jest spread was unused and misleading; `@nestjs/platform-fastify` floor note moved to `.claude/rules/nestjs.md` per SSOT policy
+- `vite-react-scaffold`: `Strict-Transport-Security` header added to nginx.conf — security header parity with NestJS and Next.js scaffolds
+- `nestjs-add-database`, `nextjs-add-database`: Drizzle v1 "release-candidate" caveat removed — v1.0 is stable (released mid-2025)
+- `shared-add-ai-security`: OWASP Top 10 for Agentic Applications (2026) reference added for Capability C systems; `z.array(z.string().url())` → `z.array(z.url())` (Zod v4 top-level form)
+- `shared-add-error-handling`, `shared-add-logging`, `shared-validation-patterns`: `error.flatten()` → `z.flattenError(error)` throughout; `z.string().datetime()` → `z.iso.datetime()`; `import { z }` added where missing; password min-length updated to 12 in `shared-validation-patterns`
+
+### Added
+- `scripts/lint-skills.sh`: new mechanical lint script — 10 checks (timeless: CVE identifiers, jurisdiction-specific content, hardcoded secrets; ecosystem-era: version pins, bcrypt references, deprecated Zod `.flatten()`, `middleware.ts`, HTTP/1.0 cache headers, Jest APIs in Vitest projects, `globals.jest` in ESLint templates, timing-unsafe stored-secret comparisons, deprecated Zod v4 string-format methods)
+- `skills/shared-audit/SKILL.md`: new structured audit skill — 5-step workflow (ecosystem research cache → mechanical lint → per-file semantic review → fix loop → infrastructure update); covers all 49 skills across 5 stacks
+- `.github/workflows/validate-skills.yml`: `lint-patterns` job calling `bash scripts/lint-skills.sh skills/`; `scripts/**` added to path triggers
+- `.claude/audit-ecosystem-research.md`: ecosystem research cache file (30-day TTL) — prevents redundant web scans on consecutive audit runs
+
+---
+
 ## [2.13.0] — 2026-05-07
 
 ### Fixed

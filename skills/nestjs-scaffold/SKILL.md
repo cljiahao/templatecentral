@@ -20,7 +20,7 @@ version: "1.0.0"
 Install runtime dependencies (no version pins):
 
 ```bash
-pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify@^11.1.19 @nestjs/swagger \
+pnpm add @nestjs/common @nestjs/core @nestjs/platform-fastify @nestjs/swagger \
   @fastify/helmet dotenv nestjs-pino nestjs-zod pino pino-http reflect-metadata rxjs zod
 
 pnpm add -D @eslint/js @nestjs/cli @nestjs/testing @types/node \
@@ -35,7 +35,7 @@ git init
 pnpm install   # activates husky via prepare script
 ```
 
-> **NestJS 11.1.19+** ships with Fastify v5. This skill pins `@nestjs/platform-fastify@^11.1.19` — do not lower this pin to earlier 11.x releases, as those shipped Fastify v4 (EOL June 2025).
+> **NestJS 11 + Fastify v5**: `@nestjs/platform-fastify ≥11.1.19` is required — earlier 11.x releases shipped Fastify v4 (EOL). The floor is documented in `.claude/rules/nestjs.md`; ensure your installed version meets it.
 
 ### Directory Structure
 
@@ -582,7 +582,6 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         ...globals.node,
-        ...globals.jest,
       },
       sourceType: 'commonjs',
       parserOptions: {

@@ -47,7 +47,7 @@ export const emailSchema = z
 
 export const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
+  .min(12, 'Password must be at least 12 characters')
   .regex(/[A-Z]/, 'Password must contain an uppercase letter')
   .regex(/[0-9]/, 'Password must contain a number');
 
@@ -58,8 +58,7 @@ export const urlSchema = z
   .url('Invalid URL');
 
 export const dateSchema = z
-  .string()
-  .datetime()
+  .iso.datetime()
   .transform((val) => new Date(val));
 
 // File validation
@@ -341,6 +340,7 @@ export function LoginForm() {
 // src/features/auth/actions/login.ts
 'use server';
 
+import { z } from 'zod';
 import { LoginFormSchema } from '../schemas/login-form';
 
 export async function loginAction(formData: unknown) {
@@ -350,7 +350,7 @@ export async function loginAction(formData: unknown) {
   if (!parsed.success) {
     return {
       error: 'Validation failed',
-      fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
+      fieldErrors: z.flattenError(parsed.error).fieldErrors,
     };
   }
 
@@ -364,6 +364,7 @@ export async function loginAction(formData: unknown) {
 
 ```ts
 // src/app/api/auth/login/route.ts
+import { z } from 'zod';
 import { handleApiError } from '@/lib/errors';
 import { LoginFormSchema } from '@/features/auth/schemas/login-form';
 import { NextResponse } from 'next/server';
@@ -378,7 +379,7 @@ export async function POST(request: Request) {
         {
           error: 'Validation failed',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
             code: 'VALIDATION_ERROR',
           },
         },
@@ -399,6 +400,7 @@ export async function POST(request: Request) {
 
 ```ts
 // src/app/api/projects/route.ts
+import { z } from 'zod';
 import { paginationSchema } from '@/lib/validation/schemas';
 import { NextResponse } from 'next/server';
 
@@ -418,7 +420,7 @@ export async function GET(request: Request) {
         {
           error: 'Invalid query parameters',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
           },
         },
         { status: 400 }
@@ -439,6 +441,7 @@ export async function GET(request: Request) {
 
 ```ts
 // src/app/api/upload/route.ts
+import { z } from 'zod';
 import { fileUploadSchema } from '@/lib/validation/schemas';
 import { handleApiError } from '@/lib/errors';
 import { NextResponse } from 'next/server';
@@ -467,7 +470,7 @@ export async function POST(request: Request) {
         {
           error: 'Invalid file',
           details: {
-            fieldErrors: parsed.error.flatten().fieldErrors, // .flatten() deprecated in Zod v4; still works
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
           },
         },
         { status: 400 }
@@ -1017,7 +1020,7 @@ const projectSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   description: z.string().optional(),
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 
 type Project = z.infer<typeof projectSchema>;

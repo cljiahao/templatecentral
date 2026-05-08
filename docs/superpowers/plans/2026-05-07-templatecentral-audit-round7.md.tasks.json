@@ -4,31 +4,31 @@
     {
       "id": 1,
       "subject": "Task 1: Drizzle v1.0 Stable Promotion",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Replace the \"release candidate\" warning in both database skills with a stable-release note that retains the casing API guidance.\n\n**Files:**\n- Modify: `skills/nextjs-add-database/SKILL.md:49`\n- Modify: `skills/nestjs-add-database/SKILL.md:49`\n\n**Acceptance Criteria:**\n- [ ] Neither database skill contains \"release candidate\" or \"verify stable release\"\n- [ ] Both files retain the casing API guidance and migration guide link\n\n**Verify:** `grep \"release candidate\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-database/SKILL.md\", \"skills/nestjs-add-database/SKILL.md\"], \"verifyCommand\": \"grep \\\"release candidate\\\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md\", \"acceptanceCriteria\": [\"Neither database skill contains 'release candidate'\", \"Both files retain casing API guidance and migration guide link\"]}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: argon2id Guidance Note",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Add argon2id guidance note to Rules section of both auth skills — industry recommendation for new projects, no code rewrite.\n\n**Files:**\n- Modify: `skills/nestjs-add-auth/SKILL.md` (Rules section, line ~336)\n- Modify: `skills/fastapi-add-auth/SKILL.md` (Rules section, line ~300)\n\n**Acceptance Criteria:**\n- [ ] `nestjs-add-auth/SKILL.md` Rules section mentions argon2id as recommended for new projects\n- [ ] `fastapi-add-auth/SKILL.md` Rules section mentions argon2id as recommended for new projects\n- [ ] Neither file removes or contradicts existing bcrypt guidance\n\n**Verify:** `grep \"argon2id\" skills/nestjs-add-auth/SKILL.md skills/fastapi-add-auth/SKILL.md` → one match per file\n\n```json:metadata\n{\"files\": [\"skills/nestjs-add-auth/SKILL.md\", \"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"argon2id\\\" skills/nestjs-add-auth/SKILL.md skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"nestjs-add-auth Rules mentions argon2id for new projects\", \"fastapi-add-auth Rules mentions argon2id for new projects\", \"bcrypt guidance unchanged\"]}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Generalize Region-Specific PII Patterns",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Replace Singapore NRIC regex and Singapore phone country code in shared-add-ai-security with jurisdiction-neutral patterns.\n\n**Files:**\n- Modify: `skills/shared-add-ai-security/SKILL.md` (LLM02 PII patterns block, lines 110–115)\n\n**Acceptance Criteria:**\n- [ ] No `NRIC` label or Singapore NRIC regex remains\n- [ ] No `\\+?65` Singapore country code in the phone pattern\n- [ ] Both replacements have comments instructing developers to adapt to their jurisdiction\n\n**Verify:** `grep \"NRIC\" skills/shared-add-ai-security/SKILL.md` → no output; `grep \"NATIONAL-ID\" skills/shared-add-ai-security/SKILL.md` → one match\n\n```json:metadata\n{\"files\": [\"skills/shared-add-ai-security/SKILL.md\"], \"verifyCommand\": \"grep \\\"NRIC\\\" skills/shared-add-ai-security/SKILL.md && echo FAIL || grep \\\"NATIONAL-ID\\\" skills/shared-add-ai-security/SKILL.md\", \"acceptanceCriteria\": [\"No NRIC label or regex remains\", \"No +65 Singapore country code in phone pattern\", \"Both patterns have jurisdiction-adapt comments\"]}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Remove better-auth Version Pin",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Drop the hardcoded \"v1.5\" version reference from the Drizzle adapter note in nextjs-add-auth line 140.\n\n**Files:**\n- Modify: `skills/nextjs-add-auth/SKILL.md:140`\n\n**Acceptance Criteria:**\n- [ ] Line 140 no longer contains \"v1.5\"\n- [ ] The @better-auth/drizzle package name and install instruction are retained\n\n**Verify:** `grep \"v1\\.5\" skills/nextjs-add-auth/SKILL.md` → no output; `grep \"@better-auth/drizzle\" skills/nextjs-add-auth/SKILL.md` → one match\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"v1\\\\.5\\\" skills/nextjs-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"No v1.5 version pin remains\", \"@better-auth/drizzle package reference retained\"]}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: Version Bump and CHANGELOG",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1, 2, 3, 4],
       "description": "**Goal:** Bump plugin version from 2.6.0 to 2.7.0 and record all Round 7 changes in CHANGELOG.md.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json`\n- Modify: `CHANGELOG.md`\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` version is \"2.7.0\"\n- [ ] `CHANGELOG.md` has `[2.7.0]` entry dated 2026-05-07\n\n**Verify:** `grep '\"version\"' .claude-plugin/plugin.json && grep '\\[2.7.0\\]' CHANGELOG.md` → both match\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2.7.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.7.0\", \"CHANGELOG has [2.7.0] entry dated 2026-05-07\"]}\n```"
     }

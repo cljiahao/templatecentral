@@ -137,6 +137,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: appConfig.JWT_SECRET,
+      algorithms: ['HS256'],
     });
   }
 
@@ -318,12 +319,12 @@ pnpm add @nestjs/throttler
 Register globally in `AppModule` (import + guard):
 
 ```typescript
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard, minutes } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: 900_000, limit: 3 }]), // 3 attempts per 15 min
+    ThrottlerModule.forRoot([{ ttl: minutes(15), limit: 3 }]),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -126,12 +126,12 @@ export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
 
 - **ESLint 9** — flat config with typescript-eslint + prettier.
 - **Prettier** — single quotes, trailing commas.
-- **Jest** — testing framework with ts-jest.
+- **Vitest** — testing framework.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).
 
 ## Backend testing (mandatory)
 
-Same-change Jest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `add-module` / `add-test`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
+Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `add-module` / `add-test`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
 
 ## Security
 

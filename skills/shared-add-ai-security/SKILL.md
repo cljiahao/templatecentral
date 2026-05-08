@@ -163,7 +163,7 @@ import { z } from 'zod';
 const AnswerSchema = z.object({
   answer: z.string().max(2000),
   confidence: z.number().min(0).max(1),
-  sources: z.array(z.string().url()).max(5),
+  sources: z.array(z.url()).max(5),
 });
 
 const raw = await openai.chat.completions.create({ ... });
@@ -323,12 +323,16 @@ The AWS Responsible AI Lens (re:Invent 2025) defines 10 dimensions for evaluatin
 
 No single framework covers everything — OWASP LLM Top 10 focuses on attack vectors; the Responsible AI Lens focuses on systemic trustworthiness. Run both checklists before shipping AI features to production.
 
+For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (2026)** — a separate framework covering multi-agent orchestration risks such as privilege escalation across agent boundaries, plan hijacking, and unsafe memory persistence. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
+
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 05, 10; B (RAG) adds LLM08; C (agentic) adds LLM06
+- Apply controls proportional to capability: A (simple) needs LLM01, 02, 05, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 
 ## Changelog
+### 1.1.0
+- Added OWASP Top 10 for Agentic Applications (2026) reference for Capability C systems
 ### 1.0.0
 - Initial release — OWASP LLM Top 10 v2.0 controls for A/B/C AI capability tiers

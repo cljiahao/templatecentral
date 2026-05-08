@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'skills/**'
+      - 'scripts/**'
       - '.claude-plugin/plugin.json'
   pull_request:
     paths:
       - 'skills/**'
+      - 'scripts/**'
       - '.claude-plugin/plugin.json'
 
 jobs:
@@ -66,6 +68,14 @@ jobs:
           fi
 
           echo "All skill directories have a SKILL.md"
+
+  lint-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Run skill lint checks
+        run: bash scripts/lint-skills.sh skills/
 
   security:
     runs-on: ubuntu-latest

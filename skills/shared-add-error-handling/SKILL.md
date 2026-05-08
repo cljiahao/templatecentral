@@ -152,8 +152,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
-    // .flatten() deprecated in Zod v4; use z.flattenError(error) for new code
-    const fieldErrors = error.flatten().fieldErrors as Record<string, string[]>;
+    const fieldErrors = z.flattenError(error).fieldErrors as Record<string, string[]>;
     return NextResponse.json(
       {
         error: 'Validation failed',
@@ -192,7 +191,7 @@ export async function POST(request: Request) {
       return handleApiError(
         'Failed to create project',
         parsed.error,
-        parsed.error.flatten().fieldErrors as Record<string, string[]> // .flatten() deprecated in Zod v4; still works
+        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
       );
     }
 
@@ -569,7 +568,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 interface ErrorResponse {
   error: string;
@@ -595,8 +594,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        // .flatten() deprecated in Zod v4; use z.flattenError(zodError) for new code
-        const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
+        const fieldErrors = z.flattenError(zodError).fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',
           details: { fieldErrors, code: 'VALIDATION_ERROR' },

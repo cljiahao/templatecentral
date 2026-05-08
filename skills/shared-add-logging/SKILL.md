@@ -35,7 +35,7 @@ Do not ask any other questions. Implement the chosen tier (and all lower tiers, 
 
 Regardless of tier, environment, or log level, these fields **must never appear** in log output:
 
-- **Passwords** — in any form (plain, hashed, bcrypt)
+- **Passwords** — in any form (plain or hashed)
 - **Tokens** — access tokens, refresh tokens, JWTs, session tokens, CSRF tokens
 - **API keys and secrets** — third-party credentials, signing keys, webhook secrets
 - **PII (raw)** — email address, full name, phone number, postal address
@@ -555,7 +555,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 interface ErrorResponse {
   error: string;
@@ -581,8 +581,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof ZodSerializationException) {
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
-        // .flatten() deprecated in Zod v4; use z.flattenError(zodError) for new code
-        const fieldErrors = zodError.flatten().fieldErrors as Record<string, string[]>;
+        const fieldErrors = z.flattenError(zodError).fieldErrors as Record<string, string[]>;
         errorResponse = {
           error: 'Validation failed',
           details: { fieldErrors, code: 'VALIDATION_ERROR' },

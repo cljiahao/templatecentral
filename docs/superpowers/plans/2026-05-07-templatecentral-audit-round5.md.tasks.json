@@ -1,0 +1,37 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-07-templatecentral-audit-round5.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: SSOT Node Cleanup",
+      "status": "completed",
+      "description": "**Goal:** Update all three rules files to `Node.js ≥24` and replace hardcoded Node version literals in scaffold SKILL.md files with rules-reference instructions.\n\n**Files:**\n- Modify: `.claude/rules/nextjs.md`\n- Modify: `.claude/rules/nestjs.md`\n- Modify: `.claude/rules/vite-react.md`\n- Modify: `skills/nextjs-scaffold/SKILL.md`\n- Modify: `skills/nestjs-scaffold/SKILL.md`\n- Modify: `skills/vite-react-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] `.claude/rules/nextjs.md` Stack line says `Node.js ≥24`\n- [ ] `.claude/rules/nestjs.md` Stack line includes `Node.js ≥24`\n- [ ] `.claude/rules/vite-react.md` Stack line includes `Node.js ≥24`\n- [ ] No `>=22`, `>=20`, or `>=18` node engine pins remain in scaffold SKILL.md files\n- [ ] No `node:24.14-alpine3.23` or patch-pinned Node image tags in scaffold SKILL.md files\n\n**Verify:** `grep -n \">=22\\|>=20\\|24\\.14\" skills/nextjs-scaffold/SKILL.md skills/nestjs-scaffold/SKILL.md skills/vite-react-scaffold/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\".claude/rules/nextjs.md\", \".claude/rules/nestjs.md\", \".claude/rules/vite-react.md\", \"skills/nextjs-scaffold/SKILL.md\", \"skills/nestjs-scaffold/SKILL.md\", \"skills/vite-react-scaffold/SKILL.md\"], \"verifyCommand\": \"grep -n \\\">=22\\\\|>=20\\\\|24\\\\.14\\\" skills/nextjs-scaffold/SKILL.md skills/nestjs-scaffold/SKILL.md skills/vite-react-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"rules/nextjs.md says Node.js >=24\", \"rules/nestjs.md says Node.js >=24\", \"rules/vite-react.md says Node.js >=24\", \"No >=22 or >=20 engine pins in scaffold files\", \"No patch-pinned node:24.14 image tags in scaffold files\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Next.js 16 Correctness",
+      "status": "completed",
+      "description": "**Goal:** Document async-only Next.js 16 Request APIs in code standards, and add the better-auth OIDC provider migration note to the auth skill.\n\n**Files:**\n- Modify: `skills/nextjs-code-standards/SKILL.md`\n- Modify: `skills/nextjs-add-auth/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] `nextjs-code-standards/SKILL.md` Security section includes async-only Request API rule\n- [ ] `nextjs-add-auth/SKILL.md` includes `@better-auth/oauth-provider` callout for OIDC\n\n**Verify:** `grep \"Request APIs\" skills/nextjs-code-standards/SKILL.md && grep \"oauth-provider\" skills/nextjs-add-auth/SKILL.md` → one match each\n\n```json:metadata\n{\"files\": [\"skills/nextjs-code-standards/SKILL.md\", \"skills/nextjs-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"Request APIs\\\" skills/nextjs-code-standards/SKILL.md && grep \\\"oauth-provider\\\" skills/nextjs-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"nextjs-code-standards has async-only Request API rule in Security section\", \"nextjs-add-auth has @better-auth/oauth-provider callout\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: FastAPI and Drizzle Accuracy",
+      "status": "completed",
+      "description": "**Goal:** Add `json=data` guidance to FastAPI code standards (strict Content-Type default), and add Drizzle v1 RC status callout to both database skills.\n\n**Files:**\n- Modify: `skills/fastapi-code-standards/SKILL.md`\n- Modify: `skills/nextjs-add-database/SKILL.md`\n- Modify: `skills/nestjs-add-database/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] `fastapi-code-standards/SKILL.md` Backend testing section notes `json=data`\n- [ ] `nextjs-add-database/SKILL.md` Section A includes Drizzle v1 RC callout\n- [ ] `nestjs-add-database/SKILL.md` Section A includes Drizzle v1 RC callout\n\n**Verify:** `grep \"json=data\" skills/fastapi-code-standards/SKILL.md && grep \"release candidate\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md` → matches in all three files\n\n```json:metadata\n{\"files\": [\"skills/fastapi-code-standards/SKILL.md\", \"skills/nextjs-add-database/SKILL.md\", \"skills/nestjs-add-database/SKILL.md\"], \"verifyCommand\": \"grep \\\"json=data\\\" skills/fastapi-code-standards/SKILL.md && grep \\\"release candidate\\\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md\", \"acceptanceCriteria\": [\"fastapi-code-standards Backend testing includes json=data note\", \"nextjs-add-database Section A includes Drizzle v1 RC callout\", \"nestjs-add-database Section A includes Drizzle v1 RC callout\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Vite 8 Accuracy",
+      "status": "completed",
+      "description": "**Goal:** Add a note to vite-react-scaffold explaining that `@vitejs/plugin-react` v6 uses Oxc instead of Babel, so no Babel config or `@babel/core` is needed.\n\n**Files:**\n- Modify: `skills/vite-react-scaffold/SKILL.md`\n\n**Acceptance Criteria:**\n- [ ] `vite-react-scaffold/SKILL.md` Generation Conventions includes Oxc note\n- [ ] No `babel.config` or `@babel/core` references in the scaffold\n\n**Verify:** `grep \"Oxc\\|oxc\" skills/vite-react-scaffold/SKILL.md` → one match\n\n```json:metadata\n{\"files\": [\"skills/vite-react-scaffold/SKILL.md\"], \"verifyCommand\": \"grep \\\"Oxc\\\\|oxc\\\" skills/vite-react-scaffold/SKILL.md\", \"acceptanceCriteria\": [\"vite-react-scaffold Generation Conventions has Oxc note for plugin-react v6\", \"No babel.config or @babel/core in scaffold output\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Version Bump and CHANGELOG",
+      "status": "completed",
+      "blockedBy": [1, 2, 3, 4],
+      "description": "**Goal:** Bump plugin version from `2.4.0` to `2.5.0` and record all Round 5 changes in `CHANGELOG.md`.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json`\n- Modify: `CHANGELOG.md`\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` version is `\"2.5.0\"`\n- [ ] `CHANGELOG.md` has `[2.5.0]` entry dated 2026-05-07\n- [ ] `grep -rn \"node:24\\.14\\|>=22\" skills/` returns zero output\n\n**Verify:** `grep '\"version\"' .claude-plugin/plugin.json && grep '\\[2.5.0\\]' CHANGELOG.md` → both match\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2.5.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.5.0\", \"CHANGELOG has [2.5.0] entry dated 2026-05-07\", \"No patch-pinned node image tags remain in scaffold files\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-07T09:00:00Z"
+}

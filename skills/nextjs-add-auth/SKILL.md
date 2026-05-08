@@ -526,6 +526,8 @@ if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
 }
 ```
 
+> **TRUST_PROXY required**: `request.ip` returns the reverse-proxy IP, not the real client IP, unless `TRUST_PROXY=true` is set. Without it, all sign-in attempts share the same bucket and one client can exhaust the limit for everyone. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App) topologies. See the scaffold's `src/lib/utils/get-app-origin.ts` for the same pattern.
+
 For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
 
 ## Security Rules

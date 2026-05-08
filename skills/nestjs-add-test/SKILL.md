@@ -7,7 +7,7 @@ description: Use when adding tests to a NestJS project — test coverage is miss
 
 Guide for adding unit tests and e2e tests to a NestJS project scaffolded from templateCentral.
 
-**Policy**: Same-change Jest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
+**Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
 
 ## Prerequisites
 
@@ -73,6 +73,7 @@ describe('MyController', () => {
 ### Service Test with Mocked Repository
 
 ```typescript
+import { vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MyService } from '../../src/modules/my/my.service';
 import { MyRepository } from '../../src/modules/my/my.repository';
@@ -89,11 +90,11 @@ describe('MyService', () => {
         {
           provide: MyRepository,
           useValue: {
-            findAll: jest.fn().mockReturnValue([]),
-            findById: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            remove: jest.fn(),
+            findAll: vi.fn().mockReturnValue([]),
+            findById: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            remove: vi.fn(),
           },
         },
       ],
@@ -109,7 +110,7 @@ describe('MyService', () => {
   });
 
   it('should throw NotFoundException for missing item', () => {
-    jest.spyOn(repository, 'findById').mockImplementation(() => {
+    vi.spyOn(repository, 'findById').mockImplementation(() => {
       throw new NotFoundException();
     });
     expect(() => service.findOne('nonexistent')).toThrow(NotFoundException);
@@ -177,7 +178,7 @@ describe('My Feature (e2e)', () => {
 
 ```
 test/
-├── jest-e2e.json              # E2E Jest config
+├── vitest.config.e2e.ts       # E2E Vitest config
 ├── app.e2e-spec.ts            # Root app e2e tests
 ├── <feature>.e2e-spec.ts      # Feature-specific e2e tests
 └── modules/

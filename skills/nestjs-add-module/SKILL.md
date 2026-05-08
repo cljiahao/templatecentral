@@ -268,7 +268,7 @@ After creating all files:
 
 ## Rules
 
-- **Tests are mandatory** — never add or change a module’s HTTP surface (controller/service/repository) without new or updated Jest tests in `test/` in the same change.
+- **Tests are mandatory** — never add or change a module’s HTTP surface (controller/service/repository) without new or updated Vitest tests in `test/` in the same change.
 - NEVER forget to register the module in `app.module.ts` and export from `modules/index.ts`
 
 ## Validate

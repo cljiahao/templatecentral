@@ -4,22 +4,22 @@
     {
       "id": 1,
       "subject": "Task 1: Version Cleanup",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Remove one drifting patch-level version pin and tighten two rules files with missing version constraints.\n\n**Files:**\n- Modify: `AGENTS.md` (line 117)\n- Modify: `.claude/rules/nextjs.md` (line 8)\n- Modify: `.claude/rules/fastapi.md` (line 3)\n- Modify: `skills/fastapi-add-auth/SKILL.md` (line 276)\n\n**Acceptance Criteria:**\n- [ ] `AGENTS.md` contains no `16.2.4` or `15.5.9` strings\n- [ ] `.claude/rules/nextjs.md` Stack line includes `Node.js ≥20.9.0`\n- [ ] `.claude/rules/fastapi.md` Stack line reads `Pydantic ≥2.9.0` and includes `Starlette 1.0`\n- [ ] `skills/fastapi-add-auth/SKILL.md` contains no `slowapi>=` string\n\n**Verify:** `grep -n \"16\\.2\\.4\\|15\\.5\\.9\\|slowapi>=\\|Pydantic v2\" AGENTS.md .claude/rules/fastapi.md skills/fastapi-add-auth/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"AGENTS.md\", \".claude/rules/nextjs.md\", \".claude/rules/fastapi.md\", \"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep -n \\\"16\\\\.2\\\\.4\\\\|15\\\\.5\\\\.9\\\\|slowapi>=\\\\|Pydantic v2\\\" AGENTS.md .claude/rules/fastapi.md skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"AGENTS.md contains no 16.2.4 or 15.5.9 strings\", \".claude/rules/nextjs.md Stack line includes Node.js >=20.9.0\", \".claude/rules/fastapi.md Stack line reads Pydantic >=2.9.0 and includes Starlette 1.0\", \"skills/fastapi-add-auth/SKILL.md contains no slowapi>= string\"]}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Security Additions",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Add four security guidance updates current for May 2026 — OWASP A03/A10:2025, better-auth v1.6 session behavior, and AWS Responsible AI Lens.\n\n**Files:**\n- Modify: `AGENTS.md` (supply chain section)\n- Modify: `skills/shared-add-error-handling/SKILL.md` (Security Checklist)\n- Modify: `skills/nextjs-add-auth/SKILL.md` (after session config block)\n- Modify: `skills/shared-add-ai-security/SKILL.md` (before Rules section)\n\n**Acceptance Criteria:**\n- [ ] `AGENTS.md` supply chain section references OWASP A03:2025\n- [ ] `skills/shared-add-error-handling/SKILL.md` Security Checklist has OWASP A10:2025 bullet\n- [ ] `skills/nextjs-add-auth/SKILL.md` has better-auth freshAge callout near session config\n- [ ] `skills/shared-add-ai-security/SKILL.md` has AWS Responsible AI Lens section with all 10 dimensions\n\n**Verify:** `grep \"A03:2025\" AGENTS.md && grep \"A10:2025\" skills/shared-add-error-handling/SKILL.md && grep \"freshAge\" skills/nextjs-add-auth/SKILL.md && grep \"Responsible AI Lens\" skills/shared-add-ai-security/SKILL.md` → all match\n\n```json:metadata\n{\"files\": [\"AGENTS.md\", \"skills/shared-add-error-handling/SKILL.md\", \"skills/nextjs-add-auth/SKILL.md\", \"skills/shared-add-ai-security/SKILL.md\"], \"verifyCommand\": \"grep \\\"A03:2025\\\" AGENTS.md && grep \\\"A10:2025\\\" skills/shared-add-error-handling/SKILL.md && grep \\\"freshAge\\\" skills/nextjs-add-auth/SKILL.md && grep \\\"Responsible AI Lens\\\" skills/shared-add-ai-security/SKILL.md\", \"acceptanceCriteria\": [\"AGENTS.md supply chain section references OWASP A03:2025\", \"shared-add-error-handling Security Checklist has OWASP A10:2025 bullet\", \"nextjs-add-auth has better-auth freshAge callout\", \"shared-add-ai-security has AWS Responsible AI Lens section with all 10 dimensions\"]}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Version Bump and CHANGELOG",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1, 2],
       "description": "**Goal:** Bump plugin version to 2.4.0 and record Round 4 changes in CHANGELOG.md.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json`\n- Modify: `CHANGELOG.md`\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` version is `\"2.4.0\"`\n- [ ] CHANGELOG has `[2.4.0]` entry dated 2026-05-07\n- [ ] Final `grep -rn \"16\\.2\\.4\\|15\\.5\\.9\\|slowapi>=\\|IM8\" skills/ AGENTS.md .claude/` returns zero output\n\n**Verify:** `grep '\"version\"' .claude-plugin/plugin.json && grep '\\[2.4.0\\]' CHANGELOG.md` → both return a match\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2.4.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.4.0\", \"CHANGELOG has [2.4.0] entry dated 2026-05-07\", \"grep -rn 16.2.4|15.5.9|slowapi>=|IM8 skills/ AGENTS.md .claude/ returns zero output\"]}\n```"
     }
   ],
-  "lastUpdated": "2026-05-07T00:00:00Z"
+  "lastUpdated": "2026-05-07T02:00:00Z"
 }

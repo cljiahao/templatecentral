@@ -1,0 +1,32 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-07-templatecentral-audit-round9.md",
+  "tasks": [
+    {
+      "id": 32,
+      "subject": "Task 1: Drizzle ORM RC Warning Restoration",
+      "status": "completed",
+      "description": "**Goal:** Restore the release-candidate warning in both database skills so users know Drizzle ORM v1 stable has not shipped.\n\n**Files:**\n- Modify: `skills/nextjs-add-database/SKILL.md:49`\n- Modify: `skills/nestjs-add-database/SKILL.md:49`\n\n**Acceptance Criteria:**\n- [ ] `skills/nextjs-add-database/SKILL.md` callout contains \"release candidate\" and a link to drizzle.team\n- [ ] `skills/nestjs-add-database/SKILL.md` callout contains \"release candidate\" and a link to drizzle.team\n- [ ] Both files retain the full casing API migration note\n\n**Verify:** `grep \"release candidate\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md` → two matching lines\n\n```json:metadata\n{\"files\": [\"skills/nextjs-add-database/SKILL.md\", \"skills/nestjs-add-database/SKILL.md\"], \"verifyCommand\": \"grep \\\"release candidate\\\" skills/nextjs-add-database/SKILL.md skills/nestjs-add-database/SKILL.md\", \"acceptanceCriteria\": [\"nextjs-add-database callout contains release candidate and drizzle.team link\", \"nestjs-add-database callout contains release candidate and drizzle.team link\", \"Both files retain casing API migration note\"]}\n```"
+    },
+    {
+      "id": 33,
+      "subject": "Task 2: Remove Version Pins from SKILL.md Files",
+      "status": "completed",
+
+      "description": "**Goal:** Remove two SSOT violations — Ruff's hardcoded Python 3.12 target in `fastapi-code-standards` and the PyJWT version floor in `fastapi-add-auth`.\n\n**Files:**\n- Modify: `skills/fastapi-code-standards/SKILL.md:84`\n- Modify: `skills/fastapi-add-auth/SKILL.md:19`\n\n**Acceptance Criteria:**\n- [ ] `fastapi-code-standards/SKILL.md` Ruff line says \"target version configured in `ruff.toml`\" — no \"Python 3.12\"\n- [ ] `fastapi-add-auth/SKILL.md` dependency line shows `PyJWT[crypto]` with no `>=` version floor\n\n**Verify:**\n```bash\ngrep \"Python 3.12\" skills/fastapi-code-standards/SKILL.md        # expect: no output\ngrep 'PyJWT\\[crypto\\]>=' skills/fastapi-add-auth/SKILL.md        # expect: no output\n```\n\n```json:metadata\n{\"files\": [\"skills/fastapi-code-standards/SKILL.md\", \"skills/fastapi-add-auth/SKILL.md\"], \"verifyCommand\": \"grep \\\"Python 3.12\\\" skills/fastapi-code-standards/SKILL.md; grep 'PyJWT\\\\[crypto\\\\]>=' skills/fastapi-add-auth/SKILL.md\", \"acceptanceCriteria\": [\"fastapi-code-standards Ruff line says ruff.toml, not Python 3.12\", \"fastapi-add-auth PyJWT dep has no version floor\"]}\n```"
+    },
+    {
+      "id": 34,
+      "subject": "Task 3: Full argon2id Migration",
+      "status": "completed",
+      "description": "**Goal:** Replace bcrypt with argon2id as the actual implementation in both auth skills and update the fastapi code standard.\n\n**Files:**\n- Modify: `skills/fastapi-add-auth/SKILL.md` (line 20 dep, lines 118–138 security.py block, line 300 rules)\n- Modify: `skills/nestjs-add-auth/SKILL.md` (lines 18–31 dep section, line 169 import, line 178 hash call, line 336 rules)\n- Modify: `skills/fastapi-code-standards/SKILL.md:127` (auth standard)\n\n**Acceptance Criteria:**\n- [ ] No bcrypt references in any of the three files\n- [ ] fastapi-add-auth dep shows argon2-cffi; security.py uses PasswordHasher; no 72-byte check\n- [ ] nestjs-add-auth onlyBuiltDependencies=argon2; install uses argon2; @types/bcrypt removed; AuthService uses argon2.hash\n- [ ] All three rules sections reference argon2id\n\n**Verify:** `grep \"bcrypt\" skills/fastapi-add-auth/SKILL.md skills/nestjs-add-auth/SKILL.md skills/fastapi-code-standards/SKILL.md` → no output\n\n```json:metadata\n{\"files\": [\"skills/fastapi-add-auth/SKILL.md\", \"skills/nestjs-add-auth/SKILL.md\", \"skills/fastapi-code-standards/SKILL.md\"], \"verifyCommand\": \"grep \\\"bcrypt\\\" skills/fastapi-add-auth/SKILL.md skills/nestjs-add-auth/SKILL.md skills/fastapi-code-standards/SKILL.md\", \"acceptanceCriteria\": [\"No bcrypt references in any of the three files\", \"fastapi-add-auth dep shows argon2-cffi; security.py uses PasswordHasher; no 72-byte check\", \"nestjs-add-auth onlyBuiltDependencies=argon2; install uses argon2; @types/bcrypt removed; AuthService uses argon2.hash\", \"All three rules sections reference argon2id\"]}\n```"
+    },
+    {
+      "id": 35,
+      "subject": "Task 4: Version Bump and CHANGELOG",
+      "status": "completed",
+      "blockedBy": [32, 33, 34],
+      "description": "**Goal:** Bump plugin version from `2.8.0` to `2.9.0` and add the Round 9 CHANGELOG entry.\n\n**Files:**\n- Modify: `.claude-plugin/plugin.json:3`\n- Modify: `CHANGELOG.md` (insert new `[2.9.0]` entry before `[2.8.0]`)\n\n**Acceptance Criteria:**\n- [ ] `plugin.json` `\"version\"` field is `\"2.9.0\"`\n- [ ] `CHANGELOG.md` contains a `[2.9.0] — 2026-05-07` section with three Fixed and three Changed items\n- [ ] `CHANGELOG.md` existing `[2.8.0]` entry is unchanged\n\n**Verify:**\n```bash\ngrep '\"version\"' .claude-plugin/plugin.json    # expect: \"version\": \"2.9.0\"\ngrep '\\[2\\.9\\.0\\]' CHANGELOG.md               # expect: one match\n```\n\n```json:metadata\n{\"files\": [\".claude-plugin/plugin.json\", \"CHANGELOG.md\"], \"verifyCommand\": \"grep '\\\"version\\\"' .claude-plugin/plugin.json && grep '\\\\[2\\\\.9\\\\.0\\\\]' CHANGELOG.md\", \"acceptanceCriteria\": [\"plugin.json version is 2.9.0\", \"CHANGELOG has [2.9.0] entry dated 2026-05-07 with three Fixed and three Changed items\", \"CHANGELOG [2.8.0] entry unchanged\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-07T01:00:00Z"
+}

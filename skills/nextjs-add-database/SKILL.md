@@ -46,7 +46,7 @@ the marker.
 
 ## Section A: Drizzle (SQL)
 
-> **Drizzle ORM v1 (release candidate)**: v1.0 is still pre-release — verify stable release at [drizzle.team](https://drizzle.team) before production use. The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
 ### A1. Install Dependencies
 
