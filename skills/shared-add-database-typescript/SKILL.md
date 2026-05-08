@@ -12,9 +12,11 @@ Add a database to a NestJS or Next.js project scaffolded from templateCentral.
 
 ## Choose Your Database and Compliance Level
 
-### Step 0 — Detect sub-stack
+### Step 0 — Detect intent and sub-stack
 
-Check line 1 of `AGENTS.md`:
+If the user's request includes "migrate database to compliance", "upgrade database to IAM", "switch to IAM auth", or similar upgrade intent → invoke `Skill("templatecentral:shared-migrate-database")` and stop.
+
+Otherwise, check line 1 of `AGENTS.md` for the sub-stack:
 - `<!-- templateCentral: nestjs@` → you are on **NestJS**. Follow the `### NestJS` variant in each section.
 - `<!-- templateCentral: nextjs@` → you are on **Next.js**. Follow the `### Next.js` variant in each section.
 

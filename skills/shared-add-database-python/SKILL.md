@@ -12,6 +12,10 @@ Add a database to a FastAPI project scaffolded from templateCentral.
 
 ## Choose Your Database and Compliance Level
 
+### Step 0 — Detect intent
+
+If the user's request includes "migrate database to compliance", "upgrade database to IAM", "switch to IAM auth", or similar upgrade intent → invoke `Skill("templatecentral:shared-migrate-database")` and stop.
+
 ### Step 1 — Database type
 
 Ask: *"Do you need a SQL database (PostgreSQL, MySQL, SQLite) or MongoDB?"*
