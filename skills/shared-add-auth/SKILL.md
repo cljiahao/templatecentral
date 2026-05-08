@@ -26,20 +26,20 @@ Add JWT-based authentication to a FastAPI project scaffolded from templateCentra
 
 > **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `fastapi-add-database` after this skill to complete the integration.
 
-## Prerequisites
+### Prerequisites
 
 Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
 
-## Dependencies
+### Dependencies
 
 Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
 - `argon2-cffi` — Password hashing (argon2id algorithm; OWASP/NIST SP 800-63B recommended)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
-## Steps
+### Steps
 
-### Step 0 — Verify context
+#### Step 0 — Verify context
 
 Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
 
@@ -50,7 +50,7 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Add Auth Schemas
+#### 1. Add Auth Schemas
 
 Create request/response schemas for auth endpoints.
 
@@ -98,7 +98,7 @@ class UserResponse(BaseResponseSchema):
     name: str = Field(description="User display name.")
 ```
 
-### 2. Extend Config
+#### 2. Extend Config
 
 Add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `APISettings` in **`src/core/config.py`**:
 
@@ -125,7 +125,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 > **Security**: `SECRET_KEY` has no default — Pydantic will raise a validation error at startup if unset, which is the correct behavior. NEVER use a hardcoded default like `"change-me"` for secrets.
 
-### 3. Create Security Module
+#### 3. Create Security Module
 
 **`src/core/security.py`** — JWT token creation/verification and password hashing:
 
@@ -171,7 +171,7 @@ def decode_access_token(token: str) -> str | None:
         return None
 ```
 
-### 4. Create Auth Dependency
+#### 4. Create Auth Dependency
 
 Create **`src/api/dependencies/`** directory (does not exist in base template), then add both **`src/api/dependencies/__init__.py`** (empty, marks the directory as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
@@ -197,7 +197,7 @@ def get_current_user(
     return user_id
 ```
 
-### 5. Create Auth Service
+#### 5. Create Auth Service
 
 **`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `fastapi-add-database`.
 
@@ -222,7 +222,7 @@ def login_user(email: str, password: str) -> str:
     )
 ```
 
-### 6. Add Auth Tag
+#### 6. Add Auth Tag
 
 Add `AUTH` to the `APITags` enum in **`src/api/tags.py`**:
 
@@ -232,7 +232,7 @@ class APITags(StrEnum):
     AUTH = "auth"
 ```
 
-### 7. Create Auth Router
+#### 7. Create Auth Router
 
 **`src/api/routers/auth.py`**:
 
@@ -261,7 +261,7 @@ def login(body: LoginRequest) -> TokenResponse:
     return TokenResponse(access_token=token)
 ```
 
-### 8. Register the Router
+#### 8. Register the Router
 
 Add the auth router to `src/api/routes.py`:
 
@@ -272,7 +272,7 @@ from api.tags import APITags
 router.include_router(auth.router, tags=[APITags.AUTH])
 ```
 
-### 9. Protect Routes
+#### 9. Protect Routes
 
 Use the `get_current_user` dependency on any endpoint that requires auth:
 
@@ -288,7 +288,7 @@ def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     )
 ```
 
-## Rate Limiting (Required for Production)
+### Rate Limiting (Required for Production)
 
 Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi` to `requirements.txt`, then:
 
@@ -309,7 +309,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 ```
 
-## Rules
+### Rules
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
@@ -318,14 +318,14 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Without `TRUST_PROXY`, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
 
-## Validate
+### Validate
 
 ```bash
 pytest test/ -v     # auth tests pass
 ruff check src/     # zero lint errors
 ```
 
-## After Writing Code
+### After Writing Code
 
 Dispatch in order:
 1. `shared-build-agent` — validate the server starts and tests pass
@@ -339,11 +339,11 @@ Add JWT-based authentication to a NestJS project scaffolded from templateCentral
 
 > **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `nestjs-add-database` after this skill to complete the integration.
 
-## Prerequisites
+### Prerequisites
 
 Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
 
-## Dependencies
+### Dependencies
 
 `argon2` is a native Node addon — pnpm blocks native builds by default. Before installing, add the following to `pnpm-workspace.yaml` in the project root (create the file if it doesn't exist):
 
@@ -359,9 +359,9 @@ pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt argon2
 pnpm add -D @types/passport-jwt
 ```
 
-## Steps
+### Steps
 
-### Step 0 — Verify context
+#### Step 0 — Verify context
 
 Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
 
@@ -372,7 +372,7 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Create Auth Module Directory
+#### 1. Create Auth Module Directory
 
 Create `src/modules/auth/` with these files (flat — no subdirectories, matching the template's module structure):
 - `auth.module.ts`
@@ -382,7 +382,7 @@ Create `src/modules/auth/` with these files (flat — no subdirectories, matchin
 - `jwt.strategy.ts`
 - `jwt-auth.guard.ts`
 
-### 2. Define DTOs
+#### 2. Define DTOs
 
 **`src/modules/auth/auth.dto.ts`**:
 
@@ -411,7 +411,7 @@ export class LoginDto extends createZodDto(loginSchema) {}
 export class TokenDto extends createZodDto(tokenSchema) {}
 ```
 
-### 3. Add Config
+#### 3. Add Config
 
 Add `JWT_SECRET` to `appConfig` in **`src/config/env.config.ts`**:
 
@@ -444,7 +444,7 @@ async function bootstrap() {
 
 NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
 
-### 4. Create JWT Strategy
+#### 4. Create JWT Strategy
 
 **`src/modules/auth/jwt.strategy.ts`**:
 
@@ -477,7 +477,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 }
 ```
 
-### 5. Create Auth Guard
+#### 5. Create Auth Guard
 
 **`src/modules/auth/jwt-auth.guard.ts`**:
 
@@ -489,7 +489,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class JwtAuthGuard extends AuthGuard('jwt') {}
 ```
 
-### 6. Create Auth Service
+#### 6. Create Auth Service
 
 **`src/modules/auth/auth.service.ts`**:
 
@@ -516,7 +516,7 @@ export class AuthService {
 }
 ```
 
-### 7. Create Auth Controller
+#### 7. Create Auth Controller
 
 **`src/modules/auth/auth.controller.ts`**:
 
@@ -546,7 +546,7 @@ export class AuthController {
 }
 ```
 
-### 8. Create Auth Module
+#### 8. Create Auth Module
 
 **`src/modules/auth/auth.module.ts`**:
 
@@ -575,7 +575,7 @@ import { JwtStrategy } from './jwt.strategy';
 export class AuthModule {}
 ```
 
-### 9. Export from Modules Barrel
+#### 9. Export from Modules Barrel
 
 Add the auth module to `src/modules/index.ts`:
 
@@ -583,7 +583,7 @@ Add the auth module to `src/modules/index.ts`:
 export * from './auth/auth.module';
 ```
 
-### 10. Register in AppModule
+#### 10. Register in AppModule
 
 Import `AuthModule` in `src/app.module.ts`:
 
@@ -599,7 +599,7 @@ import { AuthModule } from './modules';
 export class AppModule {}
 ```
 
-### 11. Protect Routes
+#### 11. Protect Routes
 
 Use the `JwtAuthGuard` on any controller or endpoint that requires authentication:
 
@@ -624,7 +624,7 @@ getMe(@Req() req) {
 }
 ```
 
-## Environment Variables
+### Environment Variables
 
 Add to `.env` (real value — never commit):
 ```
@@ -638,7 +638,7 @@ JWT_SECRET=<generate with: openssl rand -hex 32>
 JWT_EXPIRES_IN=30m
 ```
 
-## Rate Limiting (Required for Production)
+### Rate Limiting (Required for Production)
 
 Industry best practice: max 3 failed auth attempts per 15 minutes. Install `@nestjs/throttler`:
 
@@ -660,7 +660,7 @@ import { APP_GUARD } from '@nestjs/core';
 })
 ```
 
-## Rules
+### Rules
 
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
 - Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
@@ -668,14 +668,14 @@ import { APP_GUARD } from '@nestjs/core';
 - **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` uses `req.ip`, which Fastify only patches from `X-Forwarded-For` when `trustProxy` is active (set via `TRUST_PROXY` in the scaffold). Without it, all proxied requests share the proxy's IP and hit the same rate bucket.
 
-## Validate
+### Validate
 
 ```bash
 pnpm build    # zero compile errors
 pnpm test     # auth tests pass
 ```
 
-## After Writing Code
+### After Writing Code
 
 Dispatch in order:
 1. `shared-build-agent` — validate compilation
@@ -687,11 +687,11 @@ Dispatch in order:
 
 Add authentication to a Next.js project scaffolded from templateCentral. Uses **better-auth** — a TypeScript-first auth library with full type safety, SSO, and email/password support.
 
-## Prerequisites
+### Prerequisites
 
 Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
 
-## Files this skill creates
+### Files this skill creates
 
 ```
 src/
@@ -721,7 +721,7 @@ src/features/
     └── index.ts
 ```
 
-## Files this skill modifies
+### Files this skill modifies
 
 ```
 .env.example                         ← adds BETTER_AUTH_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL
@@ -732,9 +732,9 @@ AGENTS.md                            ← adds auth architecture notes
 
 > **`providers.tsx` does NOT need modification** — better-auth manages session state via `authClient.useSession()`; no `SessionProvider` wrapper is required.
 
-## Steps
+### Steps
 
-### Step 0 — Verify context
+#### Step 0 — Verify context
 
 Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
@@ -745,13 +745,13 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Install better-auth
+#### 1. Install better-auth
 
 ```bash
 pnpm add better-auth
 ```
 
-### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
+#### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
 Security-critical file. Write exactly as shown.
 
@@ -819,7 +819,7 @@ export const auth = betterAuth({
 
 > **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. The Drizzle adapter is a separate package (`@better-auth/drizzle` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
-### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
+#### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
 
 ```ts
 import { createAuthClient } from 'better-auth/react';
@@ -829,7 +829,7 @@ export const authClient = createAuthClient({
 });
 ```
 
-### 4. Write `src/proxy.ts` (verbatim — do not generate)
+#### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
 Security-critical file. Write exactly as shown.
 
@@ -889,7 +889,7 @@ export const config = {
 };
 ```
 
-### 5. Create `src/app/api/auth/[...all]/route.ts`
+#### 5. Create `src/app/api/auth/[...all]/route.ts`
 
 ```ts
 import { auth } from '@/lib/auth';
@@ -898,7 +898,7 @@ import { toNextJsHandler } from 'better-auth/next-js';
 export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
+#### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
 
 Add `LOGIN` to the existing `PAGE_ROUTES` object. `HOME` and `DASHBOARD` are already present from the scaffold — do not add them again:
 
@@ -909,7 +909,7 @@ export const PAGE_ROUTES = {
 } as const;
 ```
 
-### 7. Create `src/app/(public)/login/page.tsx`
+#### 7. Create `src/app/(public)/login/page.tsx`
 
 ```tsx
 import { LoginCard } from '@/features/auth';
@@ -923,7 +923,7 @@ export default function LoginPage() {
 }
 ```
 
-### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
+#### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
 > **Skip this step** if `src/app/dashboard/layout.tsx` already exists — present when the project was scaffolded with templateCentral. The `proxy.ts` allowlist protects `/dashboard` automatically once this skill completes; no structural change is needed.
 
@@ -943,7 +943,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 }
 ```
 
-### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
+#### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
 
 > **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; `shared-remove-example` cleans it up when the user is ready.
 
@@ -959,7 +959,7 @@ export default function DashboardPage() {
 }
 ```
 
-### 10. Create `src/features/auth/` components
+#### 10. Create `src/features/auth/` components
 
 **`src/features/auth/components/login-button.tsx`** — SSO sign-in:
 
@@ -1096,7 +1096,7 @@ export { SignOutButton } from './signout-button';
 export * from './components';
 ```
 
-### 11. Update `.env.example` and `.env.local`
+#### 11. Update `.env.example` and `.env.local`
 
 Add to both files:
 
@@ -1124,7 +1124,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # MICROSOFT_CLIENT_SECRET=
 ```
 
-### 12. Update project `AGENTS.md`
+#### 12. Update project `AGENTS.md`
 
 Add under `## Architecture Decisions`:
 
@@ -1135,7 +1135,7 @@ Add under `## Architecture Decisions`:
 - Sessions: stateless JWE cookies by default; add database adapter (via nextjs-add-database) for session revocation
 ```
 
-### 13. Session usage patterns
+#### 13. Session usage patterns
 
 **Server Component or API route:**
 
@@ -1174,7 +1174,7 @@ export function UserAvatar() {
 }
 ```
 
-### 14. Adding an SSO provider
+#### 14. Adding an SSO provider
 
 Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.local`. Then add a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`.
 
@@ -1188,7 +1188,7 @@ Full provider list: https://www.better-auth.com/docs/authentication/social-sign-
 
 > **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin has been removed. See: https://www.better-auth.com/docs/plugins/oauth-provider
 
-## Rate Limiting (Required for Production)
+### Rate Limiting (Required for Production)
 
 Industry best practice: max 3 failed auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
 
@@ -1210,7 +1210,7 @@ if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
 
 For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
 
-## Security Rules
+### Security Rules
 
 - NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })`. JSON responses create information-disclosure vectors.
 - NEVER remove `disableSignUp: process.env.NODE_ENV === 'production'` — open registration in production is a security risk unless intentional.
@@ -1221,7 +1221,7 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
 - **Password hashing**: better-auth handles password hashing internally. For any custom hashing outside better-auth, use argon2id (`argon2` package) — OWASP and NIST SP 800-63B recommended.
 
-## After Writing Code
+### After Writing Code
 
 Dispatch in order:
 1. `shared-build-agent` — validate compilation
@@ -1233,11 +1233,11 @@ Dispatch in order:
 
 Configure authentication in a Vite + React SPA scaffolded from templateCentral. The template ships with a generic `AuthProvider` context — this skill covers integrating real auth backends, customizing the login UI, and protecting routes.
 
-## Prerequisites
+### Prerequisites
 
 Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
 
-## What the Template Already Provides
+### What the Template Already Provides
 
 The scaffolded project includes a working auth setup out of the box:
 
@@ -1254,9 +1254,9 @@ The scaffolded project includes a working auth setup out of the box:
 
 In **development mode** (`ENV.IS_DEV`), the user is auto-authenticated as a dev user — no backend needed.
 
-## Steps
+### Steps
 
-### Step 0 — Verify context
+#### Step 0 — Verify context
 
 Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
 
@@ -1267,7 +1267,7 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Choose an Auth Strategy
+#### 1. Choose an Auth Strategy
 
 Since Vite + React is a client-side SPA, authentication is handled by a backend API. Common patterns:
 
@@ -1279,7 +1279,7 @@ Since Vite + React is a client-side SPA, authentication is handled by a backend 
 
 The `AuthProvider` is provider-agnostic — it manages local state. You wire it to your backend's auth endpoints.
 
-### 2. Create an Auth Service
+#### 2. Create an Auth Service
 
 Create `src/features/auth/api/auth-service.ts` to handle backend communication:
 
@@ -1323,7 +1323,7 @@ export async function logoutUser(): Promise<void> {
 }
 ```
 
-### 3. Wire AuthProvider to the Backend
+#### 3. Wire AuthProvider to the Backend
 
 Update `src/features/auth/components/auth-provider.tsx` to check for an existing session on mount and call the backend for login/logout:
 
@@ -1391,7 +1391,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 ```
 
-### 4. Add a Login Form
+#### 4. Add a Login Form
 
 Update `src/features/auth/components/login-card.tsx`. Use the project's canonical form pattern (React Hook Form + Zod + `CustomFormField`):
 
@@ -1474,7 +1474,7 @@ export function LoginCard() {
 }
 ```
 
-### 5. Add Protected Routes
+#### 5. Add Protected Routes
 
 In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`. The template already has `<BrowserRouter>` wrapping the route tree — edit only inside the existing `<Routes>`:
 
@@ -1499,7 +1499,7 @@ import { ProtectedRoute } from '@/features/auth';
 
 Do NOT replace the entire `router.tsx` — only modify the route definitions inside the existing `<BrowserRouter>` and `<Routes>` wrappers.
 
-### 6. Add a Sign-Out Button
+#### 6. Add a Sign-Out Button
 
 Use the `useAuth()` hook to access `logout`:
 
@@ -1517,7 +1517,7 @@ export function SignOutButton() {
 }
 ```
 
-### 7. Validate
+#### 7. Validate
 
 1. Start the dev server (`pnpm dev`) — confirm no import errors
 2. In dev mode, the `AuthProvider` auto-authenticates (dev bypass) — confirm `/dashboard` loads without redirect
@@ -1526,11 +1526,11 @@ export function SignOutButton() {
 5. If a backend is configured, test the full login/logout flow
 6. Run tests (`pnpm test`) — confirm no regressions
 
-## Dev Bypass Behavior
+### Dev Bypass Behavior
 
 When `ENV.IS_DEV` is `true` (`import.meta.env.DEV`), the `AuthProvider` initializes with a pre-authenticated dev user and skips the backend session check. The "Dev login" button is also only rendered in dev mode. In production builds, Vite tree-shakes these code paths entirely.
 
-## Architecture
+### Architecture
 
 ```
 src/
@@ -1553,7 +1553,7 @@ src/
     └── providers.tsx                  # AuthProvider wrapping the app
 ```
 
-## Rules
+### Rules
 
 - NEVER store tokens in `localStorage` — use HttpOnly cookies (set by the backend) or in-memory state
 - NEVER remove the `ENV.IS_DEV` guard on the dev bypass — it must only exist in development
@@ -1562,14 +1562,14 @@ src/
 - Always redirect to `/login` on 401 responses — the `ProtectedRoute` handles this for navigation, but API calls should also handle 401s gracefully
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 
-## Validate
+### Validate
 
 ```bash
 pnpm build    # zero errors
 pnpm test     # auth tests pass
 ```
 
-## After Writing Code
+### After Writing Code
 
 Dispatch in order:
 1. `shared-build-agent` — validate compilation
