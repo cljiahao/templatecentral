@@ -65,3 +65,8 @@ dist/
 .vercel
 coverage/
 
+# Local planning docs (not part of project source)
+docs/specs/
+docs/superpowers/plans/
+docs/superpowers/specs/
+
