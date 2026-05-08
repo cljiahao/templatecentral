@@ -100,13 +100,15 @@ Apply **Universal Code Quality** first, then the matching stack section below.
 
 ### Tooling
 
-- **Ruff** — linting + isort (line-length 88, Python 3.12).
+- **Ruff** — linting + isort (line-length 88, target version configured in `ruff.toml`).
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 
 ### Backend Testing (mandatory)
 
 Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `add-endpoint`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `pytest` from project root before handoff.
+
+Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI enforces `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
 
 ### Dependency Rules
 
@@ -140,7 +142,7 @@ api/           →  models/
 - In production, set `CORS_ORIGINS` env var; always set explicit methods and headers
 
 **Auth**
-- Hash passwords with `bcrypt` directly — NEVER store plaintext; `passlib` is unmaintained
+- Hash passwords with `argon2id` (`argon2-cffi` package) — never store plaintext. Do not use `passlib` (unmaintained).
 - JWT tokens: short expiry; use refresh tokens for long sessions
 - NEVER return password hashes or internal IDs in API responses
 
@@ -237,17 +239,25 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 - Every controller gets `@ApiTags()`.
 - Every endpoint gets `@ApiOperation({ summary: '...' })`.
+- Use `@ApiParam()` and `@ApiBody()` for parameter documentation.
 - DTOs from `nestjs-zod` generate Swagger schemas automatically.
+
+### Type Annotations
+
+- Annotate all public method parameters and return types.
+- Use `type` imports for interfaces: `import type { ExampleItem } from './example.types'`.
+- Prefer interfaces for object shapes, types for unions/aliases.
 
 ### Tooling
 
 - **ESLint 9** — flat config with typescript-eslint + prettier.
-- **Jest** — testing framework with ts-jest.
+- **Prettier** — single quotes, trailing commas.
+- **Vitest** — testing framework.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).
 
 ### Backend Testing (mandatory)
 
-Same-change Jest for controllers, services, repositories (`test/modules/*.spec.ts`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
+Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `add-module` / `add-test`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
 
 ### Security (NestJS)
 
@@ -357,6 +367,9 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 **Least Privilege**
 - Return only the fields the client needs — NEVER send full DB records to the browser
 - NEVER log tokens, passwords, or PII
+
+**Request APIs (Next.js 16)**
+- All Next.js Request APIs (`cookies()`, `headers()`, route `params`, and `searchParams`) return Promises in Next.js 16 — always `await` them. Sync access is a TypeScript error and runtime failure.
 
 ---
 
