@@ -1,6 +1,7 @@
 ---
 name: fastapi-add-auth
 description: Use when the user wants to add authentication, JWT tokens, password hashing, or user login/registration to a FastAPI project.
+disable-model-invocation: true
 ---
 
 # Add Auth to FastAPI

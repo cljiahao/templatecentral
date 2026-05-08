@@ -1,6 +1,7 @@
 ---
 name: vite-react-add-auth
 description: Use when the user wants to add authentication, configure an auth provider, or customize the login flow in a Vite + React SPA.
+disable-model-invocation: true
 ---
 
 # Add Auth to Vite + React

@@ -1,6 +1,7 @@
 ---
 name: nextjs-add-auth
 description: Use when the user wants to add authentication, configure an SSO provider (Microsoft Entra ID, Google, GitHub, etc.), protect routes, or add a login page to a Next.js project.
+disable-model-invocation: true
 ---
 
 # Add Auth to Next.js
