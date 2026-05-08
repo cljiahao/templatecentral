@@ -1,6 +1,7 @@
 ---
 name: nextjs-code-standards
 description: Use when writing or reviewing any code in a Next.js project — covers file naming, export style, function vs const, component placement, and performance rules.
+disable-model-invocation: true
 ---
 
 # Next.js Code Standards
