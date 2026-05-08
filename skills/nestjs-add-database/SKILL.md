@@ -1,6 +1,7 @@
 ---
 name: nestjs-add-database
 description: Use when the user wants to add a database to a NestJS project — Drizzle (SQL), Kysely (SQL), or Mongoose (MongoDB). Supports optional AWS IAM authentication for compliance environments (Kysely).
+disable-model-invocation: true
 ---
 
 # Add Database to NestJS
