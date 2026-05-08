@@ -48,7 +48,7 @@ the marker.
 If not found → ⛔ STOP. Tell the user: "No routers found. Run
 `templatecentral:fastapi-add-endpoint` first, then return here."
 
-If found → proceed to Step 1.
+If found → proceed to the sections below.
 
 ### Test Structure
 
@@ -233,7 +233,7 @@ the marker.
 If not found → ⛔ STOP. Tell the user: "No modules found. Run
 `templatecentral:nestjs-add-module` first, then return here."
 
-If found → proceed to Step 1.
+If found → proceed to the sections below.
 
 ### Unit Tests
 
@@ -447,7 +447,7 @@ the marker.
 If not found → ⛔ STOP. Tell the user: "No API routes found. Run
 `templatecentral:nextjs-add-api-route` first, then return here."
 
-If found → proceed to Step 1.
+If found → proceed to the sections below.
 
 ### Test Structure
 
@@ -719,7 +719,7 @@ If not found → ⛔ STOP. Tell the user: "No components or features found. Add 
 using `templatecentral:vite-react-add-feature` or `templatecentral:vite-react-add-component`
 first, then return here."
 
-If found → proceed to Step 1.
+If found → proceed to the sections below.
 
 ### Test Structure
 
