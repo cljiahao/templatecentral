@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nestjs-mongoose.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = NestJS, ORM = Mongoose (MongoDB). Do not invoke this file directly. -->
 ## NestJS + Mongoose (MongoDB)
 
 #### C1. Install Dependencies

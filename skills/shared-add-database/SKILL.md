@@ -1,6 +1,6 @@
 ---
 name: shared-add-database
-description: Use when the user wants to add a database to any templateCentral project — FastAPI (SQLAlchemy/Beanie), NestJS (Drizzle/Kysely/Mongoose), or Next.js (Drizzle/Kysely/Mongoose). Detects stack automatically and routes to the stack-specific implementation.
+description: Add a database to any templateCentral project — FastAPI (SQLAlchemy/Beanie), NestJS or Next.js (Drizzle/Kysely/Mongoose).
 ---
 
 # Add Database
@@ -11,10 +11,26 @@ description: Use when the user wants to add a database to any templateCentral pr
 
 Check line 1 of `AGENTS.md` for the templateCentral stack marker:
 
-- `<!-- templateCentral: fastapi@` → invoke `Skill("templatecentral:shared-add-database-python")` and stop
-- `<!-- templateCentral: nestjs@` → invoke `Skill("templatecentral:shared-add-database-typescript")` and stop
-- `<!-- templateCentral: nextjs@` → invoke `Skill("templatecentral:shared-add-database-typescript")` and stop
-- `<!-- templateCentral: vite-react@` → exit. Tell the user: "Database integration is not available for Vite + React — Vite + React projects are client-side SPAs that connect to a backend API. Add a database to the backend service instead."
-- No marker found → invoke `Skill("templatecentral:shared-migrate")` first, then re-check line 1. If the marker is now present, return to the top of Step 0. If still absent, exit.
+- `<!-- templateCentral: fastapi@` → run:
+  ```bash
+  cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database/python.md"
+  ```
+  Follow the loaded guide exactly, then stop.
 
-Do not proceed beyond stack detection — all implementation is handled by the dispatched sub-skill.
+- `<!-- templateCentral: nestjs@` → run:
+  ```bash
+  cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database/typescript.md"
+  ```
+  Follow the loaded guide exactly, then stop.
+
+- `<!-- templateCentral: nextjs@` → run:
+  ```bash
+  cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database/typescript.md"
+  ```
+  Follow the loaded guide exactly, then stop.
+
+- `<!-- templateCentral: vite-react@` → exit. Tell the user: "Database integration is not available for Vite + React — Vite + React projects are client-side SPAs that connect to a backend API. Add a database to the backend service instead."
+
+- No marker found → run `Skill("templatecentral:shared-migrate")` first, then re-check line 1. If the marker is now present, return to the top of Step 0. If still absent, exit.
+
+Do not proceed beyond stack detection — all implementation is handled by the loaded guide.

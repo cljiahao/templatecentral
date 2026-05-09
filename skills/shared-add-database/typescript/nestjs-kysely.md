@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nestjs-kysely.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = NestJS, ORM = Kysely (SQL, supports standard + AWS IAM auth). Do not invoke this file directly. -->
 ## NestJS + Kysely (SQL)
 
 Kysely is a type-safe SQL query builder with full SQL control and minimal overhead. It defaults to standard password authentication. If the user requires AWS IAM auth, see the IAM variant below.

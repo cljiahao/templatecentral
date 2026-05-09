@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nextjs-drizzle.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## Next.js + Drizzle (SQL)
 
 #### A1. Install Dependencies

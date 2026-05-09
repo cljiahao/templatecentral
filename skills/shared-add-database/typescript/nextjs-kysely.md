@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nextjs-kysely.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = Next.js, ORM = Kysely (SQL, supports standard + AWS IAM auth). Do not invoke this file directly. -->
 ## Next.js + Kysely (SQL)
 
 #### B1. Install Dependencies

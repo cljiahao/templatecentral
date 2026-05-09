@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nestjs-drizzle.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = NestJS, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## NestJS + Drizzle (SQL)
 
 > **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.

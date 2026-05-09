@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/python/beanie.md
+     loaded-by: shared-add-database/python.md → shared-add-database/SKILL.md
+     prereq: Stack = FastAPI, DB = Beanie (MongoDB async ODM). Do not invoke this file directly. -->
 ## FastAPI + Beanie (MongoDB)
 
 ### B1. Install Dependencies

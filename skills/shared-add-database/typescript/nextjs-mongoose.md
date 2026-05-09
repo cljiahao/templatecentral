@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/typescript/nextjs-mongoose.md
+     loaded-by: shared-add-database/typescript.md → shared-add-database/SKILL.md
+     prereq: Stack = Next.js, ORM = Mongoose (MongoDB). Do not invoke this file directly. -->
 ## Next.js + Mongoose (MongoDB)
 
 #### C1. Install Dependencies

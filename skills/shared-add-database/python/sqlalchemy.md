@@ -1,3 +1,6 @@
+<!-- ref: shared-add-database/python/sqlalchemy.md
+     loaded-by: shared-add-database/python.md → shared-add-database/SKILL.md
+     prereq: Stack = FastAPI, DB = SQLAlchemy standard (password) auth. Do not invoke this file directly. -->
 ## FastAPI + SQLAlchemy (SQL)
 
 ### A1. Install Dependencies
