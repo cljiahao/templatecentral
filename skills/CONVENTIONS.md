@@ -81,6 +81,7 @@ Every registered `SKILL.md` must obey these constraints:
 | Description length | ≤ 150 characters |
 | Body length (excluding frontmatter) | ≤ 30 lines |
 | Inline implementation | Not allowed |
+| Inline code blocks | Only `cat` commands and detection logic |
 
 ### Frontmatter Fields
 
@@ -102,7 +103,7 @@ The body must contain only:
 1. Stack/variant detection logic (file existence checks, config sniffs)
 2. A routing table or decision tree
 3. `cat` commands pointing to reference files
-4. A brief "Prerequisites" note if needed
+4. A brief "Prerequisites" note if needed (e.g., "Requires a project scaffolded with templatecentral:fastapi-scaffold. See Step 0.")
 
 It must NOT contain: code blocks with implementation steps, file content templates, numbered how-to instructions, or prose duplicated from another skill.
 
@@ -207,8 +208,8 @@ skills/shared-add-auth/django.md
 skills/shared-add-test/django.md
 skills/shared-add-database/django.md       ← if ≤ 2 DB variants
 skills/shared-add-database/django/         ← if > 2 DB variants (3-level)
-  django/django-orm.md
-  django/sqlalchemy.md
+  django-orm.md
+  sqlalchemy.md
 ```
 
 **2. Add the ref header to each new file.**
@@ -227,7 +228,7 @@ Example for `skills/shared-add-auth/django.md`:
 In `skills/shared-add-auth/SKILL.md`, add Django to the routing table:
 
 ```
-| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat skills/shared-add-auth/django.md` |
+| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-auth/django.md"` |
 ```
 
 **4. Check variant count. If > 2 ORM/driver variants → promote to 3-level.**
@@ -238,7 +239,7 @@ If Django will have more than 2 database variants, convert the skill to 3-level 
 
 The audit will check headers, line counts, description length, and nesting depth.
 
-**6. Update CONVENTIONS.md §6 with the new framework's detection signal.**
+**6. Update CONVENTIONS.md Section 6 with the new framework's detection signal.**
 
 Add to the stack detection signals table below.
 
@@ -263,13 +264,14 @@ When adding a new framework, define its detection signal clearly and add it to t
 | Stack-specific skill (no shared equivalent) | `<stack>-add-<noun>/` | `nestjs-add-module/` |
 | 2-level reference file | `<stack>.md` inside skill dir | `shared-add-auth/fastapi.md` |
 | 3-level stack router | `<stack>.md` inside skill dir | `shared-add-database/python.md` |
-| 3-level leaf file | `<stack>-<variant>.md` inside subdir | `shared-add-database/python/sqlalchemy.md` |
+| 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `shared-add-database/python/sqlalchemy.md` |
 | Scaffold reference files (existing pattern) | `source-files.md`, `config-files.md` | `nestjs-scaffold/source-files.md` |
 
 ### Notes
 
 - Stack names in file paths use lowercase with hyphens: `fastapi`, `nestjs`, `nextjs`, `vite-react`.
 - Variant names in leaf file paths use lowercase with hyphens: `sqlalchemy`, `drizzle`, `mongoose`.
+- When a single subdir is shared by multiple stacks (e.g., `typescript/` serves both NestJS and Next.js), prefix with the stack name to disambiguate: `nestjs-drizzle.md`, `nextjs-drizzle.md`.
 - Do not use `index.md` as a filename — every file should have a descriptive name.
 - Scaffold skills (`<stack>-scaffold/`) are stack-specific and follow their own internal structure; they are not subject to the shared-skill naming rule.
 
