@@ -508,7 +508,10 @@ Now that no HIGH or MEDIUM findings remain:
 
 0. **Verify all fixes are committed** — run `git status` and confirm the working tree is clean. Do not write the CHANGELOG entry while uncommitted changes remain; write the entry only after the final commit.
 1. Write a `CHANGELOG.md` entry summarising all changes made across all iterations of this audit run — not just the last pass.
-2. Bump the patch version in `.claude-plugin/plugin.json`.
+2. **Bump the version in `.claude-plugin/plugin.json`** using semver:
+   - **patch** (`x.y.Z`): fixes only — corrected outdated code, removed bad patterns, updated docs/examples. Nothing changes for users who don't hit the fixed case.
+   - **minor** (`x.Y.0`): new guidance, new checklist items, new reference files, or any additive change a user would notice. No existing skill behaviour removed.
+   - **major** (`X.0.0`): breaking — registered skill names changed, skills removed, or the invocation contract changed in a way that breaks existing usage.
 3. If any LOW findings were left unfixed (deferred by choice), note them under an `### In Progress` or `### Known` section so they are not lost.
 
 ---
@@ -570,6 +573,8 @@ git commit -m "audit: add <pattern> check to lint script and shared-audit"
 ```
 
 ## Changelog
+### 2.2.0
+- Step 4f: added semver decision rules for version bump (patch = fixes only, minor = additive, major = breaking skill name/contract changes)
 ### 2.1.0
 - Added universal-standards philosophy to Mindset: OWASP as the stated security standard, government-grade rigour applied generically, explicit prohibition on country/region/ethnicity/gender-specific content
 - Hardened Step 0 training-cutoff note: "August 2025" named explicitly; all ecosystem state treated as stale until web-searched
