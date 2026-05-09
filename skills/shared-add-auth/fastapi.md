@@ -1,3 +1,6 @@
+<!-- ref: shared-add-auth/fastapi.md
+     loaded-by: shared-add-auth/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-auth skill. -->
 ## FastAPI
 
 Add JWT-based authentication to a FastAPI project scaffolded from templateCentral.
