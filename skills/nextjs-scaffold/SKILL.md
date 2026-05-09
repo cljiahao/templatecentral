@@ -1,6 +1,6 @@
 ---
 name: nextjs-scaffold
-description: Use when scaffolding a new Next.js project following templateCentral conventions with App Router, shadcn/ui, TanStack Query, and Docker support (auth added separately via nextjs-add-auth)
+description: Scaffold a new Next.js project with App Router, shadcn/ui, TanStack Query, and Docker (auth via nextjs-add-auth)
 version: "1.0.0"
 ---
 

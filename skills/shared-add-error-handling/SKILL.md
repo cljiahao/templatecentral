@@ -1,6 +1,6 @@
 ---
 name: shared-add-error-handling
-description: Use to add consistent error handling and response schemas across all stacks — covers unified error responses, security boundaries, logging integration, and per-stack implementation patterns.
+description: Add consistent error handling and response schemas across all stacks with security boundaries
 ---
 
 # Add Error Handling & Boundaries

@@ -1,6 +1,6 @@
 ---
 name: shared-audit
-description: Use when you want a full accuracy, security, and quality audit of all templateCentral skills. Runs mechanical checks first, then a structured semantic review of every skill file by name.
+description: Audit all templateCentral skills for accuracy, security, and quality with mechanical + semantic review
 version: "1.6.0"
 ---
 

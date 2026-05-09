@@ -1,6 +1,6 @@
 ---
 name: vite-react-scaffold
-description: Use when scaffolding a new Vite + React SPA (no SSR) — sets up TypeScript, React Router, TanStack Query, shadcn/ui, and Docker (auth added separately via vite-react-add-auth).
+description: Scaffold a new Vite + React SPA with React Router, TanStack Query, shadcn/ui, and Docker (auth via vite-react-add-auth)
 version: "1.0.0"
 ---
 

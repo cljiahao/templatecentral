@@ -1,6 +1,6 @@
 ---
 name: shared-add-logging
-description: Use to wire structured, JSON-formatted logging into any templateCentral project — covers three cumulative tiers (base, standard, verbose), per-stack wiring locations, and a hardcoded prohibition list for sensitive data.
+description: Add structured JSON logging to any templateCentral project with sensitive data protection
 ---
 
 # Add Structured Logging

@@ -1,6 +1,6 @@
 ---
 name: fastapi-scaffold
-description: Use when the user wants to start a new Python backend project, create a new FastAPI API, or scaffold a project with layered architecture and Docker support.
+description: Scaffold a new FastAPI project with layered architecture, Pydantic validation, and Docker support
 version: "1.0.0"
 ---
 

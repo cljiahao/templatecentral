@@ -1,6 +1,6 @@
 ---
 name: shared-validation-patterns
-description: Use to add consistent input validation across all stacks — covers Zod schemas, Pydantic models, OWASP/CWE compliance, file uploads, and error transformation patterns.
+description: Add consistent input validation with Zod/Pydantic, OWASP/CWE compliance, and sanitization across stacks
 ---
 
 # Validation Patterns & Sanitization
