@@ -1,20 +1,19 @@
----
-name: vite-react-add-component
-description: Use when creating a new React component and unsure whether it belongs in features/, widgets/, or layout/, or when adding a shared component with barrel exports.
----
+<!-- ref: shared-add-component/nextjs.md
+     loaded-by: shared-add-component/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-component skill. -->
 
 # Add a Component
 
-Create a new component in a Vite + React project scaffolded from templateCentral.
+Create a new component in a Next.js project scaffolded from templateCentral.
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
 
 ## Inputs
 
 - **Component name** — PascalCase name (e.g., `StatusBadge`, `UserAvatar`)
-- **Component type** — Where it belongs (feature, widget, layout)
+- **Component type** — Where it belongs (feature, widget, layout, UI)
 
 ## Decision Guide
 
@@ -31,7 +30,7 @@ First, determine where the component belongs:
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
@@ -85,23 +84,21 @@ For low-level UI primitives, use the shadcn CLI:
 npx shadcn@latest add <component-name>
 ```
 
-This installs into `src/components/ui/`. The project has a `components.json` with `rsc: false` for Vite compatibility. Do not manually create UI primitives.
+This installs into `src/components/ui/`. Do not manually create UI primitives.
 
 > For component patterns (`function` vs `const`, `React.memo`, composition over configuration, static data in constants), see `code-standards/SKILL.md`.
 
 ### 4. Validate
 
 ```bash
-pnpm build && pnpm test
+pnpm build
 ```
 
-Confirm the build succeeds with no type errors and all tests pass.
+Confirm the build succeeds with no type errors.
 
 ## Rules
 
-- Always add to barrel `index.ts` when creating in shared folders — NEVER omit the barrel export
-- Don't prematurely extract — keep inline until a second consumer needs it; NEVER extract into `widgets/` until it has a second consumer
-- NEVER manually create files in `src/components/ui/` — use the shadcn CLI (`npx shadcn@latest add`)
+- Don't prematurely extract — keep inline until a second consumer needs it. NEVER extract to `widgets/` until it has a second consumer
 - NEVER add boolean flag props to configure variants — prefer composition with children
 
 ## Validate

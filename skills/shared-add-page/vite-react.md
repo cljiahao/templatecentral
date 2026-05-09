@@ -1,7 +1,6 @@
----
-name: vite-react-add-page
-description: Use when adding a new URL route, creating a page component, or the user asks to add a page to a Vite + React SPA.
----
+<!-- ref: shared-add-page/vite-react.md
+     loaded-by: shared-add-page/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-page skill. -->
 
 # Add a Page
 

@@ -1,17 +1,16 @@
----
-name: vite-react-add-form
-description: Use when adding a form with validation to a Vite + React project — covers React Hook Form setup, Zod schema definition, CustomFormField usage, and toast notifications.
----
+<!-- ref: shared-add-form/nextjs.md
+     loaded-by: shared-add-form/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-form skill. -->
 
-# Add a Form to Vite + React
+# Add a Form to Next.js
 
-Create a validated form in a Vite + React SPA scaffolded from templateCentral using React Hook Form, Zod, and the `CustomFormField` widget.
+Create a validated form in a Next.js project scaffolded from templateCentral using React Hook Form, Zod, and the existing `CustomFormField` widget.
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
 
-## What the Template Provides
+## What the Template Already Provides
 
 | Dependency / Component | Location |
 |------------------------|----------|
@@ -21,7 +20,7 @@ Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See St
 | `Form` (FormProvider) | `src/components/ui/form.tsx` |
 | `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
 | `Input`, `Textarea`, `Select` | `src/components/ui/` |
-| `Toaster` (Sonner) | Already in Providers |
+| `sonner` (Toaster) | **Not pre-installed** — add in Step 1 if forms need toast feedback |
 
 ## Inputs
 
@@ -32,7 +31,7 @@ Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See St
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
@@ -41,7 +40,31 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Define the Zod Schema
+### 1. Install sonner (if the form needs toast feedback)
+
+If the form will call `toast.success()` / `toast.error()`, run:
+
+```bash
+npx shadcn@latest add sonner
+```
+
+Then add `<Toaster richColors />` inside `<ThemeProvider>` in `src/app/layout.tsx`:
+
+```tsx
+import { Toaster } from 'sonner';
+// ...
+<ThemeProvider ...>
+  <Providers>{children}</Providers>
+  <Toaster richColors />
+</ThemeProvider>
+```
+
+Skip this step if sonner is already installed or the form doesn't need toast feedback.
+
+### 2. Define the Zod Schema
+
+
+Create the schema in the feature's `schemas/` directory:
 
 **`src/features/<feature>/schemas/<form-name>.schema.ts`**:
 
@@ -59,11 +82,13 @@ export type ContactFormValues = z.input<typeof contactFormSchema>;
 
 > **Zod v4 note**: Use `z.input` (not `z.infer`) for form value types. `z.input` gives the **input** type (what the user types), while `z.infer` gives the **output** type (after transforms like `.default()`, `.coerce`). `useForm` works with input types.
 
-### 2. Create the Form Component
+### 3. Create the Form Component
 
 **`src/features/<feature>/components/<form-name>-form.tsx`**:
 
 ```tsx
+'use client';
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Form } from '@/components/ui/form';
@@ -90,6 +115,8 @@ export function ContactForm() {
   });
 
   const onSubmit = async (values: ContactFormValues) => {
+    // Replace with your server action or API call:
+    // await submitContact(values);
     toast.success('Form submitted successfully!');
     form.reset();
   };
@@ -118,9 +145,9 @@ export function ContactForm() {
 }
 ```
 
-### 3. Export from Feature Barrel
+### 4. Export from Feature Barrel
 
-Add to `src/features/<feature>/components/index.ts`:
+Add the form component to `src/features/<feature>/components/index.ts`:
 
 ```typescript
 export { ContactForm } from './contact-form';
@@ -132,12 +159,12 @@ Ensure the feature root barrel (`src/features/<feature>/index.ts`) re-exports co
 export * from './components';
 ```
 
-### 4. Use in a Page
+### 5. Use in a Page
 
 ```tsx
 import { ContactForm } from '@/features/<feature>';
 
-export function ContactPage() {
+export default function ContactPage() {
   return (
     <div className="max-w-site mx-auto px-6 py-12">
       <h1 className="text-3xl font-bold">Contact Us</h1>
@@ -151,11 +178,13 @@ export function ContactPage() {
 
 ## Rules
 
-- Always define the Zod schema in a separate file under `schemas/` — not inline.
-- Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring.
+- Always define the Zod schema in a separate file under `schemas/` — not inline in the component.
+- Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring automatically.
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
-- Set `defaultValues` for all fields.
-- Use `toast.success()` / `toast.error()` from Sonner for feedback.
+- Set `defaultValues` for all fields to avoid uncontrolled-to-controlled warnings.
+- Use `toast.success()` / `toast.error()` from Sonner for user feedback — install sonner and add `<Toaster />` to root layout first (see Step 1).
+- For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
+- Add `'use client'` directive — forms are inherently interactive.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.
 
 ## Validate

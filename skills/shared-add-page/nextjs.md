@@ -1,7 +1,6 @@
----
-name: nextjs-add-page
-description: Use when adding a new URL route, creating a public or dashboard page, or the user asks to add a page with loading/error states in a Next.js app.
----
+<!-- ref: shared-add-page/nextjs.md
+     loaded-by: shared-add-page/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-page skill. -->
 
 # Add a Page
 

@@ -1,15 +1,14 @@
----
-name: vite-react-add-feature
-description: Use when adding a new domain area (e.g., projects, auth, analytics) that needs its own components, hooks, API services, and types under src/features/.
----
+<!-- ref: shared-add-feature/nextjs.md
+     loaded-by: shared-add-feature/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-feature skill. -->
 
 # Add a Feature Module
 
-Create a new self-contained feature module in a Vite + React project scaffolded from templateCentral.
+Create a new self-contained feature module in a Next.js project scaffolded from templateCentral.
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
 
 ## Inputs
 
@@ -19,7 +18,7 @@ Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See St
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
@@ -32,15 +31,14 @@ the marker.
 
 ```
 src/features/<feature-name>/
-├── api/                         # Data access services (calls to external backend API)
-│   ├── <name>-service.ts        # Service with fetch calls to backend endpoints
+├── api/                         # Data access services (HTTP calls to /api/* routes)
+│   ├── <name>-service.ts        # Service with fetch calls to /api/*
 │   └── index.ts
 ├── components/                  # Feature-specific UI
 │   └── index.ts
 ├── hooks/                       # React hooks (queries, mutations, local state)
 │   └── index.ts
-├── schemas/                     # Zod validation schemas (form inputs + API response shapes)
-│   └── index.ts
+├── schemas/                     # Zod validation schemas (see Step 4b)
 ├── constants.ts                 # Static data (arrays, config objects, options)
 ├── types.ts                     # TypeScript interfaces and types
 └── index.ts                     # Barrel export
@@ -60,7 +58,7 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Put all static data here — NOT in components:
+Static data goes here — NOT in components:
 
 ```ts
 export const STATUS_OPTIONS = [
@@ -71,21 +69,16 @@ export const STATUS_OPTIONS = [
 
 ### 4. Create API Services (in `api/`)
 
-Client-side services that fetch data from the backend API.
-
-> **`getApiBaseUrl()`** is pre-provided in `src/lib/constants/env.ts` — it throws at startup if `VITE_API_BASE_URL` is missing, preventing silent network failures at runtime. Always use it instead of `ENV.API_BASE_URL` directly.
+Data access services consumed by React Query hooks on the client side:
 
 ```ts
 // api/project-service.ts
-import { getApiBaseUrl } from '@/lib/constants/env';
-import { APIError } from '@/lib/errors';
+import { APIError } from '@/integrations/error';
 import type { ProjectItem } from '../types';
-
-const API_BASE = getApiBaseUrl();
 
 export const ProjectService = {
   getAll: async (): Promise<ProjectItem[]> => {
-    const res = await fetch(`${API_BASE}/projects`);
+    const res = await fetch('/api/projects');
     if (!res.ok) {
       throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Failed to fetch projects' })) });
     }
@@ -93,9 +86,21 @@ export const ProjectService = {
   },
 
   getById: async (id: string): Promise<ProjectItem> => {
-    const res = await fetch(`${API_BASE}/projects/${id}`);
+    const res = await fetch(`/api/projects/${id}`);
     if (!res.ok) {
       throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Project not found' })) });
+    }
+    return res.json();
+  },
+
+  create: async (data: Omit<ProjectItem, 'id'>): Promise<ProjectItem> => {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Failed to create project' })) });
     }
     return res.json();
   },
@@ -103,6 +108,28 @@ export const ProjectService = {
 ```
 
 Export from barrel: `api/index.ts`
+
+### 4b. Create Schemas (in `schemas/`, Optional)
+
+Create Zod schemas when the feature has form validation or needs to parse external API responses. Skip this step if the feature only consumes typed data from its own service.
+
+```ts
+// schemas/project-schemas.ts
+import { z } from 'zod';
+
+export const createProjectSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  description: z.string().max(500).optional(),
+  status: z.enum(['active', 'archived']),
+});
+
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+```
+
+Use these schemas in:
+- **React Hook Form** — pass to `zodResolver(createProjectSchema)` for client-side form validation
+- **API route handlers** — use `safeParse()` to validate request bodies (see `add-api-route` skill)
+- **Service layer** — validate external API responses before returning typed data
 
 ### 5. Create Components (in `components/`)
 
@@ -112,11 +139,15 @@ Feature-specific components. Use `function` declarations:
 
 ```tsx
 // components/project-card.tsx
-import { CustomCard } from '@/components/widgets';
 import type { ProjectItem } from '../types';
 
 export function ProjectCard({ project }: { project: ProjectItem }) {
-  return <CustomCard header={project.name} description={project.status} />;
+  return (
+    <div className="rounded-lg border p-4">
+      <h3 className="font-semibold">{project.name}</h3>
+      <span className="text-sm text-muted-foreground">{project.status}</span>
+    </div>
+  );
 }
 ```
 
@@ -128,8 +159,8 @@ Follow naming convention:
 
 | Suffix | Purpose |
 |--------|---------|
-| `.query.ts` | React Query `useQuery` — fetches data |
-| `.mutation.ts` | React Query `useMutation` — writes data |
+| `.query.ts` | React Query `useQuery` — fetches from `/api/*` |
+| `.mutation.ts` | React Query `useMutation` — writes to `/api/*` |
 | (no suffix) | Local state, form logic, other hooks |
 
 ```ts
@@ -157,34 +188,35 @@ export * from './constants';
 export type { ProjectItem } from './types';
 ```
 
-Export constants that consumers need (e.g., static data for rendering). Export types for typed props or state. Only export what consumers outside the feature need.
+Export constants that consumers need (e.g., static data for rendering). Export types for typed props or state.
+
+If the feature has client-side data access services (hooks that call `/api/*`), also export the API layer:
+
+```ts
+export * from './api';
+```
+
+Only export what consumers outside the feature need.
 
 ### 8. Validate
 
-```bash
-pnpm build && pnpm test
-```
-
-Confirm the build succeeds with no TypeScript errors and all tests pass. Verify imports resolve: `import { X } from '@/features/<name>'` works from outside the feature.
+After creating all files:
+1. Run `pnpm build` — confirm no TypeScript errors
+2. Verify imports resolve: `import { X } from '@/features/<name>'` works from outside the feature
+3. If hooks use React Query, verify the query key is unique across the project
 
 ## Rules
 
 - **Direct imports** OK within the same feature
-- If a component is used by 2+ features, promote it to `src/components/widgets/`; NEVER place feature-specific components there until used by 2+ features
-- NEVER import from one feature into another — if shared, promote to `components/widgets/` or `lib/`
+- If a component is used by 2+ features, promote it to `src/components/widgets/`
+- NEVER import from one feature into another — promote shared code to `components/widgets/` or `lib/`
+- NEVER place feature-specific components in `src/components/widgets/` until used by 2+ features
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
-- NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)
-
-## Validate
-
-```bash
-pnpm build    # zero errors
-pnpm test     # tests pass
-```
 
 ## After Writing Code
 
 Dispatch in order:
 1. `shared-build-agent` — validate compilation
 2. `shared-review-agent` — check code standards
+3. `shared-test-agent` — write and run tests
