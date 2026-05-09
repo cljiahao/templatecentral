@@ -1,3 +1,6 @@
+<!-- ref: shared-add-test/nestjs.md
+     loaded-by: shared-add-test/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-test skill. -->
 ## NestJS
 
 Guide for adding unit tests and e2e tests to a NestJS project scaffolded from templateCentral.

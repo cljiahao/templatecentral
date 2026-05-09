@@ -1,3 +1,6 @@
+<!-- ref: shared-add-test/nextjs.md
+     loaded-by: shared-add-test/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-test skill. -->
 ## Next.js
 
 Guide for writing tests for API route handlers in a Next.js project scaffolded from templateCentral. Tests cover server-side API logic only — not frontend components.
