@@ -5,9 +5,11 @@
 
 Approach every file as if you have never seen this project before. Do not carry assumptions from previous audit sessions or conversations. The goal is to find what is wrong, not confirm what already passed.
 
+**Universal standards — no exceptions**: All skills must be jurisdiction-neutral, industry-neutral, and free of region-, country-, ethnicity-, gender-, and race-specific content. Security guidance follows **OWASP** (Top 10 web, LLM Top 10, Agentic Top 10) as the universal standard. Apply government-grade security rigour — principle of least privilege, defence-in-depth, audit logging, strong authentication — without referencing any specific government, country, or compliance regulation by name. When in doubt, ask: "Would this guidance apply equally in any country, to any developer, on any project?"
+
 Priority order:
 1. **Accuracy** — is this correct for the current ecosystem as of today?
-2. **Security** — are there vulnerabilities, insecure defaults, or missing controls?
+2. **Security** — are there vulnerabilities, insecure defaults, or missing controls? Evaluate against OWASP; apply government-grade rigour generically.
 3. **Quality** — SRP, SoC, DRY, YAGNI, token reduction, readability
 4. **AIDLC/SDLC alignment** — does the skill guide users toward safe, maintainable development lifecycle practices?
 
@@ -15,7 +17,7 @@ Priority order:
 
 ## Step 0 — Ecosystem research
 
-**CRITICAL — model knowledge cutoff**: The AI assistant running this audit has a training cutoff that may be many months behind today's date. You MUST NOT rely on training data alone for ecosystem state — always follow the cache protocol below.
+**CRITICAL — model knowledge cutoff**: The AI assistant running this audit has a training cutoff of **August 2025**. Today's date may be a year or more beyond that. Treat all ecosystem state — framework versions, library APIs, security advisories, OWASP rankings — as potentially stale until confirmed by a web search. You MUST NOT rely on training data alone for ecosystem state; always follow the cache protocol below.
 
 ### 0a — Check the research cache
 
@@ -230,6 +232,22 @@ done
 
 ---
 
+### C6 — Jurisdiction neutrality
+
+No skill file may reference country-, region-, or government-specific compliance frameworks by name. Skills must use OWASP and generic best-practice language instead.
+
+```bash
+grep -rn -iE '\bIM8\b|\bPDPA\b|\bMAS.TRM\b|\bGDPR\b|\bHIPAA\b|\bPCI.DSS\b|\bCCPA\b|\bFedRAMP\b|\bFISMA\b|\bMAS\b' \
+  skills/ --include="*.md" | grep -v 'CHANGELOG' | grep -v 'CONVENTIONS.md' | grep -v 'audit/implementation.md'
+```
+
+**Pass**: no output.  
+**Fail**: lists files containing jurisdiction-specific framework names. Replace with generic OWASP-based guidance (e.g., "strong authentication controls" instead of "PDPA-compliant authentication").
+
+> `OWASP`, `NIST SP 800-63B`, and `AWS AIDLC` are universal industry references and are permitted in ecosystem research and audit infrastructure. They must not appear inside skill implementation files.
+
+---
+
 ## Step 2 — Semantic review
 
 Read each file below **in full** and apply the checklist beneath it. Do not skim. Mark each file as CLEAN or list specific issues with the line reference.
@@ -261,7 +279,12 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] **SoC** — are layers cleanly separated in code examples (routing vs business logic, validation vs persistence)?
 - [ ] **DRY** — is the same guidance or code block repeated across sections without need?
 - [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
-- [ ] **Token efficiency** — are there verbose explanations, redundant comments, or over-scaffolded examples that could be trimmed without losing meaning?
+- [ ] **Token efficiency** — targeted checks:
+  - Any reference file exceeding 200 lines? Flag for splitting.
+  - Inline comments that restate what the surrounding code clearly shows? Delete them.
+  - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
+  - The same instruction stated in two different forms within 15 lines? Collapse to one.
+  - Introductory prose before a code block that already has self-explanatory comments? Delete the prose.
 
 **AIDLC / SDLC alignment** ← secondary
 - [ ] Does the skill guide users toward testable, reviewable outputs (not just "run this command")?
@@ -450,7 +473,9 @@ Present all findings grouped by severity:
 
 ### 4b — Fix
 
-- HIGH and MEDIUM: fix immediately. For large-scope changes, describe the fix and confirm before implementing.
+- HIGH and MEDIUM: fix immediately. Classify each fix before acting:
+  - **Minor** (single file, ≤ 10 lines changed, no architectural impact): fix directly without asking. No plan needed.
+  - **Large-scope** (multi-file, architectural change, or > 10 lines): describe the fix and confirm before implementing. A written plan is never required — work directly from the finding description.
 - LOW: fix directly without asking.
 - After fixing, run the lint script to confirm no mechanical regressions:
 
@@ -481,6 +506,7 @@ Must pass with "All checks passed" before continuing.
 
 Now that no HIGH or MEDIUM findings remain:
 
+0. **Verify all fixes are committed** — run `git status` and confirm the working tree is clean. Do not write the CHANGELOG entry while uncommitted changes remain; write the entry only after the final commit.
 1. Write a `CHANGELOG.md` entry summarising all changes made across all iterations of this audit run — not just the last pass.
 2. Bump the patch version in `.claude-plugin/plugin.json`.
 3. If any LOW findings were left unfixed (deferred by choice), note them under an `### In Progress` or `### Known` section so they are not lost.
@@ -544,6 +570,13 @@ git commit -m "audit: add <pattern> check to lint script and shared-audit"
 ```
 
 ## Changelog
+### 2.1.0
+- Added universal-standards philosophy to Mindset: OWASP as the stated security standard, government-grade rigour applied generically, explicit prohibition on country/region/ethnicity/gender-specific content
+- Hardened Step 0 training-cutoff note: "August 2025" named explicitly; all ecosystem state treated as stale until web-searched
+- Added C6 — Jurisdiction neutrality check: grep for known jurisdiction-specific framework names (IM8, PDPA, GDPR, HIPAA, PCI-DSS, etc.) in skill files
+- Expanded Token efficiency checklist item from one line to five concrete sub-checks (line count, redundant comments, over-scaffolded examples, duplicate instructions, redundant prose)
+- Step 4b: added explicit "minor = fix directly / large-scope = confirm first" classification; stated no written plan is ever required for audit findings
+- Step 4f: added pre-changelog gate — verify working tree is clean before writing CHANGELOG entry
 ### 2.0.0
 - Updated all Step 2 file lists from 33 old skill paths to new 10-skill nested structure (`add/`, `scaffold/`, `standards/`, `migrate/`, etc.)
 - Fixed C4 depth check: `NF > 4` → `NF > 5` to accommodate the deeper nested layout

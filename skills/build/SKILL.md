@@ -1,7 +1,6 @@
----
-name: templatecentral:build
-description: Use when building a templateCentral project, checking compilation, or running the build pipeline.
----
+<!-- ref: build/SKILL.md
+     loaded-by: agent — not a registered skill; cat directly when a build step is needed
+     prereq: Project identified. -->
 
 `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/implementation.md"`
 

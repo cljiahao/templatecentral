@@ -304,7 +304,9 @@ This checklist matches what `templatecentral:audit` enforces automatically. Use 
 
 ### Count Limit
 
-- [ ] Total registered skill count = 10: verify with `ls -d skills/*/ | wc -l`
+- [ ] Total registered skill count = 6: verify with `grep -rl '^name:' skills/*/SKILL.md | wc -l`
+
+> **Agent utilities** (`build`, `test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 10; registered skills = 6.
 
 ### Stack Detection
 
@@ -313,4 +315,4 @@ This checklist matches what `templatecentral:audit` enforces automatically. Use 
 
 ---
 
-*Last updated: 2026-05-09. Maintained by the templateCentral skill architecture.*
+*Last updated: 2026-05-09. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 6 (build, test, review, cleanup de-registered as agent utilities).*

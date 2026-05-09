@@ -8,7 +8,7 @@ Detect intent and ask for database type. If migration intent detected ("migrate/
 
 Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* — skip if user named a library.
 
-For SQL, detect compliance signals (`HIPAA`, `PCI`, `regulated`, etc.) or ask about IAM. SQLite always uses standard auth (Drizzle).
+For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth (Drizzle).
 
 | Stack | Library | Load |
 |-------|---------|------|

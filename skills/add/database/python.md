@@ -8,7 +8,7 @@ Detect intent and ask for database type. If migration intent detected ("migrate/
 
 Ask: *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* — skip if user named a library.
 
-For SQL, detect compliance signals (`HIPAA`, `PCI`, `regulated`, etc.) or ask about IAM. SQLite always uses standard auth.
+For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth.
 
 | Library | Use case | Load |
 |---------|----------|------|

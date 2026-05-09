@@ -44,10 +44,11 @@ check_no_jurisdiction_specific() {
   # Known jurisdiction-specific framework names must not appear in skills.
   # ADD TO THIS LIST when a new jurisdiction-specific term is discovered.
   # Remove from this list only if the project explicitly targets that jurisdiction.
+  # audit/implementation.md is excluded — it names these patterns in its C6 check and changelog.
   header "Jurisdiction-specific content"
   local pattern='IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG'
   local matches
-  matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null || true)
+  matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Jurisdiction-specific content found — skills must be country/industry neutral"
@@ -96,10 +97,10 @@ check_no_version_pins() {
 check_no_bcrypt() {
   # Project standard is argon2id (OWASP/NIST SP 800-63B recommendation).
   # REVISIT: if the project standard changes, update this check.
-  # shared-audit/SKILL.md is excluded — it references bcrypt in its own checklist items.
+  # audit/implementation.md is excluded — it references bcrypt in its own checklist items.
   header "bcrypt references"
   local matches
-  matches=$(grep -rn '\bbcrypt\b' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rn '\bbcrypt\b' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "bcrypt found — project standard is argon2id"
@@ -111,10 +112,10 @@ check_no_bcrypt() {
 check_no_deprecated_zod_flatten() {
   # Zod v4 deprecated error.flatten() — use z.flattenError(error) instead.
   # REVISIT: if the project ever drops to Zod v3, remove this check.
-  # shared-audit/SKILL.md is excluded — it references .flatten() in its own checklist items.
+  # audit/implementation.md is excluded — it references .flatten() in its own checklist items.
   header "Deprecated Zod .flatten()"
   local matches
-  matches=$(grep -rn '\.flatten()' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rn '\.flatten()' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail ".flatten() is deprecated in Zod v4 — use z.flattenError()"
@@ -126,10 +127,10 @@ check_no_deprecated_zod_flatten() {
 check_no_middleware_ts() {
   # Next.js 16 replaced middleware.ts with proxy.ts for auth/proxy patterns.
   # REVISIT: if Next.js reintroduces middleware.ts, remove or adjust this check.
-  # shared-audit/SKILL.md is excluded — it references middleware.ts in its own checklist items.
+  # audit/implementation.md is excluded — it references middleware.ts in its own checklist items.
   header "middleware.ts references"
   local matches
-  matches=$(grep -rn 'middleware\.ts' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rn 'middleware\.ts' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "middleware.ts found — Next.js 16 uses proxy.ts"
@@ -157,10 +158,10 @@ check_no_zod_string_format_methods() {
   # Zod v4 deprecated chained string-format methods: .string().url(), .string().datetime(),
   # .string().email(), .string().uuid(). Use top-level z.url(), z.iso.datetime(), z.email(), z.uuid() instead.
   # ECOSYSTEM-ERA: correct for Zod v4+. Revisit if the project downgrades to Zod v3.
-  # shared-audit/SKILL.md is excluded — it may reference these in checklist items.
+  # audit/implementation.md is excluded — it may reference these in checklist items.
   header "Deprecated Zod v4 string format methods"
   local matches
-  matches=$(grep -rEn 'z\.string\(\)\.(url|datetime|email|uuid)\(' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rEn 'z\.string\(\)\.(url|datetime|email|uuid)\(' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Deprecated Zod string-chained format method — use top-level z.url(), z.iso.datetime(), z.email(), z.uuid()"
@@ -173,10 +174,10 @@ check_no_jest_apis_in_skills() {
   # All Node scaffold stacks (NestJS, Next.js, Vite+React) use Vitest — not Jest.
   # jest.fn(), jest.spyOn(), and jest-e2e.json must not appear in skill code examples.
   # ECOSYSTEM-ERA: correct for NestJS 11+ (Vitest default). Revisit if the project adopts Jest.
-  # shared-audit/SKILL.md is excluded — it may reference these patterns in checklist items.
+  # audit/implementation.md is excluded — it may reference these patterns in checklist items.
   header "Jest APIs in skill code examples"
   local matches
-  matches=$(grep -rEn 'jest\.(fn|spyOn|mock|clearAllMocks|resetAllMocks|restoreAllMocks)\(|jest-e2e\.json' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rEn 'jest\.(fn|spyOn|mock|clearAllMocks|resetAllMocks|restoreAllMocks)\(|jest-e2e\.json' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Jest API found in skill code example — all Node stacks use Vitest (vi.fn(), vi.spyOn())"
@@ -189,10 +190,10 @@ check_no_globals_jest_in_vitest_projects() {
   # All Node scaffold stacks use Vitest with globals: false — eslint-globals-jest is not needed.
   # Adding ...globals.jest to an ESLint config in a Vitest project is misleading and unused.
   # ECOSYSTEM-ERA: correct for NestJS 11+ / Vite+React (Vitest default). Revisit if Jest is re-adopted.
-  # shared-audit/SKILL.md is excluded — it may reference this in checklist items.
+  # audit/implementation.md is excluded — it may reference this in checklist items.
   header "globals.jest in ESLint config templates"
   local matches
-  matches=$(grep -rn 'globals\.jest' "$SKILLS_DIR/" 2>/dev/null | grep -v 'shared-audit' || true)
+  matches=$(grep -rn 'globals\.jest' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "globals.jest found in ESLint template — Node stacks use Vitest with globals: false; remove globals.jest"
