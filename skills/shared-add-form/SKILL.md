@@ -1,6 +1,6 @@
 ---
 name: templatecentral:shared-add-form
-description: Use when adding a form with validation to a Next.js or Vite + React project — covers React Hook Form, Zod schema definition, CustomFormField usage, and toast notifications.
+description: Use when adding a form with validation to a Next.js or Vite + React project — React Hook Form, Zod schema, and CustomFormField.
 ---
 
 Read `AGENTS.md` to identify the stack, then run the corresponding command:

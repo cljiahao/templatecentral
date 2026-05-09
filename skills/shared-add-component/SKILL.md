@@ -1,6 +1,6 @@
 ---
 name: templatecentral:shared-add-component
-description: Use when creating a new React component in Next.js or Vite + React — covers placement in features/, widgets/, layout/, or ui/, and barrel exports.
+description: Use when creating a new React component in Next.js or Vite + React — placement in features/, widgets/, layout/, or ui/, and barrel exports.
 ---
 
 Read `AGENTS.md` to identify the stack, then run the corresponding command:

@@ -1,6 +1,6 @@
 ---
 name: templatecentral:shared-add-feature
-description: Use when adding a new domain area (e.g., projects, auth, analytics) with components, hooks, API services, and types to a Next.js or Vite + React project.
+description: Use when adding a new domain area to a Next.js or Vite + React project — components, hooks, API services, and types.
 ---
 
 Read `AGENTS.md` to identify the stack, then run the corresponding command:
