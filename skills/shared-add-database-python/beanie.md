@@ -5,7 +5,7 @@
 Add to `requirements.txt`:
 
 ```
-beanie
+beanie>=2.0
 pymongo
 ```
 

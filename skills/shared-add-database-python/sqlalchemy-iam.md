@@ -1,7 +1,5 @@
 ## FastAPI + SQLAlchemy + AWS IAM (High Compliance)
 
-> This guide covers the AWS IAM authentication overlay on top of the standard SQLAlchemy setup. Follow steps A1 (packages), A2 (base.py), and A5 (alembic init + alembic.ini edit) from the standard SQLAlchemy guide — **skip A3, A4, and the alembic env.py DATABASE_URL lines**. Then apply the IAM steps below in place of those skipped steps. Continue from A6 onwards after applying these changes.
-
 > **Supported databases:** PostgreSQL only (the IAM token signer uses `psycopg2` — MySQL with IAM requires a different driver and SSL setup not covered here).
 
 ### A1. Install Dependencies
