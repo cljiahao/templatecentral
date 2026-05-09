@@ -158,3 +158,9 @@ pnpm test
 # Check Swagger docs at /api/docs includes error schemas
 pnpm start:dev
 ```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

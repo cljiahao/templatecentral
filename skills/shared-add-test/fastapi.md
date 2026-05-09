@@ -180,3 +180,9 @@ pytest test/test_api/           # API tests only
 - NEVER use `unittest.mock.patch` when `monkeypatch` is available — prefer pytest idioms
 - NEVER mock what you own — use real objects via factories; mock only external side effects
 - NEVER depend on test execution order — tests must pass in any order or in isolation
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

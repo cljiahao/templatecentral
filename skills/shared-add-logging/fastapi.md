@@ -241,3 +241,9 @@ curl http://localhost:8000/health
 # Confirm no prohibited fields
 grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <log-output>
 ```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

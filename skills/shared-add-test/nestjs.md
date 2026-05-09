@@ -209,3 +209,9 @@ pnpm test:e2e
 - NEVER mock the service in controller tests unless testing error handling paths
 - NEVER skip `afterAll(() => app.close())` in e2e tests — Fastify connections must be closed
 - NEVER write tests that depend on execution order — each test must be independent
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

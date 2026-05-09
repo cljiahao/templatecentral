@@ -299,3 +299,9 @@ curl 'http://localhost:3000/api/projects?page=1&limit=10&sort=asc_invalid'
 pnpm test
 pnpm build
 ```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

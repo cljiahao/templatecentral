@@ -181,3 +181,9 @@ curl 'http://localhost:8000/projects?page=1&limit=10&sort=invalid_field'
 
 pytest -v
 ```
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

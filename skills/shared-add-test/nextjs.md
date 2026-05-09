@@ -267,3 +267,9 @@ function makeParams<T extends Record<string, string>>(values: T) {
 - NEVER share mutable state between tests — each test sets up its own mocks
 - NEVER skip error path tests — always test what happens when services throw
 - NEVER hardcode URLs in assertions — test the response shape and status code
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

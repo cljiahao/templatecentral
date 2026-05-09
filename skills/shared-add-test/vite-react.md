@@ -317,3 +317,9 @@ function createWrapper() {
 - NEVER test implementation details — test what the user sees (components) or what the caller gets (services)
 - NEVER test third-party library behavior — test YOUR code's usage of it
 - NEVER share mutable state between tests — each test sets up its own data
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

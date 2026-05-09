@@ -38,6 +38,7 @@ Load the Zod/Pydantic pattern reference before using any stack section:
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-validation-patterns/patterns.md"
 ```
+Reference these patterns throughout the implementation steps below.
 
 ## Implementation
 
