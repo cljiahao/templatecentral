@@ -1,4 +1,4 @@
-## Section B: Kysely (SQL)
+## NestJS + Kysely (SQL)
 
 Kysely is a type-safe SQL query builder with full SQL control and minimal overhead. It defaults to standard password authentication. If the user requires AWS IAM auth, see the IAM variant below.
 

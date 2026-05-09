@@ -1,4 +1,4 @@
-### Next.js
+## Next.js + Kysely (SQL)
 
 #### B1. Install Dependencies
 

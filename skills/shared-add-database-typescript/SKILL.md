@@ -17,8 +17,8 @@ Add a database to a NestJS or Next.js project scaffolded from templateCentral.
 If the user's request includes "migrate database to compliance", "upgrade database to IAM", "switch to IAM auth", or similar upgrade intent → invoke `Skill("templatecentral:shared-migrate-database")` and stop.
 
 Otherwise, check line 1 of `AGENTS.md` for the sub-stack:
-- `<!-- templateCentral: nestjs@` → you are on **NestJS**. Follow the `### NestJS` variant in each section.
-- `<!-- templateCentral: nextjs@` → you are on **Next.js**. Follow the `### Next.js` variant in each section.
+- `<!-- templateCentral: nestjs@` → you are on **NestJS**. Proceed to Step 3 and use the NestJS path.
+- `<!-- templateCentral: nextjs@` → you are on **Next.js**. Proceed to Step 3 and use the Next.js path.
 
 ### Step 1 — Database type
 

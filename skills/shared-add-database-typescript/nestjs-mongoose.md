@@ -1,4 +1,4 @@
-## Section C: Mongoose (MongoDB)
+## NestJS + Mongoose (MongoDB)
 
 #### C1. Install Dependencies
 

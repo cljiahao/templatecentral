@@ -1,4 +1,4 @@
-### Next.js
+## Next.js + Drizzle (SQL)
 
 #### A1. Install Dependencies
 
@@ -162,7 +162,7 @@ pnpm db:generate && pnpm build
 
 Confirm the migration file was generated and the build succeeds with no type errors.
 
-> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (Section B) instead.
+> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (select Kysely when prompted) instead.
 
 ---
 

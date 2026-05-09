@@ -1,4 +1,4 @@
-## Section A: Drizzle (SQL)
+## NestJS + Drizzle (SQL)
 
 > **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
@@ -201,7 +201,7 @@ pnpm db:generate && pnpm build && pnpm test
 
 Confirm the migration file was generated, build succeeds, and all tests pass.
 
-> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (Section B) instead.
+> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (select Kysely when prompted) instead.
 
 ---
 

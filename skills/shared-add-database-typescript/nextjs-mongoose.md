@@ -1,4 +1,4 @@
-### Next.js
+## Next.js + Mongoose (MongoDB)
 
 #### C1. Install Dependencies
 
