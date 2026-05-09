@@ -10,6 +10,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0] — 2026-05-09
+
+### Breaking — Skill Registry Overhaul (57 → 6 registered skills)
+
+All registered skill names have changed. Any saved invocations using the old names (`templatecentral:fastapi-add-auth`, `templatecentral:nestjs-add-test`, etc.) must be updated to use the new consolidated entry points below.
+
+**New registered skills (6 total):**
+| Skill | Replaces |
+|---|---|
+| `templatecentral:add` | `fastapi-add-auth/database/test/integration`, `nestjs-add-auth/database/module/test/integration`, `nextjs-add-auth/database/api-route/component/page/feature/form/test/integration`, `vite-react-add-auth/component/page/feature/form/test/integration`, `shared-add-auth/database/test/integration/logging/error-handling/pagination/ai-security`, `shared-add-database-python`, `shared-add-database-typescript` |
+| `templatecentral:scaffold` | `fastapi-scaffold`, `nestjs-scaffold`, `nextjs-scaffold`, `vite-react-scaffold` |
+| `templatecentral:standards` | `fastapi-code-standards`, `nestjs-code-standards`, `nextjs-code-standards`, `vite-react-code-standards`, `shared-code-standards`, `shared-validation-patterns`, `shared-drift-check`, `shared-full-stack-pairing` |
+| `templatecentral:migrate` | `shared-migrate`, `shared-migrate-database` |
+| `templatecentral:audit` | `shared-audit` |
+| `templatecentral:write-skill` | (new) |
+
+**De-registered as agent utilities (not user-invocable):** `build`, `test`, `review`, `cleanup` — agents cat these directly; they no longer appear in the skill listing.
+
+### Changed — Architecture
+
+- **Nested reference file architecture**: All implementation content moved out of registered SKILL.md routers into reference files under `skills/add/<capability>/<stack>.md` and `skills/add/<capability>/<stack>/<variant>.md`. Registered skills detect context and `cat` the right file; they contain no implementation prose.
+- **3-level chain** for database (SKILL.md → stack router → ORM variant); **2-level chain** for all other capabilities (SKILL.md → stack file).
+- **Progressive context loading**: Only ~6 skill descriptions load at session start (~300 tokens). Full implementation loads only when a skill is invoked.
+- **CONVENTIONS.md** added at `skills/CONVENTIONS.md` — single source of truth for all skill authoring rules, nesting depth, description limits, and ref header format.
+- **`skills/write-skill/SKILL.md`** added — authoring checklist enforcing conventions at creation time.
+- **C1–C6 conventions checks** added to `shared-audit` → `templatecentral:audit`: description ≤150 chars, ref headers, SKILL.md body ≤30 lines, nesting depth ≤3, no duplicate content, jurisdiction neutrality (C6).
+
+### Changed — Audit (`audit/implementation.md` v2.1.0)
+
+- **Universal standards mandate**: All skills must be jurisdiction-neutral, industry-neutral, and free of region/country/ethnicity/gender/race-specific content. Security guidance follows OWASP (Top 10 web, LLM Top 10, Agentic Top 10) as the universal standard. Government-grade rigour (least privilege, defence-in-depth, audit logging, strong authentication) applied generically without naming any specific regulation.
+- **Training cutoff**: Step 0 now states "August 2025" explicitly; all ecosystem state treated as potentially stale until confirmed by web search.
+- **C6 — Jurisdiction neutrality check**: grep pattern added to catch known jurisdiction-specific framework names in skill files.
+- **Step 4b**: minor fixes (single file, ≤10 lines) → fix directly, no plan required; large-scope → confirm first.
+- **Step 4f**: changelog gate — verify `git status` is clean before writing the CHANGELOG entry.
+- **Token efficiency**: expanded from one checkbox to five concrete sub-checks (line count, redundant comments, over-scaffolded examples, duplicate instructions, redundant prose).
+
+### Fixed
+
+- `add/database/python.md`, `add/database/typescript.md`: removed jurisdiction-specific compliance framework names (HIPAA, PCI) from database detection signal examples; replaced with generic high-security signal language (`regulated`, `iam`, `no-password`, `audit-logging`).
+- `scripts/lint-skills.sh`: updated all `shared-audit` exclusion patterns to `audit/implementation` following path rename; added `audit/implementation.md` exclusion to jurisdiction check.
+
+### Removed
+
+- 31 retired skill directories (all replaced by reference files under the new nested structure).
+- All completed planning and spec documents under `docs/superpowers/plans/` and `docs/superpowers/specs/` — superseded by current architecture.
+
+---
+
 ## [2.13.1] — 2026-05-08
 
 ### Security
