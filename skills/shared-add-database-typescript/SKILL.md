@@ -50,23 +50,34 @@ Based on sub-stack (Step 0) and library (Step 1–2), run the matching `cat` com
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nestjs-drizzle.md"
 ```
+Follow the loaded guide exactly.
+
 **Next.js + Drizzle (low compliance):**
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nextjs-drizzle.md"
 ```
+Follow the loaded guide exactly.
+
 **NestJS + Kysely (high compliance / AWS IAM):**
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nestjs-kysely.md"
 ```
+Follow the loaded guide exactly.
+
 **Next.js + Kysely (high compliance / AWS IAM):**
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nextjs-kysely.md"
 ```
+Follow the loaded guide exactly.
+
 **NestJS + Mongoose (MongoDB):**
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nestjs-mongoose.md"
 ```
+Follow the loaded guide exactly.
+
 **Next.js + Mongoose (MongoDB):**
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-database-typescript/nextjs-mongoose.md"
 ```
+Follow the loaded guide exactly.
