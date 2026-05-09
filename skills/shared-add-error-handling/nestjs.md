@@ -1,3 +1,6 @@
+<!-- ref: shared-add-error-handling/nestjs.md
+     loaded-by: shared-add-error-handling/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-error-handling skill. -->
 ## NestJS — Error Handling
 
 **1. Enhanced HTTP Exception Filter**

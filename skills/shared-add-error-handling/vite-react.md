@@ -1,3 +1,6 @@
+<!-- ref: shared-add-error-handling/vite-react.md
+     loaded-by: shared-add-error-handling/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-error-handling skill. -->
 ## Vite + React — Error Handling
 
 **1. Error Boundary (Already Present, Enhanced)**

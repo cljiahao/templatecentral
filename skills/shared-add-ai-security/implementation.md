@@ -1,3 +1,6 @@
+<!-- ref: shared-add-ai-security/implementation.md
+     loaded-by: shared-add-ai-security/SKILL.md
+     prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the shared-add-ai-security skill. -->
 ## Step 0 — Verify context
 
 Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.

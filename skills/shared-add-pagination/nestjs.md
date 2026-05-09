@@ -1,3 +1,6 @@
+<!-- ref: shared-add-pagination/nestjs.md
+     loaded-by: shared-add-pagination/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-pagination skill. -->
 ### NestJS (TypeScript + Drizzle + Zod)
 
 **1. Pagination DTO**

@@ -1,3 +1,6 @@
+<!-- ref: shared-add-pagination/vite-react.md
+     loaded-by: shared-add-pagination/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-pagination skill. -->
 ### Vite + React (TypeScript + React Query)
 
 **1. Pagination Hook**

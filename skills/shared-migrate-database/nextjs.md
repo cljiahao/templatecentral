@@ -1,3 +1,6 @@
+<!-- ref: shared-migrate-database/nextjs.md
+     loaded-by: shared-migrate-database/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-migrate-database skill. -->
 ## Next.js Database Migration
 
 Migrates an existing Drizzle ORM setup to Kysely + AWS IAM authentication.

@@ -1,3 +1,6 @@
+<!-- ref: vite-react-scaffold/source-files.md
+     loaded-by: vite-react-scaffold/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the vite-react-scaffold skill. -->
 ## Part C — Verbatim Source Files
 
 ### `src/main.tsx`

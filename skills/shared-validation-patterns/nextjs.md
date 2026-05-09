@@ -1,3 +1,6 @@
+<!-- ref: shared-validation-patterns/nextjs.md
+     loaded-by: shared-validation-patterns/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-validation-patterns skill. -->
 ### Next.js (TypeScript + React + Zod)
 
 **1. Form Schema with Client & Server Validation**

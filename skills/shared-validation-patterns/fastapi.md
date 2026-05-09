@@ -1,3 +1,6 @@
+<!-- ref: shared-validation-patterns/fastapi.md
+     loaded-by: shared-validation-patterns/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-validation-patterns skill. -->
 ### FastAPI (Python + Pydantic)
 
 **1. Request Model with Validation**

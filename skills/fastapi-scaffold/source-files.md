@@ -1,3 +1,6 @@
+<!-- ref: fastapi-scaffold/source-files.md
+     loaded-by: fastapi-scaffold/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the fastapi-scaffold skill. -->
 ## Part C — Verbatim Source Files
 
 ### `src/.env.default`

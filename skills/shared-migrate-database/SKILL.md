@@ -4,12 +4,6 @@ description: Upgrade database to AWS IAM authentication — Drizzle/SQLAlchemy t
 disable-model-invocation: true
 ---
 
-# Migrate Database to High Compliance
-
-Upgrades an existing low-compliance database setup to use AWS IAM authentication.
-
-**Out of scope:** SQL ↔ MongoDB, version upgrades, schema data migrations, and any migration not listed below.
-
 ## Step 0 — Verify existing setup
 
 Detect the project stack and current library:
@@ -23,28 +17,14 @@ Detect the project stack and current library:
 | `nestjs@` | `src/database/drizzle.service.ts` | NestJS |
 | `nextjs@` | `src/integrations/database/db-client.ts` | Next.js |
 
-If signals conflict (e.g., AGENTS.md marker is present but the expected file is missing), trust the **file presence check** — the project may have already been partially migrated.
+If signals conflict, trust the **file presence check** — the project may have been partially migrated.
 
-If no database setup is found → exit. Tell the user: *"I don't see an existing database setup. Run `shared-add-database` first, then request the migration."*
+If no database setup is found → exit: *"I don't see an existing database setup. Run `shared-add-database` first, then request the migration."*
 
 ## Step 1 — Load migration guide
 
-Run the matching `cat` command for your stack and follow the loaded guide exactly.
+Run the matching command and follow the loaded guide exactly:
 
-**FastAPI:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/fastapi.md"
-```
-Follow the loaded guide exactly.
-
-**NestJS:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/nestjs.md"
-```
-Follow the loaded guide exactly.
-
-**Next.js:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/nextjs.md"
-```
-Follow the loaded guide exactly.
+- **FastAPI:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/fastapi.md"`
+- **NestJS:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/nestjs.md"`
+- **Next.js:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-migrate-database/nextjs.md"`

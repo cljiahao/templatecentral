@@ -1,3 +1,6 @@
+<!-- ref: nextjs-scaffold/source-files.md
+     loaded-by: nextjs-scaffold/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the nextjs-scaffold skill. -->
 ## Part C — Verbatim Custom Components
 
 Write these files exactly as shown. Do not modify.

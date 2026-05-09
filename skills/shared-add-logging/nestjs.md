@@ -1,3 +1,6 @@
+<!-- ref: shared-add-logging/nestjs.md
+     loaded-by: shared-add-logging/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-logging skill. -->
 ## NestJS — Structured Logging
 
 **What already exists in the template:**

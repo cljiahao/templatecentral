@@ -1,3 +1,6 @@
+<!-- ref: vite-react-scaffold/config-files.md
+     loaded-by: vite-react-scaffold/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the vite-react-scaffold skill. -->
 ## Part B — Verbatim Config Files
 
 ### `Dockerfile`

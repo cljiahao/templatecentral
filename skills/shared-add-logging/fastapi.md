@@ -1,3 +1,6 @@
+<!-- ref: shared-add-logging/fastapi.md
+     loaded-by: shared-add-logging/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-logging skill. -->
 ## FastAPI — Structured Logging
 
 **What already exists in the template:**

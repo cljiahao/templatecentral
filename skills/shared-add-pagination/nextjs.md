@@ -1,3 +1,6 @@
+<!-- ref: shared-add-pagination/nextjs.md
+     loaded-by: shared-add-pagination/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-pagination skill. -->
 ### Next.js (TypeScript + Drizzle + Zod)
 
 **1. Reusable Pagination Schema (From validation-patterns)**

@@ -1,3 +1,6 @@
+<!-- ref: shared-validation-patterns/vite-react.md
+     loaded-by: shared-validation-patterns/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-validation-patterns skill. -->
 ### Vite + React (TypeScript + React Hook Form + Zod)
 
 **1. Form Component with Validation**

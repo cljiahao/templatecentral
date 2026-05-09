@@ -1,3 +1,6 @@
+<!-- ref: shared-migrate-database/nestjs.md
+     loaded-by: shared-migrate-database/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-migrate-database skill. -->
 ## NestJS Database Migration
 
 Migrates an existing Drizzle ORM setup to Kysely + AWS IAM authentication.

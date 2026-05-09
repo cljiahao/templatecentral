@@ -1,3 +1,6 @@
+<!-- ref: shared-add-pagination/fastapi.md
+     loaded-by: shared-add-pagination/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-pagination skill. -->
 ### FastAPI (Python + Pydantic + SQLAlchemy)
 
 **1. Reusable Pagination Schema**

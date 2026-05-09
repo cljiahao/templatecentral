@@ -1,3 +1,6 @@
+<!-- ref: shared-validation-patterns/nestjs.md
+     loaded-by: shared-validation-patterns/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-validation-patterns skill. -->
 ### NestJS (TypeScript + Pydantic-equivalent via nestjs-zod)
 
 **1. DTO with Validation**

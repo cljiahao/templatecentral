@@ -1,3 +1,6 @@
+<!-- ref: shared-add-error-handling/fastapi.md
+     loaded-by: shared-add-error-handling/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-error-handling skill. -->
 ## FastAPI — Error Handling
 
 **1. Global Exception Handlers (Already Present)**

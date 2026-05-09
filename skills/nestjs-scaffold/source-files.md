@@ -1,3 +1,6 @@
+<!-- ref: nestjs-scaffold/source-files.md
+     loaded-by: nestjs-scaffold/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the nestjs-scaffold skill. -->
 ## Part C — Verbatim Source Files
 
 ### `src/main.ts`

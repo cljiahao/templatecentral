@@ -1,3 +1,6 @@
+<!-- ref: shared-audit/implementation.md
+     loaded-by: shared-audit/SKILL.md
+     prereq: Project identified. Do not invoke this file directly — it is loaded at runtime by the shared-audit skill. -->
 ## Mindset — fresh eyes
 
 Approach every file as if you have never seen this project before. Do not carry assumptions from previous audit sessions or conversations. The goal is to find what is wrong, not confirm what already passed.

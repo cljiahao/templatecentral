@@ -1,3 +1,6 @@
+<!-- ref: shared-add-error-handling/nextjs.md
+     loaded-by: shared-add-error-handling/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-error-handling skill. -->
 ## Next.js — Error Handling
 
 **1. Global Error Handler (Already Present)**

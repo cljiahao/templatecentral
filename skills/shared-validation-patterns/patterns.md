@@ -1,3 +1,6 @@
+<!-- ref: shared-validation-patterns/patterns.md
+     loaded-by: shared-validation-patterns/SKILL.md
+     prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the shared-validation-patterns skill. -->
 ## Zod Pattern Library (Reusable)
 
 Common schemas for TypeScript/Next.js projects:

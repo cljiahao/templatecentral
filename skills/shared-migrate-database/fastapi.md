@@ -1,3 +1,6 @@
+<!-- ref: shared-migrate-database/fastapi.md
+     loaded-by: shared-migrate-database/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-migrate-database skill. -->
 ## FastAPI Database Migration
 
 Migrates an existing SQLAlchemy (password auth) setup to SQLAlchemy + AWS IAM authentication.

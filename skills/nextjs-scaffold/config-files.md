@@ -1,3 +1,6 @@
+<!-- ref: nextjs-scaffold/config-files.md
+     loaded-by: nextjs-scaffold/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the nextjs-scaffold skill. -->
 ## Part B — Verbatim Config Files
 
 Write these files exactly as shown.
