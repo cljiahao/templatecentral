@@ -1,3 +1,6 @@
+<!-- ref: shared-code-standards/nextjs.md
+     loaded-by: shared-code-standards/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-code-standards skill. -->
 ## Next.js
 
 ### File Naming
