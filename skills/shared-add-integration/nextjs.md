@@ -1,3 +1,6 @@
+<!-- ref: shared-add-integration/nextjs.md
+     loaded-by: shared-add-integration/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-integration skill. -->
 ## Next.js
 
 Create a new third-party API integration in a Next.js project scaffolded from templateCentral.

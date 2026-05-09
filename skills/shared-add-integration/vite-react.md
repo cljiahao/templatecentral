@@ -1,3 +1,6 @@
+<!-- ref: shared-add-integration/vite-react.md
+     loaded-by: shared-add-integration/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-integration skill. -->
 ## Vite + React
 
 Create a new third-party API integration in a Vite + React project scaffolded from templateCentral.

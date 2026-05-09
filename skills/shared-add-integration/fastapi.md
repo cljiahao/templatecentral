@@ -1,3 +1,6 @@
+<!-- ref: shared-add-integration/fastapi.md
+     loaded-by: shared-add-integration/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-integration skill. -->
 ## FastAPI
 
 Create a new third-party API integration in a FastAPI project scaffolded from templateCentral.
