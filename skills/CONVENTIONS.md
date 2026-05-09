@@ -33,12 +33,13 @@ Use when a skill has **≤ 2 variants per stack**.
 
 ```
 skills/
-  shared-add-auth/
-    SKILL.md              ← registered skill (detection + cat)
-    fastapi.md            ← reference file (implementation)
-    nestjs.md             ← reference file (implementation)
-    nextjs.md             ← reference file (implementation)
-    vite-react.md         ← reference file (implementation)
+  add/
+    auth/
+      SKILL.md              ← registered skill (detection + cat)
+      fastapi.md            ← reference file (implementation)
+      nestjs.md             ← reference file (implementation)
+      nextjs.md             ← reference file (implementation)
+      vite-react.md         ← reference file (implementation)
 ```
 
 The chain is: `SKILL.md` → implementation file (1 `cat` call).
@@ -49,17 +50,18 @@ Use when a skill has **> 2 variants per stack** (e.g., multiple ORMs or drivers)
 
 ```
 skills/
-  shared-add-database/
-    SKILL.md              ← registered skill (detection + cat to stack router)
-    python.md             ← stack router (detects DB variant + cat to leaf)
-    python/
-      sqlalchemy.md       ← leaf reference file
-      beanie.md           ← leaf reference file
-    typescript.md         ← stack router (detects DB variant + cat to leaf)
-    typescript/
-      drizzle.md          ← leaf reference file
-      kysely.md           ← leaf reference file
-      mongoose.md         ← leaf reference file
+  add/
+    database/
+      SKILL.md              ← registered skill (detection + cat to stack router)
+      python.md             ← stack router (detects DB variant + cat to leaf)
+      python/
+        sqlalchemy.md       ← leaf reference file
+        beanie.md           ← leaf reference file
+      typescript.md         ← stack router (detects DB variant + cat to leaf)
+      typescript/
+        drizzle.md          ← leaf reference file
+        kysely.md           ← leaf reference file
+        mongoose.md         ← leaf reference file
 ```
 
 The chain is: `SKILL.md` → stack router → leaf file (2 `cat` calls).
@@ -122,24 +124,24 @@ Every reference file must begin with this comment block as its **first line**:
 ### 2-Level Example
 
 ```
-<!-- ref: shared-add-auth/fastapi.md
-     loaded-by: shared-add-auth/SKILL.md
+<!-- ref: add/auth/fastapi.md
+     loaded-by: add/auth/SKILL.md
      prereq: Stack identified as FastAPI. Do not invoke this file directly. -->
 ```
 
 ### 3-Level Stack Router Example
 
 ```
-<!-- ref: shared-add-database/python.md
-     loaded-by: shared-add-database/SKILL.md
+<!-- ref: add/database/python.md
+     loaded-by: add/database/SKILL.md
      prereq: Stack identified as FastAPI. Do not invoke this file directly. -->
 ```
 
 ### 3-Level Leaf Example
 
 ```
-<!-- ref: shared-add-database/python/sqlalchemy.md
-     loaded-by: shared-add-database/python.md → shared-add-database/SKILL.md
+<!-- ref: add/database/python/sqlalchemy.md
+     loaded-by: add/database/python.md → add/database/SKILL.md
      prereq: Stack = FastAPI, DB = SQL, compliance = standard. Do not invoke this file directly. -->
 ```
 
@@ -195,19 +197,19 @@ Never use these words in a description: `covers`, `provides`, `ensures`, `delive
 
 This section describes the canonical process for adding a new framework (e.g., Django) to the templateCentral skill system.
 
-> **Critical rule:** Do NOT create `django-add-auth`, `django-add-database`, or similar registered skills. New frameworks are added as reference files inside existing shared skills.
+> **Critical rule:** Do NOT create `django-add-auth`, `django-add-database`, or similar registered skills. New frameworks are added as reference files inside existing registered skills under the new nested structure.
 
 ### Step-by-Step: Adding Django
 
-**1. Create reference files inside existing shared skill directories.**
+**1. Create reference files inside existing skill directories.**
 
-For each shared skill that Django should support, create a new reference file:
+For each skill that Django should support, create a new reference file:
 
 ```
-skills/shared-add-auth/django.md
-skills/shared-add-test/django.md
-skills/shared-add-database/django.md       ← if ≤ 2 DB variants
-skills/shared-add-database/django/         ← if > 2 DB variants (3-level)
+skills/add/auth/django.md
+skills/add/test/django.md
+skills/add/database/django.md       ← if ≤ 2 DB variants
+skills/add/database/django/         ← if > 2 DB variants (3-level)
   django-orm.md
   sqlalchemy.md
 ```
@@ -216,26 +218,26 @@ skills/shared-add-database/django/         ← if > 2 DB variants (3-level)
 
 Every new file must start with the correct `<!-- ref: ... -->` header per Section 4.
 
-Example for `skills/shared-add-auth/django.md`:
+Example for `skills/add/auth/django.md`:
 ```
-<!-- ref: shared-add-auth/django.md
-     loaded-by: shared-add-auth/SKILL.md
+<!-- ref: add/auth/django.md
+     loaded-by: add/auth/SKILL.md
      prereq: Stack identified as Django. Do not invoke this file directly. -->
 ```
 
 **3. Add stack detection signal and `cat` command to each relevant SKILL.md.**
 
-In `skills/shared-add-auth/SKILL.md`, add Django to the routing table:
+In `skills/add/auth/SKILL.md`, add Django to the routing table:
 
 ```
-| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-auth/django.md"` |
+| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/django.md"` |
 ```
 
 **4. Check variant count. If > 2 ORM/driver variants → promote to 3-level.**
 
 If Django will have more than 2 database variants, convert the skill to 3-level structure per Section 2.
 
-**5. Run `shared-audit` to verify all constraints pass.**
+**5. Run `templatecentral:audit` to verify all constraints pass.**
 
 The audit will check headers, line counts, description length, and nesting depth.
 
@@ -260,12 +262,12 @@ When adding a new framework, define its detection signal clearly and add it to t
 
 | Item | Naming Pattern | Example |
 |---|---|---|
-| Shared cross-stack skill | `shared-add-<noun>/` | `shared-add-auth/` |
-| Stack-specific skill (no shared equivalent) | `<stack>-add-<noun>/` | `nestjs-add-module/` |
-| 2-level reference file | `<stack>.md` inside skill dir | `shared-add-auth/fastapi.md` |
-| 3-level stack router | `<stack>.md` inside skill dir | `shared-add-database/python.md` |
-| 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `shared-add-database/python/sqlalchemy.md` |
-| Scaffold reference files (existing pattern) | `source-files.md`, `config-files.md` | `nestjs-scaffold/source-files.md` |
+| Registered skill (top-level) | `skills/<capability>/` | `skills/add/`, `skills/scaffold/` |
+| Sub-skill within a capability | `skills/<capability>/<noun>/SKILL.md` | `skills/add/auth/SKILL.md` |
+| 2-level reference file | `<stack>.md` inside sub-skill dir | `add/auth/fastapi.md` |
+| 3-level stack router | `<stack>.md` inside sub-skill dir | `add/database/python.md` |
+| 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `add/database/python/sqlalchemy.md` |
+| Scaffold reference files (existing pattern) | `source-files.md`, `config-files.md` | `scaffold/nestjs/source-files.md` |
 
 ### Notes
 
@@ -279,7 +281,7 @@ When adding a new framework, define its detection signal clearly and add it to t
 
 ## Section 8: Audit Checklist (Manual Reference)
 
-This checklist matches what `shared-audit` enforces automatically. Use it for manual spot-checks before committing.
+This checklist matches what `templatecentral:audit` enforces automatically. Use it for manual spot-checks before committing.
 
 ### Registered SKILL.md Files
 
@@ -302,7 +304,7 @@ This checklist matches what `shared-audit` enforces automatically. Use it for ma
 
 ### Count Limit
 
-- [ ] Total registered skill count ≤ 33: verify with `ls -d skills/*/ | wc -l`
+- [ ] Total registered skill count = 10: verify with `ls -d skills/*/ | wc -l`
 
 ### Stack Detection
 
