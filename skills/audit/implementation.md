@@ -205,10 +205,10 @@ done
 No skill chain should be deeper than 3 levels. Check: no reference file path is more than 2 subdirectories deep under `skills/`:
 
 ```bash
-find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | awk -F'/' '{if(NF > 4) print "DEPTH VIOLATION:", $0}'
+find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | awk -F'/' '{if(NF > 5) print "DEPTH VIOLATION:", $0}'
 ```
 
-**Pass**: no output. (4 parts = `skills/<dir>/<subdir>/<file>.md` — that's depth 3)  
+**Pass**: no output. (5 parts = `skills/<skill>/<capability>/<stack>/<file>.md` — that's depth 3 from skill root)  
 **Fail**: lists files exceeding nesting depth limits.
 
 ---
@@ -266,7 +266,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 **AIDLC / SDLC alignment** ← secondary
 - [ ] Does the skill guide users toward testable, reviewable outputs (not just "run this command")?
 - [ ] Are generated files structured for auditability — clear naming, separation of secrets from config, no magic globals?
-- [ ] For AI-adjacent skills (`shared-add-ai-security`): does guidance align with current AWS AIDLC and OWASP Agentic guidance on prompt boundaries, output validation, and agent trust?
+- [ ] For AI-adjacent skills (`add/ai-security/`): does guidance align with current AWS AIDLC and OWASP Agentic guidance on prompt boundaries, output validation, and agent trust?
 
 ---
 
@@ -274,13 +274,22 @@ Apply these questions to every file. If the check is not applicable to that skil
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/fastapi-scaffold/SKILL.md`
-- [ ] `skills/fastapi-add-auth/SKILL.md`
-- [ ] `skills/fastapi-add-database/SKILL.md`
-- [ ] `skills/fastapi-add-endpoint/SKILL.md`
-- [ ] `skills/fastapi-add-integration/SKILL.md`
-- [ ] `skills/fastapi-add-test/SKILL.md`
-- [ ] `skills/fastapi-code-standards/SKILL.md`
+- [ ] `skills/scaffold/fastapi/config-files.md`
+- [ ] `skills/scaffold/fastapi/source-files.md`
+- [ ] `skills/add/auth/fastapi.md`
+- [ ] `skills/add/database/python.md` ← stack router
+- [ ] `skills/add/database/python/sqlalchemy.md`
+- [ ] `skills/add/database/python/sqlalchemy-iam.md`
+- [ ] `skills/add/database/python/beanie.md`
+- [ ] `skills/add/endpoint/implementation.md`
+- [ ] `skills/add/integration/fastapi.md`
+- [ ] `skills/add/test/fastapi.md`
+- [ ] `skills/add/error-handling/fastapi.md`
+- [ ] `skills/add/logging/fastapi.md`
+- [ ] `skills/add/pagination/fastapi.md`
+- [ ] `skills/migrate/database/fastapi.md`
+- [ ] `skills/standards/code-standards/fastapi.md`
+- [ ] `skills/standards/validation-patterns/fastapi.md`
 
 **FastAPI-specific additional checks** (apply to the above):
 - [ ] `SecurityHeadersMiddleware` includes HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and X-XSS-Protection
@@ -295,13 +304,22 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/nestjs-scaffold/SKILL.md`
-- [ ] `skills/nestjs-add-auth/SKILL.md`
-- [ ] `skills/nestjs-add-database/SKILL.md`
-- [ ] `skills/nestjs-add-integration/SKILL.md`
-- [ ] `skills/nestjs-add-module/SKILL.md`
-- [ ] `skills/nestjs-add-test/SKILL.md`
-- [ ] `skills/nestjs-code-standards/SKILL.md`
+- [ ] `skills/scaffold/nestjs/config-files.md`
+- [ ] `skills/scaffold/nestjs/source-files.md`
+- [ ] `skills/add/auth/nestjs.md`
+- [ ] `skills/add/database/typescript.md` ← stack router (NestJS + Next.js)
+- [ ] `skills/add/database/typescript/nestjs-drizzle.md`
+- [ ] `skills/add/database/typescript/nestjs-kysely.md`
+- [ ] `skills/add/database/typescript/nestjs-mongoose.md`
+- [ ] `skills/add/module/implementation.md`
+- [ ] `skills/add/integration/nestjs.md`
+- [ ] `skills/add/test/nestjs.md`
+- [ ] `skills/add/error-handling/nestjs.md`
+- [ ] `skills/add/logging/nestjs.md`
+- [ ] `skills/add/pagination/nestjs.md`
+- [ ] `skills/migrate/database/nestjs.md`
+- [ ] `skills/standards/code-standards/nestjs.md`
+- [ ] `skills/standards/validation-patterns/nestjs.md`
 
 **NestJS-specific additional checks**:
 - [ ] Fastify adapter used — no Express-specific APIs (`req.body` without Fastify types, `res.send`, etc.)
@@ -322,17 +340,25 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/nextjs-scaffold/SKILL.md`
-- [ ] `skills/nextjs-add-auth/SKILL.md`
-- [ ] `skills/nextjs-add-database/SKILL.md`
-- [ ] `skills/nextjs-add-api-route/SKILL.md`
-- [ ] `skills/nextjs-add-component/SKILL.md`
-- [ ] `skills/nextjs-add-feature/SKILL.md`
-- [ ] `skills/nextjs-add-form/SKILL.md`
-- [ ] `skills/nextjs-add-integration/SKILL.md`
-- [ ] `skills/nextjs-add-page/SKILL.md`
-- [ ] `skills/nextjs-add-test/SKILL.md`
-- [ ] `skills/nextjs-code-standards/SKILL.md`
+- [ ] `skills/scaffold/nextjs/config-files.md`
+- [ ] `skills/scaffold/nextjs/source-files.md`
+- [ ] `skills/add/auth/nextjs.md`
+- [ ] `skills/add/database/typescript/nextjs-drizzle.md`
+- [ ] `skills/add/database/typescript/nextjs-kysely.md`
+- [ ] `skills/add/database/typescript/nextjs-mongoose.md`
+- [ ] `skills/add/api-route/implementation.md`
+- [ ] `skills/add/component/nextjs.md`
+- [ ] `skills/add/feature/nextjs.md`
+- [ ] `skills/add/form/nextjs.md`
+- [ ] `skills/add/integration/nextjs.md`
+- [ ] `skills/add/page/nextjs.md`
+- [ ] `skills/add/test/nextjs.md`
+- [ ] `skills/add/error-handling/nextjs.md`
+- [ ] `skills/add/logging/nextjs.md`
+- [ ] `skills/add/pagination/nextjs.md`
+- [ ] `skills/migrate/database/nextjs.md`
+- [ ] `skills/standards/code-standards/nextjs.md`
+- [ ] `skills/standards/validation-patterns/nextjs.md`
 
 **Next.js-specific additional checks**:
 - [ ] `proxy.ts` used for auth proxy — not `middleware.ts` (deprecated in Next.js 16)
@@ -349,15 +375,19 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/vite-react-scaffold/SKILL.md`
-- [ ] `skills/vite-react-add-auth/SKILL.md`
-- [ ] `skills/vite-react-add-component/SKILL.md`
-- [ ] `skills/vite-react-add-feature/SKILL.md`
-- [ ] `skills/vite-react-add-form/SKILL.md`
-- [ ] `skills/vite-react-add-integration/SKILL.md`
-- [ ] `skills/vite-react-add-page/SKILL.md`
-- [ ] `skills/vite-react-add-test/SKILL.md`
-- [ ] `skills/vite-react-code-standards/SKILL.md`
+- [ ] `skills/scaffold/vite-react/config-files.md`
+- [ ] `skills/scaffold/vite-react/source-files.md`
+- [ ] `skills/add/auth/vite-react.md`
+- [ ] `skills/add/component/vite-react.md`
+- [ ] `skills/add/feature/vite-react.md`
+- [ ] `skills/add/form/vite-react.md`
+- [ ] `skills/add/integration/vite-react.md`
+- [ ] `skills/add/page/vite-react.md`
+- [ ] `skills/add/test/vite-react.md`
+- [ ] `skills/add/error-handling/vite-react.md`
+- [ ] `skills/add/pagination/vite-react.md`
+- [ ] `skills/standards/code-standards/vite-react.md`
+- [ ] `skills/standards/validation-patterns/vite-react.md`
 
 **Vite-specific additional checks**:
 - [ ] `pnpm-workspace.yaml` includes `blockExoticSubdeps: true` and `allowBuilds`
@@ -367,32 +397,30 @@ Read each file in full, apply checklist above:
 
 ---
 
-### Shared skills
+### Cross-stack and utility skills
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/shared-add-ai-security/SKILL.md`
-- [ ] `skills/shared-add-error-handling/SKILL.md`
-- [ ] `skills/shared-add-logging/SKILL.md`
-- [ ] `skills/shared-add-pagination/SKILL.md`
-- [ ] `skills/shared-build-agent/SKILL.md`
-- [ ] `skills/shared-drift-check/SKILL.md`
-- [ ] `skills/shared-full-stack-pairing/SKILL.md`
-- [ ] `skills/shared-migrate/SKILL.md`
-- [ ] `skills/shared-remove-example/SKILL.md`
-- [ ] `skills/shared-review-agent/SKILL.md`
-- [ ] `skills/shared-task-management/SKILL.md`
-- [ ] `skills/shared-test-agent/SKILL.md`
-- [ ] `skills/shared-update-agent/SKILL.md`
-- [ ] `skills/shared-validation-patterns/SKILL.md`
-- [ ] `skills/shared-audit/implementation.md` ← this file; check it is still accurate
+- [ ] `skills/add/ai-security/implementation.md`
+- [ ] `skills/standards/validation-patterns/patterns.md`
+- [ ] `skills/standards/drift-check/implementation.md`
+- [ ] `skills/standards/full-stack-pairing/implementation.md`
+- [ ] `skills/migrate/general/implementation.md`
+- [ ] `skills/build/implementation.md`
+- [ ] `skills/test/implementation.md`
+- [ ] `skills/review/review/implementation.md`
+- [ ] `skills/review/update/implementation.md`
+- [ ] `skills/cleanup/remove-example/implementation.md`
+- [ ] `skills/cleanup/task-management/implementation.md`
+- [ ] `skills/write-skill/SKILL.md` ← authoring checklist; check it still matches CONVENTIONS.md
+- [ ] `skills/audit/implementation.md` ← this file; check it is still accurate
 
-**Shared-specific additional checks**:
-- [ ] `shared-add-ai-security`: OWASP LLM Top 10 version still current; Tier C references OWASP Agentic Top 10
-- [ ] `shared-add-logging`: no PII, passwords, tokens, or SQL text in log field examples
-- [ ] `shared-add-error-handling`: error responses contain no stack traces or internal paths; `z.flattenError()` used
-- [ ] `shared-validation-patterns`: `z.flattenError()` used; password min-length ≥12
-- [ ] `shared-drift-check`: `pnpm audit` and `pip-audit` commands still current
+**Cross-stack additional checks**:
+- [ ] `add/ai-security/implementation.md`: OWASP LLM Top 10 version still current; Tier C references OWASP Agentic Top 10
+- [ ] `add/logging/*`: no PII, passwords, tokens, or SQL text in log field examples
+- [ ] `add/error-handling/*`: error responses contain no stack traces or internal paths; `z.flattenError()` used
+- [ ] `standards/validation-patterns/*`: `z.flattenError()` used; password min-length ≥12
+- [ ] `standards/drift-check/implementation.md`: `pnpm audit` and `pip-audit` commands still current
 
 ---
 
@@ -495,7 +523,7 @@ bash scripts/lint-skills.sh skills/
 
 ### New semantic pattern → add to this skill
 
-If the issue requires judgment (context-dependent, not detectable by grep alone), add a checklist item to the relevant section of this file (`skills/shared-audit/implementation.md`):
+If the issue requires judgment (context-dependent, not detectable by grep alone), add a checklist item to the relevant section of this file (`skills/audit/implementation.md`):
 
 - Stack-specific issue → add under the appropriate stack section's "additional checks"
 - Cross-cutting issue → add under Step 3
@@ -511,11 +539,16 @@ If a new `skills/<name>/SKILL.md` was added since the last audit, add it to the 
 Commit the lint script and this skill together with the content fixes, so the audit history is traceable:
 
 ```bash
-git add scripts/lint-skills.sh skills/shared-audit/SKILL.md skills/shared-audit/implementation.md
+git add scripts/lint-skills.sh skills/audit/SKILL.md skills/audit/implementation.md
 git commit -m "audit: add <pattern> check to lint script and shared-audit"
 ```
 
 ## Changelog
+### 2.0.0
+- Updated all Step 2 file lists from 33 old skill paths to new 10-skill nested structure (`add/`, `scaffold/`, `standards/`, `migrate/`, etc.)
+- Fixed C4 depth check: `NF > 4` → `NF > 5` to accommodate the deeper nested layout
+- Updated git commit command in Step 5 from `shared-audit/` to `audit/`
+- Updated AIDLC checklist reference from `shared-add-ai-security` to `add/ai-security/`
 ### 1.6.0
 - Added `check_no_globals_jest_in_vitest_projects` to lint script (ECOSYSTEM-ERA: catches `globals.jest` in ESLint config templates — Node stacks use Vitest with `globals: false`; `globals.jest` is unused and misleading)
 - Added NestJS-specific checklist item: ESLint config must not include `globals.jest` when using Vitest
