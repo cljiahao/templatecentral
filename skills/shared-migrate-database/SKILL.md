@@ -1,6 +1,6 @@
 ---
 name: shared-migrate-database
-description: Upgrade an existing database setup from low to high compliance — Drizzle → Kysely + AWS IAM (NestJS/Next.js) or SQLAlchemy basic → SQLAlchemy + AWS IAM (FastAPI). Invoked internally by shared-add-database-python and shared-add-database-typescript.
+description: Upgrade database to AWS IAM authentication — Drizzle/SQLAlchemy to Kysely/SQLAlchemy+IAM (internal use only)
 disable-model-invocation: true
 ---
 

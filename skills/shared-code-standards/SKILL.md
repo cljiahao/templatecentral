@@ -1,6 +1,6 @@
 ---
 name: shared-code-standards
-description: Use when writing or reviewing code in any templateCentral project (FastAPI, NestJS, Next.js, or Vite + React) — universal quality principles plus stack-specific naming, error handling, security, and tooling.
+description: Use when writing or reviewing code in any templateCentral project — universal quality + stack-specific standards
 ---
 
 # Code Standards

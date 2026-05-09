@@ -1,6 +1,6 @@
 ---
 name: shared-full-stack-pairing
-description: Use when connecting a frontend (Next.js or Vite + React) to a backend (FastAPI or NestJS) — covers proxy config, CORS, environment variables, and cookie forwarding.
+description: Connect frontend (Next.js/Vite+React) to backend (FastAPI/NestJS) with proxy, CORS, and auth config
 ---
 
 # Full-Stack Pairing Guide

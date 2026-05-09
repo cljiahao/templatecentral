@@ -1,6 +1,6 @@
 ---
 name: shared-add-test
-description: Use when adding tests to any templateCentral project — FastAPI (pytest), NestJS (Vitest), Next.js (Vitest API routes), or Vite + React (Vitest + Testing Library).
+description: Add tests to any templateCentral project — pytest (FastAPI), Vitest (NestJS/Next.js), Testing Library (Vite+React)
 ---
 
 # Add Tests

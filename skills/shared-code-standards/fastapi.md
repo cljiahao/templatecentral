@@ -1,3 +1,6 @@
+<!-- ref: shared-code-standards/fastapi.md
+     loaded-by: shared-code-standards/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-code-standards skill. -->
 ## FastAPI / Python
 
 ### Naming Conventions

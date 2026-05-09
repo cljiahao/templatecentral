@@ -1,3 +1,6 @@
+<!-- ref: shared-add-test/fastapi.md
+     loaded-by: shared-add-test/SKILL.md
+     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the shared-add-test skill. -->
 ## FastAPI
 
 Guide for writing tests in a FastAPI project scaffolded from templateCentral.

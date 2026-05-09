@@ -1,6 +1,6 @@
 ---
 name: shared-add-auth
-description: Use when the user wants to add authentication, protect routes, or implement login/logout in any templateCentral project — FastAPI, NestJS, Next.js, or Vite + React.
+description: Add authentication and route protection to any templateCentral project — FastAPI, NestJS, Next.js, or Vite+React
 ---
 
 # Add Auth

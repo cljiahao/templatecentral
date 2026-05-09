@@ -1,6 +1,6 @@
 ---
 name: shared-drift-check
-description: Use at the start of any session on a templateCentral-scaffolded project — checks whether the project's convention version and dependencies are still current.
+description: Check convention version and dependency drift in a templateCentral-scaffolded project at session start
 ---
 
 # Drift Check

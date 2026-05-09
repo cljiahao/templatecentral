@@ -1,3 +1,6 @@
+<!-- ref: shared-code-standards/vite-react.md
+     loaded-by: shared-code-standards/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-code-standards skill. -->
 ## Vite + React
 
 ### File Naming

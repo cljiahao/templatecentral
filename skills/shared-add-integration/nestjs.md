@@ -1,3 +1,6 @@
+<!-- ref: shared-add-integration/nestjs.md
+     loaded-by: shared-add-integration/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-integration skill. -->
 ## NestJS
 
 Create a new third-party API integration in a NestJS project scaffolded from templateCentral.

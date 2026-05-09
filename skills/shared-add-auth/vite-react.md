@@ -1,3 +1,6 @@
+<!-- ref: shared-add-auth/vite-react.md
+     loaded-by: shared-add-auth/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-auth skill. -->
 ## Vite + React
 
 Configure authentication in a Vite + React SPA scaffolded from templateCentral. The template ships with a generic `AuthProvider` context — this skill covers integrating real auth backends, customizing the login UI, and protecting routes.

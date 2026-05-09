@@ -1,3 +1,6 @@
+<!-- ref: shared-add-auth/nestjs.md
+     loaded-by: shared-add-auth/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-add-auth skill. -->
 ## NestJS
 
 Add JWT-based authentication to a NestJS project scaffolded from templateCentral using Passport.js.

@@ -147,6 +147,86 @@ Any failures here must be fixed before proceeding to semantic review. The lint s
 
 ---
 
+## Conventions Compliance
+
+Run the following 5 checks to verify skill file structure and architecture comply with templateCentral conventions.
+
+### C1 — Description length
+
+Check all SKILL.md descriptions are ≤ 150 characters:
+
+```bash
+grep -r '^description:' skills/*/SKILL.md | awk -F'description: ' '{if(length($2)>150) print length($2), "chars:", FILENAME}'
+```
+
+**Pass**: no output.  
+**Fail**: lists files with violating descriptions and their character counts.
+
+---
+
+### C2 — Reference file headers
+
+All non-registered reference files must have `<!-- ref:` as line 1. Check files in subdirectories:
+
+```bash
+find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | while read f; do
+  first=$(head -1 "$f")
+  if [[ "$first" != "<!-- ref:"* ]]; then echo "MISSING HEADER: $f"; fi
+done
+```
+
+**Pass**: no output.  
+**Fail**: lists files missing the reference file header.
+
+---
+
+### C3 — No duplicate content
+
+No registered SKILL.md should contain implementation content (more than 30 body lines). Body = total lines minus frontmatter (3 lines).
+
+```bash
+for f in skills/*/SKILL.md; do
+  total=$(wc -l < "$f")
+  body=$((total - 3))
+  if [ $body -gt 30 ]; then echo "BODY TOO LONG ($body lines): $f"; fi
+done
+```
+
+**Pass**: no output.  
+**Fail**: lists SKILL.md files with oversized body content.
+
+---
+
+### C4 — Nesting depth
+
+No skill chain should be deeper than 3 levels. Check: no reference file path is more than 2 subdirectories deep under `skills/`:
+
+```bash
+find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | awk -F'/' '{if(NF > 4) print "DEPTH VIOLATION:", $0}'
+```
+
+**Pass**: no output. (4 parts = `skills/<dir>/<subdir>/<file>.md` — that's depth 3)  
+**Fail**: lists files exceeding nesting depth limits.
+
+---
+
+### C5 — SKILL.md body size
+
+Check C3 passes for all registered skills (same check as C3 above — reference it or repeat).
+
+```bash
+for f in skills/*/SKILL.md; do
+  total=$(wc -l < "$f")
+  body=$((total - 3))
+  if [ $body -gt 30 ]; then echo "BODY TOO LONG ($body lines): $f"; fi
+done
+```
+
+**Pass**: no output.  
+**Fail**: lists SKILL.md files that are too large.
+
+---
+
 ## Step 2 — Semantic review
 
 Read each file below **in full** and apply the checklist beneath it. Do not skim. Mark each file as CLEAN or list specific issues with the line reference.

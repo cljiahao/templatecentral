@@ -1,3 +1,6 @@
+<!-- ref: shared-add-test/vite-react.md
+     loaded-by: shared-add-test/SKILL.md
+     prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the shared-add-test skill. -->
 ## Vite + React
 
 Guide for writing tests in a Vite + React project scaffolded from templateCentral.

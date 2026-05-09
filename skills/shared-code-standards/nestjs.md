@@ -1,3 +1,6 @@
+<!-- ref: shared-code-standards/nestjs.md
+     loaded-by: shared-code-standards/SKILL.md
+     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the shared-code-standards skill. -->
 ## NestJS / TypeScript
 
 ### Naming Conventions

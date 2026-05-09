@@ -1,3 +1,6 @@
+<!-- ref: shared-add-auth/nextjs.md
+     loaded-by: shared-add-auth/SKILL.md
+     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the shared-add-auth skill. -->
 ## Next.js
 
 Add authentication to a Next.js project scaffolded from templateCentral. Uses **better-auth** — a TypeScript-first auth library with full type safety, SSO, and email/password support.
