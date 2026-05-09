@@ -3,41 +3,11 @@ name: shared-add-test
 description: Add tests to any templateCentral project — pytest (FastAPI), Vitest (NestJS/Next.js), Testing Library (Vite+React)
 ---
 
-# Add Tests
+Read `AGENTS.md` to identify the stack, then run the corresponding command:
 
-## Stack Detection
+- **FastAPI:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/fastapi.md"`
+- **NestJS:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/nestjs.md"`
+- **Next.js:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/nextjs.md"`
+- **Vite + React:** `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/vite-react.md"`
 
-Before starting, identify the project stack:
-
-| Signal file | Stack |
-|---|---|
-| `requirements.txt` containing `fastapi` | FastAPI |
-| `nest-cli.json` | NestJS |
-| `next.config.ts` / `next.config.js` / `next.config.mjs` | Next.js |
-| `vite.config.ts` / `vite.config.js` (no `next.config.*`) | Vite + React |
-
-Then run the matching `cat` command below and follow the loaded guide:
-
-**FastAPI:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/fastapi.md"
-```
-Follow the loaded guide exactly.
-
-**NestJS:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/nestjs.md"
-```
-Follow the loaded guide exactly.
-
-**Next.js:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/nextjs.md"
-```
-Follow the loaded guide exactly.
-
-**Vite + React:**
-```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/shared-add-test/vite-react.md"
-```
-Follow the loaded guide exactly.
+After running the cat command, follow the loaded guide exactly.
