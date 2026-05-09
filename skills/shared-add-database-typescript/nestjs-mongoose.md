@@ -1,7 +1,5 @@
 ## Section C: Mongoose (MongoDB)
 
-### NestJS
-
 #### C1. Install Dependencies
 
 ```bash
@@ -195,3 +193,128 @@ pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.
+
+---
+
+## Rules
+
+- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
+- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
+- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- Place `DatabaseModule` in `src/database/`.
+- NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
+- **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use `MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties` — no schema or query code changes needed.
+
+---
+
+## Completing Auth Integration
+
+> **Only apply this section if `nestjs-add-auth` was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+
+**Step A — Create `src/modules/auth/schemas/user.schema.ts`**
+
+```typescript
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { type HydratedDocument } from 'mongoose';
+
+export type UserDocument = HydratedDocument<User>;
+
+@Schema({ timestamps: true })
+export class User {
+  @Prop({ required: true, unique: true })
+  email: string;
+
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ required: true })
+  hashedPassword: string;
+}
+
+export const UserSchema = SchemaFactory.createForClass(User);
+```
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectModel } from '@nestjs/mongoose';
+import * as argon2 from 'argon2';
+import { Model } from 'mongoose';
+
+import { User, type UserDocument } from './schemas/user.schema';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.userModel.findOne({ email: dto.email }).exec();
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    const user = await this.userModel.create({
+      email: dto.email,
+      name: dto.name,
+      hashedPassword,
+    });
+    return { id: user._id.toString(), email: user.email, name: user.name };
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.userModel.findOne({ email: dto.email }).exec();
+    if (!user || !(await argon2.verify(user.hashedPassword, dto.password))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user._id.toString(), email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — Update `src/modules/auth/auth.module.ts`**
+
+Add `MongooseModule.forFeature` to `imports` and register the `User` schema:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+import { PassportModule } from '@nestjs/passport';
+
+import { appConfig } from '../../config/env.config';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './jwt.strategy';
+import { User, UserSchema } from './schemas/user.schema';
+
+@Module({
+  imports: [
+    PassportModule,
+    JwtModule.register({
+      secret: appConfig.JWT_SECRET,
+      signOptions: { expiresIn: appConfig.JWT_EXPIRES_IN },
+    }),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService],
+})
+export class AuthModule {}
+```
+
+---
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

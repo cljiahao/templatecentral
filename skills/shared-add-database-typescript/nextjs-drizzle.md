@@ -167,3 +167,23 @@ Confirm the migration file was generated and the build succeeds with no type err
 ---
 
 > **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
+
+---
+
+## Rules
+
+- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
+- Database client and schemas live in `src/integrations/database/` — consistent with the integration layer pattern.
+- Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
+- NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
+- NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+
+---
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

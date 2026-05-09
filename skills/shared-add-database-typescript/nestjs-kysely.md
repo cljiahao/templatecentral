@@ -2,8 +2,6 @@
 
 Kysely is a type-safe SQL query builder with full SQL control and minimal overhead. It defaults to standard password authentication. If the user requires AWS IAM auth, see the IAM variant below.
 
-### NestJS
-
 #### B1. Install Dependencies
 
 ```bash
@@ -331,3 +329,131 @@ pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.
+
+---
+
+## Rules
+
+- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
+- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
+- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- Place `KyselyService` and `DatabaseModule` in `src/database/`.
+- NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
+- **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor — no query code changes needed.
+
+---
+
+## Completing Auth Integration
+
+> **Only apply this section if `nestjs-add-auth` was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+
+**Step A — Update `src/database/types.ts` and add migration**
+
+Add `hashed_password` to `UsersTable`:
+
+```typescript
+import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
+
+export interface Database {
+  users: UsersTable;
+}
+
+export interface UsersTable {
+  id: Generated<string>;
+  email: string;
+  name: string;
+  hashed_password: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type User = Selectable<UsersTable>;
+export type NewUser = Insertable<UsersTable>;
+export type UserUpdate = Updateable<UsersTable>;
+```
+
+**If `001_initial.ts` has not been applied yet:** add `hashed_password text NOT NULL` directly to the `createTable` call in `001_initial.ts`.
+
+**If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/002_add_auth.ts`:
+
+```typescript
+import { type Kysely, sql } from 'kysely';
+
+export async function up(db: Kysely<unknown>): Promise<void> {
+  await db.schema
+    .alterTable('users')
+    .addColumn('hashed_password', 'text', (col) => col.notNull().defaultTo(''))
+    .execute();
+  // Remove the temporary default — hashed_password must not have a default in production
+  await sql`ALTER TABLE users ALTER COLUMN hashed_password DROP DEFAULT`.execute(db);
+}
+
+export async function down(db: Kysely<unknown>): Promise<void> {
+  await db.schema.alterTable('users').dropColumn('hashed_password').execute();
+}
+```
+
+Run: `pnpm migrate`
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as argon2 from 'argon2';
+
+import { KyselyService } from '../../database/kysely.service';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly db: KyselyService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', dto.email)
+      .executeTakeFirst();
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    const user = await this.db
+      .insertInto('users')
+      .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
+      .returning(['id', 'email', 'name'])
+      .executeTakeFirstOrThrow();
+    return user;
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.db
+      .selectFrom('users')
+      .selectAll()
+      .where('email', '=', dto.email)
+      .executeTakeFirst();
+    if (!user || !(await argon2.verify(user.hashed_password, dto.password))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user.id, email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — `src/modules/auth/auth.module.ts` requires no changes**
+
+`KyselyService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`.
+
+---
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

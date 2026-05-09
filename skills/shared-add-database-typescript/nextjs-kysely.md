@@ -244,3 +244,23 @@ pnpm build
 ```
 
 Confirm the build succeeds with no type errors.
+
+---
+
+## Rules
+
+- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
+- Database client and schemas live in `src/integrations/database/` — consistent with the integration layer pattern.
+- Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
+- NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
+- NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
+- **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
+
+---
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards

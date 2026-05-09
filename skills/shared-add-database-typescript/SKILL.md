@@ -42,7 +42,7 @@ Scan the conversation for compliance signals:
 
 ---
 
-## Step 3 — Load implementation
+### Step 3 — Load implementation
 
 Based on sub-stack (Step 0) and library (Step 1–2), run the matching `cat` command and follow the loaded guide exactly.
 

@@ -2,8 +2,6 @@
 
 > **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
-### NestJS
-
 #### A1. Install Dependencies
 
 ```bash
@@ -204,3 +202,113 @@ pnpm db:generate && pnpm build && pnpm test
 Confirm the migration file was generated, build succeeds, and all tests pass.
 
 > **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (Section B) instead.
+
+---
+
+> **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
+
+---
+
+## Rules
+
+- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
+- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
+- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- Place `DrizzleService` and `DatabaseModule` in `src/database/`.
+- NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+
+---
+
+## Completing Auth Integration
+
+> **Only apply this section if `nestjs-add-auth` was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+
+**Step A — Add `hashedPassword` to `src/database/schema.ts`**
+
+Add the `hashedPassword` column to the existing `users` table (add only the highlighted line — preserve any other tables in the file):
+
+```typescript
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  hashedPassword: text('hashed_password').notNull(), // add this line
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
+});
+```
+
+Then run:
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+```
+
+**Step B — Replace `src/modules/auth/auth.service.ts`**
+
+```typescript
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as argon2 from 'argon2';
+import { eq } from 'drizzle-orm';
+
+import { DrizzleService } from '../../database/drizzle.service';
+import { users } from '../../database/schema';
+import type { LoginDto, RegisterDto } from './auth.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly drizzle: DrizzleService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const [existing] = await this.drizzle.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, dto.email))
+      .limit(1);
+    if (existing) throw new ConflictException('Email already registered.');
+
+    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    const [user] = await this.drizzle.db
+      .insert(users)
+      .values({ email: dto.email, name: dto.name, hashedPassword })
+      .returning({ id: users.id, email: users.email, name: users.name });
+    return user;
+  }
+
+  async login(dto: LoginDto) {
+    const [user] = await this.drizzle.db
+      .select()
+      .from(users)
+      .where(eq(users.email, dto.email))
+      .limit(1);
+    if (!user || !(await argon2.verify(user.hashedPassword, dto.password))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return {
+      accessToken: this.jwtService.sign({ sub: user.id, email: user.email }),
+      tokenType: 'bearer' as const,
+    };
+  }
+}
+```
+
+**Step C — `src/modules/auth/auth.module.ts` requires no changes**
+
+`DrizzleService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`. Confirm `DatabaseModule` is registered in `AppModule` (the scaffold handles this).
+
+---
+
+## After Writing Code
+
+Dispatch in order:
+1. `shared-build-agent` — validate compilation
+2. `shared-review-agent` — check code standards
