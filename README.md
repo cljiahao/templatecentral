@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-2.1.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -39,7 +39,7 @@ claude plugin install templatecentral
 claude plugin marketplace add templatecentral
 ```
 
-Either way, 46 skills are registered automatically — no extra setup.
+Either way, 10 skills are registered automatically — no extra setup.
 
 ### Updating
 
@@ -88,15 +88,27 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 ---
 
-## Available Skills (46)
+## Available Skills (10)
 
-| Stack | Skills |
-|-------|--------|
-| **Next.js** (11) | scaffold, code-standards, add-feature, add-page, add-api-route, add-component, add-integration, add-auth, add-test, add-form, add-database |
-| **Vite + React** (9) | scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form |
-| **FastAPI** (7) | scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration |
-| **NestJS** (7) | scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration |
-| **Shared** (12) | add-error-handling, add-logging, add-pagination, build-agent, drift-check, full-stack-pairing, remove-example, review-agent, task-management, test-agent, update-agent, validation-patterns |
+**User-invocable (6):**
+
+| Skill | What it does |
+|-------|-------------|
+| `templatecentral:scaffold` | Scaffold a new Next.js, Vite+React, FastAPI, or NestJS project from scratch |
+| `templatecentral:add` | Add any capability to an existing project — auth, database, tests, components, pages, API routes, forms, logging, error handling, pagination, integrations, and more |
+| `templatecentral:standards` | Review code quality, naming conventions, validation patterns, drift, and full-stack type contracts |
+| `templatecentral:migrate` | Run database migrations or migrate a project to updated conventions, dependencies, or patterns |
+| `templatecentral:audit` | Full project audit — ecosystem research, mechanical lint, per-file semantic review, and fix loop |
+| `templatecentral:write-skill` | Author new skills, enforcing CONVENTIONS.md at creation time |
+
+**Agent utilities (4)** — loaded internally by agents, not invoked directly by users:
+
+| Skill | What it does |
+|-------|-------------|
+| `build` | Detect stack, run the build command, report failures without auto-fixing |
+| `test` | Write tests for newly added code and run the full test suite |
+| `review` | Analyse code quality and flag issues, or apply review feedback and fix flagged issues |
+| `cleanup` | Remove example code or manage task scaffolding after a feature is complete |
 
 ---
 
@@ -127,12 +139,16 @@ claude plugin marketplace add obra/superpowers
 ```
 templatecentral/
 ├── .claude-plugin/
-│   ├── plugin.json          # Plugin manifest — lists all 46 skills
+│   ├── plugin.json          # Plugin manifest (points to skills/)
 │   └── marketplace.json     # Anthropic marketplace metadata
-├── skills/                  # All 46 skills (flat <stack>-<skill> naming)
-│   ├── nextjs-scaffold/SKILL.md
-│   ├── fastapi-scaffold/SKILL.md
-│   └── ... (44 more)
+├── skills/                  # All skills — nested reference file architecture
+│   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
+│   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
+│   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md
+│   ├── standards/SKILL.md   # Router → skills/standards/<check>/
+│   ├── migrate/SKILL.md     # Router → skills/migrate/<type>/
+│   ├── audit/SKILL.md       # Router → skills/audit/implementation.md
+│   └── write-skill/SKILL.md
 └── AGENTS.md                # Agent orchestration guide
 ```
 
@@ -142,10 +158,10 @@ templatecentral/
 
 Contributions welcome — especially new stacks and coverage gaps.
 
-1. Create `skills/<stack>-<skill>/SKILL.md` with frontmatter (`name`, `description`)
-2. Add the skill name to `.claude-plugin/plugin.json` under `"skills"`
+1. Read `skills/CONVENTIONS.md` — it defines all nesting rules, description limits, and ref header formats
+2. Use `templatecentral:write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
 3. If adding a new stack, create `.claude/rules/<stack>.md`
-4. Open a PR — CI will validate your skill's frontmatter automatically
+4. Open a PR — CI will run `scripts/lint-skills.sh` to validate your skill automatically
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
