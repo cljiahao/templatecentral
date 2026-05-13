@@ -10,6 +10,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.1.0] — 2026-05-13
+
+### Added — Next.js Backend Extraction Migration
+
+New skill path under `templatecentral:migrate` for extracting a Next.js BFF into a standalone backend service.
+
+**New files:**
+- `skills/migrate/nextjs-backend-extraction.md` — stack router: detects target backend (NestJS / FastAPI) from user intent and cats the appropriate leaf
+- `skills/migrate/nextjs-backend-extraction/nestjs.md` — fully self-contained 10-phase NestJS migration guide
+- `skills/migrate/nextjs-backend-extraction/fastapi.md` — fully self-contained 10-phase FastAPI migration guide
+
+**What it does (10 phases):**
+1. Assessment — scans `src/app/api/` routes and `src/integrations/` import graph; prints a structured report
+2. Scope confirmation gate — user confirms before any files change
+3. Scaffold sibling backend at `../[project-name]-api`
+4. Migrate API routes → NestJS controllers/services/modules or FastAPI routers/services/schemas
+5. Migrate integrations (API-route-imported only; frontend-only entries stay in Next.js)
+6. Migrate database (NestJS: Drizzle or Mongoose; FastAPI: gated ORM choice — SQLAlchemy or Beanie)
+7. Migrate auth (`proxy.ts` stays in Next.js; new backend auth module added)
+8. Rewire Next.js as pure frontend (`NEXT_PUBLIC_API_URL`, delete `src/app/api/`)
+9. Update CORS config and both `AGENTS.md` files
+10. Verify: `pnpm build && pnpm test` both projects (FastAPI: `pytest`)
+
+**Updated:**
+- `skills/migrate/SKILL.md` — added backend-extraction routing case; updated description
+- `skills/audit/implementation.md` — added 3 new reference files to the audit checklist
+
+---
+
 ## [3.0.0] — 2026-05-09
 
 ### Breaking — Skill Registry Overhaul (57 → 6 registered skills)

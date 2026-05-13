@@ -429,6 +429,9 @@ Read each file in full, apply checklist above:
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
 - [ ] `skills/migrate/general/implementation.md`
+- [ ] `skills/migrate/nextjs-backend-extraction.md`
+- [ ] `skills/migrate/nextjs-backend-extraction/nestjs.md`
+- [ ] `skills/migrate/nextjs-backend-extraction/fastapi.md`
 - [ ] `skills/build/implementation.md`
 - [ ] `skills/test/implementation.md`
 - [ ] `skills/review/review/implementation.md`
