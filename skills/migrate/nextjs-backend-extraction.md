@@ -10,7 +10,7 @@ Determine which backend the user wants to migrate to, then load the full migrati
 
 Read the user's request for clues:
 - "NestJS" or "Nest" → target: **NestJS**
-- "FastAPI", "FastAPI", or "Python" → target: **FastAPI**
+- "FastAPI", "fastapi", or "Python" → target: **FastAPI**
 
 If the target is unclear, ask:
 > "Which backend do you want to extract to? (NestJS / FastAPI)"
@@ -23,4 +23,6 @@ If the target is unclear, ask:
 | FastAPI | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/fastapi.md"` |
 | Other | Respond: "Not yet supported. Supported targets: NestJS, FastAPI." Exit without changes. |
 
-## Step 3 — Follow the loaded guide exactly.
+## Step 3 — Execute
+
+Follow the loaded guide exactly.
