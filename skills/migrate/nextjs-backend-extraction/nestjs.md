@@ -363,13 +363,11 @@ Run in sequence. Stop and report the exact error on first failure.
 ```bash
 # 1. NestJS backend
 cd ../[project-name]-api
-pnpm build
-pnpm test
+pnpm build && pnpm test
 
 # 2. Next.js frontend
 cd [original-project-path]
-pnpm build
-pnpm test
+pnpm build && pnpm test
 ```
 
 **If all pass**, print:
