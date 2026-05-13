@@ -27,7 +27,7 @@ List all `src/app/api/**/route.ts` files. For each, read the exported function n
 
 **1d. Identify integrations to move**
 
-For each `route.ts` file, scan import statements for any path starting with `@/integrations/` or `../integrations/`. Collect the unique set. Also always include `src/integrations/clients/base/fetch-client.ts` and `src/integrations/clients/base/axios-client.ts` if they exist.
+For each `route.ts` file, scan import statements for any path starting with `@/integrations/` or `../integrations/`. Collect the unique set. Note: TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are not ported to Python — they are replaced by `httpx` wrappers in Phase 5. Do not include them in the move list.
 
 **1e. Identify integrations staying in Next.js**
 
@@ -105,55 +105,110 @@ For each `route.ts` file identified in Phase 1c, create the corresponding FastAP
 | `export async function GET()` | `@router.get('/')` |
 | `export async function POST(request: Request)` | `@router.post('/', status_code=201)` with Pydantic request model |
 | `export async function PUT(request, { params })` | `@router.put('/{id}')` with path param |
+| `export async function PATCH(request, { params })` | `@router.patch('/{id}')` with path param |
 | `export async function DELETE(_, { params })` | `@router.delete('/{id}')` |
 | `handleApiError(label, error)` | `raise HTTPException(status_code=..., detail=...)` |
 | Dynamic segment `[id]/route.ts` | `/{id}` path parameter on the same router |
 | Zod `safeParse` validation | Pydantic model as function parameter (FastAPI validates automatically) |
+
+The scaffold uses a layered architecture: **router → service → schemas**. Do not put business logic in the router file.
 
 **Router template** (adapt for each resource):
 
 ```python
 # src/api/routers/users.py
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-router = APIRouter(prefix="/users", tags=["users"])
+from api.schemas.request.users import CreateUserRequest
+from api.schemas.response.users import UserResponse
+from api.services.users import UsersService
 
-
-class CreateUserRequest(BaseModel):
-    name: str
-    email: str
+router = APIRouter()
 
 
-@router.get("/")
-async def get_users():
-    # Move logic from Next.js GET handler body here
-    return []
+@router.get("/users")
+async def get_users() -> list[UserResponse]:
+    return await UsersService.find_all()
 
 
-@router.get("/{user_id}")
-async def get_user(user_id: str):
-    user = None
+@router.get("/users/{user_id}")
+async def get_user(user_id: str) -> UserResponse:
+    user = await UsersService.find_one(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Not found")
     return user
 
 
-@router.post("/", status_code=201)
-async def create_user(body: CreateUserRequest):
-    # Move logic from Next.js POST handler body here
-    return body.model_dump()
+@router.post("/users", status_code=201)
+async def create_user(body: CreateUserRequest) -> UserResponse:
+    return await UsersService.create(body)
 ```
 
-Register each new router in `../[project-name]-api/src/api/__init__.py`:
+**Request schema template:**
 
 ```python
-from fastapi import APIRouter
-from .routers.users import router as users_router
+# src/api/schemas/request/users.py
+from api.schemas.base import BaseRequestSchema
 
-api_router = APIRouter()
-api_router.include_router(users_router)
+
+class CreateUserRequest(BaseRequestSchema):
+    name: str
+    email: str
 ```
+
+Note: `BaseRequestSchema` uses `alias_generator=to_camel` — define fields in `snake_case` and FastAPI will accept both `snake_case` and `camelCase` JSON keys automatically.
+
+**Response schema template:**
+
+```python
+# src/api/schemas/response/users.py
+from api.schemas.base import BaseResponseSchema
+
+
+class UserResponse(BaseResponseSchema):
+    id: str
+    name: str
+    email: str
+```
+
+**Service template** (move business logic from the route handler body here):
+
+```python
+# src/api/services/users.py
+from api.schemas.request.users import CreateUserRequest
+from api.schemas.response.users import UserResponse
+
+
+class UsersService:
+    @staticmethod
+    async def find_all() -> list[UserResponse]:
+        return []
+
+    @staticmethod
+    async def find_one(user_id: str) -> UserResponse | None:
+        return None
+
+    @staticmethod
+    async def create(dto: CreateUserRequest) -> UserResponse:
+        raise NotImplementedError
+```
+
+**Register each new router in `../[project-name]-api/src/api/routes.py`:**
+
+1. Add `USERS = "users"` (or the appropriate resource name) to `APITags` in `src/api/tags.py`.
+2. Import the router module and register it in `src/api/routes.py`:
+
+```python
+from api.routers import users
+from api.tags import APITags
+
+router.include_router(users.router, tags=[APITags.USERS])
+```
+
+**Remove the scaffold's example placeholder:** After adding all resource routers, clean up the example boilerplate that ships with the scaffold:
+- Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
+- Remove the `example` import and its `include_router(example.router, ...)` line from `src/api/routes.py`
+- Remove `EXAMPLE` from `APITags` in `src/api/tags.py`
 
 ---
 
@@ -184,7 +239,7 @@ class GithubClient:
             return response.json()
 
 
-@lru_cache
+@lru_cache(maxsize=1)
 def get_github_client() -> GithubClient:
     return GithubClient()
 ```
@@ -229,7 +284,7 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/pyth
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/beanie.md"
 ```
 
-The Drizzle schema files define the shape of your data — you will need to re-implement the table/collection definitions in SQLAlchemy models or Beanie documents. The skill scaffolds the database layer; porting the schema is your responsibility.
+The Drizzle schema files define the shape of your data. Port each Drizzle table definition to an equivalent SQLAlchemy model or Beanie document, then present the ported schemas to the user for review before proceeding. The database skill scaffolds the connection layer; schema porting is a required step before Phase 7.
 
 Delete `src/integrations/database/` and `drizzle.config.ts` from the Next.js project after confirming the FastAPI schema is in place.
 
@@ -297,17 +352,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 **FastAPI project (`../[project-name]-api`):**
 
-The FastAPI scaffold reads `CORS_ORIGINS` from `src/.env.default`. Update the value:
-
-```
-CORS_ORIGINS=http://localhost:3000
-```
-
-If a separate `.env.example` exists, add:
-```
-# Frontend origin for CORS (comma-separated for multiple origins)
-CORS_ORIGINS=http://localhost:3000
-```
+The FastAPI scaffold already ships with `CORS_ORIGINS=http://localhost:3000` in `src/.env.default`. Verify this value is present. If the Next.js frontend runs on a different origin, update it accordingly. No separate `.env.example` is used — `src/.env.default` is the single source of truth for default env values.
 
 Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 ```
@@ -352,7 +397,6 @@ FastAPI backend:  ../[project-name]-api
 
 Next steps:
 - Review proxy.ts — update any hardcoded /api paths to use NEXT_PUBLIC_API_URL
-- Re-implement your Drizzle schema in SQLAlchemy/Beanie if not yet done
 - Set up Docker Compose if you want both services running locally with one command
 - Configure CI/CD pipelines for each repo independently
 ```

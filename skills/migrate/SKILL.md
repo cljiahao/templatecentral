@@ -1,6 +1,6 @@
 ---
 name: templatecentral:migrate
-description: Use when running database migrations, migrating conventions, or extracting a Next.js backend to a dedicated service — FastAPI, NestJS, Next.js.
+description: Use when running database migrations, migrating conventions, or extracting a Next.js backend to a dedicated service — FastAPI or NestJS.
 ---
 
 **Step 1** — Identify the migration type:
