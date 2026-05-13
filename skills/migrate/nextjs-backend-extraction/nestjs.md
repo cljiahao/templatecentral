@@ -115,7 +115,10 @@ For each `route.ts` file identified in Phase 1c, create the corresponding NestJS
 
 ```typescript
 // src/modules/users/users.controller.ts
-import { Controller, Get, Post, Body, Param, HttpCode } from '@nestjs/common';
+import {
+  Controller, Get, Post, Put, Delete,
+  Body, Param, HttpCode, HttpException, HttpStatus,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -244,7 +247,7 @@ Register each service as a provider in the relevant feature module (or in a shar
 
 **Clean up Next.js `src/integrations/`:**
 - Delete each file that was moved.
-- If `src/integrations/` is empty after removal, delete the directory.
+- If `src/integrations/` is empty after removal (no frontend-only entries remain), delete the directory.
 - If frontend-only entries remain, leave the directory intact.
 
 ---
@@ -319,7 +322,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 5. **Update `.env.local`** — add the same line.
 
-6. **Clean up `src/integrations/`** — after Phase 5 cleanup, if the directory is empty, delete it.
+6. **Clean up `src/integrations/`** — after Phase 5 cleanup, scan for any remaining entries that are now unused (no imports anywhere in the Next.js codebase). Delete unused files. If the directory is empty, delete it.
 
 ---
 
@@ -387,4 +390,4 @@ Next steps:
 - Configure CI/CD pipelines for each repo independently
 ```
 
-**If any command fails**, print the exact error output and stop.
+**If any command fails**, print the exact error output and stop. Do not continue to the next phase.
