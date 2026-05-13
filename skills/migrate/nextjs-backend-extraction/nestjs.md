@@ -192,7 +192,7 @@ import { z } from 'zod';
 
 const CreateUserSchema = z.object({
   name: z.string().min(1).max(100),
-  email: z.string().email(),
+  email: z.email(),
 });
 
 export class CreateUserDto extends createZodDto(CreateUserSchema) {}
