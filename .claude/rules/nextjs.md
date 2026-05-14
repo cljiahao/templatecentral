@@ -1,12 +1,11 @@
 ---
 paths:
-  - "templates/nextjs/**"
-  - "claude-skills/nextjs/**"
+  - "skills/nextjs-*/**"
 ---
 
 # Next.js Rules
 
-Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, NextAuth (Auth.js), React Hook Form + Zod. Package manager: **pnpm** (pinned in `packageManager` field — do not use npm or yarn).
+Stack: Next.js 16, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tailwind CSS 4, TanStack Query, React Hook Form + Zod. Auth added via `nextjs-add-auth` skill (better-auth). Package manager: **pnpm 11** (pinned in `packageManager` field — do not use npm or yarn). Native addons: add `allowBuilds:\n  <pkg>: true` to `pnpm-workspace.yaml` (pnpm 11 no longer reads the `pnpm` field from `package.json`).
 
 ## Boundaries
 
@@ -16,17 +15,17 @@ Stack: Next.js 16, React 19, TypeScript 6, shadcn/ui (new-york), Tailwind CSS 4,
 - Server components by default — add `'use client'` only for interactivity
 - Use `npx shadcn@latest add` for UI primitives — NEVER install manually
 - Pages compose from features — NEVER put data-fetching in page components
-- `proxy.ts` (route protection): NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
+- `proxy.ts` (route protection, exists only after `nextjs-add-auth`): NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
 
 ## Architecture
 
 - App Router: `src/app/` (layouts, pages, API routes)
 - Features: `src/features/<name>/` (api/, components/, hooks/, schemas/, types.ts, constants.ts, index.ts)
-- Auth: `auth.ts` (config) + `proxy.ts` (route protection) + `features/auth/` (UI)
+- Auth (optional, added via `nextjs-add-auth`): `lib/auth.ts` (server config) + `lib/auth-client.ts` (client config) + `proxy.ts` (route protection) + `features/auth/` (UI)
 - Integrations: `src/integrations/` (clients/base/, schemas/, services/, factories.ts)
 - Shared: `src/lib/` (constants/, errors/, utils/) + `src/components/` (layout/, ui/, widgets/)
 
 ## Standards
 
-- **API tests**: same-change Vitest under `test/api/` for `src/app/api/**` (not React UI) — root `AGENTS.md`, `claude-skills/nextjs/code-standards/SKILL.md`.
+- **API tests**: same-change Vitest under `test/api/` for `src/app/api/**` (not React UI) — root `AGENTS.md`, `nextjs-code-standards` skill.
 - Naming, exports, components: `code-standards/SKILL.md`.

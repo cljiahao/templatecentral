@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/cljiahao/templatecentral/discussions
+    about: Ask questions, share ideas, or discuss anything that doesn't fit a bug or feature request.

@@ -1,2 +1,0 @@
-#!/bin/sh
-pnpm build && pnpm run check && pnpm run test:ci

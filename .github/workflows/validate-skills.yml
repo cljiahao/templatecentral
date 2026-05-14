@@ -1,0 +1,104 @@
+name: Validate Skills
+
+on:
+  push:
+    paths:
+      - 'skills/**'
+      - 'scripts/**'
+      - '.claude-plugin/plugin.json'
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'scripts/**'
+      - '.claude-plugin/plugin.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2 — pinned SHA (supply chain: OWASP A03:2025)
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          failed=0
+          for skill_file in skills/*/SKILL.md; do
+            name=$(grep -m1 '^name:' "$skill_file" | sed 's/name:[[:space:]]*//' | tr -d '"')
+            description=$(grep -m1 '^description:' "$skill_file" | sed 's/description:[[:space:]]*//' | tr -d '"')
+
+            if [ -z "$name" ]; then
+              echo "FAIL: $skill_file — missing 'name' in frontmatter"
+              failed=1
+            fi
+
+            if [ -z "$description" ]; then
+              echo "FAIL: $skill_file — missing 'description' in frontmatter"
+              failed=1
+            fi
+
+            if [ $failed -eq 0 ]; then
+              echo "OK:   $skill_file"
+            fi
+          done
+
+          if [ $failed -ne 0 ]; then
+            echo ""
+            echo "One or more skills have invalid frontmatter. Fix before merging."
+            exit 1
+          fi
+
+      - name: Check all plugin.json skills have a SKILL.md
+        run: |
+          failed=0
+          skills_dir="skills"
+          plugin_file=".claude-plugin/plugin.json"
+
+          # Extract skill folder names from the skills directory
+          for skill_dir in "$skills_dir"/*/; do
+            skill_name=$(basename "$skill_dir")
+            skill_file="$skill_dir/SKILL.md"
+
+            if [ ! -f "$skill_file" ]; then
+              echo "FAIL: skills/$skill_name/ exists but has no SKILL.md"
+              failed=1
+            fi
+          done
+
+          if [ $failed -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "All skill directories have a SKILL.md"
+
+  lint-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Run skill lint checks
+        run: bash scripts/lint-skills.sh skills/
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Check for hardcoded secrets in skill files
+        run: |
+          # Detect non-empty secret assignments in skill code blocks.
+          # Allows: empty values (SECRET=), placeholders (<...>, your-..., change-me), env refs (${}), comments (#).
+          failed=0
+          while IFS= read -r line; do
+            file=$(echo "$line" | cut -d: -f1)
+            lineno=$(echo "$line" | cut -d: -f2)
+            echo "FAIL: $file:$lineno — potential hardcoded secret"
+            failed=1
+          done < <(grep -rPn \
+            '(?i)(better_auth_secret|secret_key|database_url|api_key|private_key|access_token)\s*=\s*(?![\s${\x27"<#])(?!.*\.\.\.)(?!.*<.*>)(?!.*change.me)(?!.*your-).{8,}' \
+            skills/ 2>/dev/null || true)
+
+          if [ $failed -ne 0 ]; then
+            echo ""
+            echo "Review the above lines and replace any real secrets with placeholder syntax."
+            exit 1
+          fi
+          echo "OK: No hardcoded secrets detected in skill files"

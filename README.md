@@ -1,197 +1,178 @@
-# templateCentral
+# templatecentral
+**One prompt. Four stacks. Production-ready every time.**
 
-A repository of production-ready project templates and Claude skills for scaffolding new projects using AI agents and subagents.
+[![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
-**Testing workflow:** For optional **tiered** use of separate AI sessions (test author vs selective test review) after scaffold or features — without changing the rule that tests ship in the same PR — see **`AGENTS.md` → Independent test workflow**.
+<!-- DEMO: Replace this comment block with a GIF once you have a recording.
+     Recommended: ~30s clip of Claude responding to "Scaffold a Next.js project at ~/projects/my-app"
+     from blank terminal to working app.
+     <img src="docs/assets/demo.gif" alt="templatecentral demo" width="100%" /> -->
+
+---
+
+## Before / After
+
+| Without templatecentral | With templatecentral |
+|:---|:---|
+| Pick a starter template, strip boilerplate | `"Scaffold a Next.js project at ~/projects/my-app"` |
+| Configure TypeScript, ESLint, and Prettier by hand | App Router, shadcn/ui, TanStack Query — wired and working |
+| Set up Docker, Vitest, and Husky pre-commit hooks | Docker, Vitest, Husky — done |
+| Write project docs for your AI agent | `AGENTS.md` + `CLAUDE.md` written automatically |
+| ~45 minutes of setup decisions | ~60 seconds, zero decisions |
+
+---
+
+## Install
+
+### From GitHub (available now)
+
+```bash
+claude plugin marketplace add cljiahao/templatecentral
+claude plugin install templatecentral
+```
+
+### From the Official Marketplace *(coming soon)*
+
+```bash
+claude plugin marketplace add templatecentral
+```
+
+Either way, 10 skills are registered automatically — no extra setup.
+
+### Updating
+
+```bash
+claude plugin update templatecentral
+```
+
+---
+
+## Usage
+
+Ask Claude to scaffold a project:
+
+```
+"Scaffold a new Next.js project at ~/projects/my-app"
+"Create a FastAPI API at ~/Desktop/my-api"
+"Set up a NestJS backend in ~/work/my-service"
+"Scaffold a Vite React SPA at ~/projects/my-spa"
+```
+
+Claude reads the scaffold skill, generates every file, installs dependencies, runs verification gates, and writes `AGENTS.md` — all in one shot.
+
+---
+
+## What You Get
+
+Each scaffold produces a complete, working project — not a bare starter.
+
+### Next.js
+✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod
+✅ Prettier + ESLint + Husky pre-commit · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example` · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### Vite + React
+✅ React 18 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
+✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### FastAPI
+✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Mypy
+✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
+
+### NestJS
+✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Jest + e2e tests
+✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+
+> Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
+
+---
+
+## Available Skills (10)
+
+**User-invocable (6):**
+
+| Skill | What it does |
+|-------|-------------|
+| `templatecentral:scaffold` | Scaffold a new Next.js, Vite+React, FastAPI, or NestJS project from scratch |
+| `templatecentral:add` | Add any capability to an existing project — auth, database, tests, components, pages, API routes, forms, logging, error handling, pagination, integrations, and more |
+| `templatecentral:standards` | Review code quality, naming conventions, validation patterns, drift, and full-stack type contracts |
+| `templatecentral:migrate` | Run database migrations or migrate a project to updated conventions, dependencies, or patterns |
+| `templatecentral:audit` | Full project audit — ecosystem research, mechanical lint, per-file semantic review, and fix loop |
+| `templatecentral:write-skill` | Author new skills, enforcing CONVENTIONS.md at creation time |
+
+**Agent utilities (4)** — loaded internally by agents, not invoked directly by users:
+
+| Skill | What it does |
+|-------|-------------|
+| `build` | Detect stack, run the build command, report failures without auto-fixing |
+| `test` | Write tests for newly added code and run the full test suite |
+| `review` | Analyse code quality and flag issues, or apply review feedback and fix flagged issues |
+| `cleanup` | Remove example code or manage task scaffolding after a feature is complete |
+
+---
+
+## Works With
+
+**[superpowers](https://github.com/obra/superpowers) is strongly recommended** — templatecentral integrates with the superpowers brainstorm → plan → execute workflow for complex multi-file features.
+
+```bash
+claude plugin marketplace add obra/superpowers
+```
+
+| Task complexity | Workflow |
+|:---|:---|
+| Simple (1–2 files) | templatecentral skill directly |
+| Complex (3+ files, architectural decisions) | superpowers brainstorm → plan → execute |
+
+**Optional plugins:**
+
+| Plugin | Install | When to use |
+|--------|---------|-------------|
+| **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Reduce output tokens during exploration and Q&A |
+| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` | Persist session context across scaffolded projects |
+
+---
 
 ## Repository Structure
 
 ```
-templateCentral/
-├── AGENTS.md                       # Agent orchestration guide
-├── README.md
-├── claude-skills/                  # Claude skills (organized by stack)
-│   ├── nextjs/                     # All Next.js skills (11)
-│   │   ├── scaffold/               #   Scaffold a new project
-│   │   ├── code-standards/         #   Coding standards & conventions
-│   │   ├── add-feature/            #   Add a feature module
-│   │   ├── add-page/               #   Add a page/route
-│   │   ├── add-api-route/          #   Add an API route handler
-│   │   ├── add-component/          #   Add a component
-│   │   ├── add-integration/        #   Add a third-party integration
-│   │   ├── add-auth/               #   Add/configure authentication
-│   │   ├── add-test/               #   Add API route tests (Vitest)
-│   │   ├── add-form/               #   Add a validated form
-│   │   └── add-database/           #   Add Prisma (SQL) or Mongoose (MongoDB)
-│   ├── fastapi/                    # All FastAPI skills (7)
-│   │   ├── scaffold/               #   Scaffold a new project
-│   │   ├── code-standards/         #   Python/FastAPI coding standards
-│   │   ├── add-endpoint/           #   Add a FastAPI endpoint
-│   │   ├── add-test/               #   Add pytest tests
-│   │   ├── add-auth/               #   Add JWT authentication
-│   │   ├── add-database/           #   Add SQLAlchemy (SQL) or Beanie (MongoDB)
-│   │   └── add-integration/        #   Add an external API integration
-│   ├── vite-react/                 # All Vite + React skills (9)
-│   │   ├── scaffold/               #   Scaffold a new project
-│   │   ├── code-standards/         #   Coding standards & conventions
-│   │   ├── add-feature/            #   Add a feature module
-│   │   ├── add-page/               #   Add a page/route
-│   │   ├── add-component/          #   Add a component
-│   │   ├── add-integration/        #   Add an external API integration
-│   │   ├── add-auth/               #   Add/configure authentication
-│   │   ├── add-test/               #   Add component/hook/service tests
-│   │   └── add-form/               #   Add a validated form
-│   ├── nestjs/                     # All NestJS skills (7)
-│   │   ├── scaffold/               #   Scaffold a new project
-│   │   ├── code-standards/         #   Coding standards & conventions
-│   │   ├── add-module/             #   Add a feature module with CRUD
-│   │   ├── add-test/               #   Add unit/e2e tests
-│   │   ├── add-auth/               #   Add JWT authentication
-│   │   ├── add-database/           #   Add Prisma (SQL) or Mongoose (MongoDB)
-│   │   └── add-integration/        #   Add an external API integration
-│   └── shared/                     # Cross-stack skills
-│       ├── task-management/        #   Opt-in structured task management
-│       ├── full-stack-pairing/     #   Connect frontend to backend (proxy, CORS, env vars)
-│       ├── remove-example/         #   Remove example/demo code from scaffolded project
-│       ├── validation-patterns/    #   OWASP/CWE-compliant Zod/Pydantic validation patterns
-│       ├── add-error-handling/     #   Consistent error responses and security boundaries
-│       └── add-pagination/         #   Offset or cursor-based pagination for APIs and list UIs
-└── templates/                      # Project templates
-    ├── nextjs/                     # Next.js 16 + React 19 + shadcn/ui + Tailwind
-    ├── fastapi/                    # FastAPI + layered architecture + Pydantic v2
-    ├── vite-react/                 # Vite 8 + React 19 + React Router + TanStack Query
-    └── nestjs/                     # NestJS 11 + Fastify + Zod + Swagger
+templatecentral/
+├── .claude-plugin/
+│   ├── plugin.json          # Plugin manifest (points to skills/)
+│   └── marketplace.json     # Anthropic marketplace metadata
+├── skills/                  # All skills — nested reference file architecture
+│   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
+│   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
+│   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md
+│   ├── standards/SKILL.md   # Router → skills/standards/<check>/
+│   ├── migrate/SKILL.md     # Router → skills/migrate/<type>/
+│   ├── audit/SKILL.md       # Router → skills/audit/implementation.md
+│   └── write-skill/SKILL.md
+└── AGENTS.md                # Agent orchestration guide
 ```
 
-## Available Templates
+---
 
-| Template | Stack | Status |
-|----------|-------|--------|
-| **nextjs** | Next.js 16, React 19, shadcn/ui, Tailwind CSS 4, React Query, React Hook Form, Framer Motion, Docker | Ready |
-| **fastapi** | FastAPI 0.116, Pydantic v2 (camelCase schemas), layered architecture, Ruff, pytest, Docker | Ready |
-| **vite-react** | Vite 8, React 19, React Router 7, TanStack Query, shadcn/ui, Tailwind CSS 4, React Hook Form, Framer Motion, Docker | Ready |
-| **nestjs** | NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript 6, Jest, Docker | Ready |
+## Adding a New Skill
 
-## Available Skills
+Contributions welcome — especially new stacks and coverage gaps.
 
-Skills are organized by stack. Each skill has YAML frontmatter (`name`, `description`) per the [Agent Skills spec](https://agentskills.io/specification). See each stack's `AGENT.md` for the skill routing table.
+1. Read `skills/CONVENTIONS.md` — it defines all nesting rules, description limits, and ref header formats
+2. Use `templatecentral:write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
+3. If adding a new stack, create `.claude/rules/<stack>.md`
+4. Open a PR — CI will run `scripts/lint-skills.sh` to validate your skill automatically
 
-- **Next.js** — 11 skills (scaffold, code-standards, add-feature, add-page, add-api-route, add-component, add-integration, add-auth, add-test, add-form, add-database)
-- **FastAPI** — 7 skills (scaffold, code-standards, add-endpoint, add-test, add-auth, add-database, add-integration)
-- **Vite + React** — 9 skills (scaffold, code-standards, add-feature, add-page, add-component, add-integration, add-auth, add-test, add-form)
-- **NestJS** — 7 skills (scaffold, code-standards, add-module, add-test, add-auth, add-database, add-integration)
-- **Shared** — 6 skills (task-management, full-stack-pairing, remove-example, validation-patterns, add-error-handling, add-pagination)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-## Getting Started
+---
 
-### With Cursor
+## ⭐ Star This Repo
 
-1. Open the `templateCentral` folder in Cursor
-2. Open the agent (Cmd+L or Ctrl+L) and describe what you want:
-   > "Scaffold a new Next.js project at ~/Desktop/my-app called MyApp"
-3. The agent reads `AGENTS.md`, detects the stack, and delegates to the right subagent
-4. The subagent copies the template, renames it, installs dependencies, and verifies the dev server — all automatically
+If templatecentral saves you setup time, a star helps others find it.
 
-This works the same way for any stack — just describe what you need and the orchestrator handles routing.
+---
 
-### With Claude Code (CLI)
+## Star History
 
-1. `cd` into the `templateCentral` directory
-2. Run `claude` — it automatically picks up `AGENTS.md`
-3. Describe what you want:
-   > "Create a FastAPI project at ~/projects/my-api"
-4. The agent follows the same orchestration flow as Cursor
-
-### MCP Server (Claude Code / Claude Desktop)
-
-templateCentral ships with an MCP server that exposes scaffold and skill tools to any MCP-compatible client. A `.mcp.json` in the repo root auto-registers it when you open Claude Code inside this directory.
-
-**First-time setup** — build the server once:
-
-```bash
-cd mcp-server
-npm install
-npm run build
-```
-
-After that, no further steps are needed. Claude Code picks up the server automatically via `.mcp.json` on every session.
-
-**Available tools via MCP:**
-- `scaffold_project` — copy a template to a target path
-- `list_skills` / `get_skill` — browse and fetch skill instructions
-- `list_templates` / `get_agent_definition` / `get_code_standards`
-- `check_updates` / `preview_update` / `get_changelog`
-
-### With Other AI Tools
-
-Any AI tool that reads `AGENTS.md` (Codex, Copilot, Windsurf, etc.) can use templateCentral. Open or point the tool at this repository and give it a natural language instruction. The orchestrator in `AGENTS.md` handles the rest.
-
-### Manual (No AI)
-
-Copy a template directory to your target location and customize:
-
-```bash
-# Next.js
-cp -r templates/nextjs /path/to/my-new-project
-cd /path/to/my-new-project
-pnpm install && pnpm dev
-
-# Vite + React
-cp -r templates/vite-react /path/to/my-new-project
-cd /path/to/my-new-project
-pnpm install && pnpm dev
-
-# NestJS
-cp -r templates/nestjs /path/to/my-new-project
-cd /path/to/my-new-project
-pnpm install && pnpm start:dev
-
-# FastAPI
-cp -r templates/fastapi /path/to/my-new-project
-cd /path/to/my-new-project
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-cd src && python main.py
-```
-
-## Recommended Plugins
-
-None are required — install as needed. All are Claude Code plugins unless noted as MCP.
-
-| Plugin | Install | When to use | When to skip / turn off |
-|--------|---------|-------------|--------------------------|
-| **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Exploration, audits, Q&A, code-building (65–75% fewer output tokens) | Any session writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`) — compresses prose, degrades instruction quality |
-| **superpowers** | `claude plugin marketplace add pcvelz/superpowers` | Features touching 3+ files or architectural decisions: brainstorm → plan → implement | One-liners, scaffolding, or "just do it" tasks |
-| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem` | Scaffolded projects — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB | templateCentral itself — use built-in markdown memory here instead (curated, auditable) |
-| **codegraph** | `npx @colbymchenry/codegraph` (Node 18+) | "What calls X / where does Y live" — add when grepping for definitions is a regular cost | Fresh scaffolds (< 5 features); structure is predictable from template |
-| **graphify** | `uv tool install graphifyy && graphify install` (Python 3.10+) | Codebase structure overview (communities, god nodes); use before codegraph for high-level orientation | Same threshold as codegraph |
-| **code-review-graph** | `pip install code-review-graph && code-review-graph install && code-review-graph build` (Python 3.10+) | PRs and refactors with non-obvious blast radius — queries callers, dependents, covering tests | Routine single-file edits |
-
-### Install order
-
-```bash
-# Day one (Claude Code plugins)
-claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add pcvelz/superpowers
-
-# For scaffolded projects (not templateCentral itself — use built-in memory here)
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
-
-# After 5+ features (MCP servers — run inside your project)
-npx @colbymchenry/codegraph                                              # codegraph
-uv tool install graphifyy && graphify install                            # graphify
-pip install code-review-graph && code-review-graph install && code-review-graph build  # code-review-graph
-
-# When doing refactors or PRs — activate code-review-graph
-```
-
-## Adding a New Template
-
-To add a new stack:
-
-1. Create `templates/<stack>/` with all project files and a `README.md`
-2. Create `claude-skills/<stack>/` with `AGENT.md`, `code-standards/SKILL.md`, `scaffold/SKILL.md`, and additional skills
-3. Create `.claude/rules/<stack>.md` with path-scoped boundaries and architecture summary
-4. Add the stack to the detection table in `AGENTS.md`
-5. Update this README
+[![Star History Chart](https://api.star-history.com/svg?repos=cljiahao/templatecentral&type=Date)](https://star-history.com/#cljiahao/templatecentral&Date)

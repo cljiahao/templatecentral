@@ -1,0 +1,8 @@
+{
+  "name": "templatecentral",
+  "version": "3.1.0",
+  "description": "Production-ready project scaffolding for Next.js, Vite-React, FastAPI, and NestJS. Install once, scaffold anywhere — no repo cloning required.",
+  "author": { "name": "Clarence" },
+  "keywords": ["scaffold", "nextjs", "fastapi", "nestjs", "vite-react", "templates", "boilerplate", "starter", "shadcn", "tanstack-query", "production-ready", "app-router", "typescript", "python", "docker"],
+  "skills": "./skills/"
+}

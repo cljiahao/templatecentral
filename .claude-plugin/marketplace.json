@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "templatecentral",
+  "description": "One prompt scaffolds a production-ready Next.js, Vite+React, FastAPI, or NestJS project — App Router, shadcn/ui, TanStack Query, Docker, Vitest, and AGENTS.md included. 46 skills for scaffold, auth, database, testing, logging, and more.",
+  "owner": {
+    "name": "Clarence"
+  },
+  "plugins": [
+    {
+      "name": "templatecentral",
+      "description": "46 skills for scaffolding and extending Next.js, Vite+React, FastAPI, and NestJS projects. Covers scaffold, auth, database, API routes, components, forms, testing, logging, error handling, pagination, and full-stack pairing. Each scaffold produces a fully configured project with linting, formatting, testing, Docker, and AI agent docs.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
