@@ -72,6 +72,15 @@ Do not write `AGENTS.md` or `CLAUDE.md` until the stack’s checks pass (fixes f
 | **FastAPI** | API responds, `pytest test/`, `ruff check src/` |
 | **Vite + React** | `pnpm dev` OK, `pnpm test`, `pnpm build`, `pnpm check` |
 
+## Lean by Default
+
+The template defines **available patterns**, not required files. Every project starts lean and grows only when a need exists.
+
+- **NEVER add template files pre-emptively** — unused widgets, base clients, error handlers, shared hooks, and placeholder directories are dead code. They bloat bundles, Docker images, and the dependency surface.
+- **Add on demand**: copy from `templates/<stack>/` only when the project actively uses the file.
+- **Install packages on demand**: only install `axios`, `framer-motion`, or other optional deps when a feature requires them.
+- **Audit rule**: a file present in the template but absent from a project is **not a finding**. Only missing *conventions* (naming, barrel exports, component placement, security patterns, mandatory tests) are findings.
+
 ## Subagent Boundaries
 
 - NEVER invent APIs, libraries, or features not in the stack

@@ -65,22 +65,24 @@ const useUploadForm = () => {
 
 ### Component Library — Check Before Building
 
-**Always check existing components before creating a new one.** The template ships with:
+**Always check existing components before creating a new one.** The template defines available patterns — copy only what the project actively uses.
 
-**shadcn/ui primitives** (`src/components/ui/`) — use directly, never recreate:
+**shadcn/ui primitives** (`src/components/ui/`) — add via CLI, never recreate:
 `accordion` · `avatar` · `button` · `card` · `checkbox` · `dialog` · `dropdown-menu` · `form` · `input` · `label` · `select` · `separator` · `skeleton` · `sonner` · `tabs` · `textarea`
 
-**Extended UI** (`src/components/ui/`) — built on shadcn primitives:
+To add a shadcn primitive: `npx shadcn@latest add <name>` — NEVER install `@radix-ui/*` manually.
+
+**Extended UI** (`src/components/ui/`) — available patterns, copy from `templates/nextjs/` when needed:
 - `button-group` — groups of related action buttons
 - `field` — form field wrapper with label + error message
 - `input-group` — input with prefix/suffix addon
 - `dropzone` (ui/shadcn-io/) — file upload zone
 
-**Widgets** (`src/components/widgets/`) — cross-feature, import via barrel:
+**Widgets** (`src/components/widgets/`) — available patterns, copy from `templates/nextjs/` when needed:
 - `brand-logo` · `brand-text` — branded identity elements
 - `custom-card` — card with preset layout
 - `custom-dialog` — dialog with preset header/body layout
-- `custom-form-field` — field + Zod validation display
+- `custom-form-field` — field + Zod validation display (required by `add-form` skill)
 - `link-list` — list of navigation/action links
 - `media-card` — card with image + content
 - `pill` — inline badge/tag
@@ -89,7 +91,7 @@ const useUploadForm = () => {
 **Layout** (`src/components/layout/`) — app shell only:
 `navbar` · `site-footer` · `providers` · `theme-provider`
 
-To add a **new** shadcn primitive: `npx shadcn@latest add <name>` — NEVER install `@radix-ui/*` manually.
+**Lean rule**: a project widget index exports only the widgets that file currently contains — NEVER pre-populate with widgets the project does not use.
 
 ### Component Placement Decision Guide
 
