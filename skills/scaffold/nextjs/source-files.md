@@ -2006,11 +2006,33 @@ claude plugin marketplace add obra/superpowers
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
 
-### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
+### 8. Generate `CLAUDE.md` + `.claude/settings.json` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a short `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
+**Step A** — Load the Claude Code best-practices reference:
+
+```bash
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/claude-code-best-practices.md"
+```
+
+**Step B** — Create `.claude/settings.json` in the project root (denies build artefacts so Claude does not grep / glob into machine-generated files):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./node_modules/**)", "Glob(./node_modules/**)",
+      "Read(./.next/**)", "Glob(./.next/**)",
+      "Read(./dist/**)", "Glob(./dist/**)",
+      "Read(./coverage/**)", "Glob(./coverage/**)",
+      "Read(./.turbo/**)", "Glob(./.turbo/**)"
+    ]
+  }
+}
+```
+
+**Step C** — Write a short `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
 
 Include **Build & Dev** with verified commands:
 - `pnpm dev` — dev server (http://localhost:3000)
@@ -2018,7 +2040,11 @@ Include **Build & Dev** with verified commands:
 - `pnpm test` — tests
 - `pnpm check` — type check + lint
 
-**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-code-standards`, `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-code-standards`, `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`.
+
+**Step D** — Append a `## Working with Claude Code` subsection to `CLAUDE.md`, copied verbatim from the reference loaded in Step A (section "Append a 'Working with Claude Code' subsection"). Substitute `<stack-skills>` with the templateCentral skills list from Step C.
+
+**Never** put secrets in `CLAUDE.md`.
 
 ### 8b. Optional: Task management
 

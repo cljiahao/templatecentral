@@ -819,17 +819,39 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-### 7. Generate CLAUDE.md (Optional — Claude Code users only)
+### 7. Generate CLAUDE.md + `.claude/settings.json` (Optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a short `CLAUDE.md` (architecture and conventions live in `AGENTS.md` only).
+**Step A** — Load the Claude Code best-practices reference:
+
+```bash
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/claude-code-best-practices.md"
+```
+
+**Step B** — Create `.claude/settings.json` in the project root (denies build artefacts so Claude does not grep / glob into machine-generated files):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./node_modules/**)", "Glob(./node_modules/**)",
+      "Read(./dist/**)", "Glob(./dist/**)",
+      "Read(./coverage/**)", "Glob(./coverage/**)"
+    ]
+  }
+}
+```
+
+**Step C** — Write a short `CLAUDE.md` (architecture and conventions live in `AGENTS.md` only).
 
 Include:
 - **Build & Dev** verified commands: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`
 - **templateCentral skills**: `nestjs-scaffold` (done), `nestjs-code-standards`, `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`
-- **Workflow**: simple/medium → templateCentral skills; complex → Superpowers
-- NEVER put secrets in `CLAUDE.md`
+
+**Step D** — Append a `## Working with Claude Code` subsection to `CLAUDE.md`, copied verbatim from the reference loaded in Step A (section "Append a 'Working with Claude Code' subsection"). Substitute `<stack-skills>` with the templateCentral skills list from Step C.
+
+NEVER put secrets in `CLAUDE.md`.
 
 ### 7b. Optional: Task management
 

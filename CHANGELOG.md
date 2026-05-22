@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Claude Code best practices baked into scaffolded projects
+
+Every scaffolded project now ships with version-controlled Claude Code configuration and a "Working with Claude Code" section in `CLAUDE.md`. Distilled from Anthropic's [*How Claude Code Works in Large Codebases*](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start) (2026).
+
+**New files:**
+- `skills/scaffold/claude-code-best-practices.md` — reference file loaded by every `<stack>/source-files.md` during the CLAUDE.md generation step. Covers the seven extension points (CLAUDE.md, hooks, skills, plugins, LSP, MCP, subagents), what to apply at scaffold time vs. as the project grows, periodic-review cadence (3–6 months), and org-level ownership notes.
+
+**Updated:**
+- `skills/scaffold/nextjs/source-files.md` — Step 8 now generates `.claude/settings.json` (denies `node_modules`, `.next`, `dist`, `coverage`, `.turbo`) and appends a 5-bullet `## Working with Claude Code` subsection to the project's `CLAUDE.md`.
+- `skills/scaffold/vite-react/source-files.md` — Step 8 same treatment (`node_modules`, `dist`, `coverage`, `.turbo`).
+- `skills/scaffold/fastapi/source-files.md` — Step 7 same treatment with Python deny list (`.venv`, `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `htmlcov`, `dist`).
+- `skills/scaffold/nestjs/source-files.md` — Step 7 same treatment (`node_modules`, `dist`, `coverage`).
+- `README.md` — added a "Claude Code ready" note under "What You Get".
+
+**What the scaffolded project gets:**
+- `.claude/settings.json` with `permissions.deny` rules for stack-specific build artefacts — keeps Claude from grepping or globbing into machine-generated files and burning context.
+- A `## Working with Claude Code` subsection in the generated `CLAUDE.md` covering workflow (simple → skills, complex → Superpowers), LSP recommendation, when to add subdirectory `CLAUDE.md` files as the project grows, and a 3–6-month review reminder for keeping rules aligned with the current Claude model.
+
+**Why:** Anthropic's blog identifies *agentic search* (Claude reading the live filesystem, no embedding index) as Claude Code's core navigation model — the trade-off is that Claude needs good starting context. Excluding generated noise and writing a lean, layered `CLAUDE.md` are the two highest-leverage things a new project can do.
+
 ---
 
 ## [3.1.0] — 2026-05-13

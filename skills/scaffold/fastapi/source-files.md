@@ -1213,11 +1213,35 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-### 7. Generate CLAUDE.md (optional — Claude Code users only)
+### 7. Generate CLAUDE.md + `.claude/settings.json` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a **short** `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
+**Step A** — Load the Claude Code best-practices reference:
+
+```bash
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/claude-code-best-practices.md"
+```
+
+**Step B** — Create `.claude/settings.json` in the project root (denies Python build/cache artefacts so Claude does not grep / glob into machine-generated files):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./.venv/**)", "Glob(./.venv/**)",
+      "Read(./**/__pycache__/**)", "Glob(./**/__pycache__/**)",
+      "Read(./.pytest_cache/**)", "Glob(./.pytest_cache/**)",
+      "Read(./.ruff_cache/**)", "Glob(./.ruff_cache/**)",
+      "Read(./.mypy_cache/**)", "Glob(./.mypy_cache/**)",
+      "Read(./htmlcov/**)", "Glob(./htmlcov/**)",
+      "Read(./dist/**)", "Glob(./dist/**)"
+    ]
+  }
+}
+```
+
+**Step C** — Write a **short** `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
 
 Include **Build & Dev** with verified commands only:
 - `source .venv/bin/activate` — venv
@@ -1225,7 +1249,11 @@ Include **Build & Dev** with verified commands only:
 - `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
-**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-code-standards`, `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-code-standards`, `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`.
+
+**Step D** — Append a `## Working with Claude Code` subsection to `CLAUDE.md`, copied verbatim from the reference loaded in Step A (section "Append a 'Working with Claude Code' subsection"). Substitute `<stack-skills>` with the templateCentral skills list from Step C.
+
+**Never** put secrets in `CLAUDE.md`.
 
 ### 8. Task management (optional)
 

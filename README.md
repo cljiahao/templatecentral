@@ -86,6 +86,8 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 > Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
 
+**Claude Code ready (all four stacks):** every generated project ships `.claude/settings.json` (denies build artefacts so Claude does not grep into `node_modules`, `dist`, `__pycache__`, etc.) and a short *Working with Claude Code* subsection in `CLAUDE.md` — workflow, LSP hint, growth checklist, 3-6-month review cadence. Distilled from Anthropic's [*How Claude Code Works in Large Codebases*](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start); full reference at `skills/scaffold/claude-code-best-practices.md`.
+
 ---
 
 ## Available Skills (10)

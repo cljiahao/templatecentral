@@ -2160,15 +2160,38 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
+### 8. Generate `CLAUDE.md` + `.claude/settings.json` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code.
 
-Write a short `CLAUDE.md` referencing `AGENTS.md` for full detail. Include:
+**Step A** — Load the Claude Code best-practices reference:
+
+```bash
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/claude-code-best-practices.md"
+```
+
+**Step B** — Create `.claude/settings.json` in the project root (denies build artefacts so Claude does not grep / glob into machine-generated files):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./node_modules/**)", "Glob(./node_modules/**)",
+      "Read(./dist/**)", "Glob(./dist/**)",
+      "Read(./coverage/**)", "Glob(./coverage/**)",
+      "Read(./.turbo/**)", "Glob(./.turbo/**)"
+    ]
+  }
+}
+```
+
+**Step C** — Write a short `CLAUDE.md` referencing `AGENTS.md` for full detail. Include:
 - **Build & Dev**: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck)
 - **templateCentral skills**: `vite-react-scaffold` (done), `vite-react-code-standards`, `vite-react-add-page`, `vite-react-add-feature`, `vite-react-add-component`, `vite-react-add-form`, `vite-react-add-auth`, `vite-react-add-integration`, `vite-react-add-test`
-- **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`
-- NEVER put secrets in `CLAUDE.md`
+
+**Step D** — Append a `## Working with Claude Code` subsection to `CLAUDE.md`, copied verbatim from the reference loaded in Step A (section "Append a 'Working with Claude Code' subsection"). Substitute `<stack-skills>` with the templateCentral skills list from Step C.
+
+NEVER put secrets in `CLAUDE.md`.
 
 ### 9. Optional: Task management
 
