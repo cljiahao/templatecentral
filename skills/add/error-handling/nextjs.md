@@ -124,7 +124,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const session = await auth();
+    const session = await auth.api.getSession({ headers: _request.headers });
 
     // Check project exists AND user has access
     const project = { id, name: 'Sample', ownerId: 'user-1' }; // replace with real DB lookup

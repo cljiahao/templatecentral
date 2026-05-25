@@ -88,12 +88,14 @@ class APISettings(BaseSettings):
     # ... existing fields ...
     SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
+    TRUST_PROXY: int = Field(default=0, description="Set to 1 when running behind a load balancer or reverse proxy")
 ```
 
 Add to `src/.env` (real value — never commit):
 ```
 SECRET_KEY=
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+TRUST_PROXY=0
 ```
 
 Document in `src/.env.default`:
@@ -279,6 +281,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
+# WARNING: TRUST_PROXY must be set to 1 in your environment — otherwise
+# get_remote_address returns the proxy IP and all users behind a load
+# balancer share one rate limit bucket (making limiting completely ineffective).
+#
+# In your .env file:
+# TRUST_PROXY=1  # Set to 1 when running behind a load balancer or reverse proxy
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter

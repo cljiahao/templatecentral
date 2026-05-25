@@ -51,7 +51,7 @@ import { toNextJsHandler } from 'better-auth/next-js';
 
 const { GET: _GET, POST: _POST } = toNextJsHandler(auth);
 
-export { GET: _GET as GET };
+export { _GET as GET };
 
 export async function POST(req: Request) {
   const url = new URL(req.url);
@@ -208,7 +208,7 @@ curl http://localhost:3000/api/health
 
 # Tier 3
 # Trigger a slow DB query (or lower threshold temporarily to 0 for testing)
-# Expect: { query_name: "...", duration_ms: <n> } warn log
+# Expect: { name: "...", duration_ms: <n> } warn log
 
 # Confirm no prohibited fields
 grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <log-output>

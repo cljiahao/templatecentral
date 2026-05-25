@@ -39,6 +39,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { BaseExceptionFilter } from '@nestjs/core';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { z, ZodError } from 'zod';
@@ -52,7 +53,7 @@ interface ErrorResponse {
 }
 
 @Catch(HttpException)
-export class HttpExceptionFilter implements ExceptionFilter {
+export class HttpExceptionFilter extends BaseExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
@@ -101,11 +102,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
 App startup/shutdown — use NestJS lifecycle hooks:
 
 ```ts
-// src/main.ts
+// Excerpt — integrate these changes into your existing src/main.ts
+// Do NOT replace the entire file; the scaffold already bootstraps Fastify.
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const trustProxyEnv = process.env.TRUST_PROXY;
+  const trustProxy: boolean | string | undefined =
+    trustProxyEnv === '*' ? true : trustProxyEnv;
+
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter(trustProxy ? { trustProxy, logger: false } : { logger: false }),
+    { bufferLogs: true },
+  );
   const logger = app.get(Logger);
   app.useLogger(logger);
 
@@ -297,7 +309,7 @@ curl http://localhost:3000/health
 
 # Tier 3
 # Trigger a slow DB query (or lower threshold temporarily to 0 for testing)
-# Expect: { query_name: "...", duration_ms: <n> } warn log
+# Expect: { name: "...", duration_ms: <n> } warn log
 
 # Confirm no prohibited fields
 grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <log-output>
@@ -305,8 +317,8 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 
 ## See Also
 
-- `shared-add-error-handling` — Unified error response schema; `logError` integration
-- `shared-validation-patterns` — Zod/Pydantic validation before any log call
+- `add/error-handling/nestjs` — Unified error response schema; `logError` integration
+- `standards/validation-patterns/nestjs` — Zod/Pydantic validation before any log call
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes
 

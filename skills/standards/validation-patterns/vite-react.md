@@ -11,6 +11,16 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { CustomFormField } from '@/components/ui/custom-form-field';
+import { Button } from '@/components/ui/button';
 
 const createProjectSchema = z.object({
   name: z
@@ -23,15 +33,11 @@ const createProjectSchema = z.object({
     .optional(),
 });
 
-type CreateProjectData = z.infer<typeof createProjectSchema>;
+type CreateProjectData = z.input<typeof createProjectSchema>;
 
 export function CreateProjectForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateProjectData>({
+  const form = useForm<CreateProjectData>({
     resolver: zodResolver(createProjectSchema),
   });
 
@@ -57,44 +63,47 @@ export function CreateProjectForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div>
-        <label htmlFor="name">Name</label>
-        <input
-          id="name"
-          type="text"
-          placeholder="Project name"
-          {...register('name')}
-          className="w-full rounded border px-3 py-2"
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <CustomFormField {...field} placeholder="Project name" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {errors.name && (
-          <p className="text-sm text-red-600">{errors.name.message}</p>
-        )}
-      </div>
 
-      <div>
-        <label htmlFor="description">Description</label>
-        <textarea
-          id="description"
-          placeholder="Project description (optional)"
-          {...register('description')}
-          className="w-full rounded border px-3 py-2"
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <CustomFormField {...field} placeholder="Project description (optional)" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {errors.description && (
-          <p className="text-sm text-red-600">{errors.description.message}</p>
-        )}
-      </div>
 
-      {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+        {submitError && <p className="text-sm text-red-600">{submitError}</p>}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Creating...' : 'Create Project'}
-      </button>
-    </form>
+        <Button
+          type="submit"
+          disabled={form.formState.isSubmitting}
+          className="w-full"
+        >
+          {form.formState.isSubmitting ? 'Creating...' : 'Create Project'}
+        </Button>
+      </form>
+    </Form>
   );
 }
 ```

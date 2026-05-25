@@ -234,6 +234,7 @@ import { TaskModule } from './modules';
 Create `test/modules/<name>.controller.spec.ts` (replace `<name>` with the actual module name, e.g., `task`):
 
 ```typescript
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TaskController } from '../../src/modules/task/task.controller';
 import { TaskService } from '../../src/modules/task/task.service';

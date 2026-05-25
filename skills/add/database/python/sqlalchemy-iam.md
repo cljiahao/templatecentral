@@ -28,7 +28,7 @@ class Base(DeclarativeBase):
     pass
 ```
 
-### A5. Initialize Alembic (same as standard)
+### A3. Initialize Alembic (same as standard)
 
 Run from the **repo root** (not `src/`):
 
@@ -45,7 +45,7 @@ sqlalchemy.url =
 
 > **Important**: All `alembic` commands must be run from the **repo root** (where `alembic.ini` lives), not from `src/`.
 
-### A-IAM.2 — Create `src/database/session.py` (IAM variant)
+### A4. Create `src/database/session.py` (IAM variant)
 
 ```python
 from collections.abc import Generator
@@ -89,7 +89,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 ```
 
-### A-IAM.3 — Add IAM fields to `src/core/config.py`
+### A5. Add IAM fields to `src/core/config.py`
 
 Add these fields to `APISettings` (do not add `DATABASE_URL` — IAM uses separate host/user fields):
 
@@ -113,7 +113,7 @@ DATABASE_NAME=mydb
 AWS_REGION=us-east-1
 ```
 
-### A-IAM.4 — Update `alembic/env.py` for IAM fields
+### A6. Update `alembic/env.py` for IAM fields
 
 In `alembic/env.py`, replace the `set_main_option` call with:
 
@@ -127,7 +127,7 @@ sqlalchemy_url = (
 config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 ```
 
-### A6. Create a Model
+### A7. Create a Model
 
 **`src/models/user.py`** (example):
 
@@ -147,14 +147,14 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
 ```
 
-### A7. Generate First Migration
+### A8. Generate First Migration
 
 ```bash
 alembic revision --autogenerate -m "create users table"
 alembic upgrade head
 ```
 
-### A8. Usage
+### A9. Usage
 
 Inject the database session via FastAPI's dependency injection:
 
@@ -175,7 +175,7 @@ def list_users(db: Session = Depends(get_db)) -> list[UserResponse]:
 
 > **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema.
 
-### A9. Validate
+### A10. Validate
 
 ```bash
 pytest test/

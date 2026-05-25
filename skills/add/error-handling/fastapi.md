@@ -3,6 +3,12 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Error Handling
 
+> **Migration note — response format change**
+> This skill replaces FastAPI's default validation error format (`{"detail": [...]}`)
+> with a structured envelope (`{"error": "...", "details": {"fieldErrors": {...}}}`).
+> **Before applying:** update any existing tests that assert `response.json()["detail"]`
+> to use `response.json()["details"]["fieldErrors"]` instead.
+
 **1. Global Exception Handlers (Already Present)**
 
 The template includes `src/error_handler.py`. Enhance it to return consistent field-level errors:
@@ -177,6 +183,9 @@ Register exception handlers in your FastAPI app:
 
 ```python
 # src/main.py
+# NOTE: This is a standalone reference example. In a scaffold project, integrate
+# configure_exceptions() inside your existing start_application() function instead
+# of creating a new app instance.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from error_handler import configure_exceptions

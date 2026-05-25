@@ -10,6 +10,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.2.0] — 2026-05-25
+
+### Fixed — Ecosystem accuracy and correctness audit (3-iteration pass)
+
+Full audit of all 50 skill files against the 2026-05-08 ecosystem research cache. 19 HIGH findings fixed in round 1, 8 new HIGHs surfaced and fixed in round 2, 1 residual HIGH fixed in round 3. Lint passes clean throughout.
+
+**FastAPI**
+- `add/database/python/beanie.md` — Replaced non-existent `AsyncMongoClient` (was `from pymongo import AsyncMongoClient`) with `AsyncMotorClient` from `motor.motor_asyncio`; added `motor` to requirements; fixed incorrect "Motor is no longer required" note; replaced Beanie 1.x `indexes = ["email"]` string syntax with correct `Annotated[EmailStr, Indexed(unique=True)]` field annotation; fixed `User.find_all()` (doesn't exist) → `User.find().to_list()`; narrowed bare `except Exception` to `except (ValueError, TypeError)` on ObjectId conversion
+- `add/auth/fastapi.md` — Added `TRUST_PROXY: int` to `APISettings` and `.env` template; added concrete `.env` example next to rate-limit TRUST_PROXY warning so the fix is actionable
+- `add/database/python/sqlalchemy-iam.md` — Fixed broken step numbering (A2 → A5 gap); now uses a consistent A1–A10 sequence
+- `add/error-handling/fastapi.md` — Added prominent migration note explaining the response envelope change (default FastAPI `detail` format vs. custom `fieldErrors` envelope) so existing tests aren't silently broken; added note that the standalone `app = FastAPI(...)` example is a reference, not a file replacement
+- `add/pagination/fastapi.md` — Corrected all file paths from non-existent `src/lib/` to correct `src/core/`; fixed `from core.database import get_session` → `from database.session import get_db`; added sync/async clarification notes; replaced `from core.exceptions import InvalidInputError` (undefined) with `HTTPException`; fixed `hasMore` → `has_more` with `serialization_alias='hasMore'`; removed conflicting flat `Query()` params — route now uses `Depends(PaginationParams)` consistently; fixed `scalar()` nullable → `scalar() or 0`
+
+**NestJS**
+- `add/module/implementation.md` — Added explicit `import { beforeEach, describe, expect, it } from 'vitest'` to Step 9 test template (was missing all vitest globals with `globals: false`)
+- `add/test/nestjs.md` — Added vitest imports to all three test templates (Controller, Service, E2E); Service template had `vi` but was missing `describe`/`it`/`expect`/`beforeEach`
+- `scaffold/nestjs/source-files.md` — Added `expect` to vitest import in `test/app.e2e-spec.ts` template
+- `add/logging/nestjs.md` — Fixed Tier 1 `main.ts` snippet that dropped `FastifyAdapter` entirely (would silently switch app from Fastify to Express); fixed broken `trustProxy: !!process.env.TRUST_PROXY` coercion (now uses canonical two-line pattern that correctly handles `"false"`, `"0"`, and `"*"` values); added `BaseExceptionFilter` import to `HttpExceptionFilter`; fixed stale `See Also` skill aliases
+
+**Next.js**
+- `add/error-handling/nextjs.md` — Fixed `await auth()` with no arguments (TypeError) → `await auth.api.getSession({ headers: _request.headers })`
+- `add/logging/nextjs.md` — Fixed invalid export syntax `export { GET: _GET as GET }` → `export { _GET as GET }`; fixed verification comment field name mismatch (`query_name` → `name`)
+- `add/database/typescript/nextjs-kysely.md` — Added Zod `safeParse` + structured 400 response on POST (was using throwing `.parse()` with no try/catch); changed `selectAll()` → `.select(['id', 'email', 'name'])` in both API route and Server Component examples; changed `.returningAll()` → `.returning(['id', 'email', 'name'])`
+- `add/database/typescript/nextjs-mongoose.md` — Added `.select('name email -_id')` to `User.find()` calls in both API route and Server Component examples
+
+**Vite + React / Cross-stack**
+- `standards/validation-patterns/patterns.md` — Fixed `z.email().toLowerCase()` crash (`.toLowerCase()` does not exist on `ZodEmail`) → `.transform(v => v.toLowerCase())`; fixed `z.uuid('...')` and `z.url('...')` invalid message-arg form for Zod v4
+- `standards/validation-patterns/vite-react.md` — Fixed `z.infer` → `z.input` for form value types (avoids type errors when transforms are present); replaced raw `{...register(...)}` on `<input>` elements with `Form` + `FormField` + `CustomFormField` widget pattern
+- `add/pagination/vite-react.md` — Made `usePagination` hook generic over `T` (was typed as `any`); updated `fetchFn` generic to include full `pagination` shape so `nextPage` and `hasMore` work correctly at runtime; added `z.flattenError` on `safeParse` failure
+
+**Repository**
+- `AGENTS.md` — Removed `thedotmack/claude-mem` recommendation (its UserPromptSubmit hook blocks user input); updated pnpm minimum from `≥10.33.2` to `≥11` (required for `allowBuilds` object form in `pnpm-workspace.yaml`)
+- `.gitignore` — Added `.claude/settings.local.json` (machine-specific, not project config)
+
+---
+
 ## [3.1.0] — 2026-05-13
 
 ### Added — Next.js Backend Extraction Migration

@@ -126,7 +126,7 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 Supply chain attacks are OWASP A03:2025 — the third most critical web application risk category. Maintain an SBOM and run `pnpm audit` / `pip-audit` in CI on every dependency update.
 
 - **Node projects**: Use the package manager the scaffold documents (**pnpm** for current templates); after first `pnpm install`, **commit the new lockfile**. Do not delete lockfiles or switch npm/pnpm/yarn without explicit user approval.
-- **pnpm version**: Ensure the `"packageManager"` field in scaffolded `package.json` targets **pnpm ≥10.33.2**; run `pnpm --version` to verify before first install.
+- **pnpm version**: Ensure the `"packageManager"` field in scaffolded `package.json` targets **pnpm ≥11**; run `pnpm --version` to verify before first install.
 - **Python projects**: Install from the template’s `requirements-dev.txt` (or equivalent); do not loosen version pins without user approval.
 - **SBOM (EU CRA / CSA AD-2026-003)**: Projects shipping to regulated environments should generate a machine-readable Software Bill of Materials. Generate before each release:
   - **Node**: `pnpm dlx @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom.json`
@@ -196,11 +196,10 @@ For **Claude Code users**, also generate a `CLAUDE.md` (see below). Both coexist
 
 ## Recommended plugins for new projects
 
-**caveman**, **claude-mem**, and **superpowers** are installed by default in the post-scaffold step (each scaffold skill handles this for Claude Code users). Growth-stage plugins are opt-in — suggest them as the project matures.
+**caveman** and **superpowers** are installed by default in the post-scaffold step (each scaffold skill handles this for Claude Code users). Growth-stage plugins are opt-in — suggest them as the project matures.
 
 **Installed by default (all stacks, Claude Code users only):**
 - **caveman** (`claude plugin marketplace add JuliusBrussee/caveman`) — compresses output prose. **OFF** in sessions writing committed files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`, docs).
-- **claude-mem** (`claude plugin marketplace add thedotmack/claude-mem` then `claude plugin install claude-mem`) — auto-captures tool usage, decisions, and file changes across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not templateCentral (templateCentral uses built-in markdown memory instead).
 - **superpowers** (`claude plugin marketplace add obra/superpowers`) — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **As the project grows (5+ features):**

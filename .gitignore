@@ -76,3 +76,6 @@ docs/specs/
 docs/superpowers/plans/
 docs/superpowers/specs/
 
+# Claude Code local settings (machine-specific, not project config)
+.claude/settings.local.json
+

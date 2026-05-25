@@ -3,10 +3,18 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### FastAPI (Python + Pydantic + SQLAlchemy)
 
+> **Prerequisites**
+> This skill assumes the FastAPI scaffold from `fastapi-scaffold`. File paths below use
+> `src/core/` and `src/api/` matching that scaffold layout.
+> **If you're using async SQLAlchemy** (`AsyncSession`), ensure `create_async_engine`
+> is configured in your project — the default scaffold uses sync SQLAlchemy.
+> For sync SQLAlchemy, replace `AsyncSession` with `Session` and remove `await` from
+> database calls.
+
 **1. Reusable Pagination Schema**
 
 ```python
-# src/lib/validation/schemas.py
+# src/core/validation/schemas.py
 from pydantic import BaseModel, Field
 from typing import Literal
 
@@ -28,8 +36,8 @@ class PaginationParams(BaseModel):
 **2. Pagination Response Model**
 
 ```python
-# src/lib/types/pagination.py
-from pydantic import BaseModel
+# src/core/types/pagination.py
+from pydantic import BaseModel, Field
 from typing import Generic, TypeVar
 
 T = TypeVar('T')
@@ -38,7 +46,7 @@ class PaginationMetadata(BaseModel):
     page: int
     limit: int
     total: int
-    hasMore: bool
+    has_more: bool = Field(..., serialization_alias='hasMore')
 
 class PaginatedData(BaseModel, Generic[T]):
     items: list[T]
@@ -51,7 +59,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 **3. Pagination Service**
 
 ```python
-# src/lib/pagination/pagination_service.py
+# src/core/pagination/pagination_service.py
 
 class PaginationService:
     """Pagination utilities for consistent pagination across endpoints."""
@@ -68,7 +76,7 @@ class PaginationService:
             'page': page,
             'limit': limit,
             'total': total,
-            'hasMore': page * limit < total,
+            'has_more': page * limit < total,
         }
 
     @staticmethod
@@ -103,14 +111,14 @@ class PaginationService:
 
 ```python
 # src/api/projects/routes.py
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_session
-from core.exceptions import InvalidInputError
-from lib.pagination.pagination_service import PaginationService
-from lib.types.pagination import PaginatedData, PaginatedResponse, PaginationMetadata
+from database.session import get_db
+from core.pagination.pagination_service import PaginationService
+from core.types.pagination import PaginatedData, PaginatedResponse, PaginationMetadata
+from core.validation.schemas import PaginationParams
 from models.project import Project as ProjectModel
 from .schemas import ProjectResponse
 
@@ -120,28 +128,27 @@ ALLOWED_SORT_FIELDS = ['name', 'created_at', 'updated_at']
 
 @router.get('', response_model=PaginatedResponse[ProjectResponse])
 async def list_projects(
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-    sort: str | None = Query(default=None, pattern=r'^(asc|desc)_\w+$'),
-    session: AsyncSession = Depends(get_session),
+    params: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_db),  # Replace with Session if using sync SQLAlchemy (scaffold default)
 ) -> PaginatedResponse[ProjectResponse]:
     """List projects with pagination.
     
-    Query parameters are validated by Pydantic Query() constraints.
+    Query parameters are validated by PaginationParams via Depends().
     Returns paginated response with metadata.
     """
     # Validate sort field against whitelist
-    sort_result = PaginationService.parse_sort_param(sort, ALLOWED_SORT_FIELDS)
-    if sort and not sort_result:
-        raise InvalidInputError(
-            f'Invalid sort field. Allowed: {", ".join(ALLOWED_SORT_FIELDS)}'
+    sort_result = PaginationService.parse_sort_param(params.sort, ALLOWED_SORT_FIELDS)
+    if params.sort and not sort_result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Invalid sort parameter", "field": "sort"}
         )
 
     # Calculate offset
-    offset = PaginationService.calculate_offset(page, limit)
+    offset = PaginationService.calculate_offset(params.page, params.limit)
 
     # Query projects
-    stmt = select(ProjectModel).offset(offset).limit(limit)
+    stmt = select(ProjectModel).offset(offset).limit(params.limit)
     if sort_result:
         field_name, direction = sort_result
         order_col = getattr(ProjectModel, field_name)
@@ -149,15 +156,15 @@ async def list_projects(
     else:
         stmt = stmt.order_by(ProjectModel.created_at.desc())
 
-    result = await session.execute(stmt)
+    result = await session.execute(stmt)  # Replace with session.execute(stmt) (no await) for sync SQLAlchemy
     projects = result.scalars().all()
 
     # Get total count (indexed query)
     count_stmt = select(func.count(ProjectModel.id))
-    count_result = await session.execute(count_stmt)
-    total = count_result.scalar()
+    count_result = await session.execute(count_stmt)  # Replace with session.execute(count_stmt) (no await) for sync SQLAlchemy
+    total = count_result.scalar() or 0
 
-    pagination_metadata = PaginationService.create_metadata(page, limit, total)
+    pagination_metadata = PaginationService.create_metadata(params.page, params.limit, total)
     return PaginatedResponse(
         data=PaginatedData(
             items=[ProjectResponse.model_validate(p) for p in projects],

@@ -38,6 +38,7 @@ Unit tests go in `test/modules/<name>.controller.spec.ts` or `test/modules/<name
 #### Controller Test
 
 ```typescript
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MyController } from '../../src/modules/my/my.controller';
 import { MyService } from '../../src/modules/my/my.service';
@@ -71,7 +72,7 @@ describe('MyController', () => {
 #### Service Test with Mocked Repository
 
 ```typescript
-import { vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MyService } from '../../src/modules/my/my.service';
 import { MyRepository } from '../../src/modules/my/my.repository';
@@ -123,6 +124,7 @@ E2E tests go in `test/app.e2e-spec.ts` or `test/<name>.e2e-spec.ts`.
 > **Placeholder names**: All examples use `My*`, `/my-items`, etc. Replace these with your actual module name and route path (e.g., for a `task` module with `@Controller('tasks')`: `TaskController`, `/tasks`).
 
 ```typescript
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';

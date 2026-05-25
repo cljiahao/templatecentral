@@ -210,19 +210,35 @@ DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 ```ts
 // src/app/api/users/route.ts
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { db } from '@/integrations/database';
 
 export async function GET() {
-  const users = await db.selectFrom('users').selectAll().execute();
+  // Select only fields needed — never send full records to the browser
+  const users = await db.selectFrom('users')
+    .select(['id', 'email', 'name'])
+    .execute();
   return NextResponse.json(users);
 }
 
+const createUserSchema = z.object({
+  email: z.email(),
+  name: z.string().min(1),
+});
+
 export async function POST(request: Request) {
-  const body = await request.json();
+  const result = createUserSchema.safeParse(await request.json());
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: z.flattenError(result.error) },
+      { status: 400 }
+    );
+  }
+  const body = result.data;
   const user = await db
     .insertInto('users')
     .values({ email: body.email, name: body.name })
-    .returningAll()
+    .returning(['id', 'email', 'name'])
     .executeTakeFirstOrThrow();
   return NextResponse.json(user, { status: 201 });
 }
@@ -235,7 +251,8 @@ export async function POST(request: Request) {
 import { db } from '@/integrations/database';
 
 export default async function UsersPage() {
-  const users = await db.selectFrom('users').selectAll().execute();
+  // Select only fields needed — never send full records to the browser
+  const users = await db.selectFrom('users').select(['id', 'email', 'name']).execute();
   return <UserList users={users} />;
 }
 ```

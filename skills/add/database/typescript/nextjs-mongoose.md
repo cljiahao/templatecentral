@@ -167,7 +167,8 @@ import { User } from '@/integrations/database/schemas/user';
 
 export async function GET() {
   await connectDB();
-  const users = await User.find();
+  // Select only fields needed — never send full documents to the browser
+  const users = await User.find().select('name email -_id').lean();
   return NextResponse.json(users);
 }
 ```
@@ -181,7 +182,8 @@ import { User } from '@/integrations/database/schemas/user';
 
 export default async function UsersPage() {
   await connectDB();
-  const users = await User.find().lean();
+  // Select only fields needed — never send full documents to the browser
+  const users = await User.find().select('name email -_id').lean();
   return <UserList users={users} />;
 }
 ```

@@ -9,10 +9,11 @@ Add to `requirements.txt`:
 
 ```
 beanie>=2.0
+motor
 pymongo
 ```
 
-> **Beanie** is an async ODM for MongoDB built on PyMongo's async driver and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Motor is no longer required — Beanie 2.0 uses the PyMongo async driver directly.
+> **Beanie** is an async ODM for MongoDB built on Motor (the async MongoDB driver) and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Beanie 2.x uses Motor for async MongoDB access — Motor is still required as the async driver.
 
 ### B2. Create MongoDB Connection
 
@@ -20,16 +21,16 @@ pymongo
 
 ```python
 from beanie import init_beanie
-from pymongo import AsyncMongoClient
+from motor.motor_asyncio import AsyncMotorClient
 
 from core.config import api_settings
 
-mongo_client: AsyncMongoClient | None = None
+mongo_client: AsyncMotorClient | None = None
 
 
 async def init_mongo() -> None:
     global mongo_client
-    mongo_client = AsyncMongoClient(api_settings.MONGODB_URL)
+    mongo_client = AsyncMotorClient(api_settings.MONGODB_URL)
     db = mongo_client[api_settings.MONGODB_DB_NAME]
 
     from models import DOCUMENT_MODELS
@@ -127,7 +128,7 @@ from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users():
-    return await User.find_all().to_list()
+    return await User.find().to_list()
 
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str):
@@ -163,20 +164,20 @@ If `email-validator` is not yet in `requirements.txt`, add it first (`EmailStr` 
 ```python
 # src/models/user.py
 from datetime import datetime, timezone
+from typing import Annotated
 
-from beanie import Document
+from beanie import Document, Indexed
 from pydantic import EmailStr, Field
 
 
 class User(Document):
-    email: EmailStr
+    email: Annotated[EmailStr, Indexed(unique=True)]
     hashed_password: str
     name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "users"
-        indexes = ["email"]
 ```
 
 Update `src/models/__init__.py`:
@@ -224,7 +225,7 @@ async def login_user(email: str, password: str) -> str:
 async def get_user(user_id: str) -> dict:
     try:
         oid = PydanticObjectId(user_id)
-    except Exception:
+    except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",

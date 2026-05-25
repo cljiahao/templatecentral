@@ -534,7 +534,7 @@ export interface ExampleItem {
 ### `test/app.e2e-spec.ts`
 
 ```typescript
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   FastifyAdapter,

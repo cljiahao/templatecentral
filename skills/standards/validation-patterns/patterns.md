@@ -11,8 +11,8 @@ import { z } from 'zod';
 
 // Basic types
 export const emailSchema = z
-  .email('Invalid email address')
-  .toLowerCase();
+  .email({ error: 'Invalid email address' })
+  .transform(v => v.toLowerCase());
 
 export const passwordSchema = z
   .string()
@@ -21,10 +21,10 @@ export const passwordSchema = z
   .regex(/[0-9]/, 'Password must contain a number');
 
 export const uuidSchema = z
-  .uuid('Invalid UUID');
+  .uuid();
 
 export const urlSchema = z
-  .url('Invalid URL');
+  .url();
 
 export const dateSchema = z
   .iso.datetime()

@@ -16,9 +16,12 @@ interface UsePaginationOptions {
   enabled?: boolean;
 }
 
-export function usePagination(
+export function usePagination<T>(
   queryKey: string[],
-  fetchFn: (page: number, limit: number) => Promise<any>,
+  fetchFn: (page: number, limit: number) => Promise<{
+    items: T[];
+    pagination: { page: number; limit: number; total: number; hasMore: boolean };
+  }>,
   options: UsePaginationOptions = {}
 ) {
   const { initialPage = 1, pageSize = 10, enabled = true } = options;
@@ -64,11 +67,11 @@ export function usePagination(
 ```tsx
 // src/features/projects/components/projects-list.tsx
 import { usePagination } from '@/lib/utils/use-pagination';
-import { fetchProjects } from '@/api/projects';
+import { fetchProjects, type ProjectItem } from '@/api/projects';
 
 export function ProjectsList() {
   const { data, pagination, page, isLoading, error, nextPage, prevPage } =
-    usePagination(['projects'], fetchProjects);
+    usePagination<ProjectItem>(['projects'], fetchProjects);
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {(error as Error).message}</div>;
@@ -76,7 +79,7 @@ export function ProjectsList() {
   return (
     <div className="space-y-4">
       <ul className="space-y-2">
-        {data.map((project: any) => (
+        {data.map((project: ProjectItem) => (
           <li key={project.id} className="border p-2 rounded">
             <h3 className="font-bold">{project.name}</h3>
             {project.description && (
@@ -130,14 +133,16 @@ export function ProjectsList() {
 import { z } from 'zod';
 
 // Matches Phase 1 unified response schema
+const projectItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+});
+
+export type ProjectItem = z.infer<typeof projectItemSchema>;
+
 const paginatedProjectSchema = z.object({
-  items: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string().nullable(),
-    })
-  ),
+  items: z.array(projectItemSchema),
   pagination: z.object({
     page: z.number(),
     limit: z.number(),
@@ -167,7 +172,7 @@ export async function fetchProjects(
   // Validate response shape
   const parsed = paginatedProjectSchema.safeParse(data);
   if (!parsed.success) {
-    throw new Error('Invalid API response shape');
+    throw new Error(`Invalid API response: ${JSON.stringify(z.flattenError(parsed.error).formErrors)}`);
   }
 
   return parsed.data;
