@@ -1918,71 +1918,64 @@ If check fails, a generated file violates the eslint or prettier config.
 
 ### 6. Write project AGENTS.md
 
-Create `AGENTS.md` at the project root with this exact content (update Identity fields):
+Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
 <!-- templateCentral: nextjs@4.0.0 -->
+# AGENTS.md — [Project Name]
 
-> **Session start:** Run `templatecentral:standards` (drift-check) to check for templateCentral convention and dependency updates before starting work.
+> STOP. Next.js 16 changed async APIs. `cookies()`, `headers()`, `params`, and
+> `searchParams` are ALL async — sync access is a TypeScript error. `middleware.ts`
+> is replaced by `proxy.ts`. Verify before writing any route handler or middleware.
 
-# <Project Name>
+## Stack
+Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
+React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
 
-## Identity
-- **Stack**: Next.js, React, TypeScript, shadcn/ui, Tailwind CSS 4, TanStack React Query
-- **Scaffolded from**: templateCentral nextjs@1.0.0
-- **Created**: <date>
+## File Layout
+App routes:    src/app/
+API routes:    src/app/api/
+Features:      src/features/<name>/{api/, components/, hooks/, types.ts}
+UI primitives: src/components/ui/
+Auth layer:    proxy.ts + src/lib/auth.ts
+DB layer:      src/lib/db/
+Config/env:    src/config/env.ts
+Tests:         src/test/ or *.test.ts co-located
 
-## Architecture Decisions
-- Providers (QueryClientProvider) in root `layout.tsx`
-- Route groups: `(public)/` for public pages; `dashboard/` for authenticated pages (protected by `proxy.ts` once `templatecentral:add` (auth) is run)
-- Feature modules under `src/features/<name>/`
-- Barrel exports (`index.ts`) for all shared folders
-- shadcn/ui primitives in `src/components/ui/` (managed by CLI)
-- Reusable composed widgets in `src/components/widgets/`
-- Health endpoints: `GET /api` and `GET /api/health` (Docker HEALTHCHECK targets `/api/health`)
+## Rules (always)
+- TypeScript strict — no `any`, no `@ts-ignore`
+- All user input validated with Zod at every boundary
+- DB writes via repository layer only
+- `z.input<typeof Schema>` for form types; `z.infer` for post-parse
+- No secrets in `NEXT_PUBLIC_*` variables
 
-## Key Conventions
-- Named exports only (except Next.js special files)
-- `function` declarations for components; `const` arrows for hooks/utilities
-- kebab-case filenames, PascalCase exports
-- Static data in `constants.ts`, never inline in components
-- Pages are thin — compose from `features/` and `components/`
-- API tests: Vitest under `test/api/` for same-change coverage on `src/app/api/**`
+## When to use templateCentral skills
+- `templatecentral:add (auth)` — adding JWT/OAuth/session auth
+- `templatecentral:add (database)` — connecting Drizzle/Kysely/Mongoose
+- `templatecentral:add (feature)` — full feature page+API+hooks
+- `templatecentral:add (component)` — reusable UI component
+- `templatecentral:add (api-route)` — API route with auth guard
+- `templatecentral:migrate` — DB migrations or framework upgrades
+- `templatecentral:standards` — drift check, validation patterns
+- `templatecentral:audit` — full ecosystem + accuracy audit
 
-## Commands
-- `pnpm dev` — development server
-- `pnpm build` — production build
-- `pnpm test` — run tests
-- `pnpm check` — format + lint + typecheck
+## When to use project skills
+- `/next-migrate` — Drizzle push/migrate with safety gate
+- `/next-verify` — typecheck + lint + test in one command
 
-## Code Quality
+## On-demand docs
+Architecture: docs/architecture.md | Decisions: docs/adr/
+Auth: docs/auth.md | DB schema: docs/schema.md
 
-Every agent writing or modifying code must follow these before marking a task done:
-
-- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
-- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
-- **SRP** — One responsibility per file and function. Route handlers handle HTTP; services handle business logic; never mix.
-- **SoC** — UI from data-fetching, validation from business logic, config from implementation — keep them separate.
-- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
-- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
-- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
-- **Validate at every boundary** — User input, API responses, env vars: always validate with Zod. Never trust external data.
-- **Fail loudly** — No empty catch blocks. Log with context; return meaningful status codes.
-- **Least privilege** — Return only the fields the caller needs. Never send full DB records to the browser.
-- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
-- **Secrets in production**: Use a secrets manager appropriate to your cloud platform — flat `.env` files are for local development only.
+## AI Harness
+PostToolUse hook: `pnpm exec tsc --noEmit 2>&1 | tail -5` after Edit/Write. Feedback-only.
+Project skills: .claude/skills/ | Manifest: .claude/harness.json
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
-
-## AI Harness
-
-`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
-
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
-### 6b. Create .claude/settings.json
+### 6b. Create `.claude/settings.json`
 
 Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
 
@@ -1996,7 +1989,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm test --run --reporter=dot 2>&1 | tail -20"
+            "command": "pnpm exec tsc --noEmit 2>&1 | tail -5"
           }
         ]
       }
@@ -2036,6 +2029,86 @@ A fully specified, reproducible environment ensuring every agent session starts 
 *Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
 ```
 
+### 6c. Create project skill files (`.claude/skills/`)
+
+Create `.claude/skills/next-migrate.md`:
+
+```markdown
+---
+name: next-migrate
+description: Run Drizzle push/migrate for this project with a safety gate.
+---
+
+Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
+
+- `pnpm db:push` — dev only, no migration files generated (schema overwrite)
+- `pnpm db:migrate` — production-safe, generates migration files
+
+Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
+```
+
+Create `.claude/skills/next-verify.md`:
+
+```markdown
+---
+name: next-verify
+description: Run typecheck + lint + test suite for this project in one pass.
+---
+
+Run `pnpm check && pnpm test` and report any failures.
+
+- If `pnpm check` fails: fix TypeScript or lint errors before marking work done.
+- If `pnpm test` fails: investigate root cause — do not skip or disable tests.
+```
+
+### 6d. Create `.claude/hooks/verify.sh`
+
+Create `.claude/hooks/verify.sh`:
+
+```bash
+#!/bin/bash
+# Verification gate — run after scaffold is complete
+set -e
+echo "Running verification gate..."
+pnpm build
+pnpm check
+pnpm test
+echo "All checks passed."
+```
+
+Run `chmod +x .claude/hooks/verify.sh`.
+
+### 6e. Create `.claude/harness.json`
+
+After all harness files are written, compute SHA-256 hashes and write `.claude/harness.json`:
+
+```bash
+sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
+sha256_settings=$(sha256sum .claude/settings.json | cut -d' ' -f1)
+sha256_hooks=$(sha256sum .claude/hooks/verify.sh | cut -d' ' -f1)
+sha256_migrate=$(sha256sum .claude/skills/next-migrate.md | cut -d' ' -f1)
+sha256_verify=$(sha256sum .claude/skills/next-verify.md | cut -d' ' -f1)
+```
+
+Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` placeholders and `<ISO-date>` with today's date:
+
+```json
+{
+  "templatecentral_version": "4.0.0",
+  "stack": "nextjs",
+  "seeded_at": "<ISO-date>",
+  "seeded_files": {
+    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
+    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
+    ".claude/hooks/verify.sh": { "origin_hash": "<sha256_hooks>", "path": ".claude/hooks/verify.sh" },
+    ".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" },
+    ".claude/skills/next-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify.md" }
+  }
+}
+```
+
 ### 7. Dispatch agents
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
@@ -2067,19 +2140,23 @@ claude plugin marketplace add obra/superpowers
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a short `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
+Create `CLAUDE.md` at the project root with exactly one line:
 
-Include **Build & Dev** with verified commands:
-- `pnpm dev` — dev server (http://localhost:3000)
-- `pnpm build` — production build
-- `pnpm test` — tests
-- `pnpm check` — type check + lint
+```
+@AGENTS.md
+```
 
-**templateCentral skills** (this stack): `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (auth, database, feature, page, api-route, component, form, integration, test). **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+This makes Claude Code automatically load `AGENTS.md` on every session without duplicating its content.
 
 ### 8b. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in templateCentral's root `AGENTS.md`. If no, skip.
+Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```
 
 ### 9. Remove example code (optional)
 

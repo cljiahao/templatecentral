@@ -33,10 +33,11 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 
 ### Adding a new stack
 
-1. Create `skills/<stack>-scaffold/SKILL.md` as the entry point
-2. Add `.claude/rules/<stack>.md` with stack-specific agent rules
-3. Update `AGENTS.md` to include the new stack in the routing table
-4. Update `README.md` to add the stack to the skills table
+1. Add reference files under `skills/scaffold/<stack>/` (e.g., `source-files.md`, `config-files.md`)
+2. Add a routing branch for the new stack in `skills/scaffold/SKILL.md`
+3. Add `.claude/rules/<stack>.md` with stack-specific agent rules
+4. Update `AGENTS.md` to include the new stack in the routing table
+5. Update `README.md` to add the stack to the skills table
 
 ## Pull Request Checklist
 

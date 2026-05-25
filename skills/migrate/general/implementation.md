@@ -174,27 +174,93 @@ Run only when the user chose A in Phase 0. Do not invoke for unmarked projects.
 
 Read the full `AGENTS.md`. Extract `<stack>` from the existing marker on line 1.
 
-**Step 4b: Add AI Harness section**
+**Step 4b: Replace AGENTS.md with compressed version**
 
-If `## AI Harness` is not already present in `AGENTS.md`, append it before any `## Session Start` section, or at the end if that section is absent:
+Replace `AGENTS.md` with the compressed template for the detected stack. For `nextjs`, write exactly:
+
+```markdown
+<!-- templateCentral: nextjs@4.0.0 -->
+# AGENTS.md — [Project Name]
+
+> STOP. Next.js 16 changed async APIs. `cookies()`, `headers()`, `params`, and
+> `searchParams` are ALL async — sync access is a TypeScript error. `middleware.ts`
+> is replaced by `proxy.ts`. Verify before writing any route handler or middleware.
+
+## Stack
+Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
+React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
+
+## File Layout
+App routes:    src/app/
+API routes:    src/app/api/
+Features:      src/features/<name>/{api/, components/, hooks/, types.ts}
+UI primitives: src/components/ui/
+Auth layer:    proxy.ts + src/lib/auth.ts
+DB layer:      src/lib/db/
+Config/env:    src/config/env.ts
+Tests:         src/test/ or *.test.ts co-located
+
+## Rules (always)
+- TypeScript strict — no `any`, no `@ts-ignore`
+- All user input validated with Zod at every boundary
+- DB writes via repository layer only
+- `z.input<typeof Schema>` for form types; `z.infer` for post-parse
+- No secrets in `NEXT_PUBLIC_*` variables
+
+## When to use templateCentral skills
+- `templatecentral:add (auth)` — adding JWT/OAuth/session auth
+- `templatecentral:add (database)` — connecting Drizzle/Kysely/Mongoose
+- `templatecentral:add (feature)` — full feature page+API+hooks
+- `templatecentral:add (component)` — reusable UI component
+- `templatecentral:add (api-route)` — API route with auth guard
+- `templatecentral:migrate` — DB migrations or framework upgrades
+- `templatecentral:standards` — drift check, validation patterns
+- `templatecentral:audit` — full ecosystem + accuracy audit
+
+## When to use project skills
+- `/next-migrate` — Drizzle push/migrate with safety gate
+- `/next-verify` — typecheck + lint + test in one command
+
+## On-demand docs
+Architecture: docs/architecture.md | Decisions: docs/adr/
+Auth: docs/auth.md | DB schema: docs/schema.md
+
+## AI Harness
+PostToolUse hook: `pnpm exec tsc --noEmit 2>&1 | tail -5` after Edit/Write. Feedback-only.
+Project skills: .claude/skills/ | Manifest: .claude/harness.json
+
+## Project-Specific Notes
+<!-- Migrate existing decisions, custom patterns, and context here -->
+```
+
+For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md` but append `## AI Harness` before the final line if it is not already present:
 
 ```markdown
 ## AI Harness
 
-`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
-
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
+PostToolUse hook runs after every file edit — output is feedback only; it never blocks execution.
+Project skills: .claude/skills/ | Manifest: .claude/harness.json
 ```
 
-**Step 4c: Create `.claude/settings.json`**
+**Step 4c: Create `CLAUDE.md`**
 
-If `.claude/settings.json` does not exist, create it. Select the test command for the detected stack:
+If `CLAUDE.md` does not exist, create it at the project root with exactly one line:
+
+```
+@AGENTS.md
+```
+
+If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
+
+**Step 4d: Create `.claude/settings.json`**
+
+If `.claude/settings.json` does not exist, create it. Select the hook command for the detected stack:
 
 | Stack | Command |
 |-------|---------|
-| fastapi | `pytest test/ -q --tb=short 2>&1 \| tail -20` |
-| nextjs / vite-react | `pnpm test --run --reporter=dot 2>&1 \| tail -20` |
-| nestjs | `pnpm test --run 2>&1 \| tail -20` |
+| nextjs / vite-react | `pnpm exec tsc --noEmit 2>&1 \| tail -5` |
+| nestjs | `pnpm exec tsc --noEmit 2>&1 \| tail -5` |
+| fastapi | `python -m pytest test/ -q --tb=short 2>&1 \| tail -10` |
 
 ```json
 {
@@ -205,7 +271,7 @@ If `.claude/settings.json` does not exist, create it. Select the test command fo
         "hooks": [
           {
             "type": "command",
-            "command": "<stack-test-command>"
+            "command": "<stack-hook-command>"
           }
         ]
       }
@@ -214,53 +280,139 @@ If `.claude/settings.json` does not exist, create it. Select the test command fo
 }
 ```
 
-If `.claude/settings.json` already exists, add the `PostToolUse` entry to the existing hooks without overwriting.
+If `.claude/settings.json` already exists, merge the `PostToolUse` entry into the existing hooks without overwriting.
 
-**Step 4d: Create `FUTURE.md`**
+**Step 4e: Seed project skills (nextjs only)**
 
-Create `FUTURE.md` at the project root only if it does not already exist:
+If stack is `nextjs`, create `.claude/skills/next-migrate.md` and `.claude/skills/next-verify.md` only if they do not already exist:
 
+`.claude/skills/next-migrate.md`:
 ```markdown
-# Future Directions
-
-Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
-
-## Meta-Harness
-
-CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
-
-**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
-
-## Trace-Driven Evolution
-
-Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
-
-**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
-
-## Environment Engineering
-
-A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
-
-**Seam:** `devcontainer.json` if present.
-
+---
+name: next-migrate
+description: Run Drizzle push/migrate for this project with a safety gate.
 ---
 
-*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
+
+- `pnpm db:push` — dev only, no migration files generated (schema overwrite)
+- `pnpm db:migrate` — production-safe, generates migration files
+
+Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
 ```
 
-**Step 4e: Update the version marker**
+`.claude/skills/next-verify.md`:
+```markdown
+---
+name: next-verify
+description: Run typecheck + lint + test suite for this project in one pass.
+---
 
-Rewrite line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@4.0.0 -->`.
+Run `pnpm check && pnpm test` and report any failures.
 
-**Step 4f: Print summary**
+- If `pnpm check` fails: fix TypeScript or lint errors before marking work done.
+- If `pnpm test` fails: investigate root cause — do not skip or disable tests.
+```
+
+**Step 4f: Create `.claude/harness.json`**
+
+Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
+
+```bash
+sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
+sha256_settings=$(sha256sum .claude/settings.json | cut -d' ' -f1)
+```
+
+For nextjs, also hash the project skills:
+```bash
+sha256_migrate=$(sha256sum .claude/skills/next-migrate.md | cut -d' ' -f1)
+sha256_verify=$(sha256sum .claude/skills/next-verify.md | cut -d' ' -f1)
+```
+
+Write `.claude/harness.json` (include only files that were actually created):
+
+```json
+{
+  "templatecentral_version": "4.0.0",
+  "stack": "<detected-stack>",
+  "seeded_at": "<ISO-date>",
+  "seeded_files": {
+    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
+    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" }
+  }
+}
+```
+
+**Step 4g: Update the version marker**
+
+Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@4.0.0 -->`.
+
+**Step 4h: Print summary**
 
 ```
 ✓ Upgraded to templateCentral v4.0.
 
 Changes made:
-  AGENTS.md            — Added ## AI Harness section; updated marker to @4.0.0
-  .claude/settings.json — Created with PostToolUse test hook
-  FUTURE.md            — Created with post-harness seam documentation
+  AGENTS.md              — Compressed to indexed format; marker updated to @4.0.0
+  CLAUDE.md              — Created (@AGENTS.md one-liner)
+  .claude/settings.json  — Created with PostToolUse hook
+  .claude/harness.json   — Created with origin hashes
+  (nextjs only) .claude/skills/next-migrate.md, next-verify.md
 
-Commit these three files together.
+Commit these files together.
+```
+
+---
+
+## Phase 5 — Harness Health Check
+
+Run when `templatecentral:migrate` is invoked on a project that already has `<!-- templateCentral: <stack>@4.0.0 -->` on line 1 (i.e., Phase 0 reports "no migration needed") **and** `.claude/harness.json` exists.
+
+This phase checks whether seeded files have drifted from their recorded origin hashes. It never auto-repairs — it reports only.
+
+**Step 5a: Read `.claude/harness.json`**
+
+Read the `seeded_files` map.
+
+**Step 5b: Check each seeded file**
+
+For each entry in `seeded_files`:
+
+```bash
+current_hash=$(sha256sum <path> 2>/dev/null | cut -d' ' -f1)
+```
+
+Compare `current_hash` to `origin_hash`. Classify each file:
+
+- `UNCHANGED` — hashes match
+- `MODIFIED` — hashes differ (user or agent edited it)
+- `MISSING` — file does not exist
+
+**Step 5c: Report**
+
+```
+Harness health check — templateCentral v4.0.0 / <stack>
+Seeded: <seeded_at>
+
+  AGENTS.md              UNCHANGED
+  CLAUDE.md              MODIFIED   ← you customized this
+  .claude/settings.json  UNCHANGED
+  .claude/harness.json   UNCHANGED
+
+MODIFIED files are intentional edits — no action needed unless you want to
+re-sync to the latest templateCentral defaults. To re-seed a file, run
+`templatecentral:migrate` and choose "re-seed <filename>".
+```
+
+If all files are `UNCHANGED`, print:
+```
+✓ All harness files match their templateCentral origin. No action needed.
+```
+
+If any file is `MISSING`, print a warning:
+```
+⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.
+  Re-create it by running `templatecentral:migrate` and choosing "re-seed <filename>".
 ```

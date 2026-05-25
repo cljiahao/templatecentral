@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/lint-skills.sh skills/ 2>&1 | tail -10"
+          }
+        ]
+      }
+    ]
+  }
+}

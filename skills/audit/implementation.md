@@ -566,6 +566,10 @@ Keep the item concise — one checkbox, one line.
 
 If a new `skills/<name>/SKILL.md` was added since the last audit, add it to the correct stack section in Step 2 so it is covered on the next run.
 
+### Missing capability gap
+
+If this audit repeatedly encountered a user need that no `templatecentral:add` capability covers — and it appeared in more than one stack or file — note it explicitly as a skill candidate. Open a `templatecentral:write-skill` session to draft it.
+
 ### After updating infrastructure
 
 Commit the lint script and this skill together with the content fixes, so the audit history is traceable:
@@ -574,6 +578,28 @@ Commit the lint script and this skill together with the content fixes, so the au
 git add scripts/lint-skills.sh skills/audit/SKILL.md skills/audit/implementation.md
 git commit -m "audit: add <pattern> check to lint script and shared-audit"
 ```
+
+---
+
+## Step 6 — Repo harness health check
+
+Run after Step 5 to verify templateCentral's own harness files are intact.
+
+```bash
+# AGENTS.md exists and has the plugin marker on line 1
+head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md marker" || echo "FAIL: AGENTS.md marker missing"
+
+# CLAUDE.md exists and is @AGENTS.md
+[ -f CLAUDE.md ] && grep -q '^@AGENTS.md' CLAUDE.md && echo "OK: CLAUDE.md" || echo "FAIL: CLAUDE.md missing or wrong"
+
+# .claude/settings.json exists
+[ -f .claude/settings.json ] && echo "OK: .claude/settings.json" || echo "FAIL: .claude/settings.json missing"
+
+# .claude/harness.json exists
+[ -f .claude/harness.json ] && echo "OK: .claude/harness.json" || echo "FAIL: .claude/harness.json missing"
+```
+
+Any `FAIL` line means a harness file was removed or corrupted. Re-create it from the v4.0.0 spec in `AGENTS.md` → **Working on this repo** section.
 
 ## Changelog
 ### 2.2.0

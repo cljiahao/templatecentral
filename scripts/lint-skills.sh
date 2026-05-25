@@ -148,10 +148,15 @@ check_no_deprecated_zod_flatten() {
 check_no_middleware_ts() {
   # Next.js 16 replaced middleware.ts with proxy.ts for auth/proxy patterns.
   # REVISIT: if Next.js reintroduces middleware.ts, remove or adjust this check.
-  # audit/implementation.md is excluded — it references middleware.ts in its own checklist items.
+  # Excluded files are meta-documents (audit checklist, migration guides, scaffold templates)
+  # that legitimately reference middleware.ts to explain the deprecation.
   header "middleware.ts references"
   local matches
-  matches=$(grep -rn 'middleware\.ts' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  matches=$(grep -rn 'middleware\.ts' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    | grep -v 'migrate/general/implementation' \
+    | grep -v 'scaffold/nextjs/source-files' \
+    || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "middleware.ts found — Next.js 16 uses proxy.ts"
