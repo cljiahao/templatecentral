@@ -261,6 +261,34 @@ check_no_sync_secret_comparison() {
   fi
 }
 
+check_no_postToolUse_full_test_suite() {
+  # PostToolUse hooks are feedback-only and cannot block execution.
+  # Full test suites (pnpm test, pytest, etc.) belong in Stop hooks, not PostToolUse.
+  # Running tests on every file edit is slow and masks real TypeScript feedback.
+  # TIMELESS: PostToolUse semantic is feedback-only by design in Claude Code.
+  header "Full test suite in PostToolUse hook"
+  local matches
+  matches=$(grep -rn '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    || true)
+  # Check if any PostToolUse block is followed by a test command within 15 lines
+  local postToolUse_files
+  postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  local test_in_postToolUse=""
+  for file in $postToolUse_files; do
+    # Find lines with pnpm test or pytest inside a PostToolUse context
+    if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -qE '"(pnpm test|pytest|npm test|yarn test)'; then
+      test_in_postToolUse="$test_in_postToolUse\n$file"
+    fi
+  done
+  if [[ -n "$test_in_postToolUse" ]]; then
+    echo -e "$test_in_postToolUse"
+    fail "Full test suite in PostToolUse — use Stop hook for tests; PostToolUse should run tsc --noEmit only"
+  else
+    pass "No full test suite in PostToolUse hook"
+  fi
+}
+
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
 
 echo "=== templateCentral skill lint ==="
@@ -283,6 +311,7 @@ check_no_globals_jest_in_vitest_projects
 check_no_sync_secret_comparison
 check_no_zod_string_format_methods
 check_no_zod_deprecated_message_key
+check_no_postToolUse_full_test_suite
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

@@ -459,6 +459,16 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Security header parity**: Do all three API scaffolds set the same set of security headers? If one has a header the others don't, flag it.
 - [ ] **Ecosystem currency**: Is there anything in the skills that was best practice in 2024 but has since been superseded? (Consider: new OWASP guidance, framework major releases, deprecated packages.)
 
+### Harness engineering checks (Step 3H)
+
+- [ ] **PostToolUse hook command**: Scaffold and migrate skills use `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` (not plain `--noEmit`, not `pnpm test`). PostToolUse is feedback-only; never runs blocking logic.
+- [ ] **Stop hook present**: Scaffold and migrate skills seed a `Stop` hook that runs the full test suite (`pnpm test --run`). This is the correct place for blocking quality gates — not PostToolUse.
+- [ ] **Skill scoping model correct**: Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations. The two namespaces are explained (project skills = `/skill-name`, plugin skills = `plugin:skill-name`).
+- [ ] **Project skill seeding**: Scaffold skill seeds at least `/next-verify` and `/next-migrate` into `.claude/skills/`. Migrate Phase 4 seeds the same.
+- [ ] **Write-more-skills instruction present**: Scaffold instructions include a step asking the user to create additional project skills for repeated workflows (step 7c or equivalent).
+- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Migrate Phase 5 can read these hashes to detect drift.
+- [ ] **CLAUDE.md is one line**: Every scaffold and migrate path generates `@AGENTS.md` as the only content of `CLAUDE.md` — never a verbose duplicate.
+
 ---
 
 ## Step 4 — Report, fix, and re-audit (loop until clean)

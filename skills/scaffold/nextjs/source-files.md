@@ -1924,55 +1924,68 @@ Create `AGENTS.md` at the project root with this exact content (fill in `[Projec
 <!-- templateCentral: nextjs@4.0.0 -->
 # AGENTS.md — [Project Name]
 
-> STOP. Next.js 16 changed async APIs. `cookies()`, `headers()`, `params`, and
-> `searchParams` are ALL async — sync access is a TypeScript error. `middleware.ts`
-> is replaced by `proxy.ts`. Verify before writing any route handler or middleware.
+> STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
+> ALL async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
 
 ## Stack
 Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
 React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
 
+## Commands
+```bash
+pnpm dev          # dev server — http://localhost:3000
+pnpm build        # production build
+pnpm test         # run test suite
+pnpm check        # format + lint + typecheck
+```
+
 ## File Layout
-App routes:    src/app/
-API routes:    src/app/api/
-Features:      src/features/<name>/{api/, components/, hooks/, types.ts}
-UI primitives: src/components/ui/
-Auth layer:    proxy.ts + src/lib/auth.ts
-DB layer:      src/lib/db/
-Config/env:    src/config/env.ts
-Tests:         src/test/ or *.test.ts co-located
+src/app/                — app router (pages, layouts, route handlers)
+src/app/api/            — API route handlers
+src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
+src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
+src/components/widgets/ — reusable composed components (project-owned)
+proxy.ts + src/lib/auth.ts — auth layer
+src/lib/db/             — database layer
+src/config/env.ts       — environment validation (Zod)
+
+## Skills
+
+### Project skills — check here first
+Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
+
+| Skill | What it does |
+|-------|-------------|
+| `/next-verify` | typecheck + lint + test in one pass |
+| `/next-migrate` | Drizzle push/migrate with safety gate (once database is wired up) |
+
+Add new project skills here whenever you repeat a workflow more than once.
+
+### templateCentral plugin skills — framework-level operations
+| Skill | When to use |
+|-------|-------------|
+| `templatecentral:add (auth)` | JWT/OAuth/session auth |
+| `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
+| `templatecentral:add (feature)` | full feature: page + API route + hooks |
+| `templatecentral:add (component)` | reusable UI component |
+| `templatecentral:add (api-route)` | API route with auth guard |
+| `templatecentral:migrate` | DB migrations or framework upgrades |
+| `templatecentral:standards` | drift check, validation patterns |
+| `templatecentral:audit` | full ecosystem + accuracy audit |
 
 ## Rules (always)
 - TypeScript strict — no `any`, no `@ts-ignore`
 - All user input validated with Zod at every boundary
 - DB writes via repository layer only
-- `z.input<typeof Schema>` for form types; `z.infer` for post-parse
+- `z.input<typeof Schema>` for form types; `z.infer` for post-parse output
 - No secrets in `NEXT_PUBLIC_*` variables
 
-## When to use templateCentral skills
-- `templatecentral:add (auth)` — adding JWT/OAuth/session auth
-- `templatecentral:add (database)` — connecting Drizzle/Kysely/Mongoose
-- `templatecentral:add (feature)` — full feature page+API+hooks
-- `templatecentral:add (component)` — reusable UI component
-- `templatecentral:add (api-route)` — API route with auth guard
-- `templatecentral:migrate` — DB migrations or framework upgrades
-- `templatecentral:standards` — drift check, validation patterns
-- `templatecentral:audit` — full ecosystem + accuracy audit
-
-## When to use project skills
-- `/next-migrate` — Drizzle push/migrate with safety gate
-- `/next-verify` — typecheck + lint + test in one command
-
-## On-demand docs
-Architecture: docs/architecture.md | Decisions: docs/adr/
-Auth: docs/auth.md | DB schema: docs/schema.md
-
 ## AI Harness
-PostToolUse hook: `pnpm exec tsc --noEmit 2>&1 | tail -5` after Edit/Write. Feedback-only.
-Project skills: .claude/skills/ | Manifest: .claude/harness.json
+PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
+Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
 ## Project-Specific Notes
-<!-- Add decisions, custom patterns, and context as the project evolves -->
+<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
 ```
 
 ### 6b. Create `.claude/settings.json`
@@ -1989,7 +2002,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm exec tsc --noEmit 2>&1 | tail -5"
+            "command": "pnpm exec tsc --noEmit --incremental 2>&1 | tail -5"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm test --run 2>&1 | tail -20"
           }
         ]
       }
@@ -1997,6 +2020,9 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
   }
 }
 ```
+
+`PostToolUse` — fast incremental TypeScript feedback after every file edit. Feedback-only; never blocks.
+`Stop` — runs the full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures before stopping.
 
 Also create `FUTURE.md` at the project root:
 
@@ -2135,6 +2161,20 @@ claude plugin marketplace add obra/superpowers
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
+
+### 7c. Seed additional project skills
+
+After all dispatch agents complete, ask the user: "Do you want to create project-scoped skills for any workflows you'll run regularly in this project?"
+
+If yes — or if the user ran any workflow more than once during the scaffold process — create skills in `.claude/skills/`. Common candidates for new projects:
+
+| Workflow | Suggested skill name | Body |
+|----------|---------------------|------|
+| Start dev + open browser | `dev-start` | `pnpm dev` + describe URL |
+| Reset DB to clean state | `db-reset` | `pnpm db:push --force-reset` (dev only) |
+| Generate a new shadcn component | `add-component` | `pnpm dlx shadcn@latest add <name>` |
+
+Each skill gets a SKILL.md with `name:` and `description:` frontmatter and a short body. Skills capture this-project specifics — not generic advice that templateCentral already provides.
 
 ### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
 

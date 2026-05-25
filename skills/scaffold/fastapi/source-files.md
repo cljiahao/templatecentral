@@ -1205,7 +1205,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "pytest test/ -q --tb=short 2>&1 | tail -20"
+            "command": "python -m mypy src/ --no-error-summary 2>&1 | tail -5"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pytest test/ -q 2>&1 | tail -20"
           }
         ]
       }
@@ -1213,6 +1223,9 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
   }
 }
 ```
+
+`PostToolUse` — fast type feedback via mypy after every edit. Feedback-only; never blocks.
+`Stop` — runs full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures.
 
 Also create `FUTURE.md` at the project root:
 

@@ -35,6 +35,24 @@ If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the
 
 `auth` · `database` · `page` · `feature` · `module` · `api-route` · `endpoint` · `component` · `form` · `integration` · `test` · `logging` · `error-handling` · `pagination` · `mutation` · `ai-security`
 
+## Skill Scoping Model
+
+templateCentral seeds project-scoped skills into every scaffolded project. Understanding the resolution order is important:
+
+| Level | Location | Invoked as | Priority |
+|-------|----------|------------|----------|
+| Enterprise | system-level | `/<name>` | highest |
+| Personal | `~/.claude/skills/` | `/<name>` | overrides project |
+| Project | `.claude/skills/` | `/<name>` | project-specific |
+| Plugin | `<plugin>/skills/` | `<plugin>:<name>` | namespaced, no conflict |
+
+**Key facts:**
+- Plugin skills (`templatecentral:*`) are namespaced — they never conflict with project or personal skills
+- Project skills (`.claude/skills/`) are invoked without namespace (e.g., `/next-verify`)
+- Personal skills override project skills when names collide — use project-unique names to avoid this
+- templateCentral seeds project skills for project-specific workflows; the scaffolded AGENTS.md instructs agents to check `.claude/skills/` first for project workflows, then use `templatecentral:*` for framework-level operations
+- As the project grows, agents should create new project skills for any workflow repeated more than once
+
 ## Working on this repo
 
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill
