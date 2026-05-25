@@ -1,6 +1,6 @@
 ---
 paths:
-  - "skills/nextjs-*/**"
+  - "skills/**"
 ---
 
 # Next.js Rules
