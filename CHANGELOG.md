@@ -10,158 +10,84 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [4.0.0] — 2026-05-25
+## [4.0.0] — 2026-05-26
 
-### Fixed — Audit pass: 3-iteration online scan, 2026-05-25
+### Harness Engineering
 
-Fresh web scan (NestJS 11.1.23 confirmed, all other versions verified). 5 parallel semantic review agents across all 95 skill files, 3 full iterations. Lint passes clean throughout (14/14 checks).
+All 4 scaffold skills now emit a full harness layer into the scaffolded project.
 
-**Ghost skill name sweep (HIGH — dispatched skills would silently fail)**
-- 30 files — `templatecentral:shared-migrate` → `templatecentral:migrate` (was never a registered skill name)
-- `add/database/python.md`, `add/database/typescript.md` — `shared-migrate-database` → `templatecentral:migrate`
-- `review/review/implementation.md` — `shared-code-standards` → proper `cat` command for stack-specific code-standards file
-- `write-skill/SKILL.md` — `templatecentral:shared-audit` → `templatecentral:audit`
-- `migrate/general/implementation.md` — `templatecentral:<stack>-scaffold` placeholder → `templatecentral:scaffold`
-- `build/implementation.md` — deduplicated `templatecentral:scaffold` ×4 in Callers list (residual from stack-specific names)
-- `scripts/lint-skills.sh` — added all four new ghost patterns to `check_no_ghost_agent_names` check
+**Compressed AGENTS.md** — replaced verbose 61-line template with a ~70-line indexed format: Commands section, two-table skill routing (project skills first, plugin skills second), file layout, rules, AI harness section. Subagent blind-spot note added (built-in subagents `/explore`/`/plan` have `omitClaudeMd: true` since v2.1.84 — all routing stays in AGENTS.md, not CLAUDE.md).
 
-**NestJS Fastify filter compatibility (HIGH)**
-- `scaffold/nestjs/source-files.md` — `HttpExceptionFilter extends BaseExceptionFilter` with `super.catch()` is incompatible with Fastify adapter; replaced with `implements ExceptionFilter` + manual Fastify reply construction
-- `add/logging/nestjs.md` — same fix applied to the logging skill's filter template; also removed dead `BaseExceptionFilter` import
+**CLAUDE.md = `@AGENTS.md`** — one line. Claude Code expands it fully at session start; `@`-import is officially documented. Verbose generated CLAUDE.md removed.
 
-**Accuracy and correctness**
-- `add/pagination/fastapi.md` — async SQLAlchemy (`AsyncSession`) was the only runnable code path shown, but scaffold default is sync; restructured to use sync (`Session`) as primary path with async as a clearly labelled opt-in note
-- `add/error-handling/nextjs.md` — test snippet used `toBeInTheDocument()` without `import '@testing-library/jest-dom'`; added missing import
-- `standards/validation-patterns/vite-react.md` — `z.enum()` custom error used deprecated Zod v3 callback form `error: () => ({ message: '...' })` → Zod v4 string form `error: '...'`
-- `standards/validation-patterns/nextjs.md` — `z.infer` used for form type on schema with `.default()` transform → `z.input` (correct pre-transform type for React Hook Form)
-- `add/feature/nextjs.md` — `z.infer<typeof createProjectSchema>` for Hook Form usage → `z.input` for consistency
-- `standards/validation-patterns/nestjs.md` — added comment explaining why `z.infer` is correct for NestJS controller `@Query` param (post-`ZodValidationPipe` output type, not a form input type)
-- `scaffold/nestjs/config-files.md` — Dockerfile comment referenced "jest" devDependency → "vitest"
+**Skill scoping model** — scaffolded AGENTS.md explicitly documents the priority chain:
 
-**Jurisdiction neutrality (NIST sweep)**
-- `add/auth/fastapi.md` — removed 3× "NIST SP 800-63B" references; replaced with "OWASP recommendation"
-- `add/auth/nextjs.md`, `add/auth/nestjs.md` — same NIST references replaced
-- `scripts/lint-skills.sh` — `check_no_jurisdiction_specific` pattern extended to include `NIST SP 800-63`
-- `audit/implementation.md` — C6 grep pattern updated with `NIST SP 800-63` to catch regressions
+| Level | Location | Invoked as |
+|-------|----------|------------|
+| Personal | `~/.claude/skills/` | `/name` (overrides project) |
+| Project | `.claude/skills/` | `/name` |
+| Plugin | `<plugin>/skills/` | `plugin:name` (namespaced, no conflict) |
 
-**Drizzle / CSP accuracy**
-- `add/database/typescript/nestjs-drizzle.md` — "v1.0 is stable (released mid-2025)" → "v1.0 is still pre-release (RC stage); pin to a specific RC version in production"
-- `standards/validation-patterns/patterns.md` — removed misleading "deprecated in Zod v4" comment about `.passthrough()`; `z.looseObject()` is a new v4 shorthand, `.passthrough()` still works
-- `scaffold/fastapi/source-files.md` — added `Content-Security-Policy` to `_SECURITY_HEADERS`; brings FastAPI to parity with NestJS and Next.js scaffolds
-- `add/auth/nestjs.md` — added `TRUST_PROXY=1` (one-hop) / `TRUST_PROXY=2` (two-hop) topology examples to TRUST_PROXY note
+Agents check `.claude/skills/` first for project-specific workflows, then use `templatecentral:*` for framework-level operations.
 
----
+**Hook split (PostToolUse vs Stop)** — corrected for all 4 stacks:
+- PostToolUse: fast type feedback only. TS stacks: `pnpm exec tsc --noEmit --incremental` (2–5s vs 30s). FastAPI: `python -m pyright src/` (pyright is 2-5x faster than mypy; new community standard).
+- Stop hook: full test suite (`pnpm test --run` / `pytest`). Blocking quality gate before Claude finishes a task.
 
-### Added — Harness layer, mutation testing, marketplace readiness
+**Seeded project skills** — Next.js scaffold seeds `.claude/skills/next-migrate.md` and `.claude/skills/next-verify.md` at scaffold time. Step 7c prompts user to create additional project skills for repeated workflows.
 
-**Marketplace Readiness**
-- Added `LICENSE` (MIT, templateCentral Contributors)
-- Added `SECURITY.md` — vulnerability reporting policy
-- Added `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1
-- Added `EXAMPLES.md` — usage walkthroughs for all 4 stacks
-- Added `.github/workflows/ai-review.yml` — Claude AI PR review on every non-draft PR (requires `CLAUDE_CODE_OAUTH_TOKEN` secret)
-- `plugin.json` — added `displayName`, `homepage`, `repository`, `license`, `$schema` fields; bumped to v4.0.0
-- `marketplace.json` — corrected skill count from "46" to "10 registered skills"
-- `.github/workflows/validate-skills.yml` — added `plugin-validate` job (structural check of plugin.json + marketplace.json)
+**`harness.json`** — `.claude/harness.json` written at scaffold time with SHA-256 origin hashes of all seeded files. `templatecentral:migrate` Phase 5 reads hashes to report UNCHANGED/MODIFIED/MISSING drift per file.
 
-**Harness Layer (all scaffolds)**
-- All 4 scaffold skills now emit `AGENTS.md` with `## AI Harness` section and `<!-- [[post-harness]] -->` seam
-- All 4 scaffold skills now emit `.claude/settings.json` with PostToolUse hook (runs tests after every edit, feedback-only, never blocks)
-- All 4 scaffold skills now emit `FUTURE.md` with post-harness seam documentation (Meta-Harness, Trace-Driven Evolution, Environment Engineering)
-- Scaffold version markers updated from `@1.0.0` to `@4.0.0` in all 4 scaffold templates
+**`templatecentral:migrate` Phase 4 expanded** — when upgrading pre-4.0 projects: seeds CLAUDE.md, project skills, harness.json alongside settings.json. Phase 5 (new): harness health check.
 
-**Mutation Testing (report-only default, Tier 0)**
-- New `templatecentral:add` capability: `mutation` — `add/mutation/typescript.md` (StrykerJS 7.x + Vitest runner for Next.js/NestJS/Vite+React) and `add/mutation/python.md` (mutmut 3.5.0 for FastAPI)
-- Default: `thresholds.break: null` (StrykerJS) / `continue-on-error: true` (CI) — never blocks builds, always reports
+**`templatecentral:audit` Step 3H** (new) — 7 harness engineering invariant checks. Step 6 (new): repo harness health check. Step 5 gains skill-gap suggestion.
 
-**Shared-Migrate v4.0 Upgrade Path**
-- `migrate/general/implementation.md` — Phase 0 detects existing version markers; if `@<4.0.0` found, offers non-destructive upgrade (adds `.claude/settings.json`, `## AI Harness` in AGENTS.md, `FUTURE.md`, updates marker to `@4.0.0`)
+### Marketplace Readiness
 
-**Repository Dog-Fooding**
-- `AGENTS.md` — added `<!-- templateCentral: plugin@4.0.0 -->` on line 1
+- README version badge updated to 4.0.0; CONTRIBUTING.md scaffold path corrected to `skills/scaffold/<stack>/`
+- Added `LICENSE` (MIT), `SECURITY.md`, `CODE_OF_CONDUCT.md`, `EXAMPLES.md`
+- `.github/workflows/ai-review.yml` — Claude AI PR review on every non-draft PR
+- `plugin.json` — added `displayName`, `homepage`, `repository`, `license`, `$schema` fields
+- `marketplace.json` — corrected skill count to "10 registered skills"
 
-**Cleanup (best-practices pass)**
-- `README.md` — corrected version badge `3.0.0` → `4.0.0`; `React 18` → `React 19`; `Jest` → `Vitest` for NestJS; removed `claude-mem` from recommended plugins
-- `CONTRIBUTING.md` — corrected skill file structure (was `skills/<stack>-<skill>/SKILL.md`); corrected "Registering a skill" (auto-discovered, no manual plugin.json edit needed)
-- `AGENTS.md` — corrected `shared-update-agent` → `templatecentral:review` (update operation) in routing table and security section
-- All 4 scaffold source-files.md — removed `claude-mem` from plugin install step; replaced `shared-update-agent` with `templatecentral:review` (update operation)
-- `marketplace.json` — corrected "46 skills" → "10 skills" in both description fields
+### Repository Dog-Fooding
 
-### Fixed — Audit pass: stale skill names, AGENTS.md routing, CONVENTIONS.md
+- Repo AGENTS.md: compressed 229 → 65 lines with skill-scoping model, CLAUDE.md blind-spot note
+- Repo `CLAUDE.md` = `@AGENTS.md`
+- Repo `.claude/settings.json`: PostToolUse runs `lint-skills.sh` after every edit
+- Repo `.claude/harness.json`: version manifest
 
-**Stale skill name sweep (HIGH — agents would fail to dispatch correctly)**
-- Replaced all `shared-build-agent` / `shared-review-agent` / `shared-test-agent` ghost names with `templatecentral:build`, `templatecentral:review`, `templatecentral:test` across ~50 reference files
-- Replaced all stack-specific scaffold names (`fastapi-scaffold`, `nestjs-scaffold`, `nextjs-scaffold`, `vite-react-scaffold`) with `templatecentral:scaffold` across all skill files and scaffold templates
-- Replaced all stack-specific add names (`fastapi-add-auth`, `nextjs-add-database`, etc.) with `templatecentral:add` (capability) pattern throughout all reference files
-- Replaced all `shared-add-*` names (`shared-add-logging`, `shared-add-error-handling`, `shared-validation-patterns`, `shared-full-stack-pairing`, `shared-remove-example`) with correct v4.0 skill names
-- Fixed `shared-drift-check` references in scaffold templates and AGENTS.md → `templatecentral:standards` (drift-check)
+### Security & Accuracy Fixes (audit passes, May 2026)
 
-**AGENTS.md (root) — routing table rewrite**
-- Rewrote "New project" table: all entries → `templatecentral:scaffold`
-- Rewrote "Existing project" section: collapsed per-stack table into unified capability table for `templatecentral:add`
-- Rewrote "Cross-stack tasks" table: all ghost names → correct v4.0 skill names
-- Fixed NestJS testing policy: `Jest` → `Vitest`
-- Updated CLAUDE.md skill list example and vulnerability scanning reference
-
-**CONVENTIONS.md**
-- Updated prereq format rule to document actual repo-wide pattern (`Do not invoke this file directly — it is loaded at runtime by…`)
-- Fixed stale `templatecentral:fastapi-scaffold` example in Section 3 → `templatecentral:scaffold`
-- Updated description max-chars note: bytes vs. Unicode characters clarification
-
-**scripts/lint-skills.sh**
-- Added TIMELESS `check_no_ghost_agent_names` — catches `shared-*-agent` and stack-specific `<stack>-scaffold` names before they reach production
-- Added ECOSYSTEM-ERA `check_no_zod_deprecated_message_key` — catches deprecated `z.(email|url|uuid|iso.datetime)({ message:` form (Zod v4 uses `{ error: }`, not `{ message: }`)
-
-**Accuracy fixes**
-- `add/auth/fastapi.md` — TRUST_PROXY type `int` → `str`; docs updated to CIDR/topology pattern matching the scaffold's `ProxyHeadersMiddleware(trusted_hosts=...)` usage
-- `add/auth/nextjs.md` — utility path `get-app-origin.ts` → `request-origin.ts` (actual scaffold filename)
-- `standards/validation-patterns/nextjs.md` — `z.email('Invalid email')` (deprecated Zod v3 positional form) → `z.email({ error: 'Invalid email' })`
-
-**New files**
-- `FUTURE.md` at repo root — post-harness direction seams (Meta-Harness, Trace-Driven Evolution, Community Registry, Automated Ecosystem Refresh)
-- `skills/add/mutation/` — already covered above under Mutation Testing
-
-### Fixed — Audit pass round 2: 2026-05-25 ecosystem scan
-
-Fresh web scan against 2026-05-25 ecosystem data. 3 iterations with online verification. Lint passes clean throughout.
+**HIGH — would break generated code**
+- Ghost skill names (~80 files): all `shared-*-agent`, `templatecentral:shared-migrate`, `<stack>-scaffold`, `shared-add-*` forms replaced with correct v4 names
+- NestJS Fastify filter: `extends BaseExceptionFilter + super.catch()` → `implements ExceptionFilter` (Fastify incompatible)
+- Zod v4 form types: `z.infer` → `z.input` for React Hook Form schemas with `.default()` transforms
+- `add/auth/nextjs.md`: `@better-auth/drizzle` (nonexistent) → `@better-auth/drizzle-adapter`
 
 **Security**
-- `scaffold/vite-react/source-files.md` — ErrorBoundary leaked React component stack and raw `error.message` in production via `console.error` and direct render; guarded both with `import.meta.env.DEV` checks
-- `add/error-handling/nestjs.md` — `errorResponse` initialised with `exception.message` (leaks internal error detail); fixed to safe `'An error occurred'`; 400/409 branches were only adding `details` to the original leaky object; fixed with explicit safe strings for each case; replaced `this.logger.log(...)` with conditional `logger.error` (≥500) / `logger.warn` (others)
-- `add/logging/nestjs.md` — same `exception.message` leakage fix in startup log handler; `await app.listen(port)` → `await app.listen(port, '0.0.0.0')` (Fastify defaults to 127.0.0.1 making containers unreachable)
-- `add/ai-security/implementation.md` — Added LLM07 (System Prompt Leakage) control section; expanded Agentic Top 10 paragraph to name Least-Agency principle and three 2026 entries (Insecure Inter-Agent Communication, Cascading Failures, Human-Agent Trust Exploitation); updated Rules line to include LLM07 for all tiers
+- ErrorBoundary production leaks (vite-react, nestjs error-handling): `error.message` / component stack guarded with `DEV` checks
+- OWASP LLM Top 10 v2.0 added to `add/ai-security`; LLM07 System Prompt Leakage added; Agentic Top 10 2026 entries added
+- NIST SP 800-63B references replaced with "OWASP recommendation" across all auth skills (jurisdiction neutrality)
 
-**Package correctness**
-- `add/auth/nextjs.md` — `@better-auth/drizzle` (nonexistent) → `@better-auth/drizzle-adapter` (verified via better-auth docs)
-- `add/error-handling/nextjs.md` — ErrorBoundary test referenced `@testing-library/react` / `@testing-library/jest-dom` without install note; added explicit install comment and `@vitest-environment jsdom` annotation
+**Accuracy**
+- FastAPI pagination: sync SQLAlchemy as primary path (async was the only runnable path shown but scaffold default is sync)
+- NestJS `TRUST_PROXY`: numeric string → `parseInt()` guard for Fastify hop-count mode
+- FastAPI `model_post_init(self, _)` → `model_post_init(self, __context: Any)` (correct Pydantic v2 signature)
+- Various field path, import, and API name fixes across pagination, logging, error-handling skills
 
-**FastAPI**
-- `scaffold/fastapi/source-files.md` — `model_post_init(self, _)` → `model_post_init(self, __context: Any)` (correct Pydantic v2 typed signature); added `from typing import Any` import
-- `add/logging/fastapi.md` — `api_settings.ENVIRONMENT` → `common_settings.ENVIRONMENT` (`ENVIRONMENT` is on `CommonSettings`, not `APISettings`); SQL verb logging: `context.statement.__class__.__name__` (always `"str"`) → `statement.split()[0].upper()` (returns SELECT/INSERT/etc.)
-- `add/error-handling/fastapi.md` — Fixed migration note: general errors change `["detail"]` → `["error"]`, not just `["details"]["fieldErrors"]`; removed dead `from error_handler import configure_exceptions` import from routes example; removed unreachable `if not project:` block after hardcoded stub
+### Mutation Testing
 
-**NestJS**
-- `scaffold/nestjs/source-files.md` — `TRUST_PROXY` numeric strings passed as strings to Fastify hop-count mode; added `/^\d+$/.test()` guard with `parseInt(trustProxyEnv, 10)` conversion
+New `templatecentral:add` capability: `mutation` — StrykerJS 7.x (TS stacks) and mutmut 3.5.0 (FastAPI). Report-only by default (`thresholds.break: null`); never blocks builds.
 
-**Next.js**
-- `add/pagination/nextjs.md` — Non-standard path `src/components/projects/` → `src/features/projects/components/`; removed unused `useEffect` import; raw `<button>` with hardcoded Tailwind → shadcn `<Button variant="outline">`; removed stale "Phase 1 wrapper" comment; raw `error.message` display removed
-- `add/logging/nextjs.md` — `status_code` field in outbound HTTP log and verification comment → `status` (consistent with `withLogging` HOF)
+### Lint (scripts/lint-skills.sh)
 
-**Vite + React**
-- `standards/validation-patterns/vite-react.md` — Import path `@/components/ui/custom-form-field` → `@/components/widgets`; added `credentials: 'include'` to fetch call in form submit
-- `add/pagination/vite-react.md` — `src/api/projects.ts` → `src/features/projects/api/projects.ts`; `throw new Error(...)` → `throw new APIError(...)` with correct import; `z.flattenError(...).formErrors` → `z.flattenError(...).fieldErrors` (field-level errors for schema mismatch)
-- `add/auth/nestjs.md` — Removed "NIST SP 800-63B recommendation" (US-specific standard, violates jurisdiction-neutrality)
-
-**pnpm 11**
-- `scaffold/nextjs/config-files.md` — Added commented `allowBuilds` section to `pnpm-workspace.yaml` template (pnpm 11 blocks install scripts by default)
-- `scaffold/vite-react/config-files.md` — Added `allowBuilds` section (was completely absent — HIGH finding)
-
-**Zod v4 correction**
-- `add/auth/vite-react.md`, `add/form/nextjs.md`, `add/form/vite-react.md` — Reverted incorrect prior change: `z.email({ error: '...' })` is the CORRECT Zod v4 form; `{ message: }` is the deprecated v3 form that will be removed
-- `scripts/lint-skills.sh` — Renamed `check_no_zod_email_error_key` → `check_no_zod_deprecated_message_key`; inverted logic to flag deprecated `{ message: }` form (was incorrectly flagging correct `{ error: }` form)
-
-**FastAPI pagination**
-- `add/pagination/fastapi.md` — Removed unused `from typing import Literal` import; `HTTPException(detail={"error": ..., "field": ...})` (produces nested `{"error": {"error": ...}}` via handler) → `raise InvalidInputError(...)` (routes through correct envelope handler)
+16 checks total (was 10 in v3). New checks added in v4:
+- `check_no_ghost_agent_names` (TIMELESS)
+- `check_no_zod_deprecated_message_key` (ECOSYSTEM-ERA)
+- `check_no_middleware_ts` with exclusions for meta-documents
+- `check_no_mypy_in_postToolUse` — enforces pyright over mypy (ECOSYSTEM-ERA)
+- `check_no_postToolUse_full_test_suite` — test suites belong in Stop hooks (TIMELESS)
 
 ---
 

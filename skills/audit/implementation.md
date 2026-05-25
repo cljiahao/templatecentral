@@ -461,7 +461,7 @@ After reading all files, answer these questions from memory (no additional reads
 
 ### Harness engineering checks (Step 3H)
 
-- [ ] **PostToolUse hook command**: Scaffold and migrate skills use `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` (not plain `--noEmit`, not `pnpm test`). PostToolUse is feedback-only; never runs blocking logic.
+- [ ] **PostToolUse hook command**: TS stacks use `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` (not plain `--noEmit`, not `pnpm test`); FastAPI uses `python -m pyright src/ 2>&1 | tail -5` (not mypy — pyright is 2-5x faster). PostToolUse is feedback-only; never runs blocking logic.
 - [ ] **Stop hook present**: Scaffold and migrate skills seed a `Stop` hook that runs the full test suite (`pnpm test --run`). This is the correct place for blocking quality gates — not PostToolUse.
 - [ ] **Skill scoping model correct**: Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations. The two namespaces are explained (project skills = `/skill-name`, plugin skills = `plugin:skill-name`).
 - [ ] **Project skill seeding**: Scaffold skill seeds at least `/next-verify` and `/next-migrate` into `.claude/skills/`. Migrate Phase 4 seeds the same.

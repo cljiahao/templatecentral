@@ -1982,7 +1982,11 @@ Add new project skills here whenever you repeat a workflow more than once.
 
 ## AI Harness
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
+Stop hook: runs `pnpm test --run` before task completion.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
+
+> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
+> Keep all routing and rules in this file, not in CLAUDE.md.
 
 ## Project-Specific Notes
 <!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->

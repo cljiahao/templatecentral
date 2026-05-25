@@ -53,6 +53,12 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 - templateCentral seeds project skills for project-specific workflows; the scaffolded AGENTS.md instructs agents to check `.claude/skills/` first for project workflows, then use `templatecentral:*` for framework-level operations
 - As the project grows, agents should create new project skills for any workflow repeated more than once
 
+## CLAUDE.md and subagents
+
+`CLAUDE.md` = `@AGENTS.md` — Claude Code expands this fully at session start for the main agent.
+
+**Subagent blind spot (v2.1.84+):** Built-in subagents (`/explore`, `/plan`) have `omitClaudeMd: true` — they do not receive CLAUDE.md or its `@AGENTS.md` import. AGENTS.md must therefore be self-contained and not rely on CLAUDE.md being loaded. All routing instructions belong in AGENTS.md, not CLAUDE.md.
+
 ## Working on this repo
 
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill

@@ -269,9 +269,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
-.mypy_cache/
-.dmypy.json
-.pytype/
+.pyright/
 .ruff_cache/
 .pytest_cache/
 .coverage
@@ -425,7 +423,7 @@ node_modules/
 
 # Essential config files
 !alembic.ini
-!mypy.ini
+!pyrightconfig.json
 !ruff.toml
 !.flake8
 !pytest.ini
@@ -470,9 +468,7 @@ htmlcov/
 .nox/
 
 # Type checking
-.mypy_cache/
-.dmypy.json
-.pytype/
+.pyright/
 .ruff_cache/
 
 # Logs

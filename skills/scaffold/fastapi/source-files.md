@@ -1110,7 +1110,7 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
 pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart python-json-logger
-pip install pytest httpx ruff mypy pytest-asyncio
+pip install pytest httpx ruff pyright pytest-asyncio
 
 pip freeze > requirements.txt
 ```
@@ -1205,7 +1205,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "python -m mypy src/ --no-error-summary 2>&1 | tail -5"
+            "command": "python -m pyright src/ 2>&1 | tail -5"
           }
         ]
       }
@@ -1224,7 +1224,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 }
 ```
 
-`PostToolUse` — fast type feedback via mypy after every edit. Feedback-only; never blocks.
+`PostToolUse` — fast type feedback via pyright after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures.
 
 Also create `FUTURE.md` at the project root:

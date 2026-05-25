@@ -272,7 +272,7 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 | Stack | PostToolUse command |
 |-------|---------------------|
 | nextjs / vite-react / nestjs | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` |
-| fastapi | `python -m mypy src/ --no-error-summary 2>&1 \| tail -5` |
+| fastapi | `python -m pyright src/ 2>&1 \| tail -5` |
 
 ```json
 {

@@ -261,6 +261,27 @@ check_no_sync_secret_comparison() {
   fi
 }
 
+check_no_mypy_in_postToolUse() {
+  # pyright is 2-5x faster than mypy with near-complete spec conformance.
+  # mypy in PostToolUse adds 45+ seconds per edit on real projects.
+  # REVISIT: if mypy regains a speed advantage or pyright has correctness regressions, update.
+  header "mypy in PostToolUse hook"
+  local postToolUse_files
+  postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  local mypy_in_postToolUse=""
+  for file in $postToolUse_files; do
+    if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -q 'mypy'; then
+      mypy_in_postToolUse="$mypy_in_postToolUse\n$file"
+    fi
+  done
+  if [[ -n "$mypy_in_postToolUse" ]]; then
+    echo -e "$mypy_in_postToolUse"
+    fail "mypy in PostToolUse — use pyright instead (2-5x faster, community standard as of May 2026)"
+  else
+    pass "No mypy in PostToolUse hook"
+  fi
+}
+
 check_no_postToolUse_full_test_suite() {
   # PostToolUse hooks are feedback-only and cannot block execution.
   # Full test suites (pnpm test, pytest, etc.) belong in Stop hooks, not PostToolUse.
@@ -311,6 +332,7 @@ check_no_globals_jest_in_vitest_projects
 check_no_sync_secret_comparison
 check_no_zod_string_format_methods
 check_no_zod_deprecated_message_key
+check_no_mypy_in_postToolUse
 check_no_postToolUse_full_test_suite
 echo ""
 
