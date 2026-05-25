@@ -34,7 +34,7 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 - PostToolUse: fast type feedback only. TS stacks: `pnpm exec tsc --noEmit --incremental` (2–5s vs 30s). FastAPI: `python -m pyright src/` (pyright is 2-5x faster than mypy; new community standard).
 - Stop hook: full test suite (`pnpm test --run` / `pytest`). Blocking quality gate before Claude finishes a task.
 
-**Seeded project skills** — Next.js scaffold seeds `.claude/skills/next-migrate.md` and `.claude/skills/next-verify.md` at scaffold time. Step 7c prompts user to create additional project skills for repeated workflows.
+**Seeded project skills** — All 4 scaffold skills seed a `*-verify` project skill at scaffold time (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Each scaffold step prompts the user to create additional project skills for repeated workflows. `templatecentral:migrate` Phase 4 seeds the same skills when upgrading pre-4.0 projects.
 
 **`harness.json`** — `.claude/harness.json` written at scaffold time with SHA-256 origin hashes of all seeded files. `templatecentral:migrate` Phase 5 reads hashes to report UNCHANGED/MODIFIED/MISSING drift per file.
 
