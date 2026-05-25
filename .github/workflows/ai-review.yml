@@ -1,0 +1,41 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            You are reviewing a pull request for templateCentral — a Claude Code plugin
+            that scaffolds Next.js, Vite+React, FastAPI, and NestJS projects.
+
+            Review the diff against these priorities (in order):
+
+            1. **Security** — hardcoded secrets in skill code blocks, missing auth patterns,
+               injection vectors in generated code, insecure defaults.
+            2. **Correctness** — skill references a deprecated API, wrong import path,
+               broken code that would fail at runtime.
+            3. **Convention** — SKILL.md description >150 chars, registered skill body >30 lines,
+               implementation detail in a router-only skill.
+            4. **Breaking changes** — scaffold file changes that alter output for existing
+               projects without a migration path in CHANGELOG or shared-migrate.
+
+            Rules:
+            - Cite file and line number for every finding.
+            - Skip stylistic nitpicks and formatting opinions.
+            - If a finding is already addressed in the PR description checklist, skip it.
+            - If no issues found, say so in one line.

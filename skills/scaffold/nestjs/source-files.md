@@ -22,9 +22,11 @@ import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
 async function bootstrap(): Promise<void> {
   const trustProxyEnv = process.env.TRUST_PROXY;
-  // Fastify requires boolean true for "trust all"; does not accept the string "*"
-  const trustProxy: boolean | string | undefined =
-    trustProxyEnv === '*' ? true : trustProxyEnv;
+  // Fastify: "*" → true (trust all); numeric strings → integer hop count; CIDR strings pass through
+  const trustProxy: boolean | number | string | undefined =
+    trustProxyEnv === '*' ? true :
+    trustProxyEnv && /^\d+$/.test(trustProxyEnv) ? parseInt(trustProxyEnv, 10) :
+    trustProxyEnv;
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(trustProxy ? { trustProxy } : {}),
@@ -122,13 +124,13 @@ export * from './http.constants';
 ### `src/common/filters/http-exception.filter.ts`
 
 ```typescript
-import { Logger, Catch, ArgumentsHost, HttpException } from '@nestjs/common';
-import { BaseExceptionFilter } from '@nestjs/core';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
 
 @Catch(HttpException)
-export class HttpExceptionFilter extends BaseExceptionFilter {
+export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
@@ -139,7 +141,10 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
       }
     }
 
-    super.catch(exception, host);
+    const ctx = host.switchToHttp();
+    const reply = ctx.getResponse<FastifyReply>();
+    const status = exception.getStatus();
+    reply.status(status).send({ statusCode: status, message: exception.message });
   }
 }
 ```
@@ -729,15 +734,15 @@ If any command fails, diagnose and fix before proceeding.
 
 ### 6. Generate AGENTS.md (MANDATORY)
 
-Write `<!-- templateCentral: nestjs@1.0.0 -->` on line 1, then:
+Write `<!-- templateCentral: nestjs@4.0.0 -->` on line 1, then:
 
 ```markdown
-<!-- templateCentral: nestjs@1.0.0 -->
+<!-- templateCentral: nestjs@4.0.0 -->
 # <Project Name>
 
 ## Identity
 - **Stack**: NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript, Vitest
-- **Scaffolded from**: templateCentral nestjs-scaffold skill
+- **Scaffolded from**: templateCentral (templatecentral:scaffold)
 - **Created**: <date>
 
 ## Architecture Decisions
@@ -782,19 +787,79 @@ Every agent writing or modifying code must follow these before marking a task do
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
 ## Session Start
-Run `shared-drift-check` at the start of each session to check for convention or dependency drift.
+Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+
+## AI Harness
+
+`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
 Update `Identity` with the actual project name and creation date.
 
-### 6b. Post-scaffold agent workflow
+### 6b. Create .claude/settings.json
+
+Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
+
+**`.claude/settings.json`**:
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm test --run 2>&1 | tail -20"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Also create `FUTURE.md` at the project root:
+
+**`FUTURE.md`**:
+```markdown
+# Future Directions
+
+Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
+
+## Meta-Harness
+
+CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
+
+**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+
+## Trace-Driven Evolution
+
+Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
+
+**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+
+## Environment Engineering
+
+A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
+
+**Seam:** `devcontainer.json` if present.
+
+---
+
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+```
+
+### 6c. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build`)
-2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
-3. `shared-update-agent` — freshen any deps that have newer compatible versions
-4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. `templatecentral:build` — verify the scaffold compiles clean (`pnpm build`)
+2. `templatecentral:test` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
+3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
+4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -806,13 +871,10 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
 claude plugin marketplace add obra/superpowers
 ```
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
-- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
@@ -827,7 +889,7 @@ Write a short `CLAUDE.md` (architecture and conventions live in `AGENTS.md` only
 
 Include:
 - **Build & Dev** verified commands: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`
-- **templateCentral skills**: `nestjs-scaffold` (done), `nestjs-code-standards`, `nestjs-add-module`, `nestjs-add-auth`, `nestjs-add-database`, `nestjs-add-integration`, `nestjs-add-test`
+- **templateCentral skills**: `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (module, auth, database, integration, test)
 - **Workflow**: simple/medium → templateCentral skills; complex → Superpowers
 - NEVER put secrets in `CLAUDE.md`
 
@@ -837,7 +899,7 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 8. Remove Example Code (Optional)
 
-Once the project is verified and the user confirms it runs, use the `shared-remove-example` skill.
+Once the project is verified and the user confirms it runs, use the `templatecentral:cleanup` skill.
 
 NestJS-specific steps (the skill covers these):
 - Delete `src/modules/example/` directory

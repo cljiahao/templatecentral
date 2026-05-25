@@ -8,7 +8,7 @@ Create a new page/route in a Next.js project scaffolded from templateCentral.
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -36,7 +36,7 @@ the marker.
 | Public page | `src/app/(public)/<path>/page.tsx` |
 | Dashboard/authenticated page | `src/app/dashboard/<path>/page.tsx` |
 
-> **Dashboard pages require auth.** If `src/app/dashboard/` does not exist yet, run the `nextjs-add-auth` skill first — it creates the dashboard route group along with the full auth stack.
+> **Dashboard pages require auth.** If `src/app/dashboard/` does not exist yet, run the `templatecentral:add` (auth) skill first — it creates the dashboard route group along with the full auth stack.
 
 > Dashboard pages are automatically protected by `src/proxy.ts` once auth is configured — any route not in `PUBLIC_PATHS` requires authentication. No manual auth checks needed in page components.
 
@@ -166,5 +166,5 @@ pnpm build    # zero errors
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

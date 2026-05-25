@@ -27,7 +27,7 @@ LoggerModule.forRoot({
 }),
 ```
 
-Unhandled exceptions — update your `HttpExceptionFilter` (from `shared-add-error-handling`) to add 5xx logging. Replace the existing file:
+Unhandled exceptions — update your `HttpExceptionFilter` (from `templatecentral:add` (error-handling)) to add 5xx logging. Replace the existing file:
 
 ```ts
 // src/common/filters/http-exception.filter.ts
@@ -39,7 +39,6 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { BaseExceptionFilter } from '@nestjs/core';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { z, ZodError } from 'zod';
@@ -53,7 +52,7 @@ interface ErrorResponse {
 }
 
 @Catch(HttpException)
-export class HttpExceptionFilter extends BaseExceptionFilter implements ExceptionFilter {
+export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
@@ -62,7 +61,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter implements Exceptio
     const status = exception.getStatus();
 
     let errorResponse: ErrorResponse = {
-      error: exception.message || 'An error occurred',
+      error: 'An error occurred',
     };
 
     if (exception instanceof ZodSerializationException) {
@@ -76,7 +75,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter implements Exceptio
         this.logger.warn(`Validation error: ${zodError.message}`);
       }
     } else if (status === HttpStatus.BAD_REQUEST) {
-      errorResponse.details = { code: 'BAD_REQUEST' };
+      errorResponse = { error: 'Bad request', details: { code: 'BAD_REQUEST' } };
     } else if (status === HttpStatus.UNAUTHORIZED) {
       errorResponse = { error: 'Authentication required' };
     } else if (status === HttpStatus.FORBIDDEN) {
@@ -84,7 +83,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter implements Exceptio
     } else if (status === HttpStatus.NOT_FOUND) {
       errorResponse = { error: 'Resource not found' };
     } else if (status === HttpStatus.CONFLICT) {
-      errorResponse.details = { code: 'CONFLICT' };
+      errorResponse = { error: 'Resource conflict', details: { code: 'CONFLICT' } };
     } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
       errorResponse = { error: 'Too many requests' };
       void reply.header('Retry-After', '60');
@@ -122,7 +121,7 @@ async function bootstrap() {
   app.useLogger(logger);
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log({ port, environment: process.env.NODE_ENV }, 'App started');
 }
 bootstrap();
@@ -333,5 +332,5 @@ Run the stack's build and test commands (see `AGENTS.md` → Scaffold verificati
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

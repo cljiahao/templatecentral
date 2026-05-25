@@ -37,7 +37,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
 
     let errorResponse: ErrorResponse = {
-      error: exception.message || 'An error occurred',
+      error: 'An error occurred',
     };
 
     if (exception instanceof ZodSerializationException) {
@@ -51,7 +51,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         this.logger.warn(`Validation error: ${zodError.message}`);
       }
     } else if (status === HttpStatus.BAD_REQUEST) {
-      errorResponse.details = { code: 'BAD_REQUEST' };
+      errorResponse = { error: 'Bad request', details: { code: 'BAD_REQUEST' } };
     } else if (status === HttpStatus.UNAUTHORIZED) {
       errorResponse = { error: 'Authentication required' };
     } else if (status === HttpStatus.FORBIDDEN) {
@@ -59,13 +59,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (status === HttpStatus.NOT_FOUND) {
       errorResponse = { error: 'Resource not found' };
     } else if (status === HttpStatus.CONFLICT) {
-      errorResponse.details = { code: 'CONFLICT' };
+      errorResponse = { error: 'Resource conflict', details: { code: 'CONFLICT' } };
     } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
       errorResponse = { error: 'Too many requests' };
       void reply.header('Retry-After', '60');
     }
 
-    this.logger.log(`HTTP ${status}: ${exception.message}`, 'HttpExceptionFilter');
+    if (status >= 500) {
+      this.logger.error(`HTTP ${status}: ${exception.message}`);
+    } else {
+      this.logger.warn(`HTTP ${status}: ${exception.message}`);
+    }
 
     void reply.status(status).send(errorResponse);
   }
@@ -165,5 +169,5 @@ pnpm start:dev
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

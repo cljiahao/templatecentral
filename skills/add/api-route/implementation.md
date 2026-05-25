@@ -8,7 +8,7 @@ Create a new API route handler in a Next.js project scaffolded from templateCent
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ## Inputs
 
@@ -23,7 +23,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -54,7 +54,7 @@ Keep route handlers thin — delegate to server-side data access:
 import { handleApiError } from '@/lib/errors';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-// Replace with your actual data access — e.g. (after running nextjs-add-database):
+// Replace with your actual data access — e.g. (after running templatecentral:add (database)):
 //   import { db, projects } from '@/integrations/database';
 
 const CreateProjectSchema = z.object({
@@ -184,7 +184,7 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 - Always use `handleApiError()` for error responses — NEVER return raw error objects or stack traces
 - Use `NextResponse.json()` for all responses
 - Use dynamic segments `[id]` for resource IDs
-- If `src/proxy.ts` exists (i.e. `nextjs-add-auth` has been run), unauthenticated requests to non-public paths are rejected automatically. Add route-level `auth()` checks only for role-based or resource-level authorization beyond authentication. If auth has not been added yet, all API routes are unprotected — run `nextjs-add-auth` first
+- If `src/proxy.ts` exists (i.e. `templatecentral:add` (auth) has been run), unauthenticated requests to non-public paths are rejected automatically. Add route-level `auth()` checks only for role-based or resource-level authorization beyond authentication. If auth has not been added yet, all API routes are unprotected — run `templatecentral:add` (auth) first
 - NEVER use `request.json()` without validation — parse with Zod and return 400 on failure
 - NEVER expose internal error details in responses — rely on `handleApiError()` for generic messages
 - NEVER skip the routes constant — always add new API routes to `src/lib/constants/routes.ts`
@@ -199,5 +199,5 @@ pnpm check    # zero type errors
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

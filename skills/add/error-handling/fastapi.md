@@ -4,10 +4,10 @@
 ## FastAPI — Error Handling
 
 > **Migration note — response format change**
-> This skill replaces FastAPI's default validation error format (`{"detail": [...]}`)
-> with a structured envelope (`{"error": "...", "details": {"fieldErrors": {...}}}`).
-> **Before applying:** update any existing tests that assert `response.json()["detail"]`
-> to use `response.json()["details"]["fieldErrors"]` instead.
+> This skill replaces FastAPI's default error format (`{"detail": "..."}` / `{"detail": [...]}`)
+> with a structured envelope. Before applying, update existing tests:
+> - General errors: `response.json()["detail"]` → `response.json()["error"]`
+> - Validation field errors: `response.json()["detail"]` → `response.json()["details"]["fieldErrors"]`
 
 **1. Global Exception Handlers (Already Present)**
 
@@ -140,7 +140,6 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from core.exceptions import InvalidInputError
-from error_handler import configure_exceptions
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -164,16 +163,10 @@ async def create_project(req: CreateProjectRequest) -> dict:
 @router.get("/{project_id}")
 async def get_project(project_id: str) -> dict:
     """Get a project by ID."""
-    if not project_id:
-        raise InvalidInputError("Project ID is required")
-    
     # Your logic: project = await db.projects.find_by_id(project_id)
+    # if not project:
+    #     raise NoResultsFound("Project not found")
     project = {"id": project_id, "name": "Sample Project"}
-    
-    if not project:
-        from core.exceptions import NoResultsFound
-        raise NoResultsFound("Project not found")
-    
     return project
 ```
 
@@ -236,5 +229,5 @@ pytest -v
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

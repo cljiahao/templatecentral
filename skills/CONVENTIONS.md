@@ -105,7 +105,7 @@ The body must contain only:
 1. Stack/variant detection logic (file existence checks, config sniffs)
 2. A routing table or decision tree
 3. `cat` commands pointing to reference files
-4. A brief "Prerequisites" note if needed (e.g., "Requires a project scaffolded with templatecentral:fastapi-scaffold. See Step 0.")
+4. A brief "Prerequisites" note if needed (e.g., "Requires a project scaffolded with templatecentral:scaffold. See Step 0.")
 
 It must NOT contain: code blocks with implementation steps, file content templates, numbered how-to instructions, or prose duplicated from another skill.
 
@@ -126,7 +126,7 @@ Every reference file must begin with this comment block as its **first line**:
 ```
 <!-- ref: add/auth/fastapi.md
      loaded-by: add/auth/SKILL.md
-     prereq: Stack identified as FastAPI. Do not invoke this file directly. -->
+     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
 ### 3-Level Stack Router Example
@@ -134,7 +134,7 @@ Every reference file must begin with this comment block as its **first line**:
 ```
 <!-- ref: add/database/python.md
      loaded-by: add/database/SKILL.md
-     prereq: Stack identified as FastAPI. Do not invoke this file directly. -->
+     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
 ### 3-Level Leaf Example
@@ -142,14 +142,14 @@ Every reference file must begin with this comment block as its **first line**:
 ```
 <!-- ref: add/database/python/sqlalchemy.md
      loaded-by: add/database/python.md → add/database/SKILL.md
-     prereq: Stack = FastAPI, DB = SQL, compliance = standard. Do not invoke this file directly. -->
+     prereq: Stack = FastAPI, DB = SQL, compliance = standard. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
 ### Rules
 
 - The `ref:` path is always relative to the `skills/` directory.
 - The `loaded-by:` field lists the full chain from nearest parent to root SKILL.md (arrow-separated) for 3-level files.
-- The `prereq:` sentence must always end with: `Do not invoke this file directly.`
+- The `prereq:` field must contain `Do not invoke this file directly` (as a phrase), followed by a note naming the skill that loads it: `— it is loaded at runtime by the templatecentral:<skill> skill.`
 - No blank lines between the opening `<!--` and closing `-->`.
 
 ### Exception
@@ -166,7 +166,7 @@ Scaffold reference files (`source-files.md`, `config-files.md`) that predate thi
 Use when <trigger verb phrase> — <stack list>.
 ```
 
-- **Max 150 characters** (hard limit enforced by shared-audit).
+- **Max 150 characters** (Unicode character count, not byte count — enforced by `templatecentral:audit`).
 - **Front-load the trigger action.** The reader needs to know the "when" immediately.
 - **Stack list after the em-dash** (—). Only include stacks that are actually supported.
 - **Stack order:** FastAPI, NestJS, Next.js, Vite + React.
@@ -293,7 +293,7 @@ This checklist matches what `templatecentral:audit` enforces automatically. Use 
 ### Reference Files
 
 - [ ] All reference files: `<!-- ref: ... loaded-by: ... prereq: ... -->` is the first line of the file
-- [ ] All reference files: `prereq:` ends with `Do not invoke this file directly.`
+- [ ] All reference files: `prereq:` contains `Do not invoke this file directly — it is loaded at runtime by the templatecentral:<skill> skill.`
 - [ ] All reference files: `loaded-by:` lists the full chain (arrow-separated) for 3-level files
 
 ### Structural Rules
@@ -315,4 +315,4 @@ This checklist matches what `templatecentral:audit` enforces automatically. Use 
 
 ---
 
-*Last updated: 2026-05-09. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 6 (build, test, review, cleanup de-registered as agent utilities).*
+*Last updated: 2026-05-25. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 6 (build, test, review, cleanup de-registered as agent utilities).*

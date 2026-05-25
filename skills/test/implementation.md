@@ -13,7 +13,7 @@ Same as `build-agent`: check for `next.config.ts`, `next.config.js`, or `next.co
 ## Steps
 
 1. Detect stack
-2. Load `shared-add-test` — it contains test conventions for all four stacks with a stack-detection section at the top.
+2. Load `templatecentral:add` (test) — it contains test conventions for all four stacks with a stack-detection section at the top.
 3. Identify newly added code (files written in this session)
 4. Write tests following the `add-test` skill conventions
 5. Run the full test suite:
@@ -56,7 +56,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: `nextjs-add-feature`, `nextjs-add-api-route`, `vite-react-add-feature`, `fastapi-add-endpoint`, `nestjs-add-module`.
+Dispatched by: `templatecentral:add` (feature), `templatecentral:add` (api-route), `templatecentral:add` (feature), `templatecentral:add` (endpoint), `templatecentral:add` (module).
 
 ## Changelog
 ### 1.0.0

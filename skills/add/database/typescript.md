@@ -4,7 +4,7 @@
 
 # TypeScript Database Stack Router
 
-Detect intent and ask for database type. If migration intent detected ("migrate/upgrade to IAM"), exit and say "Run `shared-migrate-database`."
+Detect intent and ask for database type. If migration intent detected ("migrate/upgrade to IAM"), exit and say "Run `templatecentral:migrate`."
 
 Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* — skip if user named a library.
 

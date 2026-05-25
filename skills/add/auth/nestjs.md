@@ -5,11 +5,11 @@
 
 Add JWT-based authentication to a NestJS project scaffolded from templateCentral using Passport.js.
 
-> **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `nestjs-add-database` after this skill to complete the integration.
+> **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Dependencies
 
@@ -35,7 +35,7 @@ Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -60,7 +60,7 @@ import { z } from 'zod';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(12), // 12-char minimum — NIST SP 800-63B baseline
+  password: z.string().min(12), // 12-char minimum — OWASP recommendation
   name: z.string().min(1),
 });
 
@@ -179,7 +179,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    throw new UnauthorizedException('Database integration required. Run nestjs-add-database to complete auth.');
+    throw new UnauthorizedException('Database integration required. Run templatecentral:add (database) to complete auth.');
   }
 }
 ```
@@ -331,10 +331,10 @@ import { APP_GUARD } from '@nestjs/core';
 ### Rules
 
 - **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
-- Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
+- Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation; industry-standard minimum 12-character passwords).
 - The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
-- **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` uses `req.ip`, which Fastify only patches from `X-Forwarded-For` when `trustProxy` is active (set via `TRUST_PROXY` in the scaffold). Without it, all proxied requests share the proxy's IP and hit the same rate bucket.
+- **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` uses `req.ip`, which Fastify only patches from `X-Forwarded-For` when `trustProxy` is active (set via `TRUST_PROXY` in the scaffold). Without it, all proxied requests share the proxy's IP and hit the same rate bucket. Set `TRUST_PROXY=1` (one-hop: ALB → App) or `TRUST_PROXY=2` (two-hop: ALB → Traefik → App); the scaffold converts numeric strings to integers automatically.
 
 ### Validate
 
@@ -346,7 +346,7 @@ pnpm test     # auth tests pass
 ### After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards
 
 ---

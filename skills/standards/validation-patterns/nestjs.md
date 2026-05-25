@@ -78,7 +78,7 @@ export class ProjectsController {
   @ApiOperation({ summary: 'List projects with pagination' })
   async list(
     @Query(new ZodValidationPipe(paginationSchema))
-    query: z.infer<typeof paginationSchema>,
+    query: z.infer<typeof paginationSchema>, // z.infer is correct here — ZodValidationPipe applies defaults; this is the post-parse output type
   ) {
     return await this.service.listProjects(query.page, query.limit);
   }
@@ -134,5 +134,5 @@ pnpm test
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

@@ -37,7 +37,7 @@ Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.

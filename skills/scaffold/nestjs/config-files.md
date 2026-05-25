@@ -46,7 +46,7 @@ RUN apk add --no-cache dumb-init ca-certificates \
     && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
 
 # ---- Dependencies ----
-# Installs ALL dependencies (including devDependencies like TypeScript, jest, etc.)
+# Installs ALL dependencies (including devDependencies like TypeScript, vitest, etc.)
 # Used by the builder (needs TypeScript, build tools) and the dev stage.
 FROM base AS deps
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* pnpm-workspace.yaml* ./

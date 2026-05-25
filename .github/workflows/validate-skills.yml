@@ -102,3 +102,28 @@ jobs:
             exit 1
           fi
           echo "OK: No hardcoded secrets detected in skill files"
+
+  plugin-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Validate plugin.json structure
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json'));
+            const required = ['name','version','description','author','skills','displayName','homepage','repository','license'];
+            const missing = required.filter(f => !p[f]);
+            if (missing.length) { console.error('Missing fields:', missing.join(', ')); process.exit(1); }
+            console.log('plugin.json OK');
+          "
+
+      - name: Validate marketplace.json structure
+        run: |
+          node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json'));
+            if (!m.name || !m.description || !m.plugins) { console.error('marketplace.json missing required fields'); process.exit(1); }
+            console.log('marketplace.json OK');
+          "

@@ -212,7 +212,7 @@ Confirm the build succeeds and all tests pass.
 
 ## Completing Auth Integration
 
-> **Only apply this section if `nestjs-add-auth` was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
 
 **Step A — Create `src/modules/auth/schemas/user.schema.ts`**
 
@@ -319,5 +319,5 @@ export class AuthModule {}
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

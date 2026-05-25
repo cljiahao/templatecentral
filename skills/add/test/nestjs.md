@@ -9,7 +9,7 @@ Guide for adding unit tests and e2e tests to a NestJS project scaffolded from te
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:nestjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
@@ -19,7 +19,7 @@ Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to context check below.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to context check below.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -27,7 +27,7 @@ the marker.
 **Context check:** Confirm `src/modules/` exists and contains at least one subdirectory.
 
 If not found → ⛔ STOP. Tell the user: "No modules found. Run
-`templatecentral:nestjs-add-module` first, then return here."
+`templatecentral:add` (module) first, then return here."
 
 If found → proceed to the sections below.
 
@@ -218,5 +218,5 @@ pnpm test:e2e
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

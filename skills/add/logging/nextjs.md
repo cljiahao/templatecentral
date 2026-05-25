@@ -111,7 +111,7 @@ export async function httpGet(url: string, options?: RequestInit): Promise<Respo
   try {
     const res = await fetch(url, options);
     logger.info(
-      { method: 'GET', url: safeUrl, status_code: res.status, duration_ms: Date.now() - start },
+      { method: 'GET', url: safeUrl, status: res.status, duration_ms: Date.now() - start },
       'Outbound HTTP'
     );
     return res;
@@ -199,7 +199,7 @@ logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
 # Tier 1
 pnpm dev
 curl http://localhost:3000/api/health
-# Expect JSON log line: { method: "GET", path: "/api/health", status_code: 200, duration_ms: <n> }
+# Expect JSON log line: { method: "GET", path: "/api/health", status: 200, duration_ms: <n> }
 
 # Tier 2
 # Attempt login with wrong credentials — expect login failure log
@@ -217,5 +217,5 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

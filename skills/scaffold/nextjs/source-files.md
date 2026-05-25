@@ -1539,7 +1539,7 @@ export default function DashboardPage() {
     <div className="max-w-site mx-auto w-full px-6 py-12">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
-        Example feature — remove with the <code>shared-remove-example</code> skill after
+        Example feature — remove with the <code>templatecentral:cleanup</code> skill after
         confirming the scaffold works.
       </p>
       <div className="mt-8">
@@ -1921,9 +1921,9 @@ If check fails, a generated file violates the eslint or prettier config.
 Create `AGENTS.md` at the project root with this exact content (update Identity fields):
 
 ```markdown
-<!-- templateCentral: nextjs@1.0.0 -->
+<!-- templateCentral: nextjs@4.0.0 -->
 
-> **Session start:** Run `shared-drift-check` to check for templateCentral convention and dependency updates before starting work.
+> **Session start:** Run `templatecentral:standards` (drift-check) to check for templateCentral convention and dependency updates before starting work.
 
 # <Project Name>
 
@@ -1934,7 +1934,7 @@ Create `AGENTS.md` at the project root with this exact content (update Identity 
 
 ## Architecture Decisions
 - Providers (QueryClientProvider) in root `layout.tsx`
-- Route groups: `(public)/` for public pages; `dashboard/` for authenticated pages (protected by `proxy.ts` once `nextjs-add-auth` is run)
+- Route groups: `(public)/` for public pages; `dashboard/` for authenticated pages (protected by `proxy.ts` once `templatecentral:add` (auth) is run)
 - Feature modules under `src/features/<name>/`
 - Barrel exports (`index.ts`) for all shared folders
 - shadcn/ui primitives in `src/components/ui/` (managed by CLI)
@@ -1974,16 +1974,76 @@ Every agent writing or modifying code must follow these before marking a task do
 
 ## Project-Specific Notes
 <!-- Add decisions, custom patterns, and context as the project evolves -->
+
+## AI Harness
+
+`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
+```
+
+### 6b. Create .claude/settings.json
+
+Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
+
+**`.claude/settings.json`**:
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm test --run --reporter=dot 2>&1 | tail -20"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Also create `FUTURE.md` at the project root:
+
+**`FUTURE.md`**:
+```markdown
+# Future Directions
+
+Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
+
+## Meta-Harness
+
+CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
+
+**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+
+## Trace-Driven Evolution
+
+Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
+
+**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+
+## Environment Engineering
+
+A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
+
+**Seam:** `devcontainer.json` if present.
+
+---
+
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
 ```
 
 ### 7. Dispatch agents
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
-2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test`)
-3. `shared-update-agent` — freshen all dependencies to latest compatible versions
-4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. `templatecentral:build` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
+2. `templatecentral:test` — verify all scaffold tests pass (`pnpm test`)
+3. `templatecentral:review` (update operation) — freshen all dependencies to latest compatible versions
+4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -1995,13 +2055,10 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
 claude plugin marketplace add obra/superpowers
 ```
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
-- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
@@ -2018,7 +2075,7 @@ Include **Build & Dev** with verified commands:
 - `pnpm test` — tests
 - `pnpm check` — type check + lint
 
-**templateCentral skills** (this stack): `nextjs-scaffold` (done), `nextjs-code-standards`, `nextjs-add-auth`, `nextjs-add-database`, `nextjs-add-feature`, `nextjs-add-page`, `nextjs-add-api-route`, `nextjs-add-component`, `nextjs-add-form`, `nextjs-add-integration`, `nextjs-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (auth, database, feature, page, api-route, component, form, integration, test). **Workflow**: simple/medium → templateCentral skills; complex → Superpowers. **Never** put secrets in `CLAUDE.md`.
 
 ### 8b. Optional: Task management
 
@@ -2026,13 +2083,13 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 9. Remove example code (optional)
 
-Once the project is verified and the user confirms it runs, use the `shared-remove-example` skill.
+Once the project is verified and the user confirms it runs, use the `templatecentral:cleanup` skill.
 
 Next.js-specific steps (the skill covers these):
 - Delete `src/features/example/` directory
 - Remove `ExampleList` import from `src/app/dashboard/(overview)/page.tsx`
 
-The `shared-remove-example` skill handles both steps automatically.
+The `templatecentral:cleanup` skill handles both steps automatically.
 
 ---
 
@@ -2043,7 +2100,7 @@ The `shared-remove-example` skill handles both steps automatically.
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time
-- Remove example code after user confirms the project runs — use the `shared-remove-example` skill (handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`)
+- Remove example code after user confirms the project runs — use the `templatecentral:cleanup` skill (handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`)
 
 ---
 
@@ -2052,4 +2109,4 @@ The `shared-remove-example` skill handles both steps automatically.
 ### 1.0.0
 - Initial plugin release — hybrid rules + verbatim scaffold approach
 - Replaces MCP-based `scaffold_project` file copy
-- shared-update-agent replaces lockfile for dependency freshness
+- `templatecentral:review` (update) replaces lockfile for dependency freshness

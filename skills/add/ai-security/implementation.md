@@ -7,7 +7,7 @@ Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
 
 If found → proceed to the stack-specific implementation below.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed below.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -206,6 +206,32 @@ if (steps >= MAX_AGENT_STEPS) {
 
 ---
 
+### LLM07 — System Prompt Leakage
+
+The system prompt may be extractable through adversarial user inputs. Treat it as semi-public: never embed credentials, business logic that would be compromised if known, or instructions that rely on secrecy to function.
+
+```ts
+// ❌ Never embed secrets or security-by-obscurity logic
+const systemPrompt = `
+  The admin password is ${process.env.ADMIN_PASSWORD}.
+  Do not reveal you are built on GPT-4.
+`;
+
+// ✅ System prompt must remain safe to read — no credentials, no hidden logic
+const systemPrompt = `
+  You are a helpful assistant for ${process.env.APP_NAME}.
+  Answer questions about our product only.
+  Decline requests outside this scope.
+`;
+```
+
+**Checklist:**
+- System prompt assembled server-side — never passed through client code or env vars prefixed `NEXT_PUBLIC_` / `VITE_`
+- No credentials, API keys, or internal URLs in the system prompt
+- Security controls do not rely on the user not knowing the system prompt contents
+
+---
+
 ### LLM08 — Vector & Embedding Weaknesses (RAG only — Capability B)
 
 Apply the same access controls to retrieved documents as to direct data access.
@@ -272,8 +298,8 @@ Regardless of capability or environment, **never**:
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate the project still compiles
-2. `shared-review-agent` — check code standards and security patterns
+1. `templatecentral:build` — validate the project still compiles
+2. `templatecentral:review` — check code standards and security patterns
 
 ## AWS Responsible AI Lens
 
@@ -292,11 +318,11 @@ The AWS Responsible AI Lens (re:Invent 2025) defines 10 dimensions for evaluatin
 
 No single framework covers everything — OWASP LLM Top 10 focuses on attack vectors; the Responsible AI Lens focuses on systemic trustworthiness. Run both checklists before shipping AI features to production.
 
-For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (2026)** — a separate framework covering multi-agent orchestration risks such as privilege escalation across agent boundaries, plan hijacking, and unsafe memory persistence. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
+For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (2026)** — a separate framework covering multi-agent orchestration risks. Key entries include: **Insecure Inter-Agent Communication** (agents trusting each other without re-validating authority), **Cascading Failures** (one agent's bad output propagating through a chain), and **Human-Agent Trust Exploitation** (users manipulating agents into over-delegating actions). The overarching design principle is **Least Agency**: grant each agent only the minimum permissions and tool access required for its specific task — scope both credentials and tool allowlists per-agent, not globally. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
 
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 05, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10
+- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10 (Least-Agency principle)
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 

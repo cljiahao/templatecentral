@@ -44,13 +44,13 @@ App startup/shutdown — add lifespan events in `src/app.py`:
 # src/app.py
 from contextlib import asynccontextmanager
 from core.logging import logger
-from core.config import api_settings
+from core.config import api_settings, common_settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("App starting", extra={"port": api_settings.API_PORT, "environment": api_settings.ENVIRONMENT})
+    logger.info("App starting", extra={"port": api_settings.API_PORT, "environment": common_settings.ENVIRONMENT})
     yield
-    logger.info("App shutdown", extra={"environment": api_settings.ENVIRONMENT})
+    logger.info("App shutdown", extra={"environment": common_settings.ENVIRONMENT})
 
 app = FastAPI(lifespan=lifespan, ...)
 ```
@@ -183,8 +183,8 @@ def before_cursor_execute(conn, cursor, statement, parameters, context, executem
 def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     total_ms = round((time.monotonic() - conn.info["query_start_time"].pop()) * 1000)
     if total_ms > 500:
-        # Use operation class name as a label — never log SQL text or bound parameters
-        query_name = str(context.statement.__class__.__name__) if hasattr(context, "statement") else "unknown"
+        # Use the SQL verb as a label — never log full SQL text or bound parameters
+        query_name = statement.split()[0].upper() if isinstance(statement, str) and statement.strip() else "unknown"
         logger.warning(
             "Slow DB query",
             extra={"query_name": query_name, "duration_ms": total_ms},
@@ -248,5 +248,5 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

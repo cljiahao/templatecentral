@@ -150,8 +150,8 @@ pnpm build
 
 ## See Also
 
-- `shared-add-logging` — Integrate structured logging with error handlers
-- `shared-validation-patterns` — Zod/Pydantic schemas for validation errors
+- `templatecentral:add` (logging) — Integrate structured logging with error handlers
+- `templatecentral:standards` (validation-patterns) — Zod/Pydantic schemas for validation errors
 - Stack-specific `code-standards` — Security and error handling guidance
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Use error handling in new routes
 
@@ -162,5 +162,5 @@ Run the stack's build and test commands (see `AGENTS.md` → Scaffold verificati
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

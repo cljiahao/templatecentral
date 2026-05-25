@@ -8,7 +8,7 @@ Create a validated form in a Next.js project scaffolded from templateCentral usi
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ## What the Template Already Provides
 
@@ -35,7 +35,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -185,7 +185,7 @@ export default function ContactPage() {
 - Use `toast.success()` / `toast.error()` from Sonner for user feedback — install sonner and add `<Toaster />` to root layout first (see Step 1).
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
 - Add `'use client'` directive — forms are inherently interactive.
-- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.
+- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `templatecentral:standards` (validation-patterns).
 
 ## Validate
 
@@ -196,5 +196,5 @@ pnpm build    # zero errors
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

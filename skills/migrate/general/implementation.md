@@ -12,6 +12,38 @@ autonomously after the decision.
 
 ---
 
+## Phase 0 — Check for Version Upgrade (agent, autonomous)
+
+Check `AGENTS.md` line 1 for a templateCentral version marker:
+
+```
+<!-- templateCentral: <stack>@<version> -->
+```
+
+**If no marker** → skip to Phase 1 (stack detection).
+
+**If marker present, version `@4.0.0` or later** → print:
+```
+✓ This project is at templateCentral v4.0.0 or later. No migration needed.
+```
+Exit.
+
+**If marker present, version earlier than `@4.0.0`** → skip Phases 1–3. Present:
+```
+ℹ️ This project was scaffolded with templateCentral <version>.
+
+v4.0 adds an AI harness layer to all scaffolds:
+- .claude/settings.json  — PostToolUse hook runs tests after every edit
+- AGENTS.md              — ## AI Harness section with post-harness seams
+- FUTURE.md              — post-harness direction documentation
+
+Upgrade? (A) Yes  (B) Skip
+```
+User A → proceed to Phase 4.
+User B → print "No changes made." Exit.
+
+---
+
 ## Phase 1 — Detect Stack (agent, autonomous)
 
 Scan the current directory for stack signals:
@@ -59,7 +91,7 @@ B) Full migration (thorough) [not yet available]
    each step.
 
 C) Stop
-   Exit without changes. Run templatecentral:<stack>-scaffold to start
+   Exit without changes. Run `templatecentral:scaffold` to start
    a fresh project, or proceed manually.
 
 Which would you prefer? (A / B / C)
@@ -131,3 +163,104 @@ Print: "No changes made."
 
 Return control to the invoking skill. The invoking skill must exit without generating
 any files.
+
+---
+
+## Phase 4 — v4.0 Upgrade (agent, autonomous after Phase 0 gate)
+
+Run only when the user chose A in Phase 0. Do not invoke for unmarked projects.
+
+**Step 4a: Read AGENTS.md and detect stack**
+
+Read the full `AGENTS.md`. Extract `<stack>` from the existing marker on line 1.
+
+**Step 4b: Add AI Harness section**
+
+If `## AI Harness` is not already present in `AGENTS.md`, append it before any `## Session Start` section, or at the end if that section is absent:
+
+```markdown
+## AI Harness
+
+`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
+```
+
+**Step 4c: Create `.claude/settings.json`**
+
+If `.claude/settings.json` does not exist, create it. Select the test command for the detected stack:
+
+| Stack | Command |
+|-------|---------|
+| fastapi | `pytest test/ -q --tb=short 2>&1 \| tail -20` |
+| nextjs / vite-react | `pnpm test --run --reporter=dot 2>&1 \| tail -20` |
+| nestjs | `pnpm test --run 2>&1 \| tail -20` |
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "<stack-test-command>"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If `.claude/settings.json` already exists, add the `PostToolUse` entry to the existing hooks without overwriting.
+
+**Step 4d: Create `FUTURE.md`**
+
+Create `FUTURE.md` at the project root only if it does not already exist:
+
+```markdown
+# Future Directions
+
+Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
+
+## Meta-Harness
+
+CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
+
+**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+
+## Trace-Driven Evolution
+
+Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
+
+**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+
+## Environment Engineering
+
+A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
+
+**Seam:** `devcontainer.json` if present.
+
+---
+
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+```
+
+**Step 4e: Update the version marker**
+
+Rewrite line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@4.0.0 -->`.
+
+**Step 4f: Print summary**
+
+```
+✓ Upgraded to templateCentral v4.0.
+
+Changes made:
+  AGENTS.md            — Added ## AI Harness section; updated marker to @4.0.0
+  .claude/settings.json — Created with PostToolUse test hook
+  FUTURE.md            — Created with post-harness seam documentation
+
+Commit these three files together.
+```

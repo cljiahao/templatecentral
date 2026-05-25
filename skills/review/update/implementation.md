@@ -90,7 +90,7 @@ Security advisories:
 
 ## Callers
 
-Dispatched by: `nextjs-scaffold`, `vite-react-scaffold`, `fastapi-scaffold`, `nestjs-scaffold`, `shared-drift-check` (when drift detected and user accepts update).
+Dispatched by: `templatecentral:scaffold` (all stacks), `templatecentral:standards` drift-check (when drift detected and user accepts update).
 
 ## Changelog
 ### 1.0.0

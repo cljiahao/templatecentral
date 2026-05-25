@@ -76,6 +76,8 @@ _SECURITY_HEADERS = [
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
     (b"x-xss-protection", b"0"),  # Disable legacy XSS auditor (exploitable in older browsers)
+    # CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
+    (b"content-security-policy", b"frame-ancestors 'none'; base-uri 'self'; object-src 'none'"),
 ]
 
 
@@ -293,6 +295,8 @@ def configure_exceptions(app: FastAPI) -> None:
 ### `src/core/config.py`
 
 ```python
+from typing import Any
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -323,7 +327,7 @@ class APISettings(BaseSettings):
     ALLOWED_CORS: list[str] = []
     TRUST_PROXY: str = Field(default="")
 
-    def model_post_init(self, _) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Compute allowed CORS origins after initialization."""
         self.ALLOWED_CORS = self._compute_allowed_cors()
 
@@ -1129,12 +1133,12 @@ ruff format --check src/  # zero formatting drift
 Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill in the project name and current date:
 
 ```markdown
-<!-- templateCentral: fastapi@1.0.0 -->
+<!-- templateCentral: fastapi@4.0.0 -->
 # <Project Name>
 
 ## Identity
 - **Stack**: FastAPI 0.136+, Python 3.13, Pydantic v2, Uvicorn, Ruff, pytest
-- **Scaffolded from**: templateCentral fastapi-scaffold skill
+- **Scaffolded from**: templateCentral (templatecentral:scaffold)
 - **Created**: <date>
 
 ## Architecture Decisions
@@ -1178,17 +1182,77 @@ Every agent writing or modifying code must follow these before marking a task do
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
 ## Session Start
-Run `shared-drift-check` at the start of each session to check for convention or dependency drift.
+Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+
+## AI Harness
+
+`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
-### 6b. Post-scaffold agent workflow
+### 6b. Create .claude/settings.json
+
+Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
+
+**`.claude/settings.json`**:
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pytest test/ -q --tb=short 2>&1 | tail -20"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Also create `FUTURE.md` at the project root:
+
+**`FUTURE.md`**:
+```markdown
+# Future Directions
+
+Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
+
+## Meta-Harness
+
+CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
+
+**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+
+## Trace-Driven Evolution
+
+Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
+
+**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+
+## Environment Engineering
+
+A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
+
+**Seam:** `devcontainer.json` if present.
+
+---
+
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+```
+
+### 6c. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `shared-build-agent` — verify the scaffold compiles clean and the API starts
-2. `shared-test-agent` — verify all scaffold tests pass (`pytest test/ -v`)
-3. `shared-update-agent` — freshen any deps that have newer compatible versions
-4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. `templatecentral:build` — verify the scaffold compiles clean and the API starts
+2. `templatecentral:test` — verify all scaffold tests pass (`pytest test/ -v`)
+3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
+4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -1200,13 +1264,10 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
 claude plugin marketplace add obra/superpowers
 ```
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
-- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
@@ -1225,7 +1286,7 @@ Include **Build & Dev** with verified commands only:
 - `pytest test/` — tests (project root)
 - `ruff check src/` — lint
 
-**templateCentral skills** (this stack): `fastapi-scaffold` (done), `fastapi-code-standards`, `fastapi-add-endpoint`, `fastapi-add-auth`, `fastapi-add-database`, `fastapi-add-integration`, `fastapi-add-test`. **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
+**templateCentral skills** (this stack): `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (endpoint, auth, database, integration, test). **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
 
 ### 8. Task management (optional)
 
@@ -1233,7 +1294,7 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 9. Remove example code (optional)
 
-Once the project is verified, use the `shared-remove-example` skill.
+Once the project is verified, use the `templatecentral:cleanup` skill.
 
 FastAPI-specific steps (the skill covers these):
 - Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`

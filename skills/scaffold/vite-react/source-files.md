@@ -705,7 +705,7 @@ export const useExampleItems = () => {
 
 ### `src/features/example/schemas/index.ts`
 
-Empty file — placeholder for Zod schemas added by the `vite-react-add-feature` skill.
+Empty file — placeholder for Zod schemas added by the `templatecentral:add` (feature) skill.
 
 ### `src/components/layout/index.ts`
 
@@ -743,7 +743,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    if (import.meta.env.DEV) {
+      console.error('ErrorBoundary caught an error:', error, errorInfo);
+    }
   }
 
   handleRetry = () => {
@@ -760,7 +762,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
           <h1 className="text-2xl font-bold">Something went wrong</h1>
           <p className="text-muted-foreground max-w-md text-sm">
-            {this.state.error?.message || 'An unexpected error occurred.'}
+            {import.meta.env.DEV
+              ? (this.state.error?.message ?? 'An unexpected error occurred.')
+              : 'An unexpected error occurred.'}
           </p>
           <button
             type="button"
@@ -2070,12 +2074,12 @@ If any check fails, diagnose and fix before proceeding.
 Only after the verification gate passes. Line 1 must be the templateCentral marker comment:
 
 ```markdown
-<!-- templateCentral: vite-react@1.0.0 -->
+<!-- templateCentral: vite-react@4.0.0 -->
 # <Project Name>
 
 ## Identity
 - **Stack**: Vite 8, React 19, TypeScript, shadcn/ui, Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, AuthProvider
-- **Scaffolded from**: templateCentral vite-react-scaffold skill
+- **Scaffolded from**: templateCentral (templatecentral:scaffold)
 - **Created**: <date>
 - **Type**: Client-side SPA (no SSR, no API route handlers)
 
@@ -2123,19 +2127,79 @@ Every agent writing or modifying code must follow these before marking a task do
 <!-- Add decisions, custom patterns, and context as the project evolves -->
 
 ## Session Start
-Run `shared-drift-check` at the start of each session to check for convention or dependency drift.
+Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+
+## AI Harness
+
+`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
 Update Identity with actual project name and creation date. Add any user-specified customizations under "Project-Specific Notes".
 
-### 7b. Post-scaffold agent workflow
+### 7b. Create .claude/settings.json
+
+Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
+
+**`.claude/settings.json`**:
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm test --run --reporter=dot 2>&1 | tail -20"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Also create `FUTURE.md` at the project root:
+
+**`FUTURE.md`**:
+```markdown
+# Future Directions
+
+Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
+
+## Meta-Harness
+
+CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
+
+**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+
+## Trace-Driven Evolution
+
+Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
+
+**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+
+## Environment Engineering
+
+A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
+
+**Seam:** `devcontainer.json` if present.
+
+---
+
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+```
+
+### 7c. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `shared-build-agent` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
-2. `shared-test-agent` — verify all scaffold tests pass (`pnpm test`)
-3. `shared-update-agent` — freshen any deps that have newer compatible versions
-4. `shared-review-agent` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. `templatecentral:build` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
+2. `templatecentral:test` — verify all scaffold tests pass (`pnpm test`)
+3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
+4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -2147,13 +2211,10 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add thedotmack/claude-mem
-claude plugin install claude-mem
 claude plugin marketplace add obra/superpowers
 ```
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).
-- **claude-mem** — persists decisions, file changes, and tool usage across sessions via SQLite + vector DB. Installed in the **scaffolded project**, not in templateCentral.
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
@@ -2166,7 +2227,7 @@ Skip if the user does not use Claude Code.
 
 Write a short `CLAUDE.md` referencing `AGENTS.md` for full detail. Include:
 - **Build & Dev**: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck)
-- **templateCentral skills**: `vite-react-scaffold` (done), `vite-react-code-standards`, `vite-react-add-page`, `vite-react-add-feature`, `vite-react-add-component`, `vite-react-add-form`, `vite-react-add-auth`, `vite-react-add-integration`, `vite-react-add-test`
+- **templateCentral skills**: `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (page, feature, component, form, auth, integration, test)
 - **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`
 - NEVER put secrets in `CLAUDE.md`
 
@@ -2182,7 +2243,7 @@ Once the project is verified and the user confirms it runs, optionally remove ex
 - Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
 - Update `src/pages/index.ts` if needed
 
-Or invoke the `shared-remove-example` skill.
+Or invoke the `templatecentral:cleanup` skill.
 
 ---
 

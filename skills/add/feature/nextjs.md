@@ -8,7 +8,7 @@ Create a new self-contained feature module in a Next.js project scaffolded from 
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ## Inputs
 
@@ -22,7 +22,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -123,7 +123,7 @@ export const createProjectSchema = z.object({
   status: z.enum(['active', 'archived']),
 });
 
-export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type CreateProjectInput = z.input<typeof createProjectSchema>;
 ```
 
 Use these schemas in:
@@ -217,6 +217,6 @@ After creating all files:
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
-3. `shared-test-agent` — write and run tests
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards
+3. `templatecentral:test` — write and run tests

@@ -276,6 +276,11 @@ pnpm dev
 
 ```typescript
 // test/error-boundary.test.tsx
+// Requires: pnpm add -D @testing-library/react @testing-library/jest-dom jsdom
+// Add to vitest.config.ts: environment: 'jsdom' (or use @vitest-environment jsdom comment below)
+// @vitest-environment jsdom
+import '@testing-library/jest-dom';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 
@@ -321,5 +326,5 @@ describe('ErrorBoundary', () => {
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

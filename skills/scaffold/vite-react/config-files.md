@@ -434,6 +434,12 @@ yarn-error.log*
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
+
+# Explicitly allowlist packages permitted to run install-time build scripts.
+# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# allowBuilds:
+#   esbuild: true
+#   sharp: true
 ```
 
 ### `.env.example`

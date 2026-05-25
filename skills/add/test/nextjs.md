@@ -9,7 +9,7 @@ Guide for writing tests for API route handlers in a Next.js project scaffolded f
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
@@ -19,7 +19,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to context check below.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to context check below.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -27,7 +27,7 @@ the marker.
 **Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file.
 
 If not found → ⛔ STOP. Tell the user: "No API routes found. Run
-`templatecentral:nextjs-add-api-route` first, then return here."
+`templatecentral:add` (api-route) first, then return here."
 
 If found → proceed to the sections below.
 
@@ -274,5 +274,5 @@ function makeParams<T extends Record<string, string>>(values: T) {
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

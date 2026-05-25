@@ -1,3 +1,4 @@
+<!-- templateCentral: plugin@4.0.0 -->
 # AGENTS.md — templateCentral
 
 templateCentral is a plugin of production-ready scaffolding skills for creating new applications. It is NOT an application itself.
@@ -10,46 +11,54 @@ Detect the stack from project files or user request (`next.config.ts/js/mjs` →
 
 | User wants | Skill |
 |------------|-------|
-| New Next.js app | `nextjs-scaffold` |
-| New FastAPI backend | `fastapi-scaffold` |
-| New Vite + React SPA | `vite-react-scaffold` |
-| New NestJS API | `nestjs-scaffold` |
+| New Next.js app | `templatecentral:scaffold` |
+| New FastAPI backend | `templatecentral:scaffold` |
+| New Vite + React SPA | `templatecentral:scaffold` |
+| New NestJS API | `templatecentral:scaffold` |
 
-### Existing project → add-* skill
+### Existing project → add capability
 
-| Task | Next.js | FastAPI | NestJS | Vite+React |
-|------|---------|---------|--------|-----------|
-| Authentication & login | `nextjs-add-auth` | `fastapi-add-auth` | `nestjs-add-auth` | `vite-react-add-auth` |
-| Database | `nextjs-add-database` | `fastapi-add-database` | `nestjs-add-database` | — |
-| Page / screen | `nextjs-add-page` | — | — | `vite-react-add-page` |
-| Feature module | `nextjs-add-feature` | — | `nestjs-add-module` | `vite-react-add-feature` |
-| API route / endpoint | `nextjs-add-api-route` | `fastapi-add-endpoint` | — | — |
-| UI component | `nextjs-add-component` | — | — | `vite-react-add-component` |
-| Form | `nextjs-add-form` | — | — | `vite-react-add-form` |
-| External integration | `nextjs-add-integration` | `fastapi-add-integration` | `nestjs-add-integration` | `vite-react-add-integration` |
-| Tests | `nextjs-add-test` | `fastapi-add-test` | `nestjs-add-test` | `vite-react-add-test` |
-| Code standards review | `nextjs-code-standards` | `fastapi-code-standards` | `nestjs-code-standards` | `vite-react-code-standards` |
+All add operations use `templatecentral:add`. The skill detects the stack and capability automatically.
 
-### Cross-stack tasks → shared-* skill
+| Capability | Stacks | Notes |
+|------------|--------|-------|
+| `auth` | fastapi, nestjs, nextjs, vite-react | |
+| `database` | fastapi, nestjs, nextjs | |
+| `page` | nextjs, vite-react | |
+| `feature` | nextjs, vite-react | |
+| `module` | nestjs | |
+| `api-route` | nextjs | |
+| `endpoint` | fastapi | |
+| `component` | nextjs, vite-react | |
+| `form` | nextjs, vite-react | |
+| `integration` | fastapi, nestjs, nextjs, vite-react | |
+| `test` | fastapi, nestjs, nextjs, vite-react | |
+| `logging` | fastapi, nestjs, nextjs | |
+| `error-handling` | fastapi, nestjs, nextjs, vite-react | |
+| `pagination` | fastapi, nestjs, nextjs, vite-react | |
+| `mutation` | fastapi→python, nestjs/nextjs/vite-react→typescript | |
+| `ai-security` | all stacks | |
+
+### Cross-stack tasks
 
 | Task | Skill |
 |------|-------|
-| Confirm project builds clean | `shared-build-agent` |
-| Write and run tests for new code | `shared-test-agent` |
-| Review code against standards | `shared-review-agent` |
-| Update dependencies | `shared-update-agent` |
-| Check convention/dep freshness (session start) | `shared-drift-check` |
-| Add structured JSON logging | `shared-add-logging` |
-| Add consistent error handling | `shared-add-error-handling` |
-| Add input validation (forms, APIs, uploads) | `shared-validation-patterns` |
-| Add pagination | `shared-add-pagination` |
-| Connect frontend to backend | `shared-full-stack-pairing` |
-| Remove template example code | `shared-remove-example` |
-| Plan complex multi-step features | `shared-task-management` |
+| Confirm project builds clean | `templatecentral:build` |
+| Write and run tests for new code | `templatecentral:test` |
+| Review code against standards | `templatecentral:review` |
+| Update dependencies | `templatecentral:review` (update operation) |
+| Check convention/dep freshness (session start) | `templatecentral:standards` (drift-check option) |
+| Add structured JSON logging | `templatecentral:add` (logging capability) |
+| Add consistent error handling | `templatecentral:add` (error-handling capability) |
+| Add input validation (forms, APIs, uploads) | `templatecentral:standards` (validation-patterns option) |
+| Add pagination | `templatecentral:add` (pagination capability) |
+| Connect frontend to backend | `templatecentral:standards` (full-stack-pairing option) |
+| Remove template example code | `templatecentral:cleanup` (remove-example option) |
+| Plan complex multi-step features | `templatecentral:cleanup` (task-management option) |
 
 ## Scaffolding flow (order matters)
 
-1. Confirm stack → use the `<stack>-scaffold` skill.
+1. Confirm stack → use the `templatecentral:scaffold` skill.
 2. Generate all project files from verbatim blocks per skill; configure name/metadata; env **only** from `.env.example` / `.env.default` (no real secrets).
 3. Install deps per scaffold (**Node**: default **`pnpm`**, `corepack enable` if needed; **Python**: venv then activate — Windows `.venv\Scripts\activate`, Unix `source .venv/bin/activate`); run **Scaffold verification** gates; fix failures before project docs.
 4. Write the **new project’s** `AGENTS.md`, then `CLAUDE.md` if Claude Code — never before gates pass. If they use git: **`git init`**, first commit should include the **lockfile**, never `.env` / `.env.local` with real secrets.
@@ -61,13 +70,13 @@ If the user’s request included specific feature requirements, invoke the corre
 
 | User wants | First skill | Then |
 |------------|-------------|------|
-| Auth only | `<stack>-add-auth` | — |
-| Database only | `<stack>-add-database` | — |
-| Auth + database | `<stack>-add-auth` first, then `<stack>-add-database` | Order matters — database skill completes the auth stub |
-| Logging | `shared-add-logging` | — |
-| Error handling | `shared-add-error-handling` | — |
+| Auth only | `templatecentral:add` (auth) | — |
+| Database only | `templatecentral:add` (database) | — |
+| Auth + database | `templatecentral:add` (auth) first, then `templatecentral:add` (database) | Order matters — database skill completes the auth stub |
+| Logging | `templatecentral:add` (logging) | — |
+| Error handling | `templatecentral:add` (error-handling) | — |
 
-**Auth + database ordering**: `fastapi-add-auth` and `nestjs-add-auth` create a stub `AuthService` that raises 501/`NOT_IMPLEMENTED` until a database is wired. Always run `add-auth` before `add-database` when both are requested — the database skill’s "Completing Auth Integration" section activates the stub with real DB calls. Running them in the wrong order means the integration section has no stub to complete.
+**Auth + database ordering**: FastAPI and NestJS auth skills create a stub `AuthService` that raises 501/`NOT_IMPLEMENTED` until a database is wired. Always run `add` (auth) before `add` (database) when both are requested — the database skill’s "Completing Auth Integration" section activates the stub with real DB calls. Running them in the wrong order means the integration section has no stub to complete.
 
 ## Code Quality (applies to every agent writing code)
 
@@ -91,7 +100,7 @@ These rules are not optional. Every subagent writing or modifying code must foll
 Stacks with a backend (**FastAPI**, **NestJS**, **Next.js** server/API code) **MUST** include automated tests for new or changed backend behavior in the same change as the code:
 
 - **FastAPI** — pytest for routers, services, and domain logic (`test/`).
-- **NestJS** — Jest for controllers, services, and repositories (`test/`); e2e where the skill prescribes it.
+- **NestJS** — Vitest for controllers, services, and repositories (`test/`); e2e where the skill prescribes it.
 - **Next.js** — Vitest for `src/app/api/**` and server-only logic they call (`test/api/`). **No** requirement to add tests for React components, pages, or client hooks.
 
 Subagents read their stack’s `code-standards` skill before writing code; those standards include this rule. **Vite + React** is out of scope for this policy (frontend template only).
@@ -115,7 +124,7 @@ Backend tests must still land in the **same change / PR** as the feature (**Back
 - **Never** paste live credentials into `AGENTS.md`, `CLAUDE.md`, generated docs, or chat output. Rotate any secret that was exposed.
 - **Never** commit private keys, `.pem` files, or SSH keys — if the project needs them locally, keep them out of git (`.gitignore`) and out of generated docs.
 - **Never** put secrets in `NEXT_PUBLIC_*` (Next.js) or `VITE_*` (Vite) — both are exposed in the client bundle.
-- **Next.js**: Always keep `next` on a current version — critical security patches release regularly. Run `shared-update-agent` to keep it current.
+- **Next.js**: Always keep `next` on a current version — critical security patches release regularly. Run `templatecentral:review` (update operation) to keep it current.
 - **FastAPI**: In development, CORS allows `localhost:3000`, `localhost:5173`, and `127.0.0.1` variants automatically. In production, set `CORS_ORIGINS` env var (comma-separated) to your frontend's domain.
 - **Production**: Replace template dev placeholders in env (e.g. better-auth `BETTER_AUTH_SECRET`, JWT secrets) with strong values before deploy — call this out in handoff when templates use placeholders.
 - Follow each stack’s `code-standards` for auth, env vars, and least-privilege responses.
@@ -132,7 +141,7 @@ Supply chain attacks are OWASP A03:2025 — the third most critical web applicat
   - **Node**: `pnpm dlx @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom.json`
   - **Python**: `pip install cyclonedx-bom && cyclonedx-bom -o sbom.json`
   - Commit `sbom.json` to the release tag; do not commit it on every push.
-- **Vulnerability scanning**: Run `pnpm audit --audit-level=high` (Node) or `pip-audit -r requirements.txt` (Python) in CI. Fail the build on high/critical findings. Use `shared-drift-check` → "Security audit" option to run interactively.
+- **Vulnerability scanning**: Run `pnpm audit --audit-level=high` (Node) or `pip-audit -r requirements.txt` (Python) in CI. Fail the build on high/critical findings. Use `templatecentral:standards` (drift-check → "Security audit" option) to run interactively.
 
 ## Scaffold verification (before project AGENTS.md / CLAUDE.md)
 
@@ -173,7 +182,7 @@ Ask whether the user wants structured task management. If **yes**, append **one*
 ```markdown
 ## Task Management
 
-For complex tasks (3+ files, architectural decisions), use the `shared-task-management` skill. Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
+For complex tasks (3+ files, architectural decisions), use the `templatecentral:cleanup` skill (task-management option). Protocol: Plan → Verify → Track → Explain → Document → Capture Lessons. Skip for single-file edits or quick fixes.
 ```
 
 **Option B — Superpowers** (Claude Code plugin — already installed if you're using Claude Code with this plugin):
@@ -214,7 +223,7 @@ Full decision rules: `README.md → Recommended Plugins`.
 Skip if the user does not use Claude Code. Add after `AGENTS.md` and after verification gates pass.
 
 - **Never** duplicate `AGENTS.md` content — one line: "Full context in `AGENTS.md`."
-- **Include**: verified Build & Dev commands; templateCentral skills list for this stack (e.g. `<stack>-scaffold`, `<stack>-add-auth`); workflow line: simple/medium → templateCentral skills; complex → Superpowers.
+- **Include**: verified Build & Dev commands; templateCentral skills list for this stack (e.g. `templatecentral:scaffold`, `templatecentral:add`); workflow line: simple/medium → templateCentral skills; complex → Superpowers.
 - **Never** put secrets or env values in `CLAUDE.md`.
 
 If templateCentral is not on disk, write `AGENTS.md` and a minimal `CLAUDE.md` from verified commands and local content.

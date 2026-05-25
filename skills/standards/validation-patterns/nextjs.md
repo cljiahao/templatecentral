@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 export const LoginFormSchema = z.object({
   email: z
-    .email('Invalid email address')
+    .email({ error: 'Invalid email address' })
     .toLowerCase(),
   password: z
     .string()
@@ -19,7 +19,7 @@ export const LoginFormSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
-export type LoginFormData = z.infer<typeof LoginFormSchema>;
+export type LoginFormData = z.input<typeof LoginFormSchema>;
 ```
 
 **2. React Hook Form + Client Validation**
@@ -314,5 +314,5 @@ pnpm test
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

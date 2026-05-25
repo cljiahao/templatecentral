@@ -7,7 +7,7 @@ Create a new third-party API integration in a Next.js project scaffolded from te
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Architecture
 
@@ -29,7 +29,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -144,8 +144,8 @@ Confirm the build succeeds with no type errors. Verify the integration works end
 - Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets. Add commented placeholders to `.env.example` so other developers know what's needed.
 - NEVER put API keys or tokens in `NEXT_PUBLIC_*` — they are exposed to every browser. Server-side integrations use `process.env` without the prefix. For APIs requiring auth from the browser, proxy through a Next.js API route.
 - NEVER consume integrations directly in components — go through feature services or API routes
-- For wiring this integration to a frontend SPA: use `shared-full-stack-pairing`
-- For complex Zod response validation patterns: use `shared-validation-patterns`
+- For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
+- For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
 
 ### Validate
 
@@ -157,5 +157,5 @@ pnpm check    # zero type errors
 ### After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

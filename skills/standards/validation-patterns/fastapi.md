@@ -177,7 +177,7 @@ async def fetch_github_user(username: str) -> GitHubUser:
 
     try:
         data = response.json()
-        user = GitHubUser(**data)  # Validates automatically
+        user = GitHubUser.model_validate(data)  # Pydantic v2 idiomatic form; respects mode="before" validators
         return user
     except ValidationError as e:
         raise InvalidInputError(f"Invalid GitHub API response: {e}")
@@ -197,5 +197,5 @@ pytest -v -s
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

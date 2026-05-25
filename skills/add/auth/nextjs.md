@@ -7,7 +7,7 @@ Add authentication to a Next.js project scaffolded from templateCentral. Uses **
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:nextjs-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Files this skill creates
 
@@ -58,7 +58,7 @@ Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -89,7 +89,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
-    minPasswordLength: 12, // NIST SP 800-63B minimum
+    minPasswordLength: 12, // OWASP recommended minimum
     autoSignIn: true,
   },
 
@@ -135,7 +135,7 @@ export const auth = betterAuth({
 
 > `freshAge` is measured from session `createdAt`, not last activity. If you set a short `freshAge` (e.g. 43200 for AAL2 flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
-> **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `nextjs-add-database`. The Drizzle adapter is a separate package (`@better-auth/drizzle` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+> **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `templatecentral:add` (database). The Drizzle adapter is a separate package (`@better-auth/drizzle-adapter` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
 #### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
 
@@ -263,7 +263,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
 #### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
 
-> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; `shared-remove-example` cleans it up when the user is ready.
+> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; `templatecentral:cleanup` cleans it up when the user is ready.
 
 If creating fresh (non-scaffold project):
 
@@ -450,7 +450,7 @@ Add under `## Architecture Decisions`:
 - Auth via better-auth with `proxy.ts` route protection (`export async function proxy`); dev bypass with email/password when `isDev`
 - `authClient` (src/lib/auth-client.ts) handles client-side session via `authClient.useSession()` — no SessionProvider needed
 - Route groups: `(public)/` for public pages, `dashboard/` for authenticated pages
-- Sessions: stateless JWE cookies by default; add database adapter (via nextjs-add-database) for session revocation
+- Sessions: stateless JWE cookies by default; add database adapter (via templatecentral:add (database)) for session revocation
 ```
 
 #### 13. Session usage patterns
@@ -524,7 +524,7 @@ if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
 }
 ```
 
-> **TRUST_PROXY required**: `request.ip` returns the reverse-proxy IP, not the real client IP, unless `TRUST_PROXY=true` is set. Without it, all sign-in attempts share the same bucket and one client can exhaust the limit for everyone. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App) topologies. See the scaffold's `src/lib/utils/get-app-origin.ts` for the same pattern.
+> **TRUST_PROXY required**: `request.ip` returns the reverse-proxy IP, not the real client IP, unless `TRUST_PROXY=true` is set. Without it, all sign-in attempts share the same bucket and one client can exhaust the limit for everyone. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App) topologies. See the scaffold's `src/lib/utils/request-origin.ts` for the same pattern.
 
 For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
 
@@ -537,12 +537,12 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
-- **Password hashing**: better-auth handles password hashing internally. For any custom hashing outside better-auth, use argon2id (`argon2` package) — OWASP and NIST SP 800-63B recommended.
+- **Password hashing**: better-auth handles password hashing internally. For any custom hashing outside better-auth, use argon2id (`argon2` package) — OWASP recommended.
 
 ### After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards
 
 ---

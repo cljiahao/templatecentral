@@ -171,7 +171,7 @@ Confirm all tests pass.
 
 ## Completing Auth Integration (SQLAlchemy)
 
-> **Only apply this section if `fastapi-add-auth` was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
 
 ### Step A — Create `src/models/user.py`
 
@@ -320,5 +320,5 @@ def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_d
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

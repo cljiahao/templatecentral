@@ -302,7 +302,7 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 # Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
 TRUST_PROXY=
 
-# Database (if using Drizzle — added by nextjs-add-database)
+# Database (if using Drizzle — added by templatecentral:add (database))
 # DATABASE_URL=
 
 # Third-party API tokens
@@ -372,6 +372,12 @@ next-env.d.ts
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
+
+# Explicitly allowlist packages permitted to run install-time build scripts.
+# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# allowBuilds:
+#   esbuild: true
+#   sharp: true
 ```
 
 ### `vitest.config.ts`

@@ -5,17 +5,17 @@
 
 Add JWT-based authentication to a FastAPI project scaffolded from templateCentral.
 
-> **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `fastapi-add-database` after this skill to complete the integration.
+> **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Dependencies
 
 Add to `requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
-- `argon2-cffi` — Password hashing (argon2id algorithm; OWASP/NIST SP 800-63B recommended)
+- `argon2-cffi` — Password hashing (argon2id algorithm; OWASP recommended)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
 
 ### Steps
@@ -26,7 +26,7 @@ Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -46,7 +46,7 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=12, description="User password — minimum 12 characters (NIST SP 800-63B).")
+    password: str = Field(min_length=12, description="User password — minimum 12 characters (OWASP recommendation).")
     name: str = Field(description="User display name.")
 
 
@@ -88,14 +88,14 @@ class APISettings(BaseSettings):
     # ... existing fields ...
     SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
-    TRUST_PROXY: int = Field(default=0, description="Set to 1 when running behind a load balancer or reverse proxy")
+    TRUST_PROXY: str = Field(default="", description="Set to a trusted CIDR (e.g. 10.0.0.0/8) or '*' when behind a load balancer; empty = disabled")
 ```
 
 Add to `src/.env` (real value — never commit):
 ```
 SECRET_KEY=
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-TRUST_PROXY=0
+TRUST_PROXY=
 ```
 
 Document in `src/.env.default`:
@@ -182,7 +182,7 @@ def get_current_user(
 
 #### 5. Create Auth Service
 
-**`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `fastapi-add-database`.
+**`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `templatecentral:add` (database).
 
 ```python
 from fastapi import HTTPException, status
@@ -191,17 +191,17 @@ from core.security import create_access_token, hash_password, verify_password
 
 
 def register_user(email: str, password: str, name: str) -> dict:
-    """Register a new user. Persist to database after running fastapi-add-database."""
+    """Register a new user. Persist to database after running `templatecentral:add` (database)."""
     hashed = hash_password(password)
     user_id = "generated-id"
     return {"id": user_id, "email": email, "name": name, "hashed_password": hashed}
 
 
 def login_user(email: str, password: str) -> str:
-    """Authenticate user and return JWT. Implement DB lookup after running fastapi-add-database."""
+    """Authenticate user and return JWT. Implement DB lookup after running `templatecentral:add` (database)."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Database integration required. Run fastapi-add-database to complete auth.",
+        detail="Database integration required. Run `templatecentral:add` (database) to complete auth.",
     )
 ```
 
@@ -264,10 +264,10 @@ from api.dependencies.auth import get_current_user
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
-    """Get the current authenticated user. Implement DB lookup after running fastapi-add-database."""
+    """Get the current authenticated user. Implement DB lookup after running `templatecentral:add` (database)."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Database integration required. Run fastapi-add-database to complete auth.",
+        detail="Database integration required. Run `templatecentral:add` (database) to complete auth.",
     )
 ```
 
@@ -281,12 +281,13 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
-# WARNING: TRUST_PROXY must be set to 1 in your environment — otherwise
+# WARNING: TRUST_PROXY must be set in your environment — otherwise
 # get_remote_address returns the proxy IP and all users behind a load
 # balancer share one rate limit bucket (making limiting completely ineffective).
 #
-# In your .env file:
-# TRUST_PROXY=1  # Set to 1 when running behind a load balancer or reverse proxy
+# In your .env file, set to a trusted CIDR or '*' for all proxies:
+# TRUST_PROXY=10.0.0.0/8   # single-hop (ALB → App): trust your VPC CIDR
+# TRUST_PROXY=*            # or trust all proxies (dev/internal only)
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter
@@ -302,10 +303,10 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
-- Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP and NIST SP 800-63B recommendation).
+- Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
-- **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Without `TRUST_PROXY`, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
+- **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
 
 ### Validate
 
@@ -317,7 +318,7 @@ ruff check src/     # zero lint errors
 ### After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate the server starts and tests pass
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate the server starts and tests pass
+2. `templatecentral:review` — check code standards
 
 ---

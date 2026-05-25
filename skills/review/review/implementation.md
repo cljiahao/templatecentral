@@ -14,7 +14,8 @@ Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; 
 
 1. Detect stack
 2. Read the project's `AGENTS.md` — load the **Code Quality** section (universal rules)
-3. Load `shared-code-standards` — it contains standards for all four stacks with a stack-detection section at the top.
+3. Cat the detected stack's code-standards file:
+   `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/standards/code-standards/<detected-stack>.md"`
 4. Identify files to review (see **Scoping** below)
 5. Review each file against both layers — quality principles first, then style rules
 6. Report violations (see **Reporting** below)
@@ -91,7 +92,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: all four scaffold skills (post-scaffold review), `nextjs-add-feature`, `nextjs-add-auth`, and any skill that produces a significant code change.
+Dispatched by: all four scaffold skills (post-scaffold review), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
 
 ## Changelog
 ### 1.2.0

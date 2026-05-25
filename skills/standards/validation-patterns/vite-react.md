@@ -19,7 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { CustomFormField } from '@/components/ui/custom-form-field';
+import { CustomFormField } from '@/components/widgets';
 import { Button } from '@/components/ui/button';
 
 const createProjectSchema = z.object({
@@ -48,6 +48,7 @@ export function CreateProjectForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -126,7 +127,7 @@ const fileUploadSchema = z.object({
     .refine((name) => !name.includes('\x00'), 'Invalid filename'),
   size: z.number().max(10 * 1024 * 1024, 'File must be under 10MB'),
   type: z.enum(['image/jpeg', 'image/png', 'application/pdf'], {
-    error: () => ({ message: 'Only JPEG, PNG, and PDF files allowed' }),
+    error: 'Only JPEG, PNG, and PDF files allowed',
   }),
 });
 
@@ -248,8 +249,8 @@ pnpm test
 
 ## See Also
 
-- `shared-add-error-handling` — Transform validation errors to consistent response format
-- `shared-add-logging` — Log validation failures with context
+- `templatecentral:add` (error-handling) — Transform validation errors to consistent response format
+- `templatecentral:add` (logging) — Log validation failures with context
 - Stack-specific `code-standards` — Type annotation and schema standards
 - Stack-specific `add-api-route`, `add-endpoint`, `add-form` — Use validation patterns in new routes/forms
 
@@ -260,5 +261,5 @@ Run the stack's build and test commands (see `AGENTS.md` → Scaffold verificati
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

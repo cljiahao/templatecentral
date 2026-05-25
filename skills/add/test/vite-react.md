@@ -7,7 +7,7 @@ Guide for writing tests in a Vite + React project scaffolded from templateCentra
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
@@ -17,7 +17,7 @@ Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
 
 If found → proceed to context check below.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to context check below.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -26,7 +26,7 @@ the marker.
 one `.tsx` file.
 
 If not found → ⛔ STOP. Tell the user: "No components or features found. Add some
-using `templatecentral:vite-react-add-feature` or `templatecentral:vite-react-add-component`
+using `templatecentral:add` (feature) or `templatecentral:add` (component)
 first, then return here."
 
 If found → proceed to the sections below.
@@ -324,5 +324,5 @@ function createWrapper() {
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

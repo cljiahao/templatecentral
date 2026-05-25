@@ -7,7 +7,7 @@ Create a new third-party API integration in a FastAPI project scaffolded from te
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:fastapi-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Architecture
 
@@ -33,7 +33,7 @@ Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -234,5 +234,5 @@ ruff check src/     # zero lint errors
 ### After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate the server starts and tests pass
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate the server starts and tests pass
+2. `templatecentral:review` — check code standards

@@ -26,10 +26,10 @@ Load the scaffold skill for the detected stack and read its `version` frontmatte
 
 | Marker stack | Scaffold skill |
 |---|---|
-| `nextjs` | `nextjs-scaffold` |
-| `vite-react` | `vite-react-scaffold` |
-| `fastapi` | `fastapi-scaffold` |
-| `nestjs` | `nestjs-scaffold` |
+| `nextjs` | `templatecentral:scaffold` |
+| `vite-react` | `templatecentral:scaffold` |
+| `fastapi` | `templatecentral:scaffold` |
+| `nestjs` | `templatecentral:scaffold` |
 
 Current scaffold skill version = the `version` field value.
 
@@ -83,8 +83,8 @@ After Step 5 (or after Step 4 if user declined Step 5), ask:
 
 **If user accepts:**
 
-- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running `shared-update-agent` to patch.
-- **Python projects**: run `pip install pip-audit && pip-audit -r requirements.txt`. Report findings.
+- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running `templatecentral:review` (update operation) to patch.
+- **Python projects**: if `pip-audit` is available (`pip-audit --version` returns without error), run `pip-audit -r requirements.txt` and report findings; if not installed, add "pip-audit not installed — security advisory check skipped" to report.
 
 If zero vulnerabilities: report "No known vulnerabilities found."
 If findings: list package name, severity, advisory identifier, and whether a fix is available. Do not auto-upgrade — let the user decide.

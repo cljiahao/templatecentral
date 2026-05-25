@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -73,7 +73,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 ✅ Prettier + ESLint + Husky pre-commit · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example` · ✅ `AGENTS.md` + `CLAUDE.md`
 
 ### Vite + React
-✅ React 18 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
+✅ React 19 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
 ✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
 
 ### FastAPI
@@ -81,7 +81,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 ✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
 
 ### NestJS
-✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Jest + e2e tests
+✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests
 ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
 
 > Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
@@ -130,7 +130,6 @@ claude plugin marketplace add obra/superpowers
 | Plugin | Install | When to use |
 |--------|---------|-------------|
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Reduce output tokens during exploration and Q&A |
-| **claude-mem** | `claude plugin marketplace add thedotmack/claude-mem` | Persist session context across scaffolded projects |
 
 ---
 

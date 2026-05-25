@@ -4,7 +4,7 @@
 ### FastAPI (Python + Pydantic + SQLAlchemy)
 
 > **Prerequisites**
-> This skill assumes the FastAPI scaffold from `fastapi-scaffold`. File paths below use
+> This skill assumes the FastAPI scaffold from `templatecentral:scaffold`. File paths below use
 > `src/core/` and `src/api/` matching that scaffold layout.
 > **If you're using async SQLAlchemy** (`AsyncSession`), ensure `create_async_engine`
 > is configured in your project — the default scaffold uses sync SQLAlchemy.
@@ -16,7 +16,6 @@
 ```python
 # src/core/validation/schemas.py
 from pydantic import BaseModel, Field
-from typing import Literal
 
 class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1, description='Page number (1-indexed)')
@@ -109,12 +108,15 @@ class PaginationService:
 
 **4. API Endpoint with Pagination**
 
+Sync SQLAlchemy (scaffold default):
+
 ```python
 # src/api/projects/routes.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
+from core.exceptions import InvalidInputError
 from database.session import get_db
 from core.pagination.pagination_service import PaginationService
 from core.types.pagination import PaginatedData, PaginatedResponse, PaginationMetadata
@@ -127,27 +129,16 @@ router = APIRouter(prefix='/projects', tags=['projects'])
 ALLOWED_SORT_FIELDS = ['name', 'created_at', 'updated_at']
 
 @router.get('', response_model=PaginatedResponse[ProjectResponse])
-async def list_projects(
+def list_projects(
     params: PaginationParams = Depends(),
-    session: AsyncSession = Depends(get_db),  # Replace with Session if using sync SQLAlchemy (scaffold default)
+    session: Session = Depends(get_db),
 ) -> PaginatedResponse[ProjectResponse]:
-    """List projects with pagination.
-    
-    Query parameters are validated by PaginationParams via Depends().
-    Returns paginated response with metadata.
-    """
-    # Validate sort field against whitelist
     sort_result = PaginationService.parse_sort_param(params.sort, ALLOWED_SORT_FIELDS)
     if params.sort and not sort_result:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "Invalid sort parameter", "field": "sort"}
-        )
+        raise InvalidInputError("Invalid sort parameter")
 
-    # Calculate offset
     offset = PaginationService.calculate_offset(params.page, params.limit)
 
-    # Query projects
     stmt = select(ProjectModel).offset(offset).limit(params.limit)
     if sort_result:
         field_name, direction = sort_result
@@ -156,13 +147,10 @@ async def list_projects(
     else:
         stmt = stmt.order_by(ProjectModel.created_at.desc())
 
-    result = await session.execute(stmt)  # Replace with session.execute(stmt) (no await) for sync SQLAlchemy
-    projects = result.scalars().all()
+    projects = session.execute(stmt).scalars().all()
 
-    # Get total count (indexed query)
     count_stmt = select(func.count(ProjectModel.id))
-    count_result = await session.execute(count_stmt)  # Replace with session.execute(count_stmt) (no await) for sync SQLAlchemy
-    total = count_result.scalar() or 0
+    total = session.execute(count_stmt).scalar() or 0
 
     pagination_metadata = PaginationService.create_metadata(params.page, params.limit, total)
     return PaginatedResponse(
@@ -172,6 +160,8 @@ async def list_projects(
         )
     )
 ```
+
+> **Async variant**: If you configured `create_async_engine` and `AsyncSession`, replace `from sqlalchemy.orm import Session` with `from sqlalchemy.ext.asyncio import AsyncSession`, change `Session` → `AsyncSession` in the dependency type, make the handler `async def`, and add `await` before each `session.execute(...)` call.
 
 ## Testing / Verification
 
@@ -195,5 +185,5 @@ pytest -v
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

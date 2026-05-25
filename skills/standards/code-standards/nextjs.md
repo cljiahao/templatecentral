@@ -78,7 +78,7 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 **Input Validation**
 - Validate all request bodies with Zod `safeParse()` — return 400 on failure
 
-**Auth & Route Protection** (after `nextjs-add-auth` is run)
+**Auth & Route Protection** (after `templatecentral:add` (auth) is run)
 - `proxy.ts`: NEVER return JSON for unauthorized requests — `new Response(null, { status: 401 })` only
 - API routes independently call `auth.api.getSession()` — defense in depth
 

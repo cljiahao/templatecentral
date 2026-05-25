@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## NestJS + Drizzle (SQL)
 
-> **Drizzle ORM v1**: v1.0 is stable (released mid-2025). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage). Pin to a specific RC version in production. The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
 #### A1. Install Dependencies
 
@@ -225,7 +225,7 @@ Confirm the migration file was generated, build succeeds, and all tests pass.
 
 ## Completing Auth Integration
 
-> **Only apply this section if `nestjs-add-auth` was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
 
 **Step A — Add `hashedPassword` to `src/database/schema.ts`**
 
@@ -313,5 +313,5 @@ export class AuthService {
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

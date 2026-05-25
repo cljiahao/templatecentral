@@ -140,7 +140,7 @@ export const externalApiUserSchema = z.looseObject({
   email: emailSchema,
   name: z.string().optional(),
   createdAt: z.string().optional(),
-}); // z.looseObject allows extra fields (replaces z.object(...).passthrough(), deprecated in Zod v4)
+}); // z.looseObject allows extra fields — new v4 shorthand; z.object(...).passthrough() also still works
 ```
 
 **Schema Composition:**

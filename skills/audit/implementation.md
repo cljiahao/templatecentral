@@ -237,14 +237,14 @@ done
 No skill file may reference country-, region-, or government-specific compliance frameworks by name. Skills must use OWASP and generic best-practice language instead.
 
 ```bash
-grep -rn -iE '\bIM8\b|\bPDPA\b|\bMAS.TRM\b|\bGDPR\b|\bHIPAA\b|\bPCI.DSS\b|\bCCPA\b|\bFedRAMP\b|\bFISMA\b|\bMAS\b' \
+grep -rn -iE '\bIM8\b|\bPDPA\b|\bMAS.TRM\b|\bGDPR\b|\bHIPAA\b|\bPCI.DSS\b|\bCCPA\b|\bFedRAMP\b|\bFISMA\b|\bMAS\b|NIST SP 800-63' \
   skills/ --include="*.md" | grep -v 'CHANGELOG' | grep -v 'CONVENTIONS.md' | grep -v 'audit/implementation.md'
 ```
 
 **Pass**: no output.  
-**Fail**: lists files containing jurisdiction-specific framework names. Replace with generic OWASP-based guidance (e.g., "strong authentication controls" instead of "PDPA-compliant authentication").
+**Fail**: lists files containing jurisdiction-specific framework names. Replace with generic OWASP-based guidance (e.g., "strong authentication controls" instead of "PDPA-compliant authentication"; "12-character minimum (OWASP recommendation)" instead of "NIST SP 800-63B minimum").
 
-> `OWASP`, `NIST SP 800-63B`, and `AWS AIDLC` are universal industry references and are permitted in ecosystem research and audit infrastructure. They must not appear inside skill implementation files.
+> `OWASP` and `AWS AIDLC` are universal industry references permitted in ecosystem research and audit infrastructure. `NIST SP 800-63B` and other government specifications must **not** appear inside skill implementation files — use "OWASP recommendation" language instead.
 
 ---
 

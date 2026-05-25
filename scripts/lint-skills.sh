@@ -46,7 +46,7 @@ check_no_jurisdiction_specific() {
   # Remove from this list only if the project explicitly targets that jurisdiction.
   # audit/implementation.md is excluded — it names these patterns in its C6 check and changelog.
   header "Jurisdiction-specific content"
-  local pattern='IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG'
+  local pattern='IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG|NIST SP 800-63'
   local matches
   matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
@@ -69,6 +69,27 @@ check_no_hardcoded_secrets() {
     fail "Potential hardcoded secrets — use placeholder syntax (e.g. <your-secret>)"
   else
     pass "No hardcoded secrets"
+  fi
+}
+
+check_no_ghost_agent_names() {
+  # templateCentral v4.0 renamed agent dispatch references to registered skill names.
+  # The old shared-*-agent names no longer exist and must not appear in skill files.
+  # Correct names: templatecentral:build, templatecentral:review, templatecentral:test,
+  # templatecentral:cleanup. Stack-specific scaffold names (fastapi-scaffold etc.) were
+  # unified as templatecentral:scaffold.
+  # Also banned: templatecentral:shared-migrate (→ templatecentral:migrate),
+  # shared-migrate-database (→ templatecentral:migrate),
+  # templatecentral:shared-audit (→ templatecentral:audit),
+  # shared-code-standards (→ cat standards/code-standards/<stack>.md).
+  header "Ghost agent / skill names"
+  local matches
+  matches=$(grep -rEn '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`' "$SKILLS_DIR/" 2>/dev/null || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Ghost agent/skill name — use templatecentral:build, :review, :test, :cleanup, :scaffold, :migrate, or :audit"
+  else
+    pass "No ghost agent/skill names"
   fi
 }
 
@@ -202,6 +223,22 @@ check_no_globals_jest_in_vitest_projects() {
   fi
 }
 
+check_no_zod_deprecated_message_key() {
+  # Zod v4 custom error params use { error: '...' }, not { message: '...' }.
+  # { message: '...' } is the Zod v3 form — still accepted but deprecated in v4 and will be removed.
+  # ECOSYSTEM-ERA: correct for Zod v4. Revisit if Zod changes error params API.
+  # audit/implementation.md is excluded — it may reference this pattern in checklist items.
+  header "Deprecated Zod v3 message key in validators"
+  local matches
+  matches=$(grep -rEn "z\.(email|url|uuid|iso\.datetime)\(\{ message:" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Zod validator uses deprecated { message: '...' } — use { error: '...' } for custom error messages in Zod v4"
+  else
+    pass "No deprecated Zod v3 message key in validators"
+  fi
+}
+
 check_no_sync_secret_comparison() {
   # Comparing stored secrets (hashes, tokens) with == or === is not timing-safe.
   # Use a constant-time function (e.g. crypto.timingSafeEqual, argon2.verify).
@@ -228,6 +265,7 @@ echo "TIMELESS"
 check_no_cve_identifiers
 check_no_jurisdiction_specific
 check_no_hardcoded_secrets
+check_no_ghost_agent_names
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins
@@ -239,6 +277,7 @@ check_no_jest_apis_in_skills
 check_no_globals_jest_in_vitest_projects
 check_no_sync_secret_comparison
 check_no_zod_string_format_methods
+check_no_zod_deprecated_message_key
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

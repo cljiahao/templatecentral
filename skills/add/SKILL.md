@@ -18,6 +18,7 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 | `pagination` | fastapi, nestjs, nextjs, vite-react | `pagination/<stack>.md` |
 | `component`, `page`, `feature`, `form` | nextjs, vite-react | `<capability>/<stack>.md` |
 | `ai-security` | all stacks | `ai-security/implementation.md` |
+| `mutation` | fastapi→python, nestjs/nextjs/vite-react→typescript | `mutation/<python\|typescript>.md` |
 | `endpoint` | fastapi only | `endpoint/implementation.md` |
 | `module` | nestjs only | `module/implementation.md` |
 | `api-route` | nextjs only | `api-route/implementation.md` |

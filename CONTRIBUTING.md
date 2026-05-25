@@ -14,30 +14,22 @@ Check [Issues](https://github.com/cljiahao/templatecentral/issues) for open task
 
 ### Skill file structure
 
-Every skill lives at `skills/<stack>-<skill>/SKILL.md` with required YAML frontmatter:
+Registered skills live at `skills/<category>/SKILL.md` (e.g., `skills/scaffold/SKILL.md`, `skills/add/SKILL.md`). Reference files live under the category (e.g., `skills/add/auth/fastapi.md`). Read `skills/CONVENTIONS.md` for the full nesting rules, description limits, and ref-header format before creating any file.
+
+Required YAML frontmatter in every `SKILL.md`:
 
 ```markdown
 ---
-name: <stack>-<skill>
-description: Use when... (one sentence, shown in skill picker)
+name: templatecentral:<category>
+description: Use when... (one sentence, ≤150 chars)
 ---
-
-# Skill Title
-...
 ```
 
 Both `name` and `description` are required — CI will reject a skill missing either field.
 
 ### Registering a skill
 
-Add the skill name to `.claude-plugin/plugin.json` under `"skills"`:
-
-```json
-{
-  "skills": "./skills/",
-  "...": "..."
-}
-```
+Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills/"`, so any directory under `skills/` that contains a valid `SKILL.md` is registered automatically. No edits to `plugin.json` needed.
 
 ### Adding a new stack
 

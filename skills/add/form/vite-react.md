@@ -8,7 +8,7 @@ Create a validated form in a Vite + React SPA scaffolded from templateCentral us
 
 ## Prerequisites
 
-Requires a project scaffolded with `templatecentral:vite-react-scaffold`. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ## What the Template Provides
 
@@ -35,7 +35,7 @@ Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
 
 If found → proceed to Step 1.
 
-If not found → invoke `templatecentral:shared-migrate`. Once complete, re-check for
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
 the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
@@ -155,7 +155,7 @@ export function ContactPage() {
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
-- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `shared-validation-patterns`.
+- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `templatecentral:standards` (validation-patterns).
 
 ## Validate
 
@@ -166,5 +166,5 @@ pnpm build    # zero errors
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

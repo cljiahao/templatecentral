@@ -28,4 +28,4 @@ description: Use when writing or modifying files under skills/ — walks through
    - Can it be merged into an existing registered skill?
 
 6. **After writing:**
-   - Run `templatecentral:shared-audit` to verify compliance
+   - Run `templatecentral:audit` to verify compliance

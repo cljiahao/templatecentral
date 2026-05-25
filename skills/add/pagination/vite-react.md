@@ -67,7 +67,7 @@ export function usePagination<T>(
 ```tsx
 // src/features/projects/components/projects-list.tsx
 import { usePagination } from '@/lib/utils/use-pagination';
-import { fetchProjects, type ProjectItem } from '@/api/projects';
+import { fetchProjects, type ProjectItem } from '@/features/projects/api/projects';
 
 export function ProjectsList() {
   const { data, pagination, page, isLoading, error, nextPage, prevPage } =
@@ -129,8 +129,9 @@ export function ProjectsList() {
 **3. API Client**
 
 ```ts
-// src/api/projects.ts
+// src/features/projects/api/projects.ts
 import { z } from 'zod';
+import { APIError } from '@/lib/errors';
 
 // Matches Phase 1 unified response schema
 const projectItemSchema = z.object({
@@ -160,7 +161,7 @@ export async function fetchProjects(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch projects: ${response.status}`);
+    throw new APIError({ statusCode: response.status, data: await response.json().catch(() => ({ message: 'Failed to fetch projects' })) });
   }
 
   const json = await response.json();
@@ -172,7 +173,7 @@ export async function fetchProjects(
   // Validate response shape
   const parsed = paginatedProjectSchema.safeParse(data);
   if (!parsed.success) {
-    throw new Error(`Invalid API response: ${JSON.stringify(z.flattenError(parsed.error).formErrors)}`);
+    throw new Error(`Invalid API response: ${JSON.stringify(z.flattenError(parsed.error).fieldErrors)}`);
   }
 
   return parsed.data;
@@ -194,8 +195,8 @@ pnpm test
 
 ## See Also
 
-- `shared-add-error-handling` — Pagination errors use unified error response schema
-- `shared-validation-patterns` — Pagination query params validated with Zod/Pydantic
+- `templatecentral:add` (error-handling) — Pagination errors use unified error response schema
+- `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod/Pydantic
 - Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Add pagination to new list endpoints
 - Stack-specific `code-standards` — Database indexing best practices for sort fields
 
@@ -206,5 +207,5 @@ Run the stack's build and test commands (see `AGENTS.md` → Scaffold verificati
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards

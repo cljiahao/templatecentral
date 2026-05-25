@@ -71,7 +71,7 @@ Do not attempt to run any build command.
 
 ## Callers
 
-This skill is dispatched by: `nextjs-scaffold`, `vite-react-scaffold`, `fastapi-scaffold`, `nestjs-scaffold`, `shared-update-agent`, `nextjs-add-feature`, `nextjs-add-component`, `nextjs-add-api-route`, `vite-react-add-feature`, `vite-react-add-component`, `fastapi-add-endpoint`, `nestjs-add-module`.
+This skill is dispatched by: `templatecentral:scaffold`, `templatecentral:review` (update), `templatecentral:add` (feature), `templatecentral:add` (component), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
 
 ## Changelog
 ### 1.0.0

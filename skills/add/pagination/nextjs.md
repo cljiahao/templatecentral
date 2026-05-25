@@ -187,11 +187,12 @@ export async function GET(request: Request) {
 **5. Paginated UI Component (React)**
 
 ```tsx
-// src/components/projects/projects-list.tsx
+// src/features/projects/components/projects-list.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 
 interface Project {
   id: string;
@@ -221,12 +222,12 @@ export function ProjectsList() {
       );
       if (!response.ok) throw new Error('Failed to fetch projects');
       const json = await response.json();
-      return json.data; // Extract from Phase 1 wrapper
+      return json.data as PaginatedResponse;
     },
   });
 
   if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {(error as Error).message}</div>;
+  if (error) return <div>Error loading projects</div>;
 
   const { items: projects, pagination } = data;
 
@@ -243,25 +244,25 @@ export function ProjectsList() {
 
       {/* Pagination controls */}
       <div className="flex gap-2 items-center justify-between">
-        <button
+        <Button
+          variant="outline"
           disabled={page === 1}
           onClick={() => setPage(page - 1)}
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
         >
           Previous
-        </button>
+        </Button>
 
         <span>
           Page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}
         </span>
 
-        <button
+        <Button
+          variant="outline"
           disabled={!pagination.hasMore}
           onClick={() => setPage(page + 1)}
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
         >
           Next
-        </button>
+        </Button>
       </div>
 
       <div className="text-sm text-gray-600">
@@ -306,5 +307,5 @@ pnpm build
 ## After Writing Code
 
 Dispatch in order:
-1. `shared-build-agent` — validate compilation
-2. `shared-review-agent` — check code standards
+1. `templatecentral:build` — validate compilation
+2. `templatecentral:review` — check code standards
