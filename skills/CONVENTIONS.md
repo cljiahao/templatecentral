@@ -92,12 +92,22 @@ Every registered `SKILL.md` must obey these constraints:
 name: skill-name
 description: "Use when <trigger phrase> — <stack list>."
 # optionally:
-disable-model-invocation: true
+when_to_use: "Extended trigger context — shown when Claude searches for the right skill."
+disable-model-invocation: true   # only user can invoke; prevents subagent preloading
+allowed-tools: "Bash(git *)"     # pre-approve specific tools without per-use prompts
+paths:                           # auto-activate only when working with matching files
+  - "src/features/**"
+argument-hint: "[feature-name]"  # shown during autocomplete
 ---
 ```
 
 Required fields: `name`, `description`.
-Optional fields: `disable-model-invocation` (set to `true` for pure-routing skills that should never trigger model generation).
+Key optional fields:
+- `when_to_use` — additional trigger context appended to `description` in skill listings; combined cap of 1,536 chars
+- `disable-model-invocation: true` — only user can invoke; prevents preloading into subagents (use for destructive or scaffold-scope skills)
+- `allowed-tools` — pre-approve tools while skill is active (scope tightly: `Bash(git add *)` not `Bash`)
+- `paths` — glob patterns; skill auto-activates when Claude works with matching files
+- `argument-hint` — shown during `/` autocomplete (e.g. `[issue-number]`)
 
 ### Body Content
 

@@ -1,6 +1,6 @@
 ---
 paths:
-  - "skills/nestjs-*/**"
+  - "skills/**"
 ---
 
 # NestJS Rules
@@ -23,5 +23,5 @@ Stack: NestJS 11, Fastify adapter (≥v5 — requires `@nestjs/platform-fastify 
 
 ## Standards
 
-- **Backend tests**: same-change Vitest for API code (`test/`) — root `AGENTS.md`, `nestjs-code-standards` skill.
-- Naming, DTOs, Swagger, DI: `code-standards/SKILL.md`.
+- **Backend tests**: same-change Vitest for API code (`test/`) — root `AGENTS.md`, `templatecentral:standards`.
+- Naming, DTOs, Swagger, DI: `templatecentral:standards`.

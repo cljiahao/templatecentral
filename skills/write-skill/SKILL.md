@@ -17,6 +17,9 @@ description: Use when writing or modifying files under skills/ — walks through
    - Body ≤ 30 lines (excluding frontmatter)
    - No inline implementation content
    - Only: detection logic, routing table, `cat` commands
+   - Add `when_to_use:` if the description alone doesn't capture all trigger contexts
+   - Add `disable-model-invocation: true` for scaffold/migrate/cleanup-scope skills
+   - Add `allowed-tools:` with tightest scope needed (e.g. `Bash(pnpm *)` not `Bash`)
 
 4. **If reference file:**
    - First line: `<!-- ref: ... loaded-by: ... prereq: ... -->`

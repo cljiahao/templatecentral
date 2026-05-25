@@ -1,6 +1,6 @@
 ---
 paths:
-  - "skills/vite-react-*/**"
+  - "skills/**"
 ---
 
 # Vite + React Rules
@@ -25,4 +25,4 @@ Stack: Vite 8, React 19, TypeScript 6, Node.js ≥24, shadcn/ui (new-york), Tail
 
 ## Standards
 
-Read `code-standards/SKILL.md` for naming, exports, component patterns, and performance rules.
+Naming, exports, component patterns, performance: `templatecentral:standards`.

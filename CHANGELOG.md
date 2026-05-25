@@ -40,7 +40,9 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 
 **`templatecentral:migrate` Phase 4 expanded** — when upgrading pre-4.0 projects: seeds CLAUDE.md, project skills, harness.json alongside settings.json. Phase 5 (new): harness health check.
 
-**`templatecentral:audit` Step 3H** (new) — 7 harness engineering invariant checks. Step 6 (new): repo harness health check. Step 5 gains skill-gap suggestion.
+**`templatecentral:audit` Step 3H** — 10 harness engineering invariant checks (expanded from 7): adds Skills Security section check, `allowed-tools` scoping check, and ghost skill names check. Step 6 (new): repo harness health check. Step 5 gains skill-gap suggestion.
+
+**Skills Security guidance** — All 4 scaffold AGENTS.md templates now include a `## Skills Security` section (Snyk ToxicSkills 2026: 13.4% of published agent skills have critical vulnerabilities; 91% of malicious skills contain prompt injection). Guidance: review SKILL.md before installing, scope `allowed-tools:` tightly, avoid skills with unscoped network access.
 
 ### Marketplace Readiness
 
@@ -56,6 +58,10 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 - Repo `CLAUDE.md` = `@AGENTS.md`
 - Repo `.claude/settings.json`: PostToolUse runs `lint-skills.sh` after every edit
 - Repo `.claude/harness.json`: version manifest
+- `.claude/rules/*.md` paths fixed (`skills/<stack>-*/**` → `skills/**`) — rules were never matching the actual skill directory structure; ghost skill names in rules files updated to current `templatecentral:*` names
+- `docs/superpowers/` removed — stale planning artifacts from v3.1.0 development (feature already shipped)
+- `CONVENTIONS.md` Section 3: documented new frontmatter fields (`when_to_use`, `paths`, `allowed-tools`, `argument-hint`) from Claude Code v2.1.84+
+- `write-skill/SKILL.md`: added `when_to_use`, `disable-model-invocation`, `allowed-tools` guidance
 
 ### Security & Accuracy Fixes (audit passes, May 2026)
 
@@ -83,7 +89,7 @@ New `templatecentral:add` capability: `mutation` — StrykerJS 7.x (TS stacks) a
 ### Lint (scripts/lint-skills.sh)
 
 16 checks total (was 10 in v3). New checks added in v4:
-- `check_no_ghost_agent_names` (TIMELESS)
+- `check_no_ghost_agent_names` — extended to catch `*-code-standards`, `nextjs-add-auth` old names (TIMELESS)
 - `check_no_zod_deprecated_message_key` (ECOSYSTEM-ERA)
 - `check_no_middleware_ts` with exclusions for meta-documents
 - `check_no_mypy_in_postToolUse` — enforces pyright over mypy (ECOSYSTEM-ERA)

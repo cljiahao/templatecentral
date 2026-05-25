@@ -2133,6 +2133,11 @@ Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 > Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
 > Keep all routing and rules in this file, not in CLAUDE.md.
 
+## Skills Security
+- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
+- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
+- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+
 ## Project-Specific Notes
 <!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
 

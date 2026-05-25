@@ -81,13 +81,15 @@ check_no_ghost_agent_names() {
   # Also banned: templatecentral:shared-migrate (→ templatecentral:migrate),
   # shared-migrate-database (→ templatecentral:migrate),
   # templatecentral:shared-audit (→ templatecentral:audit),
-  # shared-code-standards (→ cat standards/code-standards/<stack>.md).
+  # shared-code-standards (→ templatecentral:standards),
+  # stack-specific code-standards skill names (→ templatecentral:standards),
+  # nextjs-add-auth (→ templatecentral:add (auth)).
   header "Ghost agent / skill names"
   local matches
-  matches=$(grep -rEn '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`' "$SKILLS_DIR/" 2>/dev/null || true)
+  matches=$(grep -rEn '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
-    fail "Ghost agent/skill name — use templatecentral:build, :review, :test, :cleanup, :scaffold, :migrate, or :audit"
+    fail "Ghost agent/skill name — use templatecentral:build, :review, :test, :cleanup, :scaffold, :migrate, :audit, or :standards"
   else
     pass "No ghost agent/skill names"
   fi
