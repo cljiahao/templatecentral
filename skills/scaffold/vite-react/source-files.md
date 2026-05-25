@@ -2069,74 +2069,75 @@ pnpm test         # all tests pass
 
 If any check fails, diagnose and fix before proceeding.
 
-### 7. Generate `AGENTS.md`
+### 7. Write project `AGENTS.md`
 
-Only after the verification gate passes. Line 1 must be the templateCentral marker comment:
+Only after the verification gate passes. Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
 <!-- templateCentral: vite-react@4.0.0 -->
-# <Project Name>
+# AGENTS.md — [Project Name]
 
-## Identity
-- **Stack**: Vite 8, React 19, TypeScript, shadcn/ui, Tailwind CSS 4, React Router 7, TanStack React Query 5, React Hook Form + Zod, AuthProvider
-- **Scaffolded from**: templateCentral (templatecentral:scaffold)
-- **Created**: <date>
-- **Type**: Client-side SPA (no SSR, no API route handlers)
-
-## Architecture Decisions
-- Routes defined in `src/router.tsx`, not by filesystem convention
-- Auth via `AuthProvider` context + `ProtectedRoute` guard; dev bypass when `ENV.IS_DEV`
-- Feature modules under `src/features/<name>/`
-- Barrel exports (`index.ts`) for all shared folders
-- shadcn/ui primitives in `src/components/ui/` (managed by CLI, `components.json` with `rsc: false`)
-- Reusable composed widgets in `src/components/widgets/`
-- Env vars via `import.meta.env.VITE_*`, centralized in `src/lib/constants/env.ts`
-
-## Key Conventions
-- Named exports only (default exports allowed in tooling configs: `vite.config.ts`, `eslint.config.mjs`)
-- `function` declarations for components; `const` arrows for hooks/utilities
-- kebab-case filenames, PascalCase exports
-- Static data in `constants.ts`, never inline in components
-- Pages are thin — compose from `features/` and `components/`
-- **Env**: `VITE_*` is shipped to the browser — never API keys, tokens, or secrets (use server-side or proxy for those)
+## Stack
+Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 7
+TanStack React Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥24
+Client-side SPA — no SSR, no API route handlers.
 
 ## Commands
-- `pnpm dev` — development server
-- `pnpm build` — production build (`tsc -b && vite build`)
-- `pnpm test` — run tests
-- `pnpm check` — format + lint + typecheck
+```bash
+pnpm dev          # dev server
+pnpm build        # production build (tsc -b && vite build)
+pnpm test         # run tests
+pnpm check        # format + lint + typecheck
+```
 
-## Code Quality
+## File Layout
+src/features/<name>/    — feature modules (api/, components/, hooks/, types.ts)
+src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
+src/components/widgets/ — reusable composed components (project-owned)
+src/router.tsx          — route definitions (not filesystem convention)
+src/lib/constants/env.ts — centralized VITE_* env access
 
-Every agent writing or modifying code must follow these before marking a task done:
+## Skills
 
-- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
-- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
-- **SRP** — One responsibility per file and function. Pages compose; features fetch; components render. Never mix.
-- **SoC** — UI from data-fetching, validation from business logic, env config from components — keep them separate.
-- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
-- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
-- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
-- **Validate at every boundary** — Form inputs, API responses, env vars: always validate with Zod. Never trust external data.
-- **Fail loudly** — No empty catch blocks. Surface errors to the user or log with context; never swallow silently.
-- **Least privilege** — Request only the data the view needs. Strip unused fields from API responses before storing.
-- **No secrets in code** — No tokens, passwords, or keys in `VITE_*` or any client file. Use server-side or proxy.
-- **Secrets in production**: Backend secrets must use a secrets manager appropriate to your cloud platform. Never put backend secrets in `VITE_*` env vars or any client-side code.
+### Project skills — check here first
+Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
 
-## Project-Specific Notes
-<!-- Add decisions, custom patterns, and context as the project evolves -->
+| Skill | What it does |
+|-------|-------------|
+| `/vite-verify` | typecheck + lint + test in one pass |
 
-## Session Start
-Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+Add new project skills here whenever you repeat a workflow more than once.
+
+### templateCentral plugin skills — framework-level operations
+| Skill | When to use |
+|-------|-------------|
+| `templatecentral:add (feature)` | full feature: page + query hook + components |
+| `templatecentral:add (component)` | reusable UI component or widget |
+| `templatecentral:add (page)` | new route + page component |
+| `templatecentral:add (form)` | React Hook Form + Zod form |
+| `templatecentral:add (auth)` | auth flow integration |
+| `templatecentral:standards` | drift check, validation patterns |
+| `templatecentral:audit` | full ecosystem + accuracy audit |
+
+## Rules (always)
+- `VITE_*` env vars are shipped to the browser — never API keys, tokens, or secrets
+- All user input / API responses validated with Zod at every boundary
+- Named exports only (except tooling configs); `function` declarations for components
+- No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
 
 ## AI Harness
+PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
+Stop hook: runs `pnpm test --run` before task completion.
+Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
-`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
+> Keep all routing and rules in this file, not in CLAUDE.md.
+
+## Project-Specific Notes
+<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
 
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
-
-Update Identity with actual project name and creation date. Add any user-specified customizations under "Project-Specific Notes".
 
 ### 7b. Create .claude/settings.json
 
@@ -2205,7 +2206,58 @@ A fully specified, reproducible environment ensuring every agent session starts 
 *Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
 ```
 
-### 7c. Post-scaffold agent workflow
+### 7c. Create project skill files (`.claude/skills/`)
+
+Create `.claude/skills/vite-verify.md`:
+
+```markdown
+---
+name: vite-verify
+description: Run typecheck, lint, and tests for this Vite+React project in one pass
+---
+
+Run all quality checks in sequence:
+
+```bash
+pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run
+```
+
+Report failures with the exact error output. Fix before proceeding.
+```
+
+### 7d. Create `.claude/harness.json`
+
+Compute SHA-256 hashes and write:
+
+```bash
+sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
+sha256_verify=$(sha256sum .claude/skills/vite-verify.md | cut -d' ' -f1)
+```
+
+**`.claude/harness.json`**:
+```json
+{
+  "templatecentral_version": "4.0.0",
+  "stack": "vite-react",
+  "seeded_at": "<date>",
+  "seeded_files": {
+    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
+    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/skills/vite-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/vite-verify.md" }
+  }
+}
+```
+
+### 7e. Seed additional project skills
+
+Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
+- `vite-feature` — scaffold a new feature module (components + query hook + page)
+- `vite-component` — scaffold a reusable widget component with props + story
+
+If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+
+### 7f. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -2218,7 +2270,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 7c. Install Claude Code plugins
+### 7g. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 
@@ -2238,11 +2290,13 @@ claude plugin marketplace add obra/superpowers
 
 Skip if the user does not use Claude Code.
 
-Write a short `CLAUDE.md` referencing `AGENTS.md` for full detail. Include:
-- **Build & Dev**: `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm check` (format + lint + typecheck)
-- **templateCentral skills**: `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (page, feature, component, form, auth, integration, test)
-- **Workflow**: simple/medium → templateCentral skills; complex → Superpowers — root `AGENTS.md`
-- NEVER put secrets in `CLAUDE.md`
+Create `CLAUDE.md` at the project root with exactly one line:
+
+```
+@AGENTS.md
+```
+
+This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
 ### 9. Optional: Task management
 

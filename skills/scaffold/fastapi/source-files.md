@@ -1128,65 +1128,69 @@ ruff format --check src/  # zero formatting drift
 
 **Do not generate AGENTS.md until all three checks pass.**
 
-### 6. Generate AGENTS.md (mandatory — after gate passes)
+### 6. Write project AGENTS.md
 
-Create `AGENTS.md` in the project root. Line 1 must be the version comment. Fill in the project name and current date:
+Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
 <!-- templateCentral: fastapi@4.0.0 -->
-# <Project Name>
+# AGENTS.md — [Project Name]
 
-## Identity
-- **Stack**: FastAPI 0.136+, Python 3.13, Pydantic v2, Uvicorn, Ruff, pytest
-- **Scaffolded from**: templateCentral (templatecentral:scaffold)
-- **Created**: <date>
-
-## Architecture Decisions
-- Layered dependency flow: `api/` (routers → services) → `models/` (never reversed)
-- Pydantic schemas with camelCase aliases (`BaseSchema`)
-- Structured JSON logging with timed rotating file handler
-- Centralized exception → HTTP response mapping in `error_handler.py`
-
-## Key Conventions
-- snake_case for files/functions/variables; PascalCase for classes; UPPER_SNAKE_CASE for constants
-- Type annotations on all public function parameters and return types
-- Routers are thin — accept body, call service, return result
-- Services orchestrate — parse → process → return
-- Absolute imports only; no wildcards; stdlib → third-party → local
-- **Testing**: New or changed API/services/domain logic must include pytest coverage in the same change (`pytest test/ -v` from project root)
+## Stack
+FastAPI 0.136+ · Python 3.13 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
 
 ## Commands
-- `python src/main.py` — development server
-- `pytest test/ -v` — run tests
-- `ruff check src/` — lint
-- `ruff format src/` — format
+```bash
+python src/main.py          # dev server (http://localhost:8000)
+pytest test/ -v             # run tests (from project root)
+ruff check src/             # lint
+ruff format src/            # format
+python -m pyright src/      # type check
+```
 
-## Code Quality
+## Architecture
+- Layered flow: `api/` (routers → services) → `models/` (never reversed)
+- Pydantic schemas with camelCase aliases (`BaseSchema`)
+- Centralized exception → HTTP response mapping in `error_handler.py`
+- Routers are thin — accept body, call service, return result
 
-Every agent writing or modifying code must follow these before marking a task done:
+## Skills
 
-- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
-- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
-- **SRP** — One responsibility per file and function. Routers route; services orchestrate; models model. Never mix layers.
-- **SoC** — Keep concerns separate: routing from business logic, schema conversion in the service layer, config from implementation.
-- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
-- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
-- **No tech debt shortcuts** — No `# fix later`, `# temp`, or workarounds that degrade the codebase.
-- **Validate at every boundary** — User input, API responses, env vars: always validate with Pydantic. Never trust external data.
-- **Fail loudly** — No bare `except` or empty exception handlers. Log with context; return meaningful HTTP status codes.
-- **Least privilege** — Return only the fields the caller needs. Use `response_model` to strip internal fields.
-- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
-- **Secrets in production**: Use a secrets manager appropriate to your cloud platform — flat `.env` / `.env.default` files are for local development only.
+### Project skills — check here first
+Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
 
-## Project-Specific Notes
-<!-- Add decisions, custom patterns, and context as the project evolves -->
+| Skill | What it does |
+|-------|-------------|
+| `/api-verify` | pyright + ruff + tests in one pass |
 
-## Session Start
-Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+Add new project skills here whenever you repeat a workflow more than once.
+
+### templateCentral plugin skills — framework-level operations
+| Skill | When to use |
+|-------|-------------|
+| `templatecentral:add (auth)` | JWT/OAuth/session auth |
+| `templatecentral:add (database)` | connect SQLAlchemy/Beanie |
+| `templatecentral:add (endpoint)` | new route + schema + service method |
+| `templatecentral:migrate` | DB migrations or framework upgrades |
+| `templatecentral:standards` | drift check, validation patterns |
+| `templatecentral:audit` | full ecosystem + accuracy audit |
+
+## Rules (always)
+- Type annotations on all public function parameters and return types
+- All user input validated with Pydantic at every boundary; use `response_model` to strip internal fields
+- snake_case files/functions/variables; PascalCase classes; UPPER_SNAKE_CASE constants
+- No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
+PostToolUse: `python -m pyright src/ 2>&1 | tail -5` after every Edit/Write. Feedback-only.
+Stop hook: runs `python -m pytest test/ -q` before task completion.
+Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
-`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
+> Keep all routing and rules in this file, not in CLAUDE.md.
+
+## Project-Specific Notes
+<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
 
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
@@ -1258,7 +1262,58 @@ A fully specified, reproducible environment ensuring every agent session starts 
 *Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
 ```
 
-### 6c. Post-scaffold agent workflow
+### 6c. Create project skill files (`.claude/skills/`)
+
+Create `.claude/skills/api-verify.md`:
+
+```markdown
+---
+name: api-verify
+description: Run pyright, ruff lint, and pytest for this FastAPI project in one pass
+---
+
+Run all quality checks in sequence:
+
+```bash
+python -m pyright src/ && ruff check src/ && python -m pytest test/ -q
+```
+
+Report failures with the exact error output. Fix before proceeding.
+```
+
+### 6d. Create `.claude/harness.json`
+
+Compute SHA-256 hashes and write:
+
+```bash
+sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
+sha256_verify=$(sha256sum .claude/skills/api-verify.md | cut -d' ' -f1)
+```
+
+**`.claude/harness.json`**:
+```json
+{
+  "templatecentral_version": "4.0.0",
+  "stack": "fastapi",
+  "seeded_at": "<date>",
+  "seeded_files": {
+    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
+    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/skills/api-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/api-verify.md" }
+  }
+}
+```
+
+### 6e. Seed additional project skills
+
+Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
+- `api-migrate` — Alembic migration with safety gate (if SQLAlchemy/Alembic is wired up)
+- `api-endpoint` — scaffold a new router + schema + service method
+
+If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+
+### 6f. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -1271,7 +1326,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 6c. Install Claude Code plugins
+### 6g. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 
@@ -1287,19 +1342,17 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-### 7. Generate CLAUDE.md (optional — Claude Code users only)
+### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a **short** `CLAUDE.md` (do not duplicate `AGENTS.md` architecture/conventions — point to `AGENTS.md`).
+Create `CLAUDE.md` at the project root with exactly one line:
 
-Include **Build & Dev** with verified commands only:
-- `source .venv/bin/activate` — venv
-- `python src/main.py` — dev server (http://localhost:8000)
-- `pytest test/` — tests (project root)
-- `ruff check src/` — lint
+```
+@AGENTS.md
+```
 
-**templateCentral skills** (this stack): `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (endpoint, auth, database, integration, test). **Workflow**: simple/medium → templateCentral skills; complex → Superpowers (see root `AGENTS.md`). **Never** put secrets in `CLAUDE.md`.
+This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
 ### 8. Task management (optional)
 

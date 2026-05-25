@@ -732,71 +732,73 @@ pnpm test:e2e     # e2e tests pass
 
 If any command fails, diagnose and fix before proceeding.
 
-### 6. Generate AGENTS.md (MANDATORY)
+### 6. Write project AGENTS.md
 
-Write `<!-- templateCentral: nestjs@4.0.0 -->` on line 1, then:
+Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
 <!-- templateCentral: nestjs@4.0.0 -->
-# <Project Name>
+# AGENTS.md — [Project Name]
 
-## Identity
-- **Stack**: NestJS 11, Fastify, Zod + nestjs-zod, Swagger, TypeScript, Vitest
-- **Scaffolded from**: templateCentral (templatecentral:scaffold)
-- **Created**: <date>
-
-## Architecture Decisions
-- One module per feature under `src/modules/`
-- Controller → Service (→ Repository for complex queries); simple CRUD may use ORM directly in services
-- DTOs use `createZodDto` from `nestjs-zod` (no class-validator)
-- Global pipes and filters in `app.module.ts`; auth guards at controller/route level
-- Setup functions (Swagger, security) in `src/config/setups/`
-
-## Key Conventions
-- kebab-case filenames (dot-separated), PascalCase classes, camelCase methods
-- Named exports only — no `export default`
-- Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
-- Barrel exports at `src/modules/index.ts`
-- **Testing**: New or changed controllers/services/repositories must include Vitest tests in the same change (`pnpm test`; e2e when appropriate)
+## Stack
+NestJS 11 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vitest · pnpm · Node ≥24
 
 ## Commands
-- `pnpm start:dev` — development server with hot reload
-- `pnpm build` — compile TypeScript
-- `pnpm test` — run unit tests
-- `pnpm test:e2e` — run e2e tests
-- `pnpm check` — format + lint + typecheck
+```bash
+pnpm start:dev    # dev server with hot reload
+pnpm build        # compile TypeScript
+pnpm test         # run unit tests
+pnpm test:e2e     # run e2e tests
+pnpm check        # format + lint + typecheck
+```
 
-## Code Quality
+## Architecture
+- `src/modules/<name>/` — one module per feature (controller → service → optional repository)
+- DTOs use `createZodDto` from `nestjs-zod` (no class-validator)
+- Global pipes/filters in `app.module.ts`; auth guards at controller level
+- Swagger `@ApiTags()` + `@ApiOperation()` on every endpoint
 
-Every agent writing or modifying code must follow these before marking a task done:
+## Skills
 
-- **YAGNI** — Write only what the current task requires. No speculative helpers, abstractions, or files.
-- **DRY** — Don't duplicate logic; extract at the second repetition. Don't extract from a single callsite.
-- **SRP** — One responsibility per file and function. Controllers handle HTTP; services handle business logic; never mix.
-- **SoC** — Keep concerns separate: HTTP from business logic, DTO validation from domain logic, config from implementation.
-- **No premature abstractions** — Wait for the third callsite before extracting a shared helper.
-- **No dead code** — No commented-out blocks, unused imports, unused variables, or TODO stubs.
-- **No tech debt shortcuts** — No `// fix later`, `// temp`, or workarounds that degrade the codebase.
-- **Validate at every boundary** — User input, API responses, env vars: always validate with Zod (`createZodDto`). Never trust external data.
-- **Fail loudly** — No empty catch blocks. Log with context; return meaningful HTTP status codes.
-- **Least privilege** — Return only the fields the caller needs. Never expose internal IDs without auth checks.
-- **No secrets in code** — No tokens, passwords, or keys hardcoded. Use env vars; document in `.env.example`.
-- **Secrets in production**: Use a secrets manager appropriate to your cloud platform — flat `.env` files are for local development only.
+### Project skills — check here first
+Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
 
-## Project-Specific Notes
-<!-- Add decisions, custom patterns, and context as the project evolves -->
+| Skill | What it does |
+|-------|-------------|
+| `/nest-verify` | typecheck + lint + test in one pass |
 
-## Session Start
-Run `templatecentral:standards` (drift-check) at the start of each session to check for convention or dependency drift.
+Add new project skills here whenever you repeat a workflow more than once.
+
+### templateCentral plugin skills — framework-level operations
+| Skill | When to use |
+|-------|-------------|
+| `templatecentral:add (auth)` | JWT/OAuth/session auth |
+| `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
+| `templatecentral:add (module)` | full feature module |
+| `templatecentral:add (endpoint)` | new route + DTO + service method |
+| `templatecentral:migrate` | DB migrations or framework upgrades |
+| `templatecentral:standards` | drift check, validation patterns |
+| `templatecentral:audit` | full ecosystem + accuracy audit |
+
+## Rules (always)
+- TypeScript strict — no `any`, no `@ts-ignore`
+- All user input validated with Zod (`createZodDto`) at every boundary
+- kebab-case filenames, PascalCase classes, camelCase methods; named exports only
+- No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
+PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
+Stop hook: runs `pnpm test --run` before task completion.
+Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
-`.claude/settings.json` at the project root runs the test suite automatically after every file edit — output appears after each change. This is feedback only; it never blocks execution.
+> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
+> Keep all routing and rules in this file, not in CLAUDE.md.
+
+## Project-Specific Notes
+<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
 
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
-
-Update `Identity` with the actual project name and creation date.
 
 ### 6b. Create .claude/settings.json
 
@@ -865,7 +867,58 @@ A fully specified, reproducible environment ensuring every agent session starts 
 *Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
 ```
 
-### 6c. Post-scaffold agent workflow
+### 6c. Create project skill files (`.claude/skills/`)
+
+Create `.claude/skills/nest-verify.md`:
+
+```markdown
+---
+name: nest-verify
+description: Run typecheck, lint, and tests for this NestJS project in one pass
+---
+
+Run all quality checks in sequence:
+
+```bash
+pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run
+```
+
+Report failures with the exact error output. Fix before proceeding.
+```
+
+### 6d. Create `.claude/harness.json`
+
+Compute SHA-256 hashes and write:
+
+```bash
+sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
+sha256_verify=$(sha256sum .claude/skills/nest-verify.md | cut -d' ' -f1)
+```
+
+**`.claude/harness.json`**:
+```json
+{
+  "templatecentral_version": "4.0.0",
+  "stack": "nestjs",
+  "seeded_at": "<date>",
+  "seeded_files": {
+    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
+    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/skills/nest-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/nest-verify.md" }
+  }
+}
+```
+
+### 6e. Seed additional project skills
+
+Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
+- `nest-migrate` — DB migration with safety gate (if Drizzle/Kysely is wired up)
+- `nest-module` — scaffold a new feature module (controller + service + DTO + test)
+
+If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+
+### 6f. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -878,7 +931,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 6c. Install Claude Code plugins
+### 6g. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 
@@ -894,17 +947,17 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-### 7. Generate CLAUDE.md (Optional — Claude Code users only)
+### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
-Write a short `CLAUDE.md` (architecture and conventions live in `AGENTS.md` only).
+Create `CLAUDE.md` at the project root with exactly one line:
 
-Include:
-- **Build & Dev** verified commands: `pnpm start:dev`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm lint`
-- **templateCentral skills**: `templatecentral:scaffold` (done), `templatecentral:standards`, `templatecentral:add` (module, auth, database, integration, test)
-- **Workflow**: simple/medium → templateCentral skills; complex → Superpowers
-- NEVER put secrets in `CLAUDE.md`
+```
+@AGENTS.md
+```
+
+This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
 ### 7b. Optional: Task management
 

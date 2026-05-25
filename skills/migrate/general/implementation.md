@@ -315,11 +315,34 @@ Stop hook test commands:
 
 If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
 
-**Step 4e: Seed project skills (nextjs only)**
+**Step 4e: Seed project skills**
 
-If stack is `nextjs`, create `.claude/skills/next-migrate.md` and `.claude/skills/next-verify.md` only if they do not already exist:
+Create the stack-specific verify skill in `.claude/skills/` only if it does not already exist:
 
-`.claude/skills/next-migrate.md`:
+| Stack | Skill file | Command |
+|-------|-----------|---------|
+| nextjs | `.claude/skills/next-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| nestjs | `.claude/skills/nest-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| vite-react | `.claude/skills/vite-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| fastapi | `.claude/skills/api-verify.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
+
+Template for TypeScript stacks (replace `<stack>` and `<command>`):
+```markdown
+---
+name: <stack>-verify
+description: Run typecheck, lint, and tests for this project in one pass
+---
+
+Run all quality checks in sequence:
+
+```bash
+<command>
+```
+
+Report failures with the exact error output. Fix before proceeding.
+```
+
+For nextjs only, also create `.claude/skills/next-migrate.md` if not present:
 ```markdown
 ---
 name: next-migrate
@@ -334,19 +357,6 @@ Check that `src/lib/db/` exists before running — database must be wired up fir
 Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
 ```
 
-`.claude/skills/next-verify.md`:
-```markdown
----
-name: next-verify
-description: Run typecheck + lint + test suite for this project in one pass.
----
-
-Run `pnpm check && pnpm test` and report any failures.
-
-- If `pnpm check` fails: fix TypeScript or lint errors before marking work done.
-- If `pnpm test` fails: investigate root cause — do not skip or disable tests.
-```
-
 **Step 4f: Create `.claude/harness.json`**
 
 Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
@@ -355,12 +365,10 @@ Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
 sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
 sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(sha256sum .claude/settings.json | cut -d' ' -f1)
-```
-
-For nextjs, also hash the project skills:
-```bash
+# Hash the verify skill:
+sha256_verify=$(sha256sum .claude/skills/<stack>-verify.md | cut -d' ' -f1)
+# For nextjs only, also hash next-migrate:
 sha256_migrate=$(sha256sum .claude/skills/next-migrate.md | cut -d' ' -f1)
-sha256_verify=$(sha256sum .claude/skills/next-verify.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` (include only files that were actually created):
