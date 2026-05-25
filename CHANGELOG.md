@@ -86,6 +86,13 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 
 New `templatecentral:add` capability: `mutation` — StrykerJS 7.x (TS stacks) and mutmut 3.5.0 (FastAPI). Report-only by default (`thresholds.break: null`); never blocks builds.
 
+### Audit Pass — 2026-05-26
+
+Full audit against 2026-05-25 ecosystem research cache. All 16 lint checks clean. Single finding:
+- **C3/C5 fix**: `write-skill/SKILL.md` body trimmed from 31 → 30 lines (removed blank line after frontmatter closing `---`).
+
+All 4 scaffold stacks verified against harness engineering invariants: PostToolUse hooks, Stop hooks, skill scoping, project skill seeding, harness.json, CLAUDE.md one-liner, Skills Security sections. All 10 invariants pass.
+
 ### Lint (scripts/lint-skills.sh)
 
 16 checks total (was 10 in v3). New checks added in v4:

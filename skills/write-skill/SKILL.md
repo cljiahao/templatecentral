@@ -2,7 +2,6 @@
 name: templatecentral:write-skill
 description: Use when writing or modifying files under skills/ — walks through CONVENTIONS.md authoring checklist.
 ---
-
 1. **Read CONVENTIONS.md** (full runtime path):
    ```
    cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/CONVENTIONS.md"
