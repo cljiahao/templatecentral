@@ -33,7 +33,7 @@ Exit.
 ℹ️ This project was scaffolded with templateCentral <version>.
 
 v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PostToolUse hook runs tests after every edit
+- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), PostCompact (re-injects AGENTS.md after compaction)
 - AGENTS.md              — ## AI Harness section with post-harness seams
 - FUTURE.md              — post-harness direction documentation
 
@@ -237,21 +237,22 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
+PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
-Stop hook: runs `pnpm test --run` before task completion.
+Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
 ## Project-Specific Notes
-<!-- Migrate existing decisions, custom patterns, and context here -->
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
 For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md` but append `## AI Harness` before the final line if it is not already present:
 
 ```markdown
 ## AI Harness
-
-PostToolUse hook runs incremental type-check after every edit — feedback only, never blocks.
-Stop hook runs full test suite before task completion.
+PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PostToolUse: incremental type-check after every edit — feedback only, never blocks.
+Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 ```
 
@@ -274,16 +275,28 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 | nextjs / vite-react / nestjs | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` |
 | fastapi | `python -m pyright src/ 2>&1 \| tail -5` |
 
+**For TS stacks (nextjs / vite-react / nestjs):**
 ```json
 {
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "<stack-PostToolUse-command>"
+            "command": "node -e \"let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const n=((d.tool_input||{}).file_path||'').split('/').pop()||'';process.exit(n.startsWith('.env')&&!n.includes('example')?2:0)})\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm exec tsc --noEmit --incremental 2>&1 | tail -5"
           }
         ]
       }
@@ -293,7 +306,17 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         "hooks": [
           {
             "type": "command",
-            "command": "<stack-test-command>"
+            "command": "OUTPUT=$(pnpm test --run 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
           }
         ]
       }
@@ -302,16 +325,60 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 }
 ```
 
-Stop hook test commands:
+**For FastAPI:**
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); p=d.get('tool_input',{}).get('file_path',''); n=p.split('/')[-1]; exit(2) if n.startswith('.env') and 'example' not in n else exit(0)\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pyright src/ 2>&1 | tail -5"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "OUTPUT=$(python -m pytest test/ -q 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
-| Stack | Stop command |
-|-------|-------------|
-| nextjs / vite-react | `pnpm test --run 2>&1 \| tail -20` |
-| nestjs | `pnpm test --run 2>&1 \| tail -20` |
-| fastapi | `python -m pytest test/ -q 2>&1 \| tail -20` |
-
-`PostToolUse` — fast incremental feedback after every edit. Feedback-only; cannot block.
-`Stop` — runs full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures.
+`PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
+`PostToolUse` — fast incremental feedback after every edit. Feedback-only; never blocks.
+`Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
+`PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
 
 If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
 
@@ -362,13 +429,13 @@ Before running against production: verify `DATABASE_URL` in `.env.local` points 
 Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
 
 ```bash
-sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
-sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
-sha256_settings=$(sha256sum .claude/settings.json | cut -d' ' -f1)
+sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
+sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill:
-sha256_verify=$(sha256sum .claude/skills/<stack>-verify.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify.md | cut -d' ' -f1)
 # For nextjs only, also hash next-migrate:
-sha256_migrate=$(sha256sum .claude/skills/next-migrate.md | cut -d' ' -f1)
+sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` (include only files that were actually created):
@@ -381,9 +448,15 @@ Write `.claude/harness.json` (include only files that were actually created):
   "seeded_files": {
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
-    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" }
+    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
+    ".claude/skills/<stack>-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify.md" }
   }
 }
+```
+
+For nextjs only, also include the migrate skill entry:
+```json
+".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" }
 ```
 
 **Step 4g: Update the version marker**
@@ -422,7 +495,7 @@ Read the `seeded_files` map.
 For each entry in `seeded_files`:
 
 ```bash
-current_hash=$(sha256sum <path> 2>/dev/null | cut -d' ' -f1)
+current_hash=$(shasum -a 256 <path> 2>/dev/null | cut -d' ' -f1)
 ```
 
 Compare `current_hash` to `origin_hash`. Classify each file:

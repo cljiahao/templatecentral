@@ -1182,12 +1182,10 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
+PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: `python -m pyright src/ 2>&1 | tail -5` after every Edit/Write. Feedback-only.
-Stop hook: runs `python -m pytest test/ -q` before task completion.
+Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
-
-> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
-> Keep all routing and rules in this file, not in CLAUDE.md.
 
 ## Skills Security
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
@@ -1195,8 +1193,6 @@ Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
 ## Project-Specific Notes
-<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
-
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
@@ -1208,9 +1204,20 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 ```json
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); p=d.get('tool_input',{}).get('file_path',''); n=p.split('/')[-1]; exit(2) if n.startswith('.env') and 'example' not in n else exit(0)\""
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
@@ -1224,7 +1231,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "python -m pytest test/ -q 2>&1 | tail -20"
+            "command": "OUTPUT=$(python -m pytest test/ -q 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
           }
         ]
       }
@@ -1233,8 +1250,10 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 }
 ```
 
+`PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
 `PostToolUse` — fast type feedback via pyright after every edit. Feedback-only; never blocks.
-`Stop` — runs full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures.
+`Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
+`PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
 
 Also create `FUTURE.md` at the project root:
 
@@ -1291,9 +1310,10 @@ Report failures with the exact error output. Fix before proceeding.
 Compute SHA-256 hashes and write:
 
 ```bash
-sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
-sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
-sha256_verify=$(sha256sum .claude/skills/api-verify.md | cut -d' ' -f1)
+sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
+sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/api-verify.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`**:
@@ -1305,6 +1325,7 @@ sha256_verify=$(sha256sum .claude/skills/api-verify.md | cut -d' ' -f1)
   "seeded_files": {
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
+    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
     ".claude/skills/api-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/api-verify.md" }
   }
 }

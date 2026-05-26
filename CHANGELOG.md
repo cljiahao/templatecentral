@@ -24,23 +24,25 @@ All 4 scaffold skills now emit a full harness layer into the scaffolded project.
 
 | Level | Location | Invoked as |
 |-------|----------|------------|
-| Personal | `~/.claude/skills/` | `/name` (overrides project) |
-| Project | `.claude/skills/` | `/name` |
+| Project | `.claude/skills/` | `/name` (overrides user) |
+| User | `~/.claude/skills/` | `/name` |
 | Plugin | `<plugin>/skills/` | `plugin:name` (namespaced, no conflict) |
 
 Agents check `.claude/skills/` first for project-specific workflows, then use `templatecentral:*` for framework-level operations.
 
-**Hook split (PostToolUse vs Stop)** — corrected for all 4 stacks:
-- PostToolUse: fast type feedback only. TS stacks: `pnpm exec tsc --noEmit --incremental` (2–5s vs 30s). FastAPI: `python -m pyright src/` (pyright is 2-5x faster than mypy; new community standard).
-- Stop hook: full test suite (`pnpm test --run` / `pytest`). Blocking quality gate before Claude finishes a task.
+**Hook layer (PreToolUse → PostToolUse → Stop → PostCompact)** — all 4 stacks:
+- PreToolUse: blocks edits to `.env*` files (exit 2); `.env.example` always allowed. Prevents AI from accidentally exposing secrets.
+- PostToolUse: fast type feedback only. TS: `pnpm exec tsc --noEmit --incremental` (2–5s). FastAPI: `python -m pyright src/` (pyright is 2-5x faster than mypy).
+- Stop hook: full test suite. Writes output to stderr, exits 2 when tests fail (forces Claude to fix), exits 0 on pass. Pattern: `OUTPUT=$(cmd 2>&1); EC=$?; echo "$OUTPUT" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0`.
+- PostCompact: re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary. Note: PostCompact receives only metadata on stdin — `compacted_content` is not available (open GitHub issues #14258, #40492 request this).
 
 **Seeded project skills** — All 4 scaffold skills seed a `*-verify` project skill at scaffold time (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Each scaffold step prompts the user to create additional project skills for repeated workflows. `templatecentral:migrate` Phase 4 seeds the same skills when upgrading pre-4.0 projects.
 
-**`harness.json`** — `.claude/harness.json` written at scaffold time with SHA-256 origin hashes of all seeded files. `templatecentral:migrate` Phase 5 reads hashes to report UNCHANGED/MODIFIED/MISSING drift per file.
+**`harness.json`** — `.claude/harness.json` written at scaffold time with SHA-256 origin hashes of seeded files: AGENTS.md, CLAUDE.md, `.claude/settings.json`, and the stack's `*-verify.md` skill. `templatecentral:migrate` Phase 5 reads hashes to report UNCHANGED/MODIFIED/MISSING drift per file. FastAPI/NestJS/Vite-React were missing `settings.json` tracking; fixed.
 
 **`templatecentral:migrate` Phase 4 expanded** — when upgrading pre-4.0 projects: seeds CLAUDE.md, project skills, harness.json alongside settings.json. Phase 5 (new): harness health check.
 
-**`templatecentral:audit` Step 3H** — 10 harness engineering invariant checks (expanded from 7): adds Skills Security section check, `allowed-tools` scoping check, and ghost skill names check. Step 6 (new): repo harness health check. Step 5 gains skill-gap suggestion.
+**`templatecentral:audit` Step 3H** — 12 harness engineering invariant checks (expanded from 10): adds Stop hook exit-2-on-failure pattern check (with correct stderr routing and exit code capture), PreToolUse `.env` protection check (correct `tool_input.file_path` field), PostCompact hook presence check, and harness.json `settings.json` tracking check. Step 6 (new): repo harness health check. Step 5 gains skill-gap suggestion.
 
 **Skills Security guidance** — All 4 scaffold AGENTS.md templates now include a `## Skills Security` section (Snyk ToxicSkills 2026: 13.4% of published agent skills have critical vulnerabilities; 91% of malicious skills contain prompt injection). Guidance: review SKILL.md before installing, scope `allowed-tools:` tightly, avoid skills with unscoped network access.
 
@@ -86,21 +88,141 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 
 New `templatecentral:add` capability: `mutation` — StrykerJS 7.x (TS stacks) and mutmut 3.5.0 (FastAPI). Report-only by default (`thresholds.break: null`); never blocks builds.
 
-### Audit Pass — 2026-05-26
+### Audit Pass — Round 6 — 2026-05-26
 
-Full audit against 2026-05-25 ecosystem research cache. All 16 lint checks clean. Single finding:
-- **C3/C5 fix**: `write-skill/SKILL.md` body trimmed from 31 → 30 lines (removed blank line after frontmatter closing `---`).
+Fresh internet research pass (web scan of all frameworks, libraries, harness engineering, OWASP) + full semantic review across all 4 stacks. 17/17 lint checks clean.
 
-All 4 scaffold stacks verified against harness engineering invariants: PostToolUse hooks, Stop hooks, skill scoping, project skill seeding, harness.json, CLAUDE.md one-liner, Skills Security sections. All 10 invariants pass.
+**Harness engineering (skill scoping + new features)**
+- **Skill scoping priority corrected**: Official order is `Managed > CLI > Project > User > Plugin`. Project skills (`.claude/skills/`) override user/personal skills (`~/.claude/skills/`) when names collide — previous documentation had this backwards ("Personal overrides project"). Updated `AGENTS.md` scoping table and `CHANGELOG`.
+- Audit checklist Step 3H expanded: added skill scoping priority check, hook types check (5 total: command/http/mcp_tool/prompt/agent), Stop hook 8-block cap note (v2.1.143), PreCompact-can-block note, and omitClaudeMd scope clarification (only Explore+Plan skip CLAUDE.md).
+- Ecosystem cache updated with complete harness findings: asyncRewake/async hook options, args:[] exec form, PreCompact blocking, Stop 8-block cap, skillListingBudgetFraction, parentSettingsBehavior, pnpm 11.0 breaking changes (Node.js ≥22 requirement, ESM-only, config split, new security defaults).
+
+**Security — OWASP**
+- `add/ai-security/implementation.md`: Expanded OWASP Agentic Top 10 2026 from prose description to full ASI01–ASI10 table with mitigation focus per entry. Updated Rules to reference "ASI01–ASI10 (Least-Agency principle)" explicitly.
+- Audit checklist: confirmed OWASP Web 2025 (A03 renamed "Software Supply Chain Failures"; A10 new "Mishandling of Exceptional Conditions") and OWASP Agentic 2026 ASI prefix codes.
+
+**Accuracy**
+- `standards/drift-check/implementation.md`: `pip-audit -r` → `pip-audit --requirement` for consistency with `review/update/implementation.md`.
+
+### Audit Pass — Round 7 — 2026-05-26
+
+Full semantic review of all 50+ skill files against fresh research findings. 17/17 lint checks clean.
+
+**Quality / parity**
+- `scaffold/nestjs/config-files.md` pnpm-workspace.yaml: added `allowBuilds` comment section (parity with Next.js and Vite-React templates). NestJS auth uses `argon2` (native addon); users need the allowBuilds pattern to enable it.
+- `migrate/general/implementation.md`: "conditional reinject" → "re-injects AGENTS.md after compaction" — stale wording from the abandoned stdin-aware PostCompact experiment.
+
+**Confirmed CLEAN (fresh audit)**
+- All 4 scaffold AGENTS.md templates correctly list project skills first, no old Personal/Project ordering
+- All 3 API stacks (FastAPI, NestJS, Next.js): TRUST_PROXY documented for both one-hop and two-hop topologies
+- All 4 scaffold AGENTS.md templates contain `## Skills Security` section
+- Error boundary `error.message` guarded by `NODE_ENV === 'development'` / `import.meta.env.DEV` across all stacks
+- Logging skills use only `user_id` (opaque identifier) — no email, password, token in log field examples
+- Drizzle v1 casing API change documented in nestjs-drizzle.md; no deprecated `drizzle({ casing })` pattern
+- better-auth `freshAge → createdAt` (v1.6.0) correctly documented in auth/nextjs.md
+- No deprecated TanStack Query callbacks (onSuccess/onError on useQuery/useMutation) in any skill
+- No Babel dependencies in Vite-React scaffold (correctly removed for plugin-react v6/Oxc)
+- JWT algorithm whitelist present in FastAPI (algorithms=[ALGORITHM]) and NestJS (algorithms: ['HS256'])
+
+### Audit Pass — Round 8 — 2026-05-26
+
+DRY/YAGNI analysis, token-efficiency pass, new preventive lint rules. 19/19 lint checks clean.
+
+**Lint (scripts/lint-skills.sh) — 19 checks (was 17)**
+- `check_no_starlette_startup_events` — catches `@app.on_event`, `add_event_handler`, `on_startup=`, `on_shutdown=` (Starlette 1.0.0 removed these; use `lifespan=` exclusively). ECOSYSTEM-ERA.
+- `check_no_fastapi_orjson_response` — catches `ORJSONResponse`/`UJSONResponse` (deprecated FastAPI 0.130+; native Pydantic Rust serializer replaces them). ECOSYSTEM-ERA.
+
+**Quality**
+- `scaffold/nestjs/config-files.md` pnpm-workspace.yaml: added `allowBuilds` example comment (parity with Next.js/Vite-React; NestJS auth uses `argon2` native addon).
+- `migrate/general/implementation.md`: removed stale "conditional reinject" wording from PostCompact description.
+- `add/ai-security/implementation.md` audit checklist updated: OWASP Agentic ASI01–ASI10 explicitly listed.
+
+**Confirmed CLEAN — no action needed**
+- No `ORJSONResponse`/`UJSONResponse` in any skills (preventive checks added)
+- No Starlette deprecated startup event patterns in any skills
+- No `npm_config_*` env vars in skills (pnpm 11 renamed to `pnpm_config_*`)
+- `z.iso.datetime()` in validation-patterns/vite-react.md is CORRECT Zod v4 (audit agent false positive dismissed)
+- NestJS `z.flattenError(zodError).fieldErrors` in error-handling/nestjs.md is CORRECT (audit agent false positive dismissed)
+- No `isInitialLoading`, `cacheTime`, or `keepPreviousData` TanStack v4 APIs anywhere
+- NestJS/Next.js/Vite-React `z.input` used correctly for form value types (not `z.infer`)
+
+### Audit Pass — Round 10 — 2026-05-26 (final)
+
+Final validation pass. 19/19 lint checks clean.
+
+**Audit skill coverage gaps (MEDIUM)**
+- `audit/implementation.md` Step 0b research checklist: added `TanStack Query` and `Vite + @vitejs/plugin-react` to the libraries scan list (both were in the ecosystem cache but not in the "what to research" prompt). Future fresh scans will now check for TanStack v6, Oxc/Rolldown bundler changes, and Babel-removal status.
+- Step 0b: added `Claude Code harness engineering` as an explicit research category (hook events, hook types, new settings.json fields, skill scoping, Stop hook cap, AGENTS.md open standard status).
+- Cache template (`0b` output format): added `### TanStack Query`, `### Vite + @vitejs/plugin-react`, and `## Claude Code Harness Engineering` sections so the generated cache file matches what is now researched.
+
+**Confirmed CLEAN — final pass across all rounds 6–10 changes**
+- AGENTS.md (repo): skill scoping priority correct (`Project > User`, not reversed)
+- .claude/audit-ecosystem-research.md: ecosystem cache up to date for all researched categories including TanStack Query, Vite, and harness engineering
+- add/ai-security: ASI01–ASI10 OWASP Agentic Top 10 table complete and accurate
+- audit/implementation.md Step 3H: all 9 harness engineering invariant checks in place
+- standards/drift-check: pip-audit flag consistent with review/update
+- scaffold/nestjs/config-files.md: allowBuilds comment at parity with other stacks
+- migrate/general/implementation.md: PostCompact wording accurate; all 5 sha256sum instances → shasum -a 256
+- lint-skills.sh: 19 checks total (added Starlette startup events + ORJSONResponse in Round 8)
+- All 5 scaffold sha256sum instances → shasum -a 256 (macOS portability)
+- add/auth/vite-react.md: no duplicate Validate section
+
+### Audit Pass — Round 9 — 2026-05-26
+
+Cross-platform portability fix, DRY pass. 19/19 lint checks clean.
+
+**Portability fix (HIGH)**
+- `sha256sum` replaced with `shasum -a 256` across all 5 affected files: `migrate/general/implementation.md` (Phases 4f + 5b), `scaffold/fastapi/source-files.md`, `scaffold/nextjs/source-files.md`, `scaffold/vite-react/source-files.md`, `scaffold/nestjs/source-files.md`. `sha256sum` is not available on macOS by default; `shasum -a 256` works on both macOS and Linux and produces identical output format.
+
+**DRY / YAGNI**
+- `add/auth/vite-react.md`: removed duplicate `### Validate` section (6 lines). Step 7 already validates; "After Writing Code" dispatches `templatecentral:build`. No information lost.
+
+**Confirmed CLEAN — no action needed**
+- TanStack Query v5 compliance: all `useQuery` destructuring uses `isPending` (not deprecated `isLoading`); no deprecated `onSuccess`/`onError` on `useQuery` options
+- Custom `isLoading` state in `AuthContext` (vite-react auth and scaffold) is a `useState` variable, not TanStack Query — no change needed
+- `mutations.onError` in `QueryClient.defaultOptions` (error-handling/vite-react.md) is valid TanStack v5 API (not deprecated)
+- No Zod v3 deprecated chained format methods (`z.string().email()`, `z.string().uuid()`, etc.) in any skill
+- `api-route` correctly uses async `params: Promise<{ id: string }>` (Next.js 16)
+- `add/form` correctly uses `z.input<typeof schema>` for React Hook Form value types
+- Scaffold AGENTS.md templates correctly instruct agents to check `.claude/skills/` first, then `templatecentral:*` plugin skills
+- `harness.json` SHA verification commands now confirmed `shasum -a 256` in all 5 files
+
+### Audit Pass — Rounds 4–5 — 2026-05-26
+
+Internet research pass + multi-round semantic review across all 4 stacks. All 16 lint checks clean.
+
+**Hooks (all 4 stacks + migrate)**
+- Stop hook was a no-op: result was piped through `tail` (always exits 0). Fixed: capture exit code → write stderr → `exit 2` on failure. Pattern: `OUTPUT=$(cmd 2>&1); EC=$?; echo "$OUTPUT" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0`.
+- PreToolUse was reading wrong field: top-level `file_path` → `tool_input.file_path` from stdin JSON.
+- `stop_hook_active` removed from Stop hook commands: not needed when hook exits 0 on test pass (no infinite-loop risk). Claude Code has 29 named hook events total.
+- `MultiEdit` removed from matcher: not a real tool. `Edit|Write|MultiEdit` → `Edit|Write`.
+- PostCompact hook added to all 4 scaffold + migrate: re-injects first 30 lines of AGENTS.md after compaction. (Note: PostCompact stdin has only metadata, not compacted_content — unconditional re-inject is correct.)
+- Migrate Phase 4 brought to full hook parity with scaffold (PreToolUse + PostToolUse + Stop + PostCompact).
+- PreToolUse `.env` protection added (was missing in all 4 scaffold + migrate templates).
+
+**Security headers**
+- Next.js `next.config.ts`: added `X-XSS-Protection: 0` (parity gap vs FastAPI/NestJS/Vite-React).
+- Vite-React nginx: `X-Frame-Options: SAMEORIGIN` → `DENY`; added `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`.
+
+**Harness**
+- `harness.json`: FastAPI/NestJS/Vite-React now track `.claude/settings.json` hash. Migrate Phase 4 `harness.json` now includes `*-verify.md` skill hash (was computed but omitted from output template).
+
+**Accuracy**
+- NestJS logging bootstrap: replaced full `bootstrap()` excerpt (had simplified TRUST_PROXY missing numeric string → `parseInt()` guard) with logger-wiring-only snippet. Prevents users from overwriting scaffold's correct proxy logic.
+- `add/test/nextjs.md`, `add/test/vite-react.md`: `pnpm test` → `pnpm test --run` in verification steps (without `--run`, Vitest starts watch mode in a TTY).
+- `test/implementation.md` (test agent): `pnpm test` → `pnpm test --run` in run step — same watch-mode issue; test agent was dispatching a blocking command.
+- TanStack Query v5: `isLoading` → `isPending` in 3 files (`scaffold/nextjs/source-files.md` example component, `add/pagination/nextjs.md`, `add/pagination/vite-react.md`). `isLoading` was removed in TQ v5; `isPending` is the correct "initial load, no data yet" state.
+- Audit checklist: 12 invariants — PostCompact check updated to verify stdin-aware pattern; removed `stop_hook_active` guard check; added PreToolUse `tool_input.file_path` field check.
 
 ### Lint (scripts/lint-skills.sh)
 
-16 checks total (was 10 in v3). New checks added in v4:
+17 checks total (was 10 in v3). New checks added in v4:
 - `check_no_ghost_agent_names` — extended to catch `*-code-standards`, `nextjs-add-auth` old names (TIMELESS)
 - `check_no_zod_deprecated_message_key` (ECOSYSTEM-ERA)
 - `check_no_middleware_ts` with exclusions for meta-documents
 - `check_no_mypy_in_postToolUse` — enforces pyright over mypy (ECOSYSTEM-ERA)
 - `check_no_postToolUse_full_test_suite` — test suites belong in Stop hooks (TIMELESS)
+- `check_no_tanstack_isLoading` — catches TQ v5 `isLoading` from `useQuery`/`useMutation` destructuring (ECOSYSTEM-ERA)
 
 ---
 

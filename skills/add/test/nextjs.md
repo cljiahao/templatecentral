@@ -213,15 +213,15 @@ describe('GET /api/projects/[id]', () => {
 #### 5. Run Tests
 
 ```bash
-pnpm test                  # Run all tests once
-pnpm test:watch            # Watch mode (re-runs on change)
+pnpm test --run            # Run all tests once
+pnpm test                  # Watch mode (re-runs on change)
 pnpm test:coverage         # Run with coverage report
 ```
 
 #### 6. Validate
 
 ```bash
-pnpm build && pnpm test
+pnpm build && pnpm test --run
 ```
 
 Confirm the build succeeds and all tests pass.

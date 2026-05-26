@@ -54,6 +54,8 @@ Use WebSearch and/or WebFetch to check for changes **since the date in the cache
 - argon2 / argon2-cffi — parameter recommendation changes
 - `@nestjs/throttler` — API changes, helper function changes
 - slowapi — rate limiting behavior, proxy-aware configuration
+- TanStack Query — v5/v6 status, API changes, deprecated hooks (`isLoading`, `onSuccess`/`onError` on useQuery)
+- Vite + `@vitejs/plugin-react` — major version, bundler changes (Rolldown/Oxc), Babel removal status
 
 **Security standards**
 - OWASP Top 10 (web) — new ranking or new category
@@ -61,6 +63,9 @@ Use WebSearch and/or WebFetch to check for changes **since the date in the cache
 - OWASP Top 10 for Agentic Applications — new guidance
 - NIST SP 800-63B — any updated authenticator assurance guidance
 - AWS Responsible AI Lens — new dimensions or updated guidance
+
+**Claude Code harness engineering**
+Check for changes to: hook events (confirmed count), hook handler types (command/http/mcp_tool/prompt/agent), new hook options (asyncRewake, async, args[]), skill scoping priority order, Stop hook block-cap behavior, PreCompact/PostCompact capabilities, new settings.json fields (worktree, sandbox, skillListingBudgetFraction, etc.), AGENTS.md open standard (AAIF) status.
 
 **Reference: AWS AIDLC**
 Check the AWS AI Development Lifecycle (AIDLC) guidance for any new controls or patterns relevant to AI-assisted development workflows — particularly around prompt injection, model output validation, and agent trust boundaries.
@@ -113,6 +118,12 @@ expires-after-days: 30
 ### slowapi
 <current stable version and findings>
 
+### TanStack Query
+<current stable version and findings>
+
+### Vite + @vitejs/plugin-react
+<current stable version and findings>
+
 ## Security standards
 
 ### OWASP Top 10 (web)
@@ -132,6 +143,9 @@ expires-after-days: 30
 
 ### AWS AIDLC
 <current version and findings>
+
+## Claude Code Harness Engineering
+<hook events, hook types, new options, skill scoping, Stop cap, settings.json fields — current as of scan date>
 ```
 
 ---
@@ -386,7 +400,7 @@ Read each file in full, apply checklist above:
 **Next.js-specific additional checks**:
 - [ ] `proxy.ts` used for auth proxy — not `middleware.ts` (deprecated in Next.js 16)
 - [ ] Route Handlers use `async` APIs for `cookies()`, `headers()`, `params`, `searchParams`
-- [ ] `next.config.ts` security headers include HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- [ ] `next.config.ts` security headers include HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection
 - [ ] `TRUST_PROXY` env var gates `getAppOrigin()` utility (`X-Forwarded-Proto` / `X-Forwarded-Host`)
 - [ ] `better-auth` session config documented — `expiresIn`, `updateAge`, `cookieCache`
 - [ ] `allowBuilds` in `pnpm-workspace.yaml` (not `.npmrc` or `package.json#pnpm`)
@@ -417,6 +431,8 @@ Read each file in full, apply checklist above:
 - [ ] Dockerfile `COPY` includes `pnpm-workspace.yaml*`
 - [ ] `@vitejs/plugin-react` v6 Oxc-based — no `@babel/core` required
 - [ ] `z.flattenError()` used — not deprecated `.flatten()`
+- [ ] nginx.conf.template includes `Content-Security-Policy` with at least `frame-ancestors 'none'` baseline
+- [ ] nginx.conf.template uses `X-Frame-Options "DENY"` (not `SAMEORIGIN`)
 
 ---
 
@@ -462,11 +478,17 @@ After reading all files, answer these questions from memory (no additional reads
 ### Harness engineering checks (Step 3H)
 
 - [ ] **PostToolUse hook command**: TS stacks use `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` (not plain `--noEmit`, not `pnpm test`); FastAPI uses `python -m pyright src/ 2>&1 | tail -5` (not mypy). PostToolUse is feedback-only; hooks exit 0 even on errors so output flows to Claude as context.
-- [ ] **Stop hook present**: Scaffold and migrate skills seed a `Stop` hook that runs the full test suite. This is the correct place for blocking quality gates — not PostToolUse.
-- [ ] **Skill scoping model correct**: Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations.
+- [ ] **Stop hook exits 2 on failure**: The Stop hook must run tests, capture exit code, write output to **stderr** (not stdout), and `exit 2` if tests fail so Claude receives test results and is forced to fix. Pattern: `OUTPUT=$(cmd 2>&1); EC=$?; echo "$OUTPUT" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0`. Do NOT pipe through `tail` without capturing exit code (piping exits 0 regardless).
+- [ ] **PreToolUse `.env` protection**: Scaffold settings.json includes a `PreToolUse` hook that blocks edits to `.env*` files (exit 2) while allowing `.env.example`. Must read `tool_input.file_path` from stdin JSON (not top-level `file_path`). Matcher is `Edit|Write` (no `MultiEdit` tool exists). FastAPI uses `python3`, TS stacks use `node`.
+- [ ] **PostCompact hook present**: Scaffold settings.json includes a `PostCompact` hook that re-injects first 30 lines of AGENTS.md after context compaction, ensuring routing context survives summary. Note: PostCompact receives only metadata on stdin (session_id, transcript_path, cwd) — `compacted_content` is not available on stdin.
+- [ ] **Skill scoping priority correct**: Official order is `Managed > CLI flag > Project > User > Plugin`. Project skills (`.claude/skills/`) override user skills (`~/.claude/skills/`) when names collide — NOT the reverse. Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations.
+- [ ] **Hook types documented**: Five hook handler types exist — `command`, `http`, `mcp_tool` (v2.1.117), `prompt`, `agent` (experimental). Scaffold uses `command` type. Any skill recommending hook setup should reference the correct type field.
+- [ ] **Stop hook 8-block cap**: v2.1.143 added a cap of 8 consecutive blocks before Claude Code ends the turn with a warning. For test-enforcement Stop hooks this is not an issue (they exit 0 when tests pass). No explicit workaround needed in scaffold hooks.
+- [ ] **PreCompact can block**: `PreCompact` fires before compaction and CAN block (unlike `PostCompact`). Scaffold templates intentionally use `PostCompact` (re-inject after) not `PreCompact`.
+- [ ] **omitClaudeMd scope**: Only the built-in `Explore` and `Plan` subagents have `omitClaudeMd: true`. All other built-in and custom subagents DO receive CLAUDE.md (and its `@AGENTS.md` import). Scaffold AGENTS.md must still be self-contained because Explore/Plan skip it.
 - [ ] **Project skill seeding**: Every scaffold skill seeds a `*-verify` project skill into `.claude/skills/` (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Migrate Phase 4 seeds the same for all stacks.
 - [ ] **Write-more-skills instruction present**: Scaffold instructions include a step asking the user to create additional project skills for repeated workflows.
-- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Migrate Phase 5 reads these to detect drift.
+- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Tracked files must include AGENTS.md, CLAUDE.md, `.claude/settings.json`, and the stack's `*-verify.md` skill. Migrate Phase 5 reads these to detect drift.
 - [ ] **CLAUDE.md is one line**: Every scaffold and migrate path generates `@AGENTS.md` as the only content of `CLAUDE.md` — never verbose content.
 - [ ] **Skills Security section in scaffolded AGENTS.md**: All 4 scaffold AGENTS.md templates include a `## Skills Security` section reminding users to review SKILL.md content before installing third-party skills, scope `allowed-tools:`, and avoid skills that hardcode secrets or make unscoped network calls.
 - [ ] **Skill frontmatter uses `allowed-tools:` tightly scoped**: Any SKILL.md that grants tool access scopes it to the minimum required commands (e.g. `Bash(pnpm *)` not `Bash`). No SKILL.md grants unrestricted `Bash` without explicit justification.

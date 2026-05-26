@@ -284,6 +284,59 @@ check_no_mypy_in_postToolUse() {
   fi
 }
 
+check_no_tanstack_isLoading() {
+  # TanStack Query v5 renamed isLoading to isPending on useQuery()/useMutation() destructuring.
+  # isLoading still exists as a derived bool on the query object but has different semantics
+  # (true when fetching WITH existing data; isPending is true when there is no data yet).
+  # Using isLoading instead of isPending causes the loading state to not show on first render.
+  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Revisit if the project pins to TQ v4.
+  header "TanStack Query v5 isLoading usage"
+  local hits
+  hits=$(grep -rn '{ .*isLoading.*} = use\(Query\|Mutation\)\|isPending\s*:\s*isLoading\b' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "TanStack Query v5: use isPending (not isLoading) from useQuery/useMutation destructuring"
+  else
+    pass "No TanStack Query isLoading usage"
+  fi
+}
+
+check_no_starlette_startup_events() {
+  # Starlette 1.0.0 removed on_startup/on_shutdown event handlers and add_event_handler().
+  # FastAPI 0.136.x requires lifespan= context manager exclusively.
+  # ECOSYSTEM-ERA: correct for Starlette ≥1.0.0 / FastAPI ≥0.128.0.
+  header "Starlette 1.0 deprecated startup events"
+  local hits
+  hits=$(grep -rn '@app\.on_event\|add_event_handler\|on_startup=\|on_shutdown=' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "Starlette 1.0: use lifespan= context manager — on_startup/on_shutdown/add_event_handler removed"
+  else
+    pass "No Starlette deprecated startup events"
+  fi
+}
+
+check_no_fastapi_orjson_response() {
+  # ORJSONResponse and UJSONResponse deprecated in FastAPI 0.130+.
+  # Native JSON serialization now uses Pydantic's Rust-based serializer.
+  # ECOSYSTEM-ERA: correct for FastAPI ≥0.130.0.
+  header "Deprecated FastAPI ORJSONResponse/UJSONResponse"
+  local hits
+  hits=$(grep -rn 'ORJSONResponse\|UJSONResponse' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "FastAPI 0.130+: ORJSONResponse/UJSONResponse deprecated — use standard JSONResponse"
+  else
+    pass "No deprecated FastAPI ORJSONResponse/UJSONResponse"
+  fi
+}
+
 check_no_postToolUse_full_test_suite() {
   # PostToolUse hooks are feedback-only and cannot block execution.
   # Full test suites (pnpm test, pytest, etc.) belong in Stop hooks, not PostToolUse.
@@ -336,6 +389,9 @@ check_no_zod_string_format_methods
 check_no_zod_deprecated_message_key
 check_no_mypy_in_postToolUse
 check_no_postToolUse_full_test_suite
+check_no_tanstack_isLoading
+check_no_starlette_startup_events
+check_no_fastapi_orjson_response
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

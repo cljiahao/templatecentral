@@ -17,7 +17,7 @@ Same as `build-agent`: check for `next.config.ts`, `next.config.js`, or `next.co
 3. Identify newly added code (files written in this session)
 4. Write tests following the `add-test` skill conventions
 5. Run the full test suite:
-   - Next.js / Vite-React / NestJS: `pnpm test`
+   - Next.js / Vite-React / NestJS: `pnpm test --run`
    - FastAPI: `pytest test/`
 6. Report results (see Reporting below)
 

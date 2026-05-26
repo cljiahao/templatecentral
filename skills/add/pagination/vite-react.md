@@ -27,7 +27,7 @@ export function usePagination<T>(
   const { initialPage = 1, pageSize = 10, enabled = true } = options;
   const [page, setPage] = useState(initialPage);
 
-  const { data, isLoading, error, isFetching } = useQuery({
+  const { data, isPending, error, isFetching } = useQuery({
     queryKey: [...queryKey, page],
     queryFn: () => fetchFn(page, pageSize),
     enabled,
@@ -52,7 +52,7 @@ export function usePagination<T>(
     pagination: data?.pagination,
     page,
     pageSize,
-    isLoading,
+    isPending,
     isFetching,
     error,
     goToPage,
@@ -70,10 +70,10 @@ import { usePagination } from '@/lib/utils/use-pagination';
 import { fetchProjects, type ProjectItem } from '@/features/projects/api/projects';
 
 export function ProjectsList() {
-  const { data, pagination, page, isLoading, error, nextPage, prevPage } =
+  const { data, pagination, page, isPending, error, nextPage, prevPage } =
     usePagination<ProjectItem>(['projects'], fetchProjects);
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isPending) return <div>Loading...</div>;
   if (error) return <div>Error: {(error as Error).message}</div>;
 
   return (

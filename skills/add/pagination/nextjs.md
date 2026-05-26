@@ -214,7 +214,7 @@ export function ProjectsList() {
   const [page, setPage] = useState(1);
   const limit = 10;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isPending, error } = useQuery({
     queryKey: ['projects', page],
     queryFn: async () => {
       const response = await fetch(
@@ -226,7 +226,7 @@ export function ProjectsList() {
     },
   });
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isPending) return <div>Loading...</div>;
   if (error) return <div>Error loading projects</div>;
 
   const { items: projects, pagination } = data;

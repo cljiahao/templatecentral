@@ -1475,9 +1475,9 @@ import { useExampleItems } from '../hooks/use-example-items.query';
 import { ExampleCard } from './example-card';
 
 export function ExampleList() {
-  const { data: items, isLoading } = useExampleItems();
+  const { data: items, isPending } = useExampleItems();
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!items?.length) return <p className="text-sm text-muted-foreground">No items found.</p>;
 
   return (
@@ -1981,12 +1981,10 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
+PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
-Stop hook: runs `pnpm test --run` before task completion.
+Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
-
-> Built-in subagents (/explore, /plan) do not load CLAUDE.md — they read AGENTS.md directly.
-> Keep all routing and rules in this file, not in CLAUDE.md.
 
 ## Skills Security
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
@@ -1994,7 +1992,7 @@ Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
 ## Project-Specific Notes
-<!-- Expand this file as the project grows: architecture decisions, custom patterns, things to avoid -->
+<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
 ### 6b. Create `.claude/settings.json`
@@ -2005,9 +2003,20 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 ```json
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const n=((d.tool_input||{}).file_path||'').split('/').pop()||'';process.exit(n.startsWith('.env')&&!n.includes('example')?2:0)})\""
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
@@ -2021,7 +2030,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm test --run 2>&1 | tail -20"
+            "command": "OUTPUT=$(pnpm test --run 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
           }
         ]
       }
@@ -2030,8 +2049,10 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 }
 ```
 
-`PostToolUse` — fast incremental TypeScript feedback after every file edit. Feedback-only; never blocks.
-`Stop` — runs the full test suite before Claude finishes a task. Exit code 2 asks Claude to fix failures before stopping.
+`PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
+`PostToolUse` — fast incremental TypeScript feedback after every edit. Feedback-only; never blocks.
+`Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
+`PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
 
 Also create `FUTURE.md` at the project root:
 
@@ -2118,12 +2139,12 @@ Run `chmod +x .claude/hooks/verify.sh`.
 After all harness files are written, compute SHA-256 hashes and write `.claude/harness.json`:
 
 ```bash
-sha256_agents=$(sha256sum AGENTS.md | cut -d' ' -f1)
-sha256_claude=$(sha256sum CLAUDE.md | cut -d' ' -f1)
-sha256_settings=$(sha256sum .claude/settings.json | cut -d' ' -f1)
-sha256_hooks=$(sha256sum .claude/hooks/verify.sh | cut -d' ' -f1)
-sha256_migrate=$(sha256sum .claude/skills/next-migrate.md | cut -d' ' -f1)
-sha256_verify=$(sha256sum .claude/skills/next-verify.md | cut -d' ' -f1)
+sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
+sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
+sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
+sha256_hooks=$(shasum -a 256 .claude/hooks/verify.sh | cut -d' ' -f1)
+sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/next-verify.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` placeholders and `<ISO-date>` with today's date:

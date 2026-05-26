@@ -41,15 +41,15 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 | Level | Location | Invoked as | Priority |
 |-------|----------|------------|----------|
-| Enterprise | system-level | `/<name>` | highest |
-| Personal | `~/.claude/skills/` | `/<name>` | overrides project |
-| Project | `.claude/skills/` | `/<name>` | project-specific |
+| Managed | org-wide managed settings | `/<name>` | highest |
+| CLI flag | `--agents` session flag | session-only | 2nd |
+| Project | `.claude/skills/` | `/<name>` | project-specific (overrides user) |
+| User | `~/.claude/skills/` | `/<name>` | personal (loses to project) |
 | Plugin | `<plugin>/skills/` | `<plugin>:<name>` | namespaced, no conflict |
 
 **Key facts:**
-- Plugin skills (`templatecentral:*`) are namespaced — they never conflict with project or personal skills
-- Project skills (`.claude/skills/`) are invoked without namespace (e.g., `/next-verify`)
-- Personal skills override project skills when names collide — use project-unique names to avoid this
+- Plugin skills (`templatecentral:*`) are namespaced — they never conflict with project or user skills
+- Project skills (`.claude/skills/`) are invoked without namespace (e.g., `/next-verify`) and take priority over user skills when names collide
 - templateCentral seeds project skills for project-specific workflows; the scaffolded AGENTS.md instructs agents to check `.claude/skills/` first for project workflows, then use `templatecentral:*` for framework-level operations
 - As the project grows, agents should create new project skills for any workflow repeated more than once
 

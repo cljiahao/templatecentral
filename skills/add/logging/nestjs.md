@@ -101,30 +101,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
 App startup/shutdown — use NestJS lifecycle hooks:
 
 ```ts
-// Excerpt — integrate these changes into your existing src/main.ts
-// Do NOT replace the entire file; the scaffold already bootstraps Fastify.
-import { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { FastifyAdapter } from '@nestjs/platform-fastify';
+// Excerpt — integrate ONLY the logger wiring into your existing src/main.ts bootstrap.
+// The scaffold already handles trustProxy, CORS, and app.listen — do NOT copy those here.
 import { Logger } from 'nestjs-pino';
 
-async function bootstrap() {
-  const trustProxyEnv = process.env.TRUST_PROXY;
-  const trustProxy: boolean | string | undefined =
-    trustProxyEnv === '*' ? true : trustProxyEnv;
-
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter(trustProxy ? { trustProxy, logger: false } : { logger: false }),
-    { bufferLogs: true },
-  );
-  const logger = app.get(Logger);
-  app.useLogger(logger);
-
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port, '0.0.0.0');
-  logger.log({ port, environment: process.env.NODE_ENV }, 'App started');
-}
-bootstrap();
+// Inside existing bootstrap(), after NestFactory.create():
+const logger = app.get(Logger);
+app.useLogger(logger);
+// ...rest of existing bootstrap continues unchanged...
+logger.log({ port, environment: process.env.NODE_ENV }, 'App started');
 ```
 
 #### Tier 2 — Standard (+ Tier 1)

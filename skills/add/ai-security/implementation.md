@@ -318,15 +318,32 @@ The AWS Responsible AI Lens (re:Invent 2025) defines 10 dimensions for evaluatin
 
 No single framework covers everything — OWASP LLM Top 10 focuses on attack vectors; the Responsible AI Lens focuses on systemic trustworthiness. Run both checklists before shipping AI features to production.
 
-For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (2026)** — a separate framework covering multi-agent orchestration risks. Key entries include: **Insecure Inter-Agent Communication** (agents trusting each other without re-validating authority), **Cascading Failures** (one agent's bad output propagating through a chain), and **Human-Agent Trust Exploitation** (users manipulating agents into over-delegating actions). The overarching design principle is **Least Agency**: grant each agent only the minimum permissions and tool access required for its specific task — scope both credentials and tool allowlists per-agent, not globally. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
+For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications 2026 (ASI prefix codes)** — a separate framework covering multi-agent orchestration risks:
+
+| Code | Name | Mitigation focus |
+|------|------|-----------------|
+| ASI01 | Agent Goal Hijack | Validate objective integrity; reject goal mutations from untrusted input |
+| ASI02 | Tool Misuse & Exploitation | Scope tool allowlists per-agent; block recursive/unbounded execution |
+| ASI03 | Identity & Privilege Abuse | Re-validate authority at every delegation boundary |
+| ASI04 | Agentic Supply Chain Compromise | Vet external agents, schemas, and tool definitions before trust |
+| ASI05 | Unexpected Code Execution | Sandbox agent-generated code; never eval untrusted model output |
+| ASI06 | Memory & Context Poisoning | Validate memory reads; isolate long-term memory from prompt construction |
+| ASI07 | Insecure Inter-Agent Communication | Re-authenticate agent-to-agent messages; no implicit trust between agents |
+| ASI08 | Cascading Failures | Circuit-break chains; cap propagation depth; isolate failure domains |
+| ASI09 | Human-Agent Trust Exploitation | Scope confirmations to specific actions; reject open-ended authority grants |
+| ASI10 | Rogue Agents | Hard-code objective boundaries; monitor for goal drift in long-running agents |
+
+The overarching design principle is **Least Agency**: grant each agent only the minimum permissions and tool access required for its specific task — scope both credentials and tool allowlists per-agent, not globally. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
 
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10 (Least-Agency principle)
+- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 
 ## Changelog
+### 1.2.0
+- Expanded OWASP Agentic Top 10 2026 to full ASI01–ASI10 table with mitigation focus per entry
 ### 1.1.0
 - Added OWASP Top 10 for Agentic Applications (2026) reference for Capability C systems
 ### 1.0.0

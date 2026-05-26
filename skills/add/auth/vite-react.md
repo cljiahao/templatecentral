@@ -334,13 +334,6 @@ src/
 - Always redirect to `/login` on 401 responses — the `ProtectedRoute` handles this for navigation, but API calls should also handle 401s gracefully
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 
-### Validate
-
-```bash
-pnpm build    # zero errors
-pnpm test     # auth tests pass
-```
-
 ### After Writing Code
 
 Dispatch in order:

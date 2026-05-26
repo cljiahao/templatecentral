@@ -19,7 +19,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          direct_prompt: |
+          prompt: |
             You are reviewing a pull request for templateCentral — a Claude Code plugin
             that scaffolds Next.js, Vite+React, FastAPI, and NestJS projects.
 
@@ -32,7 +32,7 @@ jobs:
             3. **Convention** — SKILL.md description >150 chars, registered skill body >30 lines,
                implementation detail in a router-only skill.
             4. **Breaking changes** — scaffold file changes that alter output for existing
-               projects without a migration path in CHANGELOG or shared-migrate.
+               projects without a migration path in CHANGELOG or `templatecentral:migrate`.
 
             Rules:
             - Cite file and line number for every finding.
