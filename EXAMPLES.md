@@ -4,6 +4,7 @@ Practical walkthroughs for each scaffold. All assume templateCentral is installe
 
 ```
 claude plugin marketplace add cljiahao/templatecentral
+claude plugin install templatecentral
 ```
 
 ---
@@ -19,24 +20,24 @@ What ships: App Router, shadcn/ui, TanStack Query, better-auth, Vitest, ESLint, 
 **Add auth after scaffolding:**
 ```
 User: add authentication
-→ templatecentral:nextjs-add-auth
+→ templatecentral:add
 ```
 
 **Add a database:**
 ```
 User: add a PostgreSQL database with Drizzle
-→ templatecentral:nextjs-add-database
+→ templatecentral:add
 ```
 
 **Add a page:**
 ```
 User: add a settings page
-→ templatecentral:nextjs-add-page
+→ templatecentral:add
 ```
 
 ---
 
-## FastAPI (Python 3.12 + Pydantic v2 + argon2)
+## FastAPI (Python 3.13 + Pydantic v2 + argon2)
 
 ```
 User: scaffold a FastAPI backend called "api"
@@ -47,19 +48,19 @@ What ships: structured `src/` layout, Pydantic v2 settings, Ruff, pytest, Docker
 **Add JWT auth:**
 ```
 User: add authentication
-→ templatecentral:fastapi-add-auth
+→ templatecentral:add
 ```
 
 **Add a database (completes the auth stub):**
 ```
 User: add a PostgreSQL database with SQLAlchemy
-→ templatecentral:fastapi-add-database
+→ templatecentral:add
 ```
 
 **Auth + database together — order matters:**
 ```
 User: add auth and a database
-→ templatecentral:fastapi-add-auth first, then templatecentral:fastapi-add-database
+→ templatecentral:add (auth first, then database)
 ```
 
 ---
@@ -75,13 +76,13 @@ What ships: Fastify adapter, class-validator, Vitest, ESLint, Docker, AGENTS.md,
 **Add a feature module:**
 ```
 User: add a users module
-→ templatecentral:nestjs-add-module
+→ templatecentral:add
 ```
 
 **Add auth:**
 ```
 User: add authentication
-→ templatecentral:nestjs-add-auth
+→ templatecentral:add
 ```
 
 ---
@@ -97,13 +98,13 @@ What ships: React 19, TanStack Query, shadcn/ui, React Hook Form, Zod, Vitest, D
 **Add a page:**
 ```
 User: add a settings page
-→ templatecentral:vite-react-add-page
+→ templatecentral:add
 ```
 
 **Add a component:**
 ```
 User: add a data table component
-→ templatecentral:vite-react-add-component
+→ templatecentral:add
 ```
 
 ---
@@ -112,10 +113,10 @@ User: add a data table component
 
 ```
 User: scaffold a Next.js frontend and a FastAPI backend
-→ templatecentral:nextjs-scaffold, then templatecentral:fastapi-scaffold
+→ templatecentral:scaffold (run twice — once per project)
 
 User: connect the frontend to the backend
-→ templatecentral:shared-full-stack-pairing
+→ templatecentral:add
 ```
 
 ---
@@ -124,7 +125,7 @@ User: connect the frontend to the backend
 
 ```
 User: add mutation testing
-→ templatecentral:add-mutation
+→ templatecentral:add
 ```
 
 Adds StrykerJS (TypeScript stacks) or mutmut (FastAPI). Report-only by default — never blocks CI.
@@ -136,7 +137,7 @@ See the generated `stryker.config.mjs` or `pyproject.toml [tool.mutmut]` for con
 
 ```
 User: check for drift
-→ templatecentral:shared-drift-check
+→ templatecentral:standards
 ```
 
 Checks whether stack dependencies, patterns, and conventions are still current. Run at the start of any session on an existing project.

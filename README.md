@@ -39,7 +39,7 @@ claude plugin install templatecentral
 claude plugin marketplace add templatecentral
 ```
 
-Either way, 10 skills are registered automatically — no extra setup.
+Either way, all 10 skills are available automatically — no extra setup.
 
 ### Updating
 
@@ -77,7 +77,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 ✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
 
 ### FastAPI
-✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Mypy
+✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright
 ✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
 
 ### NestJS
@@ -140,6 +140,9 @@ templatecentral/
 ├── .claude-plugin/
 │   ├── plugin.json          # Plugin manifest (points to skills/)
 │   └── marketplace.json     # Anthropic marketplace metadata
+├── scripts/
+│   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
+│   └── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
 ├── skills/                  # All skills — nested reference file architecture
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
 │   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
@@ -160,7 +163,8 @@ Contributions welcome — especially new stacks and coverage gaps.
 1. Read `skills/CONVENTIONS.md` — it defines all nesting rules, description limits, and ref header formats
 2. Use `templatecentral:write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
 3. If adding a new stack, create `.claude/rules/<stack>.md`
-4. Open a PR — CI will run `scripts/lint-skills.sh` to validate your skill automatically
+4. Run `bash scripts/lint-skills.sh skills/` and `bash scripts/validate-manifest.sh` locally — both must pass
+5. Open a PR — CI will run both scripts automatically
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 

@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `scripts/validate-manifest.sh` — validates `.claude-plugin/plugin.json` and `marketplace.json` before publish: JSON syntax, required fields, semver format, skills directory existence, `plugins[]` entry completeness, name consistency across both files, and SKILL.md frontmatter correctness. Skips agent utilities (SKILL.md files without YAML frontmatter) as intentional unregistered internals.
+
+### Fixed
+- `EXAMPLES.md`: replaced all ghost skill names (`templatecentral:nextjs-add-auth`, `templatecentral:shared-drift-check`, etc.) with current v4 names (`templatecentral:add`, `templatecentral:scaffold`, `templatecentral:standards`)
+- `EXAMPLES.md`: FastAPI section version corrected from Python 3.12 to Python 3.13 (matches scaffold)
+- `README.md`: FastAPI scaffold line corrected from `Ruff + Mypy` to `Ruff + Pyright` — scaffold generates pyright, not mypy
+- `README.md`: "10 skills are registered automatically" → "all 10 skills are available automatically" — only 6 have frontmatter (registered); 4 are agent utilities
+- `README.md`: `scripts/` directory added to Repository Structure tree with descriptions for both scripts
+- `CONTRIBUTING.md`, `README.md`: contributor workflow updated to include `bash scripts/validate-manifest.sh` alongside `lint-skills.sh`
+- `.github/workflows/validate-skills.yml`: frontmatter check now skips agent utilities (SKILL.md files without YAML `---` first line); added `validate-manifest` step calling `bash scripts/validate-manifest.sh`; path trigger widened from `plugin.json` to `.claude-plugin/**`
+
 ---
 
 ## [4.0.0] — 2026-05-26

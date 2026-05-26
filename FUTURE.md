@@ -20,7 +20,7 @@ Seam: `skills/add/` directory structure supports new capability directories.
 ## Automated Ecosystem Refresh
 
 Scheduled scan of framework release notes → auto-PR to update skill content and bump `audit-ecosystem-research.md` cache.
-Seam: `.github/workflows/` directory; `scripts/lint-skills.sh` modular check system.
+Seam: `.github/workflows/` directory; `scripts/lint-skills.sh` and `scripts/validate-manifest.sh` modular check system.
 
 ## v5.0 Harness Promotion
 

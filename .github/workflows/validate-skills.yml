@@ -5,12 +5,12 @@ on:
     paths:
       - 'skills/**'
       - 'scripts/**'
-      - '.claude-plugin/plugin.json'
+      - '.claude-plugin/**'
   pull_request:
     paths:
       - 'skills/**'
       - 'scripts/**'
-      - '.claude-plugin/plugin.json'
+      - '.claude-plugin/**'
 
 jobs:
   validate:
@@ -22,6 +22,14 @@ jobs:
         run: |
           failed=0
           for skill_file in skills/*/SKILL.md; do
+            # Skip agent utilities — files without YAML frontmatter are intentionally
+            # unregistered (loaded internally via `cat`; no name/description required).
+            first_line=$(head -1 "$skill_file")
+            if [ "$first_line" != "---" ]; then
+              echo "SKIP: $skill_file (no YAML frontmatter — internal utility)"
+              continue
+            fi
+
             name=$(grep -m1 '^name:' "$skill_file" | sed 's/name:[[:space:]]*//' | tr -d '"')
             description=$(grep -m1 '^description:' "$skill_file" | sed 's/description:[[:space:]]*//' | tr -d '"')
 
@@ -108,22 +116,16 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - name: Validate plugin.json structure
+      - name: Validate manifest files (validate-manifest.sh)
+        run: bash scripts/validate-manifest.sh .claude-plugin
+
+      - name: Validate plugin.json extended fields
         run: |
           node -e "
             const fs = require('fs');
             const p = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json'));
-            const required = ['name','version','description','author','skills','displayName','homepage','repository','license'];
+            const required = ['displayName','homepage','repository','license'];
             const missing = required.filter(f => !p[f]);
             if (missing.length) { console.error('Missing fields:', missing.join(', ')); process.exit(1); }
-            console.log('plugin.json OK');
-          "
-
-      - name: Validate marketplace.json structure
-        run: |
-          node -e "
-            const fs = require('fs');
-            const m = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json'));
-            if (!m.name || !m.description || !m.plugins) { console.error('marketplace.json missing required fields'); process.exit(1); }
-            console.log('marketplace.json OK');
+            console.log('plugin.json extended fields OK');
           "
