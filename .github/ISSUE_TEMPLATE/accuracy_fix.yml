@@ -1,0 +1,50 @@
+name: Accuracy fix
+description: A skill references a deprecated API, wrong version, outdated pattern, or ecosystem drift
+title: "fix(<stack>): "
+labels: ["accuracy"]
+body:
+  - type: dropdown
+    id: stack
+    attributes:
+      label: Stack
+      options:
+        - Next.js
+        - Vite+React
+        - FastAPI
+        - NestJS
+        - Shared
+    validations:
+      required: true
+  - type: input
+    id: skill
+    attributes:
+      label: Affected skill
+      placeholder: "e.g. nestjs-add-auth"
+    validations:
+      required: true
+  - type: textarea
+    id: outdated
+    attributes:
+      label: What is outdated or incorrect?
+      description: Describe the specific API, pattern, version reference, or guidance that is wrong
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: What should it say instead?
+      description: Include the correct API, updated pattern, or current ecosystem guidance
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Link to official docs, release notes, or changelog that confirms the correct behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: templatecentral version
+      description: "Run `claude plugin list` and paste the version here"

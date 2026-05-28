@@ -1,0 +1,53 @@
+name: Bug report
+description: A skill produced incorrect output, failed a verification gate, or scaffolded broken code
+title: "bug(<stack>): "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: stack
+    attributes:
+      label: Stack
+      options:
+        - Next.js
+        - Vite+React
+        - FastAPI
+        - NestJS
+        - Shared
+    validations:
+      required: true
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      placeholder: "e.g. scaffold, add-auth, add-database"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe what the skill produced or did
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Describe what it should have produced
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1. Prompt used:
+        2. Claude model / version:
+        3. templatecentral version (`claude plugin list`):
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Paste relevant skill output, error messages, or generated files here

@@ -1,5 +1,9 @@
 name: Validate Skills
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   push:
     paths:
@@ -14,16 +18,17 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2 — pinned SHA (supply chain: OWASP A03:2025)
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Validate SKILL.md frontmatter
         run: |
           failed=0
           for skill_file in skills/*/SKILL.md; do
-            # Skip agent utilities — files without YAML frontmatter are intentionally
-            # unregistered (loaded internally via `cat`; no name/description required).
             first_line=$(head -1 "$skill_file")
             if [ "$first_line" != "---" ]; then
               echo "SKIP: $skill_file (no YAML frontmatter — internal utility)"
@@ -33,17 +38,18 @@ jobs:
             name=$(grep -m1 '^name:' "$skill_file" | sed 's/name:[[:space:]]*//' | tr -d '"')
             description=$(grep -m1 '^description:' "$skill_file" | sed 's/description:[[:space:]]*//' | tr -d '"')
 
+            file_ok=1
             if [ -z "$name" ]; then
               echo "FAIL: $skill_file — missing 'name' in frontmatter"
               failed=1
+              file_ok=0
             fi
-
             if [ -z "$description" ]; then
               echo "FAIL: $skill_file — missing 'description' in frontmatter"
               failed=1
+              file_ok=0
             fi
-
-            if [ $failed -eq 0 ]; then
+            if [ $file_ok -eq 1 ]; then
               echo "OK:   $skill_file"
             fi
           done
@@ -54,46 +60,43 @@ jobs:
             exit 1
           fi
 
-      - name: Check all plugin.json skills have a SKILL.md
+      - name: Check all skill directories have a SKILL.md
         run: |
           failed=0
-          skills_dir="skills"
-          plugin_file=".claude-plugin/plugin.json"
-
-          # Extract skill folder names from the skills directory
-          for skill_dir in "$skills_dir"/*/; do
+          for skill_dir in skills/*/; do
             skill_name=$(basename "$skill_dir")
-            skill_file="$skill_dir/SKILL.md"
-
+            skill_file="${skill_dir}SKILL.md"
             if [ ! -f "$skill_file" ]; then
               echo "FAIL: skills/$skill_name/ exists but has no SKILL.md"
               failed=1
             fi
           done
-
           if [ $failed -ne 0 ]; then
             exit 1
           fi
-
           echo "All skill directories have a SKILL.md"
 
   lint-patterns:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
 
   security:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Check for hardcoded secrets in skill files
         run: |
-          # Detect non-empty secret assignments in skill code blocks.
-          # Allows: empty values (SECRET=), placeholders (<...>, your-..., change-me), env refs (${}), comments (#).
           failed=0
           while IFS= read -r line; do
             file=$(echo "$line" | cut -d: -f1)
@@ -112,11 +115,14 @@ jobs:
           echo "OK: No hardcoded secrets detected in skill files"
 
   plugin-validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Validate manifest files (validate-manifest.sh)
+      - name: Validate manifest files
         run: bash scripts/validate-manifest.sh .claude-plugin
 
       - name: Validate plugin.json extended fields

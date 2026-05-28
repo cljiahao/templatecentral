@@ -1,0 +1,45 @@
+name: Skill request
+description: Request a new skill or coverage for an existing stack
+title: "feat(<stack>): "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: stack
+    attributes:
+      label: Stack
+      options:
+        - Next.js
+        - Vite+React
+        - FastAPI
+        - NestJS
+        - Shared
+        - New stack
+    validations:
+      required: true
+  - type: input
+    id: skill-name
+    attributes:
+      label: Proposed skill name
+      placeholder: "e.g. nextjs-add-websocket"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: Describe the task you want this skill to handle
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What should it produce?
+      description: Describe the files/changes it should create
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I can write this skill
