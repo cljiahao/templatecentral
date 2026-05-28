@@ -18,7 +18,7 @@
 from pydantic import BaseModel, Field
 
 class PaginationParams(BaseModel):
-    page: int = Field(default=1, ge=1, description='Page number (1-indexed)')
+    page: int = Field(default=1, ge=1, le=10_000, description='Page number (1-indexed)')
     limit: int = Field(
         default=10,
         ge=1,

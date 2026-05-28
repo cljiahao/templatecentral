@@ -8,7 +8,7 @@ Review changed files against two layers: (1) universal code quality principles f
 
 ## Stack Detection
 
-Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
+Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI. If multiple markers are found (monorepo), ask the user which stack to review before continuing.
 
 ## Steps
 
@@ -66,6 +66,12 @@ If the project has no commits yet, skip writing the baseline.
 - File naming, export conventions, function vs const patterns
 - Component placement, barrel exports, import paths
 - Stack-specific security rules (proxy.ts patterns, input validation, etc.)
+
+**Layer 3 — AI/LLM security (only when AI integrations are present):**
+- **Prompt injection** (LLM01): user-controlled strings passed to LLM calls without sanitization or structural separation (system vs user content)
+- **Excessive agency** (LLM06): agent granted more tools, permissions, or model calls than needed for the task — flag any `Bash`, `Write`, or broad tool grants without scoping
+- **Sensitive data leakage** (LLM02): PII, secrets, or internal schema passed to LLM without redaction; full DB records used as prompt context
+- **Insecure output handling** (LLM05): LLM output rendered as HTML (XSS), used in SQL (injection), or passed to `eval()` without sanitization
 
 ## Reporting
 

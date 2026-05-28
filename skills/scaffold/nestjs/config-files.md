@@ -411,8 +411,9 @@ blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
 # pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# Run `templatecentral:add (auth)` — it adds argon2 and will prompt you to uncomment this.
 # allowBuilds:
-#   argon2: true   # add when using argon2 for password hashing
+#   argon2: true   # required after `templatecentral:add (auth)`
 ```
 
 ### `.prettierrc`
@@ -454,7 +455,7 @@ export default tseslint.config(
   },
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',

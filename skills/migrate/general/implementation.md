@@ -35,7 +35,6 @@ Exit.
 v4.0 adds an AI harness layer to all scaffolds:
 - .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), PostCompact (re-injects AGENTS.md after compaction)
 - AGENTS.md              — ## AI Harness section with post-harness seams
-- FUTURE.md              — post-harness direction documentation
 
 Upgrade? (A) Yes  (B) Skip
 ```
@@ -174,9 +173,14 @@ Run only when the user chose A in Phase 0. Do not invoke for unmarked projects.
 
 Read the full `AGENTS.md`. Extract `<stack>` from the existing marker on line 1.
 
-**Step 4b: Replace AGENTS.md with compressed version**
+**Step 4b: Back up and replace AGENTS.md**
 
-Replace `AGENTS.md` with the compressed template for the detected stack. For `nextjs`, write exactly:
+Before replacing, save the original:
+```bash
+cp AGENTS.md AGENTS.md.bak
+```
+
+Replace `AGENTS.md` with the compressed template for the detected stack. If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. For `nextjs`, write exactly:
 
 ```markdown
 <!-- templateCentral: nextjs@4.0.0 -->

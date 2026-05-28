@@ -334,6 +334,7 @@ Read each file in full, apply checklist above:
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
+- [ ] Starlette ≥1.1.0 in `requirements.txt` — see GHSA-86qp-5c8j-p5mr (malformed Host header auth-bypass). Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
 
 ---
 
@@ -458,7 +459,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/audit/implementation.md` ← this file; check it is still accurate
 
 **Cross-stack additional checks**:
-- [ ] `add/ai-security/implementation.md`: OWASP LLM Top 10 version still current; Tier C references OWASP Agentic Top 10
+- [ ] `add/ai-security/implementation.md`: all LLM01–LLM10 sections present (lint now enforces this); OWASP LLM Top 10 version still current; Tier C references OWASP Agentic Top 10
 - [ ] `add/logging/*`: no PII, passwords, tokens, or SQL text in log field examples
 - [ ] `add/error-handling/*`: error responses contain no stack traces or internal paths; `z.flattenError()` used
 - [ ] `standards/validation-patterns/*`: `z.flattenError()` used; password min-length ≥12
@@ -480,6 +481,7 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **PostToolUse hook command**: TS stacks use `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` (not plain `--noEmit`, not `pnpm test`); FastAPI uses `python -m pyright src/ 2>&1 | tail -5` (not mypy). PostToolUse is feedback-only; hooks exit 0 even on errors so output flows to Claude as context.
 - [ ] **Stop hook exits 2 on failure**: The Stop hook must run tests, capture exit code, write output to **stderr** (not stdout), and `exit 2` if tests fail so Claude receives test results and is forced to fix. Pattern: `OUTPUT=$(cmd 2>&1); EC=$?; echo "$OUTPUT" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0`. Do NOT pipe through `tail` without capturing exit code (piping exits 0 regardless).
 - [ ] **PreToolUse `.env` protection**: Scaffold settings.json includes a `PreToolUse` hook that blocks edits to `.env*` files (exit 2) while allowing `.env.example`. Must read `tool_input.file_path` from stdin JSON (not top-level `file_path`). Matcher is `Edit|Write` (no `MultiEdit` tool exists). FastAPI uses `python3`, TS stacks use `node`.
+- [ ] **UserPromptSubmit hook present** (OWASP LLM01): Scaffold settings.json includes a `UserPromptSubmit` hook that pattern-checks incoming prompts for obvious injection phrases (`ignore previous instructions`, `you are now a`, etc.) using args[] exec form; exit 2 blocks the prompt and writes reason to stderr. FastAPI uses `python3`, TS stacks use `node`. Deny list is intentionally minimal — users extend for their domain.
 - [ ] **PostCompact hook present**: Scaffold settings.json includes a `PostCompact` hook that re-injects first 30 lines of AGENTS.md after context compaction, ensuring routing context survives summary. Note: PostCompact receives only metadata on stdin (session_id, transcript_path, cwd) — `compacted_content` is not available on stdin.
 - [ ] **Skill scoping priority correct**: Official order is `Managed > CLI flag > Project > User > Plugin`. Project skills (`.claude/skills/`) override user skills (`~/.claude/skills/`) when names collide — NOT the reverse. Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations.
 - [ ] **Hook types documented**: Five hook handler types exist — `command`, `http`, `mcp_tool` (v2.1.117), `prompt`, `agent` (experimental). Scaffold uses `command` type. Any skill recommending hook setup should reference the correct type field.
@@ -493,6 +495,10 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Skills Security section in scaffolded AGENTS.md**: All 4 scaffold AGENTS.md templates include a `## Skills Security` section reminding users to review SKILL.md content before installing third-party skills, scope `allowed-tools:`, and avoid skills that hardcode secrets or make unscoped network calls.
 - [ ] **Skill frontmatter uses `allowed-tools:` tightly scoped**: Any SKILL.md that grants tool access scopes it to the minimum required commands (e.g. `Bash(pnpm *)` not `Bash`). No SKILL.md grants unrestricted `Bash` without explicit justification.
 - [ ] **Ghost skill names absent**: No skill file references old names (`shared-*-agent`, `nestjs-code-standards`, `fastapi-code-standards`, `nextjs-add-auth`, `shared-audit`). Use `templatecentral:*` or `templatecentral:standards`.
+- [ ] **PreToolUse hook uses `args[]` exec form**: Simple hook commands (e.g. `node -e "..."`, `python3 -c "..."`) should use the array exec form `"command": ["node", "-e", "..."]` (v2.1.139+) rather than a shell string. Array form invokes via execve() — no shell interpolation, no injection risk. Complex shell commands that require pipes or conditionals may still use string form, but should be moved to wrapper scripts when possible.
+- [ ] **Hook `"if"` field used for path pre-filtering**: Tool-event hooks (PreToolUse, PostToolUse, PostToolUseFailure) support an `"if"` field on each handler that pre-filters execution before the `command` runs — e.g. `"if": "Edit(.env*)"` restricts a handler to only fire when editing `.env*` files. This reduces unnecessary process spawns and shrinks the attack surface of inline hook logic (ASI02). Scaffold templates use `"matcher"` for tool-name scoping; `"if"` adds path-level scoping within a matcher block.
+- [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present (v2.1.139+). It fires when a subagent finishes, is distinct from `Stop`, and supports `decision: "block"`. Default is `blocking: false` — must set `blocking: true` to enforce subagent output review before Claude continues. If no subagents are used, no check needed.
+- [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
 
 ---
 
@@ -630,6 +636,9 @@ head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md ma
 # .claude/settings.json exists
 [ -f .claude/settings.json ] && echo "OK: .claude/settings.json" || echo "FAIL: .claude/settings.json missing"
 
+# .claude/settings.json has skillListingBudgetFraction (10+ skill repos need this to cap listing overhead)
+[ -f .claude/settings.json ] && grep -q '"skillListingBudgetFraction"' .claude/settings.json && echo "OK: skillListingBudgetFraction set" || echo "FAIL: skillListingBudgetFraction missing — add \"skillListingBudgetFraction\": 0.02 to .claude/settings.json"
+
 # .claude/harness.json exists
 [ -f .claude/harness.json ] && echo "OK: .claude/harness.json" || echo "FAIL: .claude/harness.json missing"
 ```
@@ -637,6 +646,9 @@ head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md ma
 Any `FAIL` line means a harness file was removed or corrupted. Re-create it from the v4.0.0 spec in `AGENTS.md` → **Working on this repo** section.
 
 ## Changelog
+### 2.3.0
+- Step 6: added `skillListingBudgetFraction` health check — 10+ skill repos should set `"skillListingBudgetFraction": 0.02` in `.claude/settings.json` to cap skill-listing context overhead
+- Harness check list now at 15 items (added `continueOnBlock: true` awareness for PostToolUse)
 ### 2.2.0
 - Step 4f: added semver decision rules for version bump (patch = fixes only, minor = additive, major = breaking skill name/contract changes)
 ### 2.1.0

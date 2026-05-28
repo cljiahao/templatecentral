@@ -3,6 +3,8 @@
      prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## Next.js + Drizzle (SQL)
 
+> **Pre-release notice**: Drizzle ORM is at v1.0.0-rc.1 (April 2026) — not yet stable. The `drizzle-zod` integration is now merged into `drizzle-orm/zod`. Import from `drizzle-orm/zod`, not the old `drizzle-zod` package.
+
 #### A1. Install Dependencies
 
 ```bash

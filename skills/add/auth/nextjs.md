@@ -9,6 +9,8 @@ Add authentication to a Next.js project scaffolded from templateCentral. Uses **
 
 Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
+> **Security requirement**: Next.js ≥16.2.6. Versions 16.2.5 and earlier have a high-severity security advisory — RSC prefetch requests can bypass `proxy.ts` auth on Turbopack deployments (incomplete fix in 16.2.5). Verify `package.json` → `next` before proceeding.
+
 ### Files this skill creates
 
 ```
@@ -519,12 +521,18 @@ In `src/proxy.ts`, add a rate-limit check before the auth call on `/api/auth/sig
 ```typescript
 // Rate limit sign-in attempts (max 3/15 min)
 if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
-  const { success } = await ratelimit.limit(request.ip ?? 'anonymous');
+  // Use X-Forwarded-For when behind a trusted reverse proxy (set TRUST_PROXY).
+  // Falls back to request.ip — without a proxy this is the real IP.
+  const clientIp =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.ip ??
+    'anonymous';
+  const { success } = await ratelimit.limit(clientIp);
   if (!success) return new Response(null, { status: 429 });
 }
 ```
 
-> **TRUST_PROXY required**: `request.ip` returns the reverse-proxy IP, not the real client IP, unless `TRUST_PROXY=true` is set. Without it, all sign-in attempts share the same bucket and one client can exhaust the limit for everyone. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App) topologies. See the scaffold's `src/lib/utils/request-origin.ts` for the same pattern.
+> **TRUST_PROXY required**: Only trust `X-Forwarded-For` if your deployment topology has a controlled reverse proxy (ALB, Traefik). Without a proxy, any client can forge `X-Forwarded-For` to bypass rate limits. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App). See the scaffold's `src/lib/utils/request-origin.ts` for the same pattern.
 
 For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
 

@@ -120,7 +120,7 @@ export const ENV = {
 } as const;
 ```
 
-> **Security**: NEVER put API tokens or secrets in `VITE_*` environment variables — they are embedded in the client bundle and visible to users. For APIs requiring authentication, route requests through your backend (see `full-stack-pairing` skill) and have the backend add the auth header. Only use `VITE_*` for non-sensitive config like API base URLs.
+> **Security**: NEVER put API tokens or secrets in `VITE_*` environment variables — they are embedded in the client bundle and visible to users. For APIs requiring authentication, route requests through your backend (add the API as a NestJS or FastAPI endpoint, then proxy from the SPA) and have the backend add the auth header. Only use `VITE_*` for non-sensitive config like API base URLs.
 
 #### 5. Consume via React Query Hook
 

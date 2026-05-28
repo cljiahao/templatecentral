@@ -10,7 +10,9 @@
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
 
-class CreateProjectRequest(BaseModel):
+from api.schemas.base import BaseRequestSchema
+
+class CreateProjectRequest(BaseRequestSchema):
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
 
@@ -25,6 +27,9 @@ class CreateProjectRequest(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    # Use BaseModel for responses that go to same-stack Python consumers.
+    # Use BaseResponseSchema (from api.schemas.base) when the response goes to a
+    # JavaScript frontend — BaseResponseSchema enables camelCase serialization.
     id: str
     name: str
     description: str | None
@@ -33,7 +38,7 @@ class ProjectResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(BaseRequestSchema):
     email: EmailStr
     password: str = Field(..., min_length=12)
 

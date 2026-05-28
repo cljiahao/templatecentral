@@ -58,6 +58,8 @@ The dashboard page (`/dashboard`) remains — just replace its content.
 2. Edit `src/app/dashboard/(overview)/page.tsx` — remove `ExampleList` import and usage, replace with placeholder content
 3. Verify no remaining imports reference `@/features/example`
 
+> **Note:** `src/features/auth/` is intentional scaffold code (auth hooks, `AuthProvider`) — do **not** delete it. Run `templatecentral:add (auth)` to replace the dev stub with a real backend implementation.
+
 ## Vite + React
 
 ### Files to Delete

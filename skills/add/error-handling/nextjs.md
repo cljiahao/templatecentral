@@ -30,7 +30,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 interface ErrorResponseBody {
   error: string;
   details?: {
-    fieldErrors?: Record<string, string[]>;
+    fieldErrors?: Record<string, string[] | undefined>;
     code?: string;
   };
 }
@@ -38,7 +38,7 @@ interface ErrorResponseBody {
 export const handleApiError = (
   label: string,
   error: unknown,
-  fieldErrors?: Record<string, string[]>
+  fieldErrors?: Record<string, string[] | undefined>
 ): NextResponse<ErrorResponseBody> => {
   logError(label, error);
 
@@ -55,7 +55,7 @@ export const handleApiError = (
   }
 
   if (error instanceof ZodError) {
-    const fieldErrors = z.flattenError(error).fieldErrors as Record<string, string[]>;
+    const fieldErrors = z.flattenError(error).fieldErrors;
     return NextResponse.json(
       {
         error: 'Validation failed',
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       return handleApiError(
         'Failed to create project',
         parsed.error,
-        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
+        z.flattenError(parsed.error).fieldErrors
       );
     }
 
@@ -274,10 +274,10 @@ pnpm dev
 
 ### Next.js Error Boundary Tests
 
+> **Deps not in scaffold**: Run `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom` first. Also add `environment: 'jsdom'` to `vitest.config.ts` test options (or use the inline `@vitest-environment jsdom` comment).
+
 ```typescript
 // test/error-boundary.test.tsx
-// Requires: pnpm add -D @testing-library/react @testing-library/jest-dom jsdom
-// Add to vitest.config.ts: environment: 'jsdom' (or use @vitest-environment jsdom comment below)
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';

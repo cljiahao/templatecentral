@@ -8,8 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [4.1.0] — 2026-05-28
+
+### Security
+- `skills/scaffold/*/source-files.md` (all 4 stacks): added **`UserPromptSubmit` hook** to scaffolded `.claude/settings.json` — pattern-checks incoming prompts for obvious injection phrases (`ignore previous instructions`, `you are now a`, etc.) and exits 2 to block. Uses args[] exec form (execve, no shell interpolation). Addresses OWASP LLM01 Prompt Injection at the harness entry point. TS stacks use `node -e`, FastAPI uses `python3 -c`.
+- `skills/audit/implementation.md` Step 3H: added **UserPromptSubmit hook present** check — auditors now verify scaffolded harnesses include the LLM01 injection firewall
+- `skills/add/ai-security/implementation.md`: added **LLM04 — Data and Model Poisoning** section — OWASP LLM Top 10 v2.0 coverage was incomplete (file jumped LLM03 → LLM05); LLM04 guidance covers: hash-verified RAG corpus ingestion, document sanitisation before embedding, output drift monitoring for production poisoning detection
+- `skills/standards/code-standards/fastapi.md`: added **Starlette ≥1.1.0 required** rule — published advisory GHSA-86qp-5c8j-p5mr (2026-05-23) shows malformed `Host` headers in Starlette ≤1.0.0 cause `request.url.path` to return incorrect values, enabling middleware-based path auth bypass. Guidance added: prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes; `scope["path"]` is safe in middleware when path inspection is needed.
+
 ### Added
+- `scripts/lint-skills.sh`: added **`check_no_tanstack_isInitialLoading`** check (ECOSYSTEM-ERA) — `isInitialLoading` was deprecated in TanStack Query v5 and removed in v6; skill files must use `isPending` instead. Now 22 lint checks total.
+- `skills/audit/implementation.md` Step 3H: added **hook `"if"` field pre-filtering** check — auditors now verify that path-sensitive hooks (e.g. PreToolUse `.env` protection) document the `"if"` field option for reducing unnecessary process spawns and shrinking inline logic attack surface (ASI02 defence)
+- `skills/review/review/implementation.md`: added **monorepo handling** to Stack Detection — if multiple stack markers are present (e.g. both `next.config.ts` and `vite.config.ts`), the review agent now asks the user which stack to review before proceeding (mirrors `templatecentral:migrate` behaviour)
 - `scripts/validate-manifest.sh` — validates `.claude-plugin/plugin.json` and `marketplace.json` before publish: JSON syntax, required fields, semver format, skills directory existence, `plugins[]` entry completeness, name consistency across both files, and SKILL.md frontmatter correctness. Skips agent utilities (SKILL.md files without YAML frontmatter) as intentional unregistered internals.
+- `skills/add/ai-security/implementation.md`: added `### LLM09 — Misinformation` section (hallucination mitigation: system prompt grounding, factual cross-referencing, human review gate for high-stakes domains) — previously the file covered LLM08 then jumped to LLM10, leaving a gap in OWASP LLM Top 10 v2.0 coverage
+- `skills/review/review/implementation.md`: Layer 3 AI/LLM security checks — triggered when AI integrations are present: prompt injection (LLM01), excessive agency (LLM06), sensitive data leakage (LLM02), insecure output handling (LLM05)
+- `skills/audit/implementation.md` v2.3.0: Step 6 now checks for `skillListingBudgetFraction` in `.claude/settings.json` (recommended for 10+ skill repos)
 
 ### Fixed
 - `EXAMPLES.md`: replaced all ghost skill names (`templatecentral:nextjs-add-auth`, `templatecentral:shared-drift-check`, etc.) with current v4 names (`templatecentral:add`, `templatecentral:scaffold`, `templatecentral:standards`)
@@ -19,6 +35,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `README.md`: `scripts/` directory added to Repository Structure tree with descriptions for both scripts
 - `CONTRIBUTING.md`, `README.md`: contributor workflow updated to include `bash scripts/validate-manifest.sh` alongside `lint-skills.sh`
 - `.github/workflows/validate-skills.yml`: frontmatter check now skips agent utilities (SKILL.md files without YAML `---` first line); added `validate-manifest` step calling `bash scripts/validate-manifest.sh`; path trigger widened from `plugin.json` to `.claude-plugin/**`
+- `skills/scaffold/vite-react/config-files.md`: nginx image bumped from `1.28.2-alpine3.23` to `1.28.3-alpine3.23` (current on Docker Hub)
+- `skills/write-skill/SKILL.md`: corrected OWASP Agentic ASI02 name from "Unconstrained Agent Actions" to "Tool Misuse & Exploitation" (official 2026 edition name); Least Agency rationale preserved
+- `skills/standards/code-standards/fastapi.md`: explicit ban on deprecated `@app.on_event("startup/shutdown")` — removed in Starlette 1.0; must use `lifespan` context manager
+- `scripts/lint-skills.sh`: Starlette startup-event check now excludes `standards/code-standards` documentation (same pattern as `audit/implementation` exclusion)
+- `.claude/settings.json` (templateCentral repo): added `skillListingBudgetFraction: 0.02` — caps skill-listing context overhead for this 10-skill repo
+- `skills/add/auth/nextjs.md`: added Next.js ≥16.2.6 security requirement note (high-severity advisory — RSC prefetch bypass on Turbopack); rate-limit IP extraction now reads `X-Forwarded-For` header with TRUST_PROXY guidance
+- `skills/add/error-handling/fastapi.md`: removed standalone `app = FastAPI(...)` example block that caused agents to create a second app instance; replaced with explicit "integrate into existing `start_application()`" pattern; request schemas changed from `BaseModel` to `BaseRequestSchema`; `response_model` added to route decorators; `_sanitize_errors()` now joins the full loc path with `.` (e.g., `'user.email'` not just `'email'`), preserving nested schema context for Pydantic v2 errors; `http_exception_handler()` now passes `headers=dict(exc.headers) if exc.headers else None` to preserve `WWW-Authenticate` and other HTTP response headers on 401/403
+- `skills/add/error-handling/nextjs.md`: added prominent dependency notice (`@testing-library/react`, `@testing-library/jest-dom`, `jsdom`) before ErrorBoundary tests; removed `as Record<string, string[]>` unsafe casts on `z.flattenError().fieldErrors`; updated `ErrorResponseBody` interface and `handleApiError` parameter to accept `Record<string, string[] | undefined>` (correct type from Zod)
+- `skills/add/pagination/vite-react.md`: replaced `ENV.API_BASE_URL ?? ''` with `getApiBaseUrl()` — silent empty-string fallback hides misconfiguration at runtime; `(error as Error).message` unsafe cast replaced with `error instanceof Error` guard
+- `skills/add/pagination/fastapi.md`: `page` field now has `le=10_000` upper bound — previously unbounded, allowing arbitrarily large page numbers
+- `skills/add/pagination/nestjs.md`: exported `paginationSchema` from DTO; controller now uses `@Query(new ZodValidationPipe(paginationSchema))` — eliminates inline duplicate schema that omitted sort regex validation
+- `skills/add/database/python/sqlalchemy-iam.md`: `_get_iam_token()` now wraps boto3 call in try/except, raising `RuntimeError` with clear message instead of crashing with an unhandled exception
+- `skills/add/database/typescript/nextjs-drizzle.md`: added Drizzle v1.0.0-rc.1 pre-release notice and `drizzle-orm/zod` import path change
+- `skills/add/database/typescript/nestjs-drizzle.md`: "pin to specific RC version" now includes concrete syntax example (`"drizzle-orm": "1.0.0-rc.1"`)
+- `skills/add/api-route/implementation.md`: removed duplicate `## Validate` section at end of file (DRY violation — same content covered in `### 6. Validate`)
+- `skills/add/logging/nestjs.md`: removed `(req as any)` cast; replaced with typed `FastifyRequest & { user?: { id: string } }` intersection type
+- `skills/add/logging/fastapi.md`: added middleware ordering note — `@app.middleware("http")` is LIFO; must be placed before `add_middleware()` calls to wrap requests outermost
+- `skills/add/integration/vite-react.md`: removed ghost skill name `full-stack-pairing` (no such skill exists); replaced with actionable guidance
+- `skills/standards/validation-patterns/fastapi.md`: request body schemas changed from `BaseModel` to `BaseRequestSchema` (`CreateProjectRequest`, `LoginRequest`); `ProjectResponse` now documents when to use `BaseResponseSchema` vs `BaseModel` for response schemas (camelCase serialization needed for JS frontends)
+- `skills/migrate/general/implementation.md`: Phase 4b now backs up `AGENTS.md` to `AGENTS.md.bak` before replacement (ASI08 rollback); removed vestigial `FUTURE.md` reference from Phase 0 v4.0 upgrade prompt
+- `skills/migrate/nextjs-backend-extraction/nestjs.md` + `fastapi.md`: Phase 2 now creates a git backup branch before destructive migration (ASI08); git backup now saves `initial_branch=$(git rev-parse --abbrev-ref HEAD)` and restores with `git checkout "$initial_branch"` — eliminates `git checkout -` ambiguity when user had previously switched branches
+- `skills/review/review/implementation.md`: corrected Layer 3 "insecure output handling" tag from `LLM02/LLM07` to `LLM05` (LLM07 is System Prompt Leakage in OWASP LLM Top 10 v2.0)
+- `skills/cleanup/remove-example/implementation.md`: added "do not delete auth" note to Next.js section (was only in Vite section); `src/features/auth/` is intentional scaffold code in both stacks
+- `skills/scaffold/nestjs/config-files.md`: `@typescript-eslint/no-explicit-any` changed from `'off'` to `'warn'`; `allowBuilds` comment now cross-references `templatecentral:add (auth)` for argon2 connection
+- `skills/scaffold/{nestjs,nextjs,vite-react}/source-files.md` + `skills/scaffold/fastapi/source-files.md`: PreToolUse `.env` guard hook converted to `args[]` exec form (`["node","-e","..."]` / `["python3","-c","..."]`) — uses execve() instead of shell subprocess, eliminates shell injection risk (v2.1.139+, May 2026)
+- `skills/scaffold/vite-react/source-files.md`: FetchClient URL construction now normalizes trailing/leading slashes — `baseUrl.replace(/\/$/, '')` + `path.replace(/^\//, '')` prevents double-slash URLs
+- `skills/add/ai-security/implementation.md`: jurisdiction-specific comment on national-ID regex replaced with locale-neutral phrasing ("broad pattern — refine for your locale's format")
+
+### Audit infrastructure
+- `scripts/lint-skills.sh`: added `check_no_env_api_base_url_fallback` (ECOSYSTEM-ERA, check 17) — catches `ENV.API_BASE_URL ?? ''` anti-pattern in Vite skill files; added `check_owasp_llm_sections_complete` (TIMELESS, check 5) — verifies all LLM01–LLM10 sections present in `add/ai-security/implementation.md`
+- `skills/audit/implementation.md`: added 3 new harness engineering checks (args[] exec form for PreToolUse hooks, SubagentStop wiring, skillListingMaxDescChars pairing); added Starlette ≥1.1.0 check to FastAPI-specific additional checks; updated ai-security cross-stack check to note LLM01–LLM10 lint enforcement
+- `.claude/audit-ecosystem-research.md`: updated with May 2026 findings — args[] exec form (v2.1.139), SubagentStop/ConfigChange/WorktreeCreate/WorktreeRemove/MessageDisplay/Elicitation events, corrected hook event count (27+), AAIF 190+ orgs/60,000+ repos, Starlette advisory GHSA-86qp-5c8j-p5mr
+- Confirmed via official Zod v4 docs: `z.iso.datetime()` and `z.email({ error: ... })` are correct v4 API — false-positive findings from agents with stale training data documented in research cache
+- Confirmed via OWASP LLM Top 10 v2.0: LLM03 (Supply Chain) is a real category — `add/ai-security/implementation.md` was already correct
 
 ---
 

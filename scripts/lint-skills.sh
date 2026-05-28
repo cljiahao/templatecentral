@@ -303,6 +303,23 @@ check_no_tanstack_isLoading() {
   fi
 }
 
+check_no_tanstack_isInitialLoading() {
+  # TanStack Query v5 deprecated isInitialLoading (alias for isLoading && isLoading) and removed
+  # it in v6. Using it causes a runtime error once projects upgrade to v6.
+  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Retire when v6 is the project baseline.
+  header "TanStack Query v5 isInitialLoading usage"
+  local hits
+  hits=$(grep -rn '\bisInitialLoading\b' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "TanStack Query v5: isInitialLoading is deprecated (removed in v6); use isPending instead"
+  else
+    pass "No TanStack Query isInitialLoading usage"
+  fi
+}
+
 check_no_starlette_startup_events() {
   # Starlette 1.0.0 removed on_startup/on_shutdown event handlers and add_event_handler().
   # FastAPI 0.136.x requires lifespan= context manager exclusively.
@@ -311,6 +328,7 @@ check_no_starlette_startup_events() {
   local hits
   hits=$(grep -rn '@app\.on_event\|add_event_handler\|on_startup=\|on_shutdown=' "$SKILLS_DIR/" 2>/dev/null \
     | grep -v 'audit/implementation' \
+    | grep -v 'standards/code-standards' \
     || true)
   if [[ -n "$hits" ]]; then
     echo "$hits"
@@ -334,6 +352,25 @@ check_no_fastapi_orjson_response() {
     fail "FastAPI 0.130+: ORJSONResponse/UJSONResponse deprecated — use standard JSONResponse"
   else
     pass "No deprecated FastAPI ORJSONResponse/UJSONResponse"
+  fi
+}
+
+check_no_env_api_base_url_fallback() {
+  # Vite+React code-standards rule: NEVER use `ENV.API_BASE_URL ?? ''` — use `getApiBaseUrl()`.
+  # The fallback '' silently returns empty string when the env var is missing, hiding config errors.
+  # getApiBaseUrl() throws at startup so misconfiguration is caught immediately.
+  # ECOSYSTEM-ERA: Vite 8 / React 19 stack. Revisit if ENV helper API changes.
+  header "ENV.API_BASE_URL ?? '' anti-pattern in Vite skills"
+  local matches
+  matches=$(grep -rn "API_BASE_URL ?? ''" "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    | grep -v 'code-standards' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Use getApiBaseUrl() not ENV.API_BASE_URL ?? '' — see code-standards/vite-react.md"
+  else
+    pass "No ENV.API_BASE_URL ?? '' anti-pattern"
   fi
 }
 
@@ -365,6 +402,29 @@ check_no_postToolUse_full_test_suite() {
   fi
 }
 
+check_owasp_llm_sections_complete() {
+  # add/ai-security/implementation.md must cover all 10 OWASP LLM Top 10 v2.0 sections.
+  # A missing section leaves a gap in AI security guidance — agents won't know to guard against it.
+  # TIMELESS: LLM01-LLM10 are stable section names; the guidance may evolve but the structure is fixed.
+  header "OWASP LLM Top 10 v2.0 completeness in ai-security skill"
+  local ai_sec="$SKILLS_DIR/add/ai-security/implementation.md"
+  local missing=""
+  if [[ ! -f "$ai_sec" ]]; then
+    fail "add/ai-security/implementation.md not found"
+    return
+  fi
+  for n in 01 02 03 04 05 06 07 08 09 10; do
+    if ! grep -q "### LLM${n}" "$ai_sec" 2>/dev/null; then
+      missing="$missing LLM${n}"
+    fi
+  done
+  if [[ -n "$missing" ]]; then
+    fail "add/ai-security/implementation.md is missing OWASP LLM Top 10 sections:$missing"
+  else
+    pass "All LLM01-LLM10 sections present"
+  fi
+}
+
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
 
 echo "=== templateCentral skill lint ==="
@@ -375,6 +435,7 @@ check_no_cve_identifiers
 check_no_jurisdiction_specific
 check_no_hardcoded_secrets
 check_no_ghost_agent_names
+check_owasp_llm_sections_complete
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins
@@ -389,7 +450,9 @@ check_no_zod_string_format_methods
 check_no_zod_deprecated_message_key
 check_no_mypy_in_postToolUse
 check_no_postToolUse_full_test_suite
+check_no_env_api_base_url_fallback
 check_no_tanstack_isLoading
+check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
 echo ""

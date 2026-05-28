@@ -20,7 +20,7 @@
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
 ARG NODE=node:24-alpine
 ARG NODE_BUILD=node:24-alpine
-ARG NGINX=nginx:1.28.2-alpine3.23
+ARG NGINX=nginx:1.28.3-alpine3.23
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user

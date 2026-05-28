@@ -10,7 +10,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-const paginationSchema = z.object({
+export const paginationSchema = z.object({
   page: z.coerce.number().int().positive('Page must be 1 or greater').default(1),
   limit: z.coerce
     .number()
@@ -99,10 +99,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { z } from 'zod';
 import { ProjectsService } from './projects.service';
 import { PaginationService } from '@/common/services/pagination.service';
-import { PaginationDto } from './dto/pagination.dto';
+import { PaginationDto, paginationSchema } from './dto/pagination.dto';
 import type { PaginationMetadata, PaginatedResponse } from '@/common/dto/pagination.dto';
 import { ProjectDto } from './dto/project.dto';
 
@@ -122,11 +121,7 @@ export class ProjectsController {
   @ApiQuery({ name: 'limit', example: 10 })
   @ApiQuery({ name: 'sort', required: false, example: 'asc_name' })
   async list(
-    @Query(new ZodValidationPipe(z.object({
-      page: z.coerce.number().int().positive().default(1),
-      limit: z.coerce.number().int().min(1).max(100).default(10),
-      sort: z.string().optional(),
-    })))
+    @Query(new ZodValidationPipe(paginationSchema))
     query: PaginationDto
   ): Promise<PaginatedResponse<ProjectDto>> {
     // Validate sort field

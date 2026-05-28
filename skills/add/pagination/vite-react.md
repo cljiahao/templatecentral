@@ -74,7 +74,7 @@ export function ProjectsList() {
     usePagination<ProjectItem>(['projects'], fetchProjects);
 
   if (isPending) return <div>Loading...</div>;
-  if (error) return <div>Error: {(error as Error).message}</div>;
+  if (error) return <div>Error: {error instanceof Error ? error.message : 'An error occurred'}</div>;
 
   return (
     <div className="space-y-4">
@@ -132,6 +132,7 @@ export function ProjectsList() {
 // src/features/projects/api/projects.ts
 import { z } from 'zod';
 import { APIError } from '@/lib/errors';
+import { getApiBaseUrl } from '@/lib/constants/env';
 
 // Matches Phase 1 unified response schema
 const projectItemSchema = z.object({
@@ -157,7 +158,7 @@ export async function fetchProjects(
   limit: number = 10
 ): Promise<z.infer<typeof paginatedProjectSchema>> {
   const response = await fetch(
-    `/api/projects?page=${page}&limit=${limit}&sort=asc_name`
+    `${getApiBaseUrl()}/api/projects?page=${page}&limit=${limit}&sort=asc_name`
   );
 
   if (!response.ok) {

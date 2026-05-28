@@ -58,12 +58,15 @@ from core.config import api_settings
 
 
 def _get_iam_token() -> str:
-    client = boto3.client("rds", region_name=api_settings.AWS_REGION)
-    return client.generate_db_auth_token(
-        DBHostname=api_settings.DATABASE_HOST,
-        Port=api_settings.DATABASE_PORT,
-        DBUsername=api_settings.DATABASE_USER,
-    )
+    try:
+        client = boto3.client("rds", region_name=api_settings.AWS_REGION)
+        return client.generate_db_auth_token(
+            DBHostname=api_settings.DATABASE_HOST,
+            Port=api_settings.DATABASE_PORT,
+            DBUsername=api_settings.DATABASE_USER,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Failed to generate RDS IAM token: {exc}") from exc
 
 
 engine = create_engine(

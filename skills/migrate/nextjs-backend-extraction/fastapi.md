@@ -73,6 +73,15 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` (FastAPI), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
+If yes → before making any changes, run:
+```bash
+initial_branch=$(git rev-parse --abbrev-ref HEAD)
+git checkout -b pre-backend-extraction-backup
+git add -A && git commit -m "chore: pre-extraction snapshot"
+git checkout "$initial_branch"
+```
+Print the branch name (`$initial_branch`) to the user so they can restore it if needed.
+
 If no → print "No changes made." and exit.
 
 ---

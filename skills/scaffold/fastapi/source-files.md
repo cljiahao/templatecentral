@@ -1183,6 +1183,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 
 ## AI Harness
 PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `python -m pyright src/ 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -1210,7 +1211,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); p=d.get('tool_input',{}).get('file_path',''); n=p.split('/')[-1]; exit(2) if n.startswith('.env') and 'example' not in n else exit(0)\""
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); p=d.get('tool_input',{}).get('file_path',''); n=p.split('/')[-1]; exit(2) if n.startswith('.env') and 'example' not in n else exit(0)"]
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); t=(d.get('prompt','') or '').lower(); deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions']; (sys.stderr.write('Prompt injection pattern detected\\n'),sys.exit(2)) if any(p in t for p in deny) else sys.exit(0)"]
           }
         ]
       }
@@ -1251,6 +1262,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 ```
 
 `PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
+`UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
 `PostToolUse` — fast type feedback via pyright after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
 `PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.

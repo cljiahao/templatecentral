@@ -39,12 +39,13 @@ def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:
         loc = err.get('loc', [])
         msg = err.get('msg', 'Invalid value')
         
-        # loc is a tuple like ('body', 'email') or ('query', 'limit')
-        # Extract the field name (skip 'body', 'query', 'path' prefixes)
+        # loc is a tuple like ('body', 'email') or ('body', 'user', 'email').
+        # Skip the first segment ('body', 'query', 'path') and join the rest with '.'
+        # so nested schemas produce 'user.email' rather than just 'email'.
         if len(loc) > 1:
-            field_name = loc[-1]
+            field_name = '.'.join(str(x) for x in loc[1:])
         elif len(loc) == 1:
-            field_name = loc[0]
+            field_name = str(loc[0])
         else:
             field_name = 'unknown'
         
@@ -99,6 +100,7 @@ def configure_exceptions(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": exc.detail},
+            headers=dict(exc.headers) if exc.headers else None,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -139,78 +141,53 @@ def configure_exceptions(app: FastAPI) -> None:
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
+from api.schemas.base import BaseRequestSchema
 from core.exceptions import InvalidInputError
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-class CreateProjectRequest(BaseModel):
+class CreateProjectRequest(BaseRequestSchema):
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_project(req: CreateProjectRequest) -> dict:
-    """Create a new project.
-    
-    Pydantic automatically validates and returns 422 on invalid input.
-    """
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
+async def create_project(req: CreateProjectRequest) -> ProjectResponse:
+    """Create a new project."""
     # Your logic: project = await db.projects.insert(req.model_dump())
-    project = {"id": "1", **req.model_dump()}
-    return project
+    return ProjectResponse(id="1", name=req.name, description=req.description)
 
 
-@router.get("/{project_id}")
-async def get_project(project_id: str) -> dict:
+@router.get("/{project_id}", response_model=ProjectResponse)
+async def get_project(project_id: str) -> ProjectResponse:
     """Get a project by ID."""
     # Your logic: project = await db.projects.find_by_id(project_id)
     # if not project:
     #     raise NoResultsFound("Project not found")
-    project = {"id": project_id, "name": "Sample Project"}
-    return project
+    return ProjectResponse(id=project_id, name="Sample Project", description=None)
 ```
 
-**2b. Main App Setup (Required Integration)**
+**2b. Integrate into Existing App (No New File)**
 
-Register exception handlers in your FastAPI app:
+The scaffold already has `src/app.py` with a `start_application()` factory function. Add one call to `configure_exceptions(app)` inside it — do NOT create a new `app = FastAPI(...)` instance:
 
 ```python
-# src/main.py
-# NOTE: This is a standalone reference example. In a scaffold project, integrate
-# configure_exceptions() inside your existing start_application() function instead
-# of creating a new app instance.
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# src/app.py — add configure_exceptions() call inside start_application()
 from error_handler import configure_exceptions
 
-app = FastAPI(title="My API")
-
-# Register all exception handlers first
-configure_exceptions(app)
-
-# Then add other middleware/routes
-# CORS: never use ["*"] with allow_credentials=True — forbidden by the CORS spec.
-# Use explicit origins and methods. In the FastAPI template, configure_cors() in
-# src/app.py handles this correctly using api_settings.ALLOWED_CORS.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # explicit origins required with credentials
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
-
-# Include routers
-from api.projects.routes import router as projects_router
-app.include_router(projects_router)
-
-@app.get('/health')
-def health():
-    return {'status': 'ok'}
-
-if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run(app, host='0.0.0.0', port=8000)
+def start_application() -> FastAPI:
+    app = FastAPI(...)          # already exists in scaffold
+    configure_exceptions(app)   # ← add this line
+    configure_cors(app)         # already exists
+    include_routers(app)        # already exists
+    return app
 ```
 
 ## Testing / Verification

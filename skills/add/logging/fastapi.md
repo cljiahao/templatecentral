@@ -11,10 +11,12 @@
 
 #### Tier 1 — Base
 
-Add an HTTP middleware in `src/app.py` for request/response logging:
+Add an HTTP middleware in `src/app.py` for request/response logging.
+
+> **Ordering note**: `@app.middleware("http")` is LIFO — the last decorator registered runs first. Place this decorator BEFORE `app.add_middleware(CORSMiddleware, ...)` in the file so it wraps the request outermost and sees the final response status. If the scaffold uses `app.add_middleware()` for everything, add this as `app.add_middleware(LogRequestsMiddleware)` instead to keep ordering predictable.
 
 ```python
-# src/app.py  (add after existing middleware)
+# src/app.py  (place before add_middleware calls to run outermost)
 import time
 from fastapi import Request
 from core.logging import logger

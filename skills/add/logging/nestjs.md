@@ -19,8 +19,8 @@ import { LoggerModule } from 'nestjs-pino';
 
 LoggerModule.forRoot({
   pinoHttp: {
-    customProps: (req) => ({
-      user_id: (req as any).user?.id ?? null,
+    customProps: (req: import('fastify').FastifyRequest & { user?: { id: string } }) => ({
+      user_id: req.user?.id ?? null,
     }),
     level: process.env.LOG_LEVEL ?? 'info',
   },

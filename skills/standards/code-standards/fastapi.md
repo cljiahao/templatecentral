@@ -69,6 +69,8 @@
 - **Ruff** — linting + isort (line-length 88, target version configured in `ruff.toml`).
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
+- NEVER use `@app.on_event("startup")` / `@app.on_event("shutdown")` — removed in Starlette 1.0. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
+- **Starlette ≥1.1.0 required.** A published advisory (GHSA-86qp-5c8j-p5mr) shows malformed `Host` headers in Starlette ≤1.0.0 cause `request.url.path` to return incorrect values, enabling auth bypass in middleware-based path matching. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes; `scope["path"]` is safe if you must read the path in middleware.
 
 ### Backend Testing (mandatory)
 

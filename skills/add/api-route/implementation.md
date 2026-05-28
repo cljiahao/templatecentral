@@ -189,13 +189,6 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 - NEVER expose internal error details in responses — rely on `handleApiError()` for generic messages
 - NEVER skip the routes constant — always add new API routes to `src/lib/constants/routes.ts`
 
-## Validate
-
-```bash
-pnpm build    # zero errors
-pnpm check    # zero type errors
-```
-
 ## After Writing Code
 
 Dispatch in order:

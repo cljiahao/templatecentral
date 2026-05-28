@@ -18,7 +18,7 @@ description: Use when writing or modifying files under skills/ — walks through
    - Only: detection logic, routing table, `cat` commands
    - Add `when_to_use:` if the description alone doesn't capture all trigger contexts
    - Add `disable-model-invocation: true` for scaffold/migrate/cleanup-scope skills
-   - Add `allowed-tools:` with tightest scope needed (e.g. `Bash(pnpm *)` not `Bash`)
+   - Add `allowed-tools:` with tightest scope needed (e.g. `Bash(pnpm *)` not `Bash`) — Least Agency principle (OWASP Agentic ASI02: Tool Misuse & Exploitation)
 
 4. **If reference file:**
    - First line: `<!-- ref: ... loaded-by: ... prereq: ... -->`

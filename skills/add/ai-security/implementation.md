@@ -77,7 +77,7 @@ Never allow PII or credentials to enter LLM context. Strip before sending.
 ```ts
 // Redact common PII patterns before sending to the model
 const PII_PATTERNS: Array<[RegExp, string]> = [
-  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],                            // National ID — adapt regex to your jurisdiction's format
+  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],                            // National ID (broad pattern — refine for your locale's format)
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],   // Credit card
   [/\b[\w.+-]+@[\w-]+\.\w{2,}\b/g, '[EMAIL]'],
   [/\b\+?\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],    // International phone — adapt to expected formats
@@ -106,6 +106,63 @@ const model = 'gpt-4o-2024-08-06';  // example only — use your provider's curr
 ```
 
 For open-source / self-hosted models: verify checksums against the provider's published hash before loading.
+
+---
+
+### LLM04 — Data and Model Poisoning
+
+Training data, fine-tuning sets, and retrieval corpora are attack surfaces. Compromised data introduces backdoors, biased outputs, or degraded reliability without visible model changes.
+
+**For application developers using hosted models** (the common case):
+- Validate and sanitize any data you feed into fine-tuning pipelines or RAG corpora
+- Use immutable checksums to verify model weights and training datasets against provider-published hashes before loading
+- Never pull model weights from unverified mirrors — use only signed releases from the original provider
+
+```ts
+// When ingesting documents into a RAG corpus, treat them as untrusted input
+import { createHash } from 'crypto';
+
+async function ingestDocument(content: string, expectedHash?: string): Promise<void> {
+  if (expectedHash) {
+    const actualHash = createHash('sha256').update(content).digest('hex');
+    if (actualHash !== expectedHash) {
+      throw new Error('Document hash mismatch — possible content tampering');
+    }
+  }
+  // Strip executable content before embedding
+  const sanitized = content.replace(/<script[\s\S]*?<\/script>/gi, '');
+  await embedAndStore(sanitized);
+}
+```
+
+```python
+# Python equivalent — hash verification before embedding
+import hashlib
+
+def ingest_document(content: str, expected_hash: str | None = None) -> None:
+    if expected_hash:
+        actual_hash = hashlib.sha256(content.encode()).hexdigest()
+        if actual_hash != expected_hash:
+            raise ValueError("Document hash mismatch — possible content tampering")
+    # Strip executable patterns before embedding
+    import re
+    sanitized = re.sub(r'<script[\s\S]*?</script>', '', content, flags=re.IGNORECASE)
+    embed_and_store(sanitized)
+```
+
+**Monitoring gate** — detect unexpected output drift in production:
+
+```ts
+// Track output distribution — alert on sudden shift (may indicate poisoned context)
+const EXPECTED_REFUSAL_RATE = 0.02;  // baseline measured on clean data
+
+function monitorOutputDrift(refusalCount: number, totalCount: number): void {
+  const rate = refusalCount / totalCount;
+  if (rate > EXPECTED_REFUSAL_RATE * 3) {
+    logger.warn({ rate, expected: EXPECTED_REFUSAL_RATE }, 'Abnormal refusal rate — possible data poisoning');
+  }
+}
+```
 
 ---
 
@@ -247,6 +304,29 @@ const docs = await vectorDB.query(embedding, {
   topK: 5,
 });
 ```
+
+---
+
+### LLM09 — Misinformation
+
+AI systems produce plausible but false information (hallucination). Never surface raw model output as verified fact without grounding or human review.
+
+```ts
+// Always instruct the model to cite context and admit uncertainty
+const systemPrompt = `
+Answer only from the provided context. If unsure, say "I don't know."
+Do not invent statistics, names, dates, or URLs.
+`;
+
+// For factual claims: validate against authoritative source before displaying
+const result = await callModel(prompt);
+if (requiresFactualGrounding(result.content)) {
+  const verified = await crossReferenceDatabase(result.content);
+  return verified; // surface only confirmed facts
+}
+```
+
+**Rule**: For high-stakes domains (medical, legal, financial), gate AI output behind a human review step or source citation before presenting to end users.
 
 ---
 
