@@ -71,18 +71,22 @@ Each scaffold produces a complete, working project — not a bare starter.
 ### Next.js
 ✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod
 ✅ Prettier + ESLint + Husky pre-commit · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example` · ✅ `AGENTS.md` + `CLAUDE.md`
+✅ AI harness — prompt injection guard, `.env` protection, TypeScript feedback, test gate, context recovery
 
 ### Vite + React
 ✅ React 19 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
 ✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+✅ AI harness — prompt injection guard, `.env` protection, TypeScript feedback, test gate, context recovery
 
 ### FastAPI
 ✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright
 ✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
+✅ AI harness — prompt injection guard, `.env` protection, Pyright feedback, test gate, context recovery
 
 ### NestJS
 ✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests
 ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
+✅ AI harness — prompt injection guard, `.env` protection, TypeScript feedback, test gate, context recovery
 
 > Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
 
