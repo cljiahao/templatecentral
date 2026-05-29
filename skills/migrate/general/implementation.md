@@ -241,10 +241,11 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
+Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -254,10 +255,11 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 
 ```markdown
 ## AI Harness
-PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: incremental type-check after every edit — feedback only, never blocks.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
+Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 ```
 
 **Step 4c: Create `CLAUDE.md`**
@@ -289,7 +291,7 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const n=((d.tool_input||{}).file_path||'').split('/').pop()||'';process.exit(n.startsWith('.env')&&!n.includes('example')?2:0)})\""
+            "command": "node -e \"let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})\""
           }
         ]
       }
@@ -339,7 +341,7 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); p=d.get('tool_input',{}).get('file_path',''); n=p.split('/')[-1]; exit(2) if n.startswith('.env') and 'example' not in n else exit(0)\""
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); n=f.split('/')[-1]; blocked=(n.startswith('.env') and 'example' not in n) or '.github/workflows/' in f or n.endswith(('.pem','.key','.p12','.pfx','.secret')) or n in ('credentials.json','.netrc','.secrets'); exit(2 if blocked else 0)\""
           }
         ]
       }
@@ -379,7 +381,7 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 }
 ```
 
-`PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
+`PreToolUse` — blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and app code are unrestricted.
 `PostToolUse` — fast incremental feedback after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
 `PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
@@ -462,6 +464,16 @@ For nextjs only, also include the migrate skill entry:
 ```json
 ".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" }
 ```
+
+**Step 4f-2: Create `.agents` symlink**
+
+If `.agents` does not already exist, create the cross-vendor symlink:
+
+```bash
+ln -s .claude .agents
+```
+
+This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by any agent framework that resolves from `.agents/` — one source of truth, zero duplication.
 
 **Step 4g: Update the version marker**
 

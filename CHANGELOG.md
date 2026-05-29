@@ -10,6 +10,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [4.2.0] — 2026-05-30
+
+### Added
+- `scripts/pre-guard.sh` — centralised PreToolUse guard for templateCentral's own harness: blocks `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.p12`/`.pfx`/`.secret`), and credential files (`credentials.json`/`.netrc`/`.secrets`). All other paths — skills, specs, tests, app code — exit 0 immediately.
+- `.claude/settings.json`: added **PreToolUse hook** wired to `scripts/pre-guard.sh` — templateCentral's own repo now enforces the same sensitive-path guard it seeds into scaffolded projects.
+- All 4 scaffold stacks + migrate: **`.agents → .claude` symlink** created after harness bootstrap (`ln -s .claude .agents`) — makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by any agent framework that resolves from `.agents/`. One source of truth, zero duplication.
+- All 4 scaffold stacks + migrate: **context load order note** appended to the `## AI Harness` block in the scaffolded `AGENTS.md` template — documents the full instruction chain (`managed policy → ~/.claude/CLAUDE.md → CLAUDE.md @AGENTS.md → AGENTS.md → .claude/rules/*.md`) and explicitly states that `CLAUDE.md` is optional and that hard enforcement lives in `settings.json` hooks only.
+
+### Changed
+- All 4 scaffold stacks + migrate: **PreToolUse guard expanded** — previously blocked `.env*` only; now also blocks `.github/workflows/`, cert files (`.pem`/`.key`/`.p12`/`.pfx`/`.secret`), and credential files (`credentials.json`/`.netrc`/`.secrets`). Skills, specs, tests, and all application code remain unrestricted (exit 0).
+- All 4 scaffold stacks: **merge instruction corrected** — "merge the `PostToolUse` hook" → "merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, PostCompact)". Previously, running scaffold on a project with an existing `settings.json` silently skipped four of the five hooks.
+
+### Fixed
+- All description strings in scaffold and migrate referencing `PreToolUse` updated to accurately reflect expanded protection scope (was `.env*` only).
+
+---
+
 ## [4.1.0] — 2026-05-28
 
 ### Security

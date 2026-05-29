@@ -15,7 +15,7 @@ claude plugin install templatecentral
 User: scaffold a Next.js app called "dashboard"
 ```
 
-What ships: App Router, shadcn/ui, TanStack Query, better-auth, Vitest, ESLint, Prettier, Docker, AGENTS.md, AI harness (UserPromptSubmit, PreToolUse, PostToolUse, Stop, PostCompact hooks).
+What ships: App Router, shadcn/ui, TanStack Query, better-auth, Vitest, ESLint, Prettier, Docker, AGENTS.md, `.agents → .claude` symlink (cross-vendor), AI harness (UserPromptSubmit, PreToolUse secrets guard, PostToolUse, Stop, PostCompact hooks).
 
 **Add auth after scaffolding:**
 ```
@@ -43,7 +43,7 @@ User: add a settings page
 User: scaffold a FastAPI backend called "api"
 ```
 
-What ships: structured `src/` layout, Pydantic v2 settings, Ruff, pytest, Docker, AGENTS.md, AI harness (UserPromptSubmit, PreToolUse, PostToolUse, Stop, PostCompact hooks).
+What ships: structured `src/` layout, Pydantic v2 settings, Ruff, pytest, Docker, AGENTS.md, `.agents → .claude` symlink (cross-vendor), AI harness (UserPromptSubmit, PreToolUse secrets guard, PostToolUse, Stop, PostCompact hooks).
 
 **Add JWT auth:**
 ```
@@ -71,7 +71,7 @@ User: add auth and a database
 User: scaffold a NestJS API called "service"
 ```
 
-What ships: Fastify adapter, nestjs-zod, Vitest, ESLint, Docker, AGENTS.md, AI harness (UserPromptSubmit, PreToolUse, PostToolUse, Stop, PostCompact hooks).
+What ships: Fastify adapter, nestjs-zod, Vitest, ESLint, Docker, AGENTS.md, `.agents → .claude` symlink (cross-vendor), AI harness (UserPromptSubmit, PreToolUse secrets guard, PostToolUse, Stop, PostCompact hooks).
 
 **Add a feature module:**
 ```
@@ -93,7 +93,7 @@ User: add authentication
 User: scaffold a Vite React app called "frontend"
 ```
 
-What ships: React 19, TanStack Query, shadcn/ui, React Hook Form, Zod, Vitest, Docker, AGENTS.md, AI harness (UserPromptSubmit, PreToolUse, PostToolUse, Stop, PostCompact hooks).
+What ships: React 19, TanStack Query, shadcn/ui, React Hook Form, Zod, Vitest, Docker, AGENTS.md, `.agents → .claude` symlink (cross-vendor), AI harness (UserPromptSubmit, PreToolUse secrets guard, PostToolUse, Stop, PostCompact hooks).
 
 **Add a page:**
 ```

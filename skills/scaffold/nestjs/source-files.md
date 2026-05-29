@@ -787,11 +787,12 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
-PreToolUse: blocks `.env*` edits (`.env.example` allowed). PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
+Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
 ## Skills Security
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
@@ -804,7 +805,7 @@ Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 
 ### 6b. Create .claude/settings.json
 
-Create `.claude/settings.json` at the project root. If the file already exists, merge the `PostToolUse` hook rather than overwriting.
+Create `.claude/settings.json` at the project root. If the file already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, PostCompact) into the existing `hooks` object rather than overwriting — preserve any hooks already present.
 
 **`.claude/settings.json`**:
 ```json
@@ -816,7 +817,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         "hooks": [
           {
             "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const n=((d.tool_input||{}).file_path||'').split('/').pop()||'';process.exit(n.startsWith('.env')&&!n.includes('example')?2:0)})"]
+            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})"]
           }
         ]
       }
@@ -866,7 +867,7 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 }
 ```
 
-`PreToolUse` — blocks edits to `.env*` files (exit 2); reads `tool_input.file_path`; `.env.example` allowed.
+`PreToolUse` — blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and app code are unrestricted.
 `UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
 `PostToolUse` — fast incremental TypeScript feedback after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
@@ -946,6 +947,12 @@ sha256_verify=$(shasum -a 256 .claude/skills/nest-verify.md | cut -d' ' -f1)
     ".claude/skills/nest-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/nest-verify.md" }
   }
 }
+```
+
+Then create the cross-vendor symlink so the project works with any agent framework that resolves from `.agents/`:
+
+```bash
+ln -s .claude .agents
 ```
 
 ### 6e. Seed additional project skills
