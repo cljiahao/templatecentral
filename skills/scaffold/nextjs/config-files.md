@@ -13,6 +13,12 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  poweredByHeader: false,
+
+  // Uncomment and add domains when using next/image with external URLs:
+  // images: {
+  //   remotePatterns: [{ protocol: 'https', hostname: 'example.com' }],
+  // },
 
   async headers() {
     return [

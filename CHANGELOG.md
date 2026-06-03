@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [4.3.0] — 2026-06-04
+
+### Added
+- `skills/scaffold/nextjs/config-files.md`: `poweredByHeader: false` added to `next.config.ts` — removes the `X-Powered-By: Next.js` response header, eliminating a fingerprinting vector
+- `skills/scaffold/nextjs/config-files.md`: commented `images.remotePatterns` placeholder added to `next.config.ts` — prevents surprise runtime errors for projects using `next/image` with external URLs
+- `skills/scaffold/vite-react/config-files.md`: commented `server.proxy` skeleton added to `vite.config.ts` — standard starting point for proxying API calls to a backend (FastAPI/NestJS) during local dev
+- `skills/scaffold/vite-react/config-files.md`: `preview: { port: 3000 }` added to `vite.config.ts` — aligns `vite preview` port with the dev server so production-build testing is consistent
+
+### Changed
+- `skills/scaffold/vite-react/config-files.md`: nginx image bumped from `nginx:1.28.3-alpine3.23` to `nginx:1.30.2-alpine3.23` — stable branch advanced two minor versions
+- `skills/scaffold/fastapi/config-files.md`: Python image bumped from `python:3.13.3-slim` to `python:3.13.13-slim` — latest patch on the 3.13 LTS line
+
+---
+
 ## [4.2.0] — 2026-05-30
 
 ### Added

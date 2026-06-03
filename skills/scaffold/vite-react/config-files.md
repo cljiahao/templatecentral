@@ -20,7 +20,7 @@
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
 ARG NODE=node:24-alpine
 ARG NODE_BUILD=node:24-alpine
-ARG NGINX=nginx:1.28.3-alpine3.23
+ARG NGINX=nginx:1.30.2-alpine3.23
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -572,6 +572,13 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    // Uncomment to proxy API calls to a backend during local dev:
+    // proxy: {
+    //   '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    // },
+  },
+  preview: {
+    port: 3000,
   },
   build: {
     outDir: 'dist',

@@ -13,7 +13,7 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-ARG PYTHON=python:3.13.3-slim
+ARG PYTHON=python:3.13.13-slim
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
