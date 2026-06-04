@@ -68,29 +68,25 @@ Claude reads the scaffold skill, generates every file, installs dependencies, ru
 
 Each scaffold produces a complete, working project — not a bare starter.
 
+**Every stack includes:**
+✅ AI harness — prompt injection guard, secrets protection, type feedback, test gate, context recovery  
+✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility
+
 ### Next.js
-✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod
-✅ Prettier + ESLint + Husky pre-commit · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example` · ✅ `AGENTS.md` + `CLAUDE.md`
-✅ AI harness — prompt injection guard, secrets protection, TypeScript feedback, test gate, context recovery
-✅ `.agents → .claude` symlink — works with Claude Code and any agent framework resolving from `.agents/`
+✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod  
+✅ Prettier + ESLint + Husky · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example`
 
 ### Vite + React
-✅ React 19 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4
-✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
-✅ AI harness — prompt injection guard, secrets protection, TypeScript feedback, test gate, context recovery
-✅ `.agents → .claude` symlink — works with Claude Code and any agent framework resolving from `.agents/`
+✅ React 19 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4  
+✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky
 
 ### FastAPI
-✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright
-✅ pytest + httpx (async) · ✅ python-dotenv · ✅ `AGENTS.md` + `CLAUDE.md`
-✅ AI harness — prompt injection guard, secrets protection, Pyright feedback, test gate, context recovery
-✅ `.agents → .claude` symlink — works with Claude Code and any agent framework resolving from `.agents/`
+✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright  
+✅ pytest + httpx (async) · ✅ python-dotenv
 
 ### NestJS
-✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests
-✅ Prettier + ESLint + Husky · ✅ `AGENTS.md` + `CLAUDE.md`
-✅ AI harness — prompt injection guard, secrets protection, TypeScript feedback, test gate, context recovery
-✅ `.agents → .claude` symlink — works with Claude Code and any agent framework resolving from `.agents/`
+✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests  
+✅ Prettier + ESLint + Husky
 
 > Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
 
