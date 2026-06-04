@@ -96,7 +96,7 @@ async def list_projects(
     return []
 
 
-@router.post("/upload")
+@router.post("/upload", response_model=dict[str, dict[str, str]])
 async def upload_project_file(file: UploadFile = File(...)):
     """Upload a project file with validation."""
     # Validate file type
@@ -133,7 +133,7 @@ from .schemas import LoginRequest
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", status_code=status.HTTP_200_OK)
+@router.post("/login", response_model=dict[str, dict[str, str]], status_code=status.HTTP_200_OK)
 async def login(
     email: str = Form(...),
     password: str = Form(...),

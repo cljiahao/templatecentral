@@ -108,7 +108,7 @@ router = APIRouter()
     response_model=MyResponse,
     summary="Short description for OpenAPI docs",
 )
-def my_endpoint(body: MyRequest) -> MyResponse:
+async def my_endpoint(body: MyRequest) -> MyResponse:
     """One-line docstring."""
     return run_my_service(body)
 ```

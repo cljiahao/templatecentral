@@ -304,6 +304,8 @@ def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_d
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
 
+> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
+
 ---
 
 ## Rules

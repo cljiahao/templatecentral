@@ -241,7 +241,7 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -255,7 +255,7 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 
 ```markdown
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
 PostToolUse: incremental type-check after every edit — feedback only, never blocks.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -291,7 +291,26 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})\""
+            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})"]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const cmd=((d.tool_input||{}).command||'');if(cmd.includes('--no-verify')){process.stderr.write('Blocked: --no-verify bypasses safety hooks\\n');process.exit(2);}process.exit(0);})"]
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const t=(d.prompt||'').toLowerCase();const deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions'];if(deny.some(p=>t.includes(p))){process.stderr.write('Prompt injection pattern detected\\n');process.exit(2);}process.exit(0);})"]
           }
         ]
       }
@@ -327,7 +346,8 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         ]
       }
     ]
-  }
+  },
+  "skillListingBudgetFraction": 0.02
 }
 ```
 
@@ -341,7 +361,26 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); n=f.split('/')[-1]; blocked=(n.startswith('.env') and 'example' not in n) or '.github/workflows/' in f or n.endswith(('.pem','.key','.p12','.pfx','.secret')) or n in ('credentials.json','.netrc','.secrets'); exit(2 if blocked else 0)\""
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); n=f.split('/')[-1]; blocked=(n.startswith('.env') and 'example' not in n) or '.github/workflows/' in f or n.endswith(('.pem','.key','.p12','.pfx','.secret')) or n in ('credentials.json','.netrc','.secrets'); exit(2 if blocked else 0)"]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); cmd=d.get('tool_input',{}).get('command',''); (sys.stderr.write('Blocked: --no-verify bypasses safety hooks\\n'),sys.exit(2)) if '--no-verify' in cmd else sys.exit(0)"]
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); t=(d.get('prompt','') or '').lower(); deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions']; (sys.stderr.write('Prompt injection pattern detected\\n'),sys.exit(2)) if any(p in t for p in deny) else sys.exit(0)"]
           }
         ]
       }
@@ -377,14 +416,17 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
         ]
       }
     ]
-  }
+  },
+  "skillListingBudgetFraction": 0.02
 }
 ```
 
-`PreToolUse` — blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and app code are unrestricted.
+`PreToolUse` — two guards: (1) blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; (2) blocks `git ... --no-verify` to prevent hook bypass. Skills, specs, and app code are unrestricted.
+`UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
 `PostToolUse` — fast incremental feedback after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
 `PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
+`skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget.
 
 If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
 

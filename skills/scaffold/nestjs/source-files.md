@@ -820,6 +820,15 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
             "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})"]
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const cmd=((d.tool_input||{}).command||'');if(cmd.includes('--no-verify')){process.stderr.write('Blocked: --no-verify bypasses safety hooks\\n');process.exit(2);}process.exit(0);})"]
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -863,15 +872,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         ]
       }
     ]
-  }
+  },
+  "skillListingBudgetFraction": 0.02
 }
 ```
 
-`PreToolUse` — blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and app code are unrestricted.
+`PreToolUse` — two guards: (1) blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; (2) blocks `git ... --no-verify` to prevent hook bypass. Skills, specs, and app code are unrestricted.
 `UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
 `PostToolUse` — fast incremental TypeScript feedback after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
 `PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
+`skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget; prevents skill-heavy projects from crowding out working context.
 
 Also create `FUTURE.md` at the project root:
 

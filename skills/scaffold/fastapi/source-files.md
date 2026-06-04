@@ -71,6 +71,7 @@ from error_handler import configure_exceptions
 
 _SECURITY_HEADERS = [
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+    (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
@@ -705,7 +706,7 @@ router.include_router(example.router, tags=[APITags.EXAMPLE])
     description="A simple home route returning a welcome message.",
     response_model=dict[str, str],
 )
-def home() -> dict[str, str]:
+async def home() -> dict[str, str]:
     """Simple home route."""
     return {"msg": "Hello FastAPI"}
 
@@ -717,7 +718,7 @@ def home() -> dict[str, str]:
     description="A simple health check returning an OK status.",
     response_model=dict[str, str],
 )
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "OK"}
 ```
@@ -759,7 +760,7 @@ router = APIRouter()
     summary="Example endpoint",
     description="An example endpoint demonstrating the router → service → logic flow.",
 )
-def example_endpoint(body: ExampleRequest) -> ExampleResponse:
+async def example_endpoint(body: ExampleRequest) -> ExampleResponse:
     """Process an example request."""
     return run_example(body)
 ```
@@ -1215,6 +1216,15 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
             "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); n=f.split('/')[-1]; blocked=(n.startswith('.env') and 'example' not in n) or '.github/workflows/' in f or n.endswith(('.pem','.key','.p12','.pfx','.secret')) or n in ('credentials.json','.netrc','.secrets'); exit(2 if blocked else 0)"]
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); cmd=d.get('tool_input',{}).get('command',''); (sys.stderr.write('Blocked: --no-verify bypasses safety hooks\\n'),sys.exit(2)) if '--no-verify' in cmd else sys.exit(0)"]
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -1258,15 +1268,17 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
         ]
       }
     ]
-  }
+  },
+  "skillListingBudgetFraction": 0.02
 }
 ```
 
-`PreToolUse` — blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and app code are unrestricted.
+`PreToolUse` — two guards: (1) blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; (2) blocks `git ... --no-verify` to prevent hook bypass. Skills, specs, and app code are unrestricted.
 `UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
 `PostToolUse` — fast type feedback via pyright after every edit. Feedback-only; never blocks.
 `Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
 `PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
+`skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget; prevents skill-heavy projects from crowding out working context.
 
 Also create `FUTURE.md` at the project root:
 

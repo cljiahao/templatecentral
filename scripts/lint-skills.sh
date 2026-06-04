@@ -402,6 +402,25 @@ check_no_postToolUse_full_test_suite() {
   fi
 }
 
+check_no_toplevel_command_in_hooks() {
+  # Hook commands that read the bash command from top-level `d.command` (or Python d.get('command'))
+  # instead of `d.tool_input.command` will silently get an empty string — the check never fires.
+  # For Bash tool events, the command lives at tool_input.command, not at the top level.
+  # TIMELESS: Claude Code hook stdin schema places tool input under tool_input; this is by design.
+  header "Top-level d.command access in hook commands (should be d.tool_input.command)"
+  local matches
+  matches=$(grep -rn 'd\.command\|d\[.command.\]\|d\.get(.command.' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'tool_input' \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Hook reads bash command from top-level d.command — use d.tool_input.command (or d.get('tool_input',{}).get('command','') in Python)"
+  else
+    pass "No top-level d.command access in hook commands"
+  fi
+}
+
 check_owasp_llm_sections_complete() {
   # add/ai-security/implementation.md must cover all 10 OWASP LLM Top 10 v2.0 sections.
   # A missing section leaves a gap in AI security guidance — agents won't know to guard against it.
@@ -455,6 +474,7 @@ check_no_tanstack_isLoading
 check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
+check_no_toplevel_command_in_hooks
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

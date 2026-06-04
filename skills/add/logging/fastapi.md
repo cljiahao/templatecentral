@@ -67,7 +67,7 @@ Unhandled exceptions are already logged via the `Exception` handler in `src/erro
 # src/api/routers/auth.py
 from core.logging import logger
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 async def login(credentials: LoginRequest, request: Request):
     user = await authenticate(credentials)
     if not user:
@@ -87,12 +87,12 @@ async def login(credentials: LoginRequest, request: Request):
     )
     return create_token_response(user)
 
-@router.post("/logout")
+@router.post("/logout", response_model=dict[str, str])
 async def logout(current_user: User = Depends(get_current_user)):
     logger.info("Logout", extra={"user_id": str(current_user.id)})
     return {"status": "ok"}
 
-@router.post("/token/refresh")
+@router.post("/token/refresh", response_model=TokenResponse)
 async def refresh(current_user: User = Depends(get_current_user)):
     logger.info("Token refresh", extra={"user_id": str(current_user.id)})
     return create_token_response(current_user)

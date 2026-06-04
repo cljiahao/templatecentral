@@ -231,14 +231,14 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post("/register", response_model=UserResponse)
-def register(body: RegisterRequest) -> UserResponse:
+async def register(body: RegisterRequest) -> UserResponse:
     """Register a new user account."""
     user = register_user(email=body.email, password=body.password, name=body.name)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest) -> TokenResponse:
+async def login(body: LoginRequest) -> TokenResponse:
     """Authenticate and receive a JWT token."""
     token = login_user(email=body.email, password=body.password)
     return TokenResponse(access_token=token)
@@ -263,7 +263,7 @@ Use the `get_current_user` dependency on any endpoint that requires auth:
 from api.dependencies.auth import get_current_user
 
 @router.get("/me", response_model=UserResponse)
-def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
+async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     """Get the current authenticated user. Implement DB lookup after running `templatecentral:add` (database)."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -294,7 +294,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # On auth endpoints:
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 @limiter.limit("3/15minutes")
 async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 ```

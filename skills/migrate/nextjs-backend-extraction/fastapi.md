@@ -135,12 +135,12 @@ from api.services.users import UsersService
 router = APIRouter()
 
 
-@router.get("/users")
+@router.get("/users", response_model=list[UserResponse])
 async def get_users() -> list[UserResponse]:
     return await UsersService.find_all()
 
 
-@router.get("/users/{user_id}")
+@router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str) -> UserResponse:
     user = await UsersService.find_one(user_id)
     if not user:
@@ -148,7 +148,7 @@ async def get_user(user_id: str) -> UserResponse:
     return user
 
 
-@router.post("/users", status_code=201)
+@router.post("/users", response_model=UserResponse, status_code=201)
 async def create_user(body: CreateUserRequest) -> UserResponse:
     return await UsersService.create(body)
 ```
@@ -259,7 +259,7 @@ Use `get_github_client` as a FastAPI dependency:
 from fastapi import Depends
 from ..integrations.github_client import GithubClient, get_github_client
 
-@router.get("/repos")
+@router.get("/repos", response_model=list)
 async def list_repos(client: GithubClient = Depends(get_github_client)):
     return await client.get_repos()
 ```

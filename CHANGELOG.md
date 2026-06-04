@@ -10,6 +10,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [4.4.0] — 2026-06-04
+
+### Security
+
+- All 4 scaffold `settings.json` templates + `migrate/general`: added `PreToolUse` handler with `matcher: "Bash"` that blocks any bash command containing `--no-verify` (reads `tool_input.command` — not top-level `command`). Without this guard, agents could bypass Stop and all other hooks via `git commit --no-verify`.
+- `skills/scaffold/fastapi/source-files.md`: added `strict-transport-security: max-age=31536000; includeSubDomains` to `SecurityHeadersMiddleware` — FastAPI scaffold was the only stack missing HSTS (NestJS/Next.js/Vite-React all had it).
+
+### Fixed
+
+- `.claude/rules/fastapi.md`: Starlette version updated from `1.0` to `≥1.1.0` — Starlette ≤1.0.0 is vulnerable to GHSA-86qp-5c8j-p5mr (malformed Host header auth-bypass; avoid `request.url.path` for auth-critical path matching, prefer `scope["path"]` or endpoint-level `Depends()`/`Security()`).
+- `skills/migrate/general/implementation.md`: updated both TS and FastAPI `settings.json` templates to match scaffold — converted PreToolUse hooks from shell-string to args[] exec form, added block-`--no-verify` Bash guard, added `UserPromptSubmit` prompt-injection firewall, added `skillListingBudgetFraction: 0.02`.
+
+### Added
+
+- All 4 scaffold `settings.json` templates: added top-level `"skillListingBudgetFraction": 0.02` — caps skill-listing context overhead for projects that install multiple plugins.
+- `scripts/lint-skills.sh`: new `check_no_toplevel_command_in_hooks` check (TIMELESS) — catches hook commands that read bash input from top-level `d.command` instead of `d.tool_input.command`, which silently returns empty string and defeats the hook.
+- `skills/audit/implementation.md` (v2.4.0): added block-`--no-verify` harness check item to Step 3H; updated changelog.
+- `skills/add/database/python/sqlalchemy-iam.md`: added "Sync vs async" rationale note near `list_users` and auth routes — the file is loaded independently so the reasoning was missing for IAM-auth projects.
+- `skills/add/database/python/sqlalchemy.md`: added "Sync vs async" rationale note after auth routes block (`register`/`login`/`get_me`) — note previously only appeared near `list_users`, leaving the auth section without explanation.
+
+### Changed (FastAPI async route handler consistency)
+
+Route handlers that perform or will eventually perform I/O now use `async def` consistently — `def` is reserved for sync SQLAlchemy handlers (where FastAPI thread-pool semantics are the correct choice, and where an explanatory note is present). Affected files:
+
+- `skills/add/endpoint/implementation.md`: `def my_endpoint` → `async def`
+- `skills/add/auth/fastapi.md`: `def register`, `def login`, `def get_me` → `async def`; added `response_model=TokenResponse` to rate-limiter snippet
+- `skills/add/logging/fastapi.md`: added `response_model` to `/login`, `/logout`, `/token/refresh` examples
+- `skills/add/pagination/fastapi.md`: `def list_projects` → `async def`
+- `skills/scaffold/fastapi/source-files.md`: `def example_endpoint` → `async def`
+- `skills/migrate/nextjs-backend-extraction/fastapi.md`: added `response_model=` to all three user CRUD routes and the `/repos` integration route
+- `skills/standards/validation-patterns/fastapi.md`: added `response_model=` to `/upload` and form-data `/login` examples
+- `skills/scaffold/fastapi/source-files.md`: `def home`, `def health` → `async def` for consistency with `example_endpoint`
+
+---
+
 ## [4.3.0] — 2026-06-04
 
 ### Added

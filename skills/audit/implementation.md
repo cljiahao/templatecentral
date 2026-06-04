@@ -499,6 +499,7 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Hook `"if"` field used for path pre-filtering**: Tool-event hooks (PreToolUse, PostToolUse, PostToolUseFailure) support an `"if"` field on each handler that pre-filters execution before the `command` runs — e.g. `"if": "Edit(.env*)"` restricts a handler to only fire when editing `.env*` files. This reduces unnecessary process spawns and shrinks the attack surface of inline hook logic (ASI02). Scaffold templates use `"matcher"` for tool-name scoping; `"if"` adds path-level scoping within a matcher block.
 - [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present (v2.1.139+). It fires when a subagent finishes, is distinct from `Stop`, and supports `decision: "block"`. Default is `blocking: false` — must set `blocking: true` to enforce subagent output review before Claude continues. If no subagents are used, no check needed.
 - [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
+- [ ] **block-`--no-verify` PreToolUse hook present**: Scaffold settings.json includes a `PreToolUse` hook with `matcher: "Bash"` that checks incoming Bash commands and exits 2 if `--no-verify` is found. Must read `tool_input.command` from stdin JSON — **not** top-level `command`. TS stacks use `node` in args[] exec form; FastAPI uses `python3`. Without this hook, an agent can bypass Stop (and all other hooks) by running `git commit --no-verify`.
 
 ---
 
@@ -646,6 +647,9 @@ head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md ma
 Any `FAIL` line means a harness file was removed or corrupted. Re-create it from the v4.0.0 spec in `AGENTS.md` → **Working on this repo** section.
 
 ## Changelog
+### 2.4.0
+- Step 3H: added block-`--no-verify` PreToolUse hook check — scaffold must block `git ... --no-verify` via `tool_input.command` (not top-level `command`); without it agents can bypass Stop and all other hooks
+- Step 5: added `check_no_toplevel_command_in_hooks` to lint script — catches hooks that read bash command from top-level `d.command` instead of `d.tool_input.command`
 ### 2.3.0
 - Step 6: added `skillListingBudgetFraction` health check — 10+ skill repos should set `"skillListingBudgetFraction": 0.02` in `.claude/settings.json` to cap skill-listing context overhead
 - Harness check list now at 15 items (added `continueOnBlock: true` awareness for PostToolUse)
