@@ -19,6 +19,15 @@ set -euo pipefail
 SKILLS_DIR="${1:-skills}"
 FAILED=0
 
+# HARNESS_SCHEMA_VERSION — the AGENTS.md line-1 marker (`<!-- templateCentral: <stack>@X.Y.Z -->`)
+# is a MIGRATION SCHEMA FLOOR, not the plugin's semver. migrate Phase 0 reads it as
+# "@<this> or later → no migration needed". It must stay PINNED at the version where the
+# current harness structure was established, and only bump when the harness structure changes
+# in a breaking way (a major release). Do NOT bump it every plugin release — that would make
+# every existing project falsely report "needs migration". Contrast with `templatecentral_version`
+# in harness.json, which tracks plugin semver and is checked against plugin.json separately.
+HARNESS_SCHEMA_VERSION="4.0.0"
+
 fail() { echo "FAIL: $*"; FAILED=1; }
 pass() { echo "OK:   $*"; }
 header() { echo ""; echo "── $* ──"; }
@@ -402,6 +411,149 @@ check_no_postToolUse_full_test_suite() {
   fi
 }
 
+check_harness_version_matches_plugin() {
+  # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
+  # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
+  # TIMELESS: templatecentral_version must always match the plugin's declared version.
+  header "harness.json templatecentral_version matches plugin.json"
+  local plugin_json=".claude-plugin/plugin.json"
+  if [[ ! -f "$plugin_json" ]]; then
+    pass "No plugin.json found — skipping harness version check"
+    return
+  fi
+  local plugin_version
+  plugin_version=$(grep '"version"' "$plugin_json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | head -1)
+  local mismatches
+  mismatches=$(grep -rn '"templatecentral_version"' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v "\"$plugin_version\"" \
+    || true)
+  if [[ -n "$mismatches" ]]; then
+    echo "$mismatches"
+    fail "templatecentral_version in harness.json template does not match plugin.json ($plugin_version) — update scaffold and migrate source-files.md"
+  else
+    pass "templatecentral_version matches plugin.json ($plugin_version)"
+  fi
+}
+
+check_agents_marker_not_drifted_to_semver() {
+  # The AGENTS.md line-1 marker (`<!-- templateCentral: <stack>@X.Y.Z -->`) is a migration schema
+  # floor, NOT plugin semver. Legitimate values: @1.0.0 (migrate light-adoption / legacy examples)
+  # and @HARNESS_SCHEMA_VERSION (full current harness). The failure mode this guards against is a
+  # well-meaning "version bump" pushing a marker UP to the plugin semver (e.g. 4.5.0), which would
+  # break migrate Phase 0's floor logic. Rule: every marker version must be <= HARNESS_SCHEMA_VERSION.
+  # TIMELESS: bump HARNESS_SCHEMA_VERSION only on a deliberate harness-structure change (then floor markers move with it).
+  header "AGENTS.md schema marker not drifted above HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION)"
+  local drifted=""
+  local line ver
+  # Match only the marker comment; ignore prose mentions of "@4.0.0 or later".
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    ver=$(echo "$line" | grep -oE '@[0-9]+\.[0-9]+\.[0-9]+' | head -1 | tr -d '@')
+    [[ -z "$ver" ]] && continue
+    # If sorting {ver, floor} by version puts ver last AND they differ, ver > floor → drift.
+    if [[ "$(printf '%s\n%s\n' "$ver" "$HARNESS_SCHEMA_VERSION" | sort -V | tail -1)" == "$ver" \
+       && "$ver" != "$HARNESS_SCHEMA_VERSION" ]]; then
+      drifted+="$line"$'\n'
+    fi
+  done < <(grep -rnoE '<!-- templateCentral: [a-z<>-]+@[0-9]+\.[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null || true)
+  if [[ -n "$drifted" ]]; then
+    echo "$drifted"
+    fail "AGENTS.md schema marker exceeds HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION) — the marker is a migration floor, not plugin semver; revert it, or bump HARNESS_SCHEMA_VERSION deliberately if the harness structure changed"
+  else
+    pass "All AGENTS.md schema markers <= @$HARNESS_SCHEMA_VERSION"
+  fi
+}
+
+check_seeded_skills_scope_tools() {
+  # Seeded project skills (*-verify, *-migrate) embedded in scaffold templates are written into
+  # every scaffolded project. They must declare a tightly-scoped allowed-tools: line — a skill with
+  # no allowed-tools inherits unrestricted tool access. templateCentral must model the scoping it
+  # preaches in the Skills Security section.
+  # TIMELESS: least-agency (OWASP Agentic ASI02) — seeded skills scope their tools.
+  header "Seeded project skills declare scoped allowed-tools"
+  local files bad
+  files=$(grep -rlE '^name: [a-z][a-z-]*-(verify|migrate)$' "$SKILLS_DIR/" 2>/dev/null || true)
+  if [[ -z "$files" ]]; then
+    pass "No seeded *-verify/*-migrate skills found"
+    return
+  fi
+  bad=$(awk '
+    /^name: [a-z][a-z-]*-(verify|migrate)$/ { inblock=1; nm=$2; tools=0; ln=FNR; next }
+    inblock && /^allowed-tools:[[:space:]]*Bash\(/ { tools=1 }
+    inblock && /^---[[:space:]]*$/ { if(!tools) print FILENAME":"ln": "nm" — missing scoped allowed-tools"; inblock=0 }
+  ' $files 2>/dev/null || true)
+  if [[ -n "$bad" ]]; then
+    echo "$bad"
+    fail "Seeded skill missing scoped allowed-tools — add e.g. 'allowed-tools: Bash(pnpm *)' to its frontmatter"
+  else
+    pass "All seeded project skills declare scoped allowed-tools"
+  fi
+}
+
+check_no_unscoped_bash_grant() {
+  # An allowed-tools: line that grants bare 'Bash' (not 'Bash(...)') hands the skill unrestricted
+  # shell access — the opposite of least-agency. Every Bash grant must be scoped to a command prefix.
+  # TIMELESS: OWASP Agentic ASI02 (Tool Misuse) — never grant unscoped Bash.
+  header "No unscoped Bash in allowed-tools grants"
+  local hits
+  # Match allowed-tools lines mentioning Bash where Bash is NOT immediately followed by '('.
+  hits=$(grep -rnE '^allowed-tools:.*\bBash\b' "$SKILLS_DIR/" 2>/dev/null | grep -vE 'Bash\(' || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "Unscoped 'Bash' in allowed-tools — scope it (e.g. Bash(pnpm *), Bash(git *))"
+  else
+    pass "No unscoped Bash grants"
+  fi
+}
+
+check_scaffold_seeds_complete_harness() {
+  # Every scaffold + migrate settings.json template must seed the COMPLETE harness: all 7 hook
+  # events, the permissions.deny secret-Read block, skillListingBudgetFraction, and a reference to
+  # each of the 8 .claude/hooks/ scripts. Scaffolds additionally INLINE the script bodies (migrate
+  # references the same scripts to stay DRY), so scaffolds must also contain the guard-body markers.
+  # If an edit silently drops the Stop gate, a guard, or an event, a project ships a harness with a
+  # hole and nothing else catches it (Step 3H is a manual checklist). This makes it enforceable.
+  # TIMELESS: these are the load-bearing enforcement hooks; their presence is non-negotiable.
+  header "Scaffold/migrate templates seed the complete harness"
+  local scaffolds=(
+    "$SKILLS_DIR/scaffold/fastapi/source-files.md"
+    "$SKILLS_DIR/scaffold/nestjs/source-files.md"
+    "$SKILLS_DIR/scaffold/nextjs/source-files.md"
+    "$SKILLS_DIR/scaffold/vite-react/source-files.md"
+  )
+  local migrate="$SKILLS_DIR/migrate/general/implementation.md"
+  # Present in BOTH scaffold (inline) and migrate (referenced) forms:
+  local universal=(
+    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"' '"PostToolUseFailure"'
+    '"Stop"' '"SubagentStop"' '"SessionStart"'
+    'skillListingBudgetFraction' '"Read(.env)"'
+    'protect-files.sh' 'block-no-verify.sh' 'user-prompt-guard'
+    'post-edit-typecheck.sh' 'post-tool-failure.sh' 'stop-checks.sh'
+    'subagent-stop.sh' 'session-context.sh'
+  )
+  # Guard BODIES — scaffolds inline the scripts, so these strings must appear in scaffolds:
+  local bodies=('--no-verify' 'AKIA')
+  local missing="" f tok
+  for f in "${scaffolds[@]}" "$migrate"; do
+    [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
+    for tok in "${universal[@]}"; do
+      grep -qF -- "$tok" "$f" || missing+="$f — missing harness element: $tok"$'\n'
+    done
+  done
+  for f in "${scaffolds[@]}"; do
+    [[ -f "$f" ]] || continue
+    for tok in "${bodies[@]}"; do
+      grep -qF -- "$tok" "$f" || missing+="$f — missing inlined guard body: $tok"$'\n'
+    done
+  done
+  if [[ -n "$missing" ]]; then
+    echo "$missing"
+    fail "A scaffold/migrate template is missing a required harness element — restore it; full set = 7 events + permissions.deny + skillListingBudgetFraction + the 8 .claude/hooks/ scripts (scaffolds inline the bodies, migrate references them)"
+  else
+    pass "All scaffold/migrate templates seed the complete harness (7 events + permissions.deny + 8 hook scripts)"
+  fi
+}
+
 check_no_toplevel_command_in_hooks() {
   # Hook commands that read the bash command from top-level `d.command` (or Python d.get('command'))
   # instead of `d.tool_input.command` will silently get an empty string — the check never fires.
@@ -475,6 +627,11 @@ check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
 check_no_toplevel_command_in_hooks
+check_harness_version_matches_plugin
+check_agents_marker_not_drifted_to_semver
+check_seeded_skills_scope_tools
+check_no_unscoped_bash_grant
+check_scaffold_seeds_complete_harness
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

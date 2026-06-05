@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## NestJS + Drizzle (SQL)
 
-> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage). Pin to a specific RC version in production (e.g., `"drizzle-orm": "1.0.0-rc.1"` in `package.json`). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage). Pin to a specific RC version in production (e.g., `"drizzle-orm": "1.0.0-rc.3"` in `package.json`). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
 #### A1. Install Dependencies
 

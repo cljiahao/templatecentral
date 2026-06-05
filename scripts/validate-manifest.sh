@@ -196,6 +196,62 @@ check_skill_frontmatter() {
   fi
 }
 
+# ── doc sync (repo-level version markers track plugin.json) ─────────────────────
+
+# Repo files that must track the plugin's semver. Resolved relative to the repo root
+# (parent of PLUGIN_DIR). README badge + harness.json provenance drift silently otherwise —
+# this is the exact failure that left AGENTS.md/harness.json stale across four releases.
+_repo_root() { cd "$(dirname "$PLUGIN_DIR")" && pwd; }
+_plugin_version() {
+  python3 -c "import json; print(json.load(open('$PLUGIN_DIR/plugin.json')).get('version',''))" 2>/dev/null || echo ""
+}
+
+check_readme_badge_matches_plugin() {
+  header "README version badge matches plugin.json"
+  local root pv readme badge
+  root="$(_repo_root)"; pv="$(_plugin_version)"; readme="$root/README.md"
+  [[ -f "$readme" && -n "$pv" ]] || { pass "README.md or version absent — skipping"; return; }
+  badge=$(grep -oE 'badge/version-[0-9]+\.[0-9]+\.[0-9]+' "$readme" | head -1 | sed 's/badge\/version-//')
+  if [[ -z "$badge" ]]; then
+    pass "No version badge found in README — skipping"
+  elif [[ "$badge" == "$pv" ]]; then
+    pass "README badge: $badge"
+  else
+    fail "README version badge ($badge) does not match plugin.json ($pv) — update the badge"
+  fi
+}
+
+check_repo_harness_version_matches_plugin() {
+  header "Repo .claude/harness.json templatecentral_version matches plugin.json"
+  local root pv hj hv
+  root="$(_repo_root)"; pv="$(_plugin_version)"; hj="$root/.claude/harness.json"
+  [[ -f "$hj" && -n "$pv" ]] || { pass ".claude/harness.json or version absent — skipping"; return; }
+  hv=$(python3 -c "import json; print(json.load(open('$hj')).get('templatecentral_version',''))" 2>/dev/null || echo "")
+  if [[ "$hv" == "$pv" ]]; then
+    pass "harness.json templatecentral_version: $hv"
+  else
+    fail "Repo .claude/harness.json templatecentral_version ($hv) does not match plugin.json ($pv) — update it"
+  fi
+}
+
+check_repo_agents_marker_not_semver() {
+  # The repo AGENTS.md line-1 marker (`<!-- templateCentral: plugin@X.Y.Z -->`) is a harness schema
+  # floor, not plugin semver — it intentionally stays put across releases. Guard against a marker
+  # that was accidentally "synced" up to the plugin version.
+  header "Repo AGENTS.md marker not drifted to plugin semver"
+  local root pv marker mv
+  root="$(_repo_root)"; pv="$(_plugin_version)"; marker="$root/AGENTS.md"
+  [[ -f "$marker" && -n "$pv" ]] || { pass "AGENTS.md or version absent — skipping"; return; }
+  mv=$(head -1 "$marker" | grep -oE '@[0-9]+\.[0-9]+\.[0-9]+' | head -1 | tr -d '@')
+  if [[ -z "$mv" ]]; then
+    pass "No versioned marker on AGENTS.md line 1 — skipping"
+  elif [[ "$mv" == "$pv" ]]; then
+    fail "Repo AGENTS.md marker (@$mv) equals plugin semver — this marker is a schema floor, not the plugin version; it should not track releases"
+  else
+    pass "AGENTS.md marker (@$mv) is a schema floor, distinct from plugin semver ($pv)"
+  fi
+}
+
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
 
 echo "=== templateCentral manifest validation ==="
@@ -218,6 +274,12 @@ echo ""
 echo "CONSISTENCY"
 check_name_consistency
 check_skill_frontmatter
+
+echo ""
+echo "DOC SYNC"
+check_readme_badge_matches_plugin
+check_repo_harness_version_matches_plugin
+check_repo_agents_marker_not_semver
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

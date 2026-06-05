@@ -22,6 +22,7 @@ If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the
 |--------|-------|
 | New project from scratch | `templatecentral:scaffold` |
 | Add capability to existing project | `templatecentral:add` |
+| Adopt an existing project / retrofit the harness into a project built without templateCentral | `templatecentral:migrate` |
 | DB migration or framework upgrade | `templatecentral:migrate` |
 | Verify build compiles | `templatecentral:build` |
 | Write and run tests | `templatecentral:test` |

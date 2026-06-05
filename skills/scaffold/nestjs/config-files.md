@@ -3,6 +3,71 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
 ## Part B — Verbatim Config Files
 
+### `package.json`
+
+> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nestjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run `templatecentral:review` (update) post-scaffold to freshen pins.
+
+```json
+{
+  "name": "PROJECT_NAME_PLACEHOLDER",
+  "version": "0.1.0",
+  "description": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
+    "typecheck": "tsc --noEmit",
+    "check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" && eslint \"{src,test}/**/*.ts\" && tsc --noEmit",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:cov": "vitest --run --coverage",
+    "test:e2e": "vitest --run --config vitest.config.e2e.ts",
+    "test:ci": "vitest --run && vitest --run --config vitest.config.e2e.ts",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.0.2",
+    "@nestjs/common": "^11.1.24",
+    "@nestjs/core": "^11.1.24",
+    "@nestjs/platform-fastify": "^11.1.24",
+    "@nestjs/swagger": "^11.4.4",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.8.5",
+    "nestjs-pino": "^4.6.1",
+    "nestjs-zod": "^5.4.0",
+    "pino-pretty": "^13.1.3",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^4.4.3",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@nestjs/cli": "^11.0.21",
+    "@nestjs/schematics": "^11.1.0",
+    "@nestjs/testing": "^11.1.24",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^9.0.0",
+    "eslint-plugin-prettier": "^5.5.6",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "^4.1.8"
+  }
+}
+```
+
 ### `Dockerfile`
 
 ```dockerfile

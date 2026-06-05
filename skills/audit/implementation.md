@@ -334,7 +334,7 @@ Read each file in full, apply checklist above:
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
-- [ ] Starlette ≥1.1.0 in `requirements.txt` — see GHSA-86qp-5c8j-p5mr (malformed Host header auth-bypass). Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.2.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
 
 ---
 
@@ -371,6 +371,7 @@ Read each file in full, apply checklist above:
 - [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
 - [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
 - [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
+- [ ] `@nestjs/platform-fastify ≥11.1.19` — a published security advisory (Fastify URL-encoding middleware bypass) is fixed in ≥11.1.14; Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.19` that may resolve to a vulnerable version.
 
 ---
 
@@ -482,11 +483,11 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Stop hook exits 2 on failure**: The Stop hook must run tests, capture exit code, write output to **stderr** (not stdout), and `exit 2` if tests fail so Claude receives test results and is forced to fix. Pattern: `OUTPUT=$(cmd 2>&1); EC=$?; echo "$OUTPUT" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0`. Do NOT pipe through `tail` without capturing exit code (piping exits 0 regardless).
 - [ ] **PreToolUse `.env` protection**: Scaffold settings.json includes a `PreToolUse` hook that blocks edits to `.env*` files (exit 2) while allowing `.env.example`. Must read `tool_input.file_path` from stdin JSON (not top-level `file_path`). Matcher is `Edit|Write` (no `MultiEdit` tool exists). FastAPI uses `python3`, TS stacks use `node`.
 - [ ] **UserPromptSubmit hook present** (OWASP LLM01): Scaffold settings.json includes a `UserPromptSubmit` hook that pattern-checks incoming prompts for obvious injection phrases (`ignore previous instructions`, `you are now a`, etc.) using args[] exec form; exit 2 blocks the prompt and writes reason to stderr. FastAPI uses `python3`, TS stacks use `node`. Deny list is intentionally minimal — users extend for their domain.
-- [ ] **PostCompact hook present**: Scaffold settings.json includes a `PostCompact` hook that re-injects first 30 lines of AGENTS.md after context compaction, ensuring routing context survives summary. Note: PostCompact receives only metadata on stdin (session_id, transcript_path, cwd) — `compacted_content` is not available on stdin.
+- [ ] **SessionStart hook present (post-compaction recovery)**: Scaffold settings.json includes a `SessionStart` hook (matcher `startup|resume|compact`) running `session-context.sh`, which re-injects AGENTS.md routing context + universal invariants via plain stdout. This is the correct mechanism: `PostCompact` is observability-only (its exit code/stdout is ignored — it CANNOT inject context), so it is not used for re-injection.
 - [ ] **Skill scoping priority correct**: Official order is `Managed > CLI flag > Project > User > Plugin`. Project skills (`.claude/skills/`) override user skills (`~/.claude/skills/`) when names collide — NOT the reverse. Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations.
 - [ ] **Hook types documented**: Five hook handler types exist — `command`, `http`, `mcp_tool` (v2.1.117), `prompt`, `agent` (experimental). Scaffold uses `command` type. Any skill recommending hook setup should reference the correct type field.
 - [ ] **Stop hook 8-block cap**: v2.1.143 added a cap of 8 consecutive blocks before Claude Code ends the turn with a warning. For test-enforcement Stop hooks this is not an issue (they exit 0 when tests pass). No explicit workaround needed in scaffold hooks.
-- [ ] **PreCompact can block**: `PreCompact` fires before compaction and CAN block (unlike `PostCompact`). Scaffold templates intentionally use `PostCompact` (re-inject after) not `PreCompact`.
+- [ ] **Compaction recovery via SessionStart, not Pre/PostCompact**: Neither PreCompact nor PostCompact can inject context. Scaffolds use `SessionStart` (source list includes `compact`) — the documented way to restore context after compaction. PreCompact (which can block) is not used.
 - [ ] **omitClaudeMd scope**: Only the built-in `Explore` and `Plan` subagents have `omitClaudeMd: true`. All other built-in and custom subagents DO receive CLAUDE.md (and its `@AGENTS.md` import). Scaffold AGENTS.md must still be self-contained because Explore/Plan skip it.
 - [ ] **Project skill seeding**: Every scaffold skill seeds a `*-verify` project skill into `.claude/skills/` (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Migrate Phase 4 seeds the same for all stacks.
 - [ ] **Write-more-skills instruction present**: Scaffold instructions include a step asking the user to create additional project skills for repeated workflows.
@@ -496,8 +497,8 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Skill frontmatter uses `allowed-tools:` tightly scoped**: Any SKILL.md that grants tool access scopes it to the minimum required commands (e.g. `Bash(pnpm *)` not `Bash`). No SKILL.md grants unrestricted `Bash` without explicit justification.
 - [ ] **Ghost skill names absent**: No skill file references old names (`shared-*-agent`, `nestjs-code-standards`, `fastapi-code-standards`, `nextjs-add-auth`, `shared-audit`). Use `templatecentral:*` or `templatecentral:standards`.
 - [ ] **PreToolUse hook uses `args[]` exec form**: Simple hook commands (e.g. `node -e "..."`, `python3 -c "..."`) should use the array exec form `"command": ["node", "-e", "..."]` (v2.1.139+) rather than a shell string. Array form invokes via execve() — no shell interpolation, no injection risk. Complex shell commands that require pipes or conditionals may still use string form, but should be moved to wrapper scripts when possible.
-- [ ] **Hook `"if"` field used for path pre-filtering**: Tool-event hooks (PreToolUse, PostToolUse, PostToolUseFailure) support an `"if"` field on each handler that pre-filters execution before the `command` runs — e.g. `"if": "Edit(.env*)"` restricts a handler to only fire when editing `.env*` files. This reduces unnecessary process spawns and shrinks the attack surface of inline hook logic (ASI02). Scaffold templates use `"matcher"` for tool-name scoping; `"if"` adds path-level scoping within a matcher block.
-- [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present (v2.1.139+). It fires when a subagent finishes, is distinct from `Stop`, and supports `decision: "block"`. Default is `blocking: false` — must set `blocking: true` to enforce subagent output review before Claude continues. If no subagents are used, no check needed.
+- [ ] **Hook `"if"` field — single rule only**: The `"if"` field exists and holds exactly ONE permission rule (e.g. `Edit(.env*)`); there is no `&&`/`||`/pipe to combine rules or tools. Because of that single-rule limit, scaffolds filter PostToolUse to TS/Python edits **in-script** (reading `tool_input.file_path`) rather than via `if`. `continueOnBlock` does NOT exist in the hooks schema — do not add it.
+- [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present. It fires when a subagent finishes, is distinct from `Stop`, and can force review by exiting 2 (stderr → Claude) or emitting `{"decision":"block","reason":"..."}` on stdout. There is **no** `blocking` settings field — control is the hook's exit code / JSON `decision` output. If no subagents are used, no check needed.
 - [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
 - [ ] **block-`--no-verify` PreToolUse hook present**: Scaffold settings.json includes a `PreToolUse` hook with `matcher: "Bash"` that checks incoming Bash commands and exits 2 if `--no-verify` is found. Must read `tool_input.command` from stdin JSON — **not** top-level `command`. TS stacks use `node` in args[] exec form; FastAPI uses `python3`. Without this hook, an agent can bypass Stop (and all other hooks) by running `git commit --no-verify`.
 
@@ -646,13 +647,64 @@ head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md ma
 
 Any `FAIL` line means a harness file was removed or corrupted. Re-create it from the v4.0.0 spec in `AGENTS.md` → **Working on this repo** section.
 
+---
+
+## Step 7 — Documentation sync
+
+Run last, after all content fixes and the version bump in Step 4f. The goal: every markdown doc and version marker is accurate before the audit closes. Two tracks — handle them differently.
+
+### 7a — Structural markers (auto-update, no approval needed)
+
+These are formulaic — one correct value, derived from `.claude-plugin/plugin.json`. Update them directly to match, then let the lint scripts confirm. The two scripts enforce these automatically, so the audit's job is to fix any the scripts flag:
+
+```bash
+bash scripts/lint-skills.sh skills/        # check_harness_version_matches_plugin, check_agents_marker_not_drifted_to_semver
+bash scripts/validate-manifest.sh          # README badge, repo harness.json, repo AGENTS.md marker vs plugin.json
+```
+
+| Marker | Tracks | Where | Rule |
+|--------|--------|-------|------|
+| `version` | — | `.claude-plugin/plugin.json` | source of truth (set in Step 4f) |
+| README version badge | plugin semver | `README.md` | == plugin.json |
+| `templatecentral_version` | plugin semver | repo `.claude/harness.json` + all scaffold/migrate harness.json templates | == plugin.json |
+| AGENTS.md line-1 marker `@X.Y.Z` | harness **schema floor** | repo `AGENTS.md` + scaffold/migrate templates | **PINNED** at `HARNESS_SCHEMA_VERSION` (currently 4.0.0); never bump on a normal release |
+
+**Critical distinction:** `templatecentral_version` tracks the plugin's semver (bump every release). The AGENTS.md `@X.Y.Z` marker is a *migration schema floor* read by `migrate` Phase 0 — bumping it on a normal release makes every existing project falsely report "needs migration." It moves only on a deliberate harness-structure change, at which point you bump `HARNESS_SCHEMA_VERSION` in `lint-skills.sh` and the floor markers together. Both lint scripts guard against accidental drift in either direction.
+
+If either script reports a mismatch, fix the flagged file to match `plugin.json` (or revert a drifted floor marker), then re-run until both pass.
+
+### 7b — Narrative docs (flag + draft, user approves)
+
+These carry intentional decisions — don't rewrite blindly. Read each, compare against the current state of the repo, and for anything stale, present a drafted replacement for the user to approve before writing:
+
+| Doc | Check for staleness against |
+|-----|------------------------------|
+| `README.md` | skill count (registered `skills/*/SKILL.md`), capability list, stack names, command names |
+| `EXAMPLES.md` | every `templatecentral:*` reference resolves to a real skill; workflows still valid |
+| `AGENTS.md` | `templatecentral:add` capability row matches `skills/add/*` directories exactly |
+| `CONTRIBUTING.md` | lint/validate commands and contribution steps still exist |
+| `FUTURE.md` | any listed seam/direction that has since shipped (move to CHANGELOG) or changed |
+| `SECURITY.md` | supported-version statements, disclosure process |
+
+Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
+
 ## Changelog
+### 2.5.0
+- Added Step 7 — Documentation sync: two-track doc maintenance (auto-update structural version markers; flag + draft narrative docs). Runs every audit so markdown and version markers can't silently drift.
+- Scoped-skills enforcement: lint now requires every seeded `*-verify`/`*-migrate` skill to declare a tightly-scoped `allowed-tools:` (`check_seeded_skills_scope_tools`) and bans unscoped `Bash` grants (`check_no_unscoped_bash_grant`). All seeded skills updated to model least-agency (OWASP Agentic ASI02).
+- Harness-completeness enforcement: `check_scaffold_seeds_complete_harness` lint-enforces that every scaffold + migrate `settings.json` template seeds the full hook set AND the `permissions.deny` secret-Read block (the Step 3H manual checklist is now backstopped by lint). Adoption/retrofit routing surfaced in `AGENTS.md` + `README.md`.
+- Defense-in-depth: scaffolds now seed `permissions.deny` for `Read(.env*)`/`Read(./secrets/**)` — the Edit/Write PreToolUse guard only blocked writes; an agent could still read secrets.
+- **Full harness parity:** scaffolds + migrate seed a **7-event** `.claude/hooks/` script kit (8 scripts: `protect-files`, `block-no-verify` with git-guards, `user-prompt-guard` with LLM02 credential detection, `post-edit-typecheck`, `post-tool-failure`, `stop-checks`, `subagent-stop`, `session-context`). When auditing a scaffold's harness, verify: the 7 events (PreToolUse, UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart); PostToolUse filters to source-file edits **in-script** (no `if` field used — it allows only a single rule; and no `continueOnBlock` — not a real key); JSON parsing uses the runtime guaranteed per stack (Node for TS / python3 for FastAPI) so guards fail safe; `SessionStart` (source `compact`) re-injects context — PostCompact is observability-only and cannot inject; scaffolds inline the script bodies while migrate references them. Enforced by `check_scaffold_seeds_complete_harness`.
+- Step 5 / lint: added `check_harness_version_matches_plugin` (harness.json `templatecentral_version` templates == plugin.json) and `check_agents_marker_not_drifted_to_semver` (AGENTS.md schema-floor marker must stay <= `HARNESS_SCHEMA_VERSION`, guarding migrate Phase 0).
+- `validate-manifest.sh`: added DOC SYNC section — README badge, repo `.claude/harness.json`, and repo AGENTS.md marker checked against `plugin.json`.
+- Documented the `templatecentral_version` (plugin semver) vs AGENTS.md `@X.Y.Z` marker (harness schema floor) distinction; introduced `HARNESS_SCHEMA_VERSION` constant in `lint-skills.sh`.
+### 2.4.0
 ### 2.4.0
 - Step 3H: added block-`--no-verify` PreToolUse hook check — scaffold must block `git ... --no-verify` via `tool_input.command` (not top-level `command`); without it agents can bypass Stop and all other hooks
 - Step 5: added `check_no_toplevel_command_in_hooks` to lint script — catches hooks that read bash command from top-level `d.command` instead of `d.tool_input.command`
 ### 2.3.0
 - Step 6: added `skillListingBudgetFraction` health check — 10+ skill repos should set `"skillListingBudgetFraction": 0.02` in `.claude/settings.json` to cap skill-listing context overhead
-- Harness check list now at 15 items (added `continueOnBlock: true` awareness for PostToolUse)
+- Harness check list now at 15 items (PostToolUse feedback hook awareness)
 ### 2.2.0
 - Step 4f: added semver decision rules for version bump (patch = fixes only, minor = additive, major = breaking skill name/contract changes)
 ### 2.1.0

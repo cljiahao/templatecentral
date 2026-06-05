@@ -33,7 +33,7 @@ Exit.
 ℹ️ This project was scaffolded with templateCentral <version>.
 
 v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), PostCompact (re-injects AGENTS.md after compaction)
+- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
 - AGENTS.md              — ## AI Harness section with post-harness seams
 
 Upgrade? (A) Yes  (B) Skip
@@ -241,7 +241,7 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -255,7 +255,7 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 
 ```markdown
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 PostToolUse: incremental type-check after every edit — feedback only, never blocks.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -281,69 +281,67 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 | nextjs / vite-react / nestjs | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` |
 | fastapi | `python -m pyright src/ 2>&1 \| tail -5` |
 
-**For TS stacks (nextjs / vite-react / nestjs):**
+**For TS stacks (nextjs / vite-react / nestjs)** — settings.json referencing the seeded hook scripts (the same kit `templatecentral:scaffold` writes):
 ```json
 {
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.*.local)",
+      "Read(.env.development)",
+      "Read(.env.development.*)",
+      "Read(.env.dev)",
+      "Read(.env.production)",
+      "Read(.env.production.*)",
+      "Read(.env.staging)",
+      "Read(.env.staging.*)",
+      "Read(.env.uat)",
+      "Read(.env.test)",
+      "Read(./secrets/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/protect-files.sh" }]
       },
       {
         "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const cmd=((d.tool_input||{}).command||'');if(cmd.includes('--no-verify')){process.stderr.write('Blocked: --no-verify bypasses safety hooks\\n');process.exit(2);}process.exit(0);})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-no-verify.sh" }]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const t=(d.prompt||'').toLowerCase();const deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions'];if(deny.some(p=>t.includes(p))){process.stderr.write('Prompt injection pattern detected\\n');process.exit(2);}process.exit(0);})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "node .claude/hooks/user-prompt-guard.js" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pnpm exec tsc --noEmit --incremental 2>&1 | tail -5"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-tool-failure.sh" }]
       }
     ],
     "Stop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "OUTPUT=$(pnpm test --run 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-checks.sh" }]
       }
     ],
-    "PostCompact": [
+    "SubagentStop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/subagent-stop.sh" }]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-context.sh" }]
       }
     ]
   },
@@ -351,69 +349,67 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 }
 ```
 
-**For FastAPI:**
+**For FastAPI** — identical shape; `UserPromptSubmit` runs `python3 .claude/hooks/user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`:
 ```json
 {
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.*.local)",
+      "Read(.env.development)",
+      "Read(.env.development.*)",
+      "Read(.env.dev)",
+      "Read(.env.production)",
+      "Read(.env.production.*)",
+      "Read(.env.staging)",
+      "Read(.env.staging.*)",
+      "Read(.env.uat)",
+      "Read(.env.test)",
+      "Read(./secrets/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); n=f.split('/')[-1]; blocked=(n.startswith('.env') and 'example' not in n) or '.github/workflows/' in f or n.endswith(('.pem','.key','.p12','.pfx','.secret')) or n in ('credentials.json','.netrc','.secrets'); exit(2 if blocked else 0)"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/protect-files.sh" }]
       },
       {
         "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); cmd=d.get('tool_input',{}).get('command',''); (sys.stderr.write('Blocked: --no-verify bypasses safety hooks\\n'),sys.exit(2)) if '--no-verify' in cmd else sys.exit(0)"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-no-verify.sh" }]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["python3", "-c", "import json,sys; d=json.load(sys.stdin); t=(d.get('prompt','') or '').lower(); deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions']; (sys.stderr.write('Prompt injection pattern detected\\n'),sys.exit(2)) if any(p in t for p in deny) else sys.exit(0)"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "python3 .claude/hooks/user-prompt-guard.py" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python -m pyright src/ 2>&1 | tail -5"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-tool-failure.sh" }]
       }
     ],
     "Stop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "OUTPUT=$(python -m pytest test/ -q 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-checks.sh" }]
       }
     ],
-    "PostCompact": [
+    "SubagentStop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/subagent-stop.sh" }]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-context.sh" }]
       }
     ]
   },
@@ -421,11 +417,14 @@ If `.claude/settings.json` does not exist, create it. Select the PostToolUse com
 }
 ```
 
-`PreToolUse` — two guards: (1) blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; (2) blocks `git ... --no-verify` to prevent hook bypass. Skills, specs, and app code are unrestricted.
-`UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
-`PostToolUse` — fast incremental feedback after every edit. Feedback-only; never blocks.
-`Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
-`PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
+Then seed the `.claude/hooks/` scripts. Create them **identical to the scripts `templatecentral:scaffold` writes for the detected stack** (see scaffold §6b): `protect-files.sh`, `block-no-verify.sh`, `user-prompt-guard.js` (TS) or `user-prompt-guard.py` (FastAPI), `post-edit-typecheck.sh`, `post-tool-failure.sh`, `stop-checks.sh`, `subagent-stop.sh`, `session-context.sh`. Then `chmod +x .claude/hooks/*.sh`. The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
+
+`permissions.deny` — blocks the agent from *reading* `.env*` / `secrets/**` (the Edit/Write guard only blocks writes).
+`PreToolUse` — `protect-files.sh` (secrets/CI/cert/governance) + `block-no-verify.sh` (`--no-verify`, protected-branch commits, force-push, `rm -rf` src).
+`UserPromptSubmit` — `user-prompt-guard` blocks injection phrases (LLM01) and inline credentials (LLM02).
+`PostToolUse` — incremental type feedback (filtered to TS/Python edits in-script).
+`PostToolUseFailure` — surfaces tool errors. `Stop` — test gate (exit 2 forces fix). `SubagentStop` — type-gates a subagent's diff.
+`SessionStart` (startup/resume/compact) — re-injects AGENTS.md routing context + invariants (PostCompact is observability-only and cannot inject).
 `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget.
 
 If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
@@ -462,6 +461,7 @@ For nextjs only, also create `.claude/skills/next-migrate.md` if not present:
 ---
 name: next-migrate
 description: Run Drizzle push/migrate for this project with a safety gate.
+allowed-tools: Bash(pnpm *)
 ---
 
 Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
@@ -478,6 +478,9 @@ Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
 
 ```bash
 sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
+# Every enforcement hook script is a high-value tamper target — hash each for drift detection.
+# Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
+for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill:
@@ -490,17 +493,27 @@ Write `.claude/harness.json` (include only files that were actually created):
 
 ```json
 {
-  "templatecentral_version": "4.0.0",
+  "templatecentral_version": "4.5.0",
   "stack": "<detected-stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/<stack>-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify.md" }
+    ".claude/skills/<stack>-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify.md" },
+    ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
+    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
+    ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
+    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<sha256_hook_4>", "path": ".claude/hooks/post-edit-typecheck.sh" },
+    ".claude/hooks/post-tool-failure.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/post-tool-failure.sh" },
+    ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
+    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
+    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" }
   }
 }
 ```
+
+> `user-prompt-guard.<ext>` is `.js` for TS stacks (nextjs, nestjs, vite-react) and `.py` for FastAPI.
 
 For nextjs only, also include the migrate skill entry:
 ```json

@@ -5,6 +5,132 @@
 
 Write these files exactly as shown.
 
+### `package.json`
+
+> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run `templatecentral:review` (update) post-scaffold to freshen pins.
+>
+> **ESLint pinned at `^9`** — `eslint-plugin-react-hooks` 7.x peer-supports only `^9`; bumping to ESLint 10 breaks `pnpm install` under strict peer enforcement until the plugin ships ESLint 10 support. Do not upgrade eslint past `^9` without verifying `eslint-plugin-react-hooks` peer compatibility.
+
+```json
+{
+  "name": "PROJECT_NAME_PLACEHOLDER",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "prettier --check . && eslint . && tsc --noEmit",
+    "test": "vitest run",
+    "test:ci": "vitest run --coverage",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "axios": "^1.17.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "next": "^16.2.6",
+    "next-themes": "^0.4.6",
+    "pino": "^10.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.77.0",
+    "@hookform/resolvers": "^5.1.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.2.6",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^16.0.0",
+    "husky": "^9.1.7",
+    "pino-pretty": "^13.0.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "tailwindcss": "^4.3.0",
+    "tw-animate-css": "^1.3.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^4.1.8",
+    "@eslint/eslintrc": "^3.3.0"
+  }
+}
+```
+
+### `eslint.config.mjs`
+
+> Next.js 16 removed `next lint`; linting runs via ESLint flat config. `@eslint/eslintrc`'s `FlatCompat` consumes `eslint-config-next` presets. `pnpm check` runs `eslint .`, so this file must exist.
+
+```javascript
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { FlatCompat } from '@eslint/eslintrc';
+
+const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+
+export default [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts'] },
+];
+```
+
+### `.husky/pre-commit`
+
+```sh
+#!/bin/sh
+# Ensure lock file matches package.json
+pnpm install --frozen-lockfile > /dev/null 2>&1 || {
+  echo "❌ Lock file is out of sync with package.json"
+  echo "Run: pnpm install"
+  exit 1
+}
+
+# Fast checks (format, lint, typecheck)
+pnpm run check || {
+  echo "❌ Check failed (format/lint/typecheck)"
+  exit 1
+}
+```
+
+### `.husky/pre-push`
+
+```sh
+#!/bin/sh
+pnpm build && pnpm run check && pnpm run test:ci
+```
+
+### `.prettierignore`
+
+```
+node_modules
+.next
+dist
+build
+coverage
+pnpm-lock.yaml
+.claude
+```
+
 ### `next.config.ts`
 
 ```ts

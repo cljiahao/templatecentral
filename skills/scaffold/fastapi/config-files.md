@@ -517,6 +517,7 @@ extend-select = ["I"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "test"]
+asyncio_mode = "auto"  # pytest-asyncio: treat `async def test_*` as coroutine tests without per-test markers
 
 markers = [
     "unit: unit tests",
@@ -528,4 +529,14 @@ addopts = [
 ]
 ```
 
----
+### `requirements-dev.txt`
+
+Write this file verbatim (dev-only dependencies; not installed in production Docker stages):
+
+```
+pytest
+pytest-asyncio
+httpx
+ruff
+pyright
+```

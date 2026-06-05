@@ -24,9 +24,9 @@ Skills must specify **16.2.6** as minimum — 16.2.5 is insecure for Turbopack d
 `@nestjs/platform-fastify` ≥11.1.19 required for Fastify ≥v5. No breaking changes.
 
 ### FastAPI + Starlette
-FastAPI 0.136+, **Starlette ≥1.1.0 required** (latest: 1.1.0, 2026-05-23). `on_startup`/`on_shutdown` removed — lifespan only. Fixed in 4.1.0.
+FastAPI 0.136+, **Starlette ≥1.0.1 required** (BadHost fix landed in 1.0.1, CVE-2026-48710; current stable **1.2.1**, 2026-05-31). `on_startup`/`on_shutdown` removed — lifespan only. CORRECTION (v4.5.0 audit): earlier cache said the fix was 1.1.0 — it was actually 1.0.1; rules/fastapi.md floor corrected to ≥1.0.1.
 
-**SECURITY ADVISORY (GHSA-86qp-5c8j-p5mr, May 2026):** Starlette ≤1.0.0 "BadHost" — malformed `Host` headers cause `request.url.path` to return incorrect values, allowing middleware-based path auth to be bypassed. Fix: upgrade to Starlette ≥1.1.0. Prefer endpoint-level auth (`Depends()`/`Security()`) over middleware path-matching for auth-critical routes. `scope["path"]` is safe; `request.url.path` was the vulnerable form.
+**SECURITY ADVISORY (GHSA-86qp-5c8j-p5mr, May 2026):** Starlette ≤1.0.0 "BadHost" — malformed `Host` headers cause `request.url.path` to return incorrect values, allowing middleware-based path auth to be bypassed. Fix: upgrade to Starlette ≥1.0.1. Prefer endpoint-level auth (`Depends()`/`Security()`) over middleware path-matching for auth-critical routes. `scope["path"]` is safe; `request.url.path` was the vulnerable form.
 
 ### pnpm
 pnpm 11 (confirmed). Settings at **top level** of `pnpm-workspace.yaml` (no `pnpm:` prefix). `blockExoticSubdeps: true` is now DEFAULT. `allowBuilds` replaces ALL of: `onlyBuiltDependencies`, `onlyBuiltDependenciesFile`, `neverBuiltDependencies`, `ignoredBuiltDependencies`, `ignoreDepScripts` — ALL REMOVED. Scaffold uses correct format. ✓

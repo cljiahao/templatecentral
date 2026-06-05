@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-4.4.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-4.5.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -69,7 +69,7 @@ Claude reads the scaffold skill, generates every file, installs dependencies, ru
 Each scaffold produces a complete, working project — not a bare starter.
 
 **Every stack includes:**
-✅ AI harness — prompt injection guard, secrets protection, type feedback, test gate, context recovery  
+✅ AI harness (v4.5) — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall, `PreToolUse` secrets read/write guard + git guards, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
 ✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility
 
 ### Next.js
@@ -101,7 +101,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 | `templatecentral:scaffold` | Scaffold a new Next.js, Vite+React, FastAPI, or NestJS project from scratch |
 | `templatecentral:add` | Add any capability to an existing project — auth, database, tests, components, pages, API routes, forms, logging, error handling, pagination, integrations, and more |
 | `templatecentral:standards` | Review code quality, naming conventions, validation patterns, drift, and full-stack type contracts |
-| `templatecentral:migrate` | Run database migrations or migrate a project to updated conventions, dependencies, or patterns |
+| `templatecentral:migrate` | Run database migrations, migrate a project to updated conventions, or **adopt/retrofit the harness** into a project that was built without templateCentral |
 | `templatecentral:audit` | Full project audit — ecosystem research, mechanical lint, per-file semantic review, and fix loop |
 | `templatecentral:write-skill` | Author new skills, enforcing CONVENTIONS.md at creation time |
 

@@ -1286,6 +1286,9 @@ export function cn(...inputs: ClassValue[]) {
 ```ts
 import { type NextRequest } from 'next/server';
 
+// TRUST_PROXY: set to any non-empty string to read X-Forwarded-* headers.
+// One-hop (ALB → App): set to the ALB VPC CIDR or "1".
+// Two-hop (ALB → Traefik → App): set to "2" or Traefik's CIDR.
 export function getAppOrigin(request: NextRequest): string {
   const trustProxy = process.env.TRUST_PROXY;
   const proto = (trustProxy
@@ -1867,7 +1870,7 @@ describe('GET /api/health (Docker / probe path)', () => {
 
 ### 1. Create directory and files
 
-Create the target directory. Write all files per the structure in Part A: generated files from conventions, verbatim files from Parts B and C.
+Create the target directory. Write every file verbatim from `config-files.md` (Dockerfiles, `package.json`, `eslint.config.mjs`, tsconfig, etc.) and from Parts B and C below — substituting only the project `"name"` in `package.json`.
 
 ### 2. Update project name and branding
 
@@ -1981,7 +1984,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. PostCompact: re-injects first 30 lines of AGENTS.md after compaction so routing context survives summary.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -1999,71 +2002,69 @@ Context load order (context only — not enforcement, broad → specific): manag
 
 ### 6b. Create `.claude/settings.json`
 
-Create `.claude/settings.json` at the project root. If the file already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, PostCompact) into the existing `hooks` object rather than overwriting — preserve any hooks already present.
+Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (below). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present.
 
 **`.claude/settings.json`**:
 ```json
 {
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.*.local)",
+      "Read(.env.development)",
+      "Read(.env.development.*)",
+      "Read(.env.dev)",
+      "Read(.env.production)",
+      "Read(.env.production.*)",
+      "Read(.env.staging)",
+      "Read(.env.staging.*)",
+      "Read(.env.uat)",
+      "Read(.env.test)",
+      "Read(./secrets/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const f=((d.tool_input||{}).file_path||'');const n=f.split('/').pop()||'';const blocked=(n.startsWith('.env')&&!n.includes('example'))||f.includes('.github/workflows/')||['pem','key','p12','pfx','secret'].some(e=>n.endsWith('.'+e))||['credentials.json','.netrc','.secrets'].includes(n);process.exit(blocked?2:0)})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/protect-files.sh" }]
       },
       {
         "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const cmd=((d.tool_input||{}).command||'');if(cmd.includes('--no-verify')){process.stderr.write('Blocked: --no-verify bypasses safety hooks\\n');process.exit(2);}process.exit(0);})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-no-verify.sh" }]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ["node", "-e", "let b='';process.stdin.on('data',d=>b+=d);process.stdin.on('end',()=>{const d=JSON.parse(b||'{}');const t=(d.prompt||'').toLowerCase();const deny=['ignore previous instructions','ignore all instructions','you are now a ','disregard your instructions','forget your instructions'];if(deny.some(p=>t.includes(p))){process.stderr.write('Prompt injection pattern detected\\n');process.exit(2);}process.exit(0);})"]
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "node .claude/hooks/user-prompt-guard.js" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pnpm exec tsc --noEmit --incremental 2>&1 | tail -5"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-tool-failure.sh" }]
       }
     ],
     "Stop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "OUTPUT=$(pnpm test --run 2>&1); EC=$?; echo \"$OUTPUT\" | tail -20 >&2; [ $EC -ne 0 ] && exit 2 || exit 0"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-checks.sh" }]
       }
     ],
-    "PostCompact": [
+    "SubagentStop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '=== Post-compact context ===' && head -30 AGENTS.md 2>/dev/null"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/subagent-stop.sh" }]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-context.sh" }]
       }
     ]
   },
@@ -2071,12 +2072,218 @@ Create `.claude/settings.json` at the project root. If the file already exists, 
 }
 ```
 
-`PreToolUse` — two guards: (1) blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; (2) blocks `git ... --no-verify` to prevent hook bypass. Skills, specs, and app code are unrestricted.
-`UserPromptSubmit` — pattern-checks incoming prompts for obvious injection phrases; exit 2 blocks the prompt. Extend deny list for your domain.
-`PostToolUse` — fast incremental TypeScript feedback after every edit. Feedback-only; never blocks.
-`Stop` — runs full test suite; stderr to Claude on failure; exit 2 forces fix; exit 0 on pass.
-`PostCompact` — re-injects first 30 lines of AGENTS.md after context compaction so routing context survives summary.
-`skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget; prevents skill-heavy projects from crowding out working context.
+Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
+
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `.github/workflows/`, cert/credential files; warns on governance files (`AGENTS.md`, `CLAUDE.md`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), and `rm -rf` on source dirs.
+- `user-prompt-guard.js` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs).
+- `post-edit-typecheck.sh` (PostToolUse) — incremental `tsc` feedback, filtered to TS edits in-script. Feedback-only; exit 0 always.
+- `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
+- `stop-checks.sh` (Stop) — runs the test suite; exit 2 forces a fix before the turn ends.
+- `subagent-stop.sh` (SubagentStop) — type-gates a subagent's uncommitted TS changes so it can't hand back broken code.
+- `session-context.sh` (SessionStart: startup/resume/compact) — re-injects AGENTS.md routing context + universal invariants. This is the working post-compaction recovery path; PostCompact is observability-only and cannot inject context, so it is not used.
+- `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the budget.
+
+**`.claude/hooks/protect-files.sh`**:
+```bash
+#!/usr/bin/env bash
+# PreToolUse(Edit|Write) — protect secrets, CI, cert, and governance files.
+# Exit 2 = hard block; exit 1 = warn (human approval expected); exit 0 = allow.
+input=$(cat)
+file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
+[ -z "$file" ] && exit 0
+base="${file##*/}"
+
+# Hard block: .env* except the committed templates
+if [[ "$base" == .env* && "$base" != ".env.example" && "$base" != ".env.default" ]]; then
+  echo "BLOCKED: writing $base is not allowed. Add placeholders to .env.example; keep real secrets out of the repo." >&2
+  exit 2
+fi
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root="."
+rel="${file#"$root"/}"
+
+if [[ "$rel" == .github/workflows/* ]]; then
+  echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+  exit 2
+elif [[ "$rel" =~ \.(pem|key|p12|pfx|secret)$ ]] || [[ "$base" == "credentials.json" || "$base" == ".netrc" || "$base" == ".secrets" ]]; then
+  echo "BLOCKED: $rel is a certificate or credential file — must never be committed." >&2
+  exit 2
+fi
+
+reason=""
+case "$rel" in
+  AGENTS.md|CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
+  docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
+  .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
+  .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  Dockerfile) reason="container image definition" ;;
+esac
+if [ -n "$reason" ]; then
+  echo "PROTECTED FILE: $rel — $reason. Confirm human approval and note it in the PR." >&2
+  exit 1
+fi
+exit 0
+```
+
+**`.claude/hooks/block-no-verify.sh`**:
+```bash
+#!/usr/bin/env bash
+# PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
+input=$(cat)
+cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
+[ -z "$cmd" ] && exit 0
+
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-z]*n'; then
+  echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
+  exit 2
+fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [[ "$branch" == "main" || "$branch" == "uat" || "$branch" == "develop" ]]; then
+    echo "BLOCKED: direct commit to protected branch '$branch'. Create a feature branch first." >&2
+    exit 2
+  fi
+fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+push' && { { echo "$cmd" | grep -qE '\-\-force([[:space:]=]|$)|[[:space:]]-[a-z]*f' && echo "$cmd" | grep -qE '\bmain\b|\buat\b|\bdevelop\b'; } || echo "$cmd" | grep -qE '[[:space:]]\+(main|uat|develop)\b'; }; then
+  echo "BLOCKED: force-push to a protected branch (--force/-f or +refspec). Open a PR instead." >&2
+  exit 2
+fi
+if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
+  echo "BLOCKED: recursive rm on a source directory. Confirm with a human first." >&2
+  exit 2
+fi
+exit 0
+```
+
+**`.claude/hooks/user-prompt-guard.js`**:
+```javascript
+#!/usr/bin/env node
+// UserPromptSubmit — OWASP LLM01 injection guard + LLM02 credential-leak detection. Exit 2 = block.
+const input = require('fs').readFileSync(0, 'utf8');
+let prompt = '';
+try { prompt = (JSON.parse(input || '{}').prompt) || ''; } catch { process.exit(0); }
+const lower = prompt.toLowerCase();
+
+const injection = [
+  'ignore previous instructions',
+  'ignore all instructions',
+  'disregard your',
+  'forget your instructions',
+  'override your',
+  'new instructions:',
+  'system prompt:',
+  'your real instructions',
+  'you are now a different ai',
+  'you are no longer bound',
+  'pretend you are not bound',
+  'pretend you have no restrictions',
+  'act as if you have no restrictions',
+  'developer mode enabled',
+];
+for (const p of injection) {
+  if (lower.includes(p)) {
+    process.stderr.write(`Blocked: prompt matches an injection pattern (OWASP LLM01): "${p}"\n`);
+    process.exit(2);
+  }
+}
+
+const credentials = [
+  [/AKIA[0-9A-Z]{16}/, 'AWS access key ID'],
+  [/ghp_[A-Za-z0-9]{36}/, 'GitHub personal access token'],
+  [/github_pat_[A-Za-z0-9_]{82}/, 'GitHub fine-grained PAT'],
+  [/sk-ant-[A-Za-z0-9\-_]{90,}/, 'Anthropic API key'],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'PEM private key block'],
+  [/mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, 'database URL with embedded credentials'],
+];
+for (const [re, label] of credentials) {
+  if (re.test(prompt)) {
+    process.stderr.write(`Blocked: prompt may contain a real credential — ${label} (OWASP LLM02). Do not paste secrets; use env vars.\n`);
+    process.exit(2);
+  }
+}
+process.exit(0);
+```
+
+**`.claude/hooks/post-edit-typecheck.sh`**:
+```bash
+#!/usr/bin/env bash
+# PostToolUse(Edit|Write) — fast type feedback on TS edits only. Feedback-only (never blocks).
+input=$(cat)
+file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
+case "$file" in *.ts|*.tsx) ;; *) exit 0 ;; esac
+pnpm exec tsc --version >/dev/null 2>&1 || exit 0
+pnpm exec tsc --noEmit --incremental 2>&1 | tail -5
+exit 0
+```
+
+**`.claude/hooks/post-tool-failure.sh`**:
+```bash
+#!/usr/bin/env bash
+# PostToolUseFailure — surface tool error context for self-correction. Always exit 0.
+input=$(cat)
+printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const d=JSON.parse(b||'{}');process.stderr.write('Tool failure: '+(d.tool_name||'unknown')+(d.error?(' — '+d.error):'')+'\n')}catch(e){}})" 2>/dev/null
+exit 0
+```
+
+**`.claude/hooks/stop-checks.sh`**:
+```bash
+#!/usr/bin/env bash
+# Stop — run the test suite; exit 2 (stderr to Claude) forces a fix before the turn ends.
+# stop_hook_active guard: prevents re-entry when Claude re-runs after a Stop exit-2 block.
+input=$(cat)
+active=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(b||'{}').stop_hook_active||false))}catch(e){process.stdout.write('false')}})" 2>/dev/null)
+[ "$active" = "true" ] || [ "$active" = "True" ] && exit 0
+command -v pnpm >/dev/null 2>&1 || { echo "pnpm unavailable — skipping Stop gate" >&2; exit 0; }
+OUTPUT=$(pnpm test --run 2>&1); EC=$?
+echo "$OUTPUT" | tail -20 >&2
+[ $EC -ne 0 ] && exit 2 || exit 0
+```
+
+**`.claude/hooks/subagent-stop.sh`**:
+```bash
+#!/usr/bin/env bash
+# SubagentStop — type-gate a subagent's uncommitted TS changes so it can't hand back broken code.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+if git diff --name-only HEAD 2>/dev/null | grep -qE '\.(ts|tsx)$' || \
+   git diff --cached --name-only 2>/dev/null | grep -qE '\.(ts|tsx)$'; then
+  OUTPUT=$(pnpm exec tsc --noEmit 2>&1); EC=$?
+  if [ $EC -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
+fi
+exit 0
+```
+
+**`.claude/hooks/session-context.sh`**:
+```bash
+#!/usr/bin/env bash
+# SessionStart(startup|resume|compact) — re-inject routing context + universal invariants.
+# Plain stdout is added to Claude's context (per Claude Code hooks docs); this is what survives compaction.
+echo "=== templateCentral routing context ==="
+head -30 AGENTS.md 2>/dev/null
+
+# If a CONSTITUTION.md exists, re-inject it (project binding invariants survive compaction)
+if [ -f docs/CONSTITUTION.md ]; then
+  echo ""
+  echo "=== Project invariants (docs/CONSTITUTION.md) ==="
+  cat docs/CONSTITUTION.md
+fi
+
+cat <<'EOF'
+
+## Always-on invariants (survive compaction)
+1. Secrets are never read or written by the agent — .env* and secrets/** are guarded.
+2. Run the quality gate (typecheck + tests) before declaring any task done.
+3. Work on a feature branch — never commit directly to main/uat/develop.
+4. Protected files — AGENTS.md, CLAUDE.md, Dockerfile, .claude/settings.json, .claude/hooks/*, docs/CONSTITUTION.md — require human approval.
+5. Respect the architecture/dependency boundaries documented in AGENTS.md and docs/CONSTITUTION.md.
+EOF
+```
+
+Make all hook scripts executable:
+```bash
+chmod +x .claude/hooks/*.sh
+```
 
 Also create `FUTURE.md` at the project root:
 
@@ -2106,7 +2313,7 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ---
 
-*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated in v4.0.*
+*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated.*
 ```
 
 ### 6c. Create project skill files (`.claude/skills/`)
@@ -2117,6 +2324,7 @@ Create `.claude/skills/next-migrate.md`:
 ---
 name: next-migrate
 description: Run Drizzle push/migrate for this project with a safety gate.
+allowed-tools: Bash(pnpm *)
 ---
 
 Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
@@ -2133,6 +2341,7 @@ Create `.claude/skills/next-verify.md`:
 ---
 name: next-verify
 description: Run typecheck + lint + test suite for this project in one pass.
+allowed-tools: Bash(pnpm *)
 ---
 
 Run `pnpm check && pnpm test` and report any failures.
@@ -2158,15 +2367,80 @@ echo "All checks passed."
 
 Run `chmod +x .claude/hooks/verify.sh`.
 
+### 6c. Seed `docs/CONSTITUTION.md`
+
+Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
+It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
+Fill in the `[...]` placeholders with the actual project values.
+
+**`docs/CONSTITUTION.md`**:
+```markdown
+# CONSTITUTION.md
+
+## 1. Purpose
+
+This document defines the non-negotiable invariants for **[Project Name]**.
+It applies to all contributors — human and AI agent alike. When `AGENTS.md`,
+templateCentral skills, or any other guidance conflicts with this document,
+**this document wins**. No PR may be merged that violates these rules without
+an explicit `## Human Approval Override` section in the PR description.
+
+## 2. Architecture Invariants
+
+[Define the load-bearing architectural rules: layering, module boundaries,
+factory/composition-root patterns, forbidden cross-imports, etc.]
+
+## 3. Security Invariants
+
+- Secrets NEVER appear in code, git, logs, or build output — use environment
+  variables loaded from a secrets manager.
+- All API routes authenticate before executing business logic.
+- All mutations write to an audit log.
+
+## 4. Testing Invariants
+
+- New services must have integration tests (success, error, at least one edge case).
+- New API routes must have route tests covering 401, 200, and at least one error path.
+- CI must stay green — no PR may be merged with failing tests.
+
+## 5. Git & PR Invariants
+
+- Branch from `main`. Protected branches (`main`, `uat`, `develop`) — no direct commits.
+- Every PR to `uat` and `main` requires the PR template fully filled.
+
+## 6. Agent Governance Rules
+
+### Protected files — human approval required
+
+The following files require explicit human approval noted in the PR under
+`## Protected File Changes`. Agents MUST NOT modify them without approval.
+
+- `AGENTS.md` / `CLAUDE.md` — agent instruction files
+- `docs/CONSTITUTION.md` — this document
+- `.claude/settings.json` — harness wiring
+- `.claude/hooks/*` — enforcement hooks
+- `Dockerfile`
+[Add project-specific protected files here]
+
+### Behavioural rules
+
+- Run the quality gate (`pnpm check` / `python -m pytest`) before declaring any task done.
+- Never use `--no-verify` on commits — this bypasses pre-commit hooks.
+- Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
+```
+
 ### 6e. Create `.claude/harness.json`
 
 After all harness files are written, compute SHA-256 hashes and write `.claude/harness.json`:
 
 ```bash
 sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
+# Every enforcement hook script is a high-value tamper target — hash each for drift detection.
+# Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
+for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-sha256_hooks=$(shasum -a 256 .claude/hooks/verify.sh | cut -d' ' -f1)
+sha256_verify_sh=$(shasum -a 256 .claude/hooks/verify.sh | cut -d' ' -f1)
 sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate.md | cut -d' ' -f1)
 sha256_verify=$(shasum -a 256 .claude/skills/next-verify.md | cut -d' ' -f1)
 ```
@@ -2175,16 +2449,24 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
 
 ```json
 {
-  "templatecentral_version": "4.0.0",
+  "templatecentral_version": "4.5.0",
   "stack": "nextjs",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/hooks/verify.sh": { "origin_hash": "<sha256_hooks>", "path": ".claude/hooks/verify.sh" },
+    ".claude/hooks/verify.sh": { "origin_hash": "<sha256_verify_sh>", "path": ".claude/hooks/verify.sh" },
     ".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" },
-    ".claude/skills/next-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify.md" }
+    ".claude/skills/next-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify.md" },
+    ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
+    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
+    ".claude/hooks/user-prompt-guard.js": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.js" },
+    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<sha256_hook_4>", "path": ".claude/hooks/post-edit-typecheck.sh" },
+    ".claude/hooks/post-tool-failure.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/post-tool-failure.sh" },
+    ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
+    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
+    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" }
   }
 }
 ```

@@ -68,6 +68,8 @@ def validate_user_prompt(text: str) -> None:
             raise ValueError("Input contains disallowed content")
 ```
 
+> **Pattern-matching is a first layer, not a complete defense.** A denylist catches obvious overrides but cannot stop novel or obfuscated injection — prompt injection is not fully solvable by filtering. The load-bearing controls are *structural*: keep user content in `user`-role messages (never concatenated into the system prompt), never grant the model authority to change its own instructions or invoke high-privilege tools without an out-of-band gate, validate/escape model **output** before it reaches a sink, and apply least-agency tool scoping (ASI02). Treat the denylist as defense-in-depth on top of these.
+
 ---
 
 ### LLM02 — Sensitive Information Disclosure
@@ -405,7 +407,7 @@ For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Ap
 | ASI01 | Agent Goal Hijack | Validate objective integrity; reject goal mutations from untrusted input |
 | ASI02 | Tool Misuse & Exploitation | Scope tool allowlists per-agent; block recursive/unbounded execution |
 | ASI03 | Identity & Privilege Abuse | Re-validate authority at every delegation boundary |
-| ASI04 | Agentic Supply Chain Compromise | Vet external agents, schemas, and tool definitions before trust |
+| ASI04 | Agentic Supply Chain Vulnerabilities | Allowlist MCP/tool-server connections; pin + verify external agent/tool/schema versions (signed manifests where available) and re-verify on runtime discovery, before trust |
 | ASI05 | Unexpected Code Execution | Sandbox agent-generated code; never eval untrusted model output |
 | ASI06 | Memory & Context Poisoning | Validate memory reads; isolate long-term memory from prompt construction |
 | ASI07 | Insecure Inter-Agent Communication | Re-authenticate agent-to-agent messages; no implicit trust between agents |
@@ -417,7 +419,7 @@ The overarching design principle is **Least Agency**: grant each agent only the 
 
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08; C (agentic) adds LLM06 + OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
+- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08. **LLM06 (Excessive Agency) applies the moment ANY tool, function, or plugin is wired — not only multi-agent setups** — so add it as soon as the model can take an action. C (agentic) adds the full OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 

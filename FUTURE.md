@@ -29,4 +29,4 @@ Promote the post-harness seams in scaffolded projects from documentation stubs t
 - Meta-harness CI gate
 - SBOM + audit automation
 
-*Seams from templateCentral v4.0. None activated in v4.0.*
+*Seams from templateCentral v4.0. None activated as of v4.5.*

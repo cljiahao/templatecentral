@@ -10,6 +10,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [4.5.0] — 2026-06-06
+
+### Added (appcentral reference harness improvements)
+
+- **`stop_hook_active` re-entry guard** (all 4 stacks, `stop-checks.sh`): reads `stop_hook_active` from the Stop hook's stdin JSON and exits 0 immediately if true — prevents the Stop gate from triggering an infinite re-entry loop when Claude re-runs after a blocking exit 2. Appcentral uses this pattern; templateCentral now exceeds it by checking via the guaranteed-present runtime (Node for TS, python3 for FastAPI).
+- **Tightened injection patterns** (`user-prompt-guard.js`/`.py`, all 4 stacks): removed `'you are now a '` (false-positive on "you are now a reviewer") and `'pretend you are'` (false-positive on "pretend you are a user logging in"); replaced with specific jailbreak variants: `'you are now a different ai'`, `'you are no longer bound'`, `'pretend you are not bound'`, `'pretend you have no restrictions'`, `'act as if you have no restrictions'`, `'developer mode enabled'`. Lower false-positive rate, same or higher true-positive coverage.
+- **`docs/CONSTITUTION.md` scaffold** (all 4 stacks): seeds a generic binding-invariants document template with placeholders for architecture, security, testing, git, and agent-governance rules. `session-context.sh` now re-injects it on every SessionStart if present — project-specific invariants survive compaction. `protect-files.sh` warns on edits. Pattern adopted from appcentral (where it is the single source of truth for what overrides all other guidance).
+
+## [4.5.0] — 2026-06-05
+
+### Added
+
+- `skills/audit/implementation.md` (v2.5.0): new **Step 7 — Documentation sync**. Every audit now keeps markdown and version markers accurate via two tracks — structural markers auto-update to match `plugin.json`; narrative docs (README, EXAMPLES, FUTURE, CONTRIBUTING, SECURITY) are checked and flagged with drafted fixes for approval.
+- `scripts/lint-skills.sh`: `check_harness_version_matches_plugin` — harness.json `templatecentral_version` in scaffold/migrate templates must equal `plugin.json`. Introduced `HARNESS_SCHEMA_VERSION` constant.
+- `scripts/lint-skills.sh`: `check_agents_marker_not_drifted_to_semver` — the AGENTS.md `@X.Y.Z` line-1 marker is a migration schema floor; guarded against drifting above `HARNESS_SCHEMA_VERSION` (which would break `migrate` Phase 0).
+- `scripts/validate-manifest.sh`: new **DOC SYNC** section — README version badge, repo `.claude/harness.json` `templatecentral_version`, and repo `AGENTS.md` marker all validated against `plugin.json`.
+
+### Added (multi-agent audit — scaffolding completeness)
+
+- **Verbatim `package.json` for all 3 TS stacks** (`config-files.md`) — previously referenced a non-existent "Part A / Generation Conventions" template, so the build/test gate's scripts (`build`, `check`, `test`, `prepare`, etc.) were unresolvable and agents had to invent the manifest. Deps enumerated from each stack's import surface; versions web-verified to current stable (June 2026). The dangling references in `source-files.md` now point to the verbatim files.
+- **`eslint.config.mjs` for Next.js** — Next 16 removed `next lint`; the scaffold shipped no flat config, so `pnpm check`'s lint step would fail. Added a `FlatCompat`-based config (+ `@eslint/eslintrc` dep) extending `next/core-web-vitals` + `next/typescript`.
+
+### Changed (audit — versions, guards, docs)
+
+- `.claude/rules/fastapi.md` + cache: **Starlette floor corrected to ≥1.0.1** (BadHost fix actually landed in 1.0.1, not 1.1.0; current stable 1.2.1) — web-verified, supersedes the cache.
+- `.claude/rules/nextjs.md` + `vite-react.md`: added **React ≥19.2.7** floor (RSC DoS advisory fix; 19.2.6 had a Server-Actions regression). Scaffold package.json pins bumped to `^19.2.7`.
+- **ESLint pinned to `^9` across all 3 TS stacks** (package.json `eslint` + `@eslint/js`). Web-verified rationale: `eslint-config-next 16` (nextjs) and `eslint-plugin-react-hooks 7` (vite) do not support ESLint 10 — its peer range caps at `^9`; ESLint 10 would break `pnpm install` under strict mode. NestJS aligned to `^9` for cross-stack consistency (its plugins do support 10). `globals` left at its current major (it is not tied to the ESLint version).
+- `block-no-verify.sh` (all stacks): `rm -rf` guard now catches **split short flags** (`-r -f`), long-form (`--recursive --force`), and more high-value paths (`test`, `.husky`, `.git`); functionally re-tested.
+- TS `stop-checks.sh`: added `command -v pnpm` guard so a missing pnpm degrades gracefully instead of hard-blocking the turn.
+- `skills/add/ai-security/implementation.md`: ASI04 retitled to the official **"Agentic Supply Chain Vulnerabilities"**; LLM01 now frames denylist pattern-matching as a first layer, with the structural controls (role separation, least-agency, output validation) called out as load-bearing.
+- `EXAMPLES.md`: refreshed the stale 5-event harness description to the current 7-event kit; removed the incorrect "better-auth ships in base Next.js" claim (it is added via `add (auth)`).
+- `skills/scaffold/fastapi/config-files.md`: added `asyncio_mode = "auto"` to the pytest config (pytest-asyncio was installed but unconfigured).
+- Drizzle pin references bumped to `v1.0.0-rc.3`.
+
+### Fixed (multi-agent audit — schema correctness, verified against official Claude Code hooks docs)
+
+- **Removed `continueOnBlock`** from every PostToolUse handler (4 scaffolds + 2 migrate templates) and from the audit checklist that wrongly verified it — the field does not exist in the hooks schema.
+- **Removed the invalid piped `if`** (`"Edit(*.ts|*.tsx)|Write(*.ts|*.tsx)"`) — the `if` field holds exactly one permission rule. PostToolUse now filters to source-file edits **in-script** instead.
+- **Post-compaction recovery now works:** replaced the inert PreCompact/PostCompact re-injection (PostCompact is observability-only and cannot inject context) with a **SessionStart** hook (`matcher: startup|resume|compact`) that re-injects routing context + universal invariants via stdout. New script `session-context.sh`.
+- **FastAPI hooks are now venv-aware:** `post-edit-typecheck.sh`, `stop-checks.sh`, `subagent-stop.sh` activate `.venv` (hooks spawn a fresh shell that doesn't inherit it) and no-op gracefully if pyright/pytest is absent — previously the type gate silently no-opped (fail-open) and the test/subagent gates hard-blocked spuriously.
+- **Broadened `permissions.deny`** to cover `.env.development`/`.dev`/`.uat`/`.test` (the write-guard blocked all `.env*` but the read-guard had gaps); `.env.example`/`.env.default` remain readable.
+- Event set is now 7 (SessionStart replaces PreCompact+PostCompact); lint `check_scaffold_seeds_complete_harness` updated accordingly.
+
+### Security
+
+- **Full harness parity — seeded `.claude/hooks/` script kit (was inline `args[]`).** All 4 scaffolds + both migrate templates now seed a complete 7-event hook kit as self-contained scripts, matching the reference production harness:
+  - **PreToolUse** — `protect-files.sh` (block `.env*`/CI/cert writes, warn on governance files) + `block-no-verify.sh` (block `--no-verify`, **direct commits/force-push to protected branches, `rm -rf` on source dirs**).
+  - **UserPromptSubmit** — `user-prompt-guard.{js,py}`: injection patterns (OWASP LLM01) **plus credential-leak detection** (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs).
+  - **PostToolUse** — filtered to source-file edits in-script (no `if` field, no `continueOnBlock` — neither does what was intended; verified against CC docs).
+  - **PostToolUseFailure** (new), **SubagentStop** type-gate (new), **SessionStart** context re-injection (replaces the inert PostCompact re-inject).
+  - **Stop** test gate.
+  - JSON parsing uses the runtime guaranteed present per stack (Node for TS, python3 for FastAPI) so guards **fail safe**, not open.
+  - Every guard functionally tested (block/allow correctness); `check_scaffold_seeds_complete_harness` enforces all 7 events + `permissions.deny` + the 8 hook scripts across every template.
+- **`permissions.deny` Read-block for secrets (defense-in-depth).** All 4 scaffolds + both migrate `settings.json` templates now deny `Read(.env)`, `Read(.env.local)`, `Read(.env.*.local)`, `Read(.env.production*)`, `Read(.env.staging*)`, and `Read(./secrets/**)`. Previously the harness blocked *writing* `.env*` (PreToolUse) but an agent could still **read** real secrets — closing the gap matches the universal pattern used by the reference services. `.env.example`/`.env.default` remain readable. Lint (`check_scaffold_seeds_complete_harness`) now requires the deny block.
+- **Scoped skills enforcement (least-agency / OWASP Agentic ASI02).** All seeded project skills (`api-verify`, `nest-verify`, `next-verify`, `vite-verify`, `next-migrate` in both scaffold and migrate) now declare a tightly-scoped `allowed-tools:` line (e.g. `Bash(pnpm *)`, `Bash(python *), Bash(ruff *)`). Previously they declared none and inherited unrestricted tool access — templateCentral preached scoping in its Skills Security section but did not model it in the skills it seeds.
+- `scripts/lint-skills.sh`: `check_seeded_skills_scope_tools` — every seeded `*-verify`/`*-migrate` skill must declare a scoped `allowed-tools:`; and `check_no_unscoped_bash_grant` — no `allowed-tools:` may grant bare `Bash` (must be `Bash(...)`).
+- `scripts/lint-skills.sh`: `check_scaffold_seeds_complete_harness` — every scaffold + migrate `settings.json` template must seed the complete enforcement hook set (PreToolUse secrets guard + `--no-verify` block, `UserPromptSubmit` injection firewall, `PostToolUse` typecheck, `Stop` test gate, `SessionStart` context recovery, `skillListingBudgetFraction`). Previously verified only by the audit's manual Step 3H checklist; now lint-enforced so an edit can't silently ship a harness with a hole.
+
+### Fixed
+
+- `skills/scaffold/fastapi/source-files.md`: removed duplicate `strict-transport-security` entry in `_SECURITY_HEADERS` — scaffolded FastAPI apps were emitting the HSTS header twice.
+- `.claude/rules/nextjs.md`: pinned Next.js to `≥16.2.6` (16.2.5 is insecure for Turbopack deployments — App Router prefetch auth-bypass and WebSocket SSRF advisories).
+- Version-marker drift: `templatecentral_version` was stale at `4.0.0` in all four scaffold templates, the migrate template, and the repo's own `.claude/harness.json`; README badge and `plugin.json` now aligned. All `templatecentral_version` fields and the README badge synced to `4.5.0`. The AGENTS.md `@4.0.0` schema-floor marker intentionally left pinned.
+
+### Changed
+
+- `skills/scaffold/{fastapi,nestjs,nextjs}/source-files.md`: documented `TRUST_PROXY` one-hop (ALB → App) vs two-hop (ALB → Traefik → App) topologies inline at each proxy-config site.
+- `AGENTS.md` + `README.md`: surfaced harness **adoption/retrofit** as a discoverable intent routing to `templatecentral:migrate` — recovering the harness into a project built without templateCentral was already supported by `migrate` (Phases 1–5) but was not discoverable in the routing tables.
+- Scaffold seam footers made timeless (`None activated.` instead of `None activated in v4.0.`) so generated projects don't ship version-stamped status text that drifts.
+
+---
+
 ## [4.4.0] — 2026-06-04
 
 ### Security
