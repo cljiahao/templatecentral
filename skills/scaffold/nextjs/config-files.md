@@ -52,7 +52,6 @@ Write these files exactly as shown.
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^24.0.0",
@@ -62,7 +61,6 @@ Write these files exactly as shown.
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.6",
     "eslint-plugin-react-hooks": "^7.0.0",
-    "globals": "^16.0.0",
     "husky": "^9.1.7",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.8.3",
@@ -71,27 +69,23 @@ Write these files exactly as shown.
     "tailwindcss": "^4.3.0",
     "tw-animate-css": "^1.3.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.20.0",
-    "vitest": "^4.1.8",
-    "@eslint/eslintrc": "^3.3.0"
+    "vitest": "^4.1.8"
   }
 }
 ```
 
 ### `eslint.config.mjs`
 
-> Next.js 16 removed `next lint`; linting runs via ESLint flat config. `@eslint/eslintrc`'s `FlatCompat` consumes `eslint-config-next` presets. `pnpm check` runs `eslint .`, so this file must exist.
+> Next.js 16 ships `eslint-config-next` as native flat configs — `FlatCompat` causes circular JSON crashes. Import the flat config objects directly and spread them. `pnpm check` runs `eslint .`, so this file must exist.
 
 ```javascript
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { FlatCompat } from '@eslint/eslintrc';
-
-const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+import coreWebVitals from 'eslint-config-next/core-web-vitals';
+import typescript from 'eslint-config-next/typescript';
 
 export default [
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
-  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts'] },
+  ...coreWebVitals,
+  ...typescript,
+  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', '.claude/**'] },
 ];
 ```
 
@@ -130,6 +124,19 @@ build
 coverage
 pnpm-lock.yaml
 .claude
+```
+
+### `.prettierrc`
+
+```json
+{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "tabWidth": 2,
+  "printWidth": 100,
+  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-tailwindcss"]
+}
 ```
 
 ### `next.config.ts`
@@ -509,9 +516,9 @@ blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
 # pnpm 11 blocks all install scripts by default; add native packages here as needed.
-# allowBuilds:
-#   esbuild: true
-#   sharp: true
+allowBuilds:
+  sharp: true          # Next.js image optimisation
+  unrs-resolver: true  # required by eslint-config-next resolver
 ```
 
 ### `vitest.config.ts`

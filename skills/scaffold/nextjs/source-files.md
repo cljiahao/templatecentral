@@ -686,7 +686,7 @@ export { CustomCard } from './custom-card';
 export { CustomDialog } from './custom-dialog';
 export { CustomFormField } from './custom-form-field';
 export { FloatingShape } from './floating-shape';
-export { LinkList } from './link-list';
+export { LinkList, type LinkItem } from './link-list';
 export { MediaCard } from './media-card';
 export { Pill } from './pill';
 export { ThemeToggleButton } from './theme-toggle-button';
@@ -1212,7 +1212,16 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 
 ### `src/app/api/health/route.ts`
 
-Identical to `src/app/api/route.ts` above — write the same content to both paths.
+```ts
+import { type NextRequest, NextResponse } from 'next/server';
+
+export async function GET(_req: NextRequest): Promise<NextResponse> {
+  return NextResponse.json(
+    { status: 'ok', timestamp: new Date().toISOString() },
+    { status: 200 },
+  );
+}
+```
 
 ### `src/lib/logger.ts`
 
@@ -1922,6 +1931,7 @@ Never commit `.env.local`.
 Do not generate AGENTS.md until this passes:
 
 ```bash
+pnpm format      # Run this once before pnpm check — normalizes any formatting drift from file creation (substitute <stack>-verify with the delta-table verify-skill name, e.g. next-verify)
 pnpm build       # production build — zero errors
 pnpm check       # format + lint + typecheck — zero errors
 pnpm test        # all tests pass

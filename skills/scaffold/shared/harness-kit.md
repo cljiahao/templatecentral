@@ -727,7 +727,7 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 # CLAUDE.md is optional (Step G) — hash it only if it already exists
 [ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-# Hash the verify skill (created in the stack file's verify-skill step before reaching this step):
+# Hash the verify skill (substitute `<stack>-verify` with the verify-skill name from the delta table, e.g. `next-verify` for nextjs):
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
 # nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
 [ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
