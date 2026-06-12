@@ -522,7 +522,7 @@ check_no_postToolUse_full_test_suite() {
 check_harness_version_matches_plugin() {
   # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
   # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
-  # TIMELESS: templatecentral_version must always match the plugin's declared version.
+  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; revisit if versioning strategy changes.
   header "harness.json templatecentral_version matches plugin.json"
   local plugin_json=".claude-plugin/plugin.json"
   if [[ ! -f "$plugin_json" ]]; then
@@ -549,7 +549,7 @@ check_agents_marker_not_drifted_to_semver() {
   # and @HARNESS_SCHEMA_VERSION (full current harness). The failure mode this guards against is a
   # well-meaning "version bump" pushing a marker UP to the plugin semver (e.g. 4.5.0), which would
   # break migrate Phase 0's floor logic. Rule: every marker version must be <= HARNESS_SCHEMA_VERSION.
-  # TIMELESS: bump HARNESS_SCHEMA_VERSION only on a deliberate harness-structure change (then floor markers move with it).
+  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; the floor marker and schema version concept may evolve.
   header "AGENTS.md schema marker not drifted above HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION)"
   local drifted=""
   local line ver
@@ -594,8 +594,8 @@ check_seeded_skills_scope_tools() {
       next
     }
     inblock && /^---[[:space:]]*$/ {
-      if (!has_tools) print FILENAME":"ln": "nm" " — missing allowed-tools"
-      else if (bare_bash) print FILENAME":"ln": "nm" " — bare Bash in allowed-tools (must be scoped, e.g. Bash(pnpm *))"
+      if (!has_tools) print FILENAME":"ln": "nm" - missing allowed-tools"
+      else if (bare_bash) print FILENAME":"ln": "nm" - bare Bash in allowed-tools (must be scoped, e.g. Bash(pnpm *))"
       inblock=0
     }
   ' $files 2>/dev/null || true)
@@ -755,6 +755,7 @@ check_no_unscoped_bash_grant
 check_seeded_skill_paths_are_directories
 check_no_toplevel_command_in_hooks
 check_scaffold_seeds_complete_harness
+check_no_postToolUse_full_test_suite
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins
@@ -768,7 +769,6 @@ check_no_sync_secret_comparison
 check_no_zod_string_format_methods
 check_no_zod_deprecated_message_key
 check_no_mypy_in_postToolUse
-check_no_postToolUse_full_test_suite
 check_no_env_api_base_url_fallback
 check_no_tanstack_isLoading
 check_no_tanstack_isInitialLoading
