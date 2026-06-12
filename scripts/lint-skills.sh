@@ -54,10 +54,12 @@ check_no_jurisdiction_specific() {
   # ADD TO THIS LIST when a new jurisdiction-specific term is discovered.
   # Remove from this list only if the project explicitly targets that jurisdiction.
   # audit/implementation.md is excluded — it names these patterns in its C6 check and changelog.
+  # Added: GDPR, CCPA, FISMA (previously only audited in CI). MAS TRM, FedRAMP, NIST SP 800-63
+  # were already present. TIMELESS.
   header "Jurisdiction-specific content"
-  local pattern='IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG|NIST SP 800-63'
+  local pattern='GDPR|CCPA|FISMA|IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG|NIST SP 800-63'
   local matches
-  matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' | grep -v 'CONVENTIONS.md' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Jurisdiction-specific content found — skills must be country/industry neutral"
@@ -69,10 +71,19 @@ check_no_jurisdiction_specific() {
 check_no_hardcoded_secrets() {
   # Real secret values must never appear in skill code examples.
   # Safe: placeholders (<your-secret>), change-me strings, env refs (${VAR}), comments (#).
+  # grep -E replaces grep -P: PCRE silently no-ops on stock macOS BSD grep; POSIX ERE is portable.
+  # Negative lookaheads emulated via grep -v pipes. TIMELESS.
+  # Keywords extended: added better_auth_secret, private_key, access_token (previously only in CI job).
   header "Hardcoded secrets"
-  local pattern='(?i)(secret|api_key|password|database_url)\s*=\s*(?![<$"\x27\s#])(?!.*change.me)(?!.*your[-_])(?!.*example).{8,}'
   local matches
-  matches=$(grep -rPn "$pattern" "$SKILLS_DIR/" 2>/dev/null || true)
+  matches=$(grep -rniE '(secret|api_key|password|database_url|better_auth_secret|private_key|access_token)[[:space:]]*=[[:space:]]*.{8,}' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -vE '=[[:space:]]*[<$'"'"'\\]' \
+    | grep -vi 'change.me\|change-me\|your[-_]\|example\|placeholder\|changeme' \
+    | grep -vE '=[[:space:]]*[a-zA-Z_]+[[(.]' \
+    | grep -vE '=[[:space:]]*await ' \
+    | grep -vE '=[[:space:]]*[A-Z_]{4,}' \
+    | grep -v 'postgresql://\|mysql://\|mongodb://\|https://\|http://' \
+    || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Potential hardcoded secrets — use placeholder syntax (e.g. <your-secret>)"
@@ -104,20 +115,114 @@ check_no_ghost_agent_names() {
   fi
 }
 
+check_skillmd_description_length() {
+  # SKILL.md description: lines longer than 150 chars are truncated in the Claude Code skill picker,
+  # causing the skill's purpose to be invisible to the user. Registered SKILL.md (has name:) only —
+  # utility SKILL.md files without name: are loading stubs, not displayed. TIMELESS.
+  header "SKILL.md description length (<=150 chars)"
+  local bad=""
+  for f in "$SKILLS_DIR"/*/SKILL.md; do
+    grep -q '^name:' "$f" || continue
+    local desc len
+    desc=$(grep '^description:' "$f" | head -1 | sed 's/^description:[[:space:]]*//')
+    len=${#desc}
+    [ "$len" -gt 150 ] && bad+="$f ($len chars)"$'\n'
+  done
+  if [[ -n "$bad" ]]; then
+    printf "%s" "$bad"
+    fail "SKILL.md description exceeds 150 chars — shorten it so it displays fully in the skill picker"
+  else
+    pass "All registered SKILL.md descriptions <=150 chars"
+  fi
+}
+
+check_ref_file_headers() {
+  # Every reference .md file under skills/ (except SKILL.md and CONVENTIONS.md) must begin with
+  # a <!-- ref: --> comment so agents know the file's load path and purpose without reading the body.
+  # Missing headers cause agents to silently skip context about how to load the file. TIMELESS.
+  header "Ref file <!-- ref: --> headers"
+  local bad=""
+  while IFS= read -r f; do
+    local firstline
+    firstline=$(head -1 "$f")
+    [[ "$firstline" == "<!-- ref:"* ]] || bad+="$f"$'\n'
+  done < <(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' 2>/dev/null)
+  if [[ -n "$bad" ]]; then
+    printf "%s" "$bad"
+    fail "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2"
+  else
+    pass "All ref files have <!-- ref: --> headers"
+  fi
+}
+
+check_skillmd_body_length() {
+  # Registered SKILL.md bodies must be <=30 lines (CONVENTIONS §3). TIMELESS.
+  # A long body bloats the skill picker tooltip and forces agents to read unnecessary prose
+  # before they can delegate to the appropriate ref file.
+  header "SKILL.md body length (<=30 lines)"
+  local bad=""
+  for f in "$SKILLS_DIR"/*/SKILL.md; do
+    grep -q '^name:' "$f" || continue
+    local total body fm_end
+    fm_end=$(awk '/^---$/{c++; if(c==2){print NR; exit}}' "$f")
+    total=$(wc -l < "$f")
+    body=$((total - fm_end))
+    [ "$body" -gt 30 ] && bad+="$f ($body lines)"$'\n'
+  done
+  if [[ -n "$bad" ]]; then
+    printf "%s" "$bad"
+    fail "SKILL.md body exceeds 30 lines — move prose into an implementation.md ref file"
+  else
+    pass "All registered SKILL.md bodies <=30 lines"
+  fi
+}
+
+check_nesting_depth() {
+  # Skills nested more than 3 directory levels under skills/ are unreachable by templateCentral's
+  # ref-file loader and indicate a structure drift from CONVENTIONS.md §1. TIMELESS.
+  # With default SKILLS_DIR="skills": NF>5 catches skills/a/b/c/d/file.md (4+ dirs deep).
+  header "Nesting depth (<=3 levels under skills/)"
+  local bad
+  bad=$(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' \
+    | awk -F'/' -v base="$(echo "$SKILLS_DIR" | awk -F'/' '{print NF}')" 'NF > base + 4' \
+    2>/dev/null || true)
+  if [[ -n "$bad" ]]; then
+    printf "%s\n" "$bad"
+    fail "File nested >3 levels under skills/ — restructure to match CONVENTIONS.md §1"
+  else
+    pass "No files nested >3 levels under skills/"
+  fi
+}
+
 # ── ECOSYSTEM-ERA ──────────────────────────────────────────────────────────────
 
 check_no_version_pins() {
   # SSOT policy: version pins belong only in .claude/rules/*.md, not in SKILL.md files.
   # EXCEPTION: shadcn@latest is the official shadcn CLI invocation, not a version pin.
+  # Catches: scoped npm pins (@org/pkg@version), unscoped npm pins (pkg@X.Y.Z),
+  # and Python exact pins (pkg==X.Y). Exclusions:
+  #   templateCentral: schema markers (<!-- templateCentral: stack@X.Y.Z -->)
+  #   "packageManager" field: corepack requires an exact version in this field by design
+  #   ":<space>stack@version" prose (drift-check example output, schema version references)
   # REVISIT: if the SSOT policy changes, remove this check.
   header "Version pins in skills (SSOT)"
   local found=0
   while IFS= read -r match; do
-    # Skip shadcn@latest — this is a CLI tool invocation, not a dependency pin
+    # Skip shadcn@latest — CLI tool invocation, not a dependency pin
     [[ "$match" =~ shadcn@latest ]] && continue
     echo "$match"
     found=1
-  done < <(grep -rn '@[a-zA-Z][a-zA-Z0-9_/@-]*@[0-9^~><]' "$SKILLS_DIR/" 2>/dev/null || true)
+  done < <(
+    {
+      grep -rn '@[a-zA-Z][a-zA-Z0-9_/@-]*@[0-9^~><]' "$SKILLS_DIR/" 2>/dev/null || true
+      grep -rEn '[a-zA-Z0-9_-]+@[0-9]+\.[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null \
+        | grep -v 'templateCentral:' \
+        | grep -v '"packageManager"' \
+        | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' \
+        || true
+      grep -rEn '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null || true
+    } | sort -u
+  )
   if [[ $found -eq 1 ]]; then
     fail "Version pins found — move floors/pins to .claude/rules/*.md"
     FAILED=1
@@ -242,11 +347,12 @@ check_no_globals_jest_in_vitest_projects() {
 check_no_zod_deprecated_message_key() {
   # Zod v4 custom error params use { error: '...' }, not { message: '...' }.
   # { message: '...' } is the Zod v3 form — still accepted but deprecated in v4 and will be removed.
-  # ECOSYSTEM-ERA: correct for Zod v4. Revisit if Zod changes error params API.
+  # Broadened from specific method list to any z.<method>({ message: — catches z.string(), z.number(),
+  # z.object(), etc. that were missed by the narrower pattern. ECOSYSTEM-ERA: correct for Zod v4.
   # audit/implementation.md is excluded — it may reference this pattern in checklist items.
   header "Deprecated Zod v3 message key in validators"
   local matches
-  matches=$(grep -rEn "z\.(email|url|uuid|iso\.datetime)\(\{ message:" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  matches=$(grep -rEn "z\.[a-z]+\([[:space:]]*\{[[:space:]]*message:" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
     fail "Zod validator uses deprecated { message: '...' } — use { error: '...' } for custom error messages in Zod v4"
@@ -468,10 +574,10 @@ check_agents_marker_not_drifted_to_semver() {
 
 check_seeded_skills_scope_tools() {
   # Seeded project skills (*-verify, *-migrate) embedded in scaffold templates are written into
-  # every scaffolded project. They must declare a tightly-scoped allowed-tools: line — a skill with
-  # no allowed-tools inherits unrestricted tool access. templateCentral must model the scoping it
-  # preaches in the Skills Security section.
-  # TIMELESS: least-agency (OWASP Agentic ASI02) — seeded skills scope their tools.
+  # every scaffolded project. They must declare allowed-tools: with no bare Bash token — bare Bash
+  # grants unrestricted shell access (opposite of least-agency). Mixed tool lists like
+  # "Read, Edit, Write, Bash(pnpm *), Grep, Glob" are accepted; bare "Bash" (not followed by '(')
+  # is rejected. TIMELESS: least-agency (OWASP Agentic ASI02) — seeded skills scope their tools.
   header "Seeded project skills declare scoped allowed-tools"
   local files bad
   files=$(grep -rlE '^name: [a-z][a-z-]*-(verify|migrate)$' "$SKILLS_DIR/" 2>/dev/null || true)
@@ -481,9 +587,17 @@ check_seeded_skills_scope_tools() {
   fi
   # shellcheck disable=SC2086  # word-splitting is intentional: $files is newline-separated paths
   bad=$(awk '
-    /^name: [a-z][a-z-]*-(verify|migrate)$/ { inblock=1; nm=$2; tools=0; ln=FNR; next }
-    inblock && /^allowed-tools:[[:space:]]*Bash\(/ { tools=1 }
-    inblock && /^---[[:space:]]*$/ { if(!tools) print FILENAME":"ln": "nm" — missing scoped allowed-tools"; inblock=0 }
+    /^name: [a-z][a-z-]*-(verify|migrate)$/ { inblock=1; nm=$2; has_tools=0; bare_bash=0; ln=FNR; next }
+    inblock && /^allowed-tools:/ {
+      has_tools=1
+      if ($0 ~ /Bash[^(]/ || $0 ~ /Bash$/) { bare_bash=1 }
+      next
+    }
+    inblock && /^---[[:space:]]*$/ {
+      if (!has_tools) print FILENAME":"ln": "nm" " — missing allowed-tools"
+      else if (bare_bash) print FILENAME":"ln": "nm" " — bare Bash in allowed-tools (must be scoped, e.g. Bash(pnpm *))"
+      inblock=0
+    }
   ' $files 2>/dev/null || true)
   if [[ -n "$bad" ]]; then
     echo "$bad"
@@ -632,6 +746,15 @@ check_no_jurisdiction_specific
 check_no_hardcoded_secrets
 check_no_ghost_agent_names
 check_owasp_llm_sections_complete
+check_skillmd_description_length
+check_ref_file_headers
+check_skillmd_body_length
+check_nesting_depth
+check_seeded_skills_scope_tools
+check_no_unscoped_bash_grant
+check_seeded_skill_paths_are_directories
+check_no_toplevel_command_in_hooks
+check_scaffold_seeds_complete_harness
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins
@@ -651,13 +774,8 @@ check_no_tanstack_isLoading
 check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
-check_no_toplevel_command_in_hooks
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
-check_seeded_skills_scope_tools
-check_no_unscoped_bash_grant
-check_seeded_skill_paths_are_directories
-check_scaffold_seeds_complete_harness
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then
