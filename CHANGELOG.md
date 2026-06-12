@@ -10,6 +10,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [4.6.0] — 2026-06-12
+
+Full-ecosystem audit round (audit skill 2.5.0 → 2.6.0). ~70 findings fixed across 79 files; all changes verified against the June 2026 ecosystem (cached research + live doc checks).
+
+### Added
+
+- **`templatecentral:audit` 2.6.0 — community-consensus harness research** (Step 0b): each audit now scans Anthropic official guidance plus community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded `RECOMMENDED` (official) / `CONSENSUS` (≥3 sources) / `EMERGING` (track only). RECOMMENDED/CONSENSUS gaps become targeted Step 3H checks. Cache template gained a matching section; first scan cached 2026-06-12.
+- **Lint: `check_seeded_skill_paths_are_directories`** — fails on any scaffold/migrate instruction seeding a flat `.claude/skills/<name>.md`; `check_scaffold_seeds_complete_harness` now positively requires `-verify/SKILL.md` directory form and the `stop_hook_active` guard in every scaffold.
+- `skills/write-skill/implementation.md` — authoring checklist moved out of the registered SKILL.md body (CONVENTIONS §3 compliance); SKILL.md is now detection + cat only.
+
+### Fixed (harness — doc-verified against official Claude Code docs)
+
+- **Seeded project skills are now directories** (`.claude/skills/<name>/SKILL.md`) in all 4 scaffolds + migrate Phase 4. Flat `.claude/skills/<name>.md` files are silently ignored by Claude Code — every previously scaffolded project's `*-verify` skill never loaded. harness.json templates and hash commands updated to match.
+- **Skill scoping order corrected** (root AGENTS.md + audit Step 3H): per current official docs, user (personal) skills override project skills on name collision — the previous claim was reversed. Plugin namespacing unaffected.
+- Secrets defense-in-depth: FastAPI `.dockerignore`/`.gitignore`/`permissions.deny` now cover `src/.env` (was root-anchored — secrets were baked into Docker images and agent-readable); skills now ask the user to edit `.env` files instead of instructing hook-blocked agent edits.
+
+### Fixed (stacks)
+
+- **FastAPI**: validation errors no longer echo submitted input (422 bodies/logs); `exc.headers` preserved (WWW-Authenticate, Retry-After); Beanie guide rewritten onto PyMongo async (`AsyncMongoClient` — the previously shown Motor class does not exist); pymongo floor ≥4.13; ForwardedHostMiddleware validates the peer against TRUST_PROXY before honoring X-Forwarded-Host; password fields bounded (`max_length=128`).
+- **NestJS**: auth throttler fixed — global 3-req/15-min guard would have rate-limited the entire API; now a sane global default with `@Throttle` on login/register only. `ZodValidationException` handled in the exception filter (400 + fieldErrors; serialization failures log-and-genericize as 500). `@/` alias imports converted to relative (scaffold defines no paths mapping). PaginationService registration + `createZodDto` usage corrected. Swagger gate keys off `ENVIRONMENT` consistently.
+- **Next.js**: scaffold now defines `src/lib/constants/routes.ts` (`PAGE_ROUTES`/`API_ROUTES`) — previously every fresh scaffold failed its own build gate. Auth rate-limit example rewritten: keyed on the right-most untrusted X-Forwarded-For hop only when TRUST_PROXY is set, fails closed otherwise, placed before the public-route short-circuit (was unreachable dead code), `request.ip` removed (gone in Next 15+). TRUST_PROXY unified to a hop-count convention across scaffold/auth/request-origin. `__dirname`-in-ESM migration runners fixed. `@vitest/coverage-v8` added (pre-push coverage run failed without it).
+- **Vite + React**: validation-patterns Pattern 1 rewritten to the real `CustomFormField` API (previous example didn't typecheck); password schema (min 12) added; nested code fences fixed (template extraction corrupted); `.dockerignore` trimmed 236 → ~50 relevant lines; auth/feature services now Zod-validate responses; test command table matches actual scaffold scripts.
+- **Cross-stack**: full-stack-pairing proxied to an `/api` prefix neither backend serves (Next rewrite destination + Vite proxy rewrite fixed); drift-check Step 2 rewired from a nonexistent `version` frontmatter to the real SSOT (plugin.json + rules files); backend-extraction guides no longer drop uncommitted work in the snapshot step and gained an auth-rewiring step (better-auth client must be replaced with JWT-endpoint calls); review/update uses `pnpm outdated`/`pip list --outdated` instead of per-package WebFetch; ai-security tier mapping covers all of LLM01–LLM10.
+
+### Corrected (ecosystem cache)
+
+- nginx current stable is 1.30.2 (1.30.x line) — prior cache said 1.28.3; the Vite Dockerfile pin was correct all along.
+- better-auth Drizzle adapter is a separate package (`@better-auth/drizzle-adapter`); stateless no-database sessions confirmed real.
+
+### Known
+
+- NestJS scaffold tsconfig has `noImplicitAny: false` while the seeded AGENTS.md promises "no `any`" — enabling `strict: true` is deferred pending a scaffold build test.
+- v5.0 plan unchanged: split all four scaffold `source-files.md` into phase files (each exceeds the 5,000-token skill re-attach budget); dedup the FastAPI auth-completion and NestJS exception-filter blocks.
+
+---
+
 ## [4.5.0] — 2026-06-06
 
 ### Added (appcentral reference harness improvements)

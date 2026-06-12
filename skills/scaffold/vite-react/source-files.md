@@ -2562,7 +2562,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/vite-verify/SKILL.md | cut -d' ' -f
 **`.claude/harness.json`**:
 ```json
 {
-  "templatecentral_version": "4.5.0",
+  "templatecentral_version": "4.6.0",
   "stack": "vite-react",
   "seeded_at": "<date>",
   "seeded_files": {

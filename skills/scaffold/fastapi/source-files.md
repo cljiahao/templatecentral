@@ -1674,7 +1674,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/api-verify/SKILL.md | cut -d' ' -f1
 **`.claude/harness.json`**:
 ```json
 {
-  "templatecentral_version": "4.5.0",
+  "templatecentral_version": "4.6.0",
   "stack": "fastapi",
   "seeded_at": "<date>",
   "seeded_files": {
