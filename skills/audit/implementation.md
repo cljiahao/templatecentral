@@ -83,6 +83,9 @@ Grade every finding before recording it:
 
 Also record anti-patterns the community has converged on avoiding. A `RECOMMENDED` or `CONSENSUS` pattern missing from the scaffolds' harness templates is a Step 3H finding; an `EMERGING` one is noted in the report only.
 
+**Loop engineering — community/team practice**
+- Loop engineering — current community/team practice on agent loop design (goals, termination, budgets, scheduled self-prompting); grade per the table above
+
 **Reference: AWS AIDLC**
 Check the AWS AI Development Lifecycle (AIDLC) guidance for any new controls or patterns relevant to AI-assisted development workflows — particularly around prompt injection, model output validation, and agent trust boundaries.
 
@@ -187,97 +190,16 @@ Any failures here must be fixed before proceeding to semantic review. The lint s
 
 ## Conventions Compliance
 
-Run the following 5 checks to verify skill file structure and architecture comply with templateCentral conventions.
-
-### C1 — Description length
-
-Check all SKILL.md descriptions are ≤ 150 characters:
-
-```bash
-grep -r '^description:' skills/*/SKILL.md | awk -F'description: ' '{if(length($2)>150) print length($2), "chars:", FILENAME}'
-```
-
-**Pass**: no output.  
-**Fail**: lists files with violating descriptions and their character counts.
-
----
-
-### C2 — Reference file headers
-
-All non-registered reference files must have `<!-- ref:` as line 1. Check files in subdirectories:
-
-```bash
-find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | while read f; do
-  first=$(head -1 "$f")
-  if [[ "$first" != "<!-- ref:"* ]]; then echo "MISSING HEADER: $f"; fi
-done
-```
-
-**Pass**: no output.  
-**Fail**: lists files missing the reference file header.
-
----
-
-### C3 — No duplicate content
-
-No registered SKILL.md should contain implementation content (more than 30 body lines). Body = total lines minus frontmatter (3 lines).
-
-```bash
-for f in skills/*/SKILL.md; do
-  total=$(wc -l < "$f")
-  body=$((total - 3))
-  if [ $body -gt 30 ]; then echo "BODY TOO LONG ($body lines): $f"; fi
-done
-```
-
-**Pass**: no output.  
-**Fail**: lists SKILL.md files with oversized body content.
-
----
-
-### C4 — Nesting depth
-
-No skill chain should be deeper than 3 levels. Check: no reference file path is more than 2 subdirectories deep under `skills/`:
-
-```bash
-find skills -name "*.md" ! -name "SKILL.md" ! -name "CONVENTIONS.md" | awk -F'/' '{if(NF > 5) print "DEPTH VIOLATION:", $0}'
-```
-
-**Pass**: no output. (5 parts = `skills/<skill>/<capability>/<stack>/<file>.md` — that's depth 3 from skill root)  
-**Fail**: lists files exceeding nesting depth limits.
-
----
-
-### C5 — SKILL.md body size
-
-Check C3 passes for all registered skills (same check as C3 above — reference it or repeat).
-
-```bash
-for f in skills/*/SKILL.md; do
-  total=$(wc -l < "$f")
-  body=$((total - 3))
-  if [ $body -gt 30 ]; then echo "BODY TOO LONG ($body lines): $f"; fi
-done
-```
-
-**Pass**: no output.  
-**Fail**: lists SKILL.md files that are too large.
-
----
-
-### C6 — Jurisdiction neutrality
-
-No skill file may reference country-, region-, or government-specific compliance frameworks by name. Skills must use OWASP and generic best-practice language instead.
-
-```bash
-grep -rn -iE '\bIM8\b|\bPDPA\b|\bMAS.TRM\b|\bGDPR\b|\bHIPAA\b|\bPCI.DSS\b|\bCCPA\b|\bFedRAMP\b|\bFISMA\b|\bMAS\b|NIST SP 800-63' \
-  skills/ --include="*.md" | grep -v 'CHANGELOG' | grep -v 'CONVENTIONS.md' | grep -v 'audit/implementation.md'
-```
-
-**Pass**: no output.  
-**Fail**: lists files containing jurisdiction-specific framework names. Replace with generic OWASP-based guidance (e.g., "strong authentication controls" instead of "PDPA-compliant authentication"; "12-character minimum (OWASP recommendation)" instead of "NIST SP 800-63B minimum").
-
-> `OWASP` and `AWS AIDLC` are universal industry references permitted in ecosystem research and audit infrastructure. `NIST SP 800-63B` and other government specifications must **not** appear inside skill implementation files — use "OWASP recommendation" language instead.
+> **Lint-enforced as of v4.7.0 — no separate pass needed.**
+>
+> Conventions checks C1–C6 are now fully covered by `scripts/lint-skills.sh`:
+> - **C1** (description ≤ 150 chars) → `check_skillmd_description_length`
+> - **C2** (ref file headers) → `check_ref_file_headers`
+> - **C3** (no duplicate content) / **C5** (SKILL.md body ≤ 30 lines) → `check_skillmd_body_length`
+> - **C4** (nesting depth ≤ 3) → `check_nesting_depth`
+> - **C6** (jurisdiction neutrality) → `check_no_jurisdiction_specific`
+>
+> Run Step 1 (`bash scripts/lint-skills.sh skills/`). If lint passes, conventions compliance passes. No separate C1–C6 pass is needed.
 
 ---
 
@@ -713,6 +635,11 @@ These carry intentional decisions — don't rewrite blindly. Read each, compare 
 Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
 
 ## Changelog
+### 2.7.0
+- Conventions Compliance C1–C6 block replaced with a short lint-enforcement note: these checks are now fully covered by `scripts/lint-skills.sh` (`check_skillmd_description_length`, `check_ref_file_headers`, `check_skillmd_body_length`, `check_nesting_depth`, `check_no_jurisdiction_specific`). Run Step 1; no separate pass needed.
+- Step 0b community-consensus block: added loop-engineering research bullet — current community/team practice on agent loop design (goals, termination, budgets, scheduled self-prompting); graded per RECOMMENDED/CONSENSUS/EMERGING table.
+- Duplicate `### 2.4.0` changelog heading removed (was duplicated on two consecutive lines).
+- Utility skill category paths (`build/`, `test/`, `review/`, `cleanup/`) now documented as the canonical cat-path contract for de-registered agent utilities; Step 2 cross-stack file list confirms the correct paths.
 ### 2.6.0
 - Step 0b: added "Claude Code harness engineering — community consensus & team recommendations" research item — scans official Anthropic guidance and community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded RECOMMENDED / CONSENSUS / EMERGING; RECOMMENDED and CONSENSUS findings become targeted Step 3H checks, EMERGING is tracked only. Cache template gained a matching subsection.
 ### 2.5.0
@@ -724,7 +651,6 @@ Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills
 - Step 5 / lint: added `check_harness_version_matches_plugin` (harness.json `templatecentral_version` templates == plugin.json) and `check_agents_marker_not_drifted_to_semver` (AGENTS.md schema-floor marker must stay <= `HARNESS_SCHEMA_VERSION`, guarding migrate Phase 0).
 - `validate-manifest.sh`: added DOC SYNC section — README badge, repo `.claude/harness.json`, and repo AGENTS.md marker checked against `plugin.json`.
 - Documented the `templatecentral_version` (plugin semver) vs AGENTS.md `@X.Y.Z` marker (harness schema floor) distinction; introduced `HARNESS_SCHEMA_VERSION` constant in `lint-skills.sh`.
-### 2.4.0
 ### 2.4.0
 - Step 3H: added block-`--no-verify` PreToolUse hook check — scaffold must block `git ... --no-verify` via `tool_input.command` (not top-level `command`); without it agents can bypass Stop and all other hooks
 - Step 5: added `check_no_toplevel_command_in_hooks` to lint script — catches hooks that read bash command from top-level `d.command` instead of `d.tool_input.command`

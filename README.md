@@ -69,7 +69,7 @@ Claude reads the scaffold skill, generates every file, installs dependencies, ru
 Each scaffold produces a complete, working project — not a bare starter.
 
 **Every stack includes:**
-✅ AI harness (v4.5) — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall, `PreToolUse` secrets read/write guard + git guards, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
+✅ AI harness — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall, `PreToolUse` secrets read/write guard + git guards, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
 ✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility
 
 ### Next.js
@@ -88,7 +88,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 ✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests  
 ✅ Prettier + ESLint + Husky
 
-> Auth, database, pages, components, API routes, and integrations are added via separate skills — keeping the base clean.
+> Add capabilities via `templatecentral:add` — `auth · database · page · feature · endpoint · form · integration · test · logging · error-handling · pagination · mutation-testing · ai-security` — keeping the base scaffold clean.
 
 ---
 
@@ -137,6 +137,17 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
+## Scheduled Loops
+
+Two monthly GitHub Actions workflows keep templateCentral accurate without manual effort:
+
+- **`ecosystem-refresh`** — re-scans framework release notes, library changelogs, and OWASP updates; opens a PR to update `.claude/audit-ecosystem-research.md` and any stale version pins.
+- **`scaffold-verify`** — scaffolds a test project from each template and runs its build + test gate, catching regressions before they reach users.
+
+Both workflows require an `ANTHROPIC_API_KEY` repository secret. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details.
+
+---
+
 ## Repository Structure
 
 ```
@@ -144,6 +155,7 @@ templatecentral/
 ├── .claude-plugin/
 │   ├── plugin.json          # Plugin manifest (points to skills/)
 │   └── marketplace.json     # Anthropic marketplace metadata
+├── .github/workflows/       # CI — lint-skills, validate-manifest, AI PR review
 ├── scripts/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
@@ -155,8 +167,13 @@ templatecentral/
 │   ├── standards/SKILL.md   # Router → skills/standards/<check>/
 │   ├── migrate/SKILL.md     # Router → skills/migrate/<type>/
 │   ├── audit/SKILL.md       # Router → skills/audit/implementation.md
-│   └── write-skill/SKILL.md
-└── AGENTS.md                # Agent orchestration guide
+│   ├── write-skill/SKILL.md
+│   ├── build/               # (de-registered utility) detect stack + run build command
+│   ├── test/                # (de-registered utility) write and run tests
+│   ├── review/              # (de-registered utility) code review + apply feedback
+│   └── cleanup/             # (de-registered utility) remove example code / task scaffolding
+├── AGENTS.md                # Agent orchestration guide
+└── CHANGELOG.md             # Full version history
 ```
 
 ---

@@ -1,6 +1,6 @@
 ---
 name: templatecentral:audit
-description: Use when auditing a templateCentral project for code quality, conventions compliance, and structural correctness.
+description: "Use when auditing the templateCentral plugin repo itself — ecosystem accuracy, conventions, harness."
 ---
 
 `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/audit/implementation.md"`

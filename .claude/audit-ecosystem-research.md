@@ -1,5 +1,5 @@
 ---
-last-scanned: 2026-05-28
+last-scanned: 2026-06-12
 expires-after-days: 30
 ---
 

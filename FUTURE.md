@@ -1,16 +1,16 @@
 # Future Directions
 
-Design seams built into templateCentral v4.0 for AI collaboration patterns that are not yet activated.
+Design seams built into templateCentral for AI collaboration patterns that are not yet activated.
 
 ## Meta-Harness
 
 CI that validates templateCentral's own harness layer — the harness checking itself.
-Seam: `<!-- [[post-harness:meta]] -->` in `AGENTS.md`.
+Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`).
 
 ## Trace-Driven Skill Evolution
 
 Capture agent traces from real scaffolding sessions to detect skill gaps, measure step completion rates, and drive data-informed skill improvements.
-Seam: disabled trace hook in `.claude/settings.json` PostToolUse hooks.
+Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`).
 
 ## Community Skill Registry
 
@@ -22,11 +22,37 @@ Seam: `skills/add/` directory structure supports new capability directories.
 Scheduled scan of framework release notes → auto-PR to update skill content and bump `audit-ecosystem-research.md` cache.
 Seam: `.github/workflows/` directory; `scripts/lint-skills.sh` and `scripts/validate-manifest.sh` modular check system.
 
-## v5.0 Harness Promotion
+## Harness Promotion
 
 Promote the post-harness seams in scaffolded projects from documentation stubs to active capabilities:
 - Trace capture opt-in per project
 - Meta-harness CI gate
 - SBOM + audit automation
 
-*Seams from templateCentral v4.0. None activated as of v4.5.*
+*None activated yet.*
+
+---
+
+## Roadmap
+
+### 1. Harness-kit extraction — APPROVED (Option A, 2026-06-12)
+
+Extract the duplicated ~560-line harness kit (hook scripts, settings.json template, harness.json template) into a single `scaffold/shared/harness-kit.md` loaded by all 4 scaffold skills and `migrate`. Eliminates the current copy-paste maintenance burden across 5 locations. Scheduled as the next release's headline change.
+
+### 2. Scaffold source-files phase-splits
+
+Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. Tracked in memory as `project_skills_compaction_budget`.
+
+### 3. New `templatecentral:add` capabilities under evaluation
+
+- **background-jobs / queues** — task queues (Celery/FastAPI, BullMQ/NestJS, Next.js server actions)
+- **caching (Redis)** — response + query-level caching across all stacks
+- **transactional email** — Resend / Nodemailer integration with template scaffolding
+
+### 4. `templatecentral:migrate` light-adoption simplification
+
+The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can be significantly shorter. Evaluate a fast-path that skips Phase 3–4 for projects that only need harness seeding.
+
+### 5. NestJS tsconfig `strict: true`
+
+Currently `noImplicitAny: false` because `strict: true` has not been validated against a full scaffold build. Enable once the `scaffold-verify` loop confirms the scaffold compiles cleanly under strict mode.

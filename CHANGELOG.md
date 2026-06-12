@@ -46,15 +46,15 @@ Full-ecosystem audit round (audit skill 2.5.0 → 2.6.0). ~70 findings fixed acr
 
 ---
 
-## [4.5.0] — 2026-06-06
+## [4.5.0] — 2026-06-05/06
 
-### Added (appcentral reference harness improvements)
+### Added (2026-06-06 — appcentral reference harness improvements)
 
 - **`stop_hook_active` re-entry guard** (all 4 stacks, `stop-checks.sh`): reads `stop_hook_active` from the Stop hook's stdin JSON and exits 0 immediately if true — prevents the Stop gate from triggering an infinite re-entry loop when Claude re-runs after a blocking exit 2. Appcentral uses this pattern; templateCentral now exceeds it by checking via the guaranteed-present runtime (Node for TS, python3 for FastAPI).
 - **Tightened injection patterns** (`user-prompt-guard.js`/`.py`, all 4 stacks): removed `'you are now a '` (false-positive on "you are now a reviewer") and `'pretend you are'` (false-positive on "pretend you are a user logging in"); replaced with specific jailbreak variants: `'you are now a different ai'`, `'you are no longer bound'`, `'pretend you are not bound'`, `'pretend you have no restrictions'`, `'act as if you have no restrictions'`, `'developer mode enabled'`. Lower false-positive rate, same or higher true-positive coverage.
 - **`docs/CONSTITUTION.md` scaffold** (all 4 stacks): seeds a generic binding-invariants document template with placeholders for architecture, security, testing, git, and agent-governance rules. `session-context.sh` now re-injects it on every SessionStart if present — project-specific invariants survive compaction. `protect-files.sh` warns on edits. Pattern adopted from appcentral (where it is the single source of truth for what overrides all other guidance).
 
-## [4.5.0] — 2026-06-05
+### Added (2026-06-05)
 
 ### Added
 

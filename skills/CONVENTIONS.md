@@ -35,14 +35,15 @@ Use when a skill has **≤ 2 variants per stack**.
 skills/
   add/
     auth/
-      SKILL.md              ← registered skill (detection + cat)
       fastapi.md            ← reference file (implementation)
       nestjs.md             ← reference file (implementation)
       nextjs.md             ← reference file (implementation)
       vite-react.md         ← reference file (implementation)
 ```
 
-The chain is: `SKILL.md` → implementation file (1 `cat` call).
+Detection and routing live in `add/SKILL.md`; no sub-SKILL.md exists inside the capability dir.
+
+The chain is: `add/SKILL.md` → implementation file (1 `cat` call).
 
 ### 3-Level
 
@@ -135,7 +136,7 @@ Every reference file must begin with this comment block as its **first line**:
 
 ```
 <!-- ref: add/auth/fastapi.md
-     loaded-by: add/auth/SKILL.md
+     loaded-by: add/SKILL.md
      prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
@@ -143,7 +144,7 @@ Every reference file must begin with this comment block as its **first line**:
 
 ```
 <!-- ref: add/database/python.md
-     loaded-by: add/database/SKILL.md
+     loaded-by: add/SKILL.md
      prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
@@ -151,7 +152,7 @@ Every reference file must begin with this comment block as its **first line**:
 
 ```
 <!-- ref: add/database/python/sqlalchemy.md
-     loaded-by: add/database/python.md → add/database/SKILL.md
+     loaded-by: add/database/python.md → add/SKILL.md
      prereq: Stack = FastAPI, DB = SQL, compliance = standard. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
@@ -237,9 +238,9 @@ Example for `skills/add/auth/django.md`:
      prereq: Stack identified as Django. Do not invoke this file directly. -->
 ```
 
-**3. Add stack detection signal and `cat` command to each relevant SKILL.md.**
+**3. Add stack detection signal and `cat` command to `skills/add/SKILL.md`.**
 
-In `skills/add/auth/SKILL.md`, add Django to the routing table:
+In `skills/add/SKILL.md`, add Django to the routing table:
 
 ```
 | Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/django.md"` |
@@ -275,9 +276,8 @@ When adding a new framework, define its detection signal clearly and add it to t
 | Item | Naming Pattern | Example |
 |---|---|---|
 | Registered skill (top-level) | `skills/<capability>/` | `skills/add/`, `skills/scaffold/` |
-| Sub-skill within a capability | `skills/<capability>/<noun>/SKILL.md` | `skills/add/auth/SKILL.md` |
-| 2-level reference file | `<stack>.md` inside sub-skill dir | `add/auth/fastapi.md` |
-| 3-level stack router | `<stack>.md` inside sub-skill dir | `add/database/python.md` |
+| 2-level reference file | `<stack>.md` inside capability dir | `add/auth/fastapi.md` |
+| 3-level stack router | `<stack>.md` inside capability dir | `add/database/python.md` |
 | 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `add/database/python/sqlalchemy.md` |
 | Scaffold reference files (existing pattern) | `source-files.md`, `config-files.md` | `scaffold/nestjs/source-files.md` |
 
