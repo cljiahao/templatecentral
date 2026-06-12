@@ -1995,7 +1995,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -2075,7 +2075,7 @@ If yes — or if the user ran any workflow more than once during the scaffold pr
 
 Each skill gets a SKILL.md with `name:` and `description:` frontmatter and a short body. Skills capture this-project specifics — not generic advice that templateCentral already provides.
 
-### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
+### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough.
 
@@ -2087,7 +2087,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This makes Claude Code automatically load `AGENTS.md` on every session without duplicating its content.
 
-### 8b. Optional: Task management
+### 7b. Optional: Task management
 
 Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
 
@@ -2097,7 +2097,7 @@ Ask whether the user wants structured task management for complex features. If y
 For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
 ```
 
-### 9. Remove example code (optional)
+### 8. Remove example code (optional)
 
 Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
 

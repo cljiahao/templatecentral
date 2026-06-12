@@ -246,6 +246,8 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 
 ## AI Harness
 PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+
+After this paragraph, append the shared AGENTS.md tail (incl. the `## Skills Security` section) from `skills/scaffold/shared/harness-kit.md`.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -260,6 +262,8 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 ```markdown
 ## AI Harness
 PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+
+After this paragraph, append the shared AGENTS.md tail (incl. the `## Skills Security` section) from `skills/scaffold/shared/harness-kit.md`.
 PostToolUse: incremental type-check after every edit — feedback only, never blocks.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -348,7 +352,8 @@ sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
 # Every enforcement hook script is a high-value tamper target — hash each for drift detection.
 # Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
 for h in .claude/hooks/*; do shasum -a 256 "$h"; done
-sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
+# CLAUDE.md is optional — hash it only if present (omit its seeded_files entry otherwise):
+[ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill:
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
