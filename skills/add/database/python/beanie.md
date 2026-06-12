@@ -5,15 +5,14 @@
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt`:
+Add to `requirements.txt` (floors tracked in the templateCentral plugin's `.claude/rules/fastapi.md` — AsyncMongoClient requires a modern PyMongo):
 
 ```
-beanie>=2.0
-motor
+beanie
 pymongo
 ```
 
-> **Beanie** is an async ODM for MongoDB built on Motor (the async MongoDB driver) and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Beanie 2.x uses Motor for async MongoDB access — Motor is still required as the async driver.
+> **Beanie** is an async ODM for MongoDB built on PyMongo's async API and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Beanie 2.x is built on PyMongo's native async client (`AsyncMongoClient`) — Motor is deprecated and must NOT be added as a dependency.
 
 ### B2. Create MongoDB Connection
 
@@ -21,16 +20,16 @@ pymongo
 
 ```python
 from beanie import init_beanie
-from motor.motor_asyncio import AsyncMotorClient
+from pymongo import AsyncMongoClient
 
 from core.config import api_settings
 
-mongo_client: AsyncMotorClient | None = None
+mongo_client: AsyncMongoClient | None = None
 
 
 async def init_mongo() -> None:
     global mongo_client
-    mongo_client = AsyncMotorClient(api_settings.MONGODB_URL)
+    mongo_client = AsyncMongoClient(api_settings.MONGODB_URL)
     db = mongo_client[api_settings.MONGODB_DB_NAME]
 
     from models import DOCUMENT_MODELS
@@ -40,7 +39,7 @@ async def init_mongo() -> None:
 async def close_mongo() -> None:
     global mongo_client
     if mongo_client:
-        mongo_client.close()
+        await mongo_client.close()  # AsyncMongoClient.close() is a coroutine
         mongo_client = None
 ```
 
@@ -55,7 +54,7 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(description="MongoDB database name")
 ```
 
-Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
+Ask the user to add `MONGODB_URL` and `MONGODB_DB_NAME` to `src/.env` (agent edits to `.env` files are hook-blocked by design); document the placeholders in `src/.env.default`:
 ```
 MONGODB_URL=mongodb://localhost:27017
 MONGODB_DB_NAME=mydb
@@ -241,7 +240,7 @@ async def get_user(user_id: str) -> dict:
 
 ### Step C — Replace `src/api/routers/auth.py`
 
-No session dependency is needed — Beanie manages its own connection via the lifespan event:
+No session dependency is needed — Beanie manages its own connection via the lifespan event. If rate limiting was added by the auth skill, preserve any existing `@limiter.limit` decorators and `request: Request` parameters when replacing this file:
 
 ```python
 from fastapi import APIRouter, Depends

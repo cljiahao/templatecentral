@@ -46,7 +46,7 @@ the marker.
 
 #### FastAPI
 
-The template already has `configure_cors()` in `src/app.py` using `api_settings.ALLOWED_CORS`. Production origins are driven by `CORS_ORIGINS` in `APISettings` (comma-separated). Update `src/.env`:
+The template already has `configure_cors()` in `src/app.py` using `api_settings.ALLOWED_CORS`. Production origins are driven by `CORS_ORIGINS` in `APISettings` (comma-separated). Ask the user to update `CORS_ORIGINS` in `src/.env` (agent edits to `.env` files are hook-blocked by design); document the placeholder in `src/.env.default`:
 
 ```env
 CORS_ORIGINS=http://localhost:3000
@@ -58,7 +58,7 @@ No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS
 
 #### NestJS (`src/config/setups/security.setup.ts`)
 
-The template already configures CORS via `serviceConfig.CLIENT_URL` (from `src/config/env.config.ts`). Update `CLIENT_URL` in `.env`:
+The template already configures CORS via `serviceConfig.CLIENT_URL` (from `src/config/env.config.ts`). Ask the user to update `CLIENT_URL` in `.env` (agent edits to `.env` files are hook-blocked by design); document the placeholder in `.env.example`:
 
 ```env
 CLIENT_URL=http://localhost:3000
@@ -79,11 +79,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000', // FastAPI or NestJS
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
 });
 ```
+
+> Backend scaffolds serve routes at root; if you add a global `/api` prefix to the backend, drop the rewrite.
 
 #### Next.js (`next.config.ts`)
 
@@ -93,14 +96,18 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/external/:path*',
-        destination: 'http://localhost:8000/api/:path*',
+        destination: 'http://localhost:8000/:path*',
       },
     ];
   },
 };
 ```
 
+> Backend scaffolds serve routes at root; if you add a global `/api` prefix to the backend, change the destination back to `http://localhost:8000/api/:path*`.
+
 ### 3. Environment Variables
+
+Ask the user to set these in the `.env` files (agent edits to `.env` files are hook-blocked by design); document placeholders in `.env.example`/`.env.default`.
 
 #### Frontend `.env`
 

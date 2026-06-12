@@ -67,6 +67,22 @@ Use WebSearch and/or WebFetch to check for changes **since the date in the cache
 **Claude Code harness engineering**
 Check for changes to: hook events (confirmed count), hook handler types (command/http/mcp_tool/prompt/agent), new hook options (asyncRewake, async, args[]), skill scoping priority order, Stop hook block-cap behavior, PreCompact/PostCompact capabilities, new settings.json fields (worktree, sandbox, skillListingBudgetFraction, etc.), AGENTS.md open standard (AAIF) status.
 
+**Claude Code harness engineering — community consensus & team recommendations**
+Beyond the official changelog, scan for emerging harness-engineering practice and grade each finding by source strength:
+
+- Official team guidance: Anthropic engineering blog, Claude Code docs and release notes — hook patterns, skill design, context management, settings best practices
+- Community practice: `claude-code` GitHub issues/discussions with high engagement, and reputable practitioner write-ups on hooks, skill scoping, AGENTS.md structure, and compaction recovery
+
+Grade every finding before recording it:
+
+| Grade | Bar | Audit action |
+|-------|-----|--------------|
+| `RECOMMENDED` | explicit Anthropic team guidance | becomes a targeted Step 3H check this run |
+| `CONSENSUS` | ≥3 independent credible sources agree | becomes a targeted Step 3H check this run |
+| `EMERGING` | single credible source | record and track; do NOT act on it yet |
+
+Also record anti-patterns the community has converged on avoiding. A `RECOMMENDED` or `CONSENSUS` pattern missing from the scaffolds' harness templates is a Step 3H finding; an `EMERGING` one is noted in the report only.
+
 **Reference: AWS AIDLC**
 Check the AWS AI Development Lifecycle (AIDLC) guidance for any new controls or patterns relevant to AI-assisted development workflows — particularly around prompt injection, model output validation, and agent trust boundaries.
 
@@ -146,6 +162,9 @@ expires-after-days: 30
 
 ## Claude Code Harness Engineering
 <hook events, hook types, new options, skill scoping, Stop cap, settings.json fields — current as of scan date>
+
+### Community consensus & team recommendations
+<graded findings: RECOMMENDED (official team guidance) / CONSENSUS (≥3 independent sources) / EMERGING (single credible source — track only), each with sources; plus community-converged anti-patterns>
 ```
 
 ---
@@ -484,14 +503,16 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **PreToolUse `.env` protection**: Scaffold settings.json includes a `PreToolUse` hook that blocks edits to `.env*` files (exit 2) while allowing `.env.example`. Must read `tool_input.file_path` from stdin JSON (not top-level `file_path`). Matcher is `Edit|Write` (no `MultiEdit` tool exists). FastAPI uses `python3`, TS stacks use `node`.
 - [ ] **UserPromptSubmit hook present** (OWASP LLM01): Scaffold settings.json includes a `UserPromptSubmit` hook that pattern-checks incoming prompts for obvious injection phrases (`ignore previous instructions`, `you are now a`, etc.) using args[] exec form; exit 2 blocks the prompt and writes reason to stderr. FastAPI uses `python3`, TS stacks use `node`. Deny list is intentionally minimal — users extend for their domain.
 - [ ] **SessionStart hook present (post-compaction recovery)**: Scaffold settings.json includes a `SessionStart` hook (matcher `startup|resume|compact`) running `session-context.sh`, which re-injects AGENTS.md routing context + universal invariants via plain stdout. This is the correct mechanism: `PostCompact` is observability-only (its exit code/stdout is ignored — it CANNOT inject context), so it is not used for re-injection.
-- [ ] **Skill scoping priority correct**: Official order is `Managed > CLI flag > Project > User > Plugin`. Project skills (`.claude/skills/`) override user skills (`~/.claude/skills/`) when names collide — NOT the reverse. Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations.
+- [ ] **Skill scoping priority correct**: Official order per current docs is `Managed/Enterprise > CLI flag > User > Project > Plugin` — when names collide, enterprise overrides personal and personal (`~/.claude/skills/`) overrides project (`.claude/skills/`). Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations (routing guidance — unaffected by collision priority).
+- [ ] **Seeded project skills are directories**: A skill is a directory with `SKILL.md` as the entrypoint (`.claude/skills/<name>/SKILL.md`). Flat `.claude/skills/<name>.md` files are NOT discovered (flat files work only under `.claude/commands/`). Every scaffold/migrate step that seeds a project skill must create the directory form.
 - [ ] **Hook types documented**: Five hook handler types exist — `command`, `http`, `mcp_tool` (v2.1.117), `prompt`, `agent` (experimental). Scaffold uses `command` type. Any skill recommending hook setup should reference the correct type field.
-- [ ] **Stop hook 8-block cap**: v2.1.143 added a cap of 8 consecutive blocks before Claude Code ends the turn with a warning. For test-enforcement Stop hooks this is not an issue (they exit 0 when tests pass). No explicit workaround needed in scaffold hooks.
+- [ ] **Stop hook 8-block cap**: v2.1.143 added a cap of 8 consecutive blocks before Claude Code ends the turn with a warning. The cap is a backstop only — seeded stop-checks scripts must ALSO honor `stop_hook_active` (see next bullet) so a failing-test loop terminates on the first re-entry rather than burning 8 blocked turns.
+- [ ] **Stop hook loop guard**: every seeded stop-checks script exits 0 when `stop_hook_active` is true in stdin JSON before running tests. Per the hooks docs, a Stop hook that exits 2 re-runs Claude; without the guard the hook can loop. TS stacks parse stdin with `node -e`, FastAPI with `python3 -c`. The guard runs FIRST — before any test command.
 - [ ] **Compaction recovery via SessionStart, not Pre/PostCompact**: Neither PreCompact nor PostCompact can inject context. Scaffolds use `SessionStart` (source list includes `compact`) — the documented way to restore context after compaction. PreCompact (which can block) is not used.
 - [ ] **omitClaudeMd scope**: Only the built-in `Explore` and `Plan` subagents have `omitClaudeMd: true`. All other built-in and custom subagents DO receive CLAUDE.md (and its `@AGENTS.md` import). Scaffold AGENTS.md must still be self-contained because Explore/Plan skip it.
 - [ ] **Project skill seeding**: Every scaffold skill seeds a `*-verify` project skill into `.claude/skills/` (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Migrate Phase 4 seeds the same for all stacks.
 - [ ] **Write-more-skills instruction present**: Scaffold instructions include a step asking the user to create additional project skills for repeated workflows.
-- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Tracked files must include AGENTS.md, CLAUDE.md, `.claude/settings.json`, and the stack's `*-verify.md` skill. Migrate Phase 5 reads these to detect drift.
+- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Tracked files must include AGENTS.md, CLAUDE.md, `.claude/settings.json`, and the stack's `*-verify/SKILL.md` skill. Migrate Phase 5 reads these to detect drift.
 - [ ] **CLAUDE.md is one line**: Every scaffold and migrate path generates `@AGENTS.md` as the only content of `CLAUDE.md` — never verbose content.
 - [ ] **Skills Security section in scaffolded AGENTS.md**: All 4 scaffold AGENTS.md templates include a `## Skills Security` section reminding users to review SKILL.md content before installing third-party skills, scope `allowed-tools:`, and avoid skills that hardcode secrets or make unscoped network calls.
 - [ ] **Skill frontmatter uses `allowed-tools:` tightly scoped**: Any SKILL.md that grants tool access scopes it to the minimum required commands (e.g. `Bash(pnpm *)` not `Bash`). No SKILL.md grants unrestricted `Bash` without explicit justification.
@@ -689,6 +710,8 @@ These carry intentional decisions — don't rewrite blindly. Read each, compare 
 Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
 
 ## Changelog
+### 2.6.0
+- Step 0b: added "Claude Code harness engineering — community consensus & team recommendations" research item — scans official Anthropic guidance and community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded RECOMMENDED / CONSENSUS / EMERGING; RECOMMENDED and CONSENSUS findings become targeted Step 3H checks, EMERGING is tracked only. Cache template gained a matching subsection.
 ### 2.5.0
 - Added Step 7 — Documentation sync: two-track doc maintenance (auto-update structural version markers; flag + draft narrative docs). Runs every audit so markdown and version markers can't silently drift.
 - Scoped-skills enforcement: lint now requires every seeded `*-verify`/`*-migrate` skill to declare a tightly-scoped `allowed-tools:` (`check_seeded_skills_scope_tools`) and bans unscoped `Bash` grants (`check_no_unscoped_bash_grant`). All seeded skills updated to model least-agency (OWASP Agentic ASI02).

@@ -3,14 +3,16 @@
      prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
 ## Next.js + Drizzle (SQL)
 
-> **Pre-release notice**: Drizzle ORM v1 is still pre-release (latest `v1.0.0-rc.3`, June 2026) — pin a specific RC in `package.json`. The `drizzle-zod` integration is now merged into `drizzle-orm/zod`. Import from `drizzle-orm/zod`, not the old `drizzle-zod` package.
+> **Pre-release notice**: Drizzle ORM v1 is still pre-release — pin a specific RC in `package.json` (current RC tracked in `.claude/rules/nextjs.md`). The `drizzle-zod` integration is now merged into `drizzle-orm/zod`. Import from `drizzle-orm/zod`, not the old `drizzle-zod` package.
 
 #### A1. Install Dependencies
 
 ```bash
-pnpm add drizzle-orm postgres
+pnpm add drizzle-orm@rc postgres
 pnpm add -D drizzle-kit
 ```
+
+`drizzle-orm@rc` resolves the latest v1 RC — pin the exact RC in `package.json` afterwards (see `.claude/rules/nextjs.md`).
 
 #### A2. Add Database Scripts
 
@@ -33,6 +35,11 @@ Add to `package.json`:
 
 ```ts
 import { defineConfig } from 'drizzle-kit';
+
+// drizzle-kit does not load .env.local (Next.js convention) — load it explicitly.
+// NOTE: process.loadEnvFile() throws if the file does not exist — make sure
+// .env.local is created (step A8) before running any db:* script.
+process.loadEnvFile('.env.local');
 
 export default defineConfig({
   schema: './src/integrations/database/schema.ts',
@@ -133,7 +140,10 @@ import { NextResponse } from 'next/server';
 import { db, users } from '@/integrations/database';
 
 export async function GET() {
-  const all = await db.select().from(users);
+  // Select only fields needed — never send full records to the browser
+  const all = await db
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users);
   return NextResponse.json(all);
 }
 ```

@@ -166,6 +166,8 @@ Every reference file must begin with this comment block as its **first line**:
 
 Scaffold reference files (`source-files.md`, `config-files.md`) that predate this convention may be retrofitted gradually. They are not required to have the header immediately, but new scaffold reference files must include it.
 
+Agent-utility prereq variant: reference files belonging to de-registered agent utilities (build/test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
+
 ---
 
 ## Section 5: Description Writing Guide

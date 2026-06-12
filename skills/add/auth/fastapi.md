@@ -46,7 +46,7 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=12, description="User password — minimum 12 characters (OWASP recommendation).")
+    password: str = Field(min_length=12, max_length=128, description="User password — 12-128 characters (OWASP minimum; the upper bound caps argon2 hashing cost on this unauthenticated endpoint).")
     name: str = Field(description="User display name.")
 
 
@@ -88,14 +88,14 @@ class APISettings(BaseSettings):
     # ... existing fields ...
     SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
-    TRUST_PROXY: str = Field(default="", description="Set to a trusted CIDR (e.g. 10.0.0.0/8) or '*' when behind a load balancer; empty = disabled")
 ```
 
-Add to `src/.env` (real value — never commit):
+> `TRUST_PROXY` already exists in the scaffold's `APISettings` (`src/core/config.py`) and `src/.env.default` — do not re-add it.
+
+Ask the user to add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `src/.env` (real value — never commit; agent edits to `.env` files are hook-blocked by design):
 ```
 SECRET_KEY=
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-TRUST_PROXY=
 ```
 
 Document in `src/.env.default`:
@@ -293,7 +293,12 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# On auth endpoints:
+# On auth endpoints — limit /register as well as /login (both are
+# unauthenticated and CPU-expensive via argon2 hashing):
+@router.post("/register", response_model=UserResponse)
+@limiter.limit("3/15minutes")
+async def register(request: Request, body: RegisterRequest) -> UserResponse: ...
+
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("3/15minutes")
 async def login(request: Request, body: LoginRequest) -> TokenResponse: ...

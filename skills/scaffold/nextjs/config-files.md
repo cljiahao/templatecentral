@@ -58,6 +58,7 @@ Write these files exactly as shown.
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.6",
     "eslint-plugin-react-hooks": "^7.0.0",
@@ -156,7 +157,7 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'X-XSS-Protection', value: '0' },
-          // HSTS — only active over HTTPS; Next.js strips this header over HTTP automatically.
+          // HSTS — browsers ignore HSTS received over HTTP, so this is only effective over HTTPS.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           // CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
@@ -333,7 +334,7 @@ if [ -f "yarn.lock" ]; then
   exec yarn "$@"
 # Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
-  exec sh -c "corepack enable pnpm && pnpm \"$@\""
+  exec sh -c 'corepack enable pnpm && exec pnpm "$@"' -- "$@"
 # Default to npm
 else
   exec npm "$@"
@@ -432,7 +433,7 @@ docs/
 # App
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
-# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+# Reverse proxy trust — set to the number of trusted proxy hops (1 = ALB → App, 2 = ALB → Traefik → App); leave empty/unset when there is no proxy (headers not trusted), e.g. local dev
 TRUST_PROXY=
 
 # Database (if using Drizzle — added by templatecentral:add (database))
@@ -478,8 +479,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env
-.env.local
+.env*
+!.env.example
 
 # vercel
 .vercel

@@ -95,6 +95,12 @@ describe('ProjectCard', () => {
 
 ### Component Tests with User Interaction
 
+Install `@testing-library/user-event` first — the scaffold ships `@testing-library/jest-dom` and `@testing-library/react`, but not this package:
+
+```bash
+pnpm add -D @testing-library/user-event
+```
+
 Use `@testing-library/user-event` for clicks, typing, and other interactions:
 
 ```tsx
@@ -237,28 +243,26 @@ describe('useProjects', () => {
 
 ### Integration Service Tests (External APIs)
 
-If you've added external API integrations via the `add-integration` skill, test them by mocking the client:
+If you've added external API integrations via the `add-integration` skill, services live under `src/integrations/services/` and receive their client via constructor injection — test them by instantiating the service with a stub client object (no module mocking needed):
 
 ```ts
-// src/features/<name>/api/<name>-service.test.ts
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { NameService } from './<name>-service';
+// src/integrations/services/github-service.test.ts
+import { describe, expect, it, vi } from 'vitest';
+import type { GithubClient } from '../clients/github-client';
+import { GithubService } from './github-service';
 
-vi.mock('./<name>-client', () => ({
-  nameClient: { getItems: vi.fn(), getItem: vi.fn() },
-}));
+describe('GithubService', () => {
+  it('fetches and returns repos', async () => {
+    const mockRepos = [{ id: 1, name: 'alpha', full_name: 'me/alpha', private: false }];
+    const client = {
+      getRepos: vi.fn().mockResolvedValue(mockRepos),
+    } as unknown as GithubClient;
 
-import { nameClient } from './<name>-client';
+    const service = new GithubService(client);
 
-describe('NameService', () => {
-  afterEach(() => { vi.restoreAllMocks(); });
-
-  it('fetches and returns items', async () => {
-    const mockData = [{ id: '1', title: 'Item' }];
-    vi.mocked(nameClient.getItems).mockResolvedValue(mockData);
-
-    const result = await NameService.getItems();
-    expect(result).toEqual(mockData);
+    const result = await service.getRepos();
+    expect(result).toEqual(mockRepos);
+    expect(client.getRepos).toHaveBeenCalledOnce();
   });
 });
 ```
@@ -266,15 +270,15 @@ describe('NameService', () => {
 ### Running Tests
 
 ```bash
-pnpm test --run            # Run all tests once
-pnpm test                  # Watch mode (re-runs on change)
-pnpm test:coverage         # Run with coverage report
+pnpm test                  # Run all tests once (vitest --run)
+pnpm test:watch            # Watch mode (re-runs on change)
+pnpm test:ci               # Run once with the dot reporter (used by .husky/pre-push)
 ```
 
 ### Validate
 
 ```bash
-pnpm build && pnpm test --run
+pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.

@@ -28,7 +28,12 @@ All files use **kebab-case**. No exceptions (unlike Next.js, Vite has no special
 
 ### Component Best Practices
 
-Same principles as Next.js. Stack-specific component library:
+- Keep components thin — delegate logic to hooks/services.
+- Extract when there's a second consumer — don't prematurely extract.
+- Add shadcn/ui primitives via the CLI (`npx shadcn@latest add <name>`) — NEVER install `@radix-ui/*` manually or recreate primitives.
+- Prefer composition (children) over boolean flag props for variants.
+
+Stack-specific component library:
 
 **Widgets** (`src/components/widgets/`): `brand-text` · `custom-card` · `custom-dialog` · `custom-form-field` · `link-list` · `media-card` · `pill`
 

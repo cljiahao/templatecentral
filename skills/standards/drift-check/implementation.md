@@ -4,7 +4,7 @@
 
 # Drift Check
 
-Read the project's templateCentral version marker, compare to the current scaffold skill version, detect drift, and optionally trigger dependency updates.
+Read the project's templateCentral version marker, compare to the current plugin version, detect drift, and optionally trigger dependency updates.
 
 ## Step 1 — Read Version Marker
 
@@ -20,30 +20,26 @@ Examples:
 
 If no marker found: this project was not scaffolded by templateCentral. Exit silently — do not report anything.
 
-## Step 2 — Read Current Scaffold Skill Version
+## Step 2 — Read Current Plugin Version
 
-Load the scaffold skill for the detected stack and read its `version` frontmatter field:
+At the plugin root (`$HOME/.claude/plugins/marketplaces/templatecentral/`):
 
-| Marker stack | Scaffold skill |
-|---|---|
-| `nextjs` | `templatecentral:scaffold` |
-| `vite-react` | `templatecentral:scaffold` |
-| `fastapi` | `templatecentral:scaffold` |
-| `nestjs` | `templatecentral:scaffold` |
+- `.claude-plugin/plugin.json` — the version SSOT: the `version` field is the current templateCentral version
+- `.claude/rules/<stack>.md` — the stack-conventions reference: the `Stack:` line describes the current stack conventions for the detected stack
 
-Current scaffold skill version = the `version` field value.
+Current version = the `version` field value from `.claude-plugin/plugin.json`.
 
 ## Step 3 — Compare
 
 Parse both versions as semver (`major.minor.patch`).
 
-**If project version == current skill version**: conventions are current. Exit silently.
+**If project version == current plugin version**: conventions are current. Exit silently.
 
-**If project version < current skill version**: drift detected. Proceed to Step 4.
+**If project version < current plugin version**: drift detected. Proceed to Step 4.
 
 ## Step 4 — Convention Drift Report
 
-Read the scaffold skill's `## Changelog` section. Extract all entries with versions newer than the project version.
+Read `CHANGELOG.md` at the plugin root. Extract all entries with versions newer than the project version, focusing on changes relevant to the detected stack. Also diff the project's conventions against the `Stack:` line in `.claude/rules/<stack>.md`.
 
 Show the user:
 
@@ -73,13 +69,13 @@ After showing the convention report, ask the user:
 
 If user declines: skip to Step 6.
 
-If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch `update-agent`.
+If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch the update utility (`skills/review/update/implementation.md`).
 
 ## Step 6 — Security Audit
 
 After Step 5 (or after Step 4 if user declined Step 5), ask:
 
-> "Security audit available — checks installed packages against the OSV/NVD vulnerability database. Run it? (y/n)"
+> "Security audit available — checks installed packages against the package ecosystems' advisory databases. Run it? (y/n)"
 
 **If user accepts:**
 

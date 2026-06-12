@@ -20,7 +20,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 | `Form` (FormProvider) | `src/components/ui/form.tsx` |
 | `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
 | `Input`, `Textarea`, `Select` | `src/components/ui/` |
-| `sonner` (Toaster) | **Not pre-installed** — add in Step 1 if forms need toast feedback |
+| `sonner` (Toaster) | `package.json` + `<Toaster />` mounted in `src/components/layout/providers.tsx` |
 
 ## Inputs
 
@@ -40,26 +40,28 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Install sonner (if the form needs toast feedback)
+### 1. Toast feedback — already wired
 
-If the form will call `toast.success()` / `toast.error()`, run:
+The scaffold pre-installs `sonner` and mounts `<Toaster />` in `src/components/layout/providers.tsx` — call `toast.success()` / `toast.error()` directly; no setup needed. **Skip this step** for scaffolded projects.
+
+**Fallback (non-scaffold projects only):** if `sonner` is missing from `package.json`, run:
 
 ```bash
 npx shadcn@latest add sonner
 ```
 
-Then add `<Toaster richColors />` inside `<ThemeProvider>` in `src/app/layout.tsx`:
+Then mount exactly one `<Toaster />` in a shared client provider (e.g. inside `Providers`):
 
 ```tsx
 import { Toaster } from 'sonner';
 // ...
-<ThemeProvider ...>
-  <Providers>{children}</Providers>
+<Providers>
+  {children}
   <Toaster richColors />
-</ThemeProvider>
+</Providers>
 ```
 
-Skip this step if sonner is already installed or the form doesn't need toast feedback.
+Never mount more than one `<Toaster />` — duplicate toasts result.
 
 ### 2. Define the Zod Schema
 

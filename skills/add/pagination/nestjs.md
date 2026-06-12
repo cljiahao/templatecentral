@@ -53,7 +53,7 @@ export interface PaginatedResponse<T> {
 ```ts
 // src/common/services/pagination.service.ts
 import { Injectable } from '@nestjs/common';
-import type { PaginationMetadata } from '@/common/dto/pagination.dto';
+import type { PaginationMetadata } from '../dto/pagination.dto';
 
 @Injectable()
 export class PaginationService {
@@ -76,7 +76,11 @@ export class PaginationService {
   ): { field: string; direction: 'asc' | 'desc' } | null {
     if (!sort) return null;
 
-    const [direction, field] = sort.split('_');
+    // Split on the FIRST underscore only — field names may be snake_case (e.g. asc_created_at)
+    const separatorIndex = sort.indexOf('_');
+    if (separatorIndex === -1) return null;
+    const direction = sort.slice(0, separatorIndex);
+    const field = sort.slice(separatorIndex + 1);
     if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
       return null;
     }
@@ -84,6 +88,23 @@ export class PaginationService {
     return { field, direction: direction as 'asc' | 'desc' };
   }
 }
+```
+
+`PaginationService` has no module of its own — register it in each feature module that uses it:
+
+```ts
+// src/modules/projects/projects.module.ts
+import { Module } from '@nestjs/common';
+
+import { PaginationService } from '../../common/services/pagination.service';
+import { ProjectsController } from './projects.controller';
+import { ProjectsService } from './projects.service';
+
+@Module({
+  controllers: [ProjectsController],
+  providers: [ProjectsService, PaginationService],
+})
+export class ProjectsModule {}
 ```
 
 **4. Controller with Pagination**
@@ -98,11 +119,10 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { ZodValidationPipe } from 'nestjs-zod';
 import { ProjectsService } from './projects.service';
-import { PaginationService } from '@/common/services/pagination.service';
-import { PaginationDto, paginationSchema } from './dto/pagination.dto';
-import type { PaginationMetadata, PaginatedResponse } from '@/common/dto/pagination.dto';
+import { PaginationService } from '../../common/services/pagination.service';
+import { PaginationDto } from './dto/pagination.dto';
+import type { PaginationMetadata, PaginatedResponse } from '../../common/dto/pagination.dto';
 import { ProjectDto } from './dto/project.dto';
 
 const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'];
@@ -117,12 +137,12 @@ export class ProjectsController {
 
   @Get()
   @ApiOperation({ summary: 'List projects with pagination' })
-  @ApiQuery({ name: 'page', example: 1 })
-  @ApiQuery({ name: 'limit', example: 10 })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({ name: 'sort', required: false, example: 'asc_name' })
   async list(
-    @Query(new ZodValidationPipe(paginationSchema))
-    query: PaginationDto
+    // The scaffold's global APP_PIPE ZodValidationPipe validates PaginationDto — no explicit pipe needed
+    @Query() query: PaginationDto
   ): Promise<PaginatedResponse<ProjectDto>> {
     // Validate sort field
     const orderBy = this.paginationService.parseSortParam(
@@ -160,7 +180,8 @@ export class ProjectsController {
 
     return {
       data: {
-        items: projects.map((p) => new ProjectDto(p)),
+        // createZodDto classes have no mapping constructor — validate rows via the static schema
+        items: projects.map((p) => ProjectDto.schema.parse(p)),
         pagination: metadata,
       },
     };
@@ -175,8 +196,8 @@ export class ProjectsController {
 import { Injectable } from '@nestjs/common';
 import { asc, count, desc } from 'drizzle-orm';
 
-import { DrizzleService } from '@/database/drizzle.service';
-import { projects } from '@/database/schema';
+import { DrizzleService } from '../../database/drizzle.service';
+import { projects } from '../../database/schema';
 
 type SortField = 'name' | 'createdAt' | 'updatedAt';
 const SORT_COLUMNS = {

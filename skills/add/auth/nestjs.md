@@ -5,7 +5,7 @@
 
 Add JWT-based authentication to a NestJS project scaffolded from templateCentral using Passport.js.
 
-> **Stub notice:** The `AuthService` created here is intentionally incomplete — `register` stores nothing and `login` throws `UnauthorizedException` until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
+> **Stub notice:** The `AuthService` created here is intentionally incomplete — both `register` and `login` throw `UnauthorizedException` until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
 
 ### Prerequisites
 
@@ -99,6 +99,12 @@ JWT_EXPIRES_IN=30m
 
 > Run `openssl rand -hex 32` and paste the output as `JWT_SECRET`.
 
+Document in `.env.example`:
+```
+JWT_SECRET=<generate with: openssl rand -hex 32>
+JWT_EXPIRES_IN=30m
+```
+
 **Add a startup guard in `src/main.ts`** — the `!` assertion is erased at compile time and does NOT throw at runtime if the variable is missing:
 
 ```typescript
@@ -164,7 +170,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {}
 ```typescript
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
 
 import type { RegisterDto, LoginDto } from './auth.dto';
 
@@ -172,13 +177,13 @@ import type { RegisterDto, LoginDto } from './auth.dto';
 export class AuthService {
   constructor(private readonly jwtService: JwtService) {}
 
-  async register(dto: RegisterDto) {
-    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
-    const user = { id: 'generated-id', email: dto.email, name: dto.name, hashedPassword };
-    return { id: user.id, email: user.email, name: user.name };
+  // Both methods are deliberate stubs (synchronous throws, unused params prefixed with _)
+  // until templatecentral:add (database) replaces them with real implementations.
+  register(_dto: RegisterDto) {
+    throw new UnauthorizedException('Database integration required. Run templatecentral:add (database) to complete auth.');
   }
 
-  async login(dto: LoginDto) {
+  login(_dto: LoginDto) {
     throw new UnauthorizedException('Database integration required. Run templatecentral:add (database) to complete auth.');
   }
 }
@@ -292,20 +297,6 @@ getMe(@Req() req) {
 }
 ```
 
-### Environment Variables
-
-Add to `.env` (real value — never commit):
-```
-JWT_SECRET=
-JWT_EXPIRES_IN=30m
-```
-
-Document in `.env.example`:
-```
-JWT_SECRET=<generate with: openssl rand -hex 32>
-JWT_EXPIRES_IN=30m
-```
-
 ### Rate Limiting (Required for Production)
 
 Industry best practice: max 3 failed auth attempts per 15 minutes. Install `@nestjs/throttler`:
@@ -314,7 +305,7 @@ Industry best practice: max 3 failed auth attempts per 15 minutes. Install `@nes
 pnpm add @nestjs/throttler
 ```
 
-Register globally in `AppModule` (import + guard):
+Register globally in `AppModule` (import + guard) with a generous default — the global `ThrottlerGuard` applies this limit to EVERY endpoint, so the strict auth limit must NOT live here:
 
 ```typescript
 import { ThrottlerModule, ThrottlerGuard, minutes } from '@nestjs/throttler';
@@ -322,10 +313,30 @@ import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: minutes(15), limit: 3 }]),
+    ThrottlerModule.forRoot([{ ttl: minutes(1), limit: 100 }]),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
+```
+
+Then tighten only the auth endpoints with `@Throttle()` on the handlers in `auth.controller.ts`:
+
+```typescript
+import { Throttle, minutes } from '@nestjs/throttler';
+
+  @Post('register')
+  @Throttle({ default: { ttl: minutes(15), limit: 3 } })
+  @ApiOperation({ summary: 'Register a new user' })
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
+  }
+
+  @Post('login')
+  @Throttle({ default: { ttl: minutes(15), limit: 3 } })
+  @ApiOperation({ summary: 'Authenticate and receive a JWT token' })
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
 ```
 
 ### Rules

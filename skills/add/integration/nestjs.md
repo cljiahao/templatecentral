@@ -103,6 +103,19 @@ GITHUB_API_URL=https://api.github.com
 GITHUB_TOKEN=your_github_token_here
 ```
 
+**Add a startup guard in `src/main.ts`** — the `!` assertion is erased at compile time and does NOT throw at runtime if the variable is missing:
+
+```typescript
+async function bootstrap() {
+  if (!serviceConfig.GITHUB_TOKEN) {
+    throw new Error('GITHUB_TOKEN environment variable is required');
+  }
+  // ... rest of bootstrap
+}
+```
+
+NEVER use a fallback like `?? ''` for tokens — fail fast at startup instead.
+
 #### 5. Create the Module
 
 **`src/modules/<name>-integration/<name>-integration.module.ts`**:

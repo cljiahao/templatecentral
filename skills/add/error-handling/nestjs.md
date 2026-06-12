@@ -16,7 +16,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { ZodSerializationException } from 'nestjs-zod';
+import { ZodSerializationException, ZodValidationException } from 'nestjs-zod';
 import { z, ZodError } from 'zod';
 
 interface ErrorResponse {
@@ -40,7 +40,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       error: 'An error occurred',
     };
 
-    if (exception instanceof ZodSerializationException) {
+    if (exception instanceof ZodValidationException) {
+      // Request validation failure (global ZodValidationPipe) — a client 400 with field details
       const zodError = exception.getZodError();
       if (zodError instanceof ZodError) {
         const fieldErrors = z.flattenError(zodError).fieldErrors as Record<string, string[]>;
@@ -50,6 +51,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         };
         this.logger.warn(`Validation error: ${zodError.message}`);
       }
+    } else if (exception instanceof ZodSerializationException) {
+      // Response serialization failure — a server bug (500). Log it; never leak schema details.
+      const zodError = exception.getZodError();
+      if (zodError instanceof ZodError) {
+        this.logger.error(`ZodSerializationException: ${zodError.message}`);
+      }
+      errorResponse = { error: 'Internal server error' };
     } else if (status === HttpStatus.BAD_REQUEST) {
       errorResponse = { error: 'Bad request', details: { code: 'BAD_REQUEST' } };
     } else if (status === HttpStatus.UNAUTHORIZED) {
@@ -91,7 +99,7 @@ export class AppNotFoundException extends HttpException {
 
 // src/modules/projects/projects.service.ts
 import { Injectable } from '@nestjs/common';
-import { AppNotFoundException } from '@/common/exceptions/not-found.exception';
+import { AppNotFoundException } from '../../common/exceptions/not-found.exception';
 
 @Injectable()
 export class ProjectsService {
@@ -162,7 +170,7 @@ export class ProjectsController {
 # Test controller validation
 pnpm test
 
-# Check Swagger docs at /api/docs includes error schemas
+# Check Swagger docs at /docs includes error schemas
 pnpm start:dev
 ```
 

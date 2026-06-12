@@ -46,6 +46,8 @@ Latest: **1.6.11** (May 9, 2026). 1.7.0-beta in progress.
 - `genericOAuthClient()`, `issuer`, `requireIssuerValidation` removed
 SAML InResponseTo validation now default. 2FA `enableTwoFactor()` now accepts `method: "otp"|"totp"`. GHSA-xr8f-h2gw-9xh6 patched in 1.6.5.
 
+Drizzle adapter is a separate package `@better-auth/drizzle-adapter` (import { drizzleAdapter } from '@better-auth/drizzle-adapter') — verified against official docs June 2026.
+
 ### Drizzle ORM
 Pre-release: **v1.0.0-rc.1** (April 30, 2026). `drizzle-zod` → merged into `drizzle-orm/zod`. RQBv1 removed. Still pre-release — RC disclaimer in skills correct. ✓
 
@@ -62,7 +64,7 @@ Stable. TRUST_PROXY note correct.
 React: still **v5** (v6 = Svelte only). `isInitialLoading` deprecated in v5 (alias for `isLoading`), removed in v6. Should add lint check for `isInitialLoading`.
 
 ### Vite + @vitejs/plugin-react
-Vite 8 stable. `@vitejs/plugin-react` v6 = Oxc-based (no Babel). nginx `1.28.3` current (fixed 4.1.0). ✓
+Vite 8 stable. `@vitejs/plugin-react` v6 = Oxc-based (no Babel). nginx `1.30.2` current stable (1.30.x line; verified June 2026). ✓
 
 ## Security standards
 
@@ -129,6 +131,32 @@ Key events:
 **skillListingBudgetFraction: 0.02** + **skillListingMaxDescChars: 1536** (default): Paired settings. `skillListingBudgetFraction` caps how much context budget skill listing can use. `skillListingMaxDescChars` caps per-skill description length (default 1536 chars). Set `skillListingBudgetFraction` in scaffold; omit `skillListingMaxDescChars` to use default unless a tighter cap is needed.
 
 **AAIF (Linux Foundation, Dec 2025)**: AGENTS.md open standard. 190+ orgs, 60,000+ repos. Standard has matured — AGENTS.md must be self-contained (no reliance on CLAUDE.md being loaded by subagents).
+
+### Community consensus & team recommendations (scanned 2026-06-12, audit 2.6.0)
+
+**Hooks**
+- RECOMMENDED: Hooks for hard rules, CLAUDE.md for guidance — CLAUDE.md is "context, not enforced configuration"; to block an action use a PreToolUse hook — code.claude.com/docs/en/memory, anthropic.com/engineering/claude-code-best-practices
+- RECOMMENDED: PreToolUse deny (exit 2) fires before permission rules and holds even in bypassPermissions mode; deny rules are deny-first — code.claude.com/docs/en/permissions
+- RECOMMENDED: Hook surface now ~30 events; since late 2025: PostToolBatch, PermissionRequest/PermissionDenied, StopFailure, Setup, InstructionsLoaded, SessionEnd, ConfigChange, FileChanged, WorktreeCreate/Remove, TaskCreated/Completed, Elicitation — code.claude.com/docs/en/hooks
+- CONSENSUS: Stop hooks that exit 2 must carry a loop guard (check `stop_hook_active` in stdin JSON) — unguarded test-enforcement Stop hooks loop — claude-code issues #2956, #3573, #55754
+
+**Skills & AGENTS.md**
+- RECOMMENDED: A skill is a DIRECTORY with `SKILL.md` as entrypoint (`.claude/skills/<name>/SKILL.md`); flat `.md` files are discovered only under `.claude/commands/` — code.claude.com/docs/en/skills (verified directly 2026-06-12)
+- RECOMMENDED: Scoping collision order per current docs: enterprise overrides personal, personal overrides PROJECT (reverses the order previously recorded here) — code.claude.com/docs/en/skills
+- RECOMMENDED: `CLAUDE.md` = `@AGENTS.md` is the officially documented bridge — code.claude.com/docs/en/memory
+- RECOMMENDED: Skill listing budget defaults to 1% of context; `skillListingBudgetFraction` + 1,536-char description cap, key use case first — code.claude.com/docs/en/skills
+- CONSENSUS: AGENTS.md under Linux Foundation AAIF (Dec 2025, 170+ members); format stable, no breaking changes
+
+**Context management**
+- RECOMMENDED: Project-root CLAUDE.md auto re-injected after compaction; invoked skills re-attach at 5,000 tokens each within a 25,000-token combined budget; keep CLAUDE.md <200 lines, procedures in skills + path-scoped `.claude/rules/*.md` — code.claude.com/docs/en/memory
+- CONSENSUS: SessionStart with `compact` matcher is the established re-injection pattern; PostCompact exists for mid-session observability
+
+**Security**
+- RECOMMENDED: Layered .env defense: `permissions.deny` Read rules (gitignore semantics, any depth) + PreToolUse hook + sandbox. Deny rules cover built-in tools and recognized Bash file commands but NOT arbitrary subprocesses — only sandboxing blocks those — code.claude.com/docs/en/permissions
+- CONSENSUS: Hook-based .env protection on Read|Edit|Write|Bash; instructions/.claudeignore are not security boundaries
+- EMERGING: HTTP hooks for centralized team-wide hook policy (track only)
+
+**Anti-patterns (community-converged):** flat `.md` in `.claude/skills/` (silently ignored); exit-2 Stop hooks without loop guards; treating CLAUDE.md/.claudeignore as security boundaries; argument-constraining Bash permission patterns (fragile per docs); CLAUDE.md >200 lines; trigger phrase buried at end of skill description; slow synchronous hooks on every PostToolUse/Stop.
 
 ### Rogue agent patterns / code smells
 1. Missing Stop hook → no test enforcement; agent runs unconstrained

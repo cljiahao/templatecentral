@@ -103,12 +103,6 @@ Confirm the build succeeds with no type errors and all tests pass.
 - NEVER manually create files in `src/components/ui/` — use the shadcn CLI (`npx shadcn@latest add`)
 - NEVER add boolean flag props to configure variants — prefer composition with children
 
-## Validate
-
-```bash
-pnpm build    # zero errors
-```
-
 ## After Writing Code
 
 Dispatch in order:

@@ -1,6 +1,6 @@
 <!-- ref: test/implementation.md
      loaded-by: test/SKILL.md
-     prereq: Test agent workflow. Do not invoke this file directly — it is loaded at runtime by the templatecentral:test skill. -->
+     prereq: Test agent workflow. Do not invoke this file directly — it is catted by agents via skills/test/SKILL.md (de-registered agent utility). -->
 
 # Test Agent
 
@@ -8,7 +8,7 @@ Write tests for newly added code using the stack's `add-test` skill conventions.
 
 ## Stack Detection
 
-Same as `build-agent`: check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
+Same as the build utility (`skills/build/implementation.md`): check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
 
 ## Steps
 
@@ -56,7 +56,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: `templatecentral:add` (feature), `templatecentral:add` (api-route), `templatecentral:add` (feature), `templatecentral:add` (endpoint), `templatecentral:add` (module).
+Dispatched by: `templatecentral:add` (feature), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
 
 ## Changelog
 ### 1.0.0

@@ -23,7 +23,7 @@ export const GET = withLogging(async () => {
 });
 ```
 
-App startup is logged in `src/app/api/health/route.ts`; add an explicit startup log in `src/instrumentation.ts` (Next.js instrumentation hook):
+Add an explicit startup log in `src/instrumentation.ts` (Next.js instrumentation hook):
 
 ```ts
 // src/instrumentation.ts

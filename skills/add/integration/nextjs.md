@@ -12,7 +12,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 ### Architecture
 
 ```
-Environment → factories.ts → services/ → clients/ → schemas/
+Environment → factories.ts → clients/ → services/ → schemas/
 ```
 
 - **clients/** — Thin HTTP clients that make requests
@@ -146,13 +146,6 @@ Confirm the build succeeds with no type errors. Verify the integration works end
 - NEVER consume integrations directly in components — go through feature services or API routes
 - For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
 - For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
-
-### Validate
-
-```bash
-pnpm build    # zero errors
-pnpm check    # zero type errors
-```
 
 ### After Writing Code
 

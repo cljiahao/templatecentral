@@ -174,19 +174,19 @@ async def get_project(project_id: str) -> ProjectResponse:
     return ProjectResponse(id=project_id, name="Sample Project", description=None)
 ```
 
-**2b. Integrate into Existing App (No New File)**
+**2b. Wiring (Already Present — No Changes Needed)**
 
-The scaffold already has `src/app.py` with a `start_application()` factory function. Add one call to `configure_exceptions(app)` inside it — do NOT create a new `app = FastAPI(...)` instance:
+The scaffold's `src/app.py` already imports `configure_exceptions` and calls it inside `start_application()`. This skill only replaces the handler bodies in `src/error_handler.py` (Section 1) — do NOT create a new `app = FastAPI(...)` instance or add a duplicate `configure_exceptions(app)` call. Verify the existing wiring looks like this:
 
 ```python
-# src/app.py — add configure_exceptions() call inside start_application()
-from error_handler import configure_exceptions
-
+# src/app.py — already present in the scaffold; no edits required
 def start_application() -> FastAPI:
-    app = FastAPI(...)          # already exists in scaffold
-    configure_exceptions(app)   # ← add this line
-    configure_cors(app)         # already exists
-    include_routers(app)        # already exists
+    app = FastAPI(...)
+    configure_security_headers(app)
+    configure_cors(app)
+    configure_proxy_headers(app)
+    configure_exceptions(app)   # ← already wired
+    app.include_router(router)
     return app
 ```
 

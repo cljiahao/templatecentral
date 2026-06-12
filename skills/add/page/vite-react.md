@@ -162,12 +162,6 @@ Confirm the build succeeds with no type errors and all tests pass.
 - NEVER hardcode route paths in components — use `PAGE_ROUTES` constants
 - NEVER create deeply nested route files — keep pages flat in `src/pages/`; nesting is in the router
 
-## Validate
-
-```bash
-pnpm build    # zero errors
-```
-
 ## After Writing Code
 
 Dispatch in order:

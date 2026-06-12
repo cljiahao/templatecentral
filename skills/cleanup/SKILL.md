@@ -1,6 +1,6 @@
 <!-- ref: cleanup/SKILL.md
      loaded-by: agent — not a registered skill; cat directly when a cleanup step is needed
-     prereq: Project identified. -->
+     prereq: Project identified. Do not invoke this file directly — it is catted directly by agents as a de-registered utility. -->
 
 **Identify the operation:**
 - **Remove example code**: `remove-example/implementation.md`

@@ -91,11 +91,8 @@ export async function POST(request: Request) {
     const parsed = CreateProjectSchema.safeParse(body);
 
     if (!parsed.success) {
-      return handleApiError(
-        'Failed to create project',
-        parsed.error,
-        z.flattenError(parsed.error).fieldErrors
-      );
+      // ZodError branch derives fieldErrors itself — no third argument needed
+      return handleApiError('Failed to create project', parsed.error);
     }
 
     // Your logic here: const [project] = await db.insert(projects).values(parsed.data).returning()
@@ -119,12 +116,12 @@ import { handleApiError } from '@/lib/errors';
 import { NextResponse } from 'next/server';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const session = await auth.api.getSession({ headers: _request.headers });
+    const session = await auth.api.getSession({ headers: request.headers });
 
     // Check project exists AND user has access
     const project = { id, name: 'Sample', ownerId: 'user-1' }; // replace with real DB lookup
@@ -288,7 +285,6 @@ describe('ErrorBoundary', () => {
   it('displays fallback UI when render error occurs', () => {
     const ThrowComponent = () => {
       throw new Error('Test error');
-      return null;
     };
 
     render(
@@ -309,7 +305,6 @@ describe('ErrorBoundary', () => {
   it('shows reload button', () => {
     const ThrowComponent = () => {
       throw new Error('Test');
-      return null;
     };
 
     render(

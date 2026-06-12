@@ -14,8 +14,8 @@
 | Type aliases | `PascalCase` | `DatedSchedules` |
 | Private helpers | `_leading_underscore` | `_coerce_account` |
 | Files | `snake_case.py` | `tiered_interest.py` |
-| Directories | `snake_case` | `cpf_data/` |
-| Tests | `test_<function>_<scenario>` | `test_withdrawal_raises_below_55` |
+| Directories | `snake_case` | `billing_data/` |
+| Tests | `test_<function>_<scenario>` | `test_refund_raises_after_window` |
 
 ### Type Annotations
 
@@ -66,11 +66,11 @@
 
 ### Tooling
 
-- **Ruff** — linting + isort (line-length 88, target version configured in `ruff.toml`).
+- **Ruff** — linting + isort (line-length 88, target version configured in `pyproject.toml` under `[tool.ruff]`).
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 - NEVER use `@app.on_event("startup")` / `@app.on_event("shutdown")` — removed in Starlette 1.0. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
-- **Starlette ≥1.0.1 required.** A published security advisory (GHSA-86qp-5c8j-p5mr, BadHost): malformed `Host` headers in Starlette ≤1.0.0 cause `request.url.path` to return incorrect values, enabling auth bypass in middleware-based path matching. Patched in 1.0.1; current stable 1.2.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes; `scope["path"]` is safe if you must read the path in middleware.
+- **Starlette floor.** A published security advisory (BadHost) lets malformed `Host` headers make `request.url.path` return incorrect values in older Starlette, enabling auth bypass in middleware-based path matching — the templateCentral plugin's `.claude/rules/fastapi.md` tracks the required Starlette floor. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes; `scope["path"]` is safe if you must read the path in middleware.
 
 ### Backend Testing (mandatory)
 

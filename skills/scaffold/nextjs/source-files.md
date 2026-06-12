@@ -910,7 +910,8 @@ export abstract class FetchClient {
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      console.error(`${res.status} ${res.statusText}:`, data);
+      // Log status/URL only — never the error body (may contain PII)
+      console.error(`[HTTP ${res.status}] ${res.statusText} from ${res.url}`);
       throw new APIError({ statusCode: res.status, data });
     }
 
@@ -1036,10 +1037,8 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
       }
 
       if (enableLogging) {
-        console.log(
-          `[Request] ${config.method?.toUpperCase()} ${config.url}`,
-          { params: config.params, data: config.data }
-        );
+        // Log method/URL only — never params or bodies (may contain PII)
+        console.log(`[Request] ${config.method?.toUpperCase()} ${config.url}`);
       }
 
       return config;
@@ -1053,10 +1052,8 @@ export function createAxiosClient(options: AxiosClientOptions): AxiosInstance {
   client.interceptors.response.use(
     (response) => {
       if (enableLogging) {
-        console.log(
-          `[Response] ${response.status} ${response.config.url}`,
-          response.data
-        );
+        // Log status/URL only — never response bodies (may contain PII)
+        console.log(`[Response] ${response.status} ${response.config.url}`);
       }
       return response;
     },
@@ -1286,9 +1283,9 @@ export function cn(...inputs: ClassValue[]) {
 ```ts
 import { type NextRequest } from 'next/server';
 
-// TRUST_PROXY: set to any non-empty string to read X-Forwarded-* headers.
-// One-hop (ALB → App): set to the ALB VPC CIDR or "1".
-// Two-hop (ALB → Traefik → App): set to "2" or Traefik's CIDR.
+// TRUST_PROXY: set to the number of trusted proxy hops in front of the app
+// (1 = ALB → App, 2 = ALB → Traefik → App); empty/unset = X-Forwarded-*
+// headers are not trusted. A hop count is truthy, so the checks below hold.
 export function getAppOrigin(request: NextRequest): string {
   const trustProxy = process.env.TRUST_PROXY;
   const proto = (trustProxy
@@ -1309,6 +1306,19 @@ export const API_BASE =
 
 export const isDev = process.env.NODE_ENV === 'development';
 export const isProd = process.env.NODE_ENV === 'production';
+```
+
+### `src/lib/constants/routes.ts`
+
+```ts
+export const PAGE_ROUTES = {
+  HOME: '/',
+  DASHBOARD: '/dashboard',
+} as const;
+
+export const API_ROUTES = {
+  HEALTH: '/api/health',
+} as const;
 ```
 
 ### `src/hooks/index.ts`
@@ -1949,8 +1959,8 @@ src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
 src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
 src/components/widgets/ — reusable composed components (project-owned)
 proxy.ts + src/lib/auth.ts — auth layer
-src/lib/db/             — database layer
-src/config/env.ts       — environment validation (Zod)
+src/integrations/database/ — database layer (after `templatecentral:add (database)`)
+src/lib/constants/env.ts — environment constants
 
 ## Skills
 
@@ -2318,7 +2328,9 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ### 6c. Create project skill files (`.claude/skills/`)
 
-Create `.claude/skills/next-migrate.md`:
+Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
+
+Run `mkdir -p .claude/skills/next-migrate .claude/skills/next-verify`, then create `.claude/skills/next-migrate/SKILL.md`:
 
 ```markdown
 ---
@@ -2327,7 +2339,7 @@ description: Run Drizzle push/migrate for this project with a safety gate.
 allowed-tools: Bash(pnpm *)
 ---
 
-Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
+Check that `src/integrations/database/` exists before running — database must be wired up first (`templatecentral:add (database)`).
 
 - `pnpm db:push` — dev only, no migration files generated (schema overwrite)
 - `pnpm db:migrate` — production-safe, generates migration files
@@ -2335,7 +2347,7 @@ Check that `src/lib/db/` exists before running — database must be wired up fir
 Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
 ```
 
-Create `.claude/skills/next-verify.md`:
+Create `.claude/skills/next-verify/SKILL.md`:
 
 ```markdown
 ---
@@ -2367,7 +2379,7 @@ echo "All checks passed."
 
 Run `chmod +x .claude/hooks/verify.sh`.
 
-### 6c. Seed `docs/CONSTITUTION.md`
+### 6e. Seed `docs/CONSTITUTION.md`
 
 Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
 It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -2429,7 +2441,7 @@ The following files require explicit human approval noted in the PR under
 - Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
 ```
 
-### 6e. Create `.claude/harness.json`
+### 6f. Create `.claude/harness.json`
 
 After all harness files are written, compute SHA-256 hashes and write `.claude/harness.json`:
 
@@ -2441,8 +2453,8 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 sha256_verify_sh=$(shasum -a 256 .claude/hooks/verify.sh | cut -d' ' -f1)
-sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate.md | cut -d' ' -f1)
-sha256_verify=$(shasum -a 256 .claude/skills/next-verify.md | cut -d' ' -f1)
+sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/next-verify/SKILL.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` placeholders and `<ISO-date>` with today's date:
@@ -2457,8 +2469,8 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
     ".claude/hooks/verify.sh": { "origin_hash": "<sha256_verify_sh>", "path": ".claude/hooks/verify.sh" },
-    ".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" },
-    ".claude/skills/next-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify.md" },
+    ".claude/skills/next-migrate/SKILL.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate/SKILL.md" },
+    ".claude/skills/next-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.js": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.js" },
@@ -2471,7 +2483,7 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
 }
 ```
 
-### 6f. Create `.agents` symlink
+### 6g. Create `.agents` symlink
 
 Create a `.agents` symlink pointing to `.claude` so the project works with any agent framework that resolves from `.agents/`:
 
@@ -2500,7 +2512,9 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman
-claude plugin marketplace add obra/superpowers
+claude plugin marketplace add obra/superpowers-marketplace
+claude plugin install caveman@caveman
+claude plugin install superpowers@superpowers-marketplace
 ```
 
 - **caveman** — compresses Claude output prose, reducing token cost in development sessions. Disable with `/caveman off` when writing committed files (`AGENTS.md`, `CLAUDE.md`, docs).

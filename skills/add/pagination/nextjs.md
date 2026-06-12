@@ -52,7 +52,7 @@ export interface PaginatedResponse<T> {
 
 ```ts
 // src/lib/pagination/pagination-service.ts
-import { PaginationParams, PaginationMetadata } from '@/lib/types/pagination';
+import { PaginationMetadata } from '@/lib/types/pagination';
 
 export class PaginationService {
   /**
@@ -127,10 +127,12 @@ const SORT_COLUMNS: Record<SortField, typeof projects.name | typeof projects.cre
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    // searchParams.get() returns null for missing params, but z.string().default()
+    // only fires on undefined — coalesce to undefined so defaults apply.
     const queryParams = {
-      page: searchParams.get('page'),
-      limit: searchParams.get('limit'),
-      sort: searchParams.get('sort'),
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+      sort: searchParams.get('sort') ?? undefined,
     };
 
     const parsed = paginationSchema.safeParse(queryParams);

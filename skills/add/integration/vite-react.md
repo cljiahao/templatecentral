@@ -62,10 +62,6 @@ import { FetchClient } from '@/lib/clients/fetch-client';
 import type { GithubRepo } from '../schemas/github-schemas';
 
 export class GithubClient extends FetchClient {
-  constructor(baseUrl: string, headers: Record<string, string>) {
-    super(baseUrl, headers);
-  }
-
   async getRepos() {
     return this.request<GithubRepo[]>('user/repos');
   }
@@ -157,13 +153,6 @@ Confirm the build succeeds with no type errors and all tests pass. Verify the in
 - NEVER hardcode API URLs or secrets — centralize in `src/lib/constants/env.ts`
 - Throw `APIError` for HTTP failures — NEVER throw generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
 - NEVER consume integrations directly in components — go through React Query hooks in features
-
-### Validate
-
-```bash
-pnpm build    # zero errors
-pnpm test     # tests pass
-```
 
 ### After Writing Code
 

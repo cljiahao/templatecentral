@@ -1786,7 +1786,9 @@ export abstract class FetchClient {
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      console.error(`${res.status} ${res.statusText}:`, data);
+      if (import.meta.env.DEV) {
+        console.error(`${res.status} ${res.statusText}:`, data);
+      }
       throw new APIError({ statusCode: res.status, data });
     }
 
@@ -2073,7 +2075,7 @@ If any check fails, diagnose and fix before proceeding.
 
 Only after the verification gate passes. Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
-```markdown
+````markdown
 <!-- templateCentral: vite-react@4.0.0 -->
 # AGENTS.md — [Project Name]
 
@@ -2126,7 +2128,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -2140,7 +2142,7 @@ Context load order (context only — not enforcement, broad → specific): manag
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
-```
+````
 
 ### 7b. Create .claude/settings.json
 
@@ -2223,7 +2225,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
 - `stop-checks.sh` (Stop) — runs the test suite; exit 2 forces a fix before the turn ends.
 - `subagent-stop.sh` (SubagentStop) — type-gates a subagent's uncommitted TS changes so it can't hand back broken code.
-- `session-context.sh` (SessionStart: startup/resume/compact) — re-injects AGENTS.md routing context + universal invariants. This is the working post-compaction recovery path; PostCompact is observability-only and cannot inject context, so it is not used.
+- `session-context.sh` (SessionStart: startup/resume/clear/compact) — re-injects AGENTS.md routing context + universal invariants. This is the working post-compaction recovery path; PostCompact is observability-only and cannot inject context, so it is not used.
 - `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the budget.
 
 **`.claude/hooks/protect-files.sh`**:
@@ -2399,7 +2401,7 @@ exit 0
 **`.claude/hooks/session-context.sh`**:
 ```bash
 #!/usr/bin/env bash
-# SessionStart(startup|resume|compact) — re-inject routing context + universal invariants.
+# SessionStart(startup|resume|clear|compact) — re-inject routing context + universal invariants.
 # Plain stdout is added to Claude's context (per Claude Code hooks docs); this is what survives compaction.
 echo "=== templateCentral routing context ==="
 head -30 AGENTS.md 2>/dev/null
@@ -2445,7 +2447,7 @@ CI that validates this project's own harness: a job that scaffolds the project a
 
 Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
 
-**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+**Seam:** The hooks block in `.claude/settings.json` — a trace-capture hook can be registered there when this is activated (none ships by default).
 
 ## Environment Engineering
 
@@ -2460,9 +2462,11 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ### 7c. Create project skill files (`.claude/skills/`)
 
-Create `.claude/skills/vite-verify.md`:
+Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
 
-```markdown
+Run `mkdir -p .claude/skills/vite-verify`, then create `.claude/skills/vite-verify/SKILL.md`:
+
+````markdown
 ---
 name: vite-verify
 description: Run typecheck, lint, and tests for this Vite+React project in one pass
@@ -2476,9 +2480,9 @@ pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run
 ```
 
 Report failures with the exact error output. Fix before proceeding.
-```
+````
 
-### 7c. Seed `docs/CONSTITUTION.md`
+### 7d. Seed `docs/CONSTITUTION.md`
 
 Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
 It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -2540,7 +2544,7 @@ The following files require explicit human approval noted in the PR under
 - Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
 ```
 
-### 7d. Create `.claude/harness.json`
+### 7e. Create `.claude/harness.json`
 
 Compute SHA-256 hashes and write:
 
@@ -2549,9 +2553,10 @@ sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
 # Every enforcement hook script is a high-value tamper target — hash each for drift detection.
 # Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
 for h in .claude/hooks/*; do shasum -a 256 "$h"; done
-sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
+# CLAUDE.md is created in Step 8 (optional) — hash it only if it already exists
+[ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-sha256_verify=$(shasum -a 256 .claude/skills/vite-verify.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/vite-verify/SKILL.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`**:
@@ -2564,7 +2569,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/vite-verify.md | cut -d' ' -f1)
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/vite-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/vite-verify.md" },
+    ".claude/skills/vite-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/vite-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.js": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.js" },
@@ -2577,13 +2582,15 @@ sha256_verify=$(shasum -a 256 .claude/skills/vite-verify.md | cut -d' ' -f1)
 }
 ```
 
+Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step 8 (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
+
 Then create the cross-vendor symlink so the project works with any agent framework that resolves from `.agents/`:
 
 ```bash
 ln -s .claude .agents
 ```
 
-### 7e. Seed additional project skills
+### 7f. Seed additional project skills
 
 Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
 - `vite-feature` — scaffold a new feature module (components + query hook + page)
@@ -2591,7 +2598,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-### 7f. Post-scaffold agent workflow
+### 7g. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -2604,7 +2611,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 7g. Install Claude Code plugins
+### 7h. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 
@@ -2631,6 +2638,8 @@ Create `CLAUDE.md` at the project root with exactly one line:
 ```
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
+
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see 7e).
 
 ### 9. Optional: Task management
 

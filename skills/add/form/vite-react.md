@@ -15,7 +15,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 | Dependency / Component | Location |
 |------------------------|----------|
 | `react-hook-form` | `package.json` |
-| `@hookform/resolvers` | `package.json` |
+| `@hookform/resolvers` | Installed by `npx shadcn@latest add form` (not in the scaffold `package.json`) |
 | `zod` | `package.json` |
 | `Form` (FormProvider) | `src/components/ui/form.tsx` |
 | `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
@@ -89,6 +89,8 @@ export function ContactForm() {
   });
 
   const onSubmit = async (values: ContactFormValues) => {
+    // TODO: replace with a real submit (mutation hook / API call) using `values`
+    console.log(values);
     toast.success('Form submitted successfully!');
     form.reset();
   };

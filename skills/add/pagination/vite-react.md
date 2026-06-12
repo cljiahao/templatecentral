@@ -6,7 +6,7 @@
 **1. Pagination Hook**
 
 ```ts
-// src/lib/utils/use-pagination.ts
+// src/hooks/use-pagination.ts
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -66,7 +66,7 @@ export function usePagination<T>(
 
 ```tsx
 // src/features/projects/components/projects-list.tsx
-import { usePagination } from '@/lib/utils/use-pagination';
+import { usePagination } from '@/hooks/use-pagination';
 import { fetchProjects, type ProjectItem } from '@/features/projects/api/projects';
 
 export function ProjectsList() {
@@ -74,7 +74,7 @@ export function ProjectsList() {
     usePagination<ProjectItem>(['projects'], fetchProjects);
 
   if (isPending) return <div>Loading...</div>;
-  if (error) return <div>Error: {error instanceof Error ? error.message : 'An error occurred'}</div>;
+  if (error) return <div>Failed to load projects.</div>;
 
   return (
     <div className="space-y-4">
@@ -83,7 +83,7 @@ export function ProjectsList() {
           <li key={project.id} className="border p-2 rounded">
             <h3 className="font-bold">{project.name}</h3>
             {project.description && (
-              <p className="text-sm text-gray-600">{project.description}</p>
+              <p className="text-sm text-muted-foreground">{project.description}</p>
             )}
           </li>
         ))}
@@ -95,7 +95,7 @@ export function ProjectsList() {
             <button
               disabled={page === 1}
               onClick={prevPage}
-              className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+              className="bg-primary text-primary-foreground rounded px-4 py-2 disabled:opacity-50"
             >
               Previous
             </button>
@@ -108,13 +108,13 @@ export function ProjectsList() {
             <button
               disabled={!pagination.hasMore}
               onClick={nextPage}
-              className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+              className="bg-primary text-primary-foreground rounded px-4 py-2 disabled:opacity-50"
             >
               Next
             </button>
           </div>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             Showing {(page - 1) * pagination.limit + 1} to{' '}
             {Math.min(page * pagination.limit, pagination.total)} of{' '}
             {pagination.total} results
@@ -134,7 +134,6 @@ import { z } from 'zod';
 import { APIError } from '@/lib/errors';
 import { getApiBaseUrl } from '@/lib/constants/env';
 
-// Matches Phase 1 unified response schema
 const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -158,7 +157,7 @@ export async function fetchProjects(
   limit: number = 10
 ): Promise<z.infer<typeof paginatedProjectSchema>> {
   const response = await fetch(
-    `${getApiBaseUrl()}/api/projects?page=${page}&limit=${limit}&sort=asc_name`
+    `${getApiBaseUrl()}/api/projects?page=${page}&limit=${limit}`
   );
 
   if (!response.ok) {
@@ -167,8 +166,8 @@ export async function fetchProjects(
 
   const json = await response.json();
 
-  // API returns: { data: { items: [...], pagination: {...} } }
-  // Extract from Phase 1 wrapper
+  // The backend wraps list responses in an envelope:
+  // { data: { items: [...], pagination: { page, limit, total, hasMore } } }
   const data = json.data;
 
   // Validate response shape

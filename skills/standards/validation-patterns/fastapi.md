@@ -53,6 +53,8 @@ class PaginationQuery(BaseModel):
 
 ```python
 # src/api/projects/routes.py
+from pathlib import Path
+
 from fastapi import APIRouter, Query, status, UploadFile, File
 from pydantic import ValidationError
 
@@ -107,14 +109,20 @@ async def upload_project_file(file: UploadFile = File(...)):
             f"Allowed: {', '.join(allowed_types)}"
         )
 
-    # Validate file size (max 10MB)
+    # Validate file size (max 10MB) — file.size comes from the parsed multipart
+    # spool (not the client header): reject based on the parsed spool size before
+    # loading the file into memory, then re-check after reading
     max_size = 10 * 1024 * 1024
+    if file.size is not None and file.size > max_size:
+        raise InvalidInputError("File must be under 10MB")
     contents = await file.read()
     if len(contents) > max_size:
         raise InvalidInputError("File must be under 10MB")
 
-    # Validate filename
-    if ".." in file.filename or file.filename.startswith("/"):
+    # Validate filename — may be None, and may contain path components (traversal)
+    if not file.filename:
+        raise InvalidInputError("Filename is required")
+    if Path(file.filename).name != file.filename:
         raise InvalidInputError("Invalid filename")
 
     # Safe to use: file.filename, contents
@@ -128,6 +136,9 @@ async def upload_project_file(file: UploadFile = File(...)):
 ```python
 # src/api/auth/routes.py
 from fastapi import APIRouter, Form, status
+from pydantic import ValidationError
+
+from core.exceptions import InvalidInputError
 from .schemas import LoginRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -143,7 +154,14 @@ async def login(
     try:
         req = LoginRequest(email=email, password=password)
     except ValidationError as e:
-        raise InvalidInputError(f"Validation failed: {e}")
+        # NEVER interpolate the ValidationError itself — str(e) includes input_value,
+        # which echoes the submitted password into the 400 response and logs.
+        # Build a safe message from field locations + error types only.
+        safe = "; ".join(
+            f"{'.'.join(str(p) for p in err['loc'])}: {err['type']}"
+            for err in e.errors(include_input=False)
+        )
+        raise InvalidInputError(f"Validation failed: {safe}")
 
     # Safe to use: req.email, req.password
     # session = await auth.login(req.email, req.password)
@@ -155,7 +173,7 @@ async def login(
 
 ```python
 # src/integrations/services/github_service.py
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 import httpx
 from core.exceptions import InvalidInputError
 

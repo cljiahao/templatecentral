@@ -19,6 +19,9 @@ API_PORT=8000
 
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
+
+# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+TRUST_PROXY=
 ```
 
 ### `src/main.py`
@@ -59,6 +62,7 @@ if __name__ == "__main__":
 ### `src/app.py`
 
 ```python
+import ipaddress
 import textwrap
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,13 +109,40 @@ class ForwardedHostMiddleware:
 
     uvicorn's ProxyHeadersMiddleware handles X-Forwarded-Proto and X-Forwarded-For but not
     X-Forwarded-Host, leaving request.base_url with the internal container hostname.
+
+    Trust model: only mounted when TRUST_PROXY is set (see configure_proxy_headers), and added
+    AFTER ProxyHeadersMiddleware so it runs outermost — scope['client'] is still the direct peer
+    (the proxy), validated against TRUST_PROXY before the header is honored. Without this guard
+    any client reaching the app directly could spoof generated URLs (e.g. password-reset links).
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, trusted: str = "*") -> None:
         self.app = app
+        self.trust_all = trusted.strip() == "*"
+        self.trusted_networks = (
+            []
+            if self.trust_all
+            else [
+                ipaddress.ip_network(t.strip(), strict=False)
+                for t in trusted.split(",")
+                if t.strip()
+            ]
+        )
+
+    def _peer_is_trusted(self, scope: Scope) -> bool:
+        if self.trust_all:
+            return True
+        client = scope.get("client")
+        if not client:
+            return False
+        try:
+            peer = ipaddress.ip_address(client[0])
+        except ValueError:
+            return False
+        return any(peer in net for net in self.trusted_networks)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] in ("http", "websocket"):
+        if scope["type"] in ("http", "websocket") and self._peer_is_trusted(scope):
             headers = dict(scope["headers"])
             if b"x-forwarded-host" in headers:
                 host = headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
@@ -152,8 +183,10 @@ def configure_proxy_headers(app: FastAPI) -> None:
     if not api_settings.TRUST_PROXY:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-    app.add_middleware(ForwardedHostMiddleware)
+    # Order matters: the last middleware added runs outermost. ForwardedHostMiddleware must run
+    # BEFORE ProxyHeadersMiddleware rewrites scope['client'], so it can validate the direct peer.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
+    app.add_middleware(ForwardedHostMiddleware, trusted=api_settings.TRUST_PROXY)
 
 
 def start_application() -> FastAPI:
@@ -203,14 +236,16 @@ INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> list[dict]:
-    """Make Pydantic validation errors JSON-safe.
+    """Make Pydantic validation errors JSON-safe and strip submitted values.
 
     exc.errors() can contain raw exception objects in the 'ctx' dict
     which are not JSON serializable. Convert them to strings.
+    Drop 'input' (echoes the submitted value — e.g. passwords — into
+    responses and logs) and 'url' (Pydantic docs link, noise).
     """
     safe = []
     for err in errors:
-        clean = {**err}
+        clean = {k: v for k, v in err.items() if k not in ("input", "url")}
         if "ctx" in clean:
             clean["ctx"] = {
                 k: (
@@ -260,6 +295,7 @@ def configure_exceptions(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
+            headers=dict(exc.headers) if exc.headers else None,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -1128,7 +1164,7 @@ ruff check src/           # zero lint errors
 ruff format --check src/  # zero formatting drift
 ```
 
-**Do not generate AGENTS.md until all three checks pass.**
+**Do not generate AGENTS.md until all checks pass.**
 
 ### 6. Write project AGENTS.md
 
@@ -1210,17 +1246,18 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
   "permissions": {
     "deny": [
       "Read(.env)",
-      "Read(.env.local)",
-      "Read(.env.*.local)",
-      "Read(.env.development)",
-      "Read(.env.development.*)",
-      "Read(.env.dev)",
-      "Read(.env.production)",
-      "Read(.env.production.*)",
-      "Read(.env.staging)",
-      "Read(.env.staging.*)",
-      "Read(.env.uat)",
-      "Read(.env.test)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.development)",
+      "Read(**/.env.development.*)",
+      "Read(**/.env.dev)",
+      "Read(**/.env.production)",
+      "Read(**/.env.production.*)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.staging.*)",
+      "Read(**/.env.uat)",
+      "Read(**/.env.test)",
       "Read(./secrets/**)"
     ]
   },
@@ -1538,7 +1575,9 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ### 6c. Create project skill files (`.claude/skills/`)
 
-Create `.claude/skills/api-verify.md`:
+Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
+
+Run `mkdir -p .claude/skills/api-verify`, then create `.claude/skills/api-verify/SKILL.md`:
 
 ```markdown
 ---
@@ -1556,7 +1595,7 @@ python -m pyright src/ && ruff check src/ && python -m pytest test/ -q
 Report failures with the exact error output. Fix before proceeding.
 ```
 
-### 6c. Seed `docs/CONSTITUTION.md`
+### 6d. Seed `docs/CONSTITUTION.md`
 
 Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
 It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -1613,12 +1652,12 @@ The following files require explicit human approval noted in the PR under
 
 ### Behavioural rules
 
-- Run the quality gate (`pnpm check` / `python -m pytest`) before declaring any task done.
+- Run the quality gate (`python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` — the `/api-verify` skill) before declaring any task done.
 - Never use `--no-verify` on commits — this bypasses pre-commit hooks.
 - Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
 ```
 
-### 6d. Create `.claude/harness.json`
+### 6e. Create `.claude/harness.json`
 
 Compute SHA-256 hashes and write:
 
@@ -1629,7 +1668,7 @@ sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
 for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-sha256_verify=$(shasum -a 256 .claude/skills/api-verify.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/api-verify/SKILL.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`**:
@@ -1642,7 +1681,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/api-verify.md | cut -d' ' -f1)
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/api-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/api-verify.md" },
+    ".claude/skills/api-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/api-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.py": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.py" },
@@ -1661,7 +1700,7 @@ Then create the cross-vendor symlink so the project works with any agent framewo
 ln -s .claude .agents
 ```
 
-### 6e. Seed additional project skills
+### 6f. Seed additional project skills
 
 Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
 - `api-migrate` — Alembic migration with safety gate (if SQLAlchemy/Alembic is wired up)
@@ -1669,7 +1708,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-### 6f. Post-scaffold agent workflow
+### 6g. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -1678,11 +1717,11 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
 4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
-**If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
+**If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 6g. Install Claude Code plugins
+### 6h. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 

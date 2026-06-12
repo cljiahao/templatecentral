@@ -49,9 +49,9 @@ Scan the current directory for stack signals:
 
 | Signal | Stack |
 |---|---|
-| `next.config.ts` or `next.config.js` present | Next.js |
-| `vite.config.ts` present | Vite + React |
-| `pyproject.toml` present (check for FastAPI dependency) | FastAPI |
+| `next.config.ts` or `next.config.js` or `next.config.mjs` present | Next.js |
+| `vite.config.ts` or `vite.config.js` present AND no `next.config.*` | Vite + React |
+| `requirements.txt` contains `fastapi` | FastAPI |
 | `nest-cli.json` present | NestJS |
 
 If multiple signals found (likely a mono repo root) → ask the user: "Which project
@@ -186,12 +186,13 @@ Replace `AGENTS.md` with the compressed template for the detected stack. If the 
 <!-- templateCentral: nextjs@4.0.0 -->
 # AGENTS.md — [Project Name]
 
-> STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
+> STOP — Next.js breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
 > ALL async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
 
 ## Stack
-Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
-React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
+Next.js · App Router · TypeScript strict · shadcn/ui · TanStack Query
+React Hook Form · Zod · Vitest · pnpm · Node
+Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md` (`$HOME/.claude/plugins/marketplaces/templatecentral/`)
 
 ## Commands
 ```bash
@@ -241,7 +242,7 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -255,7 +256,7 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 
 ```markdown
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 PostToolUse: incremental type-check after every edit — feedback only, never blocks.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
@@ -424,21 +425,21 @@ Then seed the `.claude/hooks/` scripts. Create them **identical to the scripts `
 `UserPromptSubmit` — `user-prompt-guard` blocks injection phrases (LLM01) and inline credentials (LLM02).
 `PostToolUse` — incremental type feedback (filtered to TS/Python edits in-script).
 `PostToolUseFailure` — surfaces tool errors. `Stop` — test gate (exit 2 forces fix). `SubagentStop` — type-gates a subagent's diff.
-`SessionStart` (startup/resume/compact) — re-injects AGENTS.md routing context + invariants (PostCompact is observability-only and cannot inject).
+`SessionStart` (startup/resume/clear/compact) — re-injects AGENTS.md routing context + invariants (PostCompact is observability-only and cannot inject).
 `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget.
 
 If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
 
 **Step 4e: Seed project skills**
 
-Create the stack-specific verify skill in `.claude/skills/` only if it does not already exist:
+Create the stack-specific verify skill in `.claude/skills/` only if it does not already exist. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`). Run `mkdir -p .claude/skills/<stack>-verify` first, then write the skill file:
 
 | Stack | Skill file | Command |
 |-------|-----------|---------|
-| nextjs | `.claude/skills/next-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
-| nestjs | `.claude/skills/nest-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
-| vite-react | `.claude/skills/vite-verify.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
-| fastapi | `.claude/skills/api-verify.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
+| nextjs | `.claude/skills/next-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| nestjs | `.claude/skills/nest-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| vite-react | `.claude/skills/vite-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run` |
+| fastapi | `.claude/skills/api-verify/SKILL.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
 
 Template for TypeScript stacks (replace `<stack>` and `<command>`):
 ```markdown
@@ -456,7 +457,7 @@ Run all quality checks in sequence:
 Report failures with the exact error output. Fix before proceeding.
 ```
 
-For nextjs only, also create `.claude/skills/next-migrate.md` if not present:
+For nextjs only, also create `.claude/skills/next-migrate/SKILL.md` (`mkdir -p .claude/skills/next-migrate` first) if not present:
 ```markdown
 ---
 name: next-migrate
@@ -484,9 +485,9 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill:
-sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
 # For nextjs only, also hash next-migrate:
-sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate.md | cut -d' ' -f1)
+sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` (include only files that were actually created):
@@ -500,7 +501,7 @@ Write `.claude/harness.json` (include only files that were actually created):
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/<stack>-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify.md" },
+    ".claude/skills/<stack>-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
@@ -517,7 +518,7 @@ Write `.claude/harness.json` (include only files that were actually created):
 
 For nextjs only, also include the migrate skill entry:
 ```json
-".claude/skills/next-migrate.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate.md" }
+".claude/skills/next-migrate/SKILL.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate/SKILL.md" }
 ```
 
 **Step 4f-2: Create `.agents` symlink**
@@ -544,7 +545,8 @@ Changes made:
   CLAUDE.md              — Created (@AGENTS.md one-liner)
   .claude/settings.json  — Created with PostToolUse hook
   .claude/harness.json   — Created with origin hashes
-  (nextjs only) .claude/skills/next-migrate.md, next-verify.md
+  .claude/skills/<stack>-verify/SKILL.md
+  (nextjs only) .claude/skills/next-migrate/SKILL.md
 
 Commit these files together.
 ```
@@ -584,7 +586,6 @@ Seeded: <seeded_at>
   AGENTS.md              UNCHANGED
   CLAUDE.md              MODIFIED   ← you customized this
   .claude/settings.json  UNCHANGED
-  .claude/harness.json   UNCHANGED
 
 MODIFIED files are intentional edits — no action needed unless you want to
 re-sync to the latest templateCentral defaults. To re-seed a file, run

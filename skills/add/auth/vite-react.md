@@ -56,12 +56,21 @@ The `AuthProvider` is provider-agnostic — it manages local state. You wire it 
 Create `src/features/auth/api/auth-service.ts` to handle backend communication:
 
 ```typescript
+import { z } from 'zod';
 import { getApiBaseUrl } from '@/lib/constants/env';
 import { APIError } from '@/lib/errors';
 import type { AuthUser } from '../types';
 
 const API_BASE = getApiBaseUrl();
 const AUTH_BASE = `${API_BASE}/auth`;
+
+// Validate API response shapes at the boundary — mirrors the AuthUser type.
+const authUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.email(),
+  image: z.string().nullable().optional(), // AuthUser has it — without this, parse() silently strips it
+});
 
 export async function loginWithCredentials(
   email: string,
@@ -78,13 +87,13 @@ export async function loginWithCredentials(
     throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Login failed' })) });
   }
 
-  return res.json();
+  return authUserSchema.parse(await res.json());
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
   const res = await fetch(`${AUTH_BASE}/me`, { credentials: 'include' });
   if (!res.ok) return null;
-  return res.json();
+  return authUserSchema.parse(await res.json());
 }
 
 export async function logoutUser(): Promise<void> {

@@ -68,9 +68,24 @@ export const STATUS_OPTIONS = [
 ] as const;
 ```
 
-### 4. Create API Services (in `api/`)
+### 4. Create Response Schemas and API Services (in `schemas/` + `api/`)
 
-Client-side services that fetch data from the backend API.
+First define a Zod schema for the API response shape — every external response is validated at the boundary:
+
+```ts
+// schemas/project.schema.ts
+import { z } from 'zod';
+
+export const projectItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.enum(['active', 'archived']),
+});
+```
+
+Export from barrel: `schemas/index.ts`
+
+Then create the client-side service that fetches data from the backend API and parses responses with the schema.
 
 > **`getApiBaseUrl()`** is pre-provided in `src/lib/constants/env.ts` — it throws at startup if `VITE_API_BASE_URL` is missing, preventing silent network failures at runtime. Always use it instead of `ENV.API_BASE_URL` directly.
 
@@ -78,6 +93,7 @@ Client-side services that fetch data from the backend API.
 // api/project-service.ts
 import { getApiBaseUrl } from '@/lib/constants/env';
 import { APIError } from '@/lib/errors';
+import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
 const API_BASE = getApiBaseUrl();
@@ -88,7 +104,7 @@ export const ProjectService = {
     if (!res.ok) {
       throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Failed to fetch projects' })) });
     }
-    return res.json();
+    return projectItemSchema.array().parse(await res.json());
   },
 
   getById: async (id: string): Promise<ProjectItem> => {
@@ -96,7 +112,7 @@ export const ProjectService = {
     if (!res.ok) {
       throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Project not found' })) });
     }
-    return res.json();
+    return projectItemSchema.parse(await res.json());
   },
 };
 ```
@@ -174,13 +190,6 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
 - NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)
-
-## Validate
-
-```bash
-pnpm build    # zero errors
-pnpm test     # tests pass
-```
 
 ## After Writing Code
 

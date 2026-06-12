@@ -506,10 +506,30 @@ check_no_unscoped_bash_grant() {
   fi
 }
 
+check_seeded_skill_paths_are_directories() {
+  # A Claude Code skill is a DIRECTORY with SKILL.md as the entrypoint — flat
+  # .claude/skills/<name>.md files are silently ignored (flat files are only valid under
+  # .claude/commands/). A seeding instruction that writes the flat form ships a skill that never
+  # loads, and nothing at scaffold time catches it. Concrete flat paths (next-verify.md,
+  # <stack>-verify.md, next-migrate.md, ...) are banned; the generic '<name>.md' placeholder in
+  # explanatory prose is allowed — it documents the anti-pattern.
+  # ECOSYSTEM-ERA: skill-discovery rule per current Claude Code docs (directory + SKILL.md entrypoint).
+  header "Seeded project skills use directory form (.claude/skills/<name>/SKILL.md)"
+  local hits
+  hits=$(grep -rnE '\.claude/skills/[a-zA-Z<][a-zA-Z<>-]*-(verify|migrate)\.md' "$SKILLS_DIR/" 2>/dev/null || true)
+  if [[ -n "$hits" ]]; then
+    echo "$hits"
+    fail "Flat .claude/skills/<name>.md seeding path found — skills are directories; use .claude/skills/<name>/SKILL.md (flat files only work under .claude/commands/)"
+  else
+    pass "No flat .claude/skills/<name>.md seeding paths"
+  fi
+}
+
 check_scaffold_seeds_complete_harness() {
   # Every scaffold + migrate settings.json template must seed the COMPLETE harness: all 7 hook
-  # events, the permissions.deny secret-Read block, skillListingBudgetFraction, and a reference to
-  # each of the 8 .claude/hooks/ scripts. Scaffolds additionally INLINE the script bodies (migrate
+  # events, the permissions.deny secret-Read block, skillListingBudgetFraction, a reference to
+  # each of the 8 .claude/hooks/ scripts, and the seeded *-verify project skill in directory form
+  # (.claude/skills/<name>-verify/SKILL.md). Scaffolds additionally INLINE the script bodies (migrate
   # references the same scripts to stay DRY), so scaffolds must also contain the guard-body markers.
   # If an edit silently drops the Stop gate, a guard, or an event, a project ships a harness with a
   # hole and nothing else catches it (Step 3H is a manual checklist). This makes it enforceable.
@@ -530,9 +550,11 @@ check_scaffold_seeds_complete_harness() {
     'protect-files.sh' 'block-no-verify.sh' 'user-prompt-guard'
     'post-edit-typecheck.sh' 'post-tool-failure.sh' 'stop-checks.sh'
     'subagent-stop.sh' 'session-context.sh'
+    '-verify/SKILL.md'
   )
-  # Guard BODIES — scaffolds inline the scripts, so these strings must appear in scaffolds:
-  local bodies=('--no-verify' 'AKIA')
+  # Guard BODIES — scaffolds inline the scripts, so these strings must appear in scaffolds
+  # (stop_hook_active = the seeded Stop hook's loop guard — exit 0 before tests when re-entered):
+  local bodies=('--no-verify' 'AKIA' 'stop_hook_active')
   local missing="" f tok
   for f in "${scaffolds[@]}" "$migrate"; do
     [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
@@ -631,6 +653,7 @@ check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 check_seeded_skills_scope_tools
 check_no_unscoped_bash_grant
+check_seeded_skill_paths_are_directories
 check_scaffold_seeds_complete_harness
 echo ""
 

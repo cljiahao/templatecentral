@@ -1,6 +1,6 @@
 <!-- ref: build/implementation.md
      loaded-by: build/SKILL.md
-     prereq: Build agent workflow. Do not invoke this file directly — it is loaded at runtime by the templatecentral:build skill. -->
+     prereq: Build agent workflow. Do not invoke this file directly — it is catted by agents via skills/build/SKILL.md (de-registered agent utility). -->
 
 # Build Agent
 
@@ -26,7 +26,9 @@ If ambiguous (multiple markers), check `package.json` `dependencies` field for `
 | Next.js | `pnpm build && pnpm check` |
 | Vite-React | `pnpm build && pnpm check` |
 | NestJS | `pnpm build && pnpm check` |
-| FastAPI | `ruff check src/ && pytest test/` |
+| FastAPI | `ruff check src/ && python -m pyright src/` |
+
+Running pytest belongs to the test utility (`skills/test/implementation.md`) — do not run it here.
 
 ## Steps
 

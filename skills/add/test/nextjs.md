@@ -86,12 +86,13 @@ Place tests in `test/api/` matching the route path:
 import { GET } from '@/app/api/projects/route';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock your data access layer — replace path and export with your actual service
-vi.mock('@/features/projects/api/project-service', () => ({
+// Mock your data access layer — replace path and export with your actual service.
+// Route handlers consume integration-layer services (never feature api/ services).
+vi.mock('@/integrations/services/project-service', () => ({
   ProjectService: { getAll: vi.fn() },
 }));
 
-import { ProjectService } from '@/features/projects/api/project-service';
+import { ProjectService } from '@/integrations/services/project-service';
 
 describe('GET /api/projects', () => {
   afterEach(() => {
@@ -125,11 +126,11 @@ describe('GET /api/projects', () => {
 import { POST } from '@/app/api/projects/route';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/projects/api/project-service', () => ({
+vi.mock('@/integrations/services/project-service', () => ({
   ProjectService: { create: vi.fn() },
 }));
 
-import { ProjectService } from '@/features/projects/api/project-service';
+import { ProjectService } from '@/integrations/services/project-service';
 
 function jsonRequest(url: string, body: unknown, method = 'POST'): Request {
   return new Request(url, {
@@ -172,11 +173,11 @@ describe('POST /api/projects', () => {
 import { GET } from '@/app/api/projects/[id]/route';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/projects/api/project-service', () => ({
+vi.mock('@/integrations/services/project-service', () => ({
   ProjectService: { getById: vi.fn() },
 }));
 
-import { ProjectService } from '@/features/projects/api/project-service';
+import { ProjectService } from '@/integrations/services/project-service';
 
 function makeParams<T extends Record<string, string>>(values: T) {
   return { params: Promise.resolve(values) };
@@ -213,15 +214,15 @@ describe('GET /api/projects/[id]', () => {
 #### 5. Run Tests
 
 ```bash
-pnpm test --run            # Run all tests once
-pnpm test                  # Watch mode (re-runs on change)
-pnpm test:coverage         # Run with coverage report
+pnpm test                  # Run all tests once (vitest run — not watch mode)
+pnpm exec vitest           # Watch mode (re-runs on change)
+pnpm test:ci               # Run once with coverage report
 ```
 
 #### 6. Validate
 
 ```bash
-pnpm build && pnpm test --run
+pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.

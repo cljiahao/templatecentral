@@ -55,15 +55,9 @@ export const fileUploadSchema = z.object({
         try {
           const decoded = decodeURIComponent(name);
           const ext = decoded.split('.').pop()?.toLowerCase();
-          const blocked = [
-            'exe', 'com', 'scr', 'pif', 'msi', 'msp',  // Windows executables
-            'bat', 'cmd', 'vbs', 'ps1', 'hta',           // Windows scripts
-            'sh', 'bash', 'zsh', 'csh',                  // Unix shells
-            'php', 'php3', 'php4', 'php5', 'phtml',      // PHP variants
-            'jsp', 'jspx', 'jnlp', 'jar',                // Java
-            'dll', 'so', 'dylib',                         // Libraries
-          ];
-          return !blocked.includes(ext || '');
+          // Whitelist (Rule 5) — must stay in sync with the MIME whitelist below
+          const allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+          return allowed.includes(ext || '');
         } catch {
           return false;
         }

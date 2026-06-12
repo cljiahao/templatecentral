@@ -140,7 +140,7 @@ class APISettings(BaseSettings):
     GITHUB_TOKEN: str
 ```
 
-Add to `src/.env` (real token — never commit):
+Ask the user to add `GITHUB_TOKEN` to `src/.env` (real token — never commit; agent edits to `.env` files are hook-blocked by design):
 ```
 GITHUB_TOKEN=
 ```

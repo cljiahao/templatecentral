@@ -1,6 +1,6 @@
 <!-- ref: cleanup/task-management/implementation.md
      loaded-by: cleanup/SKILL.md
-     prereq: Task management workflow. Do not invoke this file directly — it is loaded at runtime by the templatecentral:cleanup skill. -->
+     prereq: Task management workflow. Do not invoke this file directly — it is catted by agents via skills/cleanup/SKILL.md (de-registered agent utility). -->
 
 # Task Management Protocol
 

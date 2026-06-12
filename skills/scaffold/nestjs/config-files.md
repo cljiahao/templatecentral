@@ -470,7 +470,8 @@ TRUST_PROXY=
 # pnpm-workspace.yaml — project-level pnpm 11 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
 
-# Block git-URL, tarball, and local-path dependencies.
+# Block git-URL, tarball, and local-path dependencies
+# (pnpm 11 default — kept explicit for auditability).
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 

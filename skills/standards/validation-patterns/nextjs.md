@@ -181,10 +181,12 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    // searchParams.get() returns null for missing params, but z.string().default()
+    // only fires on undefined — coalesce to undefined so defaults apply.
     const queryObj = {
-      page: searchParams.get('page'),
-      limit: searchParams.get('limit'),
-      sort: searchParams.get('sort'),
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+      sort: searchParams.get('sort') ?? undefined,
     };
 
     const parsed = paginationSchema.safeParse(queryObj);
@@ -270,13 +272,15 @@ export async function POST(request: Request) {
 ```ts
 // src/integrations/services/github-service.ts
 import { z } from 'zod';
+import { APIError } from '@/integrations/error';
 import { externalApiUserSchema } from '@/lib/validation/schemas';
 
 export async function fetchGithubUser(username: string) {
   const response = await fetch(`https://api.github.com/users/${username}`);
 
   if (!response.ok) {
-    throw new Error('GitHub API error');
+    // Integration layer always throws APIError — never generic Error
+    throw new APIError({ statusCode: response.status, data: { message: 'GitHub API error' } });
   }
 
   const data = await response.json();
@@ -285,7 +289,7 @@ export async function fetchGithubUser(username: string) {
   const parsed = externalApiUserSchema.safeParse(data);
 
   if (!parsed.success) {
-    throw new Error('Invalid GitHub API response');
+    throw new APIError({ statusCode: 502, data: { message: 'Invalid GitHub API response' } });
   }
 
   // Safe to use: parsed.data has required fields

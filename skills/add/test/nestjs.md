@@ -177,8 +177,8 @@ describe('My Feature (e2e)', () => {
 ### Test Organization
 
 ```
+vitest.config.e2e.ts           # E2E Vitest config (project root)
 test/
-├── vitest.config.e2e.ts       # E2E Vitest config
 ├── app.e2e-spec.ts            # Root app e2e tests
 ├── <feature>.e2e-spec.ts      # Feature-specific e2e tests
 └── modules/

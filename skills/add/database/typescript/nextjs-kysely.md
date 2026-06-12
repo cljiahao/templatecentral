@@ -162,6 +162,7 @@ Create a migration runner script at **`src/integrations/database/migrate.ts`**:
 ```ts
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { FileMigrationProvider, Migrator } from 'kysely';
 
 import { db } from './kysely-client';
@@ -172,7 +173,8 @@ async function migrate() {
     provider: new FileMigrationProvider({
       fs,
       path,
-      migrationFolder: path.join(__dirname, 'migrations'),
+      // ESM project ("type": "module") — __dirname does not exist
+      migrationFolder: path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations'),
     }),
   });
 

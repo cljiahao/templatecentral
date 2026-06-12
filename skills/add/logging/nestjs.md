@@ -27,74 +27,14 @@ LoggerModule.forRoot({
 }),
 ```
 
-Unhandled exceptions — update your `HttpExceptionFilter` (from `templatecentral:add` (error-handling)) to add 5xx logging. Replace the existing file:
+Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here; extend the filter from `templatecentral:add` (error-handling). If your copy lacks the status-logging block, add only these lines inside `catch()`, just before the final `reply.status(status).send(...)`:
 
 ```ts
-// src/common/filters/http-exception.filter.ts
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
-import { ZodSerializationException } from 'nestjs-zod';
-import { z, ZodError } from 'zod';
-
-interface ErrorResponse {
-  error: string;
-  details?: {
-    fieldErrors?: Record<string, string[]>;
-    code?: string;
-  };
-}
-
-@Catch(HttpException)
-export class HttpExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(HttpExceptionFilter.name);
-
-  catch(exception: HttpException, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const reply = ctx.getResponse<FastifyReply>();
-    const status = exception.getStatus();
-
-    let errorResponse: ErrorResponse = {
-      error: 'An error occurred',
-    };
-
-    if (exception instanceof ZodSerializationException) {
-      const zodError = exception.getZodError();
-      if (zodError instanceof ZodError) {
-        const fieldErrors = z.flattenError(zodError).fieldErrors as Record<string, string[]>;
-        errorResponse = {
-          error: 'Validation failed',
-          details: { fieldErrors, code: 'VALIDATION_ERROR' },
-        };
-        this.logger.warn(`Validation error: ${zodError.message}`);
-      }
-    } else if (status === HttpStatus.BAD_REQUEST) {
-      errorResponse = { error: 'Bad request', details: { code: 'BAD_REQUEST' } };
-    } else if (status === HttpStatus.UNAUTHORIZED) {
-      errorResponse = { error: 'Authentication required' };
-    } else if (status === HttpStatus.FORBIDDEN) {
-      errorResponse = { error: 'Access denied' };
-    } else if (status === HttpStatus.NOT_FOUND) {
-      errorResponse = { error: 'Resource not found' };
-    } else if (status === HttpStatus.CONFLICT) {
-      errorResponse = { error: 'Resource conflict', details: { code: 'CONFLICT' } };
-    } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
-      errorResponse = { error: 'Too many requests' };
-      void reply.header('Retry-After', '60');
-    }
-
-    if (status >= 500) {
-      this.logger.error(`HTTP ${status}: ${exception.message}`);
-    }
-
-    void reply.status(status).send(errorResponse);
-  }
+// src/common/filters/http-exception.filter.ts — added lines only
+if (status >= 500) {
+  this.logger.error(`HTTP ${status}: ${exception.message}`);
+} else {
+  this.logger.warn(`HTTP ${status}: ${exception.message}`);
 }
 ```
 
@@ -109,33 +49,44 @@ import { Logger } from 'nestjs-pino';
 const logger = app.get(Logger);
 app.useLogger(logger);
 // ...rest of existing bootstrap continues unchanged...
-logger.log({ port, environment: process.env.NODE_ENV }, 'App started');
+// Note: nestjs-pino's Logger has Nest's (message, context) signature — a second string
+// argument becomes the Nest context, not a pino message. Interpolate instead:
+logger.log(`App started on port ${port} (${process.env.NODE_ENV})`);
 ```
 
 #### Tier 2 — Standard (+ Tier 1)
 
-**Auth events** — log in your auth guard or Passport strategy:
+**Auth events** — log in your auth guard or Passport strategy. Inject `PinoLogger` (not `Logger`) for structured fields — `PinoLogger` keeps pino's `(obj, msg)` signature, whereas `Logger.log(obj, 'msg')` would treat the string as a Nest context:
 
 ```ts
-// src/common/guards/jwt-auth.guard.ts  (or passport local strategy)
-import { Logger } from 'nestjs-pino';
+// src/modules/auth/jwt-auth.guard.ts  (path per templatecentral:add (auth))
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  constructor(private readonly logger: Logger) {
+  constructor(
+    @InjectPinoLogger(JwtAuthGuard.name) private readonly logger: PinoLogger,
+  ) {
     super();
   }
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
-    const req = context.switchToHttp().getRequest();
+  handleRequest<TUser = { id: string; email: string }>(
+    err: unknown,
+    user: TUser | false,
+    _info: unknown,
+    context: ExecutionContext,
+  ): TUser {
+    const req = context.switchToHttp().getRequest<FastifyRequest>();
     if (err || !user) {
       this.logger.warn(
         { path: req.url, required_role: 'authenticated' },
         'Access denied'
       );
-      throw err || new UnauthorizedException();
+      if (err instanceof Error) throw err;
+      throw new UnauthorizedException();
     }
     return user;
   }
@@ -145,32 +96,38 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 For login/logout events, log in your auth service:
 
 ```ts
-// src/modules/auth/auth.service.ts
+// src/modules/auth/auth.service.ts  (excerpt — logging calls added to your existing service)
 import { Injectable } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as argon2 from 'argon2';
+
+import type { User } from '../../database/schema';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
+    private readonly usersService: UsersService, // existing collaborator — keep your project's user lookup service and its import
+    // ...existing collaborators (JwtService, etc.)
+  ) {}
 
   async login(user: User, method: string) {
-    this.logger.log({ user_id: user.id, method }, 'Login success');
-    return this.createToken(user);
+    this.logger.info({ user_id: user.id, method }, 'Login success');
+    return this.createToken(user); // createToken: your existing token helper
   }
 
   async logout(userId: string) {
-    this.logger.log({ user_id: userId }, 'Logout');
+    this.logger.info({ user_id: userId }, 'Logout');
   }
 
   async refreshToken(userId: string) {
-    this.logger.log({ user_id: userId }, 'Token refresh');
+    this.logger.info({ user_id: userId }, 'Token refresh');
     // ... return new token
   }
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user || !(await argon2.verify(user.passwordHash, password))) {
+    if (!user || !(await argon2.verify(user.hashedPassword, password))) {
       this.logger.warn(
         { reason: 'invalid_credentials' },
         'Login failure'
@@ -211,7 +168,7 @@ export class OutboundHttpLoggingInterceptor implements NestInterceptor {
 
 > **Note**: For more detailed logging (url, status_code), wrap `HttpService.get/post` directly in a service method and time the call there — interceptors do not have access to the outbound URL or response status.
 
-**Key domain events** — log in service methods for state changes:
+**Key domain events** — log in service methods for state changes (`this.logger` is an injected `PinoLogger`, as in the auth examples above):
 
 ```ts
 // src/modules/projects/projects.service.ts  (example — adapt to your domain)
@@ -220,7 +177,7 @@ async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
     .insert(projects)
     .values({ ...dto, userId })
     .returning();
-  this.logger.log({ user_id: userId, project_id: project.id }, 'Project created');
+  this.logger.info({ user_id: userId, project_id: project.id }, 'Project created');
   return project;
 }
 ```

@@ -263,7 +263,7 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { appConfig } from '..';
 
 export function setupSwagger(app: INestApplication): void {
-  if (process.env.NODE_ENV === 'production') return;
+  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat') return;
 
   const options = new DocumentBuilder()
     .setTitle(appConfig.PROJECT_NAME)
@@ -787,7 +787,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -824,7 +824,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
       "Read(.env.staging.*)",
       "Read(.env.uat)",
       "Read(.env.test)",
-      "Read(./secrets/**)"
+      "Read(./secrets/**)",
+      "Read(./.secrets/**)"
     ]
   },
   "hooks": {
@@ -877,14 +878,14 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `.github/workflows/`, cert/credential files; warns on governance files (`AGENTS.md`, `CLAUDE.md`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; warns on governance files (`AGENTS.md`, `CLAUDE.md`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), and `rm -rf` on source dirs.
 - `user-prompt-guard.js` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs).
 - `post-edit-typecheck.sh` (PostToolUse) — incremental `tsc` feedback, filtered to TS edits in-script. Feedback-only; exit 0 always.
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
 - `stop-checks.sh` (Stop) — runs the test suite; exit 2 forces a fix before the turn ends.
 - `subagent-stop.sh` (SubagentStop) — type-gates a subagent's uncommitted TS changes so it can't hand back broken code.
-- `session-context.sh` (SessionStart: startup/resume/compact) — re-injects AGENTS.md routing context + universal invariants. This is the working post-compaction recovery path; PostCompact is observability-only and cannot inject context, so it is not used.
+- `session-context.sh` (SessionStart: startup/resume/clear/compact) — re-injects AGENTS.md routing context + universal invariants. This is the working post-compaction recovery path; PostCompact is observability-only and cannot inject context, so it is not used.
 - `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the budget.
 
 **`.claude/hooks/protect-files.sh`**:
@@ -908,6 +909,9 @@ rel="${file#"$root"/}"
 
 if [[ "$rel" == .github/workflows/* ]]; then
   echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+  exit 2
+elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
+  echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
   exit 2
 elif [[ "$rel" =~ \.(pem|key|p12|pfx|secret)$ ]] || [[ "$base" == "credentials.json" || "$base" == ".netrc" || "$base" == ".secrets" ]]; then
   echo "BLOCKED: $rel is a certificate or credential file — must never be committed." >&2
@@ -1060,7 +1064,7 @@ exit 0
 **`.claude/hooks/session-context.sh`**:
 ```bash
 #!/usr/bin/env bash
-# SessionStart(startup|resume|compact) — re-inject routing context + universal invariants.
+# SessionStart(startup|resume|clear|compact) — re-inject routing context + universal invariants.
 # Plain stdout is added to Claude's context (per Claude Code hooks docs); this is what survives compaction.
 echo "=== templateCentral routing context ==="
 head -30 AGENTS.md 2>/dev/null
@@ -1075,7 +1079,7 @@ fi
 cat <<'EOF'
 
 ## Always-on invariants (survive compaction)
-1. Secrets are never read or written by the agent — .env* and secrets/** are guarded.
+1. Secrets are never read or written by the agent — .env*, secrets/** and .secrets/** are guarded.
 2. Run the quality gate (typecheck + tests) before declaring any task done.
 3. Work on a feature branch — never commit directly to main/uat/develop.
 4. Protected files — AGENTS.md, CLAUDE.md, Dockerfile, .claude/settings.json, .claude/hooks/*, docs/CONSTITUTION.md — require human approval.
@@ -1121,7 +1125,9 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ### 6c. Create project skill files (`.claude/skills/`)
 
-Create `.claude/skills/nest-verify.md`:
+Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
+
+Run `mkdir -p .claude/skills/nest-verify`, then create `.claude/skills/nest-verify/SKILL.md`:
 
 ```markdown
 ---
@@ -1139,7 +1145,7 @@ pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run
 Report failures with the exact error output. Fix before proceeding.
 ```
 
-### 6c. Seed `docs/CONSTITUTION.md`
+### 6d. Seed `docs/CONSTITUTION.md`
 
 Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
 It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -1201,7 +1207,7 @@ The following files require explicit human approval noted in the PR under
 - Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
 ```
 
-### 6d. Create `.claude/harness.json`
+### 6e. Create `.claude/harness.json`
 
 Compute SHA-256 hashes and write:
 
@@ -1212,7 +1218,7 @@ sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
 for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-sha256_verify=$(shasum -a 256 .claude/skills/nest-verify.md | cut -d' ' -f1)
+sha256_verify=$(shasum -a 256 .claude/skills/nest-verify/SKILL.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`**:
@@ -1225,7 +1231,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/nest-verify.md | cut -d' ' -f1)
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/nest-verify.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/nest-verify.md" },
+    ".claude/skills/nest-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/nest-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.js": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.js" },
@@ -1244,7 +1250,7 @@ Then create the cross-vendor symlink so the project works with any agent framewo
 ln -s .claude .agents
 ```
 
-### 6e. Seed additional project skills
+### 6f. Seed additional project skills
 
 Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
 - `nest-migrate` — DB migration with safety gate (if Drizzle/Kysely is wired up)
@@ -1252,7 +1258,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-### 6f. Post-scaffold agent workflow
+### 6g. Post-scaffold agent workflow
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
@@ -1265,7 +1271,7 @@ After AGENTS.md is written, run the following agent skills in order. These are *
 
 **If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
-### 6g. Install Claude Code plugins
+### 6h. Install Claude Code plugins
 
 **Claude Code users only.** Install these plugins in the scaffolded project directory. These are **on by default** — skip only if the user explicitly opts out.
 

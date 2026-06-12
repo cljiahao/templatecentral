@@ -75,6 +75,10 @@ async def login(credentials: LoginRequest, request: Request):
             "Login failure",
             extra={
                 "reason": "invalid_credentials",
+                # request.client.host is the proxy's IP unless TRUST_PROXY is set —
+                # one-hop (ALB → App): TRUST_PROXY=<VPC CIDR, e.g. 10.0.0.0/8>;
+                # two-hop (ALB → Traefik → App): TRUST_PROXY=10.0.0.0/8,172.16.0.0/12.
+                # See `templatecentral:add` (auth) — Rate Limiting section.
                 "ip": request.client.host,
                 # Never log: credentials.password
             },
@@ -101,7 +105,7 @@ async def refresh(current_user: User = Depends(get_current_user)):
 Access denied — log in your auth dependency:
 
 ```python
-# src/core/auth.py  (dependency used by protected routes)
+# src/api/dependencies/auth.py  (dependency used by protected routes)
 from core.logging import logger
 
 async def require_role(required_role: str, request: Request, current_user: User = Depends(get_current_user)):
@@ -158,7 +162,7 @@ async def http_get(url: str, **kwargs) -> httpx.Response:
 **Key domain events** — log inside service-layer functions:
 
 ```python
-# src/services/projects.py  (example — adapt to your domain)
+# src/api/services/projects.py  (example — adapt to your domain)
 from core.logging import logger
 
 async def create_project(data: CreateProjectRequest, user_id: str) -> Project:
@@ -172,7 +176,7 @@ async def create_project(data: CreateProjectRequest, user_id: str) -> Project:
 **Slow DB queries** — add a SQLAlchemy event listener:
 
 ```python
-# src/core/db.py  (add after engine creation)
+# src/database/session.py  (add after engine creation)
 import time
 from sqlalchemy import event
 from core.logging import logger
@@ -230,7 +234,7 @@ async def cache_get(key: str):
 
 ```bash
 # Tier 1
-uvicorn src.app:app --reload
+uvicorn app:app --app-dir src --reload
 curl http://localhost:8000/health
 # Expect JSON log line: { method: "GET", path: "/health", status_code: 200, duration_ms: <n> }
 

@@ -1,6 +1,6 @@
 <!-- ref: review/update/implementation.md
      loaded-by: review/SKILL.md
-     prereq: Update agent workflow. Do not invoke this file directly — it is loaded at runtime by the templatecentral:review skill. -->
+     prereq: Update agent workflow. Do not invoke this file directly — it is catted by agents via skills/review/SKILL.md (de-registered agent utility). -->
 
 # Update Agent
 
@@ -17,10 +17,10 @@ FastAPI: read `requirements.txt`.
 
 ### Node Stacks
 
-1. Read `package.json` — collect all keys from `dependencies` and `devDependencies`
-2. For each package, WebFetch: `https://registry.npmjs.org/<package-name>/latest`
-   - Extract `version` field from JSON response
-3. Compare current version (strip `^` / `~` prefix) to registry `version` using semver:
+1. Run `pnpm outdated --format json` from the project root — one command covers every package in `dependencies` and `devDependencies`
+2. Parse the JSON output — each entry gives `current` and `latest` versions (packages not listed are already current)
+   - WebFetch `https://registry.npmjs.org/<package-name>/latest` only as a fallback for packages needing release-note review
+3. Compare `current` to `latest` using semver:
    - **Patch or minor bump** → add to auto-update list
    - **Major bump** → add to report-only list
    - **Current** → skip
@@ -37,9 +37,9 @@ FastAPI: read `requirements.txt`.
 
 ### FastAPI
 
-1. Read `requirements.txt`
-2. For each package (parse `package==version` or `package>=version`), WebFetch: `https://pypi.org/pypi/<package>/json`
-   - Extract `info.version` from JSON response
+1. Read `requirements.txt` (parse `package==version` or `package>=version`)
+2. Run `pip list --outdated --format json` — one command covers every installed package; cross-reference entries against `requirements.txt`
+   - WebFetch `https://pypi.org/pypi/<package>/json` only as a fallback for packages needing release-note review
 3. Compare versions:
    - **Patch or minor bump** → auto-update list
    - **Major bump** → report-only list
@@ -72,20 +72,19 @@ If security advisories are found, list them under "Security advisories". If none
 Update agent complete — Next.js
 
 Updated (patch/minor):
-- react 18.2.0 → 18.3.1
-- @tanstack/react-query 5.17.0 → 5.24.0
-- typescript 5.3.3 → 5.4.5
+- <pkg-a> x.y.z → x.(y+1).0
+- <pkg-b> x.y.z → x.y.(z+1)
 
 Major bumps (not applied — manual review needed):
-- next 14.2.0 → 15.0.0  ← major upgrade, check release notes
+- <pkg-c> x.y.z → (x+1).0.0  ← major upgrade, check release notes
 
 Could not update (build failed after bump):
-- some-package 2.1.0 → 2.3.0  ← rolled back, build broke
+- <pkg-d> x.y.z → x.(y+1).0  ← rolled back, build broke
 
 Build: passed
 
 Security advisories:
-- some-package 2.3.0: GHSA-xxxx-xxxx-xxxx (high) — upgrade to 2.3.1 or higher
+- <pkg-e> x.y.z: GHSA-xxxx-xxxx-xxxx (high) — upgrade to the patched version or higher
 ```
 
 ## Callers

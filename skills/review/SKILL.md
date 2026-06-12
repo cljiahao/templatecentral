@@ -1,6 +1,6 @@
 <!-- ref: review/SKILL.md
      loaded-by: agent — not a registered skill; cat directly when a review or update step is needed
-     prereq: Project identified. -->
+     prereq: Project identified. Do not invoke this file directly — it is catted directly by agents as a de-registered utility. -->
 
 **Identify the operation:**
 - **Review**: analyse code quality, flag issues → `review/implementation.md`

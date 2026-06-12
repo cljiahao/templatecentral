@@ -5,7 +5,7 @@
 
 ### `package.json`
 
-> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/vite-react.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run `templatecentral:review` (update) post-scaffold to freshen pins.
+> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/vite-react.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@hookform/resolvers` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `npx shadcn@latest add form` respectively. `@testing-library/jest-dom` and `@testing-library/react` are included in devDependencies; only `@testing-library/user-event` is added later by `templatecentral:add (test)`. Run `templatecentral:review` (update) post-scaffold to freshen pins.
 >
 > **ESLint pinned at `^9`** — `eslint-plugin-react-hooks` 7.x peer-supports only `^9`; bumping to ESLint 10 breaks `pnpm install` under strict peer enforcement until the plugin ships ESLint 10 support. Do not upgrade eslint past `^9` without verifying `eslint-plugin-react-hooks` peer compatibility.
 
@@ -25,7 +25,7 @@
     "preview": "vite preview",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:ci": "vitest --run",
+    "test:ci": "vitest --run --reporter=dot",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --check .",
@@ -79,7 +79,6 @@
 
 ```
 node_modules
-.next
 dist
 build
 coverage
@@ -206,7 +205,7 @@ if [ -f "yarn.lock" ]; then
   exec yarn "$@"
 # Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
-  exec sh -c "corepack enable pnpm && pnpm \"$@\""
+  exec sh -c 'corepack enable pnpm && exec pnpm "$@"' sh "$@"
 # Default to npm
 else
   exec npm "$@"
@@ -216,242 +215,62 @@ fi
 ### `.dockerignore`
 
 ```
-# ==============================================================================
-# VITE + REACT DOCKER IGNORE - Production Optimized
-# ==============================================================================
-
 # Version Control
 .git
 .gitignore
 .gitattributes
-.gitmodules
 
-# Dependencies (will be installed in container)
+# Dependencies (installed in container)
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 .pnpm-store/
 
-# Vite Build Outputs & Cache
+# Vite build outputs & cache
 dist/
 build/
 .vite/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-.rollup.cache/
 
-# Environment Variables (security)
-.env
-.env.*
-!.env.example
-!.env.local.example
-!.env.production.example
-
-# IDE and Editor Files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.classpath
-.settings/
-.vscode-test
-.history/
-.fleet/
-
-# OS Generated Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
+# Environment variables (security)
+**/.env
+**/.env.*
+!**/.env.example
 
 # Logs
 *.log
 logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
 
-# Runtime Data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Testing & Coverage
+# Testing & coverage
 coverage/
-*.lcov
-.nyc_output/
-.jest/
-test-results/
-playwright-report/
-cypress/videos/
-cypress/screenshots/
-cypress/downloads/
-test-results.xml
-junit.xml
 .vitest/
 
-# Cache Directories
-.npm/
-.yarn/
-.pnpm/
-.eslintcache
-.cache/
-.parcel-cache/
-.turbo/
+# Editor / OS cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
 
-# Build Tool Cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
+# TypeScript
+*.tsbuildinfo
 
-# React Development Tools
-.react-dev-inspector/
-.react-refresh/
-
-# Development Tools & Storybook
-.storybook-out/
-.chromatic/
-storybook-static/
-.out/
-
-# Temporary Files
-tmp/
-temp/
-*.tmp
-*.temp
-
-# Docker Related (don't copy into image)
+# Docker (don't copy into image)
 .dockerignore
 Dockerfile*
 docker-compose*.yml
 docker-compose*.yaml
-.docker/
 
-# CI/CD Configuration
+# CI/CD & docs
 .github/
-.gitlab-ci.yml
-.travis.yml
-.circleci/
-.azuredevops/
-.buildkite/
-bitbucket-pipelines.yml
-jenkins/
-Jenkinsfile*
-
-# Documentation
 README*.md
-CHANGELOG*.md
-CONTRIBUTING*.md
-LICENSE*
-SECURITY*.md
-CODE_OF_CONDUCT*.md
 docs/
-.docs/
 
-# Security & Certificates
+# Certificates & secrets
 *.pem
 *.key
 *.crt
-*.p12
-*.pfx
 .secrets/
-
-# TypeScript
-*.tsbuildinfo
-.tscache/
-
-# Rust (for SWC/esbuild optimizations)
-target/
-Cargo.lock
-
-# WebAssembly
-*.wasm
-
-# Analysis & Profiling
-.analyze/
-bundle-analyzer/
-lighthouse/
-.bundle-analyzer/
-webpack-bundle-analyzer/
-size-limit/
-
-# Monitoring & Analytics
-.sentry/
-newrelic.js
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-.db/
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Kubernetes
-*.kubeconfig
-k8s/
-kubernetes/
-
-# AWS & Cloud
-.aws/
-.serverless/
-.vercel/
-
-# Sentry
-.sentryclirc
-
-# React Native (if applicable)
-.expo/
-android/
-ios/
-
-# PWA
-.pwa/
-sw.js
-workbox-*.js
-
-# Electron (if applicable)
-electron-builder.env
-out/
-release/
-
-# ==============================================================================
-# EXCEPTIONS - Files to include despite patterns above
-# ==============================================================================
-
-# Package manager lock files (needed for reproducible builds)
-!package-lock.json
-!yarn.lock
-!pnpm-lock.yaml
-!pnpm-workspace.yaml
-!bun.lockb
-
-# Essential config files that might match broader patterns
-!vite.config.*
-!vitest.config.*
-!tailwind.config.*
-!postcss.config.*
-!.eslintrc.*
-!.prettierrc*
-!tsconfig*.json
-!jest.config.*
-!playwright.config.*
-!cypress.config.*
-!rollup.config.*
 ```
 
 ### `.gitignore`
@@ -491,8 +310,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files
-.env
-.env.local
+.env*
+!.env.example
 
 # IDE
 .vscode/
@@ -576,9 +395,6 @@ export default tseslint.config(
 
 ```nginx
 client_max_body_size 20M;
-proxy_read_timeout 600s;
-proxy_connect_timeout 60s;
-proxy_send_timeout 60s;
 
 server {
     listen ${PORT};
@@ -624,7 +440,6 @@ Update the `<title>` to the project name during scaffolding.
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite React Template</title>
   </head>
@@ -638,7 +453,7 @@ Update the `<title>` to the project name during scaffolding.
 ### `vite.config.ts`
 
 ```ts
-/// <reference types="vitest" />
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'path';

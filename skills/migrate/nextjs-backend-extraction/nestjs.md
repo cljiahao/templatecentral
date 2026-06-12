@@ -73,14 +73,13 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` (NestJS), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
-If yes → before making any changes, run:
+If yes → before making any changes, ensure a clean tree. If uncommitted changes exist, commit them on the **current** branch (or stash them) — do not switch branches with work in flight:
 ```bash
-initial_branch=$(git rev-parse --abbrev-ref HEAD)
-git checkout -b pre-backend-extraction-backup
-git add -A && git commit -m "chore: pre-extraction snapshot"
-git checkout "$initial_branch"
+git add -A
+git diff --cached --quiet || git commit -m "chore: pre-extraction snapshot"
+snapshot_commit=$(git rev-parse HEAD)
 ```
-Print the branch name (`$initial_branch`) to the user so they can restore it if needed.
+Print the snapshot commit (`$snapshot_commit`) to the user so they can restore it if needed.
 
 If no → print "No changes made." and exit.
 
@@ -301,6 +300,12 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/nestjs.m
 
 ## Phase 8 — Rewire Next.js Frontend (autonomous)
 
+0. **Rewire auth before deleting routes** (only if auth was detected in Phase 1g) — `src/app/api/` includes the better-auth handler (`src/app/api/auth/[...all]/route.ts`). The Phase 7 backend uses JWT auth, which does not speak the better-auth protocol — re-pointing the better-auth client at it will not work. Before deleting the handler:
+   - **Replace** `lib/auth-client.ts` (better-auth client) with a small client that calls the new backend's JWT endpoints (`/auth/login`, `/auth/me`) and update `features/auth/` consumers accordingly
+   - Enable CORS credentials on the backend (`credentials: true`) if using cookie-based sessions
+   - If sessions are cookie-based, set auth cookies to `SameSite=None; Secure` for cross-origin (same-site localhost dev may use `Lax`); JWT bearer tokens in the `Authorization` header need no cookie attributes
+   - Verify the login flow end-to-end before proceeding
+
 1. **Delete `src/app/api/`** — all route handlers have moved to NestJS.
 
 2. **Update `src/lib/constants/env.ts`** — add `API_BASE`:
@@ -309,6 +314,8 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/nestjs.m
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 ```
+
+> Direct client→backend calls require the CORS setup above; alternatively keep the Next.js rewrites proxy model from `templatecentral:standards` (full-stack-pairing).
 
 3. **Update feature service files** — for each file under `src/features/` that calls `fetch('/api/...')`, replace with `API_BASE`:
 
@@ -339,23 +346,18 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 **NestJS project (`../[project-name]-api`):**
 
-Update CORS config to read `FRONTEND_URL`. In the NestJS scaffold's `src/config/index.ts` (or wherever `setupCors` is defined):
-
-```typescript
-const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-// cors origin: [frontendUrl]
-```
+Verify CORS config: the NestJS scaffold already reads `CLIENT_URL` (via `serviceConfig.CLIENT_URL` from `src/config/env.config.ts`, used by `setupCors`) — no code change needed. Set it to the Next.js origin.
 
 Add to `../[project-name]-api/.env.example`:
 ```
 # Frontend origin for CORS
-FRONTEND_URL=http://localhost:3000
+CLIENT_URL=http://localhost:3000
 ```
 
 Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 ```
 - Extracted from `[project-name]` (Next.js frontend) — see `../[project-name]`
-- Frontend calls this API; set FRONTEND_URL to the Next.js origin in production
+- Frontend calls this API; set CLIENT_URL to the Next.js origin in production
 ```
 
 **Next.js project:**
@@ -391,7 +393,7 @@ Next.js frontend: [original-project-path]
   → Pure frontend. Set NEXT_PUBLIC_API_URL in your deployment environment.
 
 NestJS backend:   ../[project-name]-api
-  → Set FRONTEND_URL to the Next.js origin in your deployment environment.
+  → Set CLIENT_URL to the Next.js origin in your deployment environment.
 
 Next steps:
 - Review proxy.ts — update any hardcoded /api paths to use NEXT_PUBLIC_API_URL

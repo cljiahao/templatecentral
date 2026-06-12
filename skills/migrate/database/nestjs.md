@@ -29,7 +29,10 @@ Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add:
 
 ### Step 3 — Delete Drizzle files
 
+> **Gate — these are user files.** Create a migration branch and get explicit user confirmation before running the deletions below; never delete user code without it.
+
 ```bash
+git checkout -b migrate/drizzle-to-kysely   # then confirm with the user before the rm commands
 rm src/database/drizzle.service.ts
 rm src/database/schema.ts
 rm drizzle.config.ts
@@ -112,7 +115,7 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 ```
 
-> **Tip**: Run `npx kysely-codegen` after connecting to generate types automatically from the live schema.
+> **Tip**: Run `npx kysely-codegen` after connecting to generate types automatically from the live schema. Note it connects via a `DATABASE_URL` with password auth — which this migration removes — so point it at a temporary password-auth connection string for the run (e.g. `DATABASE_URL=postgresql://user:pass@host:5432/db npx kysely-codegen`).
 
 ### Step 6 — Update `src/database/database.module.ts`
 
@@ -207,8 +210,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .execute();
 }
 
-export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('users').execute();
+export async function down(_db: Kysely<unknown>): Promise<void> {
+  // No-op by design: the users table pre-existed this adoption migration (created under
+  // Drizzle). Dropping it on rollback would destroy production data.
 }
 ```
 

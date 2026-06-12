@@ -127,7 +127,7 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 **Auth**
 - Guard-based (Passport.js + JWT) — apply at controller or route level, not globally
 - NEVER return password hashes, JWT secrets, or sensitive internal fields
-- Use short-lived JWTs with refresh tokens
+- Use short-lived JWTs; add refresh tokens when sessions must outlive the access-token TTL
 
 **Least Privilege**
 - Controllers return DTOs, not raw entities

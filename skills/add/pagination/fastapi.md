@@ -129,7 +129,7 @@ router = APIRouter(prefix='/projects', tags=['projects'])
 ALLOWED_SORT_FIELDS = ['name', 'created_at', 'updated_at']
 
 @router.get('', response_model=PaginatedResponse[ProjectResponse])
-async def list_projects(
+def list_projects(
     params: PaginationParams = Depends(),
     session: Session = Depends(get_db),
 ) -> PaginatedResponse[ProjectResponse]:

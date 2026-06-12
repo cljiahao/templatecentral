@@ -6,9 +6,9 @@
 
 Detect intent and ask for database type. If migration intent detected ("migrate/upgrade to IAM"), exit and say "Run `templatecentral:migrate`."
 
-Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* — skip if user named a library.
+Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL) or MongoDB?"* — skip if user named a library.
 
-For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth (Drizzle).
+For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. The Drizzle and Kysely leaf guides are PostgreSQL-only — if the user needs MySQL or SQLite, say so and adapt the guide's driver/dialect and schema imports manually.
 
 | Stack | Library | Load |
 |-------|---------|------|

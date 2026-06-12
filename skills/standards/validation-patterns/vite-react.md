@@ -11,14 +11,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import { CustomFormField } from '@/components/widgets';
 import { Button } from '@/components/ui/button';
 
@@ -33,12 +27,22 @@ const createProjectSchema = z.object({
     .optional(),
 });
 
+// Password fields: enforce length first (≥ 12 characters), then basic complexity.
+// Length matters more than exotic character rules — long passphrases beat short complex strings.
+export const passwordSchema = z
+  .string()
+  .min(12, 'Password must be at least 12 characters')
+  .regex(/[a-z]/, 'Must contain a lowercase letter')
+  .regex(/[A-Z]/, 'Must contain an uppercase letter')
+  .regex(/[0-9]/, 'Must contain a number');
+
 type CreateProjectData = z.input<typeof createProjectSchema>;
 
 export function CreateProjectForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const form = useForm<CreateProjectData>({
     resolver: zodResolver(createProjectSchema),
+    defaultValues: { name: '', description: '' },
   });
 
   const onSubmit = async (data: CreateProjectData) => {
@@ -58,7 +62,7 @@ export function CreateProjectForm() {
       }
 
       // Success
-    } catch (err) {
+    } catch {
       setSubmitError('An unexpected error occurred');
     }
   };
@@ -66,33 +70,13 @@ export function CreateProjectForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <CustomFormField {...field} placeholder="Project name" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <CustomFormField name="name" label="Name">
+          <Input placeholder="Project name" />
+        </CustomFormField>
 
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <CustomFormField {...field} placeholder="Project description (optional)" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <CustomFormField name="description" label="Description">
+          <Input placeholder="Project description (optional)" />
+        </CustomFormField>
 
         {submitError && <p className="text-sm text-red-600">{submitError}</p>}
 
@@ -108,6 +92,8 @@ export function CreateProjectForm() {
   );
 }
 ```
+
+`CustomFormField` (`src/components/widgets/custom-form-field.tsx`) takes `name`, `label`, optional `description`, and a single input child — it wires the Controller, label, and error message internally via `useFormContext()`. Do NOT wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it.
 
 **2. File Upload with Server-Side Validation (Critical)**
 
@@ -173,7 +159,7 @@ export function FileUploadForm() {
       }
 
       // Success - file is uploaded and server-validated
-    } catch (err) {
+    } catch {
       setError('An error occurred during upload');
     } finally {
       setIsUploading(false);
@@ -205,6 +191,7 @@ export function FileUploadForm() {
 ```ts
 // src/lib/clients/api-client.ts
 import { z } from 'zod';
+import { APIError } from '@/lib/errors';
 
 const projectSchema = z.object({
   id: z.uuid(),
@@ -219,7 +206,7 @@ export async function fetchProject(id: string): Promise<Project> {
   const response = await fetch(`/api/projects/${id}`);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch project: ${response.status}`);
+    throw new APIError({ statusCode: response.status, data: await response.json().catch(() => ({ message: 'Failed to fetch project' })) });
   }
 
   const data = await response.json();

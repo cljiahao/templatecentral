@@ -104,7 +104,7 @@ Pin model identifiers explicitly. Never use `latest` or version-free aliases in 
 const model = 'gpt-4o';  // bare alias — behaviour changes without notice
 
 // ✅ Always — pin a specific dated snapshot from your provider's model catalogue
-const model = 'gpt-4o-2024-08-06';  // example only — use your provider's current snapshot
+const model = '<provider>-<model>-<snapshot-date>';  // pin a dated snapshot, never a floating alias
 ```
 
 For open-source / self-hosted models: verify checksums against the provider's published hash before loading.
@@ -217,7 +217,7 @@ parsed = AnswerResponse.model_validate(json.loads(raw.choices[0].message.content
 
 ---
 
-### LLM06 — Excessive Agency (Agentic systems only — Capability C)
+### LLM06 — Excessive Agency (applies once any tool/function is wired)
 
 Every tool the agent can call must have an explicit allowlist. Irreversible actions need a human-in-the-loop gate.
 
@@ -339,7 +339,7 @@ Every LLM call must have explicit token limits and a per-user rate limit.
 ```ts
 // Always set max_tokens — never allow uncapped completions
 const response = await openai.chat.completions.create({
-  model: 'gpt-4o-2024-08-06',  // example only — use your provider's current snapshot
+  model: '<provider>-<model>-<snapshot-date>',  // pin a dated snapshot, never a floating alias
   messages,
   max_tokens: 1000,    // explicit cap — never omit
   temperature: 0.7,
@@ -383,9 +383,9 @@ Dispatch in order:
 1. `templatecentral:build` — validate the project still compiles
 2. `templatecentral:review` — check code standards and security patterns
 
-## AWS Responsible AI Lens
+## Responsible AI Checklist
 
-The AWS Responsible AI Lens (re:Invent 2025) defines 10 dimensions for evaluating production AI systems. Use it alongside OWASP LLM Top 10 for pre-launch reviews:
+Cloud providers publish responsible-AI checklists for evaluating production AI systems — e.g. the AWS Responsible AI Lens, which defines 10 dimensions; use your cloud provider's equivalent. Run one alongside OWASP LLM Top 10 for pre-launch reviews:
 
 - **Controllability** — ability to override, retrain, or shut down the model
 - **Privacy** — data minimization, consent, and PII handling
@@ -419,7 +419,7 @@ The overarching design principle is **Least Agency**: grant each agent only the 
 
 ## Rules
 
-- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 10; B (RAG) adds LLM08. **LLM06 (Excessive Agency) applies the moment ANY tool, function, or plugin is wired — not only multi-agent setups** — so add it as soon as the model can take an action. C (agentic) adds the full OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
+- Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 09, 10; B (RAG) adds LLM04 (data/model poisoning — validate RAG and fine-tuning ingestion) and LLM08. LLM09 (misinformation/overreliance) applies at every tier. **LLM06 (Excessive Agency) applies the moment ANY tool, function, or plugin is wired — not only multi-agent setups** — so add it as soon as the model can take an action. C (agentic) adds the full OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 

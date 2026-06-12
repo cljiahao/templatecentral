@@ -115,8 +115,9 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 30 * 24 * 60 * 60, // 30 days (AAL1) — AAL2 systems reduce to 43200 (12h) + 30-min inactivity; AAL3 use 28800 (8h) + 15-min inactivity
+    expiresIn: 30 * 24 * 60 * 60, // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
     updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
+    // freshAge: 43200,            // uncomment for high-assurance flows — forces re-auth after this period (see note below)
     cookieCache: {
       enabled: true,
       maxAge: 5 * 60,              // 5-minute client-side cache
@@ -135,7 +136,7 @@ export const auth = betterAuth({
 });
 ```
 
-> `freshAge` is measured from session `createdAt`, not last activity. If you set a short `freshAge` (e.g. 43200 for AAL2 flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
+> `freshAge` is measured from session `createdAt`, not last activity. If you uncomment a short `freshAge` (e.g. 43200 for elevated-assurance flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
 > **Database**: By default, better-auth uses stateless JWE-encrypted cookie sessions — no database required. For production features (session revocation, multi-device logout, audit logs), add a database adapter after running `templatecentral:add` (database). The Drizzle adapter is a separate package (`@better-auth/drizzle-adapter` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
@@ -442,6 +443,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # Microsoft Entra ID
 # MICROSOFT_CLIENT_ID=
 # MICROSOFT_CLIENT_SECRET=
+
+# Rate limiting (only if using the @upstash/ratelimit example — Redis.fromEnv() reads these)
+# UPSTASH_REDIS_REST_URL=
+# UPSTASH_REDIS_REST_TOKEN=
 ```
 
 #### 12. Update project `AGENTS.md`
@@ -516,23 +521,51 @@ Industry best practice: max 3 failed auth attempts per 15 minutes. better-auth d
 pnpm add @upstash/ratelimit @upstash/redis
 ```
 
-In `src/proxy.ts`, add a rate-limit check before the auth call on `/api/auth/sign-in`:
+In `src/proxy.ts`, add a rate-limit check at the **top of `proxy()`**, before the public-route short-circuit. Placement matters: `/api/auth/sign-in/email` matches `PUBLIC_API_PREFIXES` (`/api/auth`), so the short-circuit returns `NextResponse.next()` before the auth call ever runs — a limiter placed after it would be unreachable.
 
 ```typescript
-// Rate limit sign-in attempts (max 3/15 min)
-if (request.nextUrl.pathname === '/api/auth/sign-in/email') {
-  // Use X-Forwarded-For when behind a trusted reverse proxy (set TRUST_PROXY).
-  // Falls back to request.ip — without a proxy this is the real IP.
-  const clientIp =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.ip ??
-    'anonymous';
-  const { success } = await ratelimit.limit(clientIp);
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+// Max 3 sign-in attempts per 15 minutes, per client IP
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(3, '15 m'),
+  prefix: 'auth:sign-in',
+});
+
+// TRUST_PROXY = number of trusted proxy hops (1 = ALB → App, 2 = ALB →
+// Traefik → App); empty/unset = X-Forwarded-For is not trusted.
+// Returns null when no trustworthy client IP can be derived.
+function getRateLimitKey(req: NextRequest): string | null {
+  const hops = Number(process.env.TRUST_PROXY);
+  if (!hops) return null;
+  const entries = (req.headers.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  // Take the right-most entry that is not a trusted hop: each trusted proxy
+  // appends exactly one entry, so with one hop the client IP is the last
+  // entry, with two hops the second-to-last. Anything further left is
+  // client-forgeable.
+  return entries[entries.length - hops] ?? null;
+}
+
+// At the top of proxy(), immediately after `const { pathname } = req.nextUrl;`
+// and BEFORE the isPublicRoute() short-circuit (which would otherwise return
+// NextResponse.next() for /api/auth/* and skip this check entirely):
+if (req.nextUrl.pathname === '/api/auth/sign-in/email') {
+  // Fail closed when no trustworthy client IP exists (TRUST_PROXY unset or
+  // header missing): all such requests share one bucket, keeping the endpoint
+  // throttled instead of wide open. Fix the deployment topology — never fall
+  // back to a client-supplied header.
+  const key = getRateLimitKey(req) ?? 'untrusted';
+  const { success } = await ratelimit.limit(key);
   if (!success) return new Response(null, { status: 429 });
 }
 ```
 
-> **TRUST_PROXY required**: Only trust `X-Forwarded-For` if your deployment topology has a controlled reverse proxy (ALB, Traefik). Without a proxy, any client can forge `X-Forwarded-For` to bypass rate limits. Set `TRUST_PROXY=true` for one-hop (ALB → App) or `TRUST_PROXY=2` for two-hop (ALB → Traefik → App). See the scaffold's `src/lib/utils/request-origin.ts` for the same pattern.
+> **TRUST_PROXY required**: Only trust `X-Forwarded-For` if your deployment topology has a controlled reverse proxy (ALB, Traefik). Without a proxy, any client can forge `X-Forwarded-For` to bypass rate limits. Set `TRUST_PROXY` to the number of trusted proxy hops — `TRUST_PROXY=1` for one-hop (ALB → App), `TRUST_PROXY=2` for two-hop (ALB → Traefik → App); leave it empty/unset when there is no proxy (headers not trusted). See the scaffold's `src/lib/utils/request-origin.ts` for the same convention.
 
 For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
 

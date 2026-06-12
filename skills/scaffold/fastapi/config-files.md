@@ -285,11 +285,11 @@ build/
 .eggs/
 sdist/
 
-# Environment Variables (security)
-.env
-.env.*
-!.env.example
-!.env.local.example
+# Environment Variables (security) — match at any depth: scaffold secrets live at src/.env
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.default
 
 # IDE and Editor Files
 .vscode/
@@ -314,9 +314,9 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Logs
-*.log
-logs/
+# Logs (scaffold writes src/log/)
+**/*.log
+**/log/
 
 # Runtime Data
 pids/
@@ -456,9 +456,11 @@ ENV/
 *.swo
 .fleet/
 
-# Environment
+# Environment — matches at any depth (scaffold secrets live at src/.env)
 .env
-.env.local
+.env.*
+!.env.example
+!.env.default
 
 # Testing
 .pytest_cache/
@@ -494,8 +496,8 @@ PROJECT_NAME=My Project
 PROJECT_VERSION=v1.0.0
 ENVIRONMENT=dev
 
-# API
-FASTAPI_ROOT=api
+# API (FASTAPI_ROOT stays empty for local dev; set e.g. `api` when served under a path prefix)
+FASTAPI_ROOT=
 API_PORT=8000
 
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)

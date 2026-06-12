@@ -3,73 +3,26 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React — Error Handling
 
-**1. Error Boundary (Already Present, Enhanced)**
+**1. Error Boundary (Already Present — Wire in `logError`)**
+
+The scaffold already ships `src/components/layout/error-boundary.tsx`. Do NOT rewrite it — apply this small delta so caught errors go through the central error logger:
+
+The scaffolded file already imports `ErrorInfo` and defines `componentDidCatch` — only the `logError` import is new.
 
 ```tsx
 // src/components/layout/error-boundary.tsx
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { logError } from '@/lib/errors/error-log-handler';
+import { logError } from '@/lib/errors/error-log-handler';    // new import
 
-interface ErrorBoundaryProps {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logError('ErrorBoundary caught an error', error);
-    if (import.meta.env.DEV) {
-      console.error('Component stack:', errorInfo.componentStack);
-    }
-  }
-
-  handleRetry = () => {
-    this.setState({ hasError: false, error: null });
-  };
-
-  render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
-      return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-          <h1 className="text-2xl font-bold">Something went wrong</h1>
-          <p className="text-muted-foreground max-w-md text-sm">
-            {import.meta.env.DEV
-              ? this.state.error?.message
-              : 'An unexpected error occurred. Please try again later.'}
-          </p>
-          <button
-            type="button"
-            onClick={this.handleRetry}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-colors"
-          >
-            Try again
-          </button>
-        </div>
-      );
-    }
-
-    return this.props.children;
+// Replace the existing componentDidCatch with:
+componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  logError('ErrorBoundary caught an error', error);
+  if (import.meta.env.DEV) {
+    console.error('Component stack:', errorInfo.componentStack);
   }
 }
 ```
+
+Everything else (state, fallback rendering, retry button) stays as scaffolded.
 
 **2. Async Error Handler**
 
@@ -93,21 +46,23 @@ setupAsyncErrorHandler();
 
 ```ts
 // src/lib/clients/query-client.ts
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { logError } from '@/lib/errors/error-log-handler';
 
 export const queryClient = new QueryClient({
+  // MutationCache onError always fires — a per-mutation onError would silently
+  // replace a handler placed in defaultOptions.mutations.onError.
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (error instanceof Error) {
+        logError('Mutation failed', error);
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
       retry: 1,
       staleTime: 1000 * 60 * 5,
-    },
-    mutations: {
-      onError: (error) => {
-        if (error instanceof Error) {
-          logError('Mutation failed', error);
-        }
-      },
     },
   },
 });
@@ -141,9 +96,6 @@ export function Providers({ children }: ProvidersProps) {
 ## Testing / Verification
 
 ```bash
-# Trigger error boundary
-# Implementation included in test examples
-
 pnpm test
 pnpm build
 ```

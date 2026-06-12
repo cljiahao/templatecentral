@@ -1,7 +1,7 @@
 <!-- ref: standards/validation-patterns/nestjs.md
      loaded-by: standards/SKILL.md
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
-### NestJS (TypeScript + Pydantic-equivalent via nestjs-zod)
+### NestJS (TypeScript + Zod via nestjs-zod)
 
 **1. DTO with Validation**
 
@@ -28,10 +28,11 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
 **2. Controller with Validation**
 
-> **File uploads with Fastify**: The NestJS template uses Fastify — `FileInterceptor` from `@nestjs/platform-express` is incompatible. File uploads require `@fastify/multipart` (`pnpm add @fastify/multipart`) and registering it in `main.ts` before `app.listen()`:
+> **File uploads with Fastify**: The NestJS template uses Fastify — `FileInterceptor` from `@nestjs/platform-express` is incompatible. File uploads require `@fastify/multipart` (`pnpm add @fastify/multipart`) and registering it inside `bootstrap()` before `app.listen()` — `register` returns a promise, so await it:
 > ```ts
-> // src/main.ts — add before app.listen()
-> app.getHttpAdapter().getInstance().register(import('@fastify/multipart'), {
+> // src/main.ts — add inside bootstrap(), before app.listen()
+> const fastify = app.getHttpAdapter().getInstance();
+> await fastify.register(import('@fastify/multipart'), {
 >   limits: { fileSize: 10 * 1024 * 1024 },
 > });
 > ```
@@ -101,18 +102,18 @@ export class ProjectsController {
       throw new BadRequestException('File is required');
     }
 
+    // Note: data.mimetype is client-supplied — for high assurance, verify magic bytes
+    // (e.g. with the file-type package) instead of trusting the declared type.
     const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
     if (!allowed.includes(data.mimetype)) {
       throw new BadRequestException('File type not allowed');
     }
 
+    // toBuffer() throws once the stream exceeds limits.fileSize (set at registration) —
+    // no manual size check needed.
     const buffer = await data.toBuffer();
-    const maxSize = 10 * 1024 * 1024;
-    if (buffer.length > maxSize) {
-      throw new BadRequestException('File must be under 10MB');
-    }
 
-    // Safe to use: buffer, data.filename, data.mimetype
+    // Safe to use: buffer, data.filename
     return { message: 'File uploaded' };
   }
 }

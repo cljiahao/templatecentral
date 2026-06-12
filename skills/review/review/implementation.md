@@ -1,6 +1,6 @@
 <!-- ref: review/review/implementation.md
      loaded-by: review/SKILL.md
-     prereq: Review agent workflow. Do not invoke this file directly — it is loaded at runtime by the templatecentral:review skill. -->
+     prereq: Review agent workflow. Do not invoke this file directly — it is catted by agents via skills/review/SKILL.md (de-registered agent utility). -->
 
 # Review Agent
 
@@ -98,7 +98,7 @@ Rules:
 
 ## Callers
 
-Dispatched by: all four scaffold skills (post-scaffold review), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
+Dispatched by: `templatecentral:scaffold` (all stacks, post-scaffold review), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
 
 ## Changelog
 ### 1.2.0

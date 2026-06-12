@@ -157,12 +157,6 @@ Confirm the build succeeds with no type errors. If adding a data-fetching page, 
 - NEVER use `'use client'` in `page.tsx` components — prefer server components. Note: `error.tsx` requires `'use client'` (Next.js constraint)
 - NEVER create pages outside the established route groups (`(public)/` or `dashboard/`) without reason
 
-## Validate
-
-```bash
-pnpm build    # zero errors
-```
-
 ## After Writing Code
 
 Dispatch in order:
