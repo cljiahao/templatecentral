@@ -3,17 +3,13 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## Next.js Database Migration
 
-Migrates an existing Drizzle ORM setup to Kysely + AWS IAM authentication.
-
-This is a **library swap** — schema syntax differs, so existing queries must be rewritten.
-
-### Step 1 — Swap packages
+**Read `drizzle-to-kysely.md` first** — shared steps (1, 5, 8 up-body, 9 translation table, 10 env block, After Writing Code) live there.
 
 ```bash
-pnpm remove drizzle-orm drizzle-kit
-pnpm add kysely pg @aws-sdk/rds-signer
-pnpm add -D kysely-codegen @types/pg tsx
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/database/drizzle-to-kysely.md"
 ```
+
+---
 
 ### Step 2 — Update `package.json` scripts
 
@@ -72,28 +68,7 @@ if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 
 ### Step 5 — Create `src/integrations/database/types.ts`
 
-Match your existing schema. Example for a `users` table:
-
-```typescript
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
-
-export interface Database {
-  users: UsersTable;
-  // add more tables here as needed
-}
-
-export interface UsersTable {
-  id: Generated<string>;
-  email: string;
-  name: string;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export type User = Selectable<UsersTable>;
-export type NewUser = Insertable<UsersTable>;
-export type UserUpdate = Updateable<UsersTable>;
-```
+Use the shared types template from `drizzle-to-kysely.md` Step 5.
 
 ### Step 6 — Create `src/integrations/database/migrate.ts`
 
@@ -117,17 +92,7 @@ async function migrate() {
   });
 
   const { results, error } = await migrator.migrateToLatest();
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
-  }
-
-  await db.destroy();
+  // result-handling block: see drizzle-to-kysely.md Step 7
 }
 
 migrate();
@@ -140,25 +105,13 @@ export { db } from './kysely-client';
 export type { Database, User, NewUser, UserUpdate } from './types';
 ```
 
-### Step 8 — Write first Kysely migration for existing tables
+### Step 8 — Write first Kysely migration
 
-Create `src/integrations/database/migrations/001_initial.ts`:
+Create `src/integrations/database/migrations/001_initial.ts`. Use the `up` body from `drizzle-to-kysely.md` Step 8.
+
+Next.js `down` drops the table:
 
 ```typescript
-import { type Kysely, sql } from 'kysely';
-
-export async function up(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .createTable('users')
-    .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('email', 'text', (col) => col.notNull().unique())
-    .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute();
-}
-
 export async function down(db: Kysely<unknown>): Promise<void> {
   await db.schema.dropTable('users').execute();
 }
@@ -166,15 +119,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 
 ### Step 9 — Update query code in API routes and Server Components
 
-Drizzle → Kysely query translation reference:
-
-| Drizzle | Kysely |
-|---|---|
-| `drizzle.db.select().from(users)` | `db.selectFrom('users').selectAll().execute()` |
-| `drizzle.db.select().from(users).where(eq(users.id, id))` | `db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst()` |
-| `drizzle.db.insert(users).values(data).returning()` | `db.insertInto('users').values(data).returningAll().executeTakeFirstOrThrow()` |
-| `drizzle.db.update(users).set(data).where(eq(users.id, id))` | `db.updateTable('users').set(data).where('id', '=', id).returningAll().executeTakeFirstOrThrow()` |
-| `drizzle.db.delete(users).where(eq(users.id, id))` | `db.deleteFrom('users').where('id', '=', id).executeTakeFirst()` |
+Use the translation table from `drizzle-to-kysely.md` Step 9.
 
 Also update `src/integrations/factories.ts` if it exports a `DB()` function:
 
@@ -188,25 +133,8 @@ export function DB() {
 
 ### Step 10 — Update `.env.local` and `.env.example`
 
-Replace `DATABASE_URL` with:
-
-```env
-DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
-DATABASE_PORT=5432
-DATABASE_USER=iam_db_user
-DATABASE_NAME=mydb
-```
+Use the env block from `drizzle-to-kysely.md` Step 10.
 
 ### Step 11 — Validate
 
-```bash
-pnpm build
-```
-
-Build must succeed with zero TypeScript errors.
-
-## After Writing Code
-
-Dispatch in order:
-1. `templatecentral:build` — validate compilation
-2. `templatecentral:review` — check code standards
+See `drizzle-to-kysely.md` Step 11 (Next.js runs only `pnpm build`). Then follow After Writing Code.

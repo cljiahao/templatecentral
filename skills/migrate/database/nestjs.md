@@ -3,17 +3,13 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## NestJS Database Migration
 
-Migrates an existing Drizzle ORM setup to Kysely + AWS IAM authentication.
-
-This is a **library swap** — schema syntax differs, so existing queries must be rewritten.
-
-### Step 1 — Swap packages
+**Read `drizzle-to-kysely.md` first** — shared steps (1, 5, 8 up-body, 9 translation table, 10 env block, After Writing Code) live there.
 
 ```bash
-pnpm remove drizzle-orm drizzle-kit
-pnpm add kysely pg @aws-sdk/rds-signer
-pnpm add -D kysely-codegen @types/pg tsx
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/database/drizzle-to-kysely.md"
 ```
+
+---
 
 ### Step 2 — Update `package.json` scripts
 
@@ -92,30 +88,7 @@ export class KyselyService extends Kysely<Database> implements OnModuleInit, OnM
 
 ### Step 5 — Create `src/database/types.ts`
 
-Create Kysely type interfaces to match your existing schema. Example for a `users` table:
-
-```typescript
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
-
-export interface Database {
-  users: UsersTable;
-  // add more tables here as needed
-}
-
-export interface UsersTable {
-  id: Generated<string>;
-  email: string;
-  name: string;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export type User = Selectable<UsersTable>;
-export type NewUser = Insertable<UsersTable>;
-export type UserUpdate = Updateable<UsersTable>;
-```
-
-> **Tip**: Run `npx kysely-codegen` after connecting to generate types automatically from the live schema. Note it connects via a `DATABASE_URL` with password auth — which this migration removes — so point it at a temporary password-auth connection string for the run (e.g. `DATABASE_URL=postgresql://user:pass@host:5432/db npx kysely-codegen`).
+Use the shared types template from `drizzle-to-kysely.md` Step 5.
 
 ### Step 6 — Update `src/database/database.module.ts`
 
@@ -175,63 +148,30 @@ async function migrate() {
   });
 
   const { results, error } = await migrator.migrateToLatest();
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
-  }
-
-  await db.destroy();
+  // result-handling block: see drizzle-to-kysely.md Step 7
 }
 
 migrate();
 ```
 
-### Step 8 — Write first Kysely migration for existing tables
+### Step 8 — Write first Kysely migration
 
-Create `src/database/migrations/001_initial.ts` reflecting your current schema. Example:
+Create `src/database/migrations/001_initial.ts`. Use the `up` body from `drizzle-to-kysely.md` Step 8.
+
+NestJS `down` is a no-op (table pre-existed under Drizzle):
 
 ```typescript
-import { type Kysely, sql } from 'kysely';
-
-export async function up(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .createTable('users')
-    .ifNotExists()
-    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('email', 'text', (col) => col.notNull().unique())
-    .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute();
-}
-
 export async function down(_db: Kysely<unknown>): Promise<void> {
-  // No-op by design: the users table pre-existed this adoption migration (created under
-  // Drizzle). Dropping it on rollback would destroy production data.
+  // No-op by design: the users table pre-existed this adoption migration.
+  // Dropping it on rollback would destroy production data.
 }
 ```
 
-> Use `.ifNotExists()` to make the migration idempotent — the table already exists in the database from the Drizzle setup.
-
 ### Step 9 — Update query code in feature services
 
-Drizzle → Kysely query translation reference:
+Use the translation table from `drizzle-to-kysely.md` Step 9.
 
-| Drizzle | Kysely |
-|---|---|
-| `drizzle.db.select().from(users)` | `db.selectFrom('users').selectAll().execute()` |
-| `drizzle.db.select().from(users).where(eq(users.id, id))` | `db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst()` |
-| `drizzle.db.insert(users).values(data).returning()` | `db.insertInto('users').values(data).returningAll().executeTakeFirstOrThrow()` |
-| `drizzle.db.update(users).set(data).where(eq(users.id, id))` | `db.updateTable('users').set(data).where('id', '=', id).returningAll().executeTakeFirstOrThrow()` |
-| `drizzle.db.delete(users).where(eq(users.id, id))` | `db.deleteFrom('users').where('id', '=', id).executeTakeFirst()` |
-
-Also update constructor injection in services:
-- Replace `private readonly drizzle: DrizzleService` → `private readonly db: KyselyService`
+Also update constructor injection: replace `private readonly drizzle: DrizzleService` → `private readonly db: KyselyService`.
 
 ### Step 10 — Update `src/config/env.config.ts`
 
@@ -247,25 +187,8 @@ export const serviceConfig = {
 };
 ```
 
-Update `.env` and `.env.example` — replace `DATABASE_URL` with:
-
-```env
-DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
-DATABASE_PORT=5432
-DATABASE_USER=iam_db_user
-DATABASE_NAME=mydb
-```
+Update `.env` and `.env.example` — use the env block from `drizzle-to-kysely.md` Step 10.
 
 ### Step 11 — Validate
 
-```bash
-pnpm build && pnpm test
-```
-
-Build must succeed with zero TypeScript errors. All tests must pass.
-
-## After Writing Code
-
-Dispatch in order:
-1. `templatecentral:build` — validate compilation
-2. `templatecentral:review` — check code standards
+See `drizzle-to-kysely.md` Step 11 (NestJS runs `pnpm build && pnpm test`). Then follow After Writing Code.

@@ -84,21 +84,12 @@ A) Light adoption (fast)
    Best if your project structure is already close to templateCentral
    conventions.
 
-B) Full migration (thorough) [not yet available]
-   Analyses your project, produces a migration plan, and restructures
-   your code to match templateCentral conventions with your approval at
-   each step.
-
-C) Stop
+B) Stop
    Exit without changes. Run `templatecentral:scaffold` to start
    a fresh project, or proceed manually.
 
-Which would you prefer? (A / B / C)
+Which would you prefer? (A / B)
 ```
-
-If user answers B → respond: "Full migration is not yet available. Please choose
-A (light adoption) or C (stop)." Return to the top of Phase 2.
-If user answers B a second time → treat as C (stop). Print "No changes made." Return control.
 
 ---
 
@@ -156,7 +147,7 @@ Returning to the skill that invoked me — proceeding from Step 1.
 
 Return control to the invoking skill. The invoking skill continues from Step 1.
 
-### If C — Stop
+### If B — Stop
 
 Print: "No changes made."
 
