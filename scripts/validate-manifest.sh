@@ -54,6 +54,26 @@ sys.exit(0 if '$field' in d and d['$field'] not in ('', None) else 1)
   done
 }
 
+check_plugin_extended_fields() {
+  # These fields are required by the Claude Code marketplace extended schema.
+  # Replicates the inline node check that was previously in CI's plugin-validate job.
+  header "plugin.json extended fields"
+  local f="$PLUGIN_DIR/plugin.json"
+  [[ -f "$f" ]] || { fail "plugin.json not found — skipping extended field checks"; return; }
+
+  for field in displayName homepage repository license; do
+    if python3 -c "
+import json, sys
+d = json.load(open('$f'))
+sys.exit(0 if '$field' in d and d['$field'] not in ('', None) else 1)
+" 2>/dev/null; then
+      pass "field: $field"
+    else
+      fail "plugin.json missing or empty extended field: $field"
+    fi
+  done
+}
+
 check_plugin_semver() {
   # Claude Code marketplace rejects non-semver version strings.
   header "plugin.json semver version"
@@ -132,6 +152,46 @@ for i, p in enumerate(plugins):
         ok = False
 if ok:
     print(f"OK:   plugins[]: {len(plugins)} entry/entries — all required fields present")
+sys.exit(0 if ok else 1)
+PYEOF
+  ) || { echo "$result"; FAILED=1; return; }
+  echo "$result"
+}
+
+check_marketplace_version_and_source_consistency() {
+  # The marketplace plugin entry's version (if present) must match plugin.json,
+  # and the source path must reference the same repo root ("./" or "./").
+  # Replicates part of what the CI inline node check previously validated.
+  header "marketplace.json plugin entry — version + source consistency with plugin.json"
+  local pf="$PLUGIN_DIR/plugin.json" mf="$PLUGIN_DIR/marketplace.json"
+  [[ -f "$pf" && -f "$mf" ]] || return
+
+  local result
+  result=$(python3 - <<PYEOF
+import json, sys
+pf = "$pf"
+mf = "$mf"
+pdata = json.load(open(pf))
+mdata = json.load(open(mf))
+pv = pdata.get("version", "")
+plugins = mdata.get("plugins", [])
+if not plugins:
+    print("FAIL: marketplace.json plugins array is empty — cannot check consistency")
+    sys.exit(1)
+ok = True
+for i, p in enumerate(plugins):
+    # Version consistency: if the marketplace entry carries a version field it must match plugin.json
+    mv = p.get("version", None)
+    if mv is not None and mv != pv:
+        print(f"FAIL: plugins[{i}].version ({mv}) does not match plugin.json version ({pv})")
+        ok = False
+    # Source path: must point to the repo/plugin root (accepted values: "./" or ".")
+    src = p.get("source", "")
+    if src not in ("./", "."):
+        print(f"FAIL: plugins[{i}].source ('{src}') does not point to repo root — expected './' or '.'")
+        ok = False
+    else:
+        print(f"OK:   plugins[{i}].source='{src}'" + (f", version consistent ({pv})" if mv is not None else ", no version field (OK)"))
 sys.exit(0 if ok else 1)
 PYEOF
   ) || { echo "$result"; FAILED=1; return; }
@@ -234,6 +294,57 @@ check_repo_harness_version_matches_plugin() {
   fi
 }
 
+check_changelog_has_current_version() {
+  # CHANGELOG.md must contain a heading for the current plugin.json version so
+  # a release-gating step can confirm the changelog is up to date.
+  header "CHANGELOG.md has heading for current plugin.json version"
+  local root pv cl
+  root="$(_repo_root)"; pv="$(_plugin_version)"; cl="$root/CHANGELOG.md"
+  [[ -f "$cl" && -n "$pv" ]] || { pass "CHANGELOG.md or version absent — skipping"; return; }
+  if grep -qE "^## \[${pv}\]" "$cl"; then
+    pass "CHANGELOG.md contains heading: ## [$pv]"
+  else
+    fail "CHANGELOG.md is missing a heading '## [$pv]' — add a release entry before publishing"
+  fi
+}
+
+check_doc_version_stamps() {
+  # Detects bare version stamps (e.g. "v4.5", "v5.0") in prose docs that drift silently
+  # when the plugin version advances.
+  #
+  # Exclusions:
+  #   - Lines containing img.shields.io/badge/version (README badge — intentional version pin)
+  #   - Lines containing "changelog" (case-insensitive — version refs in changelogs are valid)
+  #
+  # Toggle:
+  #   STRICT_DOC_SYNC=1 → hard FAIL (used by release pipeline after the docs cleanup task lands)
+  #   default (unset/0)  → WARN only (CI runs without this flag until existing stamps are removed)
+  header "Doc version stamps (bare v-stamps in prose docs)"
+  local root
+  root="$(_repo_root)"
+  local stamps
+  stamps=$(grep -nE '\bv[0-9]+\.[0-9]+' \
+    "$root/README.md" "$root/EXAMPLES.md" "$root/CONTRIBUTING.md" "$root/FUTURE.md" "$root/SECURITY.md" \
+    2>/dev/null \
+    | grep -v 'img.shields.io/badge/version' | grep -vi 'changelog' || true)
+
+  if [[ -z "$stamps" ]]; then
+    pass "No bare version stamps found in prose docs"
+    return
+  fi
+
+  local count
+  count=$(echo "$stamps" | wc -l | tr -d ' ')
+  if [[ "${STRICT_DOC_SYNC:-0}" == "1" ]]; then
+    echo "FAIL: $count bare version stamp(s) found (STRICT_DOC_SYNC=1 — hard fail):"
+    echo "$stamps" | sed 's/^/  /'
+    FAILED=1
+  else
+    echo "WARN: $count bare version stamp(s) found (set STRICT_DOC_SYNC=1 to hard-fail):"
+    echo "$stamps" | sed 's/^/  /'
+  fi
+}
+
 check_repo_agents_marker_not_semver() {
   # The repo AGENTS.md line-1 marker (`<!-- templateCentral: plugin@X.Y.Z -->`) is a harness schema
   # floor, not plugin semver — it intentionally stays put across releases. Guard against a marker
@@ -262,6 +373,7 @@ check_json_syntax
 echo ""
 echo "PLUGIN.JSON"
 check_plugin_required_fields
+check_plugin_extended_fields
 check_plugin_semver
 check_skills_path_exists
 
@@ -269,6 +381,7 @@ echo ""
 echo "MARKETPLACE.JSON"
 check_marketplace_required_fields
 check_marketplace_plugin_entries
+check_marketplace_version_and_source_consistency
 
 echo ""
 echo "CONSISTENCY"
@@ -280,6 +393,8 @@ echo "DOC SYNC"
 check_readme_badge_matches_plugin
 check_repo_harness_version_matches_plugin
 check_repo_agents_marker_not_semver
+check_changelog_has_current_version
+check_doc_version_stamps
 echo ""
 
 if [[ $FAILED -ne 0 ]]; then

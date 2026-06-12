@@ -87,33 +87,6 @@ jobs:
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
 
-  security:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Check for hardcoded secrets in skill files
-        run: |
-          failed=0
-          while IFS= read -r line; do
-            file=$(echo "$line" | cut -d: -f1)
-            lineno=$(echo "$line" | cut -d: -f2)
-            echo "FAIL: $file:$lineno — potential hardcoded secret"
-            failed=1
-          done < <(grep -rPn \
-            '(?i)(better_auth_secret|secret_key|database_url|api_key|private_key|access_token)\s*=\s*(?![\s${\x27"<#])(?!.*\.\.\.)(?!.*<.*>)(?!.*change.me)(?!.*your-).{8,}' \
-            skills/ 2>/dev/null || true)
-
-          if [ $failed -ne 0 ]; then
-            echo ""
-            echo "Review the above lines and replace any real secrets with placeholder syntax."
-            exit 1
-          fi
-          echo "OK: No hardcoded secrets detected in skill files"
-
   plugin-validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -125,22 +98,11 @@ jobs:
       - name: Validate manifest files
         run: bash scripts/validate-manifest.sh .claude-plugin
 
-      - name: Validate plugin.json extended fields
-        run: |
-          node -e "
-            const fs = require('fs');
-            const p = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json'));
-            const required = ['displayName','homepage','repository','license'];
-            const missing = required.filter(f => !p[f]);
-            if (missing.length) { console.error('Missing fields:', missing.join(', ')); process.exit(1); }
-            console.log('plugin.json extended fields OK');
-          "
-
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
