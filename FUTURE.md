@@ -35,24 +35,20 @@ Promote the post-harness seams in scaffolded projects from documentation stubs t
 
 ## Roadmap
 
-### 1. Harness-kit extraction — APPROVED (Option A, 2026-06-12)
-
-Extract the duplicated ~560-line harness kit (hook scripts, settings.json template, harness.json template) into a single `scaffold/shared/harness-kit.md` loaded by all 4 scaffold skills and `migrate`. Eliminates the current copy-paste maintenance burden across 5 locations. Scheduled as the next release's headline change.
-
-### 2. Scaffold source-files phase-splits
+### 1. Scaffold source-files phase-splits
 
 Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. Tracked in memory as `project_skills_compaction_budget`.
 
-### 3. New `templatecentral:add` capabilities under evaluation
+### 2. New `templatecentral:add` capabilities under evaluation
 
 - **background-jobs / queues** — task queues (Celery/FastAPI, BullMQ/NestJS, Next.js server actions)
 - **caching (Redis)** — response + query-level caching across all stacks
 - **transactional email** — Resend / Nodemailer integration with template scaffolding
 
-### 4. `templatecentral:migrate` light-adoption simplification
+### 3. `templatecentral:migrate` light-adoption simplification
 
 The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can be significantly shorter. Evaluate a fast-path that skips Phase 3–4 for projects that only need harness seeding.
 
-### 5. NestJS tsconfig `strict: true`
+### 4. NestJS tsconfig `strict: true`
 
 Currently `noImplicitAny: false` because `strict: true` has not been validated against a full scaffold build. Enable once the `scaffold-verify` loop confirms the scaffold compiles cleanly under strict mode.

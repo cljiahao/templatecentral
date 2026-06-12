@@ -276,152 +276,15 @@ If `CLAUDE.md` does not exist, create it at the project root with exactly one li
 
 If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
 
-**Step 4d: Create `.claude/settings.json`**
+**Step 4d: Create `.claude/settings.json` and seed hook scripts**
 
-If `.claude/settings.json` does not exist, create it. Select the PostToolUse command for the detected stack:
+Load the shared harness kit and use it to create `settings.json` and all 8 `.claude/hooks/` scripts for the detected stack:
 
-| Stack | PostToolUse command |
-|-------|---------------------|
-| nextjs / vite-react / nestjs | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` |
-| fastapi | `python -m pyright src/ 2>&1 \| tail -5` |
-
-**For TS stacks (nextjs / vite-react / nestjs)** — settings.json referencing the seeded hook scripts (the same kit `templatecentral:scaffold` writes):
-```json
-{
-  "permissions": {
-    "deny": [
-      "Read(.env)",
-      "Read(.env.local)",
-      "Read(.env.*.local)",
-      "Read(.env.development)",
-      "Read(.env.development.*)",
-      "Read(.env.dev)",
-      "Read(.env.production)",
-      "Read(.env.production.*)",
-      "Read(.env.staging)",
-      "Read(.env.staging.*)",
-      "Read(.env.uat)",
-      "Read(.env.test)",
-      "Read(./secrets/**)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/protect-files.sh" }]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-no-verify.sh" }]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/user-prompt-guard.js" }]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-tool-failure.sh" }]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-checks.sh" }]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/subagent-stop.sh" }]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-context.sh" }]
-      }
-    ]
-  },
-  "skillListingBudgetFraction": 0.02
-}
+```bash
+cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
 ```
 
-**For FastAPI** — identical shape; `UserPromptSubmit` runs `python3 .claude/hooks/user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`:
-```json
-{
-  "permissions": {
-    "deny": [
-      "Read(.env)",
-      "Read(.env.local)",
-      "Read(.env.*.local)",
-      "Read(.env.development)",
-      "Read(.env.development.*)",
-      "Read(.env.dev)",
-      "Read(.env.production)",
-      "Read(.env.production.*)",
-      "Read(.env.staging)",
-      "Read(.env.staging.*)",
-      "Read(.env.uat)",
-      "Read(.env.test)",
-      "Read(./secrets/**)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/protect-files.sh" }]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-no-verify.sh" }]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [{ "type": "command", "command": "python3 .claude/hooks/user-prompt-guard.py" }]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-tool-failure.sh" }]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-checks.sh" }]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/subagent-stop.sh" }]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-context.sh" }]
-      }
-    ]
-  },
-  "skillListingBudgetFraction": 0.02
-}
-```
-
-Then seed the `.claude/hooks/` scripts. Create them **identical to the scripts `templatecentral:scaffold` writes for the detected stack** (see scaffold §6b): `protect-files.sh`, `block-no-verify.sh`, `user-prompt-guard.js` (TS) or `user-prompt-guard.py` (FastAPI), `post-edit-typecheck.sh`, `post-tool-failure.sh`, `stop-checks.sh`, `subagent-stop.sh`, `session-context.sh`. Then `chmod +x .claude/hooks/*.sh`. The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
+Use the **detected stack's row** in the kit's delta table to select the correct runtime (TS stacks: `node`; FastAPI: `python3`) and hook commands. The kit's Step A gives the full `settings.json` template for each variant; Step B gives all 8 hook scripts. Then `chmod +x .claude/hooks/*.sh`. The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
 
 `permissions.deny` — blocks the agent from *reading* `.env*` / `secrets/**` (the Edit/Write guard only blocks writes).
 `PreToolUse` — `protect-files.sh` (secrets/CI/cert/governance) + `block-no-verify.sh` (`--no-verify`, protected-branch commits, force-push, `rm -rf` src).

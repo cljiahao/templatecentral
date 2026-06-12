@@ -666,15 +666,17 @@ check_seeded_skill_paths_are_directories() {
 }
 
 check_scaffold_seeds_complete_harness() {
-  # Every scaffold + migrate settings.json template must seed the COMPLETE harness: all 7 hook
-  # events, the permissions.deny secret-Read block, skillListingBudgetFraction, a reference to
-  # each of the 8 .claude/hooks/ scripts, and the seeded *-verify project skill in directory form
-  # (.claude/skills/<name>-verify/SKILL.md). Scaffolds additionally INLINE the script bodies (migrate
-  # references the same scripts to stay DRY), so scaffolds must also contain the guard-body markers.
-  # If an edit silently drops the Stop gate, a guard, or an event, a project ships a harness with a
-  # hole and nothing else catches it (Step 3H is a manual checklist). This makes it enforceable.
+  # The shared harness kit (skills/scaffold/shared/harness-kit.md) is the single source of truth
+  # for the complete harness: all 7 hook events, the permissions.deny secret-Read block,
+  # skillListingBudgetFraction, the 8 .claude/hooks/ script bodies, stop_hook_active guard,
+  # CONSTITUTION.md, FUTURE.md, harness.json step, .agents symlink, and the shared AGENTS.md tail.
+  # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must reference
+  # the kit (contain 'scaffold/shared/harness-kit.md'). The kit itself must contain every universal
+  # harness element. This structure keeps the harness enforceable from one file rather than 5.
   # TIMELESS: these are the load-bearing enforcement hooks; their presence is non-negotiable.
   header "Scaffold/migrate templates seed the complete harness"
+
+  local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md"
   local scaffolds=(
     "$SKILLS_DIR/scaffold/fastapi/source-files.md"
     "$SKILLS_DIR/scaffold/nestjs/source-files.md"
@@ -682,37 +684,43 @@ check_scaffold_seeds_complete_harness() {
     "$SKILLS_DIR/scaffold/vite-react/source-files.md"
   )
   local migrate="$SKILLS_DIR/migrate/general/implementation.md"
-  # Present in BOTH scaffold (inline) and migrate (referenced) forms:
-  local universal=(
+
+  # (a) The kit must contain all universal harness tokens:
+  local kit_tokens=(
     '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"' '"PostToolUseFailure"'
     '"Stop"' '"SubagentStop"' '"SessionStart"'
-    'skillListingBudgetFraction' '"Read(.env)"'
+    'skillListingBudgetFraction' '"Read(.env)"' '"Read(**/.env)"'
     'protect-files.sh' 'block-no-verify.sh' 'user-prompt-guard'
     'post-edit-typecheck.sh' 'post-tool-failure.sh' 'stop-checks.sh'
     'subagent-stop.sh' 'session-context.sh'
-    '-verify/SKILL.md'
+    'stop_hook_active' '--no-verify' 'AKIA'
+    'node' 'python3'
   )
-  # Guard BODIES — scaffolds inline the scripts, so these strings must appear in scaffolds
-  # (stop_hook_active = the seeded Stop hook's loop guard — exit 0 before tests when re-entered):
-  local bodies=('--no-verify' 'AKIA' 'stop_hook_active')
-  local missing="" f tok
+  local missing="" tok
+  if [[ ! -f "$kit" ]]; then
+    missing+="$kit — file not found"$'\n'
+  else
+    for tok in "${kit_tokens[@]}"; do
+      grep -qF -- "$tok" "$kit" || missing+="$kit — missing harness element: $tok"$'\n'
+    done
+  fi
+
+  # (b) Each scaffold source-files.md and migrate must reference the shared kit:
+  local f
   for f in "${scaffolds[@]}" "$migrate"; do
     [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
-    for tok in "${universal[@]}"; do
-      grep -qF -- "$tok" "$f" || missing+="$f — missing harness element: $tok"$'\n'
-    done
+    grep -qF 'scaffold/shared/harness-kit.md' "$f" || \
+      missing+="$f — does not reference scaffold/shared/harness-kit.md"$'\n'
+    # Each scaffold also seeds a *-verify skill:
+    grep -qF -- '-verify/SKILL.md' "$f" || \
+      missing+="$f — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
   done
-  for f in "${scaffolds[@]}"; do
-    [[ -f "$f" ]] || continue
-    for tok in "${bodies[@]}"; do
-      grep -qF -- "$tok" "$f" || missing+="$f — missing inlined guard body: $tok"$'\n'
-    done
-  done
+
   if [[ -n "$missing" ]]; then
     echo "$missing"
-    fail "A scaffold/migrate template is missing a required harness element — restore it; full set = 7 events + permissions.deny + skillListingBudgetFraction + the 8 .claude/hooks/ scripts (scaffolds inline the bodies, migrate references them)"
+    fail "Harness check failed — kit must contain all universal tokens; all 4 scaffolds + migrate must reference scaffold/shared/harness-kit.md; each scaffold must seed a *-verify/SKILL.md"
   else
-    pass "All scaffold/migrate templates seed the complete harness (7 events + permissions.deny + 8 hook scripts)"
+    pass "Shared harness kit contains all universal tokens; all scaffold/migrate files reference it"
   fi
 }
 
