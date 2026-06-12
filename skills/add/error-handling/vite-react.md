@@ -3,6 +3,17 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React — Error Handling
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **1. Error Boundary (Already Present — Wire in `logError`)**
 
 The scaffold already ships `src/components/layout/error-boundary.tsx`. Do NOT rewrite it — apply this small delta so caught errors go through the central error logger:
@@ -93,7 +104,7 @@ export function Providers({ children }: ProvidersProps) {
 }
 ```
 
-## Testing / Verification
+## Validate
 
 ```bash
 pnpm test

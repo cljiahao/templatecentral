@@ -1,6 +1,6 @@
-<!-- ref: add/mutation/python.md
+<!-- ref: add/mutation-testing/python.md
      loaded-by: add/SKILL.md
-     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Mutation Testing (mutmut)
 
 Add report-only mutation testing to a FastAPI project scaffolded from templateCentral. Uses mutmut 3.5.0.

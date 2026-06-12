@@ -1,6 +1,6 @@
-<!-- ref: add/api-route/implementation.md
+<!-- ref: add/endpoint/nextjs.md
      loaded-by: add/SKILL.md
-     prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack identified as Next.js. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 
 # Add an API Route
 

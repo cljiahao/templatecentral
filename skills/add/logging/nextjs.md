@@ -3,6 +3,17 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js — Structured Logging
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **What already exists in the template:**
 - `pino` in `package.json` dependencies
 - `src/lib/logger.ts` — singleton pino logger
@@ -193,7 +204,7 @@ logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
 
 ---
 
-## Verification
+## Validate
 
 ```bash
 # Tier 1

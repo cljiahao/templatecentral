@@ -337,12 +337,13 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/python/sqlalchemy.md`
 - [ ] `skills/add/database/python/sqlalchemy-iam.md`
 - [ ] `skills/add/database/python/beanie.md`
-- [ ] `skills/add/endpoint/implementation.md`
+- [ ] `skills/add/endpoint/fastapi.md`
 - [ ] `skills/add/integration/fastapi.md`
 - [ ] `skills/add/test/fastapi.md`
 - [ ] `skills/add/error-handling/fastapi.md`
 - [ ] `skills/add/logging/fastapi.md`
 - [ ] `skills/add/pagination/fastapi.md`
+- [ ] `skills/add/mutation-testing/python.md`
 - [ ] `skills/migrate/database/fastapi.md`
 - [ ] `skills/standards/code-standards/fastapi.md`
 - [ ] `skills/standards/validation-patterns/fastapi.md`
@@ -368,12 +369,13 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/typescript/nestjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nestjs-kysely.md`
 - [ ] `skills/add/database/typescript/nestjs-mongoose.md`
-- [ ] `skills/add/module/implementation.md`
+- [ ] `skills/add/endpoint/nestjs.md`
 - [ ] `skills/add/integration/nestjs.md`
 - [ ] `skills/add/test/nestjs.md`
 - [ ] `skills/add/error-handling/nestjs.md`
 - [ ] `skills/add/logging/nestjs.md`
 - [ ] `skills/add/pagination/nestjs.md`
+- [ ] `skills/add/mutation-testing/typescript.md`
 - [ ] `skills/migrate/database/nestjs.md`
 - [ ] `skills/standards/code-standards/nestjs.md`
 - [ ] `skills/standards/validation-patterns/nestjs.md`
@@ -404,8 +406,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/typescript/nextjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nextjs-kysely.md`
 - [ ] `skills/add/database/typescript/nextjs-mongoose.md`
-- [ ] `skills/add/api-route/implementation.md`
-- [ ] `skills/add/component/nextjs.md`
+- [ ] `skills/add/endpoint/nextjs.md`
 - [ ] `skills/add/feature/nextjs.md`
 - [ ] `skills/add/form/nextjs.md`
 - [ ] `skills/add/integration/nextjs.md`
@@ -436,14 +437,15 @@ Read each file in full, apply checklist above:
 - [ ] `skills/scaffold/vite-react/config-files.md`
 - [ ] `skills/scaffold/vite-react/source-files.md`
 - [ ] `skills/add/auth/vite-react.md`
-- [ ] `skills/add/component/vite-react.md`
 - [ ] `skills/add/feature/vite-react.md`
 - [ ] `skills/add/form/vite-react.md`
 - [ ] `skills/add/integration/vite-react.md`
 - [ ] `skills/add/page/vite-react.md`
 - [ ] `skills/add/test/vite-react.md`
 - [ ] `skills/add/error-handling/vite-react.md`
+- [ ] `skills/add/logging/vite-react.md`
 - [ ] `skills/add/pagination/vite-react.md`
+- [ ] `skills/add/mutation-testing/typescript.md`
 - [ ] `skills/standards/code-standards/vite-react.md`
 - [ ] `skills/standards/validation-patterns/vite-react.md`
 
@@ -476,6 +478,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/cleanup/remove-example/implementation.md`
 - [ ] `skills/cleanup/task-management/implementation.md`
 - [ ] `skills/write-skill/SKILL.md` ← authoring checklist; check it still matches CONVENTIONS.md
+- [ ] `skills/write-skill/implementation.md`
 - [ ] `skills/audit/implementation.md` ← this file; check it is still accurate
 
 **Cross-stack additional checks**:

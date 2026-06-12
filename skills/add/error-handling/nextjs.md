@@ -3,6 +3,17 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js — Error Handling
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **1. Global Error Handler (Already Present)**
 
 The template includes `src/lib/errors/handle-api-error.ts`. Enhance it to include field-level details:
@@ -242,7 +253,7 @@ export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
 }
 ```
 
-## Testing / Verification
+## Validate
 
 ```bash
 # Test API route with validation error

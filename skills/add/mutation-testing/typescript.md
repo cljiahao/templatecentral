@@ -1,6 +1,6 @@
-<!-- ref: add/mutation/typescript.md
+<!-- ref: add/mutation-testing/typescript.md
      loaded-by: add/SKILL.md
-     prereq: Stack = Next.js, NestJS, or Vite+React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack identified as Next.js, NestJS, or Vite+React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## TypeScript Stacks — Mutation Testing (StrykerJS)
 
 Add report-only mutation testing to a TypeScript project scaffolded from templateCentral. Uses StrykerJS 7.x + Vitest runner.

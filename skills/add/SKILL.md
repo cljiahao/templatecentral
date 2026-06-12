@@ -13,15 +13,14 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 | `database` | fastapi→python, nestjs/nextjs→typescript | `database/<python\|typescript>.md` |
 | `test` | fastapi, nestjs, nextjs, vite-react | `test/<stack>.md` |
 | `integration` | fastapi, nestjs, nextjs, vite-react | `integration/<stack>.md` |
-| `logging` | fastapi, nestjs, nextjs | `logging/<stack>.md` |
+| `logging` | fastapi, nestjs, nextjs, vite-react | `logging/<stack>.md` |
 | `error-handling` | fastapi, nestjs, nextjs, vite-react | `error-handling/<stack>.md` |
 | `pagination` | fastapi, nestjs, nextjs, vite-react | `pagination/<stack>.md` |
-| `component`, `page`, `feature`, `form` | nextjs, vite-react | `<capability>/<stack>.md` |
+| `page`, `feature`, `form` | nextjs, vite-react | `<capability>/<stack>.md` |
 | `ai-security` | all stacks | `ai-security/implementation.md` |
-| `mutation` | fastapi→python, nestjs/nextjs/vite-react→typescript | `mutation/<python\|typescript>.md` |
-| `endpoint` | fastapi only | `endpoint/implementation.md` |
-| `module` | nestjs only | `module/implementation.md` |
-| `api-route` | nextjs only | `api-route/implementation.md` |
+| `mutation-testing` / `mutation` (alias) | fastapi→python, nestjs/nextjs/vite-react→typescript | `mutation-testing/<python\|typescript>.md` |
+| `endpoint` / `api-route` (alias) / `module` (alias) | fastapi→`endpoint/fastapi.md`, nestjs→`endpoint/nestjs.md`, nextjs→`endpoint/nextjs.md` | see path |
+| `component` (alias) | nextjs, vite-react | `feature/<stack>.md` |
 
 **Step 2** — Run:
 `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/<path>"`

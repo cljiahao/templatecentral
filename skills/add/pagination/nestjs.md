@@ -3,6 +3,17 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### NestJS (TypeScript + Drizzle + Zod)
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **1. Pagination DTO**
 
 ```ts
@@ -231,7 +242,7 @@ export class ProjectsService {
 }
 ```
 
-## Testing / Verification
+## Validate
 
 ```bash
 pnpm start:dev

@@ -34,7 +34,9 @@ If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the
 
 ## `templatecentral:add` capabilities
 
-`auth` · `database` · `page` · `feature` · `module` · `api-route` · `endpoint` · `component` · `form` · `integration` · `test` · `logging` · `error-handling` · `pagination` · `mutation` · `ai-security`
+`auth` · `database` · `page` · `feature` · `endpoint` · `form` · `integration` · `test` · `logging` · `error-handling` · `pagination` · `mutation-testing` · `ai-security`
+
+(aliases accepted: `api-route`, `module` → endpoint; `component` → feature; `mutation` → mutation-testing)
 
 ## Skill Scoping Model
 

@@ -3,6 +3,17 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### FastAPI (Python + Pydantic + SQLAlchemy)
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 > **Prerequisites**
 > This skill assumes the FastAPI scaffold from `templatecentral:scaffold`. File paths below use
 > `src/core/` and `src/api/` matching that scaffold layout.
@@ -163,7 +174,7 @@ def list_projects(
 
 > **Async variant**: If you configured `create_async_engine` and `AsyncSession`, replace `from sqlalchemy.orm import Session` with `from sqlalchemy.ext.asyncio import AsyncSession`, change `Session` → `AsyncSession` in the dependency type, make the handler `async def`, and add `await` before each `session.execute(...)` call.
 
-## Testing / Verification
+## Validate
 
 ```bash
 # Test pagination endpoint

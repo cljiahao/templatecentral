@@ -3,6 +3,17 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Structured Logging
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **What already exists in the template:**
 - `python-json-logger` in `requirements.txt`
 - `src/core/logging.py` — full logging setup
@@ -230,7 +241,7 @@ async def cache_get(key: str):
 
 ---
 
-## Verification
+## Validate
 
 ```bash
 # Tier 1

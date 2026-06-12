@@ -191,6 +191,32 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 - NEVER skip creating `types.ts` — define interfaces before building components
 - NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)
 
+## Standalone Components
+
+Use this section when adding a component that is not tied to a specific feature module.
+
+First determine where it belongs:
+
+| Scenario | Location | Example |
+|----------|----------|---------|
+| Used by one feature only | `src/features/<name>/components/` | `ProjectCard` in `features/project` |
+| Used by 2+ features | `src/components/widgets/` | `StatusBadge` used by project + dashboard |
+| Low-level primitive | `src/components/ui/` (use shadcn CLI) | `Button`, `Input`, `Dialog` |
+| App shell | `src/components/layout/` | `Navbar`, `SiteFooter` |
+
+For low-level UI primitives, always use the shadcn CLI — never hand-install (`components.json` is set to `rsc: false` for Vite compatibility):
+
+```bash
+npx shadcn@latest add <component-name>
+```
+
+This installs into `src/components/ui/`. Do not manually create UI primitives there.
+
+Rules:
+- Don't prematurely extract — keep inline until a second consumer needs it; NEVER move to `widgets/` until used by 2+ features
+- NEVER add boolean flag props to configure variants — prefer composition with children
+- Always add to barrel `index.ts` when creating in shared folders — NEVER omit the barrel export
+
 ## After Writing Code
 
 Dispatch in order:

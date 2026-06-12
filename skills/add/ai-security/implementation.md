@@ -3,7 +3,7 @@
      prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Step 0 — Verify context
 
-Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+Look for `<!-- templateCentral:` on line 1 of `AGENTS.md`.
 
 If found → proceed to the stack-specific implementation below.
 

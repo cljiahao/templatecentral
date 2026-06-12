@@ -3,6 +3,17 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### Vite + React (TypeScript + React Query)
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **1. Pagination Hook**
 
 ```ts
@@ -180,7 +191,7 @@ export async function fetchProjects(
 }
 ```
 
-## Testing / Verification
+## Validate
 
 ```bash
 pnpm dev

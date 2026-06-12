@@ -1,6 +1,6 @@
-<!-- ref: add/endpoint/implementation.md
+<!-- ref: add/endpoint/fastapi.md
      loaded-by: add/SKILL.md
-     prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 
 # Add a FastAPI Endpoint
 

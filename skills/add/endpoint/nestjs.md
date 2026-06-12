@@ -1,8 +1,8 @@
-<!-- ref: add/module/implementation.md
+<!-- ref: add/endpoint/nestjs.md
      loaded-by: add/SKILL.md
-     prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack identified as NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 
-# Add a NestJS Module
+# Add an Endpoint (NestJS module)
 
 Guide for adding a new feature module following the controller → service → repository architecture.
 

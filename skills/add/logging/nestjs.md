@@ -3,6 +3,17 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS — Structured Logging
 
+### Step 0 — Verify context
+
+Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+
+If found → proceed to Step 1.
+
+If not found → invoke `templatecentral:migrate`. Once complete, re-check for
+the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
+
 **What already exists in the template:**
 - `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()`
 - `Logger` from `nestjs-pino` injected via DI
@@ -235,7 +246,7 @@ async get<T>(key: string): Promise<T | null> {
 
 ---
 
-## Verification
+## Validate
 
 ```bash
 # Tier 1

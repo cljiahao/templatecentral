@@ -73,9 +73,9 @@ User: scaffold a NestJS API called "service"
 
 What ships: Fastify adapter, nestjs-zod, Vitest, ESLint, Docker, AGENTS.md, `.agents → .claude` symlink (cross-vendor), AI harness (7-event hook kit: UserPromptSubmit injection+credential firewall, PreToolUse secrets read/write + git guards, PostToolUse type-check, Stop test gate, SubagentStop type-gate, SessionStart context recovery).
 
-**Add a feature module:**
+**Add an endpoint (NestJS module):**
 ```
-User: add a users module
+User: add a users endpoint
 → templatecentral:add
 ```
 
@@ -101,7 +101,7 @@ User: add a settings page
 → templatecentral:add
 ```
 
-**Add a component:**
+**Add a component (routed via feature):**
 ```
 User: add a data table component
 → templatecentral:add
