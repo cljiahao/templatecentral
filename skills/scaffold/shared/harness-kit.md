@@ -715,7 +715,7 @@ The following files require explicit human approval noted in the PR under
 
 ## Step E. Create `.claude/harness.json`
 
-**Prerequisites:** Run this step only after the verify skills (and `next-migrate` for nextjs) have been created in `.claude/skills/` — these are seeded by the stack file's step 6c, which runs between the kit's Steps D and E. Do not run Step E before step 6c.
+**Prerequisites:** Run this step only after the verify skills (and `next-migrate` for nextjs) have been created in `.claude/skills/` — these are seeded by the stack file's verify-skill step (6c for fastapi/nestjs/nextjs, 7c for vite-react), which runs between the kit's Steps D and E. Do not run Step E before that step.
 
 Compute SHA-256 hashes and write `.claude/harness.json`. CLAUDE.md is created in a later optional step — hash it conditionally.
 
@@ -727,10 +727,10 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 # CLAUDE.md is optional (Step G) — hash it only if it already exists
 [ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-# Hash the verify skill (created in the stack file's step 6c before reaching this step):
+# Hash the verify skill (created in the stack file's verify-skill step before reaching this step):
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
-# For nextjs only — also hash the migrate skill (also created in step 6c):
-sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
+# nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
+[ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
@@ -776,7 +776,7 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — append only if not already present:** Some stack files (nextjs, fastapi) embed the `## AI Harness` and `## Skills Security` sections directly in their AGENTS.md template. Before appending the shared tail fragment below, check whether `## AI Harness` already appears in the AGENTS.md just written. If it does, skip the append — the content is already there. If it does not (e.g., nestjs, vite-react, or migrate paths), append it now.
+**AGENTS.md tail — append only if not already present:** All four stack templates and both migrate templates currently embed the `## AI Harness` and `## Skills Security` sections directly, so this check normally results in a skip. Before appending the shared tail fragment below, check whether `## AI Harness` already appears in the AGENTS.md just written: if it does, skip the append; if either section is missing (e.g., a custom or trimmed template), append the fragment now. The fragment below is the canonical reference for what those sections must say.
 
 After the stack-specific AGENTS.md is written (appending the shared tail fragment if not already present), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 

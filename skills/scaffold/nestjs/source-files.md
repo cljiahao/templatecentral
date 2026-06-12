@@ -842,7 +842,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-Now execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E — includes the `nest-verify` skill hash), `.agents` symlink (Step F), AGENTS.md tail check (Step G — append the shared tail; nestjs does NOT embed it), and plugin install (Step H).
+Now execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E — includes the `nest-verify` skill hash), `.agents` symlink (Step F), AGENTS.md tail check (Step G — the `## AI Harness` and `## Skills Security` sections are already embedded above, so skip the append), and plugin install (Step H).
 
 ---
 
