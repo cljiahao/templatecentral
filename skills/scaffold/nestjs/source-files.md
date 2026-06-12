@@ -737,7 +737,7 @@ If any command fails, diagnose and fix before proceeding.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nestjs@4.0.0 -->
+<!-- templateCentral: nestjs@5.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack

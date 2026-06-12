@@ -1102,7 +1102,7 @@ ruff format --check src/  # zero formatting drift
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: fastapi@4.0.0 -->
+<!-- templateCentral: fastapi@5.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack

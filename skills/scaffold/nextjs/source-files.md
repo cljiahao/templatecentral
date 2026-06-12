@@ -1935,7 +1935,7 @@ If check fails, a generated file violates the eslint or prettier config.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nextjs@4.0.0 -->
+<!-- templateCentral: nextjs@5.0.0 -->
 # AGENTS.md — [Project Name]
 
 > STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are

@@ -26,7 +26,12 @@ FAILED=0
 # in a breaking way (a major release). Do NOT bump it every plugin release — that would make
 # every existing project falsely report "needs migration". Contrast with `templatecentral_version`
 # in harness.json, which tracks plugin semver and is checked against plugin.json separately.
-HARNESS_SCHEMA_VERSION="4.0.0"
+#
+# v5.0.0 — seeded project skills moved from flat `.claude/skills/<name>.md` to directory form
+# `.claude/skills/<name>/SKILL.md`. Flat skill files are silently ignored by Claude Code
+# (flat files only work under `.claude/commands/`). Projects seeded before v5.0.0 must run
+# `templatecentral:migrate` to convert their flat skill files to the directory layout.
+HARNESS_SCHEMA_VERSION="5.0.0"
 
 fail() { echo "FAIL: $*"; FAILED=1; }
 pass() { echo "OK:   $*"; }
@@ -571,7 +576,7 @@ check_agents_marker_not_drifted_to_semver() {
   header "AGENTS.md schema marker not drifted above HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION)"
   local drifted=""
   local line ver
-  # Match only the marker comment; ignore prose mentions of "@4.0.0 or later".
+  # Match only the marker comment; ignore prose mentions of "@4.0.0 through @4.x" etc.
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     ver=$(echo "$line" | grep -oE '@[0-9]+\.[0-9]+\.[0-9]+' | head -1 | tr -d '@')

@@ -22,11 +22,23 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 **If no marker** → skip to Phase 1 (stack detection).
 
-**If marker present, version `@4.0.0` or later** → print:
+**If marker present, version `@5.0.0` or later** → print:
 ```
-✓ This project is at templateCentral v4.0.0 or later. No migration needed.
+✓ This project is at templateCentral v5.0.0 or later. No migration needed.
 ```
 Exit.
+
+**If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:
+```
+ℹ️ This project was scaffolded with templateCentral <version>.
+
+v5.0 converts seeded project skills to directory form:
+- .claude/skills/<name>/SKILL.md  — flat <name>.md files are silently ignored by Claude Code
+
+Upgrade? (A) Yes  (B) Skip
+```
+User A → proceed to Phase 4.
+User B → print "No changes made." Exit.
 
 **If marker present, version earlier than `@4.0.0`** → skip Phases 1–3. Present:
 ```
@@ -156,7 +168,7 @@ any files.
 
 ---
 
-## Phase 4 — v4.0 Upgrade (agent, autonomous after Phase 0 gate)
+## Phase 4 — v4.0/v5.0 Upgrade (agent, autonomous after Phase 0 gate)
 
 Run only when the user chose A in Phase 0. Do not invoke for unmarked projects.
 
@@ -174,7 +186,7 @@ cp AGENTS.md AGENTS.md.bak
 Replace `AGENTS.md` with the compressed template for the detected stack. If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. For `nextjs`, write exactly:
 
 ```markdown
-<!-- templateCentral: nextjs@4.0.0 -->
+<!-- templateCentral: nextjs@5.0.0 -->
 # AGENTS.md — [Project Name]
 
 > STOP — Next.js breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
@@ -522,22 +534,35 @@ ln -s .claude .agents
 
 This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by any agent framework that resolves from `.agents/` — one source of truth, zero duplication.
 
-**Step 4g: Update the version marker**
+**Step 4g: Convert seeded skills to directory form**
 
-Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@4.0.0 -->`.
+For each flat file `.claude/skills/<name>.md` found in the project, convert it to directory form:
 
-**Step 4h: Print summary**
+```bash
+# For each flat .claude/skills/<name>.md:
+mkdir -p .claude/skills/<name>
+cp .claude/skills/<name>.md .claude/skills/<name>/SKILL.md
+rm .claude/skills/<name>.md
+```
+
+Flat skill files (`.claude/skills/<name>.md`) are silently ignored by Claude Code — skills must be directories with a `SKILL.md` entrypoint (flat files work only under `.claude/commands/`). After moving each file, recompute the SHA-256 hash of the new path and update the corresponding entry in `.claude/harness.json`: change the `path` key from `.claude/skills/<name>.md` to `.claude/skills/<name>/SKILL.md` and update the `origin_hash` to match the moved file.
+
+**Step 4h: Update the version marker**
+
+Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@5.0.0 -->`.
+
+**Step 4i: Print summary**
 
 ```
-✓ Upgraded to templateCentral v4.0.
+✓ Upgraded to templateCentral v5.0.
 
 Changes made:
-  AGENTS.md              — Compressed to indexed format; marker updated to @4.0.0
+  AGENTS.md              — Compressed to indexed format; marker updated to @5.0.0
   CLAUDE.md              — Created (@AGENTS.md one-liner)
   .claude/settings.json  — Created with PostToolUse hook
   .claude/harness.json   — Created with origin hashes
-  .claude/skills/<stack>-verify/SKILL.md
-  (nextjs only) .claude/skills/next-migrate/SKILL.md
+  .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
+  (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
 
 Commit these files together.
 ```
@@ -546,7 +571,7 @@ Commit these files together.
 
 ## Phase 5 — Harness Health Check
 
-Run when `templatecentral:migrate` is invoked on a project that already has `<!-- templateCentral: <stack>@4.0.0 -->` on line 1 (i.e., Phase 0 reports "no migration needed") **and** `.claude/harness.json` exists.
+Run when `templatecentral:migrate` is invoked on a project that already has `<!-- templateCentral: <stack>@5.0.0 -->` on line 1 (i.e., Phase 0 reports "no migration needed") **and** `.claude/harness.json` exists.
 
 This phase checks whether seeded files have drifted from their recorded origin hashes. It never auto-repairs — it reports only.
 
@@ -571,7 +596,7 @@ Compare `current_hash` to `origin_hash`. Classify each file:
 **Step 5c: Report**
 
 ```
-Harness health check — templateCentral v4.0.0 / <stack>
+Harness health check — templateCentral v5.0.0 / <stack>
 Seeded: <seeded_at>
 
   AGENTS.md              UNCHANGED

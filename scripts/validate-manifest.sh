@@ -347,19 +347,25 @@ check_doc_version_stamps() {
 
 check_repo_agents_marker_not_semver() {
   # The repo AGENTS.md line-1 marker (`<!-- templateCentral: plugin@X.Y.Z -->`) is a harness schema
-  # floor, not plugin semver — it intentionally stays put across releases. Guard against a marker
-  # that was accidentally "synced" up to the plugin version.
-  header "Repo AGENTS.md marker not drifted to plugin semver"
-  local root pv marker mv
-  root="$(_repo_root)"; pv="$(_plugin_version)"; marker="$root/AGENTS.md"
-  [[ -f "$marker" && -n "$pv" ]] || { pass "AGENTS.md or version absent — skipping"; return; }
+  # floor, not plugin semver — it must equal HARNESS_SCHEMA_VERSION in scripts/lint-skills.sh.
+  # Guard: the marker must equal the schema floor. A marker below the floor means a missed bump;
+  # a marker above the floor means unintentional drift. The plugin semver is NOT the reference —
+  # using plugin semver would false-fail when floor == plugin semver (e.g. both at 5.0.0 on release).
+  header "Repo AGENTS.md marker equals HARNESS_SCHEMA_VERSION (schema floor)"
+  local root marker mv lint_sh floor
+  root="$(_repo_root)"; marker="$root/AGENTS.md"
+  lint_sh="$root/scripts/lint-skills.sh"
+  [[ -f "$marker" && -f "$lint_sh" ]] || { pass "AGENTS.md or lint-skills.sh absent — skipping"; return; }
+  # Source HARNESS_SCHEMA_VERSION from lint-skills.sh rather than hardcoding it here.
+  floor=$(grep -oE 'HARNESS_SCHEMA_VERSION="[0-9]+\.[0-9]+\.[0-9]+"' "$lint_sh" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+  [[ -n "$floor" ]] || { pass "HARNESS_SCHEMA_VERSION not found in lint-skills.sh — skipping"; return; }
   mv=$(head -1 "$marker" | grep -oE '@[0-9]+\.[0-9]+\.[0-9]+' | head -1 | tr -d '@')
   if [[ -z "$mv" ]]; then
     pass "No versioned marker on AGENTS.md line 1 — skipping"
-  elif [[ "$mv" == "$pv" ]]; then
-    fail "Repo AGENTS.md marker (@$mv) equals plugin semver — this marker is a schema floor, not the plugin version; it should not track releases"
+  elif [[ "$mv" == "$floor" ]]; then
+    pass "AGENTS.md marker (@$mv) equals HARNESS_SCHEMA_VERSION ($floor)"
   else
-    pass "AGENTS.md marker (@$mv) is a schema floor, distinct from plugin semver ($pv)"
+    fail "Repo AGENTS.md marker (@$mv) does not equal HARNESS_SCHEMA_VERSION ($floor) — update the marker or bump the schema floor in scripts/lint-skills.sh"
   fi
 }
 

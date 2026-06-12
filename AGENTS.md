@@ -1,4 +1,4 @@
-<!-- templateCentral: plugin@4.0.0 -->
+<!-- templateCentral: plugin@5.0.0 -->
 # AGENTS.md — templateCentral
 
 templateCentral is a Claude Code plugin — a skill library for scaffolding production-ready apps. This is NOT an application itself.
