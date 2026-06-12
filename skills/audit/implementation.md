@@ -337,6 +337,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/error-handling/nextjs.md`
 - [ ] `skills/add/logging/nextjs.md`
 - [ ] `skills/add/pagination/nextjs.md`
+- [ ] `skills/add/mutation-testing/typescript.md`
 - [ ] `skills/migrate/database/nextjs.md`
 - [ ] `skills/standards/code-standards/nextjs.md`
 - [ ] `skills/standards/validation-patterns/nextjs.md`

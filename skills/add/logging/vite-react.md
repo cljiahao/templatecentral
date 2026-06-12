@@ -29,6 +29,8 @@ Add `logEvent` alongside the existing `logError`. Do not replace `logError` — 
 ```ts
 // src/lib/errors/error-log-handler.ts  (extend existing file — add below logError)
 import { APIError } from './api-error';
+// added in Step 2 — create breadcrumbs.ts before running the type-check
+import { addBreadcrumb } from '@/lib/logging/breadcrumbs';
 
 // --- existing logError stays unchanged ---
 
