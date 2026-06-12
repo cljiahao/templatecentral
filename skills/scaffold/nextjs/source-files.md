@@ -2362,24 +2362,7 @@ Run `pnpm check && pnpm test` and report any failures.
 - If `pnpm test` fails: investigate root cause — do not skip or disable tests.
 ```
 
-### 6d. Create `.claude/hooks/verify.sh`
-
-Create `.claude/hooks/verify.sh`:
-
-```bash
-#!/bin/bash
-# Verification gate — run after scaffold is complete
-set -e
-echo "Running verification gate..."
-pnpm build
-pnpm check
-pnpm test
-echo "All checks passed."
-```
-
-Run `chmod +x .claude/hooks/verify.sh`.
-
-### 6e. Seed `docs/CONSTITUTION.md`
+### 6d. Seed `docs/CONSTITUTION.md`
 
 Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
 It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -2441,7 +2424,7 @@ The following files require explicit human approval noted in the PR under
 - Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
 ```
 
-### 6f. Create `.claude/harness.json`
+### 6e. Create `.claude/harness.json`
 
 After all harness files are written, compute SHA-256 hashes and write `.claude/harness.json`:
 
@@ -2452,7 +2435,6 @@ sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
 for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-sha256_verify_sh=$(shasum -a 256 .claude/hooks/verify.sh | cut -d' ' -f1)
 sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 sha256_verify=$(shasum -a 256 .claude/skills/next-verify/SKILL.md | cut -d' ' -f1)
 ```
@@ -2468,7 +2450,6 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
     "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/hooks/verify.sh": { "origin_hash": "<sha256_verify_sh>", "path": ".claude/hooks/verify.sh" },
     ".claude/skills/next-migrate/SKILL.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate/SKILL.md" },
     ".claude/skills/next-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/next-verify/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
@@ -2483,7 +2464,7 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
 }
 ```
 
-### 6g. Create `.agents` symlink
+### 6f. Create `.agents` symlink
 
 Create a `.agents` symlink pointing to `.claude` so the project works with any agent framework that resolves from `.agents/`:
 
@@ -2580,10 +2561,3 @@ The `templatecentral:cleanup` skill handles both steps automatically.
 - Remove example code after user confirms the project runs — use the `templatecentral:cleanup` skill (handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`)
 
 ---
-
-## Changelog
-
-### 1.0.0
-- Initial plugin release — hybrid rules + verbatim scaffold approach
-- Replaces MCP-based `scaffold_project` file copy
-- `templatecentral:review` (update) replaces lockfile for dependency freshness
