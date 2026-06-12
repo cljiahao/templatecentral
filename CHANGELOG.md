@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.0.1] — 2026-06-12
+
+### Fixed
+
+- **`.agents` symlink must never be committed** — all four scaffold `.gitignore` templates now list `.agents` (with the why), and the harness kit Step F + migrate Step 4f-2 instruct verifying/adding the entry. A git-tracked symlink breaks Windows CI build agents (e.g. "Unable to load symbolic/hard linked file" on Azure DevOps hosted runners); the symlink is per-machine convenience and should be recreated locally. Lesson adopted from the appCentral reference harness, which documented the failure in production CI.
+
+---
+
 ## [5.0.0] — 2026-06-12
 
 Major release. Includes the changes previously staged (unpublished) as 4.6.0.

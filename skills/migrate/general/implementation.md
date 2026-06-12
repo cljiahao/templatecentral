@@ -374,7 +374,7 @@ Write `.claude/harness.json` (include only files that were actually created):
 
 ```json
 {
-  "templatecentral_version": "5.0.0",
+  "templatecentral_version": "5.0.1",
   "stack": "<detected-stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -410,6 +410,8 @@ ln -s .claude .agents
 ```
 
 This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by any agent framework that resolves from `.agents/` — one source of truth, zero duplication.
+
+**Never commit the symlink** — add `.agents` to the project's `.gitignore` (with a note that it is recreated per machine). A git-tracked symlink breaks Windows CI build agents (e.g. Azure DevOps hosted runners).
 
 **Step 4g: Convert seeded skills to directory form**
 

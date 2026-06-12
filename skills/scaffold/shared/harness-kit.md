@@ -736,7 +736,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' '
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "5.0.0",
+  "templatecentral_version": "5.0.1",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -771,6 +771,8 @@ ln -s .claude .agents
 ```
 
 This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by Claude Code (`.claude/`) and any other tool that looks in `.agents/` — one source of truth, zero duplication.
+
+**Never commit the symlink** — the scaffold's `.gitignore` already lists `.agents`; verify the entry exists (add it if migrating an older project). A git-tracked symlink breaks Windows CI build agents (e.g. "Unable to load symbolic/hard linked file" on Azure DevOps hosted runners). The symlink is per-machine convenience; recreate it locally (or via a postinstall script) instead of tracking it.
 
 ---
 

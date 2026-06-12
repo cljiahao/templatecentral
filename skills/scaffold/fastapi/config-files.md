@@ -375,6 +375,10 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+# Local agent symlink (.agents -> .claude) — NEVER track it: a git-tracked
+# symlink breaks Windows CI build agents (e.g. "Unable to load symbolic/hard
+# linked file" on Azure DevOps hosted runners). Recreate it per machine.
+.agents
 ```
 
 ### `.env.example`
