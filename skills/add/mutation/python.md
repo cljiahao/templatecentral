@@ -87,5 +87,5 @@ mutmut results                        # prints kill-rate summary
 ### After Writing Code
 
 Dispatch in order:
-1. `templatecentral:build` — confirm no errors after config addition
-2. `templatecentral:review` — check config correctness
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — confirm no errors after config addition
+2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check config correctness

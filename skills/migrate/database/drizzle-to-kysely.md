@@ -117,5 +117,5 @@ Build must succeed with zero TypeScript errors. NestJS also runs `pnpm test` —
 ## After Writing Code
 
 Dispatch in order:
-1. `templatecentral:build` — validate compilation
-2. `templatecentral:review` — check code standards
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — validate compilation
+2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check code standards

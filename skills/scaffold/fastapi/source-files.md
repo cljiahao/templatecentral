@@ -1643,10 +1643,10 @@ If yes — create them in `.claude/skills/` and add a row to the Skills table in
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `templatecentral:build` — verify the scaffold compiles clean and the API starts
-2. `templatecentral:test` — verify all scaffold tests pass (`pytest test/ -v`)
-3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
-4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — verify the scaffold compiles clean and the API starts
+2. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — verify all scaffold tests pass (`pytest test/ -v`)
+3. the review utility (update operation) — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — freshen any deps that have newer compatible versions
+4. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 
@@ -1686,7 +1686,7 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 9. Remove example code (optional)
 
-Once the project is verified, use the `templatecentral:cleanup` skill.
+Once the project is verified, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
 
 FastAPI-specific steps (the skill covers these):
 - Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`

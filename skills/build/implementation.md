@@ -73,7 +73,7 @@ Do not attempt to run any build command.
 
 ## Callers
 
-This skill is dispatched by: `templatecentral:scaffold`, `templatecentral:review` (update), `templatecentral:add` (feature), `templatecentral:add` (component), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
+This utility is dispatched by: `templatecentral:scaffold`, the review utility (update mode), `templatecentral:add` (feature), `templatecentral:add` (component), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
 
 ## Changelog
 ### 1.0.0

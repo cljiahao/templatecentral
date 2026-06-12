@@ -1262,10 +1262,10 @@ If yes — create them in `.claude/skills/` and add a row to the Skills table in
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `templatecentral:build` — verify the scaffold compiles clean (`pnpm build`)
-2. `templatecentral:test` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
-3. `templatecentral:review` (update operation) — freshen any deps that have newer compatible versions
-4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — verify the scaffold compiles clean (`pnpm build`)
+2. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — verify all scaffold tests pass (`pnpm test && pnpm test:e2e`)
+3. the review utility (update operation) — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — freshen any deps that have newer compatible versions
+4. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -1305,9 +1305,9 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 8. Remove Example Code (Optional)
 
-Once the project is verified and the user confirms it runs, use the `templatecentral:cleanup` skill.
+Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
 
-NestJS-specific steps (the skill covers these):
+NestJS-specific steps (the utility covers these):
 - Delete `src/modules/example/` directory
 - Remove `ExampleModule` import and reference from `src/modules/index.ts`
 - Remove `ExampleModule` from `imports` array in `src/app.module.ts`

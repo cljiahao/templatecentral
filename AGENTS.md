@@ -24,12 +24,12 @@ If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the
 | Add capability to existing project | `templatecentral:add` |
 | Adopt an existing project / retrofit the harness into a project built without templateCentral | `templatecentral:migrate` |
 | DB migration or framework upgrade | `templatecentral:migrate` |
-| Verify build compiles | `templatecentral:build` |
-| Write and run tests | `templatecentral:test` |
-| Code review | `templatecentral:review` |
+| Verify build compiles | build utility (`cat skills/build/SKILL.md` via plugin root) |
+| Write and run tests | test utility (`cat skills/test/SKILL.md` via plugin root) |
+| Code review | review utility (`cat skills/review/SKILL.md` via plugin root) |
 | Standards drift check / validation patterns | `templatecentral:standards` |
 | Full ecosystem + accuracy audit | `templatecentral:audit` |
-| Remove example code / task planning | `templatecentral:cleanup` |
+| Remove example code / task planning | cleanup utility (`cat skills/cleanup/SKILL.md` via plugin root) |
 | Write a new templateCentral skill | `templatecentral:write-skill` |
 
 ## `templatecentral:add` capabilities

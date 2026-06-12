@@ -380,8 +380,8 @@ Regardless of capability or environment, **never**:
 ## After Writing Code
 
 Dispatch in order:
-1. `templatecentral:build` — validate the project still compiles
-2. `templatecentral:review` — check code standards and security patterns
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — validate the project still compiles
+2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check code standards and security patterns
 
 ## Responsible AI Checklist
 

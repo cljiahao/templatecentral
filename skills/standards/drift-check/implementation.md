@@ -91,7 +91,7 @@ After Step 5 (or after Step 4 if user declined Step 5), ask:
 
 **If user accepts:**
 
-- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running `templatecentral:review` (update operation) to patch.
+- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running the review utility (update operation — `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"`) to patch.
 - **Python projects**: if `pip-audit` is available (`pip-audit --version` returns without error), run `pip-audit --requirement requirements.txt` and report findings; if not installed, add "pip-audit not installed — security advisory check skipped" to report.
 
 If zero vulnerabilities: report "No known vulnerabilities found."

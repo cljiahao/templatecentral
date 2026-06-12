@@ -93,23 +93,41 @@ check_no_hardcoded_secrets() {
 }
 
 check_no_ghost_agent_names() {
-  # templateCentral v4.0 renamed agent dispatch references to registered skill names.
-  # The old shared-*-agent names no longer exist and must not appear in skill files.
-  # Correct names: templatecentral:build, templatecentral:review, templatecentral:test,
-  # templatecentral:cleanup. Stack-specific scaffold names (fastapi-scaffold etc.) were
-  # unified as templatecentral:scaffold.
-  # Also banned: templatecentral:shared-migrate (→ templatecentral:migrate),
-  # shared-migrate-database (→ templatecentral:migrate),
-  # templatecentral:shared-audit (→ templatecentral:audit),
-  # shared-code-standards (→ templatecentral:standards),
-  # stack-specific code-standards skill names (→ templatecentral:standards),
-  # nextjs-add-auth (→ templatecentral:add (auth)).
+  # Ghost agent / skill names that must never appear as invocations in skill files.
+  #
+  # OLD shared-*-agent names (pre-v4.0):
+  #   shared-(build|review|test|update|cleanup)-agent → de-registered; use cat-path contract
+  #   fastapi-scaffold / nestjs-scaffold / nextjs-scaffold / vite-react-scaffold → templatecentral:scaffold
+  #   templatecentral:shared-migrate → templatecentral:migrate
+  #   shared-migrate-database → templatecentral:migrate
+  #   templatecentral:shared-audit → templatecentral:audit
+  #   shared-code-standards / <stack>-code-standards → templatecentral:standards
+  #   nextjs-add-auth → templatecentral:add (auth)
+  #
+  # DE-REGISTERED utility names (v5.0 cat-path sweep):
+  #   templatecentral:build / templatecentral:test / templatecentral:review / templatecentral:cleanup
+  #   are NOT registered skills — their SKILL.md files have no `name:` frontmatter and cannot be
+  #   invoked as skills. The correct form is: cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/<name>/SKILL.md"
+  #   Use compact table form: `<name> utility (cat skills/<name>/SKILL.md via plugin root)`
+  #
+  # Still LEGITIMATE: templatecentral:scaffold, :add, :migrate, :standards, :audit, :write-skill
+  # (these are registered skills with `name:` frontmatter and resolve correctly).
+  #
+  # Exclusions:
+  #   audit/implementation.md — documents forbidden names in its own checklist items
+  #   CONVENTIONS.md — may explain naming history
+  #   This script itself (lint-skills.sh) — names appear only as banned-pattern strings
   header "Ghost agent / skill names"
   local matches
-  matches=$(grep -rEn '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  matches=$(grep -rEn \
+    '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`|templatecentral:(build|test|review|cleanup)' \
+    "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'audit/implementation' \
+    | grep -v 'CONVENTIONS\.md' \
+    || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
-    fail "Ghost agent/skill name — use templatecentral:build, :review, :test, :cleanup, :scaffold, :migrate, :audit, or :standards"
+    fail "Ghost agent/skill name — templatecentral:(build|test|review|cleanup) are de-registered utilities; load them via: cat \"\$HOME/.claude/plugins/marketplaces/templatecentral/skills/<name>/SKILL.md\". Registered skills (invoke normally): templatecentral:scaffold, :add, :migrate, :standards, :audit, :write-skill"
   else
     pass "No ghost agent/skill names"
   fi

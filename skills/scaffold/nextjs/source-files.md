@@ -1552,7 +1552,8 @@ export default function DashboardPage() {
     <div className="max-w-site mx-auto w-full px-6 py-12">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
-        Example feature — remove with the <code>templatecentral:cleanup</code> skill after
+        Example feature — remove with the cleanup utility (de-registered; load via: cat
+        &quot;$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md&quot;) after
         confirming the scaffold works.
       </p>
       <div className="mt-8">
@@ -2478,10 +2479,10 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 After AGENTS.md is written, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. `templatecentral:build` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
-2. `templatecentral:test` — verify all scaffold tests pass (`pnpm test`)
-3. `templatecentral:review` (update operation) — freshen all dependencies to latest compatible versions
-4. `templatecentral:review` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — verify the scaffold compiles clean (`pnpm build && pnpm check`)
+2. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — verify all scaffold tests pass (`pnpm test`)
+3. the review utility (update operation) — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — freshen all dependencies to latest compatible versions
+4. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip all three if the user confirms.
 
@@ -2541,13 +2542,13 @@ For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm`
 
 ### 9. Remove example code (optional)
 
-Once the project is verified and the user confirms it runs, use the `templatecentral:cleanup` skill.
+Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
 
-Next.js-specific steps (the skill covers these):
+Next.js-specific steps (the utility covers these):
 - Delete `src/features/example/` directory
 - Remove `ExampleList` import from `src/app/dashboard/(overview)/page.tsx`
 
-The `templatecentral:cleanup` skill handles both steps automatically.
+The cleanup utility handles both steps automatically.
 
 ---
 
@@ -2558,6 +2559,6 @@ The `templatecentral:cleanup` skill handles both steps automatically.
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time
-- Remove example code after user confirms the project runs — use the `templatecentral:cleanup` skill (handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`)
+- Remove example code after user confirms the project runs — use the cleanup utility (`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`) — handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`
 
 ---
