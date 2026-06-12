@@ -280,13 +280,14 @@ check_no_mypy_in_postToolUse() {
   local postToolUse_files
   postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   local mypy_in_postToolUse=""
-  for file in $postToolUse_files; do
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
     if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -q 'mypy'; then
       mypy_in_postToolUse="$mypy_in_postToolUse\n$file"
     fi
-  done
+  done <<< "$postToolUse_files"
   if [[ -n "$mypy_in_postToolUse" ]]; then
-    echo -e "$mypy_in_postToolUse"
+    printf '%b\n' "$mypy_in_postToolUse"
     fail "mypy in PostToolUse — use pyright instead (2-5x faster, community standard as of May 2026)"
   else
     pass "No mypy in PostToolUse hook"
@@ -397,14 +398,15 @@ check_no_postToolUse_full_test_suite() {
   local postToolUse_files
   postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
   local test_in_postToolUse=""
-  for file in $postToolUse_files; do
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
     # Find lines with pnpm test or pytest inside a PostToolUse context
     if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -qE '"(pnpm test|pytest|npm test|yarn test)'; then
       test_in_postToolUse="$test_in_postToolUse\n$file"
     fi
-  done
+  done <<< "$postToolUse_files"
   if [[ -n "$test_in_postToolUse" ]]; then
-    echo -e "$test_in_postToolUse"
+    printf '%b\n' "$test_in_postToolUse"
     fail "Full test suite in PostToolUse — use Stop hook for tests; PostToolUse should run tsc --noEmit only"
   else
     pass "No full test suite in PostToolUse hook"
@@ -477,6 +479,7 @@ check_seeded_skills_scope_tools() {
     pass "No seeded *-verify/*-migrate skills found"
     return
   fi
+  # shellcheck disable=SC2086  # word-splitting is intentional: $files is newline-separated paths
   bad=$(awk '
     /^name: [a-z][a-z-]*-(verify|migrate)$/ { inblock=1; nm=$2; tools=0; ln=FNR; next }
     inblock && /^allowed-tools:[[:space:]]*Bash\(/ { tools=1 }

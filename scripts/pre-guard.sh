@@ -3,9 +3,12 @@
 # Skills, specs, and all other project files are unrestricted.
 
 INPUT=$(cat)
-FILE=$(echo "$INPUT" | jq -r '.file_path // .path // empty' 2>/dev/null)
+FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 [[ -z "$FILE" ]] && exit 0
+
+base="${FILE##*/}"
+if [[ "$base" == ".env.example" ]]; then exit 0; fi
 
 if [[ "$FILE" =~ (^|/)\.env(\.[^/]*)?$ ]] || \
    [[ "$FILE" =~ (^|/)\.github/workflows/ ]] || \

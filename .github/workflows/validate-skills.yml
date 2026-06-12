@@ -135,3 +135,13 @@ jobs:
             if (missing.length) { console.error('Missing fields:', missing.join(', ')); process.exit(1); }
             console.log('plugin.json extended fields OK');
           "
+
+  shell-lint:
+    name: Shellcheck repo scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: shellcheck + bash -n
+        run: |
+          shellcheck scripts/*.sh
+          for f in scripts/*.sh; do bash -n "$f"; done
