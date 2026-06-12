@@ -367,7 +367,7 @@ sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill:
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
 # For nextjs only, also hash next-migrate:
-sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
+[ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 ```
 
 Write `.claude/harness.json` (include only files that were actually created):
