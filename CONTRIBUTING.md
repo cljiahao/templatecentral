@@ -59,6 +59,17 @@ fix(fastapi): correct pytest async config in scaffold
 docs(readme): update skills table
 ```
 
+## Scheduled loops
+
+Two monthly GitHub Actions workflows run automatically on the 1st of each month. Both require the `ANTHROPIC_API_KEY` repository secret — if the secret is absent the `claude-code-action` step fails immediately. Either workflow can also be triggered manually via **Actions → Run workflow**.
+
+| Workflow | Schedule | What it does |
+|---|---|---|
+| `ecosystem-refresh.yml` | 02:00 UTC on the 1st | Runs a full web scan (Step 0b of `skills/audit/implementation.md`), overwrites `.claude/audit-ecosystem-research.md`, and opens a PR summarising new versions, advisories, harness-consensus findings, and any result that invalidates a current skill. |
+| `scaffold-verify.yml` | 03:00 UTC on the 1st | Scaffolds each stack (`fastapi`, `nestjs`, `nextjs`, `vite-react`) into a clean directory, runs all quality gates exactly as documented, and fails if any template file is missing or any gate does not pass. |
+
+**Handling scaffold-verify failures:** when any matrix leg fails the workflow automatically opens a GitHub issue titled `scaffold-verify: <stack> failed <date>`. Triage these issues the same way as `accuracy_fix` reports — identify the broken template section and file named in the agent output, then open a fix PR.
+
 ## Questions
 
 Open a [Discussion](https://github.com/cljiahao/templatecentral/discussions) for anything that doesn't fit an issue.
