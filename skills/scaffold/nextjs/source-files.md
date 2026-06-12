@@ -1995,7 +1995,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -2013,13 +2013,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 
 ### 6b. Seed the agent harness (shared kit)
 
-Load the shared harness kit and execute ALL of its steps using the **nextjs** row of its delta table:
+Load the shared harness kit using the **nextjs** row of its delta table:
 
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
 ```
 
-Then continue with the stack-specific steps below (verify skills including next-migrate, additional project skills).
+Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
 
 
 
@@ -2059,7 +2059,7 @@ Run `pnpm check && pnpm test` and report any failures.
 - If `pnpm test` fails: investigate root cause — do not skip or disable tests.
 ```
 
-The shared harness kit (Step 6b) covers CONSTITUTION.md, harness.json, symlink, post-scaffold workflow, and plugin install — execute those steps from the kit using the **nextjs** row. For `harness.json`, nextjs includes both `next-migrate` and `next-verify` skills.
+Now execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), `.agents` symlink (Step F), AGENTS.md tail check (Step G — the tail is already embedded above, so skip the append), and plugin install (Step H).
 
 ### 6d. Seed additional project skills
 

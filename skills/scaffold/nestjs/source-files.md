@@ -786,7 +786,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -804,13 +804,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 
 ### 6b. Seed the agent harness (shared kit)
 
-Load the shared harness kit and execute ALL of its steps using the **nestjs** row of its delta table:
+Load the shared harness kit using the **nestjs** row of its delta table:
 
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
 ```
 
-Then continue with the stack-specific steps below (verify skill, additional project skills).
+Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
 
 ### 6c. Create project skill files (`.claude/skills/`)
 
@@ -842,7 +842,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-The shared harness kit (Step 6b) covers the post-scaffold workflow and plugin install steps — execute those steps from the kit using the **nestjs** row.
+Now execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E — includes the `nest-verify` skill hash), `.agents` symlink (Step F), AGENTS.md tail check (Step G — append the shared tail; nestjs does NOT embed it), and plugin install (Step H).
 
 ---
 

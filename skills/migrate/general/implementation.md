@@ -245,13 +245,17 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
-
-After this paragraph, append the shared AGENTS.md tail (incl. the `## Skills Security` section) from `skills/scaffold/shared/harness-kit.md`.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
+
+## Skills Security
+- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
+- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
+- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -261,13 +265,17 @@ For other stacks (fastapi, nestjs, vite-react): preserve all existing content in
 
 ```markdown
 ## AI Harness
-PreToolUse: two guards — (1) blocks secrets and CI pipeline files (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files, `credentials.json`/`.netrc`; (2) blocks `--no-verify` in Bash commands. UserPromptSubmit: prompt injection firewall. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
-
-After this paragraph, append the shared AGENTS.md tail (incl. the `## Skills Security` section) from `skills/scaffold/shared/harness-kit.md`.
-PostToolUse: incremental type-check after every edit — feedback only, never blocks.
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
+PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
+
+## Skills Security
+- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
+- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
+- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 ```
 
 **Step 4c: Create `CLAUDE.md`**
@@ -316,6 +324,7 @@ Template for TypeScript stacks (replace `<stack>` and `<command>`):
 ---
 name: <stack>-verify
 description: Run typecheck, lint, and tests for this project in one pass
+allowed-tools: Bash(pnpm *)
 ---
 
 Run all quality checks in sequence:
@@ -335,7 +344,7 @@ description: Run Drizzle push/migrate for this project with a safety gate.
 allowed-tools: Bash(pnpm *)
 ---
 
-Check that `src/lib/db/` exists before running — database must be wired up first (`templatecentral:add (database)`).
+Check that `src/integrations/database/` exists before running — database must be wired up first (`templatecentral:add (database)`).
 
 - `pnpm db:push` — dev only, no migration files generated (schema overwrite)
 - `pnpm db:migrate` — production-safe, generates migration files

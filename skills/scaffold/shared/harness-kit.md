@@ -13,9 +13,9 @@ This file is the single source of truth for the Claude Code agent harness seeded
 | Stack | JSON-parsing runtime | Typecheck feedback cmd | Stop-checks test cmd | Verify-skill name(s) | Quality-gate line in CONSTITUTION §6 |
 |-------|----------------------|------------------------|----------------------|----------------------|---------------------------------------|
 | **fastapi** | `python3` | `python -m pyright src/ 2>&1 \| tail -5` | `python -m pytest test/ -q` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
-| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `nest-verify` | `pnpm check` / `python -m pytest` |
-| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `next-verify` + `next-migrate` | `pnpm check` / `python -m pytest` |
-| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `vite-verify` | `pnpm check` / `python -m pytest` |
+| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `nest-verify` | `pnpm check` |
+| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `next-verify` + `next-migrate` | `pnpm check` |
+| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `vite-verify` | `pnpm check` |
 
 **Additional per-stack notes:**
 - `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.js` for all TS stacks.
@@ -715,6 +715,8 @@ The following files require explicit human approval noted in the PR under
 
 ## Step E. Create `.claude/harness.json`
 
+**Prerequisites:** Run this step only after the verify skills (and `next-migrate` for nextjs) have been created in `.claude/skills/` — these are seeded by the stack file's step 6c, which runs between the kit's Steps D and E. Do not run Step E before step 6c.
+
 Compute SHA-256 hashes and write `.claude/harness.json`. CLAUDE.md is created in a later optional step — hash it conditionally.
 
 ```bash
@@ -725,8 +727,10 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 # CLAUDE.md is optional (Step G) — hash it only if it already exists
 [ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-# Hash each verify skill (and next-migrate if nextjs):
+# Hash the verify skill (created in the stack file's step 6c before reaching this step):
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
+# For nextjs only — also hash the migrate skill (also created in step 6c):
+sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
@@ -772,7 +776,9 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-After the stack-specific AGENTS.md is written (append the shared tail fragment below), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+**AGENTS.md tail — append only if not already present:** Some stack files (nextjs, fastapi) embed the `## AI Harness` and `## Skills Security` sections directly in their AGENTS.md template. Before appending the shared tail fragment below, check whether `## AI Harness` already appears in the AGENTS.md just written. If it does, skip the append — the content is already there. If it does not (e.g., nestjs, vite-react, or migrate paths), append it now.
+
+After the stack-specific AGENTS.md is written (appending the shared tail fragment if not already present), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
 1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — verify all scaffold tests pass
@@ -807,9 +813,9 @@ claude plugin marketplace add obra/superpowers
 
 ```markdown
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
-PostToolUse: [see delta table typecheck cmd] after every Edit/Write. Feedback-only.
+PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.

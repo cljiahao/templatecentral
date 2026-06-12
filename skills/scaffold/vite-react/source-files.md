@@ -2127,7 +2127,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
 
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -2145,13 +2145,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 
 ### 7b. Seed the agent harness (shared kit)
 
-Load the shared harness kit and execute ALL of its steps using the **vite-react** row of its delta table:
+Load the shared harness kit using the **vite-react** row of its delta table:
 
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
 ```
 
-Then continue with the stack-specific steps below (verify skill, additional project skills).
+Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 7c below to create the verify skill. After step 7c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
 
 ### 7c. Create project skill files (`.claude/skills/`)
 
@@ -2175,7 +2175,7 @@ pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test --run
 Report failures with the exact error output. Fix before proceeding.
 ````
 
-The shared harness kit (Step 7b) covers CONSTITUTION.md, harness.json, and symlink steps — execute those from the kit using the **vite-react** row.
+CONSTITUTION.md was created in kit Step D. Do not run kit Step E yet — the verify skill below must exist first.
 
 ### 7d. Seed additional project skills
 
@@ -2185,7 +2185,7 @@ Ask: "Do you have any repeated workflows that should be captured as project skil
 
 If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-The shared harness kit (Step 7b) covers the post-scaffold workflow and plugin install steps — execute those steps from the kit using the **vite-react** row.
+Now execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E — includes the `vite-verify` skill hash), `.agents` symlink (Step F), AGENTS.md tail check (Step G — append the shared tail; vite-react does NOT embed it), and plugin install (Step H).
 
 ---
 
