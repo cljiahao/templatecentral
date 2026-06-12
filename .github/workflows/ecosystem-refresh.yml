@@ -15,9 +15,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Check Anthropic credentials
+        id: creds
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Anthropic credentials configured - skipping this loop. Add the ANTHROPIC_API_KEY secret (API) or CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token', Claude subscription) to enable it."
+          fi
       - uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251  # v1
+        if: steps.creds.outputs.ok == 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--max-turns 60 --allowedTools WebSearch,WebFetch,Read,Glob,Grep,Write,Edit,Bash(git:*),Bash(gh:*)"
           prompt: |
             Execute Step 0b of skills/audit/implementation.md (full web scan, ALL listed

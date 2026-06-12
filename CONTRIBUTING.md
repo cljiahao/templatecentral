@@ -61,7 +61,7 @@ docs(readme): update skills table
 
 ## Scheduled loops
 
-Two monthly GitHub Actions workflows run automatically on the 1st of each month. Both require the `ANTHROPIC_API_KEY` repository secret — if the secret is absent the `claude-code-action` step fails immediately. Either workflow can also be triggered manually via **Actions → Run workflow**.
+Two monthly GitHub Actions workflows run automatically on the 1st of each month. Both require Anthropic credentials: either the `ANTHROPIC_API_KEY` repository secret (API) or `CLAUDE_CODE_OAUTH_TOKEN` (Claude subscription — generate with `claude setup-token`). If neither secret is configured, scheduled runs **skip gracefully** with a notice instead of failing. Either workflow can also be triggered manually via **Actions → Run workflow**.
 
 | Workflow | Schedule | What it does |
 |---|---|---|
