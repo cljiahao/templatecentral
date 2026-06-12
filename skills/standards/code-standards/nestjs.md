@@ -106,7 +106,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Backend Testing (mandatory)
 
-Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `add-module` / `add-test`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
+Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
 
 ### Security (NestJS)
 

@@ -17,14 +17,14 @@ Major release. Includes the changes previously staged (unpublished) as 4.6.0.
 ### BREAKING
 
 - **Add-capability consolidation**: `endpoint`/`api-route`/`module` merged into `endpoint` (per-stack files); `component` folded into `feature`; `mutation` renamed `mutation-testing`. Aliases for all old names remain in `add/SKILL.md` routing — existing invocations continue to work.
-- **Utility skills (build/test/review/cleanup) are now cat-path only**: `templatecentral:build`, `templatecentral:test`, `templatecentral:review`, `templatecentral:cleanup` no longer resolve as registered skills — invoke exclusively via the cat-path contract (e.g. `templatecentral:build`). All references swept across skill files.
+- **Utility skills (build/test/review/cleanup) are now cat-path only**: `templatecentral:build`, `templatecentral:test`, `templatecentral:review`, `templatecentral:cleanup` no longer resolve as registered skills — the OLD form (registered skill invocation) is banned; use the cat-path contract instead: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/implementation.md"`. All references swept across skill files.
 - **Harness schema floor bumped 4.0.0 → 5.0.0**: AGENTS.md markers and `templatecentral:migrate` now target 5.0.0. `templatecentral:migrate` upgrades 4.x projects and converts flat seeded skills (`<name>.md`) to `<name>/SKILL.md` directory form.
 
 ### Added
 
 - **Loop engineering**: scheduled `ecosystem-refresh` and `scaffold-verify` GitHub Actions loops; loop-engineering research topic added as audit Step 0b to surface harness-engineering practice from community sources.
 - **`add (logging)` for Vite+React**: logging capability extended to the fourth stack (was FastAPI/NestJS/Next.js only).
-- **Lint checks C1–C4 folded in**: ghost-utility-name ban and version-stamp ban (`STRICT_DOC_SYNC`) now enforced by lint; `check_harness_version_matches_plugin` catches straggler version sites.
+- **Audit conventions checks C1–C6 folded into lint (C1–C4 as new checks; C5 was a duplicate of C3; C6 merged into the existing jurisdiction check)**: ghost-utility-name ban and version-stamp ban (`STRICT_DOC_SYNC`) now enforced by lint; `check_harness_version_matches_plugin` catches straggler version sites.
 - **`validate-manifest` extended checks**: plugin extended fields, marketplace consistency, CHANGELOG heading presence — all validated on every CI run.
 - **Shellcheck CI job**: `shellcheck scripts/*.sh` + `bash -n` syntax check added to `validate-skills.yml`.
 - **Shared migrate cores**: `drizzle-to-kysely.md` shared migration guide; backend-extraction `common.md` shared core for FastAPI + NestJS extraction paths.

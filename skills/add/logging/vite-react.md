@@ -28,7 +28,6 @@ Add `logEvent` alongside the existing `logError`. Do not replace `logError` — 
 
 ```ts
 // src/lib/errors/error-log-handler.ts  (extend existing file — add below logError)
-import { APIError } from './api-error';
 // added in Step 2 — create breadcrumbs.ts before running the type-check
 import { addBreadcrumb } from '@/lib/logging/breadcrumbs';
 
@@ -125,6 +124,8 @@ function flush(): void {
     // getApiBaseUrl() throws if VITE_API_BASE_URL is absent; fall back silently
     console.info('[log-batcher]', JSON.stringify(batch));
   }
+  // Trade-off: if queue.length > MAX_BATCH after splice, remainder entries flush on
+  // the next enqueueLog call (size gate) or next visibilitychange — never silently dropped.
 }
 
 export function enqueueLog(entry: Omit<LogEntry, 'timestamp'>): void {

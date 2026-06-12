@@ -92,7 +92,7 @@ If no → print "No changes made." and exit.
 
 ---
 
-## Phase 3 — Scaffold [BACKEND] (autonomous)
+## Phase 3 — shared skeleton (the leaf adds stack specifics)
 
 Determine the sibling path: `../[project-name]-api`.
 

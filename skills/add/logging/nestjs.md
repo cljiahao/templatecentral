@@ -272,7 +272,7 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 - `add/error-handling/nestjs` — Unified error response schema; `logError` integration
 - `standards/validation-patterns/nestjs` — Zod/Pydantic validation before any log call
 - Stack-specific `code-standards` — Logging rules within each stack's security guidelines
-- Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Apply logging when adding new routes
+- `templatecentral:add (endpoint)` — Apply logging when adding new routes
 
 ## Production Requirement
 

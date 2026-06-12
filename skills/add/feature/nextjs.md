@@ -128,7 +128,7 @@ export type CreateProjectInput = z.input<typeof createProjectSchema>;
 
 Use these schemas in:
 - **React Hook Form** — pass to `zodResolver(createProjectSchema)` for client-side form validation
-- **API route handlers** — use `safeParse()` to validate request bodies (see `add-api-route` skill)
+- **API route handlers** — use `safeParse()` to validate request bodies (see `templatecentral:add (endpoint)`)
 - **Service layer** — validate external API responses before returning typed data
 
 ### 5. Create Components (in `components/`)

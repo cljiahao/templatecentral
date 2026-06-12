@@ -10,11 +10,29 @@ on:
       - 'skills/**'
       - 'scripts/**'
       - '.claude-plugin/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'AGENTS.md'
+      - 'EXAMPLES.md'
+      - 'CONTRIBUTING.md'
+      - 'FUTURE.md'
+      - 'SECURITY.md'
+      - '.claude/**'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'skills/**'
       - 'scripts/**'
       - '.claude-plugin/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'AGENTS.md'
+      - 'EXAMPLES.md'
+      - 'CONTRIBUTING.md'
+      - 'FUTURE.md'
+      - 'SECURITY.md'
+      - '.claude/**'
+      - '.github/workflows/**'
 
 jobs:
   validate:
@@ -103,6 +121,9 @@ jobs:
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: shellcheck + bash -n

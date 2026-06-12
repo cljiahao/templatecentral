@@ -774,8 +774,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 |-------|-------------|
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
 | `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
-| `templatecentral:add (module)` | full feature module |
-| `templatecentral:add (endpoint)` | new route + DTO + service method |
+| `templatecentral:add (endpoint)` | new route + DTO + service method (NestJS modules — alias: module) |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
 | `templatecentral:audit` | full ecosystem + accuracy audit |

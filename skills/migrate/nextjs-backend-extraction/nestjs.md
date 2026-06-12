@@ -6,7 +6,7 @@
 
 Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients from a Next.js project into a sibling NestJS project. Next.js becomes a pure frontend.
 
-**Read `common.md` first.** Phases 1, 2, 8, 9, 10 live there. Phases 3–7 are below. Variable substitutions: `[BACKEND]` = NestJS, `[DEV_PORT]` = 3001, `[CORS_VAR]` = `CLIENT_URL`.
+**Read `common.md` first.** Phases 1, 2, the Phase 3 skeleton, and Phases 8–10 live in common.md; stack-specific Phases 3–7 are below. Variable substitutions: `[BACKEND]` = NestJS, `[DEV_PORT]` = 3001, `[CORS_VAR]` = `CLIENT_URL`.
 
 ```bash
 cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/common.md"

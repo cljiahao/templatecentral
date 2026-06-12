@@ -74,7 +74,7 @@
 
 ### Backend Testing (mandatory)
 
-Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `add-endpoint`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `pytest` from project root before handoff.
+Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `templatecentral:add (endpoint)`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `pytest` from project root before handoff.
 
 Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI enforces `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
 

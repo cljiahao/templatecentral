@@ -208,7 +208,7 @@ pnpm test
 
 - `templatecentral:add` (error-handling) — Pagination errors use unified error response schema
 - `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod/Pydantic
-- Stack-specific `add-api-route`, `add-endpoint`, `add-module` — Add pagination to new list endpoints
+- `templatecentral:add (endpoint)` — Add pagination to new list endpoints
 - Stack-specific `code-standards` — Database indexing best practices for sort fields
 
 ## Validate

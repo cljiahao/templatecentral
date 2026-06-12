@@ -19,6 +19,13 @@ jobs:
         stack: [fastapi, nestjs, nextjs, vite-react]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251  # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -29,19 +36,40 @@ jobs:
             improvisation, no silently fixing template bugs. Then run that stack's quality
             gates (TS stacks: pnpm install, pnpm check or lint+typecheck, pnpm build, pnpm
             test or test:ci; FastAPI: pip install -r requirements.txt, ruff check src/,
-            python -m pyright src/, python -m pytest). If any template file is missing, any
-            gate fails, or you had to deviate from the written instructions to proceed, exit
-            with a failing status and print a precise report naming the broken template
-            section and file.
+            python -m pyright src/, python -m pytest). If every gate passes and you made no
+            deviations from the written instructions, run: echo ok > /tmp/scaffold-e2e-result
+            On ANY failure or deviation instead: write a precise report naming the broken
+            template section and file to /tmp/scaffold-e2e-report.md and do NOT write the
+            result file.
+      - name: Assert verification result
+        run: |
+          if [ ! -f /tmp/scaffold-e2e-result ]; then
+            echo "scaffold-verify: no success marker — see report below"
+            cat /tmp/scaffold-e2e-report.md 2>/dev/null || echo "(agent produced no report)"
+            exit 1
+          fi
       - name: Open issue on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create \
-            --title "scaffold-verify: ${{ matrix.stack }} failed $(date +%F)" \
-            --body "Scaffold verification failed for stack \`${{ matrix.stack }}\`.
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          report_file="/tmp/scaffold-e2e-report.md"
+          header="Scaffold verification failed for stack \`${{ matrix.stack }}\`.
 
-          Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Run URL: ${run_url}
 
           Triage this issue like an accuracy_fix report: identify the broken template section and file named in the agent output, then open a fix PR."
+
+          if [ -f "$report_file" ]; then
+            body_file="$(mktemp)"
+            printf '%s\n\n---\n\n' "$header" > "$body_file"
+            cat "$report_file" >> "$body_file"
+            gh issue create \
+              --title "scaffold-verify: ${{ matrix.stack }} failed $(date +%F)" \
+              --body-file "$body_file"
+          else
+            gh issue create \
+              --title "scaffold-verify: ${{ matrix.stack }} failed $(date +%F)" \
+              --body "$header"
+          fi

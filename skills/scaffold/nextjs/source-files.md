@@ -1981,8 +1981,8 @@ Add new project skills here whenever you repeat a workflow more than once.
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
 | `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
 | `templatecentral:add (feature)` | full feature: page + API route + hooks |
-| `templatecentral:add (component)` | reusable UI component |
-| `templatecentral:add (api-route)` | API route with auth guard |
+| `templatecentral:add (feature)` | reusable UI component (components route via feature) |
+| `templatecentral:add (endpoint)` | API route with auth guard |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
 | `templatecentral:audit` | full ecosystem + accuracy audit |

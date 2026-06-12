@@ -2113,8 +2113,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 ### templateCentral plugin skills — framework-level operations
 | Skill | When to use |
 |-------|-------------|
-| `templatecentral:add (feature)` | full feature: page + query hook + components |
-| `templatecentral:add (component)` | reusable UI component or widget |
+| `templatecentral:add (feature)` | full feature: page + query hook + components (includes components) |
 | `templatecentral:add (page)` | new route + page component |
 | `templatecentral:add (form)` | React Hook Form + Zod form |
 | `templatecentral:add (auth)` | auth flow integration |

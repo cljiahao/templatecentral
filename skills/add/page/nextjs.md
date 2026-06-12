@@ -40,7 +40,7 @@ the marker.
 
 > Dashboard pages are automatically protected by `src/proxy.ts` once auth is configured — any route not in `PUBLIC_PATHS` requires authentication. No manual auth checks needed in page components.
 
-> For API endpoints, use the `add-api-route` skill.
+> For API endpoints, use `templatecentral:add (endpoint)`.
 
 Use **route groups** `(name)/` to share layouts without affecting the URL.
 Use **folders** `name/` when the folder should be a URL segment.
