@@ -1224,7 +1224,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/nest-verify/SKILL.md | cut -d' ' -f
 **`.claude/harness.json`**:
 ```json
 {
-  "templatecentral_version": "4.6.0",
+  "templatecentral_version": "5.0.0",
   "stack": "nestjs",
   "seeded_at": "<date>",
   "seeded_files": {

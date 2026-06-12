@@ -10,23 +10,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [4.6.0] — 2026-06-12
+## [5.0.0] — 2026-06-12
 
-Full-ecosystem audit round (audit skill 2.5.0 → 2.6.0). ~70 findings fixed across 79 files; all changes verified against the June 2026 ecosystem (cached research + live doc checks).
+Major release. Includes the changes previously staged (unpublished) as 4.6.0.
+
+### BREAKING
+
+- **Add-capability consolidation**: `endpoint`/`api-route`/`module` merged into `endpoint` (per-stack files); `component` folded into `feature`; `mutation` renamed `mutation-testing`. Aliases for all old names remain in `add/SKILL.md` routing — existing invocations continue to work.
+- **Utility skills (build/test/review/cleanup) are now cat-path only**: `templatecentral:build`, `templatecentral:test`, `templatecentral:review`, `templatecentral:cleanup` no longer resolve as registered skills — invoke exclusively via the cat-path contract (e.g. `templatecentral:build`). All references swept across skill files.
+- **Harness schema floor bumped 4.0.0 → 5.0.0**: AGENTS.md markers and `templatecentral:migrate` now target 5.0.0. `templatecentral:migrate` upgrades 4.x projects and converts flat seeded skills (`<name>.md`) to `<name>/SKILL.md` directory form.
 
 ### Added
 
+- **Loop engineering**: scheduled `ecosystem-refresh` and `scaffold-verify` GitHub Actions loops; loop-engineering research topic added as audit Step 0b to surface harness-engineering practice from community sources.
+- **`add (logging)` for Vite+React**: logging capability extended to the fourth stack (was FastAPI/NestJS/Next.js only).
+- **Lint checks C1–C4 folded in**: ghost-utility-name ban and version-stamp ban (`STRICT_DOC_SYNC`) now enforced by lint; `check_harness_version_matches_plugin` catches straggler version sites.
+- **`validate-manifest` extended checks**: plugin extended fields, marketplace consistency, CHANGELOG heading presence — all validated on every CI run.
+- **Shellcheck CI job**: `shellcheck scripts/*.sh` + `bash -n` syntax check added to `validate-skills.yml`.
+- **Shared migrate cores**: `drizzle-to-kysely.md` shared migration guide; backend-extraction `common.md` shared core for FastAPI + NestJS extraction paths.
+- **`FUTURE.md` roadmap**: approved harness-kit extraction (Option A) documented as the v5.x roadmap.
 - **`templatecentral:audit` 2.6.0 — community-consensus harness research** (Step 0b): each audit now scans Anthropic official guidance plus community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded `RECOMMENDED` (official) / `CONSENSUS` (≥3 sources) / `EMERGING` (track only). RECOMMENDED/CONSENSUS gaps become targeted Step 3H checks. Cache template gained a matching section; first scan cached 2026-06-12.
 - **Lint: `check_seeded_skill_paths_are_directories`** — fails on any scaffold/migrate instruction seeding a flat `.claude/skills/<name>.md`; `check_scaffold_seeds_complete_harness` now positively requires `-verify/SKILL.md` directory form and the `stop_hook_active` guard in every scaffold.
 - `skills/write-skill/implementation.md` — authoring checklist moved out of the registered SKILL.md body (CONVENTIONS §3 compliance); SKILL.md is now detection + cat only.
 
-### Fixed (harness — doc-verified against official Claude Code docs)
+### Fixed
+
+- **`pre-guard.sh` stdin key bug**: was reading the wrong JSON keys (silent no-op); `.env.example` exemption also corrected.
+- **Drift-check false positive**: drift-check Step 2 was comparing the schema-floor marker against plugin semver, causing a false drift on every fresh project — now reads `harness.json templatecentral_version`.
+- **Lint weak checks**: PCRE portability, unscoped version pins, zod message-key, seeded-skills awk (dead on BSD awk) — all hardened.
+- **Scaffold dead code removed**: FastAPI Django/Flask branches, unused `DirectoryManager` utils, duplicate `verify.sh`, stale changelog block.
+- **Dead "Full migration" migrate branch removed** from `templatecentral:migrate`.
+- **CHANGELOG duplicate 4.5.0 headings merged**.
+- **LICENSE year** corrected.
+- **`FUTURE.md` seam pointers** corrected to current skill paths.
+- **Docs made version-stamp-free**: all prose version stamps removed from README, EXAMPLES, CONTRIBUTING, FUTURE, SECURITY; `STRICT_DOC_SYNC=1` now hard-fails in CI.
+
+### Fixed (from 4.6.0 staging — harness, doc-verified against official Claude Code docs)
 
 - **Seeded project skills are now directories** (`.claude/skills/<name>/SKILL.md`) in all 4 scaffolds + migrate Phase 4. Flat `.claude/skills/<name>.md` files are silently ignored by Claude Code — every previously scaffolded project's `*-verify` skill never loaded. harness.json templates and hash commands updated to match.
 - **Skill scoping order corrected** (root AGENTS.md + audit Step 3H): per current official docs, user (personal) skills override project skills on name collision — the previous claim was reversed. Plugin namespacing unaffected.
 - Secrets defense-in-depth: FastAPI `.dockerignore`/`.gitignore`/`permissions.deny` now cover `src/.env` (was root-anchored — secrets were baked into Docker images and agent-readable); skills now ask the user to edit `.env` files instead of instructing hook-blocked agent edits.
+- `skills/scaffold/fastapi/source-files.md`: removed duplicate `strict-transport-security` entry in `_SECURITY_HEADERS` — scaffolded FastAPI apps were emitting the HSTS header twice.
+- `.claude/rules/nextjs.md`: pinned Next.js to `≥16.2.6` (16.2.5 is insecure for Turbopack deployments — App Router prefetch auth-bypass and WebSocket SSRF advisories).
 
-### Fixed (stacks)
+### Fixed (from 4.6.0 staging — stacks)
 
 - **FastAPI**: validation errors no longer echo submitted input (422 bodies/logs); `exc.headers` preserved (WWW-Authenticate, Retry-After); Beanie guide rewritten onto PyMongo async (`AsyncMongoClient` — the previously shown Motor class does not exist); pymongo floor ≥4.13; ForwardedHostMiddleware validates the peer against TRUST_PROXY before honoring X-Forwarded-Host; password fields bounded (`max_length=128`).
 - **NestJS**: auth throttler fixed — global 3-req/15-min guard would have rate-limited the entire API; now a sane global default with `@Throttle` on login/register only. `ZodValidationException` handled in the exception filter (400 + fieldErrors; serialization failures log-and-genericize as 500). `@/` alias imports converted to relative (scaffold defines no paths mapping). PaginationService registration + `createZodDto` usage corrected. Swagger gate keys off `ENVIRONMENT` consistently.
@@ -42,7 +69,6 @@ Full-ecosystem audit round (audit skill 2.5.0 → 2.6.0). ~70 findings fixed acr
 ### Known
 
 - NestJS scaffold tsconfig has `noImplicitAny: false` while the seeded AGENTS.md promises "no `any`" — enabling `strict: true` is deferred pending a scaffold build test.
-- v5.0 plan unchanged: split all four scaffold `source-files.md` into phase files (each exceeds the 5,000-token skill re-attach budget); dedup the FastAPI auth-completion and NestJS exception-filter blocks.
 
 ---
 

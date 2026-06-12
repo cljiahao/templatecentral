@@ -2444,7 +2444,7 @@ Write `.claude/harness.json` with the computed values, replacing `<sha256_*>` pl
 
 ```json
 {
-  "templatecentral_version": "4.6.0",
+  "templatecentral_version": "5.0.0",
   "stack": "nextjs",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
