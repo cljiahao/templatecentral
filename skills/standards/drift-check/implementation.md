@@ -31,7 +31,19 @@ Current version = the `version` field value from `.claude-plugin/plugin.json`.
 
 ## Step 3 — Compare
 
-Parse both versions as semver (`major.minor.patch`).
+The AGENTS.md line-1 marker (`@X.Y.Z`) is the harness *schema floor*, not the install version — never compare it to the plugin semver.
+
+The install version is recorded in the project's `.claude/harness.json` → `templatecentral_version` field. Read that file now.
+
+**If `.claude/harness.json` is missing**: the project was not installed via templateCentral (it was adopted or hand-crafted). Do not report drift. Instead, inform the user:
+
+> "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
+
+Then exit.
+
+Parse both versions as semver (`major.minor.patch`):
+- **Project version**: `templatecentral_version` from `.claude/harness.json`
+- **Plugin version**: `version` from `$HOME/.claude/plugins/marketplaces/templatecentral/.claude-plugin/plugin.json` (already read in Step 2)
 
 **If project version == current plugin version**: conventions are current. Exit silently.
 
@@ -106,5 +118,8 @@ At session start, invoke the drift-check skill.
 ```
 
 ## Changelog
+### 1.1.0
+- Fix: Step 3 now reads `templatecentral_version` from `.claude/harness.json` instead of the AGENTS.md line-1 marker. The marker is the harness schema floor (lint-enforced, deliberately pinned) and must never be compared to the plugin semver. Missing `harness.json` routes to `templatecentral:migrate` instead of reporting false drift.
+
 ### 1.0.0
 - Initial plugin release
