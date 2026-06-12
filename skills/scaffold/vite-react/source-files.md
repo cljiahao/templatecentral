@@ -72,8 +72,8 @@ export function AppRouter() {
 
 ```css
 @import 'tailwindcss';
-@plugin '@tailwindcss/typography';
 @import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
 
 @theme inline {
   /* Fonts & radius */
@@ -1224,11 +1224,13 @@ Custom component (not managed by shadcn CLI):
 ```tsx
 import type { ComponentProps } from 'react';
 
-import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils/index';
+
+// Note: Slot is used directly as a component; Slot.Root does not exist on the Slot component itself.
 
 const buttonGroupVariants = cva(
   "flex w-fit items-stretch [&>*]:focus-visible:z-10 [&>*]:focus-visible:relative [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-md has-[>[data-slot=button-group]]:gap-2",
@@ -1270,7 +1272,7 @@ function ButtonGroupText({
 }: ComponentProps<'div'> & {
   asChild?: boolean;
 }) {
-  const Comp = asChild ? Slot.Root : 'div';
+  const Comp = asChild ? Slot : 'div';
 
   return (
     <Comp
@@ -1301,12 +1303,7 @@ function ButtonGroupSeparator({
   );
 }
 
-export {
-  ButtonGroup,
-  ButtonGroupSeparator,
-  ButtonGroupText,
-  buttonGroupVariants,
-};
+export { ButtonGroup, ButtonGroupSeparator, ButtonGroupText, buttonGroupVariants };
 ```
 
 ### `src/components/ui/field.tsx`
@@ -2062,6 +2059,8 @@ After shadcn installs, write the custom UI components verbatim (they are NOT man
 ### 6. Verification gate
 
 Do NOT generate `AGENTS.md` until ALL of these pass:
+
+> Run `pnpm format:write` once first if this is a fresh scaffold — Prettier drift on newly generated files will cause `pnpm check` to fail until formatted.
 
 ```bash
 pnpm build        # zero errors

@@ -64,14 +64,14 @@ if __name__ == "__main__":
 ```python
 import ipaddress
 import textwrap
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from api.routes import router
-from core.config import common_settings, api_settings
+from core.config import api_settings, common_settings
 from error_handler import configure_exceptions
-
 
 _SECURITY_HEADERS = [
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
@@ -79,9 +79,15 @@ _SECURITY_HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-    (b"x-xss-protection", b"0"),  # Disable legacy XSS auditor (exploitable in older browsers)
+    (
+        b"x-xss-protection",
+        b"0",
+    ),  # Disable legacy XSS auditor (exploitable in older browsers)
     # CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
-    (b"content-security-policy", b"frame-ancestors 'none'; base-uri 'self'; object-src 'none'"),
+    (
+        b"content-security-policy",
+        b"frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+    ),
 ]
 
 
@@ -94,7 +100,7 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
-        async def _send(message: dict) -> None:
+        async def _send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
                 headers.extend(_SECURITY_HEADERS)
@@ -183,6 +189,7 @@ def configure_proxy_headers(app: FastAPI) -> None:
     if not api_settings.TRUST_PROXY:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
     # Order matters: the last middleware added runs outermost. ForwardedHostMiddleware must run
     # BEFORE ProxyHeadersMiddleware rewrites scope['client'], so it can validate the direct peer.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
@@ -276,9 +283,7 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(NoResultsFound)
-    async def no_results_handler(
-        request: Request, exc: NoResultsFound
-    ) -> JSONResponse:
+    async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
         logger.info(
             "No results found",
             extra={"path": request.url.path, "detail": str(exc)},
@@ -313,9 +318,7 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled exception", extra={"path": request.url.path})
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -378,7 +381,9 @@ class APISettings(BaseSettings):
                 "http://127.0.0.1:3000",
                 "http://127.0.0.1:5173",
             ]
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        return [
+            origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()
+        ]
 
     @field_validator("FASTAPI_ROOT", mode="before")
     def remove_trailing_slash(cls, value: str) -> str:
@@ -412,8 +417,8 @@ import json
 import logging
 import logging.config
 import logging.handlers
-from pathlib import Path
 from datetime import datetime as dt
+from pathlib import Path
 
 from core.config import common_settings
 from core.directory_manager import directory_manager as dm
@@ -443,8 +448,9 @@ class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         return str(mth_fol / fname)
 
 
-# Register the custom handler
-logging.handlers.MyTimedRotatingFileHandler = MyTimedRotatingFileHandler
+# Register the custom handler so logging.json can reference it via
+# "class": "logging.handlers.MyTimedRotatingFileHandler"
+setattr(logging.handlers, "MyTimedRotatingFileHandler", MyTimedRotatingFileHandler)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def setup_logging() -> None:
@@ -770,7 +776,12 @@ class BaseResponseSchema(BaseSchema):
     """Base for API response schemas — always serializes using camelCase aliases."""
 
     model_config = ConfigDict(
-        **dict(BaseSchema.model_config),
+        extra="forbid",
+        from_attributes=True,
+        validate_assignment=True,
+        validate_default=True,
+        populate_by_name=True,
+        alias_generator=to_camel,
         serialize_by_alias=True,
     )
 ```
@@ -1079,7 +1090,7 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
 pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart python-json-logger
-pip install pytest httpx ruff pyright pytest-asyncio
+pip install -r requirements-dev.txt
 
 pip freeze > requirements.txt
 ```
@@ -1093,7 +1104,10 @@ python src/main.py &      # starts server; confirm http://localhost:8000 respond
 pytest test/ -v           # all tests must pass
 ruff check src/           # zero lint errors
 ruff format --check src/  # zero formatting drift
+python -m pyright src/    # zero type errors
 ```
+
+> Run `ruff format src/` once first if this is a fresh scaffold — formatting drift on newly generated files will cause the format check to fail until formatted.
 
 **Do not generate AGENTS.md until all checks pass.**
 

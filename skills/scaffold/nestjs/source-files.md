@@ -24,9 +24,11 @@ async function bootstrap(): Promise<void> {
   const trustProxyEnv = process.env.TRUST_PROXY;
   // Fastify trustProxy: "*" → trust all; number = hop count (1 = one-hop ALB→App, 2 = two-hop ALB→Traefik→App); CIDR string = trusted range.
   const trustProxy: boolean | number | string | undefined =
-    trustProxyEnv === '*' ? true :
-    trustProxyEnv && /^\d+$/.test(trustProxyEnv) ? parseInt(trustProxyEnv, 10) :
-    trustProxyEnv;
+    trustProxyEnv === '*'
+      ? true
+      : trustProxyEnv && /^\d+$/.test(trustProxyEnv)
+        ? parseInt(trustProxyEnv, 10)
+        : trustProxyEnv;
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(trustProxy ? { trustProxy } : {}),
@@ -124,7 +126,13 @@ export * from './http.constants';
 ### `src/common/filters/http-exception.filter.ts`
 
 ```typescript
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
@@ -144,7 +152,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
-    reply.status(status).send({ statusCode: status, message: exception.message });
+    reply
+      .status(status)
+      .send({ statusCode: status, message: exception.message });
   }
 }
 ```
@@ -238,8 +248,14 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
-    void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
-    void reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    void reply.header(
+      'Cache-Control',
+      'no-cache, no-store, must-revalidate, private',
+    );
+    void reply.header(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=()',
+    );
     return payload;
   });
 }
@@ -263,7 +279,8 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { appConfig } from '..';
 
 export function setupSwagger(app: INestApplication): void {
-  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat') return;
+  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat')
+    return;
 
   const options = new DocumentBuilder()
     .setTitle(appConfig.PROJECT_NAME)
@@ -391,10 +408,7 @@ export class ExampleController {
   @ApiOperation({ summary: 'Update an example' })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiBody({ type: UpdateExampleDto })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateExampleDto,
-  ): ExampleItem {
+  update(@Param('id') id: string, @Body() dto: UpdateExampleDto): ExampleItem {
     return this.exampleService.update(id, dto);
   }
 
@@ -468,7 +482,11 @@ export class ExampleRepository {
 
   update(id: string, data: Partial<ExampleItem>): ExampleItem {
     const existing = this.findById(id);
-    const updated = { ...existing, ...data, updatedAt: new Date().toISOString() };
+    const updated = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
     this.items.set(id, updated);
     return updated;
   }
@@ -567,21 +585,17 @@ describe('AppController (e2e)', () => {
   });
 
   it('GET / should return "Hello World!"', () => {
-    return app
-      .inject({ method: 'GET', url: '/' })
-      .then((result) => {
-        expect(result.statusCode).toBe(200);
-        expect(result.payload).toBe('Hello World!');
-      });
+    return app.inject({ method: 'GET', url: '/' }).then((result) => {
+      expect(result.statusCode).toBe(200);
+      expect(result.payload).toBe('Hello World!');
+    });
   });
 
   it('GET /health should return OK', () => {
-    return app
-      .inject({ method: 'GET', url: '/health' })
-      .then((result) => {
-        expect(result.statusCode).toBe(200);
-        expect(JSON.parse(result.payload)).toEqual({ status: 'ok' });
-      });
+    return app.inject({ method: 'GET', url: '/health' }).then((result) => {
+      expect(result.statusCode).toBe(200);
+      expect(JSON.parse(result.payload)).toEqual({ status: 'ok' });
+    });
   });
 });
 ```
@@ -722,10 +736,13 @@ pnpm install
 
 ### 5. Verification Gate
 
-**Do NOT generate AGENTS.md until all three pass:**
+**Do NOT generate AGENTS.md until all four pass:**
+
+> Run `pnpm format` once first if this is a fresh scaffold — Prettier drift on newly generated files will cause `pnpm check` to fail until formatted.
 
 ```bash
 pnpm build        # zero compile errors
+pnpm check        # format + lint + typecheck
 pnpm test         # all unit tests pass
 pnpm test:e2e     # e2e tests pass
 ```

@@ -57,6 +57,7 @@
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
@@ -480,7 +481,11 @@ blockExoticSubdeps: true
 # Run `templatecentral:add (auth)` — it adds argon2 and will prompt you to uncomment this.
 # allowBuilds:
 #   argon2: true   # required after `templatecentral:add (auth)`
+allowBuilds:
+  '@scarf/scarf': false
 ```
+
+> **Note:** if `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites `pnpm-workspace.yaml` with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` as appropriate and re-run `pnpm install`.
 
 ### `.prettierrc`
 
@@ -613,6 +618,7 @@ export default defineConfig({
   },
   "include": [
     "src/**/*",
+    "test/**/*",
     "src/common/types/**/*.d.ts"
   ]
 }

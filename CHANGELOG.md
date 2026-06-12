@@ -36,6 +36,7 @@ Major release. Includes the changes previously staged (unpublished) as 4.6.0.
 
 ### Fixed
 
+- **Execution-verified all four scaffolds end-to-end; fixed the template bugs the runs surfaced** (NestJS: missing eslint-config-prettier peer + @scarf/scarf allowBuilds + tsconfig missing test/** include; FastAPI: pyright-clean templates — ConfigDict explicit expansion, `_send(message: Message)` typing, setattr for logging handler, import order — and requirements-dev.txt wired into install; Vite: Slot misuse, CSS @import order; all stacks: format-before-first-check note).
 - **Execution-verified the Next.js scaffold end-to-end; fixed 4 template bugs it surfaced** (missing `LinkItem` re-export; FlatCompat ESLint config broken on current eslint-config-next — replaced with native flat imports; hook scripts excluded from app ESLint; Prettier singleQuote aligned with template sources) plus pnpm `allowBuilds` for sharp/unrs-resolver.
 - **`pre-guard.sh` stdin key bug**: was reading the wrong JSON keys (silent no-op); `.env.example` exemption also corrected.
 - **Drift-check false positive**: drift-check Step 2 was comparing the schema-floor marker against plugin semver, causing a false drift on every fresh project — now reads `harness.json templatecentral_version`.
