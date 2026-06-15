@@ -129,6 +129,7 @@ check_no_ghost_agent_names() {
   #   This script itself (lint-skills.sh) — names appear only as banned-pattern strings
   header "Ghost agent / skill names"
   local matches
+  # shellcheck disable=SC2016  # literal backticks/colons are regex content, not shell expansions
   matches=$(grep -rEn \
     '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`|templatecentral:(build|test|review|cleanup|audit|write-skill)' \
     "$SKILLS_DIR/" 2>/dev/null \

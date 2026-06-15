@@ -337,10 +337,12 @@ check_doc_version_stamps() {
   count=$(echo "$stamps" | wc -l | tr -d ' ')
   if [[ "${STRICT_DOC_SYNC:-0}" == "1" ]]; then
     echo "FAIL: $count bare version stamp(s) found (STRICT_DOC_SYNC=1 — hard fail):"
+    # shellcheck disable=SC2001  # per-line ^ anchor; parameter expansion can't prefix every line
     echo "$stamps" | sed 's/^/  /'
     FAILED=1
   else
     echo "WARN: $count bare version stamp(s) found (set STRICT_DOC_SYNC=1 to hard-fail):"
+    # shellcheck disable=SC2001  # per-line ^ anchor; parameter expansion can't prefix every line
     echo "$stamps" | sed 's/^/  /'
   fi
 }
