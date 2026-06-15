@@ -10,6 +10,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.1.0] — 2026-06-15
+
+Marketplace-readiness release. Separates repo-maintenance tooling from the shipped plugin surface so installed projects carry only end-user skills.
+
+### Changed
+
+- **`audit` and `write-skill` are now repo-internal contributor skills, not shipped plugin skills.** Both moved from `skills/` to `.claude/skills/` and were renamed to project skills `/tc-audit` and `/tc-write-skill`. They are available when you clone and open this repo, but are no longer installed into end-user projects (the marketplace ships only the plugin's `skills/` directory). Rationale: their purpose is maintaining templateCentral itself (`lint-skills.sh`, CONVENTIONS.md, the skill tree) — they were never meaningful for a scaffolded app, yet every install carried them and their routing rows.
+- **Shipped skill count is now 8** (4 user-invocable: `scaffold`, `add`, `migrate`, `standards` + 4 de-registered cat-path utilities: `build`, `test`, `review`, `cleanup`). README and `marketplace.json` counts updated from 10.
+
+### Fixed
+
+- **Scaffolded `AGENTS.md` no longer advertises `templatecentral:audit`.** The `| full ecosystem + accuracy audit |` routing row was embedded in all four scaffold `source-files.md` templates and the migrate routing table, pointing end-user projects at a skill that only ever audited the templateCentral repo. Removed from all five sites.
+- **Lint guard updated**: `templatecentral:audit` / `:write-skill` added to the ghost-name ban so a plugin-namespaced reference to either inside shipped `skills/` now fails the gate (they resolve only as `/tc-audit` / `/tc-write-skill` project skills).
+
+### Repo
+
+- **Release history tagged**: annotated git tags `v1.0.0` … `v5.1.0` created retroactively, each pinned to the commit that introduced that `plugin.json` version.
+
+---
+
 ## [5.0.1] — 2026-06-12
 
 ### Fixed

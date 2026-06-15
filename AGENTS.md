@@ -28,9 +28,9 @@ If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the
 | Write and run tests | test utility (`cat skills/test/SKILL.md` via plugin root) |
 | Code review | review utility (`cat skills/review/SKILL.md` via plugin root) |
 | Standards drift check / validation patterns | `templatecentral:standards` |
-| Full ecosystem + accuracy audit | `templatecentral:audit` |
+| Full ecosystem + accuracy audit (repo-internal) | `/tc-audit` (project skill in `.claude/skills/`) |
 | Remove example code / task planning | cleanup utility (`cat skills/cleanup/SKILL.md` via plugin root) |
-| Write a new templateCentral skill | `templatecentral:write-skill` |
+| Write a new templateCentral skill (repo-internal) | `/tc-write-skill` (project skill in `.claude/skills/`) |
 
 ## `templatecentral:add` capabilities
 
@@ -67,7 +67,7 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill
 - Lint gate: `bash scripts/lint-skills.sh skills/` — must pass before any commit
-- Write new skills: `templatecentral:write-skill`
+- Write new skills: `/tc-write-skill` (repo-internal project skill in `.claude/skills/`)
 - PostToolUse hook: `bash scripts/lint-skills.sh skills/ 2>&1 | tail -10` runs after every Edit/Write — feedback only
 
 ## Rules

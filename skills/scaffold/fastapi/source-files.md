@@ -1156,7 +1156,6 @@ Add new project skills here whenever you repeat a workflow more than once.
 | `templatecentral:add (endpoint)` | new route + schema + service method |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
-| `templatecentral:audit` | full ecosystem + accuracy audit |
 
 ## Rules (always)
 - Type annotations on all public function parameters and return types

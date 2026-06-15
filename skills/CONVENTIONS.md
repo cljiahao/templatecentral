@@ -179,7 +179,7 @@ Agent-utility prereq variant: reference files belonging to de-registered agent u
 Use when <trigger verb phrase> — <stack list>.
 ```
 
-- **Max 150 characters** (Unicode character count, not byte count — enforced by `templatecentral:audit`).
+- **Max 150 characters** (Unicode character count, not byte count — enforced by `/tc-audit`).
 - **Front-load the trigger action.** The reader needs to know the "when" immediately.
 - **Stack list after the em-dash** (—). Only include stacks that are actually supported.
 - **Stack order:** FastAPI, NestJS, Next.js, Vite + React.
@@ -250,7 +250,7 @@ In `skills/add/SKILL.md`, add Django to the routing table:
 
 If Django will have more than 2 database variants, convert the skill to 3-level structure per Section 2.
 
-**5. Run `templatecentral:audit` to verify all constraints pass.**
+**5. Run `/tc-audit` to verify all constraints pass.**
 
 The audit will check headers, line counts, description length, and nesting depth.
 
@@ -293,7 +293,7 @@ When adding a new framework, define its detection signal clearly and add it to t
 
 ## Section 8: Audit Checklist (Manual Reference)
 
-This checklist matches what `templatecentral:audit` enforces automatically. Use it for manual spot-checks before committing.
+This checklist matches what `/tc-audit` enforces automatically. Use it for manual spot-checks before committing.
 
 ### Registered SKILL.md Files
 

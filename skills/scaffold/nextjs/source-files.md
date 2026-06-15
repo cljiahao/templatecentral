@@ -1995,7 +1995,6 @@ Add new project skills here whenever you repeat a workflow more than once.
 | `templatecentral:add (endpoint)` | API route with auth guard |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
-| `templatecentral:audit` | full ecosystem + accuracy audit |
 
 ## Rules (always)
 - TypeScript strict — no `any`, no `@ts-ignore`

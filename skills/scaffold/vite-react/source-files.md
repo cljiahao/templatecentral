@@ -2117,7 +2117,6 @@ Add new project skills here whenever you repeat a workflow more than once.
 | `templatecentral:add (form)` | React Hook Form + Zod form |
 | `templatecentral:add (auth)` | auth flow integration |
 | `templatecentral:standards` | drift check, validation patterns |
-| `templatecentral:audit` | full ecosystem + accuracy audit |
 
 ## Rules (always)
 - `VITE_*` env vars are shipped to the browser — never API keys, tokens, or secrets

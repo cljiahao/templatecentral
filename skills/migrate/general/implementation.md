@@ -235,7 +235,6 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 | `templatecentral:add (endpoint)` | API route with auth guard |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
-| `templatecentral:audit` | full ecosystem + accuracy audit |
 
 ## Rules (always)
 - TypeScript strict — no `any`, no `@ts-ignore`
@@ -374,7 +373,7 @@ Write `.claude/harness.json` (include only files that were actually created):
 
 ```json
 {
-  "templatecentral_version": "5.0.1",
+  "templatecentral_version": "5.1.0",
   "stack": "<detected-stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {

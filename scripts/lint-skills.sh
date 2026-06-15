@@ -115,7 +115,12 @@ check_no_ghost_agent_names() {
   #   invoked as skills. The correct form is: cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/<name>/SKILL.md"
   #   Use compact table form: `<name> utility (cat skills/<name>/SKILL.md via plugin root)`
   #
-  # Still LEGITIMATE: templatecentral:scaffold, :add, :migrate, :standards, :audit, :write-skill
+  # MOVED to repo-internal project skills (v5.1.0):
+  #   templatecentral:audit → /tc-audit, templatecentral:write-skill → /tc-write-skill
+  #   These live in .claude/skills/ (not shipped to installed projects). A plugin-namespaced
+  #   reference (templatecentral:audit / :write-skill) inside shipped skills/ is now a ghost.
+  #
+  # Still LEGITIMATE (shipped registered skills): templatecentral:scaffold, :add, :migrate, :standards
   # (these are registered skills with `name:` frontmatter and resolve correctly).
   #
   # Exclusions:
@@ -125,14 +130,14 @@ check_no_ghost_agent_names() {
   header "Ghost agent / skill names"
   local matches
   matches=$(grep -rEn \
-    '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`|templatecentral:(build|test|review|cleanup)' \
+    '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`|templatecentral:(build|test|review|cleanup|audit|write-skill)' \
     "$SKILLS_DIR/" 2>/dev/null \
     | grep -v 'audit/implementation' \
     | grep -v 'CONVENTIONS\.md' \
     || true)
   if [[ -n "$matches" ]]; then
     echo "$matches"
-    fail "Ghost agent/skill name — templatecentral:(build|test|review|cleanup) are de-registered utilities; load them via: cat \"\$HOME/.claude/plugins/marketplaces/templatecentral/skills/<name>/SKILL.md\". Registered skills (invoke normally): templatecentral:scaffold, :add, :migrate, :standards, :audit, :write-skill"
+    fail "Ghost agent/skill name — templatecentral:(build|test|review|cleanup) are de-registered utilities (load via cat-path). templatecentral:audit / :write-skill moved to repo-internal project skills /tc-audit / /tc-write-skill (.claude/skills/) and must not be referenced from shipped skills/. Registered shipped skills (invoke normally): templatecentral:scaffold, :add, :migrate, :standards"
   else
     pass "No ghost agent/skill names"
   fi

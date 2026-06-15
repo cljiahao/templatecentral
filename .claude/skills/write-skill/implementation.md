@@ -1,12 +1,12 @@
 <!-- ref: write-skill/implementation.md
      loaded-by: write-skill/SKILL.md
-     prereq: Skill authoring checklist. Do not invoke this file directly — it is loaded at runtime by the templatecentral:write-skill skill. -->
+     prereq: Skill authoring checklist. Do not invoke this file directly — it is loaded at runtime by the /tc-write-skill skill. -->
 
 # Write a templateCentral Skill
 
-1. **Read CONVENTIONS.md** (full runtime path):
+1. **Read CONVENTIONS.md** (repo-relative — run from the repo root):
    ```
-   cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/CONVENTIONS.md"
+   cat skills/CONVENTIONS.md
    ```
 
 2. **Determine file type:**
@@ -32,4 +32,4 @@
    - Can it be merged into an existing registered skill?
 
 6. **After writing:**
-   - Run `templatecentral:audit` to verify compliance
+   - Run `/tc-audit` to verify compliance

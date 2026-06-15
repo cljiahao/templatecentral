@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.0.1-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.1.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -33,13 +33,15 @@ claude plugin marketplace add cljiahao/templatecentral
 claude plugin install templatecentral
 ```
 
-### From the Official Marketplace *(coming soon)*
+### From the community marketplace *(coming soon)*
+
+Once approved for Anthropic's community marketplace, install with:
 
 ```bash
-claude plugin marketplace add templatecentral
+claude plugin install templatecentral@claude-community
 ```
 
-Either way, all 10 skills are available automatically — no extra setup.
+Either way, all 8 skills are available automatically — no extra setup.
 
 ### Updating
 
@@ -92,9 +94,9 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 ---
 
-## Available Skills (10)
+## Available Skills (8)
 
-**User-invocable (6):**
+**User-invocable (4):**
 
 | Skill | What it does |
 |-------|-------------|
@@ -102,8 +104,6 @@ Each scaffold produces a complete, working project — not a bare starter.
 | `templatecentral:add` | Add any capability to an existing project — auth, database, tests, components, pages, API routes, forms, logging, error handling, pagination, integrations, and more |
 | `templatecentral:standards` | Review code quality, naming conventions, validation patterns, drift, and full-stack type contracts |
 | `templatecentral:migrate` | Run database migrations, migrate a project to updated conventions, or **adopt/retrofit the harness** into a project that was built without templateCentral |
-| `templatecentral:audit` | Full project audit — ecosystem research, mechanical lint, per-file semantic review, and fix loop |
-| `templatecentral:write-skill` | Author new skills, enforcing CONVENTIONS.md at creation time |
 
 **Agent utilities (4)** — loaded internally by agents, not invoked directly by users:
 
@@ -183,7 +183,9 @@ templatecentral/
 Contributions welcome — especially new stacks and coverage gaps.
 
 1. Read `skills/CONVENTIONS.md` — it defines all nesting rules, description limits, and ref header formats
-2. Use `templatecentral:write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
+2. Use `/tc-write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
+
+> **Contributor-only skills.** `/tc-write-skill` (authoring) and `/tc-audit` (full ecosystem + accuracy audit) live in this repo under `.claude/skills/` and are available as project skills when you clone and open the repo. They are **not** shipped to installed projects — end users never carry the plugin's maintenance tooling.
 3. If adding a new stack, create `.claude/rules/<stack>.md`
 4. Run `bash scripts/lint-skills.sh skills/` and `bash scripts/validate-manifest.sh` locally — both must pass
 5. Open a PR — CI will run both scripts automatically
