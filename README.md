@@ -160,18 +160,19 @@ templatecentral/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
 │   └── pre-guard.sh         # PreToolUse hook — blocks writes to secrets and CI pipeline files
-├── skills/                  # All skills — nested reference file architecture
+├── skills/                  # Shipped skills — nested reference file architecture
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
 │   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
 │   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md
 │   ├── standards/SKILL.md   # Router → skills/standards/<check>/
 │   ├── migrate/SKILL.md     # Router → skills/migrate/<type>/
-│   ├── audit/SKILL.md       # Router → skills/audit/implementation.md
-│   ├── write-skill/SKILL.md
 │   ├── build/               # (de-registered utility) detect stack + run build command
 │   ├── test/                # (de-registered utility) write and run tests
 │   ├── review/              # (de-registered utility) code review + apply feedback
 │   └── cleanup/             # (de-registered utility) remove example code / task scaffolding
+├── .claude/skills/          # Repo-internal contributor skills (NOT shipped to installs)
+│   ├── audit/               # /tc-audit — full ecosystem + accuracy audit
+│   └── write-skill/         # /tc-write-skill — skill authoring checklist
 ├── AGENTS.md                # Agent orchestration guide
 └── CHANGELOG.md             # Full version history
 ```

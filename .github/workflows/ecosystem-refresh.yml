@@ -34,7 +34,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--max-turns 60 --allowedTools WebSearch,WebFetch,Read,Glob,Grep,Write,Edit,Bash(git:*),Bash(gh:*)"
           prompt: |
-            Execute Step 0b of skills/audit/implementation.md (full web scan, ALL listed
+            Execute Step 0b of .claude/skills/audit/implementation.md (full web scan, ALL listed
             topics including harness community consensus and loop engineering). Overwrite
             .claude/audit-ecosystem-research.md in the documented format with last-scanned
             set to today. Then create a branch chore/ecosystem-refresh-<YYYYMMDD>, commit
