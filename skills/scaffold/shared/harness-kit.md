@@ -227,6 +227,7 @@ case "$rel" in
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
+  .claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile) reason="container image definition" ;;
   lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
@@ -283,6 +284,7 @@ case "$rel" in
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
+  .claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile) reason="container image definition" ;;
   lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
@@ -1073,6 +1075,25 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 > `user-prompt-guard.<ext>` is `.js` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI.
 > Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step G (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
+
+---
+
+## Step E2. Seed the base snapshot (enables safe day-2 re-sync)
+
+Copy every seeded file into `.claude/.harness-base/` — a committed snapshot of the **as-seeded** content. This is the merge *base* that `templatecentral:migrate` Phase 5 uses to **3-way-merge** harness updates into the project without clobbering the user's edits (templateCentral can't re-render an old version like cruft/copier, so the base is snapshotted at seed time).
+
+```bash
+mkdir -p .claude/.harness-base
+# Mirror each seeded path into .claude/.harness-base/ (same relative path). Paths come from the manifest just written.
+for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.claude/harness.json'))['seeded_files'].values()]" 2>/dev/null \
+          || node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path)'); do
+  [ -f "$p" ] || continue
+  mkdir -p ".claude/.harness-base/$(dirname "$p")"
+  cp "$p" ".claude/.harness-base/$p"
+done
+```
+
+**Commit** `.claude/.harness-base/` — it travels with the repo so collaborators and CI share the same merge base. It is tamper-protected by `protect-files.sh` (editing the base would poison a future re-sync merge); the harness verifier ignores it (it is the base, not a live enforcement file).
 
 ---
 
