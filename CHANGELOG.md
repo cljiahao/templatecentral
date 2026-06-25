@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Build-artefact `permissions.deny` in seeded `settings.json`.** Every scaffold now denies Claude from *reading* generated/dependency dirs — per stack (`node_modules`, `.next`, `dist`, `coverage`, `.turbo`, `*.tsbuildinfo` for TS; `.venv`, `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `htmlcov` for FastAPI) — so Claude's agentic search doesn't burn context on machine-generated noise. Anthropic's documented best practice (*How Claude Code Works in Large Codebases*); complements the existing secret denies. **Salvaged from PR #1** (the part Anthropic actually recommends); the PR's verbose-`CLAUDE.md` approach was *dropped* — the same blog flags "using CLAUDE.md for reusable expertise that belongs in a skill" as a common mistake, so `CLAUDE.md` stays the lean `@AGENTS.md` one-liner.
+
 ---
 
 ## [5.3.0] — 2026-06-25
