@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Seeded git-hook layer (lefthook).** Every scaffold now seeds `lefthook.yml`, `.lefthook/commit-msg.sh`, and `.gitleaks.toml` — a commit-time enforcement layer that runs for every committer (agent *or* human), not just inside Claude Code. Pre-commit: prettier+eslint (TS) / ruff (FastAPI) on staged files + `tsc`/`pyright` typecheck + `gitleaks protect --staged` secret scan; commit-msg: Conventional Commits; pre-push: the quality gate. Chose **lefthook over Husky** because it is a single Go binary that runs in both the TS stacks and the Python (FastAPI) stack (Husky needs a Node runtime). Hard-local; coverage / changed-line gates land in the CI workflow (next increment). The new files are drift-tracked in `harness.json` and gated by `protect-files.sh`. Adopted from a matured downstream project's DevSecOps setup, re-expressed in lefthook for polyglot support.
+
 ### Security
 
 - **Next.js auth: optimistic-proxy + authoritative-layout model.** `add (auth)`'s `proxy.ts` called `auth.api.getSession()` directly in the Edge-runtime proxy (unreliable — it pulls in Node-only DB/crypto code) and the protected `DashboardLayout` did no server-side check, so route protection relied entirely on the proxy. The proxy now does an Edge-safe optimistic `getSessionCookie()` check for routing/redirects, and the layout does the authoritative `auth.api.getSession()` validation (redirect on failure) — matching better-auth's documented Next.js pattern.

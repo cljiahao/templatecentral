@@ -227,6 +227,8 @@ case "$rel" in
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   Dockerfile) reason="container image definition" ;;
+  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
   # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
@@ -280,6 +282,8 @@ case "$rel" in
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   Dockerfile) reason="container image definition" ;;
+  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
   # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
@@ -619,6 +623,114 @@ chmod +x .claude/hooks/*.sh
 
 ---
 
+## Step B2. Seed the git-hook layer (lefthook + gitleaks)
+
+The `.claude/hooks/*` above are **Claude-Code** hooks (they guard the agent). This step seeds **git** hooks that guard *every* committer — agent or human — at commit/push time. Uses **lefthook** (a single Go binary, no Node/Python runtime lock-in) so the same hook model works on the TS stacks **and** FastAPI. This is the **hard-local** layer (format, lint, typecheck, secret-scan, conventional-commit message); coverage and changed-line gates run in CI (warn-local, hard-CI — see the seeded CI workflow).
+
+> **Why lefthook, not Husky:** Husky needs a Node runtime, so it cannot run in a Python-only FastAPI scaffold. lefthook installs from either ecosystem (`pnpm add -D lefthook` or `pip install lefthook`) and runs hook commands in parallel.
+
+**`lefthook.yml`** — TS stacks (nestjs / nextjs / vite-react):
+```yaml
+# Git-hook layer. Install once: pnpm exec lefthook install (auto-run by the "prepare" script).
+pre-commit:
+  parallel: true
+  commands:
+    format-lint:
+      glob: "*.{ts,tsx,js,mjs,cjs}"
+      run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
+      stage_fixed: true
+    typecheck:
+      run: pnpm exec tsc --noEmit
+    lockfile:
+      glob: "package.json"
+      run: pnpm install --frozen-lockfile
+    secret-scan:
+      # Soft-skip when gitleaks isn't installed locally — CI is the hard gate.
+      run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+commit-msg:
+  commands:
+    conventional:
+      run: bash .lefthook/commit-msg.sh {1}
+pre-push:
+  commands:
+    verify:
+      run: pnpm run check && pnpm test -- --run
+```
+
+**`lefthook.yml`** — FastAPI (Python tools; no pnpm):
+```yaml
+pre-commit:
+  parallel: true
+  commands:
+    format-lint:
+      glob: "*.py"
+      run: ruff format {staged_files} && ruff check --fix {staged_files}
+      stage_fixed: true
+    typecheck:
+      run: python -m pyright src/
+    secret-scan:
+      run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+commit-msg:
+  commands:
+    conventional:
+      run: bash .lefthook/commit-msg.sh {1}
+pre-push:
+  commands:
+    verify:
+      run: ruff check src/ && python -m pyright src/ && python -m pytest test/ -q
+```
+
+**`.lefthook/commit-msg.sh`** (identical across stacks — Conventional Commits gate; lefthook passes the message-file path as `{1}`):
+```bash
+#!/usr/bin/env bash
+# Conventional Commits gate. Invoked by lefthook commit-msg with the message file as $1.
+set -euo pipefail
+msg=$(head -1 "$1")
+
+# Allow merge commits and release commits.
+case "$msg" in
+  Merge\ *|"chore(release):"*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|chore|docs|style|refactor|test|ci|perf|build|revert)(\([a-z0-9/_-]+\))?: .{1,100}$'
+if ! printf '%s' "$msg" | grep -qE "$pattern"; then
+  {
+    echo "❌ Commit message must follow Conventional Commits:"
+    echo "   <type>(<scope>): <description>   e.g.  feat(auth): add OAuth2 sign-in"
+    echo "   types: feat fix chore docs style refactor test ci perf build revert"
+    echo "   your message: $msg"
+  } >&2
+  exit 1
+fi
+```
+
+**`.gitleaks.toml`** (identical across stacks — extends the built-in ruleset; allowlist is for FALSE POSITIVES only, never real secrets):
+```toml
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secrets"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.default$''',
+  '''(^|/)(pnpm-lock\.yaml|package-lock\.json|poetry\.lock|uv\.lock)$''',
+  '''(^|/)test/.*''',
+]
+```
+
+**Install wiring:**
+- **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone). Freshen the `lefthook` pin with the review utility.
+- **FastAPI** — add `lefthook` to the dev dependencies (`pip install lefthook`) and run `lefthook install` once after install; document it in the README setup steps.
+- **gitleaks** is a system binary, not a package dependency. The pre-commit command soft-skips when it is absent (CI is the hard gate); document `brew install gitleaks` / the release binary in the README.
+
+Then create the lefthook commit-msg script executable:
+```bash
+chmod +x .lefthook/commit-msg.sh
+```
+
+---
+
 ## Step C. Create `FUTURE.md`
 
 Create `FUTURE.md` at the project root:
@@ -737,6 +849,10 @@ sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
 # nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
 [ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
+# Git-hook layer (Step B2) — drift-tracked too:
+sha256_lefthook=$(shasum -a 256 lefthook.yml | cut -d' ' -f1)
+sha256_commitmsg=$(shasum -a 256 .lefthook/commit-msg.sh | cut -d' ' -f1)
+sha256_gitleaks=$(shasum -a 256 .gitleaks.toml | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
@@ -757,7 +873,10 @@ sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' '
     ".claude/hooks/post-tool-failure.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/post-tool-failure.sh" },
     ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
     ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
-    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" }
+    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" },
+    "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
+    ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
+    ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" }
   }
 }
 ```
@@ -825,6 +944,7 @@ PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except 
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
+Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
