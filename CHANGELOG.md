@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.3.0] — 2026-06-25
+
 ### Added
 
 - **Day-2 harness re-sync (3-way merge).** `templatecentral:migrate` Phase 5 is no longer report-only — it can now safely upgrade an existing project's harness to the current templateCentral version *without clobbering edits*. Scaffolds and migrations seed a committed `.claude/.harness-base/` snapshot of the as-seeded content (the merge base); Phase 5d 3-way-merges user-co-owned files (`AGENTS.md`, `CLAUDE.md`, the verify-skill) via `git merge-file` (upstream changes apply, user edits preserved, conflict markers only where they genuinely overlap), overwrites the enforcement layer to canonical, and reseeds missing files — all behind a dry-run + human gate, refreshing the snapshot + `origin_hash` + `templatecentral_version` afterward. `settings.json` merges structurally (not raw text). The base snapshot is tamper-guarded by `protect-files.sh`. Validated end-to-end. This is what lets existing projects adopt the v5.2.0 lefthook/CI/verifier safely. (Thread 3-A.)
