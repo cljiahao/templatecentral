@@ -1,0 +1,28 @@
+name: Tag Release
+on:
+  push:
+    branches: [main]
+    paths: [".claude-plugin/plugin.json"] # only when the version file changes
+permissions:
+  contents: write # push tags + create releases
+concurrency: { group: tag-release, cancel-in-progress: false }
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { fetch-depth: 0 }
+      - name: Tag + release on version bump
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          ver=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          tag="v$ver"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists — nothing to do."; exit 0
+          fi
+          awk -v v="$ver" '$0 ~ "^## \\["v"\\]"{p=1;print;next} /^## \[/{if(p)exit} p' CHANGELOG.md > /tmp/notes.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          gh release create "$tag" --title "$tag" --notes-file /tmp/notes.md
