@@ -168,13 +168,6 @@ After creating all files:
 - NEVER use raw `dict` or unvalidated data in services — always use Pydantic schemas or domain models
 - NEVER forget to register the router in `src/api/routes.py` and add the tag to `src/api/tags.py`
 
-## Validate
-
-```bash
-pytest test/ -v     # tests pass
-ruff check src/     # zero lint errors
-```
-
 ## After Writing Code
 
 Dispatch in order:

@@ -182,13 +182,6 @@ Confirm the server starts with no DI or import errors.
 - Keep API tokens in environment variables — NEVER hardcode
 - Integration modules are self-contained — each has its own module, service, and schemas
 
-### Validate
-
-```bash
-pnpm build    # zero compile errors
-pnpm test     # tests pass
-```
-
 ### After Writing Code
 
 Dispatch in order:
