@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Docs-coupling pre-commit warn (lefthook).** A warn-only `docs-coupling` command in the seeded `lefthook.yml` pre-commit: if an env template (`.env.example` / `.env.default`) is staged without `README.md`, it reminds you to update the README's Env Vars section — **commit still proceeds** (never blocks). Ports the `.env`↔README coupling nudge from a matured downstream project. Complements the changed-code⇒`CHANGELOG.md` CI gate already seeded in v5.2.0. Validated: warns on env-only stages, silent when README is also staged; `lefthook validate` accepts it.
+
 ---
 
 ## [5.2.0] — 2026-06-25
