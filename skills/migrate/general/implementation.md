@@ -400,6 +400,19 @@ For nextjs only, also include the migrate skill entry:
 ".claude/skills/next-migrate/SKILL.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate/SKILL.md" }
 ```
 
+**Step 4f-1b: Seed the base snapshot**
+
+Snapshot the as-seeded content into `.claude/.harness-base/` so day-2 re-sync (Phase 5d) can 3-way-merge future harness updates without clobbering edits:
+```bash
+mkdir -p .claude/.harness-base
+for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.claude/harness.json'))['seeded_files'].values()]" 2>/dev/null \
+          || node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path)'); do
+  [ -f "$p" ] || continue
+  mkdir -p ".claude/.harness-base/$(dirname "$p")"; cp "$p" ".claude/.harness-base/$p"
+done
+```
+Commit `.claude/.harness-base/` — it is the merge base; `protect-files.sh` guards it.
+
 **Step 4f-2: Create `.agents` symlink**
 
 If `.agents` does not already exist, create the cross-vendor symlink:
@@ -481,18 +494,55 @@ Seeded: <seeded_at>
   CLAUDE.md              MODIFIED   ← you customized this
   .claude/settings.json  UNCHANGED
 
-MODIFIED files are intentional edits — no action needed unless you want to
-re-sync to the latest templateCentral defaults. To re-seed a file, run
-`templatecentral:migrate` and choose "re-seed <filename>".
+MODIFIED files are intentional edits. To pull the latest templateCentral defaults
+into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way-merges,
+it does not clobber.
 ```
 
-If all files are `UNCHANGED`, print:
+If all files are `UNCHANGED` **and** `templatecentral_version` equals the current plugin version, print:
 ```
-✓ All harness files match their templateCentral origin. No action needed.
+✓ All harness files match their templateCentral origin and are up to date. No action needed.
 ```
 
 If any file is `MISSING`, print a warning:
 ```
 ⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.
-  Re-create it by running `templatecentral:migrate` and choosing "re-seed <filename>".
+  Re-seed it via the re-sync below (Step 5d).
 ```
+
+**Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
+
+Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
+
+- **Enforcement layer** (`.claude/hooks/*`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical content from this skill / `scaffold/shared/harness-kit.md`. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. Warn if one was `MODIFIED`.
+- **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`):
+  - `UNCHANGED` → overwrite with the new canonical.
+  - `MODIFIED` → **3-way merge** against the base snapshot:
+    ```bash
+    PLUGIN_VER="<current plugin.json version>"
+    base=".claude/.harness-base/$path"      # the as-seeded content
+    new="$(mktemp)"                          # write the CURRENT canonical content for $path here
+    # → generate $path's new canonical content from this skill / harness-kit into $new
+    if [ -f "$base" ]; then
+      cp "$path" "$path.merging"
+      git merge-file -L "your version" -L "seeded base" -L "templateCentral $PLUGIN_VER" \
+        "$path.merging" "$base" "$new"
+      rc=$?; mv "$path.merging" "$path"
+      [ $rc -ne 0 ] && echo "⚠ $path: merge conflicts — resolve the <<<<<<< markers, then re-run verify."
+    else
+      echo "No base snapshot for $path (project predates .harness-base). Showing a diff for MANUAL merge — not overwriting:"
+      diff -u "$path" "$new" || true
+    fi
+    ```
+    `git merge-file` cleanly combines edits separated by unchanged context and leaves conflict markers only where your edit and the upstream change overlap (standard `git merge` behaviour). Resolve any markers by hand.
+- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Instead merge structurally — add any new seeded `hooks`/`permissions.deny` entries into the existing object without removing the user's, exactly as Phase 4 Step 4 (settings.json) describes.
+- `MISSING` → reseed (write the current canonical content).
+
+**After applying** (only the files actually written):
+```bash
+# refresh the base snapshot to the new canonical content
+for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; cp "$p" ".claude/.harness-base/$p"; done
+# recompute origin_hash for each in harness.json, and bump templatecentral_version to "$PLUGIN_VER"
+bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
+```
+Then re-run Step 5b/5c and confirm everything is `UNCHANGED` and up to date.
