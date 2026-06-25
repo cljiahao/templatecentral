@@ -226,6 +226,7 @@ case "$rel" in
   docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   Dockerfile) reason="container image definition" ;;
   lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
@@ -281,6 +282,7 @@ case "$rel" in
   docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   Dockerfile) reason="container image definition" ;;
   lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
@@ -653,6 +655,8 @@ commit-msg:
       run: bash .lefthook/commit-msg.sh {1}
 pre-push:
   commands:
+    harness-integrity:
+      run: bash .claude/verify-harness.sh
     verify:
       run: pnpm run check && pnpm test -- --run
 ```
@@ -676,6 +680,8 @@ commit-msg:
       run: bash .lefthook/commit-msg.sh {1}
 pre-push:
   commands:
+    harness-integrity:
+      run: bash .claude/verify-harness.sh
     verify:
       run: ruff check src/ && python -m pyright src/ && python -m pytest test/ -q
 ```
@@ -758,6 +764,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
+      - name: Harness integrity
+        run: bash .claude/verify-harness.sh
       - run: pnpm run check                      # format:check + lint + typecheck
       - run: pnpm test -- --run --coverage       # writes coverage/cobertura-coverage.xml
       - name: Changed-line coverage (>= 80%)
@@ -792,6 +800,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
       - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Harness integrity
+        run: bash .claude/verify-harness.sh
       - run: ruff check src/ && ruff format --check src/
       - run: python -m pyright src/
       - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
@@ -805,6 +815,73 @@ jobs:
 - **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
 - **SHA-pin the actions** (`actions/checkout`, `setup-node`, `gitleaks-action`) for supply-chain hygiene — freshen via the review utility, consistent with `## Skills Security`.
 - The workflow lives under `.github/workflows/`, which `protect-files.sh` blocks the agent from editing — CI config is human-reviewed by design.
+
+---
+
+## Step B4. Seed the harness integrity verifier
+
+`harness.json` records an `origin_hash` for every seeded file but nothing *checks* it. This step closes that loop with a **tamper/drift sensor** over the **enforcement layer** (hooks, `settings.json`, lefthook, gitleaks, CI) — the files that should never change except by deliberate human action. It deliberately does **not** verify living docs (`AGENTS.md`, `CLAUDE.md`, the verify skills) — those legitimately evolve. SHA-256, read-only, deterministic (the agent never self-certifies). To bless an intentional enforcement change, a **human** runs the regen script — never an agent, which would mask the very drift this catches.
+
+**`.claude/verify-harness.sh`** (portable bash — works on every stack via a jq/node/python3 fallback):
+```bash
+#!/usr/bin/env bash
+# Harness integrity sensor. Recomputes sha256 of the enforcement-layer seeded files and
+# compares to the origin_hash baseline in .claude/harness.json. Read-only; exits non-zero
+# on drift. Wired into CI and lefthook pre-push. Bless intentional changes with regen-harness.sh.
+set -euo pipefail
+manifest=".claude/harness.json"
+[ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
+
+# Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/)'
+
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+read_manifest() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.seeded_files | to_entries[] | "\(.value.path)\t\(.value.origin_hash)"' "$manifest"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(v["path"]+"\t"+v["origin_hash"]) for v in m["seeded_files"].values()]'
+  else echo "verify-harness: need jq, node, or python3" >&2; exit 3; fi
+}
+
+drift=0
+while IFS=$'\t' read -r path origin; do
+  printf '%s' "$path" | grep -qE "$guard" || continue   # enforcement layer only
+  case "$origin" in "<"*) continue;; esac               # skip unfilled template placeholders
+  if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
+  [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
+done < <(read_manifest)
+
+if [ "$drift" -ne 0 ]; then
+  echo "❌ harness integrity drift. If intentional, a human runs: bash .claude/regen-harness.sh" >&2
+  exit 1
+fi
+echo "✓ harness integrity OK"
+```
+
+**`.claude/regen-harness.sh`** (HUMAN-RUN ONLY — re-blesses the baseline):
+```bash
+#!/usr/bin/env bash
+# HUMAN-RUN ONLY. Rewrites origin_hash in .claude/harness.json to the current files.
+# NEVER let an agent run this — regenerating the baseline masks the drift the verifier
+# exists to catch. protect-files.sh requires human approval to edit harness.json itself.
+set -euo pipefail
+if command -v node >/dev/null 2>&1; then
+  node -e 'const fs=require("fs"),cr=require("crypto"),j=JSON.parse(fs.readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(".claude/harness.json",JSON.stringify(j,null,2)+"\n");console.log("harness baseline regenerated");'
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -c 'import json,hashlib,os;j=json.load(open(".claude/harness.json"));[v.__setitem__("origin_hash",hashlib.sha256(open(v["path"],"rb").read()).hexdigest()) for v in j["seeded_files"].values() if os.path.isfile(v["path"])];open(".claude/harness.json","w").write(json.dumps(j,indent=2)+"\n");print("harness baseline regenerated")'
+else
+  echo "regen-harness: need node or python3" >&2; exit 3
+fi
+chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
+```
+
+**Wiring:**
+- **CI** — add a step to the `quality` job in `.github/workflows/ci.yml`: `- name: Harness integrity` / `run: bash .claude/verify-harness.sh` (this is the hard gate — drift fails the PR).
+- **pre-push** — add a `harness-integrity` command to `lefthook.yml` pre-push: `run: bash .claude/verify-harness.sh`.
+- **protect the manifest** — add `.claude/harness.json`, `.claude/verify-harness.sh`, and `.claude/regen-harness.sh` to the `protect-files.sh` approval list (Step B) so an agent can't silently rewrite the baseline or the verifier. This is the "protect the manifest itself" safeguard — without it, drift detection is defeatable.
 
 ---
 
@@ -931,6 +1008,8 @@ sha256_lefthook=$(shasum -a 256 lefthook.yml | cut -d' ' -f1)
 sha256_commitmsg=$(shasum -a 256 .lefthook/commit-msg.sh | cut -d' ' -f1)
 sha256_gitleaks=$(shasum -a 256 .gitleaks.toml | cut -d' ' -f1)
 sha256_ci=$(shasum -a 256 .github/workflows/ci.yml | cut -d' ' -f1)
+sha256_verifyh=$(shasum -a 256 .claude/verify-harness.sh | cut -d' ' -f1)
+sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
@@ -955,7 +1034,9 @@ sha256_ci=$(shasum -a 256 .github/workflows/ci.yml | cut -d' ' -f1)
     "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
     ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
     ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
-    ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" }
+    ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" },
+    ".claude/verify-harness.sh": { "origin_hash": "<sha256_verifyh>", "path": ".claude/verify-harness.sh" },
+    ".claude/regen-harness.sh": { "origin_hash": "<sha256_regenh>", "path": ".claude/regen-harness.sh" }
   }
 }
 ```
