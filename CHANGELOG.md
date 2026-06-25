@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Next.js auth: optimistic-proxy + authoritative-layout model.** `add (auth)`'s `proxy.ts` called `auth.api.getSession()` directly in the Edge-runtime proxy (unreliable — it pulls in Node-only DB/crypto code) and the protected `DashboardLayout` did no server-side check, so route protection relied entirely on the proxy. The proxy now does an Edge-safe optimistic `getSessionCookie()` check for routing/redirects, and the layout does the authoritative `auth.api.getSession()` validation (redirect on failure) — matching better-auth's documented Next.js pattern.
 - **Harness: `protect-files.sh` now actually gates governance files.** The hook "warned" via `exit 1` on writes to `AGENTS.md`/`CLAUDE.md`/`.claude/settings.json`/`.claude/hooks/*`/`Dockerfile`, but `exit 1` is non-blocking on PreToolUse — the edit went through and the message never reached the model. It now emits a `permissionDecision: "ask"` JSON envelope so Claude Code prompts for human approval before the write. Affects every newly scaffolded/migrated project.
+- **`block-no-verify.sh` now blocks `git checkout`/`git restore` on guard-layer files** (`.claude/`, `lefthook.yml`, `.github/`, `AGENTS.md`, `CLAUDE.md`, `docs/CONSTITUTION.md`). Previously an agent could silently wipe enforcement config by discarding working-tree changes to it — a real data-loss class observed in a downstream project.
 
 ### Fixed
 

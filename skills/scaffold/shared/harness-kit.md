@@ -175,7 +175,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
 - `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
-- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), and `rm -rf` on source dirs.
+- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
@@ -324,6 +324,10 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+push' && { { echo "$cmd" | grep -qE '\
   echo "BLOCKED: force-push to a protected branch (--force/-f or +refspec). Open a PR instead." >&2
   exit 2
 fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" | grep -qE '(^|[[:space:]])(\.claude/|\.lefthook/|\.github/|lefthook\.yml|\.gitleaks\.toml|AGENTS\.md|CLAUDE\.md|docs/CONSTITUTION\.md)'; then
+  echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
+  exit 2
+fi
 if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
   echo "BLOCKED: recursive rm on a source directory. Confirm with a human first." >&2
   exit 2
@@ -354,6 +358,10 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+push' && { { echo "$cmd" | grep -qE '\-\-force([[:space:]=]|$)|[[:space:]]-[a-z]*f' && echo "$cmd" | grep -qE '\bmain\b|\buat\b|\bdevelop\b'; } || echo "$cmd" | grep -qE '[[:space:]]\+(main|uat|develop)\b'; }; then
   echo "BLOCKED: force-push to a protected branch (--force/-f or +refspec). Open a PR instead." >&2
+  exit 2
+fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" | grep -qE '(^|[[:space:]])(\.claude/|\.lefthook/|\.github/|lefthook\.yml|\.gitleaks\.toml|AGENTS\.md|CLAUDE\.md|docs/CONSTITUTION\.md)'; then
+  echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
@@ -752,7 +760,9 @@ on:
   pull_request: { branches: [main, uat, develop] }
   push: { branches: [main] }
 permissions: { contents: read }
-concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   quality:
     runs-on: ubuntu-latest
