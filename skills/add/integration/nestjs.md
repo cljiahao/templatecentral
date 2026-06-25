@@ -72,7 +72,7 @@ export class GithubIntegrationService {
 
   async listRepos(): Promise<GithubRepo[]> {
     const { data } = await firstValueFrom(
-      this.http.get('/user/repos'),
+      this.http.get<unknown[]>('/user/repos'),
     );
     return data.map((r: unknown) => githubRepoSchema.parse(r));
   }

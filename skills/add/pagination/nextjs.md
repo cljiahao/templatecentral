@@ -104,7 +104,11 @@ export class PaginationService {
   ): { field: string; direction: 'asc' | 'desc' } | null {
     if (!sort) return null;
 
-    const [direction, field] = sort.split('_');
+    // Split on the FIRST underscore only — field names may be snake_case (e.g. desc_created_at)
+    const separatorIndex = sort.indexOf('_');
+    if (separatorIndex === -1) return null;
+    const direction = sort.slice(0, separatorIndex);
+    const field = sort.slice(separatorIndex + 1);
     if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
       return null; // Invalid sort - caller should reject
     }
@@ -234,8 +238,16 @@ export function ProjectsList() {
         `/api/projects?page=${page}&limit=${limit}&sort=asc_name`
       );
       if (!response.ok) throw new Error('Failed to fetch projects');
-      const json = await response.json();
-      return json.data as PaginatedResponse;
+      const json: unknown = await response.json();
+      if (
+        typeof json !== 'object' ||
+        json === null ||
+        !('data' in json) ||
+        typeof (json as { data: unknown }).data !== 'object'
+      ) {
+        throw new Error('Malformed pagination response');
+      }
+      return (json as { data: PaginatedResponse }).data;
     },
   });
 
@@ -250,7 +262,7 @@ export function ProjectsList() {
         {projects.map((project: Project) => (
           <li key={project.id} className="border p-2 rounded">
             <h3 className="font-bold">{project.name}</h3>
-            {project.description && <p className="text-sm text-gray-600">{project.description}</p>}
+            {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
           </li>
         ))}
       </ul>
@@ -278,7 +290,7 @@ export function ProjectsList() {
         </Button>
       </div>
 
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-muted-foreground">
         Showing {(page - 1) * limit + 1} to {Math.min(page * limit, pagination.total)} of{' '}
         {pagination.total} results
       </div>

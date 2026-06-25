@@ -297,7 +297,7 @@ input=$(cat)
 cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-z]*n'; then
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -329,7 +329,7 @@ try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
 except Exception: print('')" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-z]*n'; then
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -643,7 +643,7 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ---
 
-*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated.*
+*Seams from [templateCentral](https://github.com/cljiahao/templatecentral). None activated.*
 ```
 
 ---

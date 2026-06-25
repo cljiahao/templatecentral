@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+Repo-wide skill-content cleanup (audit + smell/debt/dedupe pass). 37 reference files touched, net −105 lines.
+
+- **Security drift reconciled across stacks.** The Vite stack shipped a *weaker* `fileUploadSchema` (missing the extension whitelist and `../`/decode path-traversal checks) and a logging redaction list that silently omitted `address` — both restored to the canonical in `standards/validation-patterns/patterns.md`. `passwordSchema` had diverged; all stacks now share the strongest superset (min-12 + lower + upper + number).
+- **Correctness fixes.** Next.js pagination truncated snake_case sort fields (`desc_created_at`) — fixed to match the NestJS sibling. FastAPI Pydantic v2 `@field_validator` missing `@classmethod`. FastAPI `list_users` had a return annotation that contradicted its own "never return raw ORM objects" note (two files).
+- **Info-disclosure hygiene.** Removed raw `ValidationError` interpolation (its `str()` echoes submitted input) from FastAPI validation examples.
+- **Type-safety regressions** removed: `as any` in NestJS logging, untyped `@Req()`, untyped `JSON.parse`, dropped Drizzle schema generic, untyped axios responses.
+- **Deduplication.** Collapsed a ~110-line verbatim auth section in `sqlalchemy-iam.md` to a pointer; removed duplicate `## Validate` blocks (4 files), duplicate test helpers (2 files), and a duplicated AGENTS.md routing row; reconciled drifted IAM-token error handling.
+- **Hygiene:** `typing.Sequence` → `collections.abc.Sequence` (3 sites), Ruff `B904 from None`, `==`→`===` in TS examples, deprecated unused exports/params removed, 500-message casing aligned, log `pagehide` flush added, mixed camelCase serialization aliases fixed, missing imports added, `mutation-testing` CI Node 22 → 24.
+- **Anti-drift:** the seeded `FUTURE.md` credit no longer hardcodes a version string (was "v4.0"), so it cannot re-stale.
+
 ---
 
 ## [5.1.0] — 2026-06-15

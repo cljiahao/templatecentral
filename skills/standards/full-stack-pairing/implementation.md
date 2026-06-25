@@ -52,7 +52,7 @@ The template already has `configure_cors()` in `src/app.py` using `api_settings.
 CORS_ORIGINS=http://localhost:3000
 ```
 
-> The templateCentral Vite template defaults to port `3000` (same as Next.js). For multiple origins: `CORS_ORIGINS=http://localhost:3000,http://localhost:3001`.
+> For multiple origins: `CORS_ORIGINS=http://localhost:3000,http://localhost:3001`. Port defaults and conflict resolution: see the port-alignment note in Step 3.
 
 No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, common localhost origins (`localhost:3000`, `localhost:5173`, `127.0.0.1` variants) are allowed automatically.
 
@@ -64,7 +64,7 @@ The template already configures CORS via `serviceConfig.CLIENT_URL` (from `src/c
 CLIENT_URL=http://localhost:3000
 ```
 
-> **Port note**: The templateCentral Vite template defaults to port `3000` (same as NestJS and Next.js). When pairing Vite or Next.js with NestJS, change one port to avoid conflict (e.g., set NestJS to `3001`).
+> **Port note**: NestJS and the Vite/Next.js templates all default to port `3000` — change one to avoid conflict (e.g., set NestJS to `3001`). See the port-alignment note in Step 3.
 
 The template's `setupCors()` reads this automatically — no code changes needed unless you need multiple origins (comma-separated: `CLIENT_URL=http://localhost:3000,http://localhost:3001`).
 
@@ -145,10 +145,12 @@ Both templates have a base HTTP client. Configure it with the API base URL:
 ```typescript
 // src/lib/clients/api-client.ts
 import { FetchClient } from './fetch-client';
+import { getApiBaseUrl } from '@/lib/constants/env';
 
 export class ApiClient extends FetchClient {
   constructor() {
-    super(import.meta.env.VITE_API_BASE_URL, {});
+    // getApiBaseUrl() throws at startup if VITE_API_BASE_URL is missing — never pass the raw env var
+    super(getApiBaseUrl(), {});
   }
 }
 ```

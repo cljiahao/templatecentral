@@ -1513,7 +1513,7 @@ function FieldError({
       return null;
     }
 
-    if (errors?.length == 1) {
+    if (errors?.length === 1) {
       return errors[0]?.message;
     }
 
@@ -2003,14 +2003,6 @@ import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-}
-
-export function mergeHandlers<Args extends readonly unknown[]>(
-  ...handlers: (((...args: Args) => void) | undefined)[]
-): (...args: Args) => void {
-  return (...args: Args) => {
-    handlers.forEach((fn) => fn?.(...args));
-  };
 }
 ```
 

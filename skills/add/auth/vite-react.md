@@ -236,7 +236,7 @@ export function LoginCard() {
             <Input type="password" placeholder="Password" />
           </CustomFormField>
 
-          {serverError && <p className="text-sm text-red-500">{serverError}</p>}
+          {serverError && <p className="text-sm text-destructive">{serverError}</p>}
 
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
@@ -245,7 +245,7 @@ export function LoginCard() {
       </Form>
       {ENV.IS_DEV && (
         <button type="button"
-          className="mt-4 w-full rounded-md border-2 bg-white px-4 py-3 text-sm text-gray-500 hover:bg-gray-100"
+          className="mt-4 w-full rounded-md border-2 bg-card px-4 py-3 text-sm text-muted-foreground hover:bg-accent"
           onClick={handleDevLogin}>
           Dev login (bypass auth)
         </button>

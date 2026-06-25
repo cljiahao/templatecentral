@@ -52,6 +52,8 @@ touch src/integrations/__init__.py src/api/dependencies/__init__.py
 **`src/integrations/<name>_client.py`**:
 
 ```python
+from typing import Any
+
 import httpx
 
 
@@ -65,13 +67,13 @@ class GithubClient:
             timeout=30.0,
         )
 
-    async def get_repos(self) -> list[dict]:
+    async def get_repos(self) -> list[dict[str, Any]]:
         """Fetch the authenticated user's repositories."""
         response = await self._client.get("/user/repos")
         response.raise_for_status()
         return response.json()
 
-    async def get_repo(self, owner: str, repo: str) -> dict:
+    async def get_repo(self, owner: str, repo: str) -> dict[str, Any]:
         """Fetch a specific repository."""
         response = await self._client.get(f"/repos/{owner}/{repo}")
         response.raise_for_status()

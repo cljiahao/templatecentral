@@ -226,8 +226,8 @@ const rows = await this.drizzle.timedQuery('projects.findAll', () =>
 
 ```ts
 // src/app.module.ts  (extend pinoHttp customProps)
-customProps: (req) => ({
-  user_id: (req as any).user?.id ?? null,
+customProps: (req: import('fastify').FastifyRequest & { user?: { id: string } }) => ({
+  user_id: req.user?.id ?? null,
   auth_present: !!req.headers['authorization'],
   // Never log: req.headers['authorization'] value
 }),
@@ -277,10 +277,6 @@ grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <
 ## Production Requirement
 
 Ship logs to a separate, tamper-evident system (e.g. AWS CloudWatch, Datadog, OpenSearch Ingestion) — writing to local disk only is not sufficient; production log storage must be isolated from the application host.
-
-## Validate
-
-Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
 
 ## After Writing Code
 

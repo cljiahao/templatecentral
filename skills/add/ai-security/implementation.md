@@ -53,6 +53,8 @@ export function validateUserPrompt(input: string): void {
 
 ```python
 # Python equivalent
+import re
+
 INJECTION_PATTERNS = [
     r'ignore (previous|above|all) instructions',
     r'system prompt',

@@ -184,7 +184,7 @@ class GitHubUser(BaseModel):
 
     @field_validator("login", mode="before")
     @classmethod
-    def validate_login(cls, v):
+    def validate_login(cls, v: object):
         if not v or not isinstance(v, str):
             raise ValueError("login is required")
         return v
@@ -202,8 +202,10 @@ async def fetch_github_user(username: str) -> GitHubUser:
         data = response.json()
         user = GitHubUser.model_validate(data)  # Pydantic v2 idiomatic form; respects mode="before" validators
         return user
-    except ValidationError as e:
-        raise InvalidInputError(f"Invalid GitHub API response: {e}")
+    except ValidationError:
+        # Never interpolate the raw ValidationError — its str() echoes the input values
+        # (info disclosure). Log the detail server-side; return a generic message.
+        raise InvalidInputError("Invalid GitHub API response")
 ```
 
 ## Testing / Verification

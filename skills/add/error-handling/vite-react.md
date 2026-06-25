@@ -118,10 +118,6 @@ pnpm build
 - Stack-specific `code-standards` — Security and error handling guidance
 - `templatecentral:add (endpoint)` — Use error handling in new routes
 
-## Validate
-
-Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
-
 ## After Writing Code
 
 Dispatch in order:

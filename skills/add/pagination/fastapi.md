@@ -53,9 +53,9 @@ from typing import Generic, TypeVar
 T = TypeVar('T')
 
 class PaginationMetadata(BaseModel):
-    page: int
-    limit: int
-    total: int
+    page: int = Field(..., serialization_alias='page')
+    limit: int = Field(..., serialization_alias='limit')
+    total: int = Field(..., serialization_alias='total')
     has_more: bool = Field(..., serialization_alias='hasMore')
 
 class PaginatedData(BaseModel, Generic[T]):

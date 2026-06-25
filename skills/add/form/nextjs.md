@@ -116,9 +116,9 @@ export function ContactForm() {
     },
   });
 
-  const onSubmit = async (values: ContactFormValues) => {
-    // Replace with your server action or API call:
-    // await submitContact(values);
+  const onSubmit = (values: ContactFormValues) => {
+    // TODO: replace with a real submit (server action / API call) using `values`
+    console.log(values);
     toast.success('Form submitted successfully!');
     form.reset();
   };

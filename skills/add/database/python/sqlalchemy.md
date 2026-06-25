@@ -139,6 +139,8 @@ Inject the database session via FastAPI's dependency injection:
 Create a Pydantic response schema (in `api/schemas/`) and use `response_model`:
 
 ```python
+from collections.abc import Sequence
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -148,7 +150,7 @@ from database.session import get_db
 from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)) -> list[UserResponse]:
+def list_users(db: Session = Depends(get_db)) -> Sequence[User]:
     stmt = select(User)
     return db.scalars(stmt).all()
 ```

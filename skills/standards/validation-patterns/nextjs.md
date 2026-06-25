@@ -77,7 +77,7 @@ export function LoginForm() {
           className="w-full rounded border px-3 py-2"
         />
         {errors.email && (
-          <p className="text-sm text-red-600">{errors.email.message}</p>
+          <p className="text-sm text-destructive">{errors.email.message}</p>
         )}
       </div>
 
@@ -90,16 +90,16 @@ export function LoginForm() {
           className="w-full rounded border px-3 py-2"
         />
         {errors.password && (
-          <p className="text-sm text-red-600">{errors.password.message}</p>
+          <p className="text-sm text-destructive">{errors.password.message}</p>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+        className="w-full rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {isSubmitting ? 'Logging in...' : 'Login'}
       </button>
@@ -124,7 +124,10 @@ export async function loginAction(formData: unknown) {
   if (!parsed.success) {
     return {
       error: 'Validation failed',
-      fieldErrors: z.flattenError(parsed.error).fieldErrors,
+      details: {
+        fieldErrors: z.flattenError(parsed.error).fieldErrors,
+        code: 'VALIDATION_ERROR',
+      },
     };
   }
 
@@ -197,6 +200,7 @@ export async function GET(request: Request) {
           error: 'Invalid query parameters',
           details: {
             fieldErrors: z.flattenError(parsed.error).fieldErrors,
+            code: 'VALIDATION_ERROR',
           },
         },
         { status: 400 }
@@ -247,6 +251,7 @@ export async function POST(request: Request) {
           error: 'Invalid file',
           details: {
             fieldErrors: z.flattenError(parsed.error).fieldErrors,
+            code: 'VALIDATION_ERROR',
           },
         },
         { status: 400 }

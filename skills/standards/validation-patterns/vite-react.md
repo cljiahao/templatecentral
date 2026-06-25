@@ -29,12 +29,13 @@ const createProjectSchema = z.object({
 
 // Password fields: enforce length first (≥ 12 characters), then basic complexity.
 // Length matters more than exotic character rules — long passphrases beat short complex strings.
+// Canonical definition lives in standards/validation-patterns/patterns.md — keep these identical.
 export const passwordSchema = z
   .string()
   .min(12, 'Password must be at least 12 characters')
-  .regex(/[a-z]/, 'Must contain a lowercase letter')
-  .regex(/[A-Z]/, 'Must contain an uppercase letter')
-  .regex(/[0-9]/, 'Must contain a number');
+  .regex(/[a-z]/, 'Password must contain a lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+  .regex(/[0-9]/, 'Password must contain a number');
 
 type CreateProjectData = z.input<typeof createProjectSchema>;
 
@@ -78,7 +79,7 @@ export function CreateProjectForm() {
           <Input placeholder="Project description (optional)" />
         </CustomFormField>
 
-        {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
         <Button
           type="submit"
@@ -104,17 +105,48 @@ export function CreateProjectForm() {
 import { type ChangeEvent, useState } from 'react';
 import { z } from 'zod';
 
+// Canonical definition lives in standards/validation-patterns/patterns.md (fileUploadSchema)
+// — keep the extension whitelist and path-traversal checks identical; do not weaken.
 const fileUploadSchema = z.object({
-  filename: z
+  name: z
     .string()
-    .min(1, 'Filename is required')
-    .refine((name) => !name.includes('..'), 'Invalid filename')
-    .refine((name) => !name.startsWith('/'), 'Invalid filename')
-    .refine((name) => !name.includes('\x00'), 'Invalid filename'),
+    .refine(
+      (name) => {
+        try {
+          const decoded = decodeURIComponent(name);
+          return (
+            !decoded.includes('..') &&
+            !decoded.startsWith('/') &&
+            !decoded.startsWith('./') &&
+            !decoded.includes('\x00')
+          );
+        } catch {
+          return false;
+        }
+      },
+      'Invalid filename'
+    )
+    .refine(
+      (name) => {
+        try {
+          const decoded = decodeURIComponent(name);
+          const ext = decoded.split('.').pop()?.toLowerCase();
+          // Whitelist (Rule 5) — must stay in sync with the MIME whitelist below
+          const allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+          return allowed.includes(ext || '');
+        } catch {
+          return false;
+        }
+      },
+      'File type not allowed'
+    ),
   size: z.number().max(10 * 1024 * 1024, 'File must be under 10MB'),
-  type: z.enum(['image/jpeg', 'image/png', 'application/pdf'], {
-    error: 'Only JPEG, PNG, and PDF files allowed',
-  }),
+  type: z
+    .string()
+    .refine(
+      (type) => ['image/jpeg', 'image/png', 'application/pdf'].includes(type),
+      'File type must be JPEG, PNG, or PDF'
+    ),
 });
 
 export function FileUploadForm() {
@@ -131,7 +163,7 @@ export function FileUploadForm() {
 
       // Client-side validation (user feedback only)
       const validation = fileUploadSchema.safeParse({
-        filename: file.name,
+        name: file.name,
         size: file.size,
         type: file.type,
       });
@@ -178,8 +210,8 @@ export function FileUploadForm() {
           disabled={isUploading}
           className="w-full"
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {isUploading && <p className="text-sm text-blue-600">Uploading...</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {isUploading && <p className="text-sm text-primary">Uploading...</p>}
       </div>
     </div>
   );

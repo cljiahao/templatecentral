@@ -81,7 +81,7 @@ import postgres from 'postgres';
 
 import * as schema from './schema';
 
-const globalForDb = globalThis as unknown as { db: ReturnType<typeof drizzle> };
+const globalForDb = globalThis as unknown as { db: ReturnType<typeof drizzle<typeof schema>> };
 
 const client = postgres(process.env.DATABASE_URL!);
 

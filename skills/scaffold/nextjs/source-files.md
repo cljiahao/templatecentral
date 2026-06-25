@@ -204,7 +204,7 @@ function FieldError({
   const content = useMemo(() => {
     if (children) return children;
     if (!errors?.length) return null;
-    if (errors?.length == 1) return errors[0]?.message;
+    if (errors?.length === 1) return errors[0]?.message;
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
         {errors.map(
@@ -1928,10 +1928,10 @@ Never commit `.env.local`.
 
 ### 5b. Run verification gate before generating AGENTS.md
 
-Do not generate AGENTS.md until this passes:
+Do not generate AGENTS.md until this passes. Substitute `<stack>-verify` with the delta-table verify-skill name (e.g. `next-verify`).
 
 ```bash
-pnpm format      # Run this once before pnpm check — normalizes any formatting drift from file creation (substitute <stack>-verify with the delta-table verify-skill name, e.g. next-verify)
+pnpm format      # Run this once before pnpm check — normalizes any formatting drift from file creation
 pnpm build       # production build — zero errors
 pnpm check       # format + lint + typecheck — zero errors
 pnpm test        # all tests pass
@@ -1990,8 +1990,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 |-------|-------------|
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
 | `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
-| `templatecentral:add (feature)` | full feature: page + API route + hooks |
-| `templatecentral:add (feature)` | reusable UI component (components route via feature) |
+| `templatecentral:add (feature)` | full feature: page + API route + hooks (includes components) |
 | `templatecentral:add (endpoint)` | API route with auth guard |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
