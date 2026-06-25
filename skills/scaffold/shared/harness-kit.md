@@ -731,6 +731,83 @@ chmod +x .lefthook/commit-msg.sh
 
 ---
 
+## Step B3. Seed the CI quality gates (GitHub Actions)
+
+The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed one workflow that enforces what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, and a **changelog-touched** gate. (GitHub Actions is the seeded default — adapt the steps to GitLab CI / Azure Pipelines if the project uses them.)
+
+**Coverage reporter (so `diff-cover` has input):** `diff-cover` reads a Cobertura XML, which both runners emit — one gate works for every stack.
+- **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
+- **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
+
+**`.github/workflows/ci.yml`** — TS stacks (nestjs / nextjs / vite-react):
+```yaml
+name: CI
+on:
+  pull_request: { branches: [main, uat, develop] }
+  push: { branches: [main] }
+permissions: { contents: read }
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # SHA-pin in production (see Skills Security)
+        with: { fetch-depth: 0 }    # diff-cover needs full history
+      - uses: pnpm/action-setup@v4
+        with: { version: "11" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "24", cache: pnpm }
+      - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
+      - run: pnpm run check                      # format:check + lint + typecheck
+      - run: pnpm test -- --run --coverage       # writes coverage/cobertura-coverage.xml
+      - name: Changed-line coverage (>= 80%)
+        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2       # SHA-pin in production
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
+        env: { LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}" }
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          if echo "$changed" | grep -qE '^src/' && ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo " $LABELS " | grep -q ' skip-changelog ' && { echo "skip-changelog label present — OK"; exit 0; }
+            echo "::error::src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
+            exit 1
+          fi
+```
+
+**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog` job is identical):
+```yaml
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: ruff check src/ && ruff format --check src/
+      - run: python -m pyright src/
+      - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
+      - name: Changed-line coverage (>= 80%)
+        run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2
+```
+
+**Notes:**
+- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
+- **SHA-pin the actions** (`actions/checkout`, `setup-node`, `gitleaks-action`) for supply-chain hygiene — freshen via the review utility, consistent with `## Skills Security`.
+- The workflow lives under `.github/workflows/`, which `protect-files.sh` blocks the agent from editing — CI config is human-reviewed by design.
+
+---
+
 ## Step C. Create `FUTURE.md`
 
 Create `FUTURE.md` at the project root:
@@ -853,6 +930,7 @@ sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' '
 sha256_lefthook=$(shasum -a 256 lefthook.yml | cut -d' ' -f1)
 sha256_commitmsg=$(shasum -a 256 .lefthook/commit-msg.sh | cut -d' ' -f1)
 sha256_gitleaks=$(shasum -a 256 .gitleaks.toml | cut -d' ' -f1)
+sha256_ci=$(shasum -a 256 .github/workflows/ci.yml | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
@@ -876,7 +954,8 @@ sha256_gitleaks=$(shasum -a 256 .gitleaks.toml | cut -d' ' -f1)
     ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" },
     "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
     ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
-    ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" }
+    ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
+    ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" }
   }
 }
 ```
@@ -945,6 +1024,7 @@ UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
 Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
+CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, and a full-history gitleaks scan.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
