@@ -463,7 +463,7 @@ export function LoginCard() {
         {ENV.IS_DEV && (
           <button
             type="button"
-            className="rounded-md border-2 bg-white px-4 py-3 text-sm text-gray-500 hover:bg-gray-100"
+            className="rounded-md border-2 bg-card px-4 py-3 text-sm text-muted-foreground hover:bg-muted"
             onClick={handleDevLogin}
           >
             Dev login (bypass auth)
@@ -800,7 +800,7 @@ export function Navbar() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-white">
+    <nav className="sticky top-0 z-50 w-full border-b bg-card">
       <div className="max-w-site flex-between mx-auto px-6 py-4">
         <Link to={PAGE_ROUTES.HOME} className="text-xl font-bold tracking-tight">
           templateCentral
@@ -893,9 +893,9 @@ interface SiteFooterProps {
 
 export function SiteFooter({ creditText = 'Built with templateCentral' }: SiteFooterProps) {
   return (
-    <footer className="w-full border-t bg-black">
+    <footer className="w-full border-t bg-foreground">
       <div className="max-w-site mx-auto px-6 py-6">
-        <p className="text-sm text-white">{creditText}</p>
+        <p className="text-sm text-background">{creditText}</p>
       </div>
     </footer>
   );
@@ -927,7 +927,7 @@ export function BrandText({ className }: BrandTextProps) {
   return (
     <>
       <span className="text-brand-gradient">template</span>
-      <span className={cn('text-white', className)}>Central</span>
+      <span className={cn('text-foreground', className)}>Central</span>
     </>
   );
 }
@@ -948,7 +948,7 @@ interface CustomCardProps {
 
 export function CustomCard({ header, description, children, className }: CustomCardProps) {
   return (
-    <div className={cn('rounded-lg border bg-white p-6 shadow-xs', className)}>
+    <div className={cn('rounded-lg border bg-card p-6 shadow-xs', className)}>
       <h3 className="text-lg font-semibold">{header}</h3>
       {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       {children && <div className="mt-4">{children}</div>}

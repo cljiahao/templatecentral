@@ -174,7 +174,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; warns on governance files (`AGENTS.md`, `CLAUDE.md`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
@@ -194,7 +194,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 ```bash
 #!/usr/bin/env bash
 # PreToolUse(Edit|Write) — protect secrets, CI, cert, and governance files.
-# Exit 2 = hard block; exit 1 = warn (human approval expected); exit 0 = allow.
+# Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
 input=$(cat)
 file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$file" ] && exit 0
@@ -229,8 +229,11 @@ case "$rel" in
   Dockerfile) reason="container image definition" ;;
 esac
 if [ -n "$reason" ]; then
-  echo "PROTECTED FILE: $rel — $reason. Confirm human approval and note it in the PR." >&2
-  exit 1
+  # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
+  # (The old `exit 1` + stderr was NON-blocking on PreToolUse — the edit went through and the
+  # warning never reached the model. "ask" actually gates the write.)
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"PROTECTED FILE: %s — %s. Confirm human approval and note it in the PR."}}\n' "$rel" "$reason"
+  exit 0
 fi
 exit 0
 ```
@@ -239,7 +242,7 @@ exit 0
 ```bash
 #!/usr/bin/env bash
 # PreToolUse(Edit|Write) — protect secrets, CI, cert, and governance files.
-# Exit 2 = hard block; exit 1 = warn (human approval expected); exit 0 = allow.
+# Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
 input=$(cat)
 file=$(printf '%s' "$input" | python3 -c "import json,sys
 try:
@@ -279,8 +282,11 @@ case "$rel" in
   Dockerfile) reason="container image definition" ;;
 esac
 if [ -n "$reason" ]; then
-  echo "PROTECTED FILE: $rel — $reason. Confirm human approval and note it in the PR." >&2
-  exit 1
+  # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
+  # (The old `exit 1` + stderr was NON-blocking on PreToolUse — the edit went through and the
+  # warning never reached the model. "ask" actually gates the write.)
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"PROTECTED FILE: %s — %s. Confirm human approval and note it in the PR."}}\n' "$rel" "$reason"
+  exit 0
 fi
 exit 0
 ```

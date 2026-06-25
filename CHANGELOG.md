@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Next.js auth: optimistic-proxy + authoritative-layout model.** `add (auth)`'s `proxy.ts` called `auth.api.getSession()` directly in the Edge-runtime proxy (unreliable — it pulls in Node-only DB/crypto code) and the protected `DashboardLayout` did no server-side check, so route protection relied entirely on the proxy. The proxy now does an Edge-safe optimistic `getSessionCookie()` check for routing/redirects, and the layout does the authoritative `auth.api.getSession()` validation (redirect on failure) — matching better-auth's documented Next.js pattern.
+- **Harness: `protect-files.sh` now actually gates governance files.** The hook "warned" via `exit 1` on writes to `AGENTS.md`/`CLAUDE.md`/`.claude/settings.json`/`.claude/hooks/*`/`Dockerfile`, but `exit 1` is non-blocking on PreToolUse — the edit went through and the message never reached the model. It now emits a `permissionDecision: "ask"` JSON envelope so Claude Code prompts for human approval before the write. Affects every newly scaffolded/migrated project.
+
 ### Fixed
 
 Repo-wide skill-content cleanup (audit + smell/debt/dedupe pass). 37 reference files touched, net −105 lines.
@@ -19,6 +24,7 @@ Repo-wide skill-content cleanup (audit + smell/debt/dedupe pass). 37 reference f
 - **Deduplication.** Collapsed a ~110-line verbatim auth section in `sqlalchemy-iam.md` to a pointer; removed duplicate `## Validate` blocks (4 files), duplicate test helpers (2 files), and a duplicated AGENTS.md routing row; reconciled drifted IAM-token error handling.
 - **Hygiene:** `typing.Sequence` → `collections.abc.Sequence` (3 sites), Ruff `B904 from None`, `==`→`===` in TS examples, deprecated unused exports/params removed, 500-message casing aligned, log `pagehide` flush added, mixed camelCase serialization aliases fixed, missing imports added, `mutation-testing` CI Node 22 → 24.
 - **Anti-drift:** the seeded `FUTURE.md` credit no longer hardcodes a version string (was "v4.0"), so it cannot re-stale.
+- **UI consistency:** raw Tailwind colors in the generated scaffold UI (`text-red-*`, `bg-white`, `bg-green-*`, `bg-black`, etc.) replaced with shadcn theme tokens so generated components adapt to dark mode; reconciled the drifted `error-log-handler.ts` parameter name across the Next.js/Vite scaffolds (kept as separate per-stack files, not merged).
 
 ---
 
