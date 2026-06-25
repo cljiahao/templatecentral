@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.2.0] — 2026-06-25
+
 ### Added
 
 - **Seeded git-hook layer (lefthook).** Every scaffold now seeds `lefthook.yml`, `.lefthook/commit-msg.sh`, and `.gitleaks.toml` — a commit-time enforcement layer that runs for every committer (agent *or* human), not just inside Claude Code. Pre-commit: prettier+eslint (TS) / ruff (FastAPI) on staged files + `tsc`/`pyright` typecheck + `gitleaks protect --staged` secret scan; commit-msg: Conventional Commits; pre-push: the quality gate. Chose **lefthook over Husky** because it is a single Go binary that runs in both the TS stacks and the Python (FastAPI) stack (Husky needs a Node runtime). Hard-local; coverage / changed-line gates land in the CI workflow (next increment). The new files are drift-tracked in `harness.json` and gated by `protect-files.sh`. Adopted from a matured downstream project's DevSecOps setup, re-expressed in lefthook for polyglot support.
