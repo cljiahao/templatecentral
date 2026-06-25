@@ -735,7 +735,7 @@ paths = [
 
 **Install wiring:**
 - **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone). Freshen the `lefthook` pin with the review utility.
-- **FastAPI** — add `lefthook` to the dev dependencies (`pip install lefthook`) and run `lefthook install` once after install; document it in the README setup steps.
+- **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
 - **gitleaks** is a system binary, not a package dependency. The pre-commit command soft-skips when it is absent (CI is the hard gate); document `brew install gitleaks` / the release binary in the README.
 
 Then create the lefthook commit-msg script executable:
@@ -809,7 +809,10 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          [ -f requirements-dev.txt ] && pip install -r requirements-dev.txt || true
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: ruff check src/ && ruff format --check src/
