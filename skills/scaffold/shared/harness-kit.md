@@ -659,6 +659,14 @@ pre-commit:
     secret-scan:
       # Soft-skip when gitleaks isn't installed locally — CI is the hard gate.
       run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+    docs-coupling:
+      # Warn-only (never blocks): an env-template change should be mirrored in README's Env Vars section.
+      run: |
+        staged=$(git diff --cached --name-only)
+        if echo "$staged" | grep -qE '^\.env\.(example|default)$' && ! echo "$staged" | grep -qx 'README.md'; then
+          echo "⚠ env template changed but README.md isn't staged — update the Env Vars section if you added/renamed/removed a variable (commit still proceeds)."
+        fi
+        exit 0
 commit-msg:
   commands:
     conventional:
@@ -684,6 +692,14 @@ pre-commit:
       run: python -m pyright src/
     secret-scan:
       run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+    docs-coupling:
+      # Warn-only (never blocks): an env-template change should be mirrored in README's Env Vars section.
+      run: |
+        staged=$(git diff --cached --name-only)
+        if echo "$staged" | grep -qE '^\.env\.(example|default)$' && ! echo "$staged" | grep -qx 'README.md'; then
+          echo "⚠ env template changed but README.md isn't staged — update the Env Vars section if you added/renamed/removed a variable (commit still proceeds)."
+        fi
+        exit 0
 commit-msg:
   commands:
     conventional:
