@@ -131,14 +131,7 @@ vi.mock('@/integrations/services/project-service', () => ({
 }));
 
 import { ProjectService } from '@/integrations/services/project-service';
-
-function jsonRequest(url: string, body: unknown, method = 'POST'): Request {
-  return new Request(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
+// jsonRequest: see Helper Patterns → Request Factory below
 
 describe('POST /api/projects', () => {
   afterEach(() => {
@@ -178,10 +171,7 @@ vi.mock('@/integrations/services/project-service', () => ({
 }));
 
 import { ProjectService } from '@/integrations/services/project-service';
-
-function makeParams<T extends Record<string, string>>(values: T) {
-  return { params: Promise.resolve(values) };
-}
+// makeParams: see Helper Patterns → Params Factory below
 
 describe('GET /api/projects/[id]', () => {
   afterEach(() => {

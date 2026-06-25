@@ -128,13 +128,6 @@ export const API_ROUTES = {
 } as const;
 ```
 
-## Response Conventions
-
-- **Success**: Return data with appropriate status code (200, 201)
-- **Error**: Use `handleApiError()` which logs and returns consistent JSON error response
-- **Not Found**: Return `{ error: 'Not found' }` with status 404
-- **Validation**: Parse with Zod's `safeParse()` and return 400 with `z.flattenError(error)` on failure
-
 ### 5. Add tests (mandatory)
 
 Create Vitest files under `test/api/` mirroring the route structure. Import handlers from the route module (same pattern as `test/api/health.test.ts`).
@@ -176,6 +169,13 @@ pnpm test
 ```
 
 Confirm the build succeeds with no type errors, all tests pass, and the route responds correctly using `curl` or the browser.
+
+## Response Conventions
+
+- **Success**: Return data with appropriate status code (200, 201)
+- **Error**: Use `handleApiError()` which logs and returns consistent JSON error response
+- **Not Found**: Return `{ error: 'Not found' }` with status 404
+- **Validation**: Parse with Zod's `safeParse()` and return 400 with `z.flattenError(error)` on failure
 
 ## Rules
 

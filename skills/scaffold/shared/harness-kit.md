@@ -174,8 +174,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; warns on governance files (`AGENTS.md`, `CLAUDE.md`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
-- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), and `rm -rf` on source dirs.
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
@@ -194,7 +194,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 ```bash
 #!/usr/bin/env bash
 # PreToolUse(Edit|Write) — protect secrets, CI, cert, and governance files.
-# Exit 2 = hard block; exit 1 = warn (human approval expected); exit 0 = allow.
+# Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
 input=$(cat)
 file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$file" ] && exit 0
@@ -226,11 +226,17 @@ case "$rel" in
   docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   Dockerfile) reason="container image definition" ;;
+  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
-  echo "PROTECTED FILE: $rel — $reason. Confirm human approval and note it in the PR." >&2
-  exit 1
+  # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
+  # (The old `exit 1` + stderr was NON-blocking on PreToolUse — the edit went through and the
+  # warning never reached the model. "ask" actually gates the write.)
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"PROTECTED FILE: %s — %s. Confirm human approval and note it in the PR."}}\n' "$rel" "$reason"
+  exit 0
 fi
 exit 0
 ```
@@ -239,7 +245,7 @@ exit 0
 ```bash
 #!/usr/bin/env bash
 # PreToolUse(Edit|Write) — protect secrets, CI, cert, and governance files.
-# Exit 2 = hard block; exit 1 = warn (human approval expected); exit 0 = allow.
+# Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
 input=$(cat)
 file=$(printf '%s' "$input" | python3 -c "import json,sys
 try:
@@ -276,11 +282,17 @@ case "$rel" in
   docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
   .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
   .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   Dockerfile) reason="container image definition" ;;
+  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
-  echo "PROTECTED FILE: $rel — $reason. Confirm human approval and note it in the PR." >&2
-  exit 1
+  # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
+  # (The old `exit 1` + stderr was NON-blocking on PreToolUse — the edit went through and the
+  # warning never reached the model. "ask" actually gates the write.)
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"PROTECTED FILE: %s — %s. Confirm human approval and note it in the PR."}}\n' "$rel" "$reason"
+  exit 0
 fi
 exit 0
 ```
@@ -297,7 +309,7 @@ input=$(cat)
 cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-z]*n'; then
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -310,6 +322,10 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+push' && { { echo "$cmd" | grep -qE '\-\-force([[:space:]=]|$)|[[:space:]]-[a-z]*f' && echo "$cmd" | grep -qE '\bmain\b|\buat\b|\bdevelop\b'; } || echo "$cmd" | grep -qE '[[:space:]]\+(main|uat|develop)\b'; }; then
   echo "BLOCKED: force-push to a protected branch (--force/-f or +refspec). Open a PR instead." >&2
+  exit 2
+fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" | grep -qE '(^|[[:space:]])(\.claude/|\.lefthook/|\.github/|lefthook\.yml|\.gitleaks\.toml|AGENTS\.md|CLAUDE\.md|docs/CONSTITUTION\.md)'; then
+  echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
@@ -329,7 +345,7 @@ try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
 except Exception: print('')" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-z]*n'; then
+if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -342,6 +358,10 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+push' && { { echo "$cmd" | grep -qE '\-\-force([[:space:]=]|$)|[[:space:]]-[a-z]*f' && echo "$cmd" | grep -qE '\bmain\b|\buat\b|\bdevelop\b'; } || echo "$cmd" | grep -qE '[[:space:]]\+(main|uat|develop)\b'; }; then
   echo "BLOCKED: force-push to a protected branch (--force/-f or +refspec). Open a PR instead." >&2
+  exit 2
+fi
+if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" | grep -qE '(^|[[:space:]])(\.claude/|\.lefthook/|\.github/|lefthook\.yml|\.gitleaks\.toml|AGENTS\.md|CLAUDE\.md|docs/CONSTITUTION\.md)'; then
+  echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
@@ -613,6 +633,271 @@ chmod +x .claude/hooks/*.sh
 
 ---
 
+## Step B2. Seed the git-hook layer (lefthook + gitleaks)
+
+The `.claude/hooks/*` above are **Claude-Code** hooks (they guard the agent). This step seeds **git** hooks that guard *every* committer — agent or human — at commit/push time. Uses **lefthook** (a single Go binary, no Node/Python runtime lock-in) so the same hook model works on the TS stacks **and** FastAPI. This is the **hard-local** layer (format, lint, typecheck, secret-scan, conventional-commit message); coverage and changed-line gates run in CI (warn-local, hard-CI — see the seeded CI workflow).
+
+> **Why lefthook, not Husky:** Husky needs a Node runtime, so it cannot run in a Python-only FastAPI scaffold. lefthook installs from either ecosystem (`pnpm add -D lefthook` or `pip install lefthook`) and runs hook commands in parallel.
+
+**`lefthook.yml`** — TS stacks (nestjs / nextjs / vite-react):
+```yaml
+# Git-hook layer. Install once: pnpm exec lefthook install (auto-run by the "prepare" script).
+pre-commit:
+  parallel: true
+  commands:
+    format-lint:
+      glob: "*.{ts,tsx,js,mjs,cjs}"
+      run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
+      stage_fixed: true
+    typecheck:
+      run: pnpm exec tsc --noEmit
+    lockfile:
+      glob: "package.json"
+      run: pnpm install --frozen-lockfile
+    secret-scan:
+      # Soft-skip when gitleaks isn't installed locally — CI is the hard gate.
+      run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+commit-msg:
+  commands:
+    conventional:
+      run: bash .lefthook/commit-msg.sh {1}
+pre-push:
+  commands:
+    harness-integrity:
+      run: bash .claude/verify-harness.sh
+    verify:
+      run: pnpm run check && pnpm test -- --run
+```
+
+**`lefthook.yml`** — FastAPI (Python tools; no pnpm):
+```yaml
+pre-commit:
+  parallel: true
+  commands:
+    format-lint:
+      glob: "*.py"
+      run: ruff format {staged_files} && ruff check --fix {staged_files}
+      stage_fixed: true
+    typecheck:
+      run: python -m pyright src/
+    secret-scan:
+      run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
+commit-msg:
+  commands:
+    conventional:
+      run: bash .lefthook/commit-msg.sh {1}
+pre-push:
+  commands:
+    harness-integrity:
+      run: bash .claude/verify-harness.sh
+    verify:
+      run: ruff check src/ && python -m pyright src/ && python -m pytest test/ -q
+```
+
+**`.lefthook/commit-msg.sh`** (identical across stacks — Conventional Commits gate; lefthook passes the message-file path as `{1}`):
+```bash
+#!/usr/bin/env bash
+# Conventional Commits gate. Invoked by lefthook commit-msg with the message file as $1.
+set -euo pipefail
+msg=$(head -1 "$1")
+
+# Allow merge commits and release commits.
+case "$msg" in
+  Merge\ *|"chore(release):"*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|chore|docs|style|refactor|test|ci|perf|build|revert)(\([a-z0-9/_-]+\))?: .{1,100}$'
+if ! printf '%s' "$msg" | grep -qE "$pattern"; then
+  {
+    echo "❌ Commit message must follow Conventional Commits:"
+    echo "   <type>(<scope>): <description>   e.g.  feat(auth): add OAuth2 sign-in"
+    echo "   types: feat fix chore docs style refactor test ci perf build revert"
+    echo "   your message: $msg"
+  } >&2
+  exit 1
+fi
+```
+
+**`.gitleaks.toml`** (identical across stacks — extends the built-in ruleset; allowlist is for FALSE POSITIVES only, never real secrets):
+```toml
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secrets"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.default$''',
+  '''(^|/)(pnpm-lock\.yaml|package-lock\.json|poetry\.lock|uv\.lock)$''',
+  '''(^|/)test/.*''',
+]
+```
+
+**Install wiring:**
+- **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone). Freshen the `lefthook` pin with the review utility.
+- **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
+- **gitleaks** is a system binary, not a package dependency. The pre-commit command soft-skips when it is absent (CI is the hard gate); document `brew install gitleaks` / the release binary in the README.
+
+Then create the lefthook commit-msg script executable:
+```bash
+chmod +x .lefthook/commit-msg.sh
+```
+
+---
+
+## Step B3. Seed the CI quality gates (GitHub Actions)
+
+The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed one workflow that enforces what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, and a **changelog-touched** gate. (GitHub Actions is the seeded default — adapt the steps to GitLab CI / Azure Pipelines if the project uses them.)
+
+**Coverage reporter (so `diff-cover` has input):** `diff-cover` reads a Cobertura XML, which both runners emit — one gate works for every stack.
+- **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
+- **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
+
+**`.github/workflows/ci.yml`** — TS stacks (nestjs / nextjs / vite-react):
+```yaml
+name: CI
+on:
+  pull_request: { branches: [main, uat, develop] }
+  push: { branches: [main] }
+permissions: { contents: read }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # SHA-pin in production (see Skills Security)
+        with: { fetch-depth: 0 }    # diff-cover needs full history
+      - uses: pnpm/action-setup@v4
+        with: { version: "11" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "24", cache: pnpm }
+      - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
+      - name: Harness integrity
+        run: bash .claude/verify-harness.sh
+      - run: pnpm run check                      # format:check + lint + typecheck
+      - run: pnpm test -- --run --coverage       # writes coverage/cobertura-coverage.xml
+      - name: Changed-line coverage (>= 80%)
+        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2       # SHA-pin in production
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
+        env: { LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}" }
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          if echo "$changed" | grep -qE '^src/' && ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo " $LABELS " | grep -q ' skip-changelog ' && { echo "skip-changelog label present — OK"; exit 0; }
+            echo "::error::src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
+            exit 1
+          fi
+```
+
+**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog` job is identical):
+```yaml
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          [ -f requirements-dev.txt ] && pip install -r requirements-dev.txt || true
+      - name: Harness integrity
+        run: bash .claude/verify-harness.sh
+      - run: ruff check src/ && ruff format --check src/
+      - run: python -m pyright src/
+      - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
+      - name: Changed-line coverage (>= 80%)
+        run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2
+```
+
+**Notes:**
+- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
+- **SHA-pin the actions** (`actions/checkout`, `setup-node`, `gitleaks-action`) for supply-chain hygiene — freshen via the review utility, consistent with `## Skills Security`.
+- The workflow lives under `.github/workflows/`, which `protect-files.sh` blocks the agent from editing — CI config is human-reviewed by design.
+
+---
+
+## Step B4. Seed the harness integrity verifier
+
+`harness.json` records an `origin_hash` for every seeded file but nothing *checks* it. This step closes that loop with a **tamper/drift sensor** over the **enforcement layer** (hooks, `settings.json`, lefthook, gitleaks, CI) — the files that should never change except by deliberate human action. It deliberately does **not** verify living docs (`AGENTS.md`, `CLAUDE.md`, the verify skills) — those legitimately evolve. SHA-256, read-only, deterministic (the agent never self-certifies). To bless an intentional enforcement change, a **human** runs the regen script — never an agent, which would mask the very drift this catches.
+
+**`.claude/verify-harness.sh`** (portable bash — works on every stack via a jq/node/python3 fallback):
+```bash
+#!/usr/bin/env bash
+# Harness integrity sensor. Recomputes sha256 of the enforcement-layer seeded files and
+# compares to the origin_hash baseline in .claude/harness.json. Read-only; exits non-zero
+# on drift. Wired into CI and lefthook pre-push. Bless intentional changes with regen-harness.sh.
+set -euo pipefail
+manifest=".claude/harness.json"
+[ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
+
+# Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/)'
+
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+read_manifest() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.seeded_files | to_entries[] | "\(.value.path)\t\(.value.origin_hash)"' "$manifest"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(v["path"]+"\t"+v["origin_hash"]) for v in m["seeded_files"].values()]'
+  else echo "verify-harness: need jq, node, or python3" >&2; exit 3; fi
+}
+
+drift=0
+while IFS=$'\t' read -r path origin; do
+  printf '%s' "$path" | grep -qE "$guard" || continue   # enforcement layer only
+  case "$origin" in "<"*) continue;; esac               # skip unfilled template placeholders
+  if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
+  [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
+done < <(read_manifest)
+
+if [ "$drift" -ne 0 ]; then
+  echo "❌ harness integrity drift. If intentional, a human runs: bash .claude/regen-harness.sh" >&2
+  exit 1
+fi
+echo "✓ harness integrity OK"
+```
+
+**`.claude/regen-harness.sh`** (HUMAN-RUN ONLY — re-blesses the baseline):
+```bash
+#!/usr/bin/env bash
+# HUMAN-RUN ONLY. Rewrites origin_hash in .claude/harness.json to the current files.
+# NEVER let an agent run this — regenerating the baseline masks the drift the verifier
+# exists to catch. protect-files.sh requires human approval to edit harness.json itself.
+set -euo pipefail
+if command -v node >/dev/null 2>&1; then
+  node -e 'const fs=require("fs"),cr=require("crypto"),j=JSON.parse(fs.readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(".claude/harness.json",JSON.stringify(j,null,2)+"\n");console.log("harness baseline regenerated");'
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -c 'import json,hashlib,os;j=json.load(open(".claude/harness.json"));[v.__setitem__("origin_hash",hashlib.sha256(open(v["path"],"rb").read()).hexdigest()) for v in j["seeded_files"].values() if os.path.isfile(v["path"])];open(".claude/harness.json","w").write(json.dumps(j,indent=2)+"\n");print("harness baseline regenerated")'
+else
+  echo "regen-harness: need node or python3" >&2; exit 3
+fi
+chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
+```
+
+**Wiring:**
+- **CI** — add a step to the `quality` job in `.github/workflows/ci.yml`: `- name: Harness integrity` / `run: bash .claude/verify-harness.sh` (this is the hard gate — drift fails the PR).
+- **pre-push** — add a `harness-integrity` command to `lefthook.yml` pre-push: `run: bash .claude/verify-harness.sh`.
+- **protect the manifest** — add `.claude/harness.json`, `.claude/verify-harness.sh`, and `.claude/regen-harness.sh` to the `protect-files.sh` approval list (Step B) so an agent can't silently rewrite the baseline or the verifier. This is the "protect the manifest itself" safeguard — without it, drift detection is defeatable.
+
+---
+
 ## Step C. Create `FUTURE.md`
 
 Create `FUTURE.md` at the project root:
@@ -643,7 +928,7 @@ A fully specified, reproducible environment ensuring every agent session starts 
 
 ---
 
-*Seams from [templateCentral v4.0](https://github.com/cljiahao/templatecentral). None activated.*
+*Seams from [templateCentral](https://github.com/cljiahao/templatecentral). None activated.*
 ```
 
 ---
@@ -731,12 +1016,19 @@ sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
 # nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
 [ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
+# Git-hook layer (Step B2) — drift-tracked too:
+sha256_lefthook=$(shasum -a 256 lefthook.yml | cut -d' ' -f1)
+sha256_commitmsg=$(shasum -a 256 .lefthook/commit-msg.sh | cut -d' ' -f1)
+sha256_gitleaks=$(shasum -a 256 .gitleaks.toml | cut -d' ' -f1)
+sha256_ci=$(shasum -a 256 .github/workflows/ci.yml | cut -d' ' -f1)
+sha256_verifyh=$(shasum -a 256 .claude/verify-harness.sh | cut -d' ' -f1)
+sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 ```
 
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "5.1.0",
+  "templatecentral_version": "5.2.0",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -751,7 +1043,13 @@ sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' '
     ".claude/hooks/post-tool-failure.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/post-tool-failure.sh" },
     ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
     ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
-    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" }
+    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" },
+    "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
+    ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
+    ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
+    ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" },
+    ".claude/verify-harness.sh": { "origin_hash": "<sha256_verifyh>", "path": ".claude/verify-harness.sh" },
+    ".claude/regen-harness.sh": { "origin_hash": "<sha256_regenh>", "path": ".claude/regen-harness.sh" }
   }
 }
 ```
@@ -819,6 +1117,8 @@ PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except 
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
+Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
+CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, and a full-history gitleaks scan.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 

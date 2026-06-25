@@ -222,7 +222,8 @@ export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
 
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      setError(new Error(event.reason?.message || 'An error occurred'));
+      const reason: unknown = event.reason;
+      setError(reason instanceof Error ? reason : new Error('An error occurred'));
     };
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection);

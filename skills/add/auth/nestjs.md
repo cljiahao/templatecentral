@@ -290,9 +290,11 @@ export class TaskController {
 Or on a single endpoint:
 
 ```typescript
+import type { FastifyRequest } from 'fastify';
+
 @UseGuards(JwtAuthGuard)
 @Get('me')
-getMe(@Req() req) {
+getMe(@Req() req: FastifyRequest & { user: { id: string; email: string } }): { id: string; email: string } {
   return req.user; // { id, email } from JwtStrategy.validate()
 }
 ```

@@ -204,7 +204,7 @@ function FieldError({
   const content = useMemo(() => {
     if (children) return children;
     if (!errors?.length) return null;
-    if (errors?.length == 1) return errors[0]?.message;
+    if (errors?.length === 1) return errors[0]?.message;
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
         {errors.map(
@@ -591,7 +591,7 @@ export function BrandText({ className }: BrandTextProps) {
   return (
     <>
       <span className="text-brand-gradient">template</span>
-      <span className={cn('text-white', className)}>Central</span>
+      <span className={cn('text-foreground', className)}>Central</span>
     </>
   );
 }
@@ -651,7 +651,7 @@ export function ThemeToggleButton() {
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="relative overflow-hidden rounded-full bg-gray-200 p-5 transition-colors duration-100 dark:bg-gray-800 dark:text-gray-200"
+      className="relative overflow-hidden rounded-full bg-muted p-5 transition-colors duration-100"
       aria-label="Toggle theme"
     >
       <span
@@ -1137,20 +1137,20 @@ export const handleApiError = (label: string, error: unknown) => {
 import { APIError } from '@/integrations/error';
 import { logger } from '@/lib/logger';
 
-export const logError = (logLabel: string, error: unknown): void => {
+export const logError = (label: string, error: unknown): void => {
   if (error instanceof APIError) {
     logger.error({
-      label: logLabel,
+      label,
       message: error.message,
       statusCode: error.statusCode,
     });
     return;
   }
   if (error instanceof Error) {
-    logger.error({ label: logLabel, message: error.message });
+    logger.error({ label, message: error.message });
     return;
   }
-  logger.error({ label: logLabel, message: String(error) });
+  logger.error({ label, message: String(error) });
 };
 ```
 
@@ -1476,8 +1476,8 @@ export function ExampleCard({ item }: ExampleCardProps) {
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
             item.status === 'active'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-500'
+              ? 'bg-secondary text-secondary-foreground'
+              : 'bg-muted text-muted-foreground'
           }`}
         >
           {item.status}
@@ -1793,7 +1793,7 @@ export function Navbar() {
     >
       <div
         className={cn(
-          'flex-between min-h-20 bg-white px-6 py-3 shadow-lg',
+          'flex-between min-h-20 bg-card px-6 py-3 shadow-lg',
           isDashboard ? 'border-b' : 'rounded-2xl border',
         )}
       >
@@ -1808,7 +1808,7 @@ export function Navbar() {
           )}
           <Button
             asChild
-            className="bg-primary hover:bg-primary-hover h-12 rounded-lg px-6 py-3 font-bold text-white"
+            className="bg-primary hover:bg-primary-hover h-12 rounded-lg px-6 py-3 font-bold text-primary-foreground"
           >
             <Link href={PAGE_ROUTES.DASHBOARD}>Dashboard</Link>
           </Button>
@@ -1840,10 +1840,10 @@ export function SiteFooter({
   links = defaultLinks,
 }: SiteFooterProps) {
   return (
-    <footer className="w-full bg-black">
+    <footer className="w-full bg-foreground">
       <div className="flex-between px-6 py-6">
-        <p className="text-sm text-white">{creditText}</p>
-        <LinkList links={links} className="text-sm text-white" />
+        <p className="text-sm text-background">{creditText}</p>
+        <LinkList links={links} className="text-sm text-background" />
       </div>
     </footer>
   );
@@ -1928,10 +1928,10 @@ Never commit `.env.local`.
 
 ### 5b. Run verification gate before generating AGENTS.md
 
-Do not generate AGENTS.md until this passes:
+Do not generate AGENTS.md until this passes. Substitute `<stack>-verify` with the delta-table verify-skill name (e.g. `next-verify`).
 
 ```bash
-pnpm format      # Run this once before pnpm check — normalizes any formatting drift from file creation (substitute <stack>-verify with the delta-table verify-skill name, e.g. next-verify)
+pnpm format      # Run this once before pnpm check — normalizes any formatting drift from file creation
 pnpm build       # production build — zero errors
 pnpm check       # format + lint + typecheck — zero errors
 pnpm test        # all tests pass
@@ -1990,8 +1990,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 |-------|-------------|
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
 | `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
-| `templatecentral:add (feature)` | full feature: page + API route + hooks |
-| `templatecentral:add (feature)` | reusable UI component (components route via feature) |
+| `templatecentral:add (feature)` | full feature: page + API route + hooks (includes components) |
 | `templatecentral:add (endpoint)` | API route with auth guard |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |

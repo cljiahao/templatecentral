@@ -143,10 +143,19 @@ export function enqueueLog(entry: Omit<LogEntry, 'timestamp'>): void {
   }
 }
 
-// Flush on page unload so buffered logs are not lost
+// On unload, drain the entire queue (flush() only sends one MAX_BATCH slice)
+function flushAll(): void {
+  while (queue.length > 0) flush();
+}
+
+// Flush on page unload so buffered logs are not lost.
+// pagehide fires on bfcache/navigation where visibilitychange may not — register both.
 if (typeof window !== 'undefined') {
   window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flush();
+    if (document.visibilityState === 'hidden') flushAll();
+  });
+  window.addEventListener('pagehide', () => {
+    flushAll();
   });
 }
 ```
@@ -193,7 +202,7 @@ NEVER log passwords, tokens, email addresses, or other personal data.
 
 ```bash
 # Grep check — run before committing
-grep -rn "password\|token\|email\|phone\|credit_card\|secret\|api_key" src/lib/logging/ src/lib/errors/
+grep -rn "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" src/lib/logging/ src/lib/errors/
 ```
 
 Any match must be removed or redacted before the code ships.

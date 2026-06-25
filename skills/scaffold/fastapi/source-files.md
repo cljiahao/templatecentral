@@ -229,7 +229,8 @@ app = start_application()
 ### `src/error_handler.py`
 
 ```python
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -239,7 +240,7 @@ from starlette import status
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
 
-INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
+INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> list[dict]:
@@ -386,6 +387,7 @@ class APISettings(BaseSettings):
         ]
 
     @field_validator("FASTAPI_ROOT", mode="before")
+    @classmethod
     def remove_trailing_slash(cls, value: str) -> str:
         """Remove any trailing slashes from FASTAPI_ROOT."""
         return value.rstrip("/")
@@ -419,6 +421,7 @@ import logging.config
 import logging.handlers
 from datetime import datetime as dt
 from pathlib import Path
+from typing import Any
 
 from core.config import common_settings
 from core.directory_manager import directory_manager as dm
@@ -427,7 +430,7 @@ from core.directory_manager import directory_manager as dm
 class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
     """Custom log handler that rotates log files daily and organizes them by month."""
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.namer = self.change_name
 
@@ -681,7 +684,6 @@ router.include_router(example.router, tags=[APITags.EXAMPLE])
     response_model=dict[str, str],
 )
 async def home() -> dict[str, str]:
-    """Simple home route."""
     return {"msg": "Hello FastAPI"}
 
 
@@ -693,7 +695,6 @@ async def home() -> dict[str, str]:
     response_model=dict[str, str],
 )
 async def health() -> dict[str, str]:
-    """Health check endpoint."""
     return {"status": "OK"}
 ```
 

@@ -228,7 +228,7 @@ async def get_user(user_id: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
-        )
+        ) from None
     user = await User.get(oid)
     if not user:
         raise HTTPException(

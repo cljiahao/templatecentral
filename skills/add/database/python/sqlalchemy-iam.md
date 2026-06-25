@@ -162,6 +162,8 @@ alembic upgrade head
 Inject the database session via FastAPI's dependency injection:
 
 ```python
+from collections.abc import Sequence
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -171,7 +173,7 @@ from database.session import get_db
 from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)) -> list[UserResponse]:
+def list_users(db: Session = Depends(get_db)) -> Sequence[User]:
     stmt = select(User)
     return db.scalars(stmt).all()
 ```
@@ -194,136 +196,12 @@ Confirm all tests pass.
 
 > **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations. The auth wiring is identical to the standard SQLAlchemy path — only the session/config setup differs (already handled above).
 
-### Step A — Create `src/models/user.py`
+The repository, service, and router wiring is **identical** to the standard SQLAlchemy path — only the session/config setup differs (already handled in sections A2–A6 above). Apply these steps from `add/database/python/sqlalchemy.md`, exactly as written there:
 
-```python
-from datetime import datetime
-from uuid import uuid4
-
-from sqlalchemy import DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
-
-from database.base import Base
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
-    email: Mapped[str] = mapped_column(String, unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String)
-    name: Mapped[str] = mapped_column(String)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-```
-
-### Step B — Create `src/api/repositories/user_repository.py`
-
-> Create the `api/repositories/` directory if it does not already exist.
-
-```python
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from models.user import User
-
-
-def get_user_by_email(db: Session, email: str) -> User | None:
-    return db.scalars(select(User).where(User.email == email)).first()
-
-
-def get_user_by_id(db: Session, user_id: str) -> User | None:
-    return db.scalars(select(User).where(User.id == user_id)).first()
-
-
-def create_user(db: Session, email: str, hashed_password: str, name: str) -> User:
-    user = User(email=email, hashed_password=hashed_password, name=name)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
-```
-
-### Step C — Replace stubs in `src/api/services/auth_service.py`
-
-```python
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
-
-from api.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
-from core.security import create_access_token, hash_password, verify_password
-
-
-def register_user(db: Session, email: str, password: str, name: str) -> dict:
-    if get_user_by_email(db, email):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered.",
-        )
-    user = create_user(
-        db=db,
-        email=email,
-        hashed_password=hash_password(password),
-        name=name,
-    )
-    return {"id": str(user.id), "email": user.email, "name": user.name}
-
-
-def login_user(db: Session, email: str, password: str) -> str:
-    user = get_user_by_email(db, email)
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials.",
-        )
-    return create_access_token(subject=str(user.id))
-
-
-def get_user(db: Session, user_id: str) -> dict:
-    user = get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-    return {"id": str(user.id), "email": user.email, "name": user.name}
-```
-
-### Step D — Replace `src/api/routers/auth.py`
-
-```python
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from api.dependencies.auth import get_current_user
-from api.schemas.request.auth import LoginRequest, RegisterRequest
-from api.schemas.response.auth import TokenResponse, UserResponse
-from api.services.auth_service import login_user, register_user, get_user
-from database.session import get_db
-
-router = APIRouter(prefix="/auth")
-
-
-@router.post("/register", response_model=UserResponse)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> UserResponse:
-    """Register a new user account."""
-    user = register_user(db=db, email=body.email, password=body.password, name=body.name)
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
-
-
-@router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    """Authenticate and receive a JWT token."""
-    token = login_user(db=db, email=body.email, password=body.password)
-    return TokenResponse(access_token=token)
-
-
-@router.get("/me", response_model=UserResponse)
-def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
-    """Get the current authenticated user."""
-    user = get_user(db=db, user_id=user_id)
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
-```
+- **Step A** — Create `src/models/user.py`
+- **Step B** — Create `src/api/repositories/user_repository.py`
+- **Step C** — Replace stubs in `src/api/services/auth_service.py`
+- **Step D** — Replace `src/api/routers/auth.py`
 
 > **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
 

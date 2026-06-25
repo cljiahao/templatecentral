@@ -10,6 +10,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.2.0] — 2026-06-25
+
+### Added
+
+- **Seeded git-hook layer (lefthook).** Every scaffold now seeds `lefthook.yml`, `.lefthook/commit-msg.sh`, and `.gitleaks.toml` — a commit-time enforcement layer that runs for every committer (agent *or* human), not just inside Claude Code. Pre-commit: prettier+eslint (TS) / ruff (FastAPI) on staged files + `tsc`/`pyright` typecheck + `gitleaks protect --staged` secret scan; commit-msg: Conventional Commits; pre-push: the quality gate. Chose **lefthook over Husky** because it is a single Go binary that runs in both the TS stacks and the Python (FastAPI) stack (Husky needs a Node runtime). Hard-local; coverage / changed-line gates land in the CI workflow (next increment). The new files are drift-tracked in `harness.json` and gated by `protect-files.sh`. Adopted from a matured downstream project's DevSecOps setup, re-expressed in lefthook for polyglot support.
+- **Seeded CI quality gates (GitHub Actions).** A seeded `.github/workflows/ci.yml` adds the hard-gate half of the quality story: changed-line coverage via `diff-cover` (≥80% on the diff — one tool across stacks, reading the Cobertura XML both Vitest and pytest-cov emit), a lockfile-in-sync check (`pnpm install --frozen-lockfile`), a full-history gitleaks scan, and a changelog-touched gate (`src/` changed ⇒ `CHANGELOG.md` must change, bypass via a `skip-changelog` label). Version pinning stays **caret-floors + committed lockfile** (not reversed) — the frozen-install check covers reproducibility without an anti-caret ban.
+- **Seeded harness integrity verifier (`.claude/verify-harness.sh` + `regen-harness.sh`).** Closes the loop on `harness.json`, which recorded `origin_hash`es that nothing checked. A portable bash sensor (SHA-256; jq/node/python3 fallback so it runs on every stack — unlike a Node-only `.mjs`) recomputes the **enforcement-layer** hashes (hooks, `settings.json`, lefthook, gitleaks, CI) and fails CI / pre-push on drift; living docs (`AGENTS.md`, skills) are excluded so they evolve without false positives. The baseline is re-blessed only by a **human** running `regen-harness.sh` (an agent regenerating it would mask drift — explicit-baseline best practice). `harness.json` and the verifier scripts were added to `protect-files.sh`'s approval list so the baseline can't be silently rewritten. Validated end-to-end (OK / tamper→drift / missing / living-doc-ignored / regen).
+
+### Security
+
+- **Next.js auth: optimistic-proxy + authoritative-layout model.** `add (auth)`'s `proxy.ts` called `auth.api.getSession()` directly in the Edge-runtime proxy (unreliable — it pulls in Node-only DB/crypto code) and the protected `DashboardLayout` did no server-side check, so route protection relied entirely on the proxy. The proxy now does an Edge-safe optimistic `getSessionCookie()` check for routing/redirects, and the layout does the authoritative `auth.api.getSession()` validation (redirect on failure) — matching better-auth's documented Next.js pattern.
+- **Harness: `protect-files.sh` now actually gates governance files.** The hook "warned" via `exit 1` on writes to `AGENTS.md`/`CLAUDE.md`/`.claude/settings.json`/`.claude/hooks/*`/`Dockerfile`, but `exit 1` is non-blocking on PreToolUse — the edit went through and the message never reached the model. It now emits a `permissionDecision: "ask"` JSON envelope so Claude Code prompts for human approval before the write. Affects every newly scaffolded/migrated project.
+- **`block-no-verify.sh` now blocks `git checkout`/`git restore` on guard-layer files** (`.claude/`, `lefthook.yml`, `.github/`, `AGENTS.md`, `CLAUDE.md`, `docs/CONSTITUTION.md`). Previously an agent could silently wipe enforcement config by discarding working-tree changes to it — a real data-loss class observed in a downstream project.
+
+### Fixed
+
+Repo-wide skill-content cleanup (audit + smell/debt/dedupe pass). 37 reference files touched, net −105 lines.
+
+- **Security drift reconciled across stacks.** The Vite stack shipped a *weaker* `fileUploadSchema` (missing the extension whitelist and `../`/decode path-traversal checks) and a logging redaction list that silently omitted `address` — both restored to the canonical in `standards/validation-patterns/patterns.md`. `passwordSchema` had diverged; all stacks now share the strongest superset (min-12 + lower + upper + number).
+- **Correctness fixes.** Next.js pagination truncated snake_case sort fields (`desc_created_at`) — fixed to match the NestJS sibling. FastAPI Pydantic v2 `@field_validator` missing `@classmethod`. FastAPI `list_users` had a return annotation that contradicted its own "never return raw ORM objects" note (two files).
+- **Info-disclosure hygiene.** Removed raw `ValidationError` interpolation (its `str()` echoes submitted input) from FastAPI validation examples.
+- **Type-safety regressions** removed: `as any` in NestJS logging, untyped `@Req()`, untyped `JSON.parse`, dropped Drizzle schema generic, untyped axios responses.
+- **Deduplication.** Collapsed a ~110-line verbatim auth section in `sqlalchemy-iam.md` to a pointer; removed duplicate `## Validate` blocks (6 files), duplicate test helpers (2 files), and a duplicated AGENTS.md routing row; reconciled drifted IAM-token error handling.
+- **Hygiene:** `typing.Sequence` → `collections.abc.Sequence` (3 sites), Ruff `B904 from None`, `==`→`===` in TS examples, deprecated unused exports/params removed, 500-message casing aligned, log `pagehide` flush added, mixed camelCase serialization aliases fixed, missing imports added, `mutation-testing` CI Node 22 → 24.
+- **Anti-drift:** the seeded `FUTURE.md` credit no longer hardcodes a version string (was "v4.0"), so it cannot re-stale.
+- **UI consistency:** raw Tailwind colors in the generated scaffold UI (`text-red-*`, `bg-white`, `bg-green-*`, `bg-black`, etc.) replaced with shadcn theme tokens so generated components adapt to dark mode; reconciled the drifted `error-log-handler.ts` parameter name across the Next.js/Vite scaffolds (kept as separate per-stack files, not merged).
+
+---
+
 ## [5.1.0] — 2026-06-15
 
 Marketplace-readiness release. Separates repo-maintenance tooling from the shipped plugin surface so installed projects carry only end-user skills.

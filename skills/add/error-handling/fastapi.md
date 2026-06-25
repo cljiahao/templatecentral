@@ -26,7 +26,8 @@ The template includes `src/error_handler.py`. Enhance it to return consistent fi
 
 ```python
 # src/error_handler.py
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -36,7 +37,7 @@ from starlette import status
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
 
-INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
+INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:

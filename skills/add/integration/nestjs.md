@@ -72,7 +72,7 @@ export class GithubIntegrationService {
 
   async listRepos(): Promise<GithubRepo[]> {
     const { data } = await firstValueFrom(
-      this.http.get('/user/repos'),
+      this.http.get<unknown[]>('/user/repos'),
     );
     return data.map((r: unknown) => githubRepoSchema.parse(r));
   }
@@ -181,13 +181,6 @@ Confirm the server starts with no DI or import errors.
 - Export the service from the integration module so other modules can import it
 - Keep API tokens in environment variables — NEVER hardcode
 - Integration modules are self-contained — each has its own module, service, and schemas
-
-### Validate
-
-```bash
-pnpm build    # zero compile errors
-pnpm test     # tests pass
-```
 
 ### After Writing Code
 

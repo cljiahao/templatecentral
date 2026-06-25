@@ -285,33 +285,9 @@ Confirm the build succeeds and all tests pass.
 
 ### Helper Patterns
 
-#### JSON Response Factory
-
-```ts
-function jsonResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-```
-
 #### React Query Wrapper
 
-```tsx
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  };
-}
-```
+Reuse the `createWrapper` factory shown in the hook-test example above — a fresh `QueryClient` (with `retry: false`) wrapped in `QueryClientProvider`. Define it once per test file (or a shared `test/utils.tsx`) and pass it as the `wrapper` option to `renderHook`.
 
 ### Rules
 

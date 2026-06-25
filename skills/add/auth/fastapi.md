@@ -260,6 +260,8 @@ router.include_router(auth.router, tags=[APITags.AUTH])
 Use the `get_current_user` dependency on any endpoint that requires auth:
 
 ```python
+from fastapi import HTTPException, status
+
 from api.dependencies.auth import get_current_user
 
 @router.get("/me", response_model=UserResponse)

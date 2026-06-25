@@ -141,7 +141,7 @@ import { ZodError } from 'zod';
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
-  catch(exception: HttpException, host: ArgumentsHost) {
+  catch(exception: HttpException, host: ArgumentsHost): void {
     if (exception instanceof ZodSerializationException) {
       const zodError: unknown = exception.getZodError();
       if (zodError instanceof ZodError) {

@@ -211,10 +211,6 @@ pnpm test
 - `templatecentral:add (endpoint)` — Add pagination to new list endpoints
 - Stack-specific `code-standards` — Database indexing best practices for sort fields
 
-## Validate
-
-Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
-
 ## After Writing Code
 
 Dispatch in order:

@@ -156,7 +156,7 @@ describe('My Feature (e2e)', () => {
     });
 
     expect(result.statusCode).toBe(201);
-    const body = JSON.parse(result.payload);
+    const body = JSON.parse(result.payload) as { id: string; name: string };
     expect(body.name).toBe('Test Item');
     expect(body.id).toBeDefined();
   });
@@ -168,7 +168,7 @@ describe('My Feature (e2e)', () => {
     });
 
     expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.payload);
+    const body = JSON.parse(result.payload) as { id: string; name: string }[];
     expect(Array.isArray(body)).toBe(true);
   });
 });

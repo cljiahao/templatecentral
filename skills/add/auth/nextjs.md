@@ -155,7 +155,7 @@ export const authClient = createAuthClient({
 Security-critical file. Write exactly as shown.
 
 ```ts
-import { auth } from '@/lib/auth';
+import { getSessionCookie } from 'better-auth/cookies';
 import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -182,18 +182,23 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = await auth.api.getSession({ headers: req.headers });
+  // Optimistic check ONLY. getSessionCookie reads the cookie's presence with no
+  // database call, so it is safe on the Edge runtime — auth.api.getSession pulls in
+  // Node-only crypto/DB code and is unreliable in proxy/middleware. This gates routing
+  // and redirects; it does NOT validate the session (a forged cookie passes). The
+  // authoritative check MUST run server-side in the protected layout (see step 8).
+  const hasSession = getSessionCookie(req) != null;
 
-  // Handle /login: redirect authenticated users to dashboard, allow others through
+  // Handle /login: redirect users who appear signed in to the dashboard, allow others through
   if (pathname === PAGE_ROUTES.LOGIN) {
-    if (session) {
+    if (hasSession) {
       return NextResponse.redirect(new URL(PAGE_ROUTES.DASHBOARD, req.url));
     }
     return NextResponse.next();
   }
 
-  // Protected routes: require authentication
-  if (!session) {
+  // Protected routes: require a session cookie (authoritative validation happens in the layout)
+  if (!hasSession) {
     if (isApiRoute(pathname)) {
       return new Response(null, { status: 401 });
     }
@@ -246,14 +251,26 @@ export default function LoginPage() {
 
 #### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
-> **Skip this step** if `src/app/dashboard/layout.tsx` already exists — present when the project was scaffolded with templateCentral. The `proxy.ts` allowlist protects `/dashboard` automatically once this skill completes; no structural change is needed.
+> If `src/app/dashboard/layout.tsx` already exists (present when scaffolded with templateCentral), **add the authoritative session check below to it** — do not rely on `proxy.ts` alone. The proxy does only an optimistic cookie-presence check on the Edge runtime; `/dashboard` is genuinely protected only once this server-side check is in the layout. Every protected route group needs one.
 
 ```tsx
+import { auth } from '@/lib/auth';
 import { Navbar } from '@/components/layout/navbar';
 import { SiteFooter } from '@/components/layout/site-footer';
+import { PAGE_ROUTES } from '@/lib/constants/routes';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  // Authoritative gate. proxy.ts only checks cookie presence on the Edge; this runs on
+  // the Node runtime and validates the session against the store. Without this, a forged
+  // cookie would pass the proxy and reach protected content.
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    redirect(PAGE_ROUTES.LOGIN);
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />

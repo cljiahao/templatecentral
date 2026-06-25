@@ -87,7 +87,7 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
           version: "11"
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm mutation
