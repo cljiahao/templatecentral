@@ -948,6 +948,49 @@ chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
 
 ---
 
+## Step B5. Seed the `/skill-audit` project skill (skill capture)
+
+The `skill-usage-log.sh` hook (Step B) silently records which skills get used; this is its **consumer**. Seed a stack-agnostic project skill that turns the log into action — surface workflows the developer repeats but hasn't committed as a project skill, then help author one. Run **on demand** (never automatic; no nagging).
+
+```bash
+mkdir -p .claude/skills/skill-audit
+```
+
+**`.claude/skills/skill-audit/SKILL.md`**:
+~~~markdown
+---
+name: skill-audit
+description: Surface repeated workflows worth capturing as committed project skills, from the skill-usage log.
+disable-model-invocation: true
+allowed-tools: "Bash(awk *), Bash(sort *), Bash(cat .claude/skill-usage.log), Bash(ls .claude/skills/*)"
+---
+
+# Skill Audit
+
+Find workflows you repeat often that aren't yet committed project skills — so the repo (and teammates) carry them, not just your session memory.
+
+## 1. Aggregate usage
+```bash
+[ -f .claude/skill-usage.log ] || { echo "No skill usage logged yet."; exit 0; }
+awk -F'\t' '{c[$2]++} END{for (k in c) printf "%4d  %s\n", c[k], k}' .claude/skill-usage.log | sort -rn
+```
+
+## 2. Filter to capture candidates
+A skill is a **capture candidate** when it is used **≥ 2 times** AND:
+- it is NOT a Claude Code built-in (`code-review`, `verify`, `run`, `init`, `review`, `security-review`, `simplify`) — those ship with the CLI, nothing to capture;
+- it is NOT already a project skill — `.claude/skills/<name>/SKILL.md` does not exist (`ls .claude/skills/`).
+
+## 3. Capture (with the user, per candidate)
+- **Author a project skill** (recommended) — create `.claude/skills/<name>/SKILL.md` encoding the workflow, tuned to this project, and commit it. Do NOT vendor a third-party skill's files — write a project skill that captures the same intent (a plugin skill used often is a *signal* to author your own).
+- **Skip** — note it's intentionally not captured.
+
+Keep each new SKILL.md to one workflow, with a clear trigger description and tightly-scoped `allowed-tools`. See the `## Skill capture` norm in AGENTS.md.
+~~~
+
+Track it in `harness.json` (Step E) alongside the other seeded skills.
+
+---
+
 ## Step C. Create `FUTURE.md`
 
 Create `FUTURE.md` at the project root:
@@ -1064,6 +1107,7 @@ for h in .claude/hooks/*; do shasum -a 256 "$h"; done
 sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
 # Hash the verify skill (substitute `<stack>-verify` with the verify-skill name from the delta table, e.g. `next-verify` for nextjs):
 sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
+sha256_skillaudit=$(shasum -a 256 .claude/skills/skill-audit/SKILL.md | cut -d' ' -f1)
 # nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
 [ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
 # Git-hook layer (Step B2) — drift-tracked too:
@@ -1086,6 +1130,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
     "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
     ".claude/skills/<stack>-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify/SKILL.md" },
+    ".claude/skills/skill-audit/SKILL.md": { "origin_hash": "<sha256_skillaudit>", "path": ".claude/skills/skill-audit/SKILL.md" },
     ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
     ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
     ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
@@ -1196,4 +1241,8 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+
+## Skill capture
+- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
+- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
 ```
