@@ -74,6 +74,10 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
       {
         "matcher": "Edit|Write",
         "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
+      },
+      {
+        "matcher": "Skill__.*",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/skill-usage-log.sh" }]
       }
     ],
     "PostToolUseFailure": [
@@ -144,6 +148,10 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
       {
         "matcher": "Edit|Write",
         "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-typecheck.sh" }]
+      },
+      {
+        "matcher": "Skill__.*",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/skill-usage-log.sh" }]
       }
     ],
     "PostToolUseFailure": [
@@ -186,6 +194,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 - `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
+- `skill-usage-log.sh` (PostToolUse `Skill__.*`) — silently logs each skill invocation to `.claude/skill-usage.log` (gitignored, per-developer). Feeds `/skill-audit`, which surfaces repeated workflows worth capturing as a committed project skill. Never blocks (exit 0 always).
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
 - `stop-checks.sh` (Stop) — runs the test suite; exit 2 forces a fix before the turn ends. See delta table for test command.
 - `subagent-stop.sh` (SubagentStop) — type-gates a subagent's uncommitted changes so it can't hand back broken code.
@@ -636,6 +645,21 @@ cat <<'EOF'
 EOF
 ```
 
+**`.claude/hooks/skill-usage-log.sh`** (identical across all stacks — silent skill-usage logger; portable POSIX, no runtime split):
+```bash
+#!/usr/bin/env bash
+# PostToolUse(Skill__.*) — silent skill-usage logger. Records which skills are invoked so the
+# /skill-audit skill can later surface workflows worth capturing as a committed project skill.
+# Silent + non-blocking: always exits 0, never interrupts. Log is per-developer (gitignored).
+input=$(cat)
+name=$(printf '%s' "$input" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"Skill__\([^"]*\)".*/\1/p' | head -1)
+[ -z "$name" ] && exit 0
+printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$name" >> .claude/skill-usage.log
+exit 0
+```
+
+Add `.claude/skill-usage.log` to the project `.gitignore` — it is per-developer telemetry, not shared state.
+
 Make all hook scripts executable:
 ```bash
 chmod +x .claude/hooks/*.sh
@@ -1070,6 +1094,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
     ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
     ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
     ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" },
+    ".claude/hooks/skill-usage-log.sh": { "origin_hash": "<sha256_hook_9>", "path": ".claude/hooks/skill-usage-log.sh" },
     "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
     ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
     ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
