@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.4.0] — 2026-06-26
+
 ### Added
 
 - **Skill-capture — turn repeated workflows into committed project skills (Thread 3-B).** Every scaffold now seeds (1) a silent `PostToolUse` hook on `Skill__.*` that logs skill usage to `.claude/skill-usage.log` (gitignored, per-developer; **never nags** — logger, not nagger), and (2) an on-demand **`/skill-audit`** project skill that aggregates the log, filters out built-ins / namespaced plugin skills / already-captured skills, surfaces anything used **≥2× with no project skill**, and walks authoring one. Plus a `## Skill capture` norm in the seeded `AGENTS.md` (*"a workflow done twice → author a project skill; don't vendor third-party skills — re-author them"*). The repo accumulates the workflows you actually repeat, instead of them living only in session memory. Validated end-to-end (log extraction, aggregation, candidate filtering).
