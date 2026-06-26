@@ -172,6 +172,14 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 }
 ```
 
+**Build-artefact `Read` denies** — also add these to `permissions.deny`, per stack. Generated/dependency dirs burn Claude's context if it greps or opens them; committing the denies gives every developer the same noise reduction (Anthropic, *How Claude Code Works in Large Codebases*). `.gitignore` already keeps gitignored paths out of *search* — these also block *opening* them and cover any checked-in artefacts.
+
+| Stack | Add to `permissions.deny` |
+|---|---|
+| Next.js | `Read(./**/node_modules/**)`, `Read(./**/.next/**)`, `Read(./**/dist/**)`, `Read(./**/coverage/**)`, `Read(./**/.turbo/**)`, `Read(./**/*.tsbuildinfo)` |
+| NestJS · Vite + React | `Read(./**/node_modules/**)`, `Read(./**/dist/**)`, `Read(./**/coverage/**)`, `Read(./**/.turbo/**)`, `Read(./**/*.tsbuildinfo)` |
+| FastAPI | `Read(./**/.venv/**)`, `Read(./**/__pycache__/**)`, `Read(./**/.pytest_cache/**)`, `Read(./**/.ruff_cache/**)`, `Read(./**/.mypy_cache/**)`, `Read(./**/htmlcov/**)`, `Read(./**/dist/**)` |
+
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
 - `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
