@@ -14,12 +14,12 @@ export const emailSchema = z
   .email({ error: 'Invalid email address' })
   .transform(v => v.toLowerCase());
 
+// Modern authenticator guidance: require length and screen against breached-password lists —
+// do NOT impose character-composition rules. Long passphrases beat short complex strings.
 export const passwordSchema = z
   .string()
   .min(12, 'Password must be at least 12 characters')
-  .regex(/[a-z]/, 'Password must contain a lowercase letter')
-  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-  .regex(/[0-9]/, 'Password must contain a number');
+  .max(128, 'Password must be at most 128 characters');
 
 export const uuidSchema = z
   .uuid();
