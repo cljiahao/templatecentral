@@ -17,7 +17,7 @@ Write these files exactly as shown.
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.5.1",
+  "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=24"
   },
@@ -54,7 +54,7 @@ Write these files exactly as shown.
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.16",
-    "@types/node": "^24.0.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.1.8",
