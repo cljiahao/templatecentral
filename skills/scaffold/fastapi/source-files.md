@@ -1090,7 +1090,7 @@ Update values as needed (project name, port, etc.). Never commit `src/.env`.
 python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
-pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv python-multipart python-json-logger
+pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.9.0" pydantic-settings python-dotenv python-multipart "python-json-logger>=4.0" "starlette>=1.0.1"
 pip install -r requirements-dev.txt
 
 pip freeze > requirements.txt
