@@ -51,9 +51,9 @@ Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. 
 
 The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can be significantly shorter. Evaluate a fast-path that skips Phase 3–4 for projects that only need harness seeding.
 
-### 4. NestJS tsconfig `strict: true`
+### 4. NestJS tsconfig `strict: true` — enabled, pending verification
 
-Currently `noImplicitAny: false` because `strict: true` has not been validated against a full scaffold build. Enable once the `scaffold-verify` loop confirms the scaffold compiles cleanly under strict mode.
+Enabled as `strict: true` with `strictPropertyInitialization: false` (the NestJS-idiomatic config — DTO/entity classes use declaration-only properties that full `strict` would reject). Pending a `scaffold-verify` (or manual scaffold) build confirming the generated project compiles clean under strict; if it doesn't, fix the seeded source or narrow the strict flags.
 
 ### 5. New frameworks under evaluation
 
