@@ -14,7 +14,7 @@ Detect from project files before routing. Look in a subdirectory if needed (e.g.
 | `requirements.txt` + fastapi import | fastapi |
 | `nest-cli.json` or `@nestjs/core` in package.json | nestjs |
 
-If ambiguous → ask. Meta-tasks (auditing templateCentral itself) stay with the orchestrator.
+If ambiguous → ask. For a **new** project with no stack named, `templatecentral:scaffold` recommends one from the use-case (see its Step 0) — don't guess. Meta-tasks (auditing templateCentral itself) stay with the orchestrator.
 
 ## Skill Routing
 

@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Scaffold stack recommendation (`templatecentral:scaffold` Step 0).** When a user asks to scaffold without naming a stack, the skill now asks up to two use-case questions and recommends one of the four stacks (Next.js / Vite + React / FastAPI / NestJS) before generating — instead of guessing. `AGENTS.md` cross-references the flow so subagents don't guess either.
+- **`FUTURE.md` framework + capability admission gate.** Documented that the capability × stack matrix is already complete (apparent gaps are intentional stack boundaries), added a demand-gate for net-new `add` capabilities, and a new "Frameworks under evaluation" section with an admission bar — Django priority 1 (distinct niche), Go priority 2 (minimal idiomatic layout, not `golang-standards/project-layout`); Flask and Streamlit declined with reasons.
+
 ---
 
 ## [5.4.0] — 2026-06-26

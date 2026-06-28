@@ -62,6 +62,8 @@ Ask Claude to scaffold a project:
 "Scaffold a Vite React SPA at ~/projects/my-spa"
 ```
 
+Not sure which stack? Just ask — e.g. *"scaffold me a new app"* — and Claude asks a couple of use-case questions, then recommends one of the four stacks before generating.
+
 Claude reads the scaffold skill, generates every file, installs dependencies, runs verification gates, and writes `AGENTS.md` — all in one shot.
 
 ---
