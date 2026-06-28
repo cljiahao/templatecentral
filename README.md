@@ -157,7 +157,7 @@ templatecentral/
 ├── .claude-plugin/
 │   ├── plugin.json          # Plugin manifest (points to skills/)
 │   └── marketplace.json     # Anthropic marketplace metadata
-├── .github/workflows/       # CI — lint-skills, validate-manifest, AI PR review
+├── .github/workflows/       # CI — validate-skills (lint + manifest), AI review, scheduled ecosystem-refresh + scaffold-verify, tag-release
 ├── scripts/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish

@@ -18,11 +18,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **NestJS Fastify adapter floor raised to `@nestjs/platform-fastify ≥11.1.27`** (`.claude/rules/nestjs.md`) — the prior `≥11.1.19` floor sat below a trailing-slash auth-bypass advisory fixed in 11.1.24. Scaffold `config-files.md` already pinned `^11.1.24`; this corrects the documented floor the audit/migrate logic reads.
 - **NestJS Drizzle install now uses `drizzle-orm@rc`** (`add/database/typescript/nestjs-drizzle.md`) — a bare `pnpm add drizzle-orm` resolved the stable v0.x line instead of the v1 RC the skill's code assumes, matching the Next.js sibling.
 - **FastAPI dependency install applies the documented security floors** (`scaffold/fastapi/source-files.md`) — runtime deps were installed unpinned before `pip freeze`, so the Starlette / Pydantic / python-json-logger floors in the rules weren't enforced at install.
+- **Hardened the seeded enforcement hooks** (`scaffold/shared/harness-kit.md`, node + python): `block-no-verify` scrubs quoted strings before flag-matching (a commit message mentioning `--no-verify`/`-n` no longer false-blocks); the `protect-files` governance "ask" gate also matches absolute paths (worktree/symlink outside the git root); the rm-guard treats quotes as word boundaries; `stop-checks` (python) accepts lowercase `true` for `stop_hook_active`.
+- **Password validation aligned to current authenticator guidance** (`standards/validation-patterns/*`): dropped character-composition regexes for length (min 12, max 128) + breach-screening; verifiers should not impose composition rules.
 
 ### Changed
 
 - Drizzle RC pin example bumped `1.0.0-rc.3` → `1.0.0-rc.4` in the Next.js / NestJS rules (the `@rc` tag advanced 2026-06-27; v1 still has no GA). Starlette current-stable note corrected `1.2.1` → `1.3.1`.
-- Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29). Large-scope drift recorded for follow-up: React Router v7 → v8, OWASP Top 10:2025, OWASP Agentic Top 10 2026 (ASI), NIST 800-63B Rev 4, and Claude Code harness-doc accuracy (hook-event set, Stop-loop guard, AGENTS.md/AAIF provenance).
+- Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29).
+- **NestJS scaffold `tsconfig` now `strict: true`** (with `strictPropertyInitialization: false`, the NestJS-idiomatic config) — pending a scaffold build to confirm clean compilation.
+- **Vite + React upgraded to React Router v8** (`^8.0.1`) — `BrowserRouter` now imports from `react-router/dom`; all other router APIs unchanged.
+- Aligned `@types/node` (`^25.9.1`) and `pnpm` (`11.5.2`) pins across the TS stacks; corrected the audit's unfounded "Stop-hook 8-block cap" claim and a stale README workflows comment.
+- Deferred (need build / verified-SHA confirmation): OWASP Top 10:2025 web-edition references and CI action SHA-pinning. OWASP Agentic Top 10 2026 (ASI) and the AWS Responsible AI Lens were already current in `add/ai-security`.
 
 ---
 

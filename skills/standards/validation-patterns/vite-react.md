@@ -27,15 +27,14 @@ const createProjectSchema = z.object({
     .optional(),
 });
 
-// Password fields: enforce length first (≥ 12 characters), then basic complexity.
-// Length matters more than exotic character rules — long passphrases beat short complex strings.
+// Password fields: modern authenticator guidance — require length and screen against
+// breached-password lists; do NOT impose character-composition rules. Long passphrases beat
+// short complex strings.
 // Canonical definition lives in standards/validation-patterns/patterns.md — keep these identical.
 export const passwordSchema = z
   .string()
   .min(12, 'Password must be at least 12 characters')
-  .regex(/[a-z]/, 'Password must contain a lowercase letter')
-  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-  .regex(/[0-9]/, 'Password must contain a number');
+  .max(128, 'Password must be at most 128 characters');
 
 type CreateProjectData = z.input<typeof createProjectSchema>;
 

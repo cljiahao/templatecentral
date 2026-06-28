@@ -611,9 +611,9 @@ export default defineConfig({
     "ignoreDeprecations": "6.0",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
     "typeRoots": [
       "./node_modules/@types",
       "./src/common/types"

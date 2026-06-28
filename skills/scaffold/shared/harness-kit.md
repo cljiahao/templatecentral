@@ -239,15 +239,15 @@ fi
 
 reason=""
 case "$rel" in
-  AGENTS.md|CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
-  docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
-  .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
-  .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
-  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
-  .claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
-  Dockerfile) reason="container image definition" ;;
-  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
-  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
+  AGENTS.md|*/AGENTS.md|CLAUDE.md|*/CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
+  docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
+  .claude/settings.json|*/.claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
+  .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
+  .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
+  Dockerfile|*/Dockerfile) reason="container image definition" ;;
+  lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
   # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
@@ -296,15 +296,15 @@ fi
 
 reason=""
 case "$rel" in
-  AGENTS.md|CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
-  docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
-  .claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
-  .claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
-  .claude/harness.json|.claude/verify-harness.sh|.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
-  .claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
-  Dockerfile) reason="container image definition" ;;
-  lefthook.yml|.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
-  .lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
+  AGENTS.md|*/AGENTS.md|CLAUDE.md|*/CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
+  docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
+  .claude/settings.json|*/.claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
+  .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
+  .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
+  Dockerfile|*/Dockerfile) reason="container image definition" ;;
+  lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
+  .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
 esac
 if [ -n "$reason" ]; then
   # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
@@ -327,8 +327,10 @@ exit 0
 input=$(cat)
 cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
+# Scrub quoted strings (e.g. commit messages) before flag-matching so text inside -m "..." can't false-trigger.
+scan=$(printf '%s' "$cmd" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
+if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -347,7 +349,7 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" |
   echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
   exit 2
 fi
-if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
+if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/"])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/"]|$)'; then
   echo "BLOCKED: recursive rm on a source directory. Confirm with a human first." >&2
   exit 2
 fi
@@ -363,8 +365,10 @@ cmd=$(printf '%s' "$input" | python3 -c "import json,sys
 try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
 except Exception: print('')" 2>/dev/null)
 [ -z "$cmd" ] && exit 0
+# Scrub quoted strings (e.g. commit messages) before flag-matching so text inside -m "..." can't false-trigger.
+scan=$(printf '%s' "$cmd" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
 
-if echo "$cmd" | grep -qE 'git[[:space:]]+commit' && echo "$cmd" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
+if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
@@ -383,7 +387,7 @@ if echo "$cmd" | grep -qE 'git[[:space:]]+(checkout|restore)\b' && echo "$cmd" |
   echo "BLOCKED: 'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first." >&2
   exit 2
 fi
-if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/]|$)'; then
+if echo "$cmd" | grep -qE '(^|[[:space:]])rm([[:space:]]|$)' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*r|[[:space:]]--recursive' && echo "$cmd" | grep -qE '[[:space:]]-[a-zA-Z]*f|[[:space:]]--force' && echo "$cmd" | grep -qE '(^|[[:space:]/"])(src|app|lib|test|\.claude|\.husky|\.git|node_modules)([[:space:]/"]|$)'; then
   echo "BLOCKED: recursive rm on a source directory. Confirm with a human first." >&2
   exit 2
 fi
@@ -575,7 +579,7 @@ input=$(cat)
 active=$(printf '%s' "$input" | python3 -c "import json,sys
 try: print(json.loads(sys.stdin.read() or '{}').get('stop_hook_active', False))
 except: print(False)" 2>/dev/null)
-[ "$active" = "True" ] && exit 0
+[ "$active" = "True" ] || [ "$active" = "true" ] && exit 0
 [ -f .venv/bin/activate ] && . .venv/bin/activate
 python -m pytest --version >/dev/null 2>&1 || { echo "pytest unavailable — skipping Stop gate" >&2; exit 0; }
 OUTPUT=$(python -m pytest test/ -q 2>&1); EC=$?
