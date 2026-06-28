@@ -41,6 +41,8 @@ Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. 
 
 ### 2. New `templatecentral:add` capabilities under evaluation
 
+> The capability × stack matrix is already complete for the current four stacks — apparent gaps (no `database`/`endpoint` for client-only Vite; no `page`/`feature`/`form` for backend stacks) are intentional boundaries, not gaps. The items below are **net-new** capabilities, not gap-fills, and are **demand-gated**: added when a real user asks, not for completeness (the same gate as new frameworks — see §5).
+
 - **background-jobs / queues** — task queues (Celery/FastAPI, BullMQ/NestJS, Next.js server actions)
 - **caching (Redis)** — response + query-level caching across all stacks
 - **transactional email** — Resend / Nodemailer integration with template scaffolding
@@ -52,3 +54,18 @@ The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can b
 ### 4. NestJS tsconfig `strict: true`
 
 Currently `noImplicitAny: false` because `strict: true` has not been validated against a full scaffold build. Enable once the `scaffold-verify` loop confirms the scaffold compiles cleanly under strict mode.
+
+### 5. New frameworks under evaluation
+
+New frameworks are the only way to expand coverage (the matrix in §2 is already complete), but each one is a permanent maintenance cost for a solo maintainer — a third hook-runtime variant, a `.claude/rules/<stack>.md`, and ongoing version/advisory tracking. Community consensus (create-t3-app, create-next-app, Vite) favours depth over breadth; the create-t3-app maintainers explicitly rejected going framework-agnostic because the work scales poorly. So additions are **demand-gated** — added only when real users ask, not for completeness.
+
+**Admission bar** — a framework earns a slot only if it can deliver the same promises as the current four: (1) an encodable, agreed architecture; (2) a harness with real teeth (typecheck / test / lint / secret gates); (3) maintainable currency (trackable in `ecosystem-refresh`); (4) a non-redundant niche.
+
+| Framework | Verdict | Notes |
+|---|---|---|
+| **Django** | Priority 1 (if pulled) | Distinct full-stack batteries-included niche the current menu lacks; mature, well-defined gates. Caveat: Django ships much structure itself — validate the harness adds enough on top before committing. |
+| **Go** | Priority 2 (optional) | Clean gates (`gofmt`, `go vet`, `go test`, `golangci-lint`). No canonical layout — use minimal official idioms (`main.go` + `go.mod`, `internal/`, `cmd/`), NOT `golang-standards/project-layout` (self-admittedly non-official) or any single app repo. |
+| **Flask** | Declined | Redundant with FastAPI, which owns the type-checked-API niche; Flask survives mainly for lightweight/MVP work. |
+| **Streamlit** | Declined | Prototyping / data-app tool; lacks native structure and governance, only API-level testing — contradicts the production-ready / tested / harnessed value prop. |
+
+See `CONVENTIONS.md` §6 for the mechanical steps to add a framework once one clears the gate.

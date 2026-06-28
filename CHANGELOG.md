@@ -8,6 +8,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Scaffold stack recommendation (`templatecentral:scaffold` Step 0).** When a user asks to scaffold without naming a stack, the skill now asks up to two use-case questions and recommends one of the four stacks (Next.js / Vite + React / FastAPI / NestJS) before generating — instead of guessing. `AGENTS.md` cross-references the flow so subagents don't guess either.
+- **`FUTURE.md` framework + capability admission gate.** Documented that the capability × stack matrix is already complete (apparent gaps are intentional stack boundaries), added a demand-gate for net-new `add` capabilities, and a new "Frameworks under evaluation" section with an admission bar — Django priority 1 (distinct niche), Go priority 2 (minimal idiomatic layout, not `golang-standards/project-layout`); Flask and Streamlit declined with reasons.
+
+### Fixed
+
+- **NestJS Fastify adapter floor raised to `@nestjs/platform-fastify ≥11.1.27`** (`.claude/rules/nestjs.md`) — the prior `≥11.1.19` floor sat below a trailing-slash auth-bypass advisory fixed in 11.1.24. Scaffold `config-files.md` already pinned `^11.1.24`; this corrects the documented floor the audit/migrate logic reads.
+- **NestJS Drizzle install now uses `drizzle-orm@rc`** (`add/database/typescript/nestjs-drizzle.md`) — a bare `pnpm add drizzle-orm` resolved the stable v0.x line instead of the v1 RC the skill's code assumes, matching the Next.js sibling.
+- **FastAPI dependency install applies the documented security floors** (`scaffold/fastapi/source-files.md`) — runtime deps were installed unpinned before `pip freeze`, so the Starlette / Pydantic / python-json-logger floors in the rules weren't enforced at install.
+
+### Changed
+
+- Drizzle RC pin example bumped `1.0.0-rc.3` → `1.0.0-rc.4` in the Next.js / NestJS rules (the `@rc` tag advanced 2026-06-27; v1 still has no GA). Starlette current-stable note corrected `1.2.1` → `1.3.1`.
+- Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29). Large-scope drift recorded for follow-up: React Router v7 → v8, OWASP Top 10:2025, OWASP Agentic Top 10 2026 (ASI), NIST 800-63B Rev 4, and Claude Code harness-doc accuracy (hook-event set, Stop-loop guard, AGENTS.md/AAIF provenance).
+
 ---
 
 ## [5.4.0] — 2026-06-26

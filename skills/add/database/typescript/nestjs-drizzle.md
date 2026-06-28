@@ -8,7 +8,7 @@
 #### A1. Install Dependencies
 
 ```bash
-pnpm add drizzle-orm postgres
+pnpm add drizzle-orm@rc postgres
 pnpm add -D drizzle-kit
 ```
 
