@@ -22,6 +22,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - Drizzle RC pin example bumped `1.0.0-rc.3` → `1.0.0-rc.4` in the Next.js / NestJS rules (the `@rc` tag advanced 2026-06-27; v1 still has no GA). Starlette current-stable note corrected `1.2.1` → `1.3.1`.
+- Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29). Large-scope drift recorded for follow-up: React Router v7 → v8, OWASP Top 10:2025, OWASP Agentic Top 10 2026 (ASI), NIST 800-63B Rev 4, and Claude Code harness-doc accuracy (hook-event set, Stop-loop guard, AGENTS.md/AAIF provenance).
 
 ---
 
