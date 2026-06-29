@@ -69,3 +69,24 @@ New frameworks are the only way to expand coverage (the matrix in §2 is already
 | **Streamlit** | Declined | Prototyping / data-app tool; lacks native structure and governance, only API-level testing — contradicts the production-ready / tested / harnessed value prop. |
 
 See `CONVENTIONS.md` §6 for the mechanical steps to add a framework once one clears the gate.
+
+### 6. Cross-tool support (OpenCode / OpenChamber)
+
+**Goal:** make templateCentral usable from non-Claude-Code agents — driven by a product that wraps OpenCode/OpenChamber. **Constraint: the Claude Code plugin stays the primary, non-negotiable target** (marketplace install + full hook harness). Cross-tool is strictly additive — it must never regress the Claude Code experience.
+
+templateCentral is three layers with different portability:
+
+| Layer | Portability | Notes |
+|---|---|---|
+| **Skills** (scaffold logic) | near-portable | Agent Skills open standard; OpenCode reads `.claude/skills/`, `.agents/skills/`, `~/.config/opencode/skills/`. Blocker: routers hardcode `$HOME/.claude/plugins/marketplaces/templatecentral/…` `cat` paths. |
+| **Harness** | split | **Universal half** — lefthook git-hooks + gitleaks + CI gates — already tool-agnostic (fires at commit/CI time, any tool/human). **Claude-Code half** — `.claude/hooks/` + `settings.json` in-agent guards — CC-specific. |
+| **Docs** (`AGENTS.md`) | universal | already read by OpenCode and most tools. |
+
+**Design principle: push enforcement DOWN to git-hooks / CI / `AGENTS.md` (universal), keep in-agent hooks as a per-tool layer.** The more the harness lives in lefthook + CI, the more "the full thing" is automatically cross-tool.
+
+**Phased plan (demand-gated):**
+1. **Skill path-portability.** Resolve the skill base dynamically instead of hardcoding the CC plugin path, so a clone/copy loads in OpenCode (`.agents/skills/`) without edits. ⚠️ **Open design question:** a markdown skill can't easily know its own location — needs a tool-provided plugin-root variable (e.g. `${CLAUDE_PLUGIN_ROOT}` in CC, OpenCode's equivalent) or a relative-load mechanism. Must keep resolving correctly for the CC plugin. Deserves its own design pass before any router edits.
+2. **Cross-tool distribution.** Publish skills to tool-agnostic registries (`agents.toml`/skills-supply, open Agent-Skills marketplaces) so they're discoverable beyond the Claude marketplace.
+3. **OpenCode-native in-agent harness adapter.** Port the live guards (typecheck-on-edit, Stop test-gate, secret/prompt-injection guards, session recovery) to OpenCode's plugin/hook API. The *logic* is portable; the *wiring* (event names, config) is per-tool — a standing per-tool maintenance cost (the "breadth tax", now for tools). Build per tool that has real demand.
+
+**What a cloned OpenCode user gets today, before any of the above:** scaffold logic (after path fix) + `AGENTS.md` conventions + the git-hook/CI enforcement — i.e. ~80% of the value, minus the in-agent live guards.
