@@ -63,6 +63,14 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 **Subagent blind spot (v2.1.84+):** Built-in subagents (`/explore`, `/plan`) have `omitClaudeMd: true` — they do not receive CLAUDE.md or its `@AGENTS.md` import. AGENTS.md must therefore be self-contained and not rely on CLAUDE.md being loaded. All routing instructions belong in AGENTS.md, not CLAUDE.md.
 
+## Cross-tool portability
+
+**Claude Code is the primary, non-negotiable target** (marketplace install + full `.claude/hooks/` harness). Beyond that, templateCentral rides two cross-vendor open standards so its skills also work in OpenCode, Codex, and Antigravity unchanged — keep contributions on-standard:
+
+- **SKILL.md is portable.** Reference bundled/sibling files only via the `<skill-dir>` placeholder — the skill's own directory, which every compliant tool surfaces to the agent at invocation (CC/OpenCode print "Base directory for this skill", Codex injects the skill's `(file: …)` path). NEVER hardcode `$HOME/.claude/plugins/…` and NEVER use `${CLAUDE_SKILL_DIR}` (empty in agent-run ```bash``` blocks — CC only fills it for `!`-injection). Lint-enforced. See `skills/CONVENTIONS.md` §1.
+- **AGENTS.md is the universal layer** (Linux Foundation / Agentic AI Foundation standard) — read natively by Codex/Antigravity and by Claude Code via the `CLAUDE.md = @AGENTS.md` import. Push durable routing/constraints here, not into CC-only surfaces.
+- **What stays CC-specific:** the in-agent live guards (`.claude/hooks/` + `settings.json`). The git-hook/CI half of the harness (lefthook + gitleaks + CI) is already tool-agnostic. Cross-tool support is strictly additive — it must never regress the Claude Code experience. Full analysis + per-tool adapter roadmap: `FUTURE.md` §6.
+
 ## Working on this repo
 
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill
