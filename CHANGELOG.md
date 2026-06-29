@@ -26,7 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Drizzle RC pin example bumped `1.0.0-rc.3` → `1.0.0-rc.4` in the Next.js / NestJS rules (the `@rc` tag advanced 2026-06-27; v1 still has no GA). Starlette current-stable note corrected `1.2.1` → `1.3.1`.
 - Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29).
 - **NestJS scaffold `tsconfig` now `strict: true`** (with `strictPropertyInitialization: false`, the NestJS-idiomatic config) — pending a scaffold build to confirm clean compilation.
-- **Vite + React upgraded to React Router v8** (`^8.0.1`) — `BrowserRouter` now imports from `react-router/dom`; all other router APIs unchanged.
+- **Vite + React upgraded to React Router v8** (`^8.0.1`) — version bump only; imports are unchanged (v8 keeps `BrowserRouter`/`Route`/`Routes` in the `react-router` entry — `react-router/dom` is for SSR hydration, not the declarative SPA router). Validated end-to-end via a real scaffold (`pnpm build` + tests green).
 - Aligned `@types/node` (`^25.9.1`) and `pnpm` (`11.5.2`) pins across the TS stacks; corrected the audit's unfounded "Stop-hook 8-block cap" claim and a stale README workflows comment.
 - Deferred (need build / verified-SHA confirmation): OWASP Top 10:2025 web-edition references and CI action SHA-pinning. OWASP Agentic Top 10 2026 (ASI) and the AWS Responsible AI Lens were already current in `add/ai-security`.
 

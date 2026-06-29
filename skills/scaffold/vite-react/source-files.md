@@ -44,8 +44,7 @@ import { DashboardPage } from '@/pages/dashboard';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/not-found';
-import { Route, Routes } from 'react-router';
-import { BrowserRouter } from 'react-router/dom';
+import { BrowserRouter, Route, Routes } from 'react-router';
 
 export function AppRouter() {
   return (
