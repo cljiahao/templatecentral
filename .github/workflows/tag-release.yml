@@ -17,12 +17,21 @@ jobs:
         run: |
           ver=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
           tag="v$ver"
+          # 1) Create + push the tag only if it doesn't already exist.
           if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists — nothing to do."; exit 0
+            echo "Tag $tag already exists — skipping tag creation."
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
           fi
-          awk -v v="$ver" '$0 ~ "^## \\["v"\\]"{p=1;print;next} /^## \[/{if(p)exit} p' CHANGELOG.md > /tmp/notes.md
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Release $tag"
-          git push origin "$tag"
-          gh release create "$tag" --title "$tag" --notes-file /tmp/notes.md
+          # 2) Create the GitHub Release only if it doesn't already exist.
+          #    Decoupled from the tag check on purpose: a pre-existing tag (e.g. pushed
+          #    manually, or by a prior partial run) must NOT skip release creation.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists — nothing to do."
+          else
+            awk -v v="$ver" '$0 ~ "^## \\["v"\\]"{p=1;print;next} /^## \[/{if(p)exit} p' CHANGELOG.md > /tmp/notes.md
+            gh release create "$tag" --title "$tag" --notes-file /tmp/notes.md --verify-tag --latest
+          fi
