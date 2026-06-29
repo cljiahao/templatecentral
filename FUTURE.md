@@ -90,3 +90,15 @@ templateCentral is three layers with different portability:
 3. **OpenCode-native in-agent harness adapter.** Port the live guards (typecheck-on-edit, Stop test-gate, secret/prompt-injection guards, session recovery) to OpenCode's plugin/hook API. The *logic* is portable; the *wiring* (event names, config) is per-tool — a standing per-tool maintenance cost (the "breadth tax", now for tools). Build per tool that has real demand.
 
 **What a cloned OpenCode user gets today, before any of the above:** scaffold logic (after path fix) + `AGENTS.md` conventions + the git-hook/CI enforcement — i.e. ~80% of the value, minus the in-agent live guards.
+
+#### Phase 1 spike findings (2026-06-29) — the path swap is NOT a clean win
+
+Hands-on testing (invoking the installed scaffold skill + probing) settled the "open design question" above, and not in the convenient direction:
+
+- **`${CLAUDE_SKILL_DIR}` does NOT work for our loader.** It is **empty in agent-run bash** — CC only populates it for `!`-prefixed *bash-injection* commands, not the agent-run ```` ```bash cat ```` blocks templateCentral uses. A full 78-file conversion to it was implemented, **failed the live probe (`CLAUDE_SKILL_DIR=[]`, cat → "No such file"), and was reverted.** Do not revisit it.
+- **`${CLAUDE_PLUGIN_ROOT}` also doesn't expand in skill markdown** (known CC bug).
+- **The current hardcoded `marketplaces/` path actually resolves in CC** — so CC is *not* broken today. But it has a separate latent bug: the running skill is `cache/…/<active-version>` while the hardcoded path points at `marketplaces/…` (the *latest* marketplace clone), so an older installed version can load newer reference files (version drift).
+- **base-dir-from-invocation works** (CC shows "Base directory for this skill: …"; catting that absolute path resolves ✓) — but it is **model-dependent** (the agent must substitute the shown path) and a large prose rewrite.
+- **OpenCode's bundled-file resolution is undocumented** — its skills docs don't say whether it sets a skill-dir var, resolves relative reads against the skill dir, or shows the dir. **Needs hands-on OpenCode testing**, not assumption.
+
+**Revised stance:** the swap trades CC's *working* loader for a *model-dependent* one to gain portability that can't yet be validated on OpenCode — backwards from "CC is primary." So Phase 1 is **not** a simple find-replace. Recommended re-scope: (a) leave CC's loader working; optionally fix the version-drift separately; (b) treat OpenCode portability as its own effort that **starts with hands-on OpenCode testing** of how it resolves bundled files, then chooses a mechanism (relative-read, base-dir, or a build-step variant) proven against *both* tools before any mass conversion.
