@@ -7,7 +7,7 @@ Thanks for helping improve templatecentral. Contributions of all kinds are welco
 Check [Issues](https://github.com/cljiahao/templatecentral/issues) for open tasks. Good first contributions:
 
 - **Skill improvements** — accuracy fixes, version bumps, missing edge cases
-- **New add-* skills** — coverage gaps within an existing stack
+- **New capability reference files** — coverage gaps within an existing stack (added under `templatecentral:add`, not as standalone skills)
 - **New stacks** — if you know a stack well and can write a complete scaffold skill
 
 ## Adding or Modifying a Skill
@@ -29,7 +29,7 @@ Both `name` and `description` are required — CI will reject a skill missing ei
 
 ### Registering a skill
 
-Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills/"`, so any directory under `skills/` that contains a valid `SKILL.md` is registered automatically. No edits to `plugin.json` needed.
+Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills/"`, so any directory under `skills/` whose `SKILL.md` carries `name:` frontmatter is registered automatically — no `plugin.json` edits needed. A `SKILL.md` that has a `<!-- ref: -->` header instead of `name:` frontmatter is an **agent utility** (e.g. `build`, `test`, `review`, `cleanup`): it is catted on demand, not registered. See `skills/CONVENTIONS.md`.
 
 ### Adding a new stack
 
@@ -54,7 +54,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat(nextjs): add nextjs-add-websocket skill
+feat(add): add websocket capability reference for nextjs
 fix(fastapi): correct pytest async config in scaffold
 docs(readme): update skills table
 ```

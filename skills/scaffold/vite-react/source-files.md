@@ -2035,7 +2035,7 @@ git init
 pnpm install
 ```
 
-`pnpm install` automatically runs `prepare: husky`, activating pre-commit and pre-push hooks. Verify installation completed without errors.
+`pnpm install` runs the `prepare` script, installing the lefthook git hooks. Verify installation completed without errors.
 
 ### 5. Install shadcn components
 

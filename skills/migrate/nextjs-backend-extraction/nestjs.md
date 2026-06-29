@@ -1,6 +1,6 @@
 <!-- ref: migrate/nextjs-backend-extraction/nestjs.md
      loaded-by: migrate/nextjs-backend-extraction.md → migrate/SKILL.md
-     prereq: Stack = Next.js, target backend = NestJS. Do not invoke this file directly. -->
+     prereq: Stack = Next.js, target backend = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 
 # Next.js → NestJS Backend Extraction
 

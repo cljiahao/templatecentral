@@ -789,6 +789,95 @@ check_owasp_llm_sections_complete() {
   fi
 }
 
+check_skilldir_refs_resolve() {
+  # Every concrete <skill-dir>/<path> reference must resolve to a real file, so the cat-routing
+  # contract (CONVENTIONS §1/§8 "every reference file referenced in a cat command actually exists")
+  # cannot silently break when a ref file is moved or renamed. Placeholder refs (containing <, >, or |
+  # — e.g. <skill-dir>/<stack>/config-files.md) are skipped. TIMELESS: this is the core load mechanism.
+  header "<skill-dir> references resolve to real files"
+  if ! command -v python3 >/dev/null 2>&1; then
+    pass "skipped (python3 not available)"
+    return
+  fi
+  local out
+  out=$(python3 - "$SKILLS_DIR" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+def owning(p):
+    d = os.path.dirname(p)
+    while d.startswith(root):
+        if os.path.exists(os.path.join(d, "SKILL.md")): return d
+        nd = os.path.dirname(d)
+        if nd == d: break
+        d = nd
+    return None
+# Tight char class: matches a concrete path and stops cleanly at backtick/quote/paren/space and
+# at placeholder markers (<stack>, <path>, |), so doc placeholders are skipped without a filter.
+tok = re.compile(r'<skill-dir>(/[A-Za-z0-9._/*{}-]+)')
+bad = []
+for dp, _, fs in os.walk(root):
+    for f in fs:
+        if not f.endswith('.md'): continue
+        p = os.path.join(dp, f)
+        try: t = open(p, encoding='utf-8').read()
+        except Exception: continue
+        for m in tok.finditer(t):
+            rel = m.group(1).lstrip('/')
+            base = owning(p)
+            if base and not os.path.exists(os.path.join(base, rel)):
+                bad.append(p + ': <skill-dir>/' + rel)
+for b in bad: print(b)
+PY
+)
+  if [[ -n "$out" ]]; then
+    echo "$out"
+    fail "Broken <skill-dir> reference(s) — target file does not exist (CONVENTIONS §8)"
+  else
+    pass "All concrete <skill-dir> references resolve"
+  fi
+}
+
+check_ref_header_prereq_suffix() {
+  # CONVENTIONS §4: a ref file's prereq must state how it is loaded — ending with
+  # "— it is loaded at runtime by the templatecentral:<skill> skill" (or noting it is a
+  # de-registered agent utility). The bare "Do not invoke this file directly." form drifted
+  # across 12 files; this locks the full form so routing intent stays self-documenting. TIMELESS.
+  header "Ref-header prereq carries the §4 'loaded at runtime by' clause"
+  local bad=""
+  while IFS= read -r f; do
+    local head6
+    head6=$(head -6 "$f")
+    [[ "$head6" == *"<!-- ref:"* ]] || continue
+    [[ "$head6" == *"prereq:"* ]] || continue
+    if ! grep -qF 'loaded at runtime by the templatecentral:' <<<"$head6" \
+       && ! grep -qiE 'de-registered|agent utilit|catted directly' <<<"$head6"; then
+      bad+="$f"$'\n'
+    fi
+  done < <(find "$SKILLS_DIR" -name '*.md' 2>/dev/null)
+  if [[ -n "$bad" ]]; then
+    printf "%s" "$bad"
+    fail "Ref-header prereq missing the §4 'loaded at runtime by the templatecentral:<skill> skill' clause"
+  else
+    pass "All ref-header prereqs carry the §4 'loaded at runtime by' clause"
+  fi
+}
+
+check_no_husky() {
+  # The git-hook layer is lefthook (harness-kit Step B2) — the single source for ALL stacks,
+  # since it installs from Node OR Python (Husky is Node-only and cannot run in a FastAPI scaffold).
+  # A stray husky reference means a scaffold drifted back to a contradictory dual-hook setup.
+  # TIMELESS: lefthook is the harness design SSOT.
+  header "No husky references (lefthook is the git-hook SSOT)"
+  local matches
+  matches=$(grep -rn 'husky' "$SKILLS_DIR/" 2>/dev/null || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "husky reference found — the git-hook layer is lefthook (harness-kit Step B2). Remove husky."
+  else
+    pass "No husky references (lefthook only)"
+  fi
+}
+
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────
 
 echo "=== templateCentral skill lint ==="
@@ -810,6 +899,9 @@ check_seeded_skill_paths_are_directories
 check_no_toplevel_command_in_hooks
 check_scaffold_seeds_complete_harness
 check_no_absolute_plugin_path
+check_skilldir_refs_resolve
+check_ref_header_prereq_suffix
+check_no_husky
 check_no_postToolUse_full_test_suite
 echo ""
 echo "ECOSYSTEM-ERA"

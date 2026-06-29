@@ -1,6 +1,6 @@
 <!-- ref: add/database/python/beanie.md
      loaded-by: add/database/python.md → add/SKILL.md
-     prereq: Stack = FastAPI, DB = Beanie (MongoDB async ODM). Do not invoke this file directly. -->
+     prereq: Stack = FastAPI, DB = Beanie (MongoDB async ODM). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + Beanie (MongoDB)
 
 ### B1. Install Dependencies

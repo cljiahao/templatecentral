@@ -1,6 +1,6 @@
 <!-- ref: migrate/nextjs-backend-extraction.md
      loaded-by: migrate/SKILL.md
-     prereq: User wants to extract Next.js API routes to a dedicated backend service. Do not invoke this file directly. -->
+     prereq: User wants to extract Next.js API routes to a dedicated backend service. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 
 # Next.js Backend Extraction — Target Router
 

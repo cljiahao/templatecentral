@@ -1,6 +1,6 @@
 <!-- ref: add/database/typescript/nextjs-mongoose.md
      loaded-by: add/database/typescript.md → add/SKILL.md
-     prereq: Stack = Next.js, ORM = Mongoose (MongoDB). Do not invoke this file directly. -->
+     prereq: Stack = Next.js, ORM = Mongoose (MongoDB). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js + Mongoose (MongoDB)
 
 #### C1. Install Dependencies

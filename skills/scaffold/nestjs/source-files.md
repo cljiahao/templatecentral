@@ -688,16 +688,16 @@ describe('ExampleController', () => {
 
 Create the target directory and write all files:
 
-- All **Part B** config files verbatim (including `.husky/pre-commit` and `.husky/pre-push`)
+- All **Part B** config files verbatim
 - All **Part C** source files verbatim
 - Create two empty files: `src/common/types/.gitkeep` and `src/database/.gitkeep`
 - Write `package.json` verbatim from `config-files.md`, substituting the project `"name"` (kebab-case)
 - Write `README.md` (brief project intro + the commands from `package.json` scripts)
 
-Make `docker-entrypoint.sh` and both husky hooks executable:
+Make `docker-entrypoint.sh` executable:
 
 ```bash
-chmod +x docker-entrypoint.sh .husky/pre-commit .husky/pre-push
+chmod +x docker-entrypoint.sh
 ```
 
 ### 2. Update Project Settings
@@ -732,7 +732,7 @@ git init
 pnpm install
 ```
 
-`pnpm install` triggers the `prepare` script which activates husky.
+`pnpm install` triggers the `prepare` script, installing the lefthook git hooks.
 
 ### 5. Verification Gate
 

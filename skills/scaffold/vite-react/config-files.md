@@ -25,13 +25,13 @@
     "preview": "vite preview",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:ci": "vitest --run --reporter=dot",
+    "test:ci": "vitest --run --coverage --reporter=dot",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "check": "prettier --check . && eslint . && tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
@@ -57,10 +57,11 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
-    "husky": "^9.1.7",
+    "lefthook": "^2.1.9",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "prettier-plugin-organize-imports": "^4.3.0",
@@ -84,6 +85,13 @@ build
 coverage
 pnpm-lock.yaml
 .claude
+
+# Enforcement-layer config — human-reviewed, never auto-formatted.
+# Prettier would otherwise rewrite these (yaml quoting/whitespace), drifting them from the
+# harness-integrity baseline and failing verify-harness.sh on the first push / in CI.
+lefthook.yml
+.github/
+.gitleaks.toml
 ```
 
 ### `Dockerfile`
@@ -344,7 +352,9 @@ blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
 # pnpm 11 blocks all install scripts by default; add native packages here as needed.
-# allowBuilds:
+allowBuilds:
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+# Add native build deps here if `pnpm install` reports ERR_PNPM_IGNORED_BUILDS, e.g.:
 #   esbuild: true
 #   sharp: true
 ```
@@ -493,6 +503,10 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'cobertura'],
+    },
   },
 });
 ```
@@ -566,31 +580,6 @@ export default {
     '@tailwindcss/postcss': {},
   },
 };
-```
-
-### `.husky/pre-commit`
-
-```sh
-#!/bin/sh
-# Ensure lock file matches package.json
-pnpm install --frozen-lockfile > /dev/null 2>&1 || {
-  echo "❌ Lock file is out of sync with package.json"
-  echo "Run: pnpm install"
-  exit 1
-}
-
-# Fast checks (format, lint, typecheck)
-pnpm run check || {
-  echo "❌ Check failed (format/lint/typecheck)"
-  exit 1
-}
-```
-
-### `.husky/pre-push`
-
-```sh
-#!/bin/sh
-pnpm build && pnpm run check && pnpm run test:ci
 ```
 
 ---

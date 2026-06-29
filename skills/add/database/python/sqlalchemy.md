@@ -1,6 +1,6 @@
 <!-- ref: add/database/python/sqlalchemy.md
      loaded-by: add/database/python.md → add/SKILL.md
-     prereq: Stack = FastAPI, DB = SQLAlchemy standard (password) auth. Do not invoke this file directly. -->
+     prereq: Stack = FastAPI, DB = SQLAlchemy standard (password) auth. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + SQLAlchemy (SQL)
 
 ### A1. Install Dependencies

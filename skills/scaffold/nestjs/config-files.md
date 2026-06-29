@@ -31,8 +31,8 @@
     "test:watch": "vitest",
     "test:cov": "vitest --run --coverage",
     "test:e2e": "vitest --run --config vitest.config.e2e.ts",
-    "test:ci": "vitest --run && vitest --run --config vitest.config.e2e.ts",
-    "prepare": "husky"
+    "test:ci": "vitest --run --coverage && vitest --run --config vitest.config.e2e.ts",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
@@ -61,7 +61,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.6.0",
-    "husky": "^9.1.7",
+    "lefthook": "^2.1.9",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
@@ -488,6 +488,7 @@ blockExoticSubdeps: true
 #   argon2: true   # required after `templatecentral:add (auth)`
 allowBuilds:
   '@scarf/scarf': false
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
 ```
 
 > **Note:** if `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites `pnpm-workspace.yaml` with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` as appropriate and re-run `pnpm install`.
@@ -566,7 +567,7 @@ export default defineConfig({
     include: ['test/**/*.{spec,test}.ts', 'src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'cobertura'],
       include: ['src/**/*.ts'],
       exclude: ['**/*.spec.ts', '**/*.d.ts', 'src/main.ts'],
     },
@@ -634,33 +635,15 @@ export default defineConfig({
 ```json
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"],
+  "compilerOptions": {
+    "rootDir": "./src"
+  }
 }
 ```
 
-### `.husky/pre-commit`
-
-```sh
-#!/bin/sh
-# Ensure lock file matches package.json
-pnpm install --frozen-lockfile > /dev/null 2>&1 || {
-  echo "❌ Lock file is out of sync with package.json"
-  echo "Run: pnpm install"
-  exit 1
-}
-
-# Fast checks (format, lint, typecheck)
-pnpm run check || {
-  echo "❌ Check failed (format/lint/typecheck)"
-  exit 1
-}
-```
-
-### `.husky/pre-push`
-
-```sh
-#!/bin/sh
-pnpm build && pnpm run check && pnpm run test:ci
-```
+> `rootDir: "./src"` is build-only (here, not in `tsconfig.json`): it makes `nest build` emit the
+> entrypoint to `dist/main.js` — which `start:prod` and the Dockerfile `CMD`/healthcheck expect.
+> The base `tsconfig.json` keeps `rootDir: "./"` so `tsc --noEmit` can still typecheck `test/`.
 
 ---

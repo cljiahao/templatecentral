@@ -8,6 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-tool support (OpenCode / OpenChamber, Codex, Antigravity).** `docs/CROSS-TOOL.md` documents per-tool install; `scripts/build-agents-dist.sh` generates a namespace-stripped Agent-Skills distribution (`dist/agents-skills/`) for tools that require `name == folder`. README "Works With" pointer added. The `<skill-dir>` reference form and `AGENTS.md` are portable across all four tools (both are cross-vendor open standards — see `FUTURE.md` §6).
+- **OpenCode harness adapter (`adapters/opencode/`).** Ports the in-agent guards (bash-command guard, protected-file guard, typecheck-on-edit) to an OpenCode plugin, with guard logic copied verbatim from the harness kit. Ships with a 22-case logic test (`guards.test.mjs`).
+- **Three new lint guards** (`lint-skills.sh`): every concrete `<skill-dir>/path` reference resolves to a real file; every ref-header prereq carries the CONVENTIONS §4 "loaded at runtime by" clause; and a husky-ban (lefthook is the git-hook SSOT).
+
+### Fixed
+
+- **NestJS production boot failure.** `nest build` emitted the entrypoint to `dist/src/main.js` (`tsconfig.json` sets `rootDir: "./"`), but `start:prod` and the Dockerfile run `node dist/main.js`. Set `rootDir: "./src"` in `tsconfig.build.json` so the build emits `dist/main.js` while typecheck still covers `test/`. (Found by an end-to-end scaffold+build; the four scaffold gates miss it because they don't run `start:prod`.)
+- **Harness-integrity drift on fresh Next.js / Vite scaffolds.** `pnpm format` reformatted `lefthook.yml` and the CI workflow, drifting them from the harness baseline and failing `verify-harness.sh` on the first push and in CI. Added the enforcement-layer files (`lefthook.yml`, `.github/`, `.gitleaks.toml`) to `.prettierignore`.
+- **Git-hook system contradiction.** The three TS scaffolds shipped husky (`prepare`/devDep/`.husky/` hooks) while the shared harness kit mandates lefthook. Purged husky; aligned `prepare`/devDep to lefthook and added `lefthook: false` to each `pnpm-workspace.yaml` `allowBuilds` (pnpm 11 otherwise blocks all `pnpm <script>` runs with `ERR_PNPM_IGNORED_BUILDS`).
+- **Coverage gate had no input.** Next.js/NestJS Vitest emitted `lcov` but the CI diff-cover gate reads Cobertura; Vite had no coverage block. Switched reporters to `cobertura`, added Vite's coverage block + `@vitest/coverage-v8` + `--coverage` on `test:ci`, and added `pytest-cov` to FastAPI's `requirements-dev.txt` (the CI `pytest --cov` step depended on it).
+- **`templatecentral:migrate` logic.** Light-adoption stamped `@1.0.0`, which Phase 0 would re-flag for a phantom v4 upgrade → now `@5.0.0`; removed a false "invoked automatically by add-*" self-description; dropped a stale `tailwind.config.ts` gap check (Tailwind v4 is CSS-first).
+
+### Changed
+
+- **Docs/accuracy sweep.** CONVENTIONS §8 registered-skill count 6→4, dirs 10→8; normalized `add-*` skill-name references to `templatecentral:add (X)`; added the §4 "loaded at runtime by" clause to 12 ref-headers; fixed CONTRIBUTING naming examples and a broken README list; removed a plugin-loader leak from the Next.js dashboard example UI.
+
 ---
 
 ## [5.5.0] — 2026-06-29

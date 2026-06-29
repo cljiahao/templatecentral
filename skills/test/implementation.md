@@ -4,7 +4,7 @@
 
 # Test Agent
 
-Write tests for newly added code using the stack's `add-test` skill conventions. Run the full test suite. Report failures with context.
+Write tests for newly added code using the stack's `templatecentral:add (test)` skill conventions. Run the full test suite. Report failures with context.
 
 ## Stack Detection
 
@@ -15,7 +15,7 @@ Same as the build utility (`skills/build/implementation.md`): check for `next.co
 1. Detect stack
 2. Load `templatecentral:add` (test) — it contains test conventions for all four stacks with a stack-detection section at the top.
 3. Identify newly added code (files written in this session)
-4. Write tests following the `add-test` skill conventions
+4. Write tests following the `templatecentral:add (test)` skill conventions
 5. Run the full test suite:
    - Next.js / Vite-React / NestJS: `pnpm test --run`
    - FastAPI: `pytest test/`

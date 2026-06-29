@@ -1561,9 +1561,7 @@ export default function DashboardPage() {
     <div className="max-w-site mx-auto w-full px-6 py-12">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
-        Example feature — remove with the cleanup utility (de-registered; load via: cat
-        &quot;<skill-dir>/../cleanup/SKILL.md&quot;) after
-        confirming the scaffold works.
+        This page demonstrates the feature module pattern with TanStack Query.
       </p>
       <div className="mt-8">
         <ExampleList />
@@ -1908,7 +1906,7 @@ git init
 pnpm install
 ```
 
-`pnpm install` activates husky hooks via the `prepare` script.
+`pnpm install` runs the `prepare` script, installing the lefthook git hooks.
 
 ### 4. Install shadcn components
 

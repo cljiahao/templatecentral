@@ -32,7 +32,7 @@ Write these files exactly as shown.
     "check": "prettier --check . && eslint . && tsc --noEmit",
     "test": "vitest run",
     "test:ci": "vitest run --coverage",
-    "prepare": "husky"
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
@@ -61,7 +61,7 @@ Write these files exactly as shown.
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.6",
     "eslint-plugin-react-hooks": "^7.0.0",
-    "husky": "^9.1.7",
+    "lefthook": "^2.1.9",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.8.3",
     "prettier-plugin-organize-imports": "^4.1.0",
@@ -100,31 +100,6 @@ const config = [
 export default config;
 ```
 
-### `.husky/pre-commit`
-
-```sh
-#!/bin/sh
-# Ensure lock file matches package.json
-pnpm install --frozen-lockfile > /dev/null 2>&1 || {
-  echo "❌ Lock file is out of sync with package.json"
-  echo "Run: pnpm install"
-  exit 1
-}
-
-# Fast checks (format, lint, typecheck)
-pnpm run check || {
-  echo "❌ Check failed (format/lint/typecheck)"
-  exit 1
-}
-```
-
-### `.husky/pre-push`
-
-```sh
-#!/bin/sh
-pnpm build && pnpm run check && pnpm run test:ci
-```
-
 ### `.prettierignore`
 
 ```
@@ -135,6 +110,13 @@ build
 coverage
 pnpm-lock.yaml
 .claude
+
+# Enforcement-layer config — human-reviewed, never auto-formatted.
+# Prettier would otherwise rewrite these (yaml quoting/whitespace), drifting them from the
+# harness-integrity baseline and failing verify-harness.sh on the first push / in CI.
+lefthook.yml
+.github/
+.gitleaks.toml
 ```
 
 ### `.prettierrc`
@@ -534,6 +516,7 @@ blockExoticSubdeps: true
 allowBuilds:
   sharp: true          # Next.js image optimisation
   unrs-resolver: true  # required by eslint-config-next resolver
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
 ```
 
 ### `vitest.config.ts`
@@ -558,7 +541,7 @@ export default defineConfig({
     include: ['test/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'cobertura'],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       exclude: ['**/*.test.ts', '**/*.d.ts', '**/index.ts'],
     },

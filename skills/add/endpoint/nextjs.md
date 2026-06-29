@@ -45,9 +45,9 @@ src/app/api/
 
 Keep route handlers thin — delegate to server-side data access:
 
-> **Important**: Route handlers run on the server. They access data via `integrations/` (clients, services, factories) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `add-integration` skill for external APIs.
+> **Important**: Route handlers run on the server. They access data via `integrations/` (clients, services, factories) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `templatecentral:add (integration)` skill for external APIs.
 >
-> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Drizzle/Mongoose via the `add-database` skill, or external API clients via the `add-integration` skill.
+> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Drizzle/Mongoose via the `templatecentral:add (database)` skill, or external API clients via the `templatecentral:add (integration)` skill.
 
 ```ts
 // src/app/api/projects/route.ts

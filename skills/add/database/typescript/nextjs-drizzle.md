@@ -1,6 +1,6 @@
 <!-- ref: add/database/typescript/nextjs-drizzle.md
      loaded-by: add/database/typescript.md → add/SKILL.md
-     prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly. -->
+     prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js + Drizzle (SQL)
 
 > **Pre-release notice**: Drizzle ORM v1 is still pre-release — pin a specific RC in `package.json` (current RC tracked in `.claude/rules/nextjs.md`). The `drizzle-zod` integration is now merged into `drizzle-orm/zod`. Import from `drizzle-orm/zod`, not the old `drizzle-zod` package.

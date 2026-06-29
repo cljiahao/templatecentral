@@ -68,7 +68,7 @@ describe('GET /api/projects', () => {
 
 > **Why direct imports**: Next.js API route handlers are plain async functions that accept a `Request` and return a `Response`. Calling them directly is fast, requires no server setup, and gives full access to the response object.
 
-> **Note**: `DataService` in the examples below is a **placeholder** — the template's `src/integrations/factories.ts` starts empty. Replace it with whatever data access layer you've added via the `add-database` or `add-integration` skill. The mock pattern shown (module-level `vi.mock`, `vi.mocked` for type-safety) applies to any service you create.
+> **Note**: `DataService` in the examples below is a **placeholder** — the template's `src/integrations/factories.ts` starts empty. Replace it with whatever data access layer you've added via the `templatecentral:add (database)` or `templatecentral:add (integration)` skill. The mock pattern shown (module-level `vi.mock`, `vi.mocked` for type-safety) applies to any service you create.
 
 #### 1. Create the Test File
 

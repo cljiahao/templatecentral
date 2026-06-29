@@ -1,6 +1,6 @@
 <!-- ref: add/database/python/sqlalchemy-iam.md
      loaded-by: add/database/python.md → add/SKILL.md
-     prereq: Stack = FastAPI, DB = SQLAlchemy + AWS IAM (high compliance, PostgreSQL only). Do not invoke this file directly. -->
+     prereq: Stack = FastAPI, DB = SQLAlchemy + AWS IAM (high compliance, PostgreSQL only). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + SQLAlchemy + AWS IAM (High Compliance)
 
 > **Supported databases:** PostgreSQL only (the IAM token signer uses `psycopg2` — MySQL with IAM requires a different driver and SSL setup not covered here).

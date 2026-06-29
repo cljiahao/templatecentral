@@ -1,6 +1,6 @@
 <!-- ref: add/database/typescript/nextjs-kysely.md
      loaded-by: add/database/typescript.md → add/SKILL.md
-     prereq: Stack = Next.js, ORM = Kysely (SQL, supports standard + AWS IAM auth). Do not invoke this file directly. -->
+     prereq: Stack = Next.js, ORM = Kysely (SQL, supports standard + AWS IAM auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js + Kysely (SQL)
 
 #### B1. Install Dependencies

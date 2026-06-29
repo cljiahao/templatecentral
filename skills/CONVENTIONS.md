@@ -317,9 +317,9 @@ This checklist matches what `/tc-audit` enforces automatically. Use it for manua
 
 ### Count Limit
 
-- [ ] Total registered skill count = 6: verify with `grep -rl '^name:' skills/*/SKILL.md | wc -l`
+- [ ] Total registered skill count = 4: verify with `grep -rl '^name:' skills/*/SKILL.md | wc -l`
 
-> **Agent utilities** (`build`, `test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 10; registered skills = 6.
+> **Agent utilities** (`build`, `test`, `review`, `cleanup`) are not registered skills — their SKILL.md files have ref headers instead of `name:` frontmatter. They are catted directly by agents as needed. Skill directories = 8; registered skills = 4 (`add`, `migrate`, `scaffold`, `standards`).
 
 ### Stack Detection
 
@@ -328,4 +328,4 @@ This checklist matches what `/tc-audit` enforces automatically. Use it for manua
 
 ---
 
-*Last updated: 2026-05-25. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 6 (build, test, review, cleanup de-registered as agent utilities).*
+*Last updated: 2026-06-29. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 4: build, test, review, cleanup de-registered as agent utilities; audit, write-skill moved to `.claude/skills/` (repo-internal project skills) in v5.1.0.*

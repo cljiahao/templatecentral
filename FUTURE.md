@@ -103,7 +103,7 @@ Hands-on testing (invoking the installed scaffold skill + probing) settled the "
 
 #### Phase 1 OpenCode test findings (2026-06-29) — `<skill-dir>` has a confirmed structural basis in OpenCode
 
-Tested against the user's own OpenCode (binary v1.17.11) with a marker skill in `.opencode/skills/sdtest/`, using the no-auth `opencode debug skill` introspection command:
+Tested against the user's own OpenCode (binary build 1.17.11) with a marker skill in `.opencode/skills/sdtest/`, using the no-auth `opencode debug skill` introspection command:
 
 - **OpenCode tracks each skill's full `location`.** `opencode debug skill` returns per skill: `name`, `description`, `content`, and **`location`** = absolute path to that skill's `SKILL.md`. The skill's base directory is `dirname(location)`. This is the exact structural equivalent of Claude Code's "Base directory for this skill" line — OpenCode *has* the dir and could surface it to the agent, which is the prerequisite for `<skill-dir>` to resolve there.
 - **Confirmed OpenCode skill discovery layout** (from its built-in "customize opencode" skill): project `.opencode/skill(s)/<name>/SKILL.md`, global `~/.config/opencode/skill(s)/<name>/SKILL.md`, auto-loaded external `~/.claude/skills/<name>/SKILL.md` + `~/.agents/skills/<name>/SKILL.md`, plus `skills.paths` (scanned recursively for `**/SKILL.md`) and `skills.urls` in `opencode.json`. So templateCentral's `.claude/skills/`-seeded skills are auto-discovered by OpenCode with no extra config.

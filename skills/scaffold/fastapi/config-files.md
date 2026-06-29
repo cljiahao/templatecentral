@@ -431,7 +431,11 @@ Write this file verbatim (dev-only dependencies; not installed in production Doc
 ```
 pytest
 pytest-asyncio
+pytest-cov
 httpx
 ruff
 pyright
 ```
+
+> `pytest-cov` is required by the seeded CI coverage gate (`pytest --cov=src --cov-report=xml`,
+> harness-kit Step B3) — the FastAPI counterpart to the TS stacks' `@vitest/coverage-v8`.

@@ -120,7 +120,7 @@ export const ENV = {
 
 #### 5. Consume via React Query Hook
 
-Create the consumer feature first using the `add-feature` skill (e.g., `repos`), then add the hook inside it:
+Create the consumer feature first using the `templatecentral:add (feature)` skill (e.g., `repos`), then add the hook inside it:
 
 ```ts
 // src/features/repos/hooks/use-repos.query.ts

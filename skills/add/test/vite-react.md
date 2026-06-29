@@ -243,7 +243,7 @@ describe('useProjects', () => {
 
 ### Integration Service Tests (External APIs)
 
-If you've added external API integrations via the `add-integration` skill, services live under `src/integrations/services/` and receive their client via constructor injection — test them by instantiating the service with a stub client object (no module mocking needed):
+If you've added external API integrations via the `templatecentral:add (integration)` skill, services live under `src/integrations/services/` and receive their client via constructor injection — test them by instantiating the service with a stub client object (no module mocking needed):
 
 ```ts
 // src/integrations/services/github-service.test.ts
@@ -272,7 +272,7 @@ describe('GithubService', () => {
 ```bash
 pnpm test                  # Run all tests once (vitest --run)
 pnpm test:watch            # Watch mode (re-runs on change)
-pnpm test:ci               # Run once with the dot reporter (used by .husky/pre-push)
+pnpm test:ci               # Run once with the dot reporter (used by the lefthook pre-push hook)
 ```
 
 ### Validate

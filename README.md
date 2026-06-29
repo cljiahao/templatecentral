@@ -137,6 +137,8 @@ claude plugin marketplace add obra/superpowers
 |--------|---------|-------------|
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Reduce output tokens during exploration and Q&A |
 
+**Other agent tools (OpenCode/OpenChamber, Codex, Antigravity, …):** Claude Code is the primary, fully-featured target, but the skills follow the open [Agent Skills](https://agentskills.io) standard and work in other tools. See [`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md) — run `bash scripts/build-agents-dist.sh` and point your tool's skill path at `dist/agents-skills/`.
+
 ---
 
 ## Scheduled Loops
@@ -187,11 +189,11 @@ Contributions welcome — especially new stacks and coverage gaps.
 
 1. Read `skills/CONVENTIONS.md` — it defines all nesting rules, description limits, and ref header formats
 2. Use `/tc-write-skill` — it walks through the authoring checklist and validates your skill before you open a PR
-
-> **Contributor-only skills.** `/tc-write-skill` (authoring) and `/tc-audit` (full ecosystem + accuracy audit) live in this repo under `.claude/skills/` and are available as project skills when you clone and open the repo. They are **not** shipped to installed projects — end users never carry the plugin's maintenance tooling.
 3. If adding a new stack, create `.claude/rules/<stack>.md`
 4. Run `bash scripts/lint-skills.sh skills/` and `bash scripts/validate-manifest.sh` locally — both must pass
 5. Open a PR — CI will run both scripts automatically
+
+> **Contributor-only skills.** `/tc-write-skill` (authoring) and `/tc-audit` (full ecosystem + accuracy audit) live in this repo under `.claude/skills/` and are available as project skills when you clone and open the repo. They are **not** shipped to installed projects — end users never carry the plugin's maintenance tooling.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 

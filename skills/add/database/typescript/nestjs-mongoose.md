@@ -1,6 +1,6 @@
 <!-- ref: add/database/typescript/nestjs-mongoose.md
      loaded-by: add/database/typescript.md → add/SKILL.md
-     prereq: Stack = NestJS, ORM = Mongoose (MongoDB). Do not invoke this file directly. -->
+     prereq: Stack = NestJS, ORM = Mongoose (MongoDB). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Mongoose (MongoDB)
 
 #### C1. Install Dependencies
