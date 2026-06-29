@@ -82,11 +82,22 @@ Write these files exactly as shown.
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
 
-export default [
+const config = [
   ...coreWebVitals,
   ...typescript,
+  {
+    rules: {
+      // Honour the `_`-prefix convention for intentionally-unused args/vars.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
   { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', '.claude/**'] },
 ];
+
+export default config;
 ```
 
 ### `.husky/pre-commit`

@@ -151,7 +151,9 @@ class ForwardedHostMiddleware:
         if scope["type"] in ("http", "websocket") and self._peer_is_trusted(scope):
             headers = dict(scope["headers"])
             if b"x-forwarded-host" in headers:
-                host = headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
+                host = (
+                    headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
+                )
                 port = scope.get("server", (host, 80))[1]
                 scope["server"] = (host, port)
         await self.app(scope, receive, send)
