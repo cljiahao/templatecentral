@@ -15,7 +15,7 @@ Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; 
 1. Detect stack
 2. Read the project's `AGENTS.md` — load the **Code Quality** section (universal rules)
 3. Cat the detected stack's code-standards file:
-   `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/standards/code-standards/<detected-stack>.md"`
+   `cat "<skill-dir>/../standards/code-standards/<detected-stack>.md"`
 4. Identify files to review (see **Scoping** below)
 5. Review each file against both layers — quality principles first, then style rules
 6. Report violations (see **Reporting** below)

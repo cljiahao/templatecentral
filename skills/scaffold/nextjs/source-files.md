@@ -1562,7 +1562,7 @@ export default function DashboardPage() {
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
         Example feature — remove with the cleanup utility (de-registered; load via: cat
-        &quot;$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md&quot;) after
+        &quot;<skill-dir>/../cleanup/SKILL.md&quot;) after
         confirming the scaffold works.
       </p>
       <div className="mt-8">
@@ -2024,7 +2024,7 @@ Context load order (context only — not enforcement, broad → specific): manag
 Load the shared harness kit using the **nextjs** row of its delta table:
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
@@ -2107,7 +2107,7 @@ For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm`
 
 ### 8. Remove example code (optional)
 
-Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
+Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
 
 Next.js-specific steps (the utility covers these):
 - Delete `src/features/example/` directory
@@ -2124,6 +2124,6 @@ The cleanup utility handles both steps automatically.
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time
-- Remove example code after user confirms the project runs — use the cleanup utility (`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`) — handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`
+- Remove example code after user confirms the project runs — use the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`) — handles both `src/features/example/` deletion and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`
 
 ---

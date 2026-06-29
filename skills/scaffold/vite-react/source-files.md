@@ -2138,7 +2138,7 @@ Context load order (context only — not enforcement, broad → specific): manag
 Load the shared harness kit using the **vite-react** row of its delta table:
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 7c below to create the verify skill. After step 7c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -2205,7 +2205,7 @@ Once the project is verified and the user confirms it runs, optionally remove ex
 - Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
 - Update `src/pages/index.ts` if needed
 
-Or use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
+Or use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
 
 ---
 

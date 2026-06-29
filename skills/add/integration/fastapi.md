@@ -236,5 +236,5 @@ ruff check src/     # zero lint errors
 ### After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — validate the server starts and tests pass
-2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check code standards
+1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate the server starts and tests pass
+2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards

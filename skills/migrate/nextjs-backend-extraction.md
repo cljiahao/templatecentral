@@ -19,8 +19,8 @@ If the target is unclear, ask:
 
 | Target | Command |
 |---|---|
-| NestJS | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/nestjs.md"` |
-| FastAPI | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/fastapi.md"` |
+| NestJS | `cat "<skill-dir>/nextjs-backend-extraction/nestjs.md"` |
+| FastAPI | `cat "<skill-dir>/nextjs-backend-extraction/fastapi.md"` |
 | Other | Respond: "Not yet supported. Supported targets: NestJS, FastAPI." Exit without changes. |
 
 ## Step 3 — Execute

@@ -87,5 +87,5 @@ mutmut results                        # prints kill-rate summary
 ### After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — confirm no errors after config addition
-2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check config correctness
+1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — confirm no errors after config addition
+2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check config correctness

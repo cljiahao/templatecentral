@@ -823,7 +823,7 @@ Context load order (context only — not enforcement, broad → specific): manag
 Load the shared harness kit using the **nestjs** row of its delta table:
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -880,7 +880,7 @@ Ask whether the user wants structured task management for complex features. If y
 
 ### 8. Remove Example Code (Optional)
 
-Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`.
+Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
 
 NestJS-specific steps (the utility covers these):
 - Delete `src/modules/example/` directory

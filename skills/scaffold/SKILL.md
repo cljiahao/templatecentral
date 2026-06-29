@@ -16,11 +16,11 @@ Full-stack → scaffold frontend and backend as two separate runs.
 
 **Step 1** — Identify the stack: `fastapi`, `nestjs`, `nextjs`, or `vite-react`.
 
-**Step 2** — Load in order:
+**Step 2** — Load in order. Replace `<skill-dir>` with this skill's own directory — Claude Code prints it as **"Base directory for this skill"** when the skill loads; substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill's directory the same way.
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/<stack>/config-files.md"
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/<stack>/source-files.md"
+cat "<skill-dir>/<stack>/config-files.md"
+cat "<skill-dir>/<stack>/source-files.md"
 ```
 
 **Step 3** — Follow each loaded guide fully before proceeding to the next.

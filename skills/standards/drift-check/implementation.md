@@ -22,7 +22,7 @@ If no marker found: this project was not scaffolded by templateCentral. Exit sil
 
 ## Step 2 — Read Current Plugin Version
 
-At the plugin root (`$HOME/.claude/plugins/marketplaces/templatecentral/`):
+At the plugin root (`<skill-dir>/../../`):
 
 - `.claude-plugin/plugin.json` — the version SSOT: the `version` field is the current templateCentral version
 - `.claude/rules/<stack>.md` — the stack-conventions reference: the `Stack:` line describes the current stack conventions for the detected stack
@@ -43,7 +43,7 @@ Then exit.
 
 Parse both versions as semver (`major.minor.patch`):
 - **Project version**: `templatecentral_version` from `.claude/harness.json`
-- **Plugin version**: `version` from `$HOME/.claude/plugins/marketplaces/templatecentral/.claude-plugin/plugin.json` (already read in Step 2)
+- **Plugin version**: `version` from `<skill-dir>/../../.claude-plugin/plugin.json` (already read in Step 2)
 
 **If project version == current plugin version**: conventions are current. Exit silently.
 
@@ -91,7 +91,7 @@ After Step 5 (or after Step 4 if user declined Step 5), ask:
 
 **If user accepts:**
 
-- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running the review utility (update operation — `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"`) to patch.
+- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running the review utility (update operation — `cat "<skill-dir>/../review/SKILL.md"`) to patch.
 - **Python projects**: if `pip-audit` is available (`pip-audit --version` returns without error), run `pip-audit --requirement requirements.txt` and report findings; if not installed, add "pip-audit not installed — security advisory check skipped" to report.
 
 If zero vulnerabilities: report "No known vulnerabilities found."

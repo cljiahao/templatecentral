@@ -715,8 +715,9 @@ check_scaffold_seeds_complete_harness() {
   local f
   for f in "${scaffolds[@]}" "$migrate"; do
     [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
-    grep -qF 'scaffold/shared/harness-kit.md' "$f" || \
-      missing+="$f — does not reference scaffold/shared/harness-kit.md"$'\n'
+    # Form-agnostic: matches the legacy absolute path and the <skill-dir>-relative form.
+    grep -qF 'shared/harness-kit.md' "$f" || \
+      missing+="$f — does not reference shared/harness-kit.md"$'\n'
     # Each scaffold also seeds a *-verify skill:
     grep -qF -- '-verify/SKILL.md' "$f" || \
       missing+="$f — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
@@ -727,6 +728,22 @@ check_scaffold_seeds_complete_harness() {
     fail "Harness check failed — kit must contain all universal tokens; all 4 scaffolds + migrate must reference scaffold/shared/harness-kit.md; each scaffold must seed a *-verify/SKILL.md"
   else
     pass "Shared harness kit contains all universal tokens; all scaffold/migrate files reference it"
+  fi
+}
+
+check_no_absolute_plugin_path() {
+  # References load via the <skill-dir> placeholder (the tool-provided skill directory at invocation),
+  # never an absolute install path, and never ${CLAUDE_SKILL_DIR} (empty in agent-run bash — only
+  # populated for CC !-injection, not the agent-run cat blocks used here). See CONVENTIONS.md §1.
+  # TIMELESS: skills must be portable across Agent-Skills tools; the install path is never hardcoded.
+  header "No absolute plugin-path or \${CLAUDE_SKILL_DIR} references"
+  local matches
+  matches=$(grep -rnE 'plugins/marketplaces/templatecentral|CLAUDE_SKILL_DIR' "$SKILLS_DIR/" 2>/dev/null | grep -v 'CONVENTIONS.md' || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Use the <skill-dir> placeholder (CONVENTIONS.md §1), not an absolute plugin path or \${CLAUDE_SKILL_DIR}."
+  else
+    pass "No absolute plugin-path / \${CLAUDE_SKILL_DIR} references (all use <skill-dir>)"
   fi
 }
 
@@ -792,6 +809,7 @@ check_no_unscoped_bash_grant
 check_seeded_skill_paths_are_directories
 check_no_toplevel_command_in_hooks
 check_scaffold_seeds_complete_harness
+check_no_absolute_plugin_path
 check_no_postToolUse_full_test_suite
 echo ""
 echo "ECOSYSTEM-ERA"

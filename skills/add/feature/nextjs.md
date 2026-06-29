@@ -243,6 +243,6 @@ Rules:
 ## After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"`  — validate compilation
-2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check code standards
-3. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — write and run tests
+1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`  — validate compilation
+2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+3. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — write and run tests

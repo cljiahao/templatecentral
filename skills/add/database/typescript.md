@@ -12,11 +12,13 @@ For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit
 
 | Stack | Library | Load |
 |-------|---------|------|
-| NestJS | Drizzle | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nestjs-drizzle.md"` |
-| NestJS | Kysely | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nestjs-kysely.md"` |
-| NestJS | Mongoose | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nestjs-mongoose.md"` |
-| Next.js | Drizzle | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nextjs-drizzle.md"` |
-| Next.js | Kysely | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nextjs-kysely.md"` |
-| Next.js | Mongoose | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nextjs-mongoose.md"` |
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+| NestJS | Drizzle | `cat "<skill-dir>/database/typescript/nestjs-drizzle.md"` |
+| NestJS | Kysely | `cat "<skill-dir>/database/typescript/nestjs-kysely.md"` |
+| NestJS | Mongoose | `cat "<skill-dir>/database/typescript/nestjs-mongoose.md"` |
+| Next.js | Drizzle | `cat "<skill-dir>/database/typescript/nextjs-drizzle.md"` |
+| Next.js | Kysely | `cat "<skill-dir>/database/typescript/nextjs-kysely.md"` |
+| Next.js | Mongoose | `cat "<skill-dir>/database/typescript/nextjs-mongoose.md"` |
 
 Run the chosen command and follow the loaded guide exactly.

@@ -1199,10 +1199,10 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 After the stack-specific AGENTS.md is written (appending the shared tail fragment if not already present), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
-1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — verify the scaffold compiles clean
-2. the test utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/test/SKILL.md"` — verify all scaffold tests pass
-3. the review utility (update operation) — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — freshen any deps that have newer compatible versions
-4. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
+2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
+3. the review utility (update operation) — load it with: `cat "<skill-dir>/../review/SKILL.md"` — freshen any deps that have newer compatible versions
+4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 

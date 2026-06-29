@@ -7,7 +7,7 @@ Write these files exactly as shown.
 
 ### `package.json`
 
-> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"`) post-scaffold to freshen pins.
+> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
 > **ESLint pinned at `^9`** — `eslint-plugin-react-hooks` 7.x peer-supports only `^9`; bumping to ESLint 10 breaks `pnpm install` under strict peer enforcement until the plugin ships ESLint 10 support. Do not upgrade eslint past `^9` without verifying `eslint-plugin-react-hooks` peer compatibility.
 
