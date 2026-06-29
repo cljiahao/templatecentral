@@ -7,6 +7,8 @@
 - **Update**: apply review feedback, fix flagged issues → `update/implementation.md`
 
 **Cat the reference file:**
-`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/<review|update>/implementation.md"`
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+`cat "<skill-dir>/<review|update>/implementation.md"`
 
 Follow the loaded guide exactly.

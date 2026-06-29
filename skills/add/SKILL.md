@@ -5,7 +5,7 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 
 **Step 1** — From `AGENTS.md` and the user's request, identify the **capability** and **stack**.
 
-**Capability → path** (base: `$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/`):
+**Capability → path** (base: `<skill-dir>/`):
 
 | Capability | Stacks | Path |
 |---|---|---|
@@ -23,6 +23,8 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 | `component` (alias) | nextjs, vite-react | `feature/<stack>.md` |
 
 **Step 2** — Run:
-`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/<path>"`
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+`cat "<skill-dir>/<path>"`
 
 **Step 3** — Follow the loaded guide exactly. For `database`, the loaded file will instruct the next `cat`.

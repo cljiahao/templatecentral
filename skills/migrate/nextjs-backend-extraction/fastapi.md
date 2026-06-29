@@ -9,7 +9,7 @@ Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients 
 **Read `common.md` first.** Phases 1, 2, the Phase 3 skeleton, and Phases 8–10 live in common.md; stack-specific Phases 3–7 are below. Variable substitutions: `[BACKEND]` = FastAPI, `[DEV_PORT]` = 8000, `[CORS_VAR]` = `CORS_ORIGINS`.
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/common.md"
+cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
 **Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle (requires ORM choice at Phase 6) / ✓ Mongoose → Beanie / None detected]`.
@@ -19,8 +19,8 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-ba
 ## Phase 3 — Scaffold FastAPI (autonomous)
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/fastapi/config-files.md"
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/fastapi/source-files.md"
+cat "<skill-dir>/../scaffold/fastapi/config-files.md"
+cat "<skill-dir>/../scaffold/fastapi/source-files.md"
 ```
 
 Set the project name in `src/.env.default`. (See `common.md` Phase 3 for shared context.)
@@ -212,10 +212,10 @@ Ask:
 After the user answers, load and follow the corresponding skill:
 ```bash
 # If SQLAlchemy
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/sqlalchemy.md"
+cat "<skill-dir>/../add/database/python/sqlalchemy.md"
 
 # If Beanie
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/beanie.md"
+cat "<skill-dir>/../add/database/python/beanie.md"
 ```
 
 The Drizzle schema files define the shape of your data. Port each Drizzle table definition to an equivalent SQLAlchemy model or Beanie document, then present the ported schemas to the user for review before proceeding. The database skill scaffolds the connection layer; schema porting is a required step before Phase 7.
@@ -226,7 +226,7 @@ Delete `src/integrations/database/` and `drizzle.config.ts` from the Next.js pro
 
 Load and follow the Beanie skill (Beanie is the Pydantic-native equivalent for MongoDB in Python):
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/beanie.md"
+cat "<skill-dir>/../add/database/python/beanie.md"
 ```
 
 Port Mongoose schemas to Beanie Documents. Delete `src/integrations/database/` from the Next.js project.
@@ -239,7 +239,7 @@ Port Mongoose schemas to Beanie Documents. Delete `src/integrations/database/` f
 
 Load and follow the FastAPI auth skill in `../[project-name]-api`:
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/fastapi.md"
+cat "<skill-dir>/../add/auth/fastapi.md"
 ```
 
 **Important:** `proxy.ts` remains in the Next.js project — it continues to protect frontend routes at the edge. After migration, update any hardcoded Next.js `/api/auth/...` paths in `proxy.ts` to use `process.env.NEXT_PUBLIC_API_URL`.

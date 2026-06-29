@@ -11,6 +11,8 @@ description: Use when running database migrations, migrating conventions, or ext
 **Step 2** — For database migrations, identify the stack: `fastapi`, `nestjs`, or `nextjs`.
 
 **Step 3** — Cat the reference file:
-`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/<path>"`
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+`cat "<skill-dir>/<path>"`
 
 **Step 4** — Follow the loaded guide exactly.

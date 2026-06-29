@@ -195,7 +195,7 @@ Replace `AGENTS.md` with the compressed template for the detected stack. If the 
 ## Stack
 Next.js · App Router · TypeScript strict · shadcn/ui · TanStack Query
 React Hook Form · Zod · Vitest · pnpm · Node
-Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md` (`$HOME/.claude/plugins/marketplaces/templatecentral/`)
+Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md` (`<skill-dir>/../../`)
 
 ## Commands
 ```bash
@@ -292,7 +292,7 @@ If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
 Load the shared harness kit and use it to create `settings.json` and all 8 `.claude/hooks/` scripts for the detected stack:
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/shared/harness-kit.md"
+cat "<skill-dir>/../scaffold/shared/harness-kit.md"
 ```
 
 Use the **detected stack's row** in the kit's delta table to select the correct runtime (TS stacks: `node`; FastAPI: `python3`) and hook commands. The kit's Step A gives the full `settings.json` template for each variant; Step B gives all 8 hook scripts. Then `chmod +x .claude/hooks/*.sh`. The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.

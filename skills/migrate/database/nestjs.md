@@ -6,7 +6,7 @@
 **Read `drizzle-to-kysely.md` first** — shared steps (1, 5, 8 up-body, 9 translation table, 10 env block, After Writing Code) live there.
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/database/drizzle-to-kysely.md"
+cat "<skill-dir>/database/drizzle-to-kysely.md"
 ```
 
 ---

@@ -15,6 +15,8 @@ description: Use when reviewing code quality, naming conventions, validation pat
 Stacks: `fastapi`, `nestjs`, `nextjs`, `vite-react`
 
 **Step 2** — Cat the reference file:
-`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/standards/<path>"`
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+`cat "<skill-dir>/<path>"`
 
 **Step 3** — Follow the loaded guide exactly.

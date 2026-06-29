@@ -283,7 +283,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
 #### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
 
-> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; the cleanup utility (`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/SKILL.md"`) cleans it up when the user is ready.
+> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`) cleans it up when the user is ready.
 
 If creating fresh (non-scaffold project):
 
@@ -600,7 +600,7 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 ### After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/review/SKILL.md"` — check code standards
+1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
+2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
 
 ---

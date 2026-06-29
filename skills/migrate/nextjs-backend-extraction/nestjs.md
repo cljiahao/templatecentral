@@ -9,7 +9,7 @@ Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients 
 **Read `common.md` first.** Phases 1, 2, the Phase 3 skeleton, and Phases 8–10 live in common.md; stack-specific Phases 3–7 are below. Variable substitutions: `[BACKEND]` = NestJS, `[DEV_PORT]` = 3001, `[CORS_VAR]` = `CLIENT_URL`.
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-backend-extraction/common.md"
+cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
 **Phase 1 NestJS deltas:** In 1d, also always include `src/integrations/clients/base/fetch-client.ts` and `src/integrations/clients/base/axios-client.ts` if they exist. Assessment Database line: `[✓ Drizzle / ✓ Mongoose / None detected]`.
@@ -19,8 +19,8 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/migrate/nextjs-ba
 ## Phase 3 — Scaffold NestJS (autonomous)
 
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/nestjs/config-files.md"
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/scaffold/nestjs/source-files.md"
+cat "<skill-dir>/../scaffold/nestjs/config-files.md"
+cat "<skill-dir>/../scaffold/nestjs/source-files.md"
 ```
 
 Set the project name to `[project-name]-api` in `package.json`. (See `common.md` Phase 3 for shared context.)
@@ -196,7 +196,7 @@ Register each service as a provider in the relevant feature module (or in a shar
 2. Copy `drizzle.config.ts` → `../[project-name]-api/drizzle.config.ts` (update internal paths)
 3. Load and follow the Drizzle database skill for NestJS:
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nestjs-drizzle.md"
+cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"
 ```
 4. Delete `src/integrations/database/` and `drizzle.config.ts` from the Next.js project.
 
@@ -205,7 +205,7 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/type
 1. Copy Mongoose schema files from `src/integrations/database/` → `../[project-name]-api/src/database/`
 2. Load and follow the Mongoose database skill for NestJS:
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/typescript/nestjs-mongoose.md"
+cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```
 3. Delete `src/integrations/database/` from the Next.js project.
 
@@ -217,7 +217,7 @@ cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/type
 
 Load and follow the NestJS auth skill in `../[project-name]-api`:
 ```bash
-cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/nestjs.md"
+cat "<skill-dir>/../add/auth/nestjs.md"
 ```
 
 **Important:** `proxy.ts` remains in the Next.js project — it continues to protect frontend routes at the edge. After migration, update any hardcoded Next.js `/api/auth/...` paths in `proxy.ts` to use `process.env.NEXT_PUBLIC_API_URL`.

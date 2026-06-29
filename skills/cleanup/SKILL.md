@@ -7,6 +7,8 @@
 - **Task management**: `task-management/implementation.md`
 
 **Cat the reference file:**
-`cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/cleanup/<path>"`
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+`cat "<skill-dir>/<path>"`
 
 Follow the loaded guide exactly.

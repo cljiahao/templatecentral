@@ -19,6 +19,7 @@ All other tasks and skill authors must follow these conventions exactly.
 - **Definition:** Markdown files that carry the actual implementation instructions.
 - **Never registered:** Reference files are never listed as skills. Claude only reads them when a registered SKILL.md explicitly `cat`s them.
 - **Loaded at runtime:** A registered SKILL.md detects context and issues a `cat` command pointing to the correct reference file.
+- **Reference paths use the `<skill-dir>` placeholder** — this skill's own directory, which the tool provides at invocation (Claude Code prints it as **"Base directory for this skill"**). The agent substitutes the literal path. Within-skill: `cat "<skill-dir>/<path>"`. Sibling skill: `cat "<skill-dir>/../<other-skill>/<path>"`. Plugin root: `<skill-dir>/../../`. **Do NOT** hardcode `$HOME/.claude/plugins/...` (install-location-specific; breaks outside Claude Code) and **do NOT** use `${CLAUDE_SKILL_DIR}` (empty in agent-run bash — it only populates for CC `!`-injection, not the agent-run `cat` blocks here). Lint-enforced.
 - **Location:** Live inside skill directories, alongside or beneath the SKILL.md that loads them.
 
 **Rule:** If a file has implementation steps in it, it is a reference file. If a file detects context and issues `cat` commands, it is a registered skill. These two roles must never be combined in a single file.
@@ -243,7 +244,7 @@ Example for `skills/add/auth/django.md`:
 In `skills/add/SKILL.md`, add Django to the routing table:
 
 ```
-| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/auth/django.md"` |
+| Django | `manage.py` exists AND `requirements.txt` contains `django` | `cat "<skill-dir>/auth/django.md"` |
 ```
 
 **4. Check variant count. If > 2 ORM/driver variants → promote to 3-level.**

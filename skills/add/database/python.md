@@ -12,8 +12,10 @@ For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit
 
 | Library | Use case | Load |
 |---------|----------|------|
-| SQLAlchemy | SQL (standard auth) | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/sqlalchemy.md"` |
-| SQLAlchemy IAM | SQL (AWS IAM auth) | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/sqlalchemy-iam.md"` |
-| Beanie | MongoDB | `cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/add/database/python/beanie.md"` |
+> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+
+| SQLAlchemy | SQL (standard auth) | `cat "<skill-dir>/database/python/sqlalchemy.md"` |
+| SQLAlchemy IAM | SQL (AWS IAM auth) | `cat "<skill-dir>/database/python/sqlalchemy-iam.md"` |
+| Beanie | MongoDB | `cat "<skill-dir>/database/python/beanie.md"` |
 
 Run the chosen command and follow the loaded guide exactly.
