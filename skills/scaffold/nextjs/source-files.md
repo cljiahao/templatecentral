@@ -1186,7 +1186,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="no-scrollbar">
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className="no-scrollbar">
       <body className={`${lato.variable} ${geistMono.variable} relative antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
           <Providers>{children}</Providers>

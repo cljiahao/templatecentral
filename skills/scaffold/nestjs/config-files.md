@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
+    "@fastify/static": "^9.1.3",
     "@nestjs/common": "^11.1.24",
     "@nestjs/core": "^11.1.24",
     "@nestjs/platform-fastify": "^11.1.24",
