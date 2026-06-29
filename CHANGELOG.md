@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.5.0] — 2026-06-29
+
 ### Added
 
 - **Scaffold stack recommendation (`templatecentral:scaffold` Step 0).** When a user asks to scaffold without naming a stack, the skill now asks up to two use-case questions and recommends one of the four stacks (Next.js / Vite + React / FastAPI / NestJS) before generating — instead of guessing. `AGENTS.md` cross-references the flow so subagents don't guess either.
@@ -20,12 +24,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **FastAPI dependency install applies the documented security floors** (`scaffold/fastapi/source-files.md`) — runtime deps were installed unpinned before `pip freeze`, so the Starlette / Pydantic / python-json-logger floors in the rules weren't enforced at install.
 - **Hardened the seeded enforcement hooks** (`scaffold/shared/harness-kit.md`, node + python): `block-no-verify` scrubs quoted strings before flag-matching (a commit message mentioning `--no-verify`/`-n` no longer false-blocks); the `protect-files` governance "ask" gate also matches absolute paths (worktree/symlink outside the git root); the rm-guard treats quotes as word boundaries; `stop-checks` (python) accepts lowercase `true` for `stop_hook_active`.
 - **Password validation aligned to current authenticator guidance** (`standards/validation-patterns/*`): dropped character-composition regexes for length (min 12, max 128) + breach-screening; verifiers should not impose composition rules.
+- **NestJS Swagger UI serves under Fastify** — added `@fastify/static` to the scaffold deps; `@nestjs/swagger`'s `SwaggerModule.setup` serves the UI via Fastify `useStaticAssets()`, which requires it (without it the server logged a missing-package error and `/docs` assets 404'd). Found by running the scaffold; validated `/docs` → 200 with the full UI.
+- **Seeded templates now pass their own strict gates** — `nextjs/eslint.config.mjs` names its default export and adds `argsIgnorePattern: '^_'` to `no-unused-vars` (so `_req` params and the `_`-prefix convention don't fail the lefthook `eslint --max-warnings=0` gate); `fastapi/src/app.py` wraps an over-long line so the verbatim file passes `ruff format --check`.
+- **Next.js** — added `data-scroll-behavior="smooth"` to `<html>` to clear the Next.js 16 smooth-scroll dev warning.
 
 ### Changed
 
 - Drizzle RC pin example bumped `1.0.0-rc.3` → `1.0.0-rc.4` in the Next.js / NestJS rules (the `@rc` tag advanced 2026-06-27; v1 still has no GA). Starlette current-stable note corrected `1.2.1` → `1.3.1`.
 - Ecosystem research cache refreshed (`/tc-audit` Step 0, scan 2026-06-29).
-- **NestJS scaffold `tsconfig` now `strict: true`** (with `strictPropertyInitialization: false`, the NestJS-idiomatic config) — pending a scaffold build to confirm clean compilation.
+- **NestJS scaffold `tsconfig` now `strict: true`** (with `strictPropertyInitialization: false`, the NestJS-idiomatic config) — validated against a real scaffold build (compiles clean; unit + e2e tests green).
 - **Vite + React upgraded to React Router v8** (`^8.0.1`) — version bump only; imports are unchanged (v8 keeps `BrowserRouter`/`Route`/`Routes` in the `react-router` entry — `react-router/dom` is for SSR hydration, not the declarative SPA router). Validated end-to-end via a real scaffold (`pnpm build` + tests green).
 - Aligned `@types/node` (`^25.9.1`) and `pnpm` (`11.5.2`) pins across the TS stacks; corrected the audit's unfounded "Stop-hook 8-block cap" claim and a stale README workflows comment.
 - Deferred (need build / verified-SHA confirmation): OWASP Top 10:2025 web-edition references and CI action SHA-pinning. OWASP Agentic Top 10 2026 (ASI) and the AWS Responsible AI Lens were already current in `add/ai-security`.
