@@ -137,7 +137,38 @@ claude plugin marketplace add obra/superpowers
 |--------|---------|-------------|
 | **caveman** | `claude plugin marketplace add JuliusBrussee/caveman` | Reduce output tokens during exploration and Q&A |
 
-**Other agent tools (OpenCode/OpenChamber, Codex, Antigravity, …):** Claude Code is the primary, fully-featured target, but the skills follow the open [Agent Skills](https://agentskills.io) standard and work in other tools. See [`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md) — run `bash scripts/build-agents-dist.sh` and point your tool's skill path at `dist/agents-skills/`.
+**Other agent tools:** Claude Code is the primary, fully-featured target, but the skills ride the open [Agent Skills](https://agentskills.io) + `AGENTS.md` standards and run in OpenCode/OpenChamber, Codex, and Antigravity — see the section below.
+
+---
+
+## Other Agent Tools (OpenCode / OpenChamber, Codex, Antigravity)
+
+Claude Code stays primary, but the skills follow the open [Agent Skills](https://agentskills.io) standard and `AGENTS.md` (a Linux Foundation standard), so they work in other agent tools too.
+
+**One-time prep — generate a tool-agnostic copy** (strips the `templatecentral:` namespace, which other tools require to match the folder name):
+
+```bash
+bash scripts/build-agents-dist.sh        # → dist/agents-skills/
+```
+
+### OpenCode / OpenChamber
+
+Register the generated skills, either via `opencode.json`:
+
+```json
+{ "$schema": "https://opencode.ai/config.json",
+  "skills": { "paths": ["/abs/path/to/templatecentral/dist/agents-skills"] } }
+```
+
+…or copy them into a scanned dir (`~/.config/opencode/skills/`, a project `.opencode/skills/`, or `~/.agents/skills/`). **OpenChamber / Docker:** mount `dist/agents-skills` to `/home/developer/.config/opencode/skills` (alongside the existing plugin mount) and restart the container. Then ask OpenCode to scaffold — e.g. *"scaffold a Next.js project at ./my-app"* — and it auto-activates the `scaffold` skill.
+
+**Optional in-agent guards.** The git-hook + CI half of the harness already works in any tool. To also get the live in-agent guards (block `git --no-verify`, protect secrets/`.env`, typecheck-on-edit), load the OpenCode adapter at [`adapters/opencode/`](adapters/opencode/) — validated end-to-end in a real OpenCode container.
+
+### Codex / Antigravity
+
+Both read `AGENTS.md` natively and implement the Agent Skills standard. Copy `dist/agents-skills/*` into `.agents/skills/` (Codex also scans `~/.agents/skills/`; Antigravity uses a project `.agents/skills/`). A native in-agent harness adapter for these tools is planned — see `FUTURE.md` §6.
+
+Full per-tool details: [`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md).
 
 ---
 

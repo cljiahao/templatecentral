@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **README "Other Agent Tools" onboarding** — concrete OpenCode/OpenChamber setup (generate `dist/agents-skills/`, register via `skills.paths` or a scanned dir, Docker mount) plus Codex/Antigravity notes. `FUTURE.md` §6 gains a per-tool harness-adapter status table + Codex/Antigravity adapter roadmap.
+
 ---
 
 ## [5.6.0] — 2026-06-30

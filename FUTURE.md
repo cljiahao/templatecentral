@@ -144,3 +144,22 @@ Closed the OpenCode question from source and grounded the rest in official docs 
 **Phase-2 lever (#16) — compile step:** if true multi-tool *emission* becomes a goal (vs. relying on each tool reading `.claude/skills/` directly), `rulesync` (github.com/dyoshikawa/rulesync) compiles a single source into per-tool configs (Cursor, Claude Code, Copilot, Gemini/Antigravity, Zed) and already treats skills as a transformable feature. Community converter `acplugin` (CC plugin → Codex/Cursor) covers most of the harness delta but only warns on hooks. Evaluate when demand is real — premature for a solo maintainer now.
 
 **Revised stance:** the swap trades CC's *working* loader for a *model-dependent* one to gain portability that can't yet be validated on OpenCode — backwards from "CC is primary." So Phase 1 is **not** a simple find-replace. Recommended re-scope: (a) leave CC's loader working; optionally fix the version-drift separately; (b) treat OpenCode portability as its own effort that **starts with hands-on OpenCode testing** of how it resolves bundled files, then chooses a mechanism (relative-read, base-dir, or a build-step variant) proven against *both* tools before any mass conversion.
+
+#### Per-tool in-agent harness adapters — status & roadmap (2026-06-30)
+
+The skills + `AGENTS.md` + git-hook/CI harness already run on every target tool (Phase 1 + 2 done — `scripts/build-agents-dist.sh`, `docs/CROSS-TOOL.md`). The only per-tool work left is the **in-agent live guards** (the CC `.claude/hooks/` layer). Status:
+
+| Tool | In-agent harness adapter | Status |
+|---|---|---|
+| **Claude Code** | `.claude/hooks/` (7-event kit) | ✅ primary, complete |
+| **OpenCode / OpenChamber** | `adapters/opencode/templatecentral.plugin.js` | ✅ **shipped & validated live** — plugin loads in a real OpenChamber container and the `git --no-verify` guard blocks end-to-end; 25-case `hooks.test.mjs`. (Was "Phase 3 / #17".) |
+| **Codex** | — | ⏳ **planned** (demand-gated) |
+| **Antigravity** | — | ⏳ **planned** (demand-gated) |
+
+**Codex adapter (planned).** Codex has a Claude-Code-style hook framework (GA 2026-05-14): events `SessionStart`/`PreToolUse`/`PostToolUse`/`PreCompact`/`PostCompact`/`Stop`, configured via `~/.codex/hooks.json` or repo `.codex/hooks.json`, handlers are `type: "command"` (shell, JSON on stdin). Because they're shell-command hooks, the **original CC `.claude/hooks/*.sh` scripts likely port more directly than the OpenCode JS plugin did** — map CC event names → Codex event names and adjust the stdin JSON shape. Reference guard logic: `adapters/opencode/` (and `scaffold/shared/harness-kit.md` Step B). Live-test needs a Codex run.
+
+**Antigravity adapter (planned).** Antigravity also has lifecycle hooks (`hooks.json` with `PreToolUse`/`PostToolUse`/`Stop`; paths `<project>/.agents/hooks.json`, global `~/.gemini/config/hooks.json`) — a `PreToolUse` hook returning `allow_tool: false` is a hard gate. Same guard logic; per-tool wiring (event names, the stdin/return JSON contract) is the only delta.
+
+**Lesson carried from the OpenCode adapter (avoid repeating):** the adapter plugin must export **only `default`** — OpenCode (and likely other tools) invoke *every named export* as a plugin factory, which crashed loading. Keep guard helpers internal; test through the default export's hooks. And key the guards on **arg shape** (presence of a command string / file path), not the tool name, since tool names differ per tool.
+
+Build a tool's adapter when there's real demand for live in-agent enforcement there; until then, that tool still gets ~80% of the value (skills + AGENTS.md + commit/CI gates).
