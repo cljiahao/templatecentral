@@ -20,12 +20,18 @@
 
 const PROTECTED_BRANCHES = ["main", "uat", "develop"];
 
+// IMPORTANT: keep the helpers below UN-exported. OpenCode treats EVERY named export of a plugin
+// module as a plugin factory and invokes it with a plugin-input object — exporting a plain helper
+// makes OpenCode call e.g. bashCommandReason(input) and crash with "failed to load plugin". Only
+// `export default` (the factory at the bottom) may be exported. Tests drive the default export's
+// hooks (see hooks.test.mjs); they must NOT import named helpers from this file.
+
 // ── protected-file guard (port of protect-files.sh) ───────────────────────────
 // Returns a block reason string, or null to allow. Mirrors the hard-block set; governance files
 // (AGENTS.md, CONSTITUTION.md, settings, hooks, Dockerfile, lefthook/gitleaks) are also hard-blocked
 // here with a "confirm with a human" message — OpenCode plugins can't raise Claude Code's softer
 // "ask" prompt mid-tool, so the safe default is to block and let the human re-run intentionally.
-export function protectedFileReason(filePath, root) {
+function protectedFileReason(filePath, root) {
   if (!filePath) return null;
   const base = filePath.split("/").pop();
   // Hard block: .env* except committed templates.
@@ -57,7 +63,7 @@ export function protectedFileReason(filePath, root) {
 // ── bash-command guard (port of block-no-verify.sh) ───────────────────────────
 // `branch` is the current git branch (or "") so the protected-branch check works without a subprocess
 // inside the regex logic. Returns a block reason string, or null to allow.
-export function bashCommandReason(cmd, branch) {
+function bashCommandReason(cmd, branch) {
   if (!cmd) return null;
   // Scrub quoted strings (e.g. commit messages) so text inside -m "..." can't false-trigger flags.
   const scan = cmd.replace(/'[^']*'/g, "").replace(/"[^"]*"/g, "");
@@ -101,24 +107,30 @@ export default async ({ directory, $ }) => {
   const root = directory || ".";
   return {
     // PreToolUse equivalent — runs before the tool; throwing aborts the tool call.
-    "tool.execute.before": async (input, output) => {
-      const tool = input?.tool || input?.name || "";
+    // Keyed on the SHAPE of the tool args (presence of a command string / a file path), NOT on the
+    // tool name — OpenCode's tool names vary by version, so name-gating silently misses calls. This
+    // mirrors the proven args-based approach used by env-protection-style plugins.
+    "tool.execute.before": async (_input, output) => {
       const args = output?.args || {};
-      if (tool === "bash") {
+      const command = args.command || args.cmd;
+      const file = args.filePath || args.path || args.file_path;
+      // Bash-command guard
+      if (typeof command === "string" && command) {
         let branch = "";
         try { branch = (await $`git -C ${root} rev-parse --abbrev-ref HEAD`.text()).trim(); } catch { /* not a repo */ }
-        const reason = bashCommandReason(args.command || args.cmd || "", branch);
+        const reason = bashCommandReason(command, branch);
         if (reason) throw new Error(`[templatecentral] BLOCKED: ${reason}`);
-      } else if (tool === "edit" || tool === "write") {
-        const file = args.filePath || args.path || args.file_path || "";
+      }
+      // Protected-file guard
+      if (typeof file === "string" && file) {
         const reason = protectedFileReason(file, root);
         if (reason) throw new Error(`[templatecentral] BLOCKED: ${reason}`);
       }
     },
-    // PostToolUse equivalent — type feedback after an edit/write. Never blocks (best-effort).
-    "tool.execute.after": async (input) => {
-      const tool = input?.tool || input?.name || "";
-      if (tool !== "edit" && tool !== "write") return;
+    // PostToolUse equivalent — type feedback after a file write. Never blocks (best-effort).
+    "tool.execute.after": async (_input, output) => {
+      const file = output?.args?.filePath || output?.args?.path || output?.args?.file_path;
+      if (typeof file !== "string" || !file) return; // only after a file-writing tool
       const cmd = await typecheckCommand($, root);
       if (!cmd) return;
       try {
