@@ -8,10 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.6.0] — 2026-06-30
+
 ### Added
 
 - **Cross-tool support (OpenCode / OpenChamber, Codex, Antigravity).** `docs/CROSS-TOOL.md` documents per-tool install; `scripts/build-agents-dist.sh` generates a namespace-stripped Agent-Skills distribution (`dist/agents-skills/`) for tools that require `name == folder`. README "Works With" pointer added. The `<skill-dir>` reference form and `AGENTS.md` are portable across all four tools (both are cross-vendor open standards — see `FUTURE.md` §6).
-- **OpenCode harness adapter (`adapters/opencode/`).** Ports the in-agent guards (bash-command guard, protected-file guard, typecheck-on-edit) to an OpenCode plugin, with guard logic copied verbatim from the harness kit. Ships with a 22-case logic test (`guards.test.mjs`).
+- **OpenCode harness adapter (`adapters/opencode/`).** Ports the in-agent guards (bash-command, protected-file, typecheck-on-edit) to an OpenCode plugin (default export only; args-shape-based hooks so OpenCode's tool names don't matter), guard logic copied verbatim from the harness kit. Ships with a 25-case `hooks.test.mjs`. **Validated end-to-end in a real OpenCode / OpenChamber container** — the plugin loads and the `git --no-verify` guard blocks live.
 - **Three new lint guards** (`lint-skills.sh`): every concrete `<skill-dir>/path` reference resolves to a real file; every ref-header prereq carries the CONVENTIONS §4 "loaded at runtime by" clause; and a husky-ban (lefthook is the git-hook SSOT).
 
 ### Fixed
@@ -21,10 +25,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Git-hook system contradiction.** The three TS scaffolds shipped husky (`prepare`/devDep/`.husky/` hooks) while the shared harness kit mandates lefthook. Purged husky; aligned `prepare`/devDep to lefthook and added `lefthook: false` to each `pnpm-workspace.yaml` `allowBuilds` (pnpm 11 otherwise blocks all `pnpm <script>` runs with `ERR_PNPM_IGNORED_BUILDS`).
 - **Coverage gate had no input.** Next.js/NestJS Vitest emitted `lcov` but the CI diff-cover gate reads Cobertura; Vite had no coverage block. Switched reporters to `cobertura`, added Vite's coverage block + `@vitest/coverage-v8` + `--coverage` on `test:ci`, and added `pytest-cov` to FastAPI's `requirements-dev.txt` (the CI `pytest --cov` step depended on it).
 - **`templatecentral:migrate` logic.** Light-adoption stamped `@1.0.0`, which Phase 0 would re-flag for a phantom v4 upgrade → now `@5.0.0`; removed a false "invoked automatically by add-*" self-description; dropped a stale `tailwind.config.ts` gap check (Tailwind v4 is CSS-first).
+- **OpenCode adapter failed to load.** OpenCode invokes every *named* export of a plugin module as a plugin factory, so the adapter's exported test helpers crashed loading ("failed to load plugin") and the guards never ran. Made the helpers internal (default export only), switched the hooks to args-shape detection, and replaced the function-level test with `hooks.test.mjs`. (Found by live OpenCode testing.)
 
 ### Changed
 
-- **Docs/accuracy sweep.** CONVENTIONS §8 registered-skill count 6→4, dirs 10→8; normalized `add-*` skill-name references to `templatecentral:add (X)`; added the §4 "loaded at runtime by" clause to 12 ref-headers; fixed CONTRIBUTING naming examples and a broken README list; removed a plugin-loader leak from the Next.js dashboard example UI.
+- **Docs/accuracy sweep.** CONVENTIONS §8 registered-skill count 6→4, dirs 10→8; normalized `add-*` skill-name references to `templatecentral:add (X)`; added the §4 "loaded at runtime by" clause to 12 ref-headers; fixed CONTRIBUTING naming examples and a broken README list; removed a plugin-loader leak from the Next.js dashboard example UI; corrected the README to reflect lefthook (was "Husky") and React Router 8 (was v7).
 
 ---
 

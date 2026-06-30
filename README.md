@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.5.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.6.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -18,7 +18,7 @@
 |:---|:---|
 | Pick a starter template, strip boilerplate | `"Scaffold a Next.js project at ~/projects/my-app"` |
 | Configure TypeScript, ESLint, and Prettier by hand | App Router, shadcn/ui, TanStack Query — wired and working |
-| Set up Docker, Vitest, and Husky pre-commit hooks | Docker, Vitest, Husky — done |
+| Set up Docker, Vitest, and lefthook pre-commit hooks | Docker, Vitest, lefthook — done |
 | Write project docs for your AI agent | `AGENTS.md` + `CLAUDE.md` written automatically |
 | ~45 minutes of setup decisions | ~60 seconds, zero decisions |
 
@@ -78,11 +78,11 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 ### Next.js
 ✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod  
-✅ Prettier + ESLint + Husky · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example`
+✅ Prettier + ESLint + lefthook · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example`
 
 ### Vite + React
-✅ React 19 + React Router v7 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4  
-✅ Vitest + Testing Library · ✅ Prettier + ESLint + Husky
+✅ React 19 + React Router v8 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4  
+✅ Vitest + Testing Library · ✅ Prettier + ESLint + lefthook
 
 ### FastAPI
 ✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright  
@@ -90,7 +90,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 ### NestJS
 ✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests  
-✅ Prettier + ESLint + Husky
+✅ Prettier + ESLint + lefthook
 
 > Add capabilities via `templatecentral:add` — `auth · database · page · feature · endpoint · form · integration · test · logging · error-handling · pagination · mutation-testing · ai-security` — keeping the base scaffold clean.
 
