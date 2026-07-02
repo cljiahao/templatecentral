@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.6.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.7.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -141,34 +141,53 @@ claude plugin marketplace add obra/superpowers
 
 ---
 
-## Other Agent Tools (OpenCode / OpenChamber, Codex, Antigravity)
+## Other Agent Tools (OpenCode, Codex, Antigravity)
 
-Claude Code stays primary, but the skills follow the open [Agent Skills](https://agentskills.io) standard and `AGENTS.md` (a Linux Foundation standard), so they work in other agent tools too.
+Claude Code is the primary target, but the skills follow the open [Agent Skills](https://agentskills.io) and [`AGENTS.md`](https://agents.md) standards, so they run in any compliant tool. You get the full scaffold logic and routing — only the Claude-Code-only in-agent hooks differ (and those stay enforced at commit/CI time).
 
-**One-time prep — generate a tool-agnostic copy** (strips the `templatecentral:` namespace, which other tools require to match the folder name):
+**Prerequisite — clone the repo and generate a tool-agnostic copy.** Other tools require each skill's `name` to match its folder, so this strips the `templatecentral:` namespace:
 
 ```bash
+git clone https://github.com/cljiahao/templatecentral.git
+cd templatecentral
 bash scripts/build-agents-dist.sh        # → dist/agents-skills/
 ```
 
 ### OpenCode / OpenChamber
 
-Register the generated skills, either via `opencode.json`:
+1. **Register the skills** — add to `opencode.json` (project `./opencode.json` or global `~/.config/opencode/opencode.json`):
 
-```json
-{ "$schema": "https://opencode.ai/config.json",
-  "skills": { "paths": ["/abs/path/to/templatecentral/dist/agents-skills"] } }
-```
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "skills": { "paths": ["/abs/path/to/templatecentral/dist/agents-skills"] }
+   }
+   ```
 
-…or copy them into a scanned dir (`~/.config/opencode/skills/`, a project `.opencode/skills/`, or `~/.agents/skills/`). **OpenChamber / Docker:** mount `dist/agents-skills` to `/home/developer/.config/opencode/skills` (alongside the existing plugin mount) and restart the container. Then ask OpenCode to scaffold — e.g. *"scaffold a Next.js project at ./my-app"* — and it auto-activates the `scaffold` skill.
+2. **(Optional) Add the live guards** — block `git --no-verify`, protect `.env`/secrets, typecheck-on-edit:
 
-**Optional in-agent guards.** The git-hook + CI half of the harness already works in any tool. To also get the live in-agent guards (block `git --no-verify`, protect secrets/`.env`, typecheck-on-edit), load the OpenCode adapter at [`adapters/opencode/`](adapters/opencode/) — validated end-to-end in a real OpenCode container.
+   ```json
+   { "plugin": ["/abs/path/to/templatecentral/adapters/opencode/templatecentral.plugin.js"] }
+   ```
+
+3. **Restart OpenCode** — it loads config only at startup.
+
+Verify: ask *"scaffold a Next.js project at ./my-app"* — OpenCode auto-activates the `scaffold` skill.
+
+> **OpenChamber / Docker:** instead of step 1, mount `dist/agents-skills` to `/home/developer/.config/opencode/skills` and restart the container.
 
 ### Codex / Antigravity
 
-Both read `AGENTS.md` natively and implement the Agent Skills standard. Copy `dist/agents-skills/*` into `.agents/skills/` (Codex also scans `~/.agents/skills/`; Antigravity uses a project `.agents/skills/`). A native in-agent harness adapter for these tools is planned — see `FUTURE.md` §6.
+Both read `AGENTS.md` natively. Copy the skills into their scan path, then restart:
 
-Full per-tool details: [`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md).
+```bash
+cp -R dist/agents-skills/* ~/.agents/skills/     # Codex   (or a project ./.agents/skills/)
+cp -R dist/agents-skills/* .agents/skills/       # Antigravity (project-local)
+```
+
+---
+
+📖 **Full reference:** [`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md) — every skill-path option, the guard-parity table, and the per-tool adapter roadmap.
 
 ---
 
