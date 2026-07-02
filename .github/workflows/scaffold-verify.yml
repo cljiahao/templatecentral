@@ -44,7 +44,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--max-turns 80"
+          claude_args: "--max-turns 80 --allowedTools Read,Glob,Grep,Write,Edit,Bash"
           prompt: |
             Follow skills/scaffold/${{ matrix.stack }}/config-files.md and source-files.md to
             scaffold a brand-new project into /tmp/scaffold-e2e EXACTLY as written - no
