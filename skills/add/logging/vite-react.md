@@ -6,8 +6,13 @@
 **What already exists in the scaffold:**
 - `src/lib/errors/error-log-handler.ts` — `logError(label, error)` (console-JSON output, typed for `APIError` / `Error` / unknown)
 - `src/lib/errors/api-error.ts` — `APIError` with `statusCode` and `data`
-- `src/components/layout/error-boundary.tsx` — class component with `componentDidCatch`
-- `src/lib/errors/index.ts` — barrel re-exporting `logError`
+- `src/components/layout/error-boundary.tsx` — class component with `componentDidCatch` (render-phase errors)
+- `src/lib/errors/global-handlers.ts` — `registerGlobalErrorHandlers()` wiring `window.onerror` + `unhandledrejection`, registered in `main.tsx`. Together with the ErrorBoundary this is full client-side error coverage: render-phase (boundary) + async/event/promise (global handlers).
+- `src/lib/errors/index.ts` — barrel re-exporting `logError` and `registerGlobalErrorHandlers`
+
+> **Coverage rule (the client analogue of "wrap every route"):** every uncaught error must reach `logError`, and every API call must flow through one logged client (`src/lib/clients/`), never a raw `fetch`. The ErrorBoundary + global handlers cover the first; keep all data-fetching in the shared client for the second.
+
+> **Production upgrade path:** the homegrown console-JSON + batcher below is vendor-free and right for a scaffold default. For production error tracking, the community standard is **Sentry** (`@sentry/react`) — it auto-installs the ErrorBoundary wrapper + `window.onerror` + `unhandledrejection`, and adds source-map symbolication, breadcrumbs, release tracking, and PII scrubbing (`beforeSend`). Adopt it when you have a DSN; it supersedes the manual handlers above. OpenTelemetry's browser SDK is still experimental — not a client error-tracking replacement yet.
 
 This skill extends `logError` with a `logEvent` companion, adds a breadcrumb buffer, and wires batched delivery to a backend `/logs` endpoint (or console-JSON fallback in dev).
 

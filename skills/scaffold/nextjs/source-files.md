@@ -1202,12 +1202,16 @@ export default function RootLayout({
 ```ts
 import { type NextRequest, NextResponse } from 'next/server';
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+import { withLogging } from '@/lib/utils/with-logging';
+
+// Every route handler is wrapped in withLogging — the base scaffold models the pattern
+// its own health checks depend on, and the lint gate (see AGENTS.md) enforces it.
+export const GET = withLogging(async (_req: NextRequest): Promise<NextResponse> => {
   return NextResponse.json(
     { status: 'ok', timestamp: new Date().toISOString() },
     { status: 200 },
   );
-}
+});
 ```
 
 ### `src/app/api/health/route.ts`
@@ -1215,12 +1219,14 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 ```ts
 import { type NextRequest, NextResponse } from 'next/server';
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+import { withLogging } from '@/lib/utils/with-logging';
+
+export const GET = withLogging(async (_req: NextRequest): Promise<NextResponse> => {
   return NextResponse.json(
     { status: 'ok', timestamp: new Date().toISOString() },
     { status: 200 },
   );
-}
+});
 ```
 
 ### `src/lib/logger.ts`
@@ -1228,15 +1234,46 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 ```ts
 import pino from 'pino';
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
-  ...(process.env.NODE_ENV !== 'production' && {
-    transport: {
-      target: 'pino-pretty',
-      options: { colorize: true, singleLine: true },
-    },
-  }),
-});
+// pino ships NO redaction by default — logging a raw `req`/`res` or an object that
+// carries credentials would otherwise leak secrets. Paths are case-sensitive; wildcards
+// (`*.token`) cost more but catch nested fields. Never build these paths from user input.
+const redact = [
+  'password',
+  '*.password',
+  'token',
+  '*.token',
+  'accessToken',
+  'refreshToken',
+  'authorization',
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'res.headers["set-cookie"]',
+];
+
+function createLogger() {
+  return pino({
+    level: process.env.LOG_LEVEL ?? 'info',
+    redact,
+    ...(process.env.NODE_ENV !== 'production' && {
+      transport: {
+        target: 'pino-pretty',
+        options: { colorize: true, singleLine: true },
+      },
+    }),
+  });
+}
+
+// Cache the logger on globalThis in dev. Next.js HMR re-imports this module on every hot
+// reload; without the cache each reload spawns a fresh pino-pretty transport (a thread-stream
+// worker), and the accumulating listeners trip Node's MaxListenersExceededWarning. This mirrors
+// the canonical Next.js PrismaClient singleton pattern. In production a single instance is used.
+const globalForLogger = globalThis as unknown as {
+  __logger?: ReturnType<typeof createLogger>;
+};
+
+export const logger = globalForLogger.__logger ?? createLogger();
+
+if (process.env.NODE_ENV !== 'production') globalForLogger.__logger = logger;
 ```
 
 ### `src/lib/utils/with-logging.ts`
@@ -1247,20 +1284,27 @@ import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 
-type RouteHandler = (
-  req: NextRequest,
-  ctx?: { params?: Promise<Record<string, string>> }
-) => Promise<NextResponse>;
+// Generic over the route context so typed dynamic-segment params survive the wrap:
+//   export const GET = withLogging(async (req) => …)                                    // static
+//   export const GET = withLogging<RouteContext<{ id: string }>>(async (req, { params }) => …)  // dynamic
+export type RouteContext<P = Record<string, string>> = { params: Promise<P> };
 
-export function withLogging(handler: RouteHandler): RouteHandler {
-  return async (req, ctx) => {
+type RouteHandler<C> = (req: NextRequest, ctx: C) => Promise<NextResponse>;
+
+// The returned handler takes the context via a variadic tuple ([ctx] | []) so static routes
+// (and unit tests) can call it with just the request, while dynamic routes still receive
+// their typed params. Next.js passes the context for dynamic segments at runtime.
+export function withLogging<C = unknown>(
+  handler: RouteHandler<C>
+): (req: NextRequest, ...rest: [ctx: C] | []) => Promise<NextResponse> {
+  return async (req, ...rest) => {
     const start = Date.now();
     const { method } = req;
     const path = new URL(req.url).pathname;
     const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID();
 
     try {
-      const res = await handler(req, ctx);
+      const res = await handler(req, ...(rest as [ctx: C]));
       logger.info({ requestId, method, path, status: res.status, duration_ms: Date.now() - start });
       return res;
     } catch (err) {
@@ -1878,6 +1922,48 @@ describe('GET /api/health (Docker / probe path)', () => {
     expect(response.status).toBe(200);
     expect(data.status).toBe('ok');
     expect(data.timestamp).toBeDefined();
+  });
+});
+```
+
+### `test/api/with-logging.test.ts`
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { NextRequest, NextResponse } from 'next/server';
+
+import { type RouteContext, withLogging } from '@/lib/utils/with-logging';
+
+function makeRequest(url: string): NextRequest {
+  return new NextRequest(url);
+}
+
+describe('withLogging', () => {
+  it('returns the handler response on success', async () => {
+    const GET = withLogging(async () => NextResponse.json({ ok: true }, { status: 201 }));
+    const res = await GET(makeRequest('http://localhost/api/thing'));
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual({ ok: true });
+  });
+
+  it('catches a thrown error and returns a 500 without leaking the message', async () => {
+    const GET = withLogging(async () => {
+      throw new Error('boom');
+    });
+    const res = await GET(makeRequest('http://localhost/api/thing'));
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({ error: 'Internal server error' });
+  });
+
+  it('passes typed dynamic-route params through to the handler', async () => {
+    const GET = withLogging<RouteContext<{ id: string }>>(async (_req, { params }) => {
+      const { id } = await params;
+      return NextResponse.json({ id });
+    });
+    const res = await GET(makeRequest('http://localhost/api/thing/42'), {
+      params: Promise.resolve({ id: '42' }),
+    });
+    await expect(res.json()).resolves.toEqual({ id: '42' });
   });
 });
 ```

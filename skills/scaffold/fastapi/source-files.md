@@ -276,10 +276,7 @@ def configure_exceptions(app: FastAPI) -> None:
     async def invalid_input_handler(
         request: Request, exc: InvalidInputError
     ) -> JSONResponse:
-        logger.info(
-            "Invalid input",
-            extra={"path": request.url.path, "detail": str(exc)},
-        )
+        logger.info("Invalid input", path=request.url.path, detail=str(exc))
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"detail": str(exc)},
@@ -287,10 +284,7 @@ def configure_exceptions(app: FastAPI) -> None:
 
     @app.exception_handler(NoResultsFound)
     async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
-        logger.info(
-            "No results found",
-            extra={"path": request.url.path, "detail": str(exc)},
-        )
+        logger.info("No results found", path=request.url.path, detail=str(exc))
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": str(exc)},
@@ -313,7 +307,8 @@ def configure_exceptions(app: FastAPI) -> None:
         safe_errors = _sanitize_errors(exc.errors())
         logger.info(
             "Request validation error",
-            extra={"path": request.url.path, "errors": safe_errors},
+            path=request.url.path,
+            errors=safe_errors,
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -322,7 +317,7 @@ def configure_exceptions(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
-        logger.exception("Unhandled exception", extra={"path": request.url.path})
+        logger.exception("Unhandled exception", path=request.url.path)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": INTERNAL_SERVER_ERROR_DETAIL},
@@ -417,16 +412,48 @@ class NoResultsFound(Exception):
 ### `src/core/logging.py`
 
 ```python
-import json
 import logging
-import logging.config
 import logging.handlers
+import sys
 from datetime import datetime as dt
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from core.config import common_settings
 from core.directory_manager import directory_manager as dm
+
+# Keys whose values are redacted anywhere in a log event — the structlog analogue of
+# pino's `redact`. Matched case-insensitively; extend for your domain. Prefer this over
+# scattered "never log X" comments: it is a safety net that holds even when a caller slips.
+_SENSITIVE_KEYS = {
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "secret",
+    "api_key",
+}
+
+
+def _redact_sensitive(
+    _logger: Any, _method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """Redact sensitive values by key, recursing into nested dicts (parity with pino's `*.token`)."""
+
+    def scrub(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                k: ("***" if k.lower() in _SENSITIVE_KEYS else scrub(v))
+                for k, v in value.items()
+            }
+        return value
+
+    return scrub(event_dict)
 
 
 class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
@@ -453,140 +480,87 @@ class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         return str(mth_fol / fname)
 
 
-# Register the custom handler so logging.json can reference it via
-# "class": "logging.handlers.MyTimedRotatingFileHandler"
-setattr(logging.handlers, "MyTimedRotatingFileHandler", MyTimedRotatingFileHandler)  # pyright: ignore[reportAttributeAccessIssue]
+# Processors shared by structlog (app) logs and stdlib (uvicorn/library) logs so both render
+# identically. merge_contextvars pulls request-scoped context (e.g. request_id, bound per
+# request in middleware) into every line and propagates it correctly across async/await.
+_shared_processors: list[Any] = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.add_logger_name,
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.UnicodeDecoder(),
+    _redact_sensitive,
+]
 
 
 def setup_logging() -> None:
-    """Set up logging configuration from a JSON file or default settings."""
-    logging_config_path = Path(__file__).parent / "json" / "logging.json"
-    if not logging_config_path.exists():
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            handlers=[logging.StreamHandler()],
-        )
-        return
-
-    with logging_config_path.open("rt", encoding="utf-8") as f:
-        config = json.load(f)
-
-    # Get handlers that are actually used by loggers
-    handlers = config.get("handlers", {})
-    loggers = config.get("loggers", {})
-
+    """Configure structlog + stdlib logging: JSON in prod/uat, colored console in dev."""
     env = common_settings.ENVIRONMENT
-    logger_config = loggers.get(env, loggers.get("dev", {}))
-    log_handlers = logger_config.get("handlers", [])
+    use_json = env != "dev"
 
-    # Only update file paths for handlers that are actually used
-    for handler_name, handler_config in handlers.items():
-        if "filename" in handler_config and handler_name in log_handlers:
-            # Convert relative paths to absolute paths using log directory
-            original_filename = handler_config["filename"]
-            dm.create_directory(dm.log_dir)
-            absolute_path = dm.log_dir / original_filename
+    # structlog side: run the shared chain, then hand the event to a stdlib formatter.
+    structlog.configure(
+        processors=[
+            *_shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
 
-            # Update the handler configuration
-            handler_config["filename"] = str(absolute_path)
+    # stdlib side: one ProcessorFormatter renders BOTH structlog records and plain stdlib
+    # records — uvicorn/library logs run through foreign_pre_chain first, so they match.
+    def make_formatter(render: Any) -> structlog.stdlib.ProcessorFormatter:
+        return structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=_shared_processors,
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                *render,
+            ],
+        )
 
-    # Apply the logging configuration
-    logging.config.dictConfig(config)
+    console_render: list[Any] = (
+        [structlog.processors.format_exc_info, structlog.processors.JSONRenderer()]
+        if use_json
+        else [structlog.dev.ConsoleRenderer(colors=True)]
+    )
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(make_formatter(console_render))
+    handlers: list[logging.Handler] = [console_handler]
+
+    # Dev also writes daily-rotating JSON files; prod/uat log JSON to stdout only — never rely
+    # on local disk in production (the platform ships stdout to the log aggregator).
+    if not use_json:
+        dm.create_directory(dm.log_dir)
+        file_formatter = make_formatter(
+            [structlog.processors.format_exc_info, structlog.processors.JSONRenderer()]
+        )
+        for filename, level in (("info.log", logging.INFO), ("errors.log", logging.ERROR)):
+            file_handler = MyTimedRotatingFileHandler(
+                filename=str(dm.log_dir / filename),
+                when="midnight",
+                encoding="utf8",
+                delay=True,
+            )
+            file_handler.setLevel(level)
+            file_handler.setFormatter(file_formatter)
+            handlers.append(file_handler)
+
+    root = logging.getLogger()
+    root.handlers = handlers
+    root.setLevel(logging.INFO if use_json else logging.DEBUG)
 
 
-# Setup logging and create logger instance
+# Configure logging at import and expose a bound logger. Bind per-request context in
+# middleware with structlog.contextvars.bind_contextvars(request_id=...); it flows to
+# every line for that request automatically. Structured fields are passed as kwargs
+# (logger.info("Event", key=value)), NOT via stdlib's extra={...}.
 setup_logging()
-logger = logging.getLogger(common_settings.ENVIRONMENT)
-```
-
-### `src/core/json/logging.json`
-
-```json
-{
-  "version": 1,
-  "disable_existing_loggers": false,
-  "formatters": {
-    "simple": {
-      "format": "%(name)s : %(asctime)s | %(levelname)s | %(filename)s : %(lineno)s | %(message)s",
-      "datefmt": "%Y-%m-%d %H:%M:%S"
-    },
-    "json": {
-      "class": "pythonjsonlogger.json.JsonFormatter",
-      "format": "%(name)s  %(asctime)s %(levelname)s %(filename)s %(lineno)s %(message)s",
-      "datefmt": "%Y-%m-%d %H:%M:%S"
-    }
-  },
-  "handlers": {
-    "console": {
-      "class": "logging.StreamHandler",
-      "level": "DEBUG",
-      "formatter": "simple",
-      "stream": "ext://sys.stdout"
-    },
-    "info_console": {
-      "class": "logging.StreamHandler",
-      "level": "INFO",
-      "formatter": "json",
-      "stream": "ext://sys.stdout"
-    },
-    "error_console": {
-      "class": "logging.StreamHandler",
-      "level": "ERROR",
-      "formatter": "json",
-      "stream": "ext://sys.stderr"
-    },
-    "info_file": {
-      "class": "logging.handlers.MyTimedRotatingFileHandler",
-      "level": "INFO",
-      "formatter": "json",
-      "filename": "info.log",
-      "when": "midnight",
-      "encoding": "utf8",
-      "delay": true
-    },
-    "error_file": {
-      "class": "logging.handlers.MyTimedRotatingFileHandler",
-      "level": "ERROR",
-      "formatter": "json",
-      "filename": "errors.log",
-      "when": "midnight",
-      "encoding": "utf8",
-      "delay": true
-    }
-  },
-  "loggers": {
-    "dev": {
-      "level": "DEBUG",
-      "handlers": [
-        "console",
-        "info_file",
-        "error_file"
-      ],
-      "propagate": false
-    },
-    "uat": {
-      "level": "INFO",
-      "handlers": [
-        "info_console"
-      ],
-      "propagate": false
-    },
-    "prod": {
-      "level": "INFO",
-      "handlers": [
-        "info_console"
-      ],
-      "propagate": false
-    }
-  },
-  "root": {
-    "level": "DEBUG",
-    "handlers": [
-      "console"
-    ]
-  }
-}
+logger: structlog.stdlib.BoundLogger = structlog.stdlib.get_logger(common_settings.ENVIRONMENT)
 ```
 
 ### `src/core/directory_manager.py`
@@ -1063,6 +1037,46 @@ def test_health_returns_ok(client: TestClient) -> None:
 
 *(empty file)*
 
+### `test/test_utils/test_logging.py`
+
+```python
+"""Tests for the structlog configuration in core.logging."""
+
+import logging
+
+import pytest
+
+from core.logging import _redact_sensitive, logger, setup_logging
+
+
+@pytest.mark.unit
+def test_logger_supports_structured_calls() -> None:
+    """The exported logger binds context and exposes structlog methods."""
+    bound = logger.bind(request_id="test-123")
+    assert hasattr(bound, "info")
+    assert hasattr(bound, "exception")
+
+
+@pytest.mark.unit
+def test_setup_logging_is_idempotent() -> None:
+    """Re-running setup_logging replaces root handlers rather than stacking them."""
+    setup_logging()
+    first = len(logging.getLogger().handlers)
+    setup_logging()
+    assert len(logging.getLogger().handlers) == first
+    assert first >= 1
+
+
+@pytest.mark.unit
+def test_sensitive_keys_are_redacted_recursively() -> None:
+    """The redaction processor masks sensitive keys at any nesting depth."""
+    event = {"password": "hunter2", "user": {"token": "abc"}, "path": "/x"}
+    result = _redact_sensitive(None, "info", event)
+    assert result["password"] == "***"
+    assert result["user"]["token"] == "***"
+    assert result["path"] == "/x"
+```
+
 ---
 
 ## Scaffold Steps
@@ -1092,7 +1106,7 @@ Update values as needed (project name, port, etc.). Never commit `src/.env`.
 python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
-pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.9.0" pydantic-settings python-dotenv python-multipart "python-json-logger>=4.0" "starlette>=1.0.1"
+pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.9.0" pydantic-settings python-dotenv python-multipart "structlog>=25.1" "starlette>=1.0.1"
 pip install -r requirements-dev.txt
 
 pip freeze > requirements.txt

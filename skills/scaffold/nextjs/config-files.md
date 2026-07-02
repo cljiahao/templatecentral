@@ -29,7 +29,8 @@ Write these files exactly as shown.
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "check": "prettier --check . && eslint . && tsc --noEmit",
+    "check:logging": "node scripts/check-route-logging.mjs",
+    "check": "prettier --check . && eslint . && tsc --noEmit && node scripts/check-route-logging.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --coverage",
     "prepare": "lefthook install"
@@ -72,6 +73,65 @@ Write these files exactly as shown.
     "vitest": "^4.1.8"
   }
 }
+```
+
+### `scripts/check-route-logging.mjs`
+
+> Next.js App Router has no global request-logging layer, so coverage can't be automatic like NestJS (pino-http) or FastAPI (ASGI middleware). This dependency-free check fails the build if any API handler ships unwrapped — wired into `pnpm check`, so it runs locally, in lefthook, and in CI. See `add/logging/nextjs.md`.
+
+```js
+// Fail the build if any App Router API handler is not wrapped in withLogging().
+// Enforces the "every route is logged" rule the base scaffold models on its own handlers.
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const ROOT = 'src/app/api';
+const METHODS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS';
+const ROUTE_FILE = /^route\.m?[jt]sx?$/; // route.ts|tsx|js|jsx|mjs|mts
+
+// Match on comment-stripped, whole-file text (not line-by-line) so commented-out handlers
+// don't false-positive and prettier-wrapped `export const POST =\n  withLogging(...)` still passes.
+const bareFn = new RegExp(`export\\s+(?:async\\s+)?function\\s+(?:${METHODS})\\b`, 'g');
+// Whitespace lives INSIDE the lookahead so it can't backtrack to zero and false-pass `= withLogging`.
+const unwrapped = new RegExp(`export\\s+const\\s+(?:${METHODS})\\b\\s*=(?!\\s*withLogging\\b)`, 'g');
+
+function walk(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else if (ROUTE_FILE.test(entry)) out.push(p);
+  }
+  return out;
+}
+
+// Blank out comments while preserving newlines so reported line numbers stay accurate.
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+}
+
+const lineOf = (src, index) => src.slice(0, index).split('\n').length;
+
+const files = existsSync(ROOT) ? walk(ROOT) : [];
+const violations = [];
+for (const file of files) {
+  const src = stripComments(readFileSync(file, 'utf8'));
+  for (const m of src.matchAll(bareFn)) {
+    violations.push(`${file}:${lineOf(src, m.index)} — bare handler export; wrap it in withLogging()`);
+  }
+  for (const m of src.matchAll(unwrapped)) {
+    violations.push(`${file}:${lineOf(src, m.index)} — handler not wrapped in withLogging()`);
+  }
+}
+
+if (violations.length > 0) {
+  console.error('Route logging check failed — every API handler must be wrapped in withLogging():');
+  for (const v of violations) console.error('  ' + v);
+  process.exit(1);
+}
+console.log(`Route logging check passed (${files.length} route file(s)).`);
 ```
 
 ### `eslint.config.mjs`
