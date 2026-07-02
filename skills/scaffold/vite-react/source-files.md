@@ -9,7 +9,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/app';
+import { registerGlobalErrorHandlers } from '@/lib/errors';
 import '@/styles/globals.css';
+
+// Capture async/event/promise errors that ErrorBoundary (render-phase only) cannot see.
+registerGlobalErrorHandlers();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -1902,6 +1906,62 @@ export const API_ROUTES = {
 ```ts
 export { APIError } from './api-error';
 export { logError } from './error-log-handler';
+export { registerGlobalErrorHandlers } from './global-handlers';
+```
+
+### `src/lib/errors/global-handlers.ts`
+
+```ts
+import { logError } from './error-log-handler';
+
+// React's ErrorBoundary only catches errors thrown during render. Everything else —
+// errors in event handlers, timers, and async code, plus promise rejections with no
+// .catch() (e.g. a failed fetch) — escapes it. These two global listeners close that gap
+// so no uncaught error goes unlogged. Register once at bootstrap (see main.tsx).
+export function registerGlobalErrorHandlers(): void {
+  window.addEventListener('error', (event) => {
+    logError('window.onerror', event.error ?? event.message);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    logError('unhandledrejection', event.reason);
+  });
+}
+```
+
+### `src/lib/errors/global-handlers.test.ts`
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { registerGlobalErrorHandlers } from './global-handlers';
+
+describe('registerGlobalErrorHandlers', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('logs uncaught errors from the window error event', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    registerGlobalErrorHandlers();
+
+    const event = new Event('error');
+    Object.assign(event, { error: new Error('kaboom') });
+    window.dispatchEvent(event);
+
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('logs unhandled promise rejections', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    registerGlobalErrorHandlers();
+
+    // jsdom doesn't emit unhandledrejection on its own — dispatch a shaped event manually.
+    const event = new Event('unhandledrejection');
+    Object.assign(event, { reason: new Error('nope') });
+    window.dispatchEvent(event);
+
+    expect(spy).toHaveBeenCalled();
+  });
+});
 ```
 
 ### `src/lib/errors/api-error.ts`

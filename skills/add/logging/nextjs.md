@@ -16,8 +16,8 @@ the marker.
 
 **What already exists in the template:**
 - `pino` in `package.json` dependencies
-- `src/lib/logger.ts` — singleton pino logger
-- `src/lib/utils/with-logging.ts` — `withLogging` HOF
+- `src/lib/logger.ts` — pino logger with `redact` (auth/cookie/password/token) and an HMR-safe `globalThis` singleton (dev)
+- `src/lib/utils/with-logging.ts` — `withLogging` HOF (already applied to the scaffold's own route handlers; the lint gate enforces coverage)
 - `src/lib/errors/error-log-handler.ts` — `logError` using pino
 
 #### Tier 1 — Base

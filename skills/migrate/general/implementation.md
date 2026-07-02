@@ -373,7 +373,7 @@ Write `.claude/harness.json` (include only files that were actually created):
 
 ```json
 {
-  "templatecentral_version": "5.6.0",
+  "templatecentral_version": "5.7.0",
   "stack": "<detected-stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {

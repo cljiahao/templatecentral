@@ -8,9 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.7.0] — 2026-07-02
+
 ### Added
 
-- **README "Other Agent Tools" onboarding** — concrete OpenCode/OpenChamber setup (generate `dist/agents-skills/`, register via `skills.paths` or a scanned dir, Docker mount) plus Codex/Antigravity notes. `FUTURE.md` §6 gains a per-tool harness-adapter status table + Codex/Antigravity adapter roadmap.
+- **README "Other Agent Tools" onboarding** — a clean, numbered OpenCode/OpenChamber quickstart (clone → `build-agents-dist.sh` → register via `skills.paths`, optional guard-plugin step, restart, verify) plus a two-line Codex/Antigravity copy step, all linking to `docs/CROSS-TOOL.md` for depth. `FUTURE.md` §6 gains a per-tool harness-adapter status table + Codex/Antigravity adapter roadmap.
+- **Logging hardening across all four stacks** (research-backed — 2025–26 pino/structlog/OpenTelemetry/Sentry community consensus, cross-checked against the appCentral reference implementation):
+  - **Next.js** — pino `redact` for secrets/PII (`authorization`, `cookie`, `password`, `token`, nested) and an HMR-safe `globalThis` logger singleton (prevents dev `MaxListenersExceededWarning` from duplicate `pino-pretty` transports). `withLogging` is now generic over `RouteContext<P>` so typed dynamic-segment routes wrap cleanly. New `test/api/with-logging.test.ts`.
+  - **Next.js route-logging enforcement** — `scripts/check-route-logging.mjs` (dependency-free; comment-stripped, whole-file matching) wired into `pnpm check` fails the build on any unwrapped `src/app/api/**/route.ts` handler. The base scaffold's own routes and the `add (endpoint)` examples now model the pattern. Answers "every API is logged" by construction instead of by convention.
+  - **FastAPI** — the `add (logging)` skill's Tier 1 now uses `asgi-correlation-id` + `structlog.contextvars` so a per-request `request_id` is bound once and flows to every log line across `async`/`await`; the request-logging middleware clears context in a `finally` so it never leaks between requests. New `test/test_utils/test_logging.py`.
+  - **Vite + React** — `registerGlobalErrorHandlers()` (`window.onerror` + `unhandledrejection`) wired into `main.tsx`, closing the gap that render-phase-only `ErrorBoundary` leaves; Sentry documented as the production upgrade path. New `global-handlers.test.ts`.
+
+### Changed
+
+- **FastAPI logging: `python-json-logger` → `structlog`.** The scaffold now configures structlog (JSON in prod/uat, colored console in dev, retaining daily-rotating files) with a recursive key-based redaction processor, replacing the `logging.json`/`dictConfig` setup. Log calls use structlog kwargs (`logger.info("Event", key=value)`) rather than stdlib `extra={...}`. `.claude/rules/fastapi.md` logging floor updated to `structlog ≥25.1` + `asgi-correlation-id ≥4.3`.
+
+### Fixed
+
+- **FastAPI scaffold shipped no `pyrightconfig.json`.** `python -m pyright src/` fell back to the system Python when the venv wasn't the active shell, reporting every dependency as a missing import (19 `reportMissingImports`). Added the verbatim `pyrightconfig.json` (`venvPath`/`.venv`) that `.dockerignore` already whitelisted. Surfaced by a branch `scaffold-verify` run.
 
 ---
 

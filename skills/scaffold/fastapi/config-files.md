@@ -424,6 +424,19 @@ addopts = [
 ]
 ```
 
+### `pyrightconfig.json`
+
+> Pins pyright to the project venv so `python -m pyright src/` resolves imports from `.venv` even when the venv is not the active shell. Without it, pyright falls back to the system Python and reports every dependency as a missing import.
+
+```json
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Linux"
+}
+```
+
 ### `requirements-dev.txt`
 
 Write this file verbatim (dev-only dependencies; not installed in production Docker stages):

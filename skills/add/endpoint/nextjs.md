@@ -49,9 +49,12 @@ Keep route handlers thin — delegate to server-side data access:
 >
 > **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Drizzle/Mongoose via the `templatecentral:add (database)` skill, or external API clients via the `templatecentral:add (integration)` skill.
 
+> **Wrap every handler in `withLogging`.** Next.js has no global request-logging layer, so each handler must be wrapped — and `pnpm check` fails the build on any unwrapped route (`scripts/check-route-logging.mjs`). See `add/logging/nextjs.md`.
+
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
+import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 // Replace with your actual data access — e.g. (after running templatecentral:add (database)):
@@ -62,16 +65,16 @@ const CreateProjectSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-export async function GET() {
+export const GET = withLogging(async () => {
   try {
     const rows = []; // ← Replace: e.g. await db.select().from(projects)
     return NextResponse.json(rows);
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withLogging(async (request) => {
   try {
     const body = await request.json();
     const parsed = CreateProjectSchema.safeParse(body);
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError('Failed to create project', error);
   }
-}
+});
 ```
 
 ### 3. Dynamic Segments
@@ -98,11 +101,10 @@ For routes with resource IDs:
 ```ts
 // src/app/api/projects/[id]/route.ts
 import { handleApiError } from '@/lib/errors';
+import { type RouteContext, withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
-type Params = { params: Promise<{ id: string }> };
-
-export async function GET(_request: Request, { params }: Params) {
+export const GET = withLogging<RouteContext<{ id: string }>>(async (_request, { params }) => {
   try {
     const { id } = await params;
     const project = null; // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
@@ -113,7 +115,7 @@ export async function GET(_request: Request, { params }: Params) {
   } catch (error) {
     return handleApiError('Failed to fetch project', error);
   }
-}
+});
 ```
 
 ### 4. Update Routes Constant
