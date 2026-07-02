@@ -21,6 +21,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **FastAPI logging: `python-json-logger` → `structlog`.** The scaffold now configures structlog (JSON in prod/uat, colored console in dev, retaining daily-rotating files) with a recursive key-based redaction processor, replacing the `logging.json`/`dictConfig` setup. Log calls use structlog kwargs (`logger.info("Event", key=value)`) rather than stdlib `extra={...}`. `.claude/rules/fastapi.md` logging floor updated to `structlog ≥25.1` + `asgi-correlation-id ≥4.3`.
 
+### Fixed
+
+- **FastAPI scaffold shipped no `pyrightconfig.json`.** `python -m pyright src/` fell back to the system Python when the venv wasn't the active shell, reporting every dependency as a missing import (19 `reportMissingImports`). Added the verbatim `pyrightconfig.json` (`venvPath`/`.venv`) that `.dockerignore` already whitelisted. Surfaced by a branch `scaffold-verify` run.
+
 ---
 
 ## [5.6.0] — 2026-06-30
