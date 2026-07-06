@@ -7,7 +7,7 @@ description: Use when reviewing code quality, naming conventions, validation pat
 
 | Operation | Description | Path |
 |---|---|---|
-| `code-standards` | Naming, exports, component patterns | `code-standards/<stack>.md` |
+| `code-standards` | Naming, exports, component patterns, comment hygiene | `code-standards/<stack>.md` (load `code-standards/comments.md` first) |
 | `validation-patterns` | Zod/Pydantic schemas | `validation-patterns/<stack>.md` (load `validation-patterns/patterns.md` first) |
 | `drift-check` | Detect implementation drift | `drift-check/implementation.md` |
 | `full-stack-pairing` | Sync frontend/backend contracts | `full-stack-pairing/implementation.md` |

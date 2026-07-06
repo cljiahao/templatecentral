@@ -10,6 +10,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.8.0] — 2026-07-06
+
+### Added
+
+- **Comment Hygiene Harness — comment standards across every scaffolded + migrated project** (research-backed against PEP 8, Google/Airbnb style guides, Ruff `ERA`, SonarQube, and *Clean Code*):
+  - **Doctrine SSOT** — new `skills/standards/code-standards/comments.md`: a language-neutral 5-point doctrine (why-not-what; own-line over trailing; no commented-out code; no change-narration; API docs are contracts). Loaded first by `code-standards`, referenced by all four per-stack files. Tenet 2 (inline comments) is deliberately calibrated to *"sparingly, not banned"* — PEP 8 permits inline comments and ESLint's `no-inline-comments` is opt-in/frozen, so a hard ban isn't community consensus.
+  - **Seeded rule** — the `## Rules (always)` block in every scaffold AGENTS.md template (and `migrate`) now carries the comment doctrine, so new and adopted projects both inherit it.
+  - **Deterministic enforcement** — `no-inline-comments: 'warn'` added to the seeded `eslint.config` for Next.js, NestJS, and Vite+React (a non-blocking nudge); Ruff `ERA` enabled in the FastAPI `pyproject.toml` to flag commented-out code (dependency-free, the one deterministic win Python affords). Seeded starter code is already clean, so a fresh scaffold's lint stays green.
+
+### Changed
+
+- **`migrate` now seeds the FULL harness-kit (scaffold parity).** Phase 4 previously ran only kit Steps A–B ("8 scripts") and hand-maintained a partial `harness.json`, so migrated projects silently lost the git-hook layer (`lefthook`/`gitleaks`), CI, the integrity verifier (`verify/regen-harness.sh`), the `/skill-audit` skill, and the 9th hook (`skill-usage-log.sh`) — while Phase 5d re-sync still called `verify-harness.sh` that was never seeded. Phase 4 now executes kit Steps **A–E** in full and defers the manifest + base-snapshot to kit Steps E/E2 (single source), and both AGENTS.md `## AI Harness` blocks describe the git-hook + CI layer.
+- **Mutation-testing version references made version-neutral** — `add/mutation-testing/typescript.md` ("StrykerJS 7.x", now two majors stale — current is 9.x) and the `mutmut` sibling no longer pin a major in prose; the install command resolves the current release (versions are SSOT in `.claude/rules/*`).
+- **NestJS `@nestjs/*` floor `^11.1.24` → `^11.1.27`** in the scaffold, aligning with the `.claude/rules/nestjs.md` fix floor for the trailing-slash auth-bypass advisory.
+- **Toolchain currency** (web-verified) — seeded `packageManager` `pnpm@11.5.2` → `pnpm@11.10.0` (all three TS stacks); FastAPI Docker base `python:3.13.13-slim` → `python:3.13.14-slim`. The `globals` pin `^17.6.0` was confirmed current (latest, 2026-05-01) and left unchanged.
+
+### Fixed
+
+- **Next.js — 6 route-handler examples wrapped in `withLogging`** (`add/error-handling`, `standards/validation-patterns`, `add/pagination`); as written they were bare `export async function` handlers that fail the scaffold's own `check-route-logging.mjs` gate.
+- **Next.js — stale "Edge runtime" rationale for `proxy.ts`** in `add/auth/nextjs.md`. Verified against the Next.js 16.2.10 proxy docs (Proxy defaults to the **Node.js** runtime); reframed the optimistic cookie-check rationale as routing-layer latency avoidance, not an Edge constraint. Also fixed a `session`/`hasSession` variable mismatch in `add/logging/nextjs.md`.
+- **FastAPI — structlog `extra={}` misuse** in `add/error-handling/fastapi.md` (4 sites) converted to flat kwargs, matching the scaffold's `error_handler.py` and the "kwargs not `extra=`" rule.
+- **Vite+React** — seeded AGENTS.md stack banner "React Router 7" → "8" (matches the `^8.0.1` pin); `add/error-handling/vite-react.md` no longer registers a duplicate `unhandledrejection` listener, routing through the existing `global-handlers.ts` instead.
+- **Audit skill self-drift** — doc-sync schema-floor value `4.0.0` → `5.0.0`; added a Step 3H check for migrate/scaffold harness parity and `comments.md` to the Step 2 coverage list.
+
+---
+
 ## [5.7.0] — 2026-07-02
 
 ### Added

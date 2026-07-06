@@ -13,7 +13,7 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-ARG PYTHON=python:3.13.13-slim
+ARG PYTHON=python:3.13.14-slim
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -408,7 +408,8 @@ line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
-extend-select = ["I"]
+# I = isort; ERA = flag commented-out code (comment hygiene — see templatecentral:standards code-standards/comments.md).
+extend-select = ["I", "ERA"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "test"]

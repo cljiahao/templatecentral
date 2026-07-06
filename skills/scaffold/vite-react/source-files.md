@@ -2131,7 +2131,7 @@ Only after the verification gate passes. Create `AGENTS.md` at the project root 
 # AGENTS.md — [Project Name]
 
 ## Stack
-Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 7
+Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8
 TanStack React Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥24
 Client-side SPA — no SSR, no API route handlers.
 
@@ -2175,6 +2175,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - All user input / API responses validated with Zod at every boundary
 - Named exports only (except tooling configs); `function` declarations for components
 - No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
+- Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
 ## AI Harness
 PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).

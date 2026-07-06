@@ -143,10 +143,11 @@ export async function loginAction(formData: unknown) {
 // src/app/api/auth/login/route.ts
 import { z } from 'zod';
 import { handleApiError } from '@/lib/errors';
+import { withLogging } from '@/lib/utils/with-logging';
 import { LoginFormSchema } from '@/features/auth/schemas/login-form';
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
+export const POST = withLogging(async (request) => {
   try {
     const body = await request.json();
     const parsed = LoginFormSchema.safeParse(body);
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError('Login failed', error);
   }
-}
+});
 ```
 
 **5. Query Parameter Validation**
@@ -179,9 +180,10 @@ export async function POST(request: Request) {
 // src/app/api/projects/route.ts
 import { z } from 'zod';
 import { paginationSchema } from '@/lib/validation/schemas';
+import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+export const GET = withLogging(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     // searchParams.get() returns null for missing params, but z.string().default()
@@ -214,7 +216,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
   }
-}
+});
 ```
 
 **6. File Upload Validation**
@@ -224,9 +226,10 @@ export async function GET(request: Request) {
 import { z } from 'zod';
 import { fileUploadSchema } from '@/lib/validation/schemas';
 import { handleApiError } from '@/lib/errors';
+import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
+export const POST = withLogging(async (request) => {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -269,7 +272,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError('Upload failed', error);
   }
-}
+});
 ```
 
 **7. External API Response Validation**

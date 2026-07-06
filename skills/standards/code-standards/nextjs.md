@@ -69,6 +69,12 @@ Each feature and shared folder has an `index.ts`. Prefer `import { X } from '@/f
 
 Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pnpm build` before handoff.
 
+### Comments
+
+- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
+- `no-inline-comments` is seeded as a `warn` in `eslint.config.mjs` — a nudge toward own-line comments.
+
 ### Security (Next.js)
 
 **Environment Variables**
