@@ -2085,6 +2085,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - DB writes via repository layer only
 - `z.input<typeof Schema>` for form types; `z.infer` for post-parse output
 - No secrets in `NEXT_PUBLIC_*` variables
+- Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
 ## AI Harness
 PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).

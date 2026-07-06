@@ -183,10 +183,10 @@ export async function proxy(req: NextRequest) {
   }
 
   // Optimistic check ONLY. getSessionCookie reads the cookie's presence with no
-  // database call, so it is safe on the Edge runtime — auth.api.getSession pulls in
-  // Node-only crypto/DB code and is unreliable in proxy/middleware. This gates routing
-  // and redirects; it does NOT validate the session (a forged cookie passes). The
-  // authoritative check MUST run server-side in the protected layout (see step 8).
+  // database call — this avoids a DB/session round-trip at the routing layer on every
+  // request, keeping proxy latency low. It gates routing and redirects; it does NOT
+  // validate the session (a forged cookie passes). The authoritative check MUST run
+  // server-side in the protected layout (see step 8).
   const hasSession = getSessionCookie(req) != null;
 
   // Handle /login: redirect users who appear signed in to the dashboard, allow others through
@@ -251,7 +251,7 @@ export default function LoginPage() {
 
 #### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
-> If `src/app/dashboard/layout.tsx` already exists (present when scaffolded with templateCentral), **add the authoritative session check below to it** — do not rely on `proxy.ts` alone. The proxy does only an optimistic cookie-presence check on the Edge runtime; `/dashboard` is genuinely protected only once this server-side check is in the layout. Every protected route group needs one.
+> If `src/app/dashboard/layout.tsx` already exists (present when scaffolded with templateCentral), **add the authoritative session check below to it** — do not rely on `proxy.ts` alone. The proxy does only an optimistic cookie-presence check (no session validation); `/dashboard` is genuinely protected only once this server-side check is in the layout. Every protected route group needs one.
 
 ```tsx
 import { auth } from '@/lib/auth';
@@ -263,9 +263,9 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  // Authoritative gate. proxy.ts only checks cookie presence on the Edge; this runs on
-  // the Node runtime and validates the session against the store. Without this, a forged
-  // cookie would pass the proxy and reach protected content.
+  // Authoritative gate. proxy.ts only checks cookie presence to keep routing fast; this
+  // validates the session against the store. Without this, a forged cookie would pass
+  // the proxy and reach protected content.
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect(PAGE_ROUTES.LOGIN);

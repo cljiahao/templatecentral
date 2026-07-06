@@ -1179,6 +1179,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - All user input validated with Pydantic at every boundary; use `response_model` to strip internal fields
 - snake_case files/functions/variables; PascalCase classes; UPPER_SNAKE_CASE constants
 - No secrets in code — use env vars; document in `.env.example`
+- Comments explain *why*, not *what* — no commented-out code (Ruff `ERA`), no change-narration (`# was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
 ## AI Harness
 PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).

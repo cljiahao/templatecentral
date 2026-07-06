@@ -77,7 +77,7 @@ def configure_exceptions(app: FastAPI) -> None:
     ) -> JSONResponse:
         logger.warning(
             "Invalid input",
-            extra={"path": request.url.path, "detail": str(exc), "code": "INVALID_INPUT"},
+            path=request.url.path, detail=str(exc), code="INVALID_INPUT",
         )
         # Allow services to attach field-level errors to the exception
         field_errors = getattr(exc, 'field_errors', {})
@@ -98,7 +98,7 @@ def configure_exceptions(app: FastAPI) -> None:
     ) -> JSONResponse:
         logger.warning(
             "No results found",
-            extra={"path": request.url.path, "detail": str(exc), "code": "NOT_FOUND"},
+            path=request.url.path, detail=str(exc), code="NOT_FOUND",
         )
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -122,7 +122,7 @@ def configure_exceptions(app: FastAPI) -> None:
         field_errors = _sanitize_errors(exc.errors())
         logger.warning(
             "Request validation error",
-            extra={"path": request.url.path, "code": "VALIDATION_ERROR"},
+            path=request.url.path, code="VALIDATION_ERROR",
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -138,7 +138,7 @@ def configure_exceptions(app: FastAPI) -> None:
     ) -> JSONResponse:
         logger.exception(
             "Unhandled exception",
-            extra={"path": request.url.path, "code": "INTERNAL_ERROR"},
+            path=request.url.path, code="INTERNAL_ERROR",
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

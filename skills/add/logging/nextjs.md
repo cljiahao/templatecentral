@@ -89,7 +89,7 @@ For access denied, log in `proxy.ts` (route protection middleware):
 
 ```ts
 // src/proxy.ts — inside proxy(), after session check
-if (!session) {
+if (!hasSession) {
   if (isApiRoute(pathname)) {
     logger.warn({ event: 'auth.access_denied', path: pathname }, 'Unauthenticated API request');
     return new Response(null, { status: 401 });

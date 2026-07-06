@@ -3,7 +3,7 @@
      prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Mutation Testing (mutmut)
 
-Add report-only mutation testing to a FastAPI project scaffolded from templateCentral. Uses mutmut 3.5.0.
+Add report-only mutation testing to a FastAPI project scaffolded from templateCentral. Uses mutmut (the `requirements-dev.txt` floor below resolves the current major).
 
 > **Report-only by default.** The CI job uses `continue-on-error: true` — results appear in output without failing the build. To enforce a floor, add a threshold check on `mutmut results`.
 

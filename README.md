@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.7.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.8.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.

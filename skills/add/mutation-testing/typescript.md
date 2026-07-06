@@ -3,7 +3,7 @@
      prereq: Stack identified as Next.js, NestJS, or Vite+React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## TypeScript Stacks — Mutation Testing (StrykerJS)
 
-Add report-only mutation testing to a TypeScript project scaffolded from templateCentral. Uses StrykerJS 7.x + Vitest runner.
+Add report-only mutation testing to a TypeScript project scaffolded from templateCentral. Uses StrykerJS + the Vitest runner (install resolves the current major).
 
 > **Report-only by default.** `thresholds.break` is `null` — results appear in CI output and `stryker-report.html` without failing the build. To enforce a floor, change `break` to a number (e.g., `70`).
 

@@ -242,12 +242,15 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - DB writes via repository layer only
 - `z.input<typeof Schema>` for form types; `z.infer` for post-parse output
 - No secrets in `NEXT_PUBLIC_*` variables
+- Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
 ## AI Harness
 PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
+Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
+CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, and a full-history gitleaks scan.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
@@ -268,6 +271,8 @@ PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except 
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
+Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
+CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, and a full-history gitleaks scan.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
@@ -276,6 +281,8 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 ```
+
+For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend `no-inline-comments: 'warn'` (TS `eslint.config.*`) or Ruff `ERA` (`pyproject.toml`) so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
 
 **Step 4c: Create `CLAUDE.md`**
 
@@ -287,25 +294,26 @@ If `CLAUDE.md` does not exist, create it at the project root with exactly one li
 
 If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
 
-**Step 4d: Create `.claude/settings.json` and seed hook scripts**
+**Step 4d: Seed the agent harness (shared kit)**
 
-Load the shared harness kit and use it to create `settings.json` and all 8 `.claude/hooks/` scripts for the detected stack:
+Load the shared harness kit and execute it **in full** — a migrated project must receive the **same** enforcement layer as a scaffolded one:
 
 ```bash
 cat "<skill-dir>/../scaffold/shared/harness-kit.md"
 ```
 
-Use the **detected stack's row** in the kit's delta table to select the correct runtime (TS stacks: `node`; FastAPI: `python3`) and hook commands. The kit's Step A gives the full `settings.json` template for each variant; Step B gives all 8 hook scripts. Then `chmod +x .claude/hooks/*.sh`. The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
+Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; FastAPI: `python3`), execute kit Steps **A through D**:
+- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and the 7-event hook wiring).
+- **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-tool-failure`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), then `chmod +x .claude/hooks/*.sh`.
+- **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
+- **Step B3** — CI quality gates (`.github/workflows/ci.yml`).
+- **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`) — Phase 5d's re-sync and the pre-push hook both call this, so it MUST be seeded here.
+- **Step B5** — the `/skill-audit` project skill (consumes `skill-usage-log.sh`).
+- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md`.
 
-`permissions.deny` — blocks the agent from *reading* `.env*` / `secrets/**` (the Edit/Write guard only blocks writes).
-`PreToolUse` — `protect-files.sh` (secrets/CI/cert/governance) + `block-no-verify.sh` (`--no-verify`, protected-branch commits, force-push, `rm -rf` src).
-`UserPromptSubmit` — `user-prompt-guard` blocks injection phrases (LLM01) and inline credentials (LLM02).
-`PostToolUse` — incremental type feedback (filtered to TS/Python edits in-script).
-`PostToolUseFailure` — surfaces tool errors. `Stop` — test gate (exit 2 forces fix). `SubagentStop` — type-gates a subagent's diff.
-`SessionStart` (startup/resume/clear/compact) — re-injects AGENTS.md routing context + invariants (PostCompact is observability-only and cannot inject).
-`skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the context budget.
+The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
 
-If `.claude/settings.json` already exists, merge both hook entries into the existing hooks without overwriting.
+**Adoption (merge, never clobber):** if `.claude/settings.json`, `lefthook.yml`, `.github/workflows/ci.yml`, or `.gitleaks.toml` already exists, merge the kit's entries into the existing file instead of overwriting; warn on any conflict.
 
 **Step 4e: Seed project skills**
 
@@ -353,65 +361,11 @@ Before running against production: verify `DATABASE_URL` in `.env.local` points 
 
 **Step 4f: Create `.claude/harness.json`**
 
-Compute SHA-256 hashes of all seeded files, then write `.claude/harness.json`:
-
-```bash
-sha256_agents=$(shasum -a 256 AGENTS.md | cut -d' ' -f1)
-# Every enforcement hook script is a high-value tamper target — hash each for drift detection.
-# Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
-for h in .claude/hooks/*; do shasum -a 256 "$h"; done
-# CLAUDE.md is optional — hash it only if present (omit its seeded_files entry otherwise):
-[ -f CLAUDE.md ] && sha256_claude=$(shasum -a 256 CLAUDE.md | cut -d' ' -f1)
-sha256_settings=$(shasum -a 256 .claude/settings.json | cut -d' ' -f1)
-# Hash the verify skill:
-sha256_verify=$(shasum -a 256 .claude/skills/<stack>-verify/SKILL.md | cut -d' ' -f1)
-# For nextjs only, also hash next-migrate:
-[ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(shasum -a 256 .claude/skills/next-migrate/SKILL.md | cut -d' ' -f1)
-```
-
-Write `.claude/harness.json` (include only files that were actually created):
-
-```json
-{
-  "templatecentral_version": "5.7.0",
-  "stack": "<detected-stack>",
-  "seeded_at": "<ISO-date>",
-  "seeded_files": {
-    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
-    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
-    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/<stack>-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify/SKILL.md" },
-    ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
-    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
-    ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
-    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<sha256_hook_4>", "path": ".claude/hooks/post-edit-typecheck.sh" },
-    ".claude/hooks/post-tool-failure.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/post-tool-failure.sh" },
-    ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/stop-checks.sh" },
-    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/subagent-stop.sh" },
-    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/session-context.sh" }
-  }
-}
-```
-
-> `user-prompt-guard.<ext>` is `.js` for TS stacks (nextjs, nestjs, vite-react) and `.py` for FastAPI.
-
-For nextjs only, also include the migrate skill entry:
-```json
-".claude/skills/next-migrate/SKILL.md": { "origin_hash": "<sha256_migrate>", "path": ".claude/skills/next-migrate/SKILL.md" }
-```
+Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, the `<stack>-verify` and `skill-audit` skills, plus `next-migrate` for nextjs) and writes the complete manifest. Include only files that were actually created or merged. The kit is the single source for this manifest — do not maintain a separate copy here.
 
 **Step 4f-1b: Seed the base snapshot**
 
-Snapshot the as-seeded content into `.claude/.harness-base/` so day-2 re-sync (Phase 5d) can 3-way-merge future harness updates without clobbering edits:
-```bash
-mkdir -p .claude/.harness-base
-for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.claude/harness.json'))['seeded_files'].values()]" 2>/dev/null \
-          || node -e 'const m=require("./.claude/harness.json");for(const v of Object.values(m.seeded_files))console.log(v.path)'); do
-  [ -f "$p" ] || continue
-  mkdir -p ".claude/.harness-base/$(dirname "$p")"; cp "$p" ".claude/.harness-base/$p"
-done
-```
-Commit `.claude/.harness-base/` — it is the merge base; `protect-files.sh` guards it.
+Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base Phase 5d uses to re-sync harness updates without clobbering edits. Commit `.claude/.harness-base/`; `protect-files.sh` guards it.
 
 **Step 4f-2: Create `.agents` symlink**
 

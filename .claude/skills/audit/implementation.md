@@ -387,6 +387,7 @@ Read each file in full, apply checklist above:
 Read each file in full, apply checklist above:
 
 - [ ] `skills/add/ai-security/implementation.md`
+- [ ] `skills/standards/code-standards/comments.md` ← shared comment doctrine (loaded first by code-standards)
 - [ ] `skills/standards/validation-patterns/patterns.md`
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
@@ -449,6 +450,7 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present. It fires when a subagent finishes, is distinct from `Stop`, and can force review by exiting 2 (stderr → Claude) or emitting `{"decision":"block","reason":"..."}` on stdout. There is **no** `blocking` settings field — control is the hook's exit code / JSON `decision` output. If no subagents are used, no check needed.
 - [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
 - [ ] **block-`--no-verify` PreToolUse hook present**: Scaffold settings.json includes a `PreToolUse` hook with `matcher: "Bash"` that checks incoming Bash commands and exits 2 if `--no-verify` is found. Must read `tool_input.command` from stdin JSON — **not** top-level `command`. TS stacks use `node` in args[] exec form; FastAPI uses `python3`. Without this hook, an agent can bypass Stop (and all other hooks) by running `git commit --no-verify`.
+- [ ] **migrate seeds the FULL harness-kit (scaffold parity)**: `migrate/general` Phase 4 must execute harness-kit Steps **A–E** (incl. B2 git-hook layer, B3 CI, B4 integrity verifier, B5 `/skill-audit`), not just A–B — a migrated project must get the same enforcement layer as a scaffolded one. Its `harness.json` must defer to kit **Step E** (all 9 hooks incl. `skill-usage-log.sh`, `lefthook.yml`, `.gitleaks.toml`, `ci.yml`, `verify/regen-harness.sh`, `skill-audit`), never a hand-maintained partial copy. Phase 5d re-sync + the pre-push hook call `verify-harness.sh`, so B4 MUST be seeded. Flag any "8 scripts" / partial-manifest drift.
 
 ---
 
@@ -615,7 +617,7 @@ bash scripts/validate-manifest.sh          # README badge, repo harness.json, re
 | `version` | — | `.claude-plugin/plugin.json` | source of truth (set in Step 4f) |
 | README version badge | plugin semver | `README.md` | == plugin.json |
 | `templatecentral_version` | plugin semver | repo `.claude/harness.json` + all scaffold/migrate harness.json templates | == plugin.json |
-| AGENTS.md line-1 marker `@X.Y.Z` | harness **schema floor** | repo `AGENTS.md` + scaffold/migrate templates | **PINNED** at `HARNESS_SCHEMA_VERSION` (currently 4.0.0); never bump on a normal release |
+| AGENTS.md line-1 marker `@X.Y.Z` | harness **schema floor** | repo `AGENTS.md` + scaffold/migrate templates | **PINNED** at `HARNESS_SCHEMA_VERSION` (currently 5.0.0); never bump on a normal release |
 
 **Critical distinction:** `templatecentral_version` tracks the plugin's semver (bump every release). The AGENTS.md `@X.Y.Z` marker is a *migration schema floor* read by `migrate` Phase 0 — bumping it on a normal release makes every existing project falsely report "needs migration." It moves only on a deliberate harness-structure change, at which point you bump `HARNESS_SCHEMA_VERSION` in `lint-skills.sh` and the floor markers together. Both lint scripts guard against accidental drift in either direction.
 

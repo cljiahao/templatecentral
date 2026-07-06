@@ -123,6 +123,7 @@ export class PaginationService {
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
+import { withLogging } from '@/lib/utils/with-logging';
 import { paginationSchema } from '@/lib/validation/schemas';
 import { PaginationService } from '@/lib/pagination/pagination-service';
 import { NextResponse } from 'next/server';
@@ -139,7 +140,7 @@ const SORT_COLUMNS: Record<SortField, typeof projects.name | typeof projects.cre
   updatedAt: projects.updatedAt,
 };
 
-export async function GET(request: Request) {
+export const GET = withLogging(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     // searchParams.get() returns null for missing params, but z.string().default()
@@ -198,7 +199,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
   }
-}
+});
 ```
 
 **5. Paginated UI Component (React)**

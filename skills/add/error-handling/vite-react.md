@@ -35,23 +35,28 @@ componentDidCatch(error: Error, errorInfo: ErrorInfo) {
 
 Everything else (state, fallback rendering, retry button) stays as scaffolded.
 
-**2. Async Error Handler**
+**2. Async Errors (Already Wired — Route Through `global-handlers.ts`)**
+
+The scaffold already ships `src/lib/errors/global-handlers.ts` — `registerGlobalErrorHandlers()` listens for both `window.onerror` and `unhandledrejection`, and it is already called in `main.tsx`. Do NOT add a second `unhandledrejection` listener or a second `main.tsx` wiring — route reporting through `logError` inside the existing handler instead:
 
 ```ts
-// src/lib/errors/async-error-handler.ts
-import { logError } from './error-log-handler';
+// src/lib/errors/global-handlers.ts — extend the existing handler
+import { logError } from './error-log-handler';    // new import
 
-export function setupAsyncErrorHandler() {
-  window.addEventListener('unhandledrejection', (event) => {
-    const error = event.reason;
-    logError('Unhandled promise rejection', error instanceof Error ? error : new Error(String(error)));
-  });
-}
+// Inside the existing unhandledrejection listener, replace the current
+// console/report line with a logError call:
+window.addEventListener('unhandledrejection', (event) => {
+  const error = event.reason;
+  logError('Unhandled promise rejection', error instanceof Error ? error : new Error(String(error)));
+});
 
-// src/main.tsx
-import { setupAsyncErrorHandler } from '@/lib/errors/async-error-handler';
-setupAsyncErrorHandler();
+// Inside the existing window.onerror handler, likewise report via logError:
+window.addEventListener('error', (event) => {
+  logError('Uncaught error', event.error instanceof Error ? event.error : new Error(String(event.message)));
+});
 ```
+
+The `registerGlobalErrorHandlers()` call already present in `main.tsx` stays as-is — no new wiring.
 
 **3. React Query Error Handler**
 

@@ -108,6 +108,12 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
 
+### Comments
+
+- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- JSDoc on exported providers/controllers/DTOs describes the contract — not the implementation.
+- `no-inline-comments` is seeded as a `warn` in `eslint.config.mjs` — a nudge toward own-line comments.
+
 ### Security (NestJS)
 
 **Environment & Secrets**

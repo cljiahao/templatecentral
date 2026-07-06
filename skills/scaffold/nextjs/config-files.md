@@ -17,7 +17,7 @@ Write these files exactly as shown.
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.10.0",
   "engines": {
     "node": ">=24"
   },
@@ -152,6 +152,8 @@ const config = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
+      // Comment hygiene: nudge toward own-line comments (non-blocking). See templatecentral:standards code-standards/comments.md.
+      'no-inline-comments': 'warn',
     },
   },
   { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', '.claude/**'] },

@@ -88,6 +88,7 @@ export const handleApiError = (
 ```ts
 // src/app/api/projects/route.ts
 import { handleApiError } from '@/lib/errors';
+import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -96,7 +97,7 @@ const CreateProjectSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-export async function POST(request: Request) {
+export const POST = withLogging(async (request) => {
   try {
     const body = await request.json();
     const parsed = CreateProjectSchema.safeParse(body);
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError('Failed to create project', error);
   }
-}
+});
 ```
 
 **2b. Dynamic Route with Unauthorized Access (404 Pattern)**
@@ -124,12 +125,10 @@ Rule #9: Return 404 for both missing resources AND unauthorized access (never re
 // src/app/api/projects/[id]/route.ts
 import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';
+import { type RouteContext, withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withLogging<RouteContext<{ id: string }>>(async (request, { params }) => {
   try {
     const { id } = await params;
     const session = await auth.api.getSession({ headers: request.headers });
@@ -147,7 +146,7 @@ export async function GET(
   } catch (error) {
     return handleApiError('Failed to fetch project', error);
   }
-}
+});
 ```
 
 **3. Error Boundary Components**

@@ -53,10 +53,11 @@
 - No wildcard imports (`from module import *`).
 - Avoid barrel re-exports in `__init__.py` unless stable public API.
 
-### Docstrings
+### Comments & Docstrings
 
-- One-line for simple functions; short paragraph for complex ones.
-- Focus on *what*, not *how*; inline comments explain *why*.
+- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- Docstrings: one-line for simple functions, short paragraph for complex ones; describe the contract (args, returns, behavior), not the implementation.
+- Ruff `ERA` flags commented-out code — keep it enabled in `pyproject.toml`.
 
 ### Constants
 

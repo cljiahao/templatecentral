@@ -14,7 +14,7 @@
   "description": "",
   "private": true,
   "license": "UNLICENSED",
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.10.0",
   "engines": {
     "node": ">=24"
   },
@@ -37,9 +37,9 @@
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^9.1.3",
-    "@nestjs/common": "^11.1.24",
-    "@nestjs/core": "^11.1.24",
-    "@nestjs/platform-fastify": "^11.1.24",
+    "@nestjs/common": "^11.1.27",
+    "@nestjs/core": "^11.1.27",
+    "@nestjs/platform-fastify": "^11.1.27",
     "@nestjs/swagger": "^11.4.4",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
@@ -54,7 +54,7 @@
     "@eslint/js": "^9.0.0",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
-    "@nestjs/testing": "^11.1.24",
+    "@nestjs/testing": "^11.1.27",
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
@@ -536,6 +536,8 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',
+      // Comment hygiene: nudge toward own-line comments (non-blocking). See templatecentral:standards code-standards/comments.md.
+      'no-inline-comments': 'warn',
     },
   },
 );
