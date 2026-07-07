@@ -25,6 +25,20 @@ if [[ ! -d "$SRC" ]]; then
   exit 1
 fi
 
+# Sanity-check OUT before the destructive rm -rf: reject empty/root/relative-root paths and any
+# path that doesn't look like a build-output dir (contains "dist"), so a mistyped second arg can't
+# wipe an unrelated directory.
+case "$OUT" in
+  "" | / | . | .. )
+    echo "error: refusing to rm -rf unsafe OUT path '$OUT'" >&2
+    exit 1
+    ;;
+esac
+if [[ "$OUT" != *dist* ]]; then
+  echo "error: refusing to rm -rf OUT path '$OUT' — expected a build-output path containing 'dist' (got '$OUT')" >&2
+  exit 1
+fi
+
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp -R "$SRC/." "$OUT/"
