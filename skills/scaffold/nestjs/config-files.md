@@ -55,7 +55,7 @@
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.1.27",
-    "@types/node": "^25.9.1",
+    "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
@@ -498,8 +498,11 @@ allowBuilds:
 
 ```json
 {
+  "semi": true,
   "singleQuote": true,
-  "trailingComma": "all"
+  "trailingComma": "es5",
+  "tabWidth": 2,
+  "printWidth": 100
 }
 ```
 
