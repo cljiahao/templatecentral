@@ -1,8 +1,10 @@
 name: Scaffold Parse (deterministic)
 # Deterministic PR gate over the scaffold config templates: extracts every ```json fenced block
-# from skills/scaffold/*/config-files.md and validates it with jq (JSONC comments stripped first).
-# A malformed scaffold config template fails this check on the PR — no LLM, no monthly cron
-# (that is scaffold-verify.yml, which stays as the end-to-end complement).
+# from skills/scaffold/*/config-files.md and validates it with jq (JSONC comments stripped first),
+# and every ```js/```mjs/```javascript fenced block (eslint.config.mjs and friends) and
+# syntax-checks it with `node --check`. A malformed scaffold config template fails this check on
+# the PR — no LLM, no monthly cron (that is scaffold-verify.yml, which stays as the end-to-end
+# complement).
 on:
   pull_request:
     paths:
@@ -21,11 +23,11 @@ concurrency:
   group: scaffold-parse-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  validate-json:
+  validate-config-fences:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      # jq and node are preinstalled on ubuntu-latest; the script degrades to a sed-based
-      # JSONC stripper if node is ever absent.
-      - name: Validate scaffold JSON config fences
+      # jq and node are preinstalled on ubuntu-latest; both are required (node also runs the
+      # JS/MJS syntax check, not just the JSONC-comment-stripper fast path).
+      - name: Validate scaffold JSON/JS config fences
         run: bash scripts/validate-scaffold-configs.sh

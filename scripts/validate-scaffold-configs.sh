@@ -3,11 +3,15 @@
 # Extracts every ```json fenced block from skills/scaffold/*/config-files.md (package.json,
 # tsconfig.json, settings-style configs, ...) and validates each as JSON with jq. tsconfig-style
 # blocks are JSONC, so a string-aware pass strips // and /* */ comments first (URLs like
-# "https://..." are preserved). Fails (exit 1) on the first malformed block so a broken scaffold
-# config template is caught by a PR check, not only by the optional monthly LLM scaffold-verify cron.
+# "https://..." are preserved). Also extracts every ```js/```mjs/```javascript fenced block
+# (eslint.config.mjs and other JS config templates, all written as ESM) and syntax-checks each
+# with `node --check` (loaded as a module via a .mjs temp file). Fails (exit 1) on the first
+# malformed block so a broken scaffold config template is caught by a PR check, not only by the
+# optional monthly LLM scaffold-verify cron.
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || { echo "validate-scaffold-configs: jq not found" >&2; exit 2; }
+command -v node >/dev/null 2>&1 || { echo "validate-scaffold-configs: node not found" >&2; exit 2; }
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root" || exit 2
@@ -58,10 +62,35 @@ for f in skills/scaffold/*/config-files.md; do
       fail=1
     fi
   done
+
+  # Split each ```js / ```mjs / ```javascript ... ``` block into its own .mjs file named by its
+  # start line. All scaffold JS config templates (eslint.config.mjs, postcss.config.mjs, ...) are
+  # written as ESM, so every extracted block is checked as a module regardless of its fence tag.
+  rm -f "$workdir"/*.mjs 2>/dev/null || true
+  awk -v dir="$workdir" '
+    /^```(js|mjs|javascript)[[:space:]]*$/ { inblk=1; start=NR; out=dir "/" NR ".mjs"; next }
+    inblk && /^```[[:space:]]*$/ { close(out); inblk=0; next }
+    inblk { print > out }
+  ' "$f"
+
+  for blk in "$workdir"/*.mjs; do
+    [ -e "$blk" ] || continue
+    total=$((total + 1))
+    line=$(basename "$blk" .mjs)
+    err="$workdir/node_check_err"
+    if node --check "$blk" >/dev/null 2>"$err"; then
+      echo "  ok    $f:$line"
+    else
+      echo "  FAIL  $f:$line  — invalid JS fence" >&2
+      sed 's/^/          /' "$err" >&2
+      fail=1
+    fi
+    rm -f "$err"
+  done
 done
 
 if [ "$fail" -ne 0 ]; then
-  echo "validate-scaffold-configs: one or more scaffold JSON config templates are malformed." >&2
+  echo "validate-scaffold-configs: one or more scaffold config templates are malformed." >&2
   exit 1
 fi
-echo "validate-scaffold-configs: all $total JSON config fences valid."
+echo "validate-scaffold-configs: all $total JSON/JS config fences valid."
