@@ -62,6 +62,7 @@ Write these files exactly as shown.
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.6",
     "eslint-plugin-react-hooks": "^7.0.0",
+    "eslint-plugin-sonarjs": "4.1.0",
     "lefthook": "^2.1.9",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.8.3",
@@ -141,19 +142,25 @@ console.log(`Route logging check passed (${files.length} route file(s)).`);
 ```javascript
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
+import sonarjs from 'eslint-plugin-sonarjs';
 
 const config = [
   ...coreWebVitals,
   ...typescript,
   {
+    plugins: { sonarjs },
     rules: {
       // Honour the `_`-prefix convention for intentionally-unused args/vars.
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      // Comment hygiene: nudge toward own-line comments (non-blocking). See templatecentral:standards code-standards/comments.md.
-      'no-inline-comments': 'warn',
+      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      'no-inline-comments': [
+        'error',
+        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
+      ],
+      'sonarjs/no-commented-code': 'error',
     },
   },
   { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', '.claude/**'] },
