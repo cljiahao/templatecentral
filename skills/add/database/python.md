@@ -10,10 +10,10 @@ Ask: *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* — skip if user named a li
 
 For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth.
 
-| Library | Use case | Load |
-|---------|----------|------|
 > `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
 
+| Library | Use case | Load |
+|---------|----------|------|
 | SQLAlchemy | SQL (standard auth) | `cat "<skill-dir>/database/python/sqlalchemy.md"` |
 | SQLAlchemy IAM | SQL (AWS IAM auth) | `cat "<skill-dir>/database/python/sqlalchemy-iam.md"` |
 | Beanie | MongoDB | `cat "<skill-dir>/database/python/beanie.md"` |
