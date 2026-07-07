@@ -259,6 +259,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
+## Git Workflow
+
+**Branch source:** Always fork from an up-to-date `main`.
+Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
+
+<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
+
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
@@ -280,6 +287,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+
+## Git Workflow
+
+**Branch source:** Always fork from an up-to-date `main`.
+Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
+
+<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
 ```
 
 For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same hard gate a fresh scaffold ships — `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives) plus `sonarjs/no-commented-code: 'error'` in the TS `eslint.config.*`, or Ruff `ERA` (`pyproject.toml`) for FastAPI — so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).

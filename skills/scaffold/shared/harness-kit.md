@@ -36,10 +36,6 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 ```json
 {
   "permissions": {
-    "allow": [
-      "Read(**/.env.example)",
-      "Read(**/.env.default)"
-    ],
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
@@ -104,10 +100,6 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 ```json
 {
   "permissions": {
-    "allow": [
-      "Read(**/.env.example)",
-      "Read(**/.env.default)"
-    ],
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
@@ -167,6 +159,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
   "skillListingBudgetFraction": 0.02
 }
 ```
+
+**`.env.example`/`.env.default` are intentionally not agent-readable.** The `Read(**/.env.*)` catch-all deny above also matches the committed `.env.example`/`.env.default` templates, and Claude Code evaluates `deny` before `allow` (a `deny` cannot carry allowlist exceptions), so pairing an `allow: Read(**/.env.example)` entry with the catch-all would be dead and misleading — those entries are deliberately omitted. This is the safer fail-closed posture: the templates stay writable via `protect-files.sh` and are non-secret (gitleaks-allowlisted). If an agent needs their content, copy it via bash (e.g. `cat .env.example`) rather than opening it as a `Read`.
 
 **Build-artefact `Read` denies** — also add these to `permissions.deny`, per stack. Generated/dependency dirs burn Claude's context if it greps or opens them; committing the denies gives every developer the same noise reduction (Anthropic, *How Claude Code Works in Large Codebases*). `.gitignore` already keeps gitignored paths out of *search* — these also block *opening* them and cover any checked-in artefacts.
 
