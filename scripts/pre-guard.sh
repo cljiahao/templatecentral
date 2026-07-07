@@ -33,7 +33,7 @@ case "$FILE" in
   .claude/settings.json|*/.claude/settings.json)               reason="harness config — can silently disable every hook" ;;
   .claude/hooks/*|*/.claude/hooks/*)                           reason="enforcement hook script" ;;
   scripts/pre-guard.sh|*/scripts/pre-guard.sh)                 reason="this guard itself — editing it can weaken the protection layer" ;;
-  .github/workflows/*|*/.github/workflows/*)                   reason="CI/CD pipeline — supply-chain / secret-exfiltration surface" ;;
+  .github/workflows/*|*/.github/workflows/*|.github/actions/*|*/.github/actions/*|.azuredevops/*|*/.azuredevops/*|azure-pipelines*.yml|*/azure-pipelines*.yml|azure-pipelines*.yaml|*/azure-pipelines*.yaml|.gitlab-ci.yml|*/.gitlab-ci.yml|Jenkinsfile|*/Jenkinsfile) reason="CI/CD pipeline — supply-chain / secret-exfiltration surface" ;;
   Dockerfile|*/Dockerfile)                                     reason="container image definition" ;;
   lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config" ;;
   .lefthook/*|*/.lefthook/*)                                   reason="git-hook script" ;;

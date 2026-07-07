@@ -39,7 +39,11 @@ function protectedFileReason(filePath, root) {
     return `writing ${base} is not allowed — add placeholders to .env.example; keep real secrets out of the repo`;
   }
   const rel = root && filePath.startsWith(root + "/") ? filePath.slice(root.length + 1) : filePath;
-  if (rel.startsWith(".github/workflows/")) return `${rel} is a CI/CD pipeline definition — requires human review`;
+  if (rel.startsWith(".github/workflows/") || rel.startsWith(".github/actions/") || rel.startsWith(".azuredevops/") ||
+      base === "azure-pipelines.yml" || /^azure-pipelines.*\.ya?ml$/.test(base) ||
+      base === ".gitlab-ci.yml" || base === "Jenkinsfile") {
+    return `${rel} is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review`;
+  }
   if (rel.startsWith("secrets/") || rel.startsWith(".secrets/")) return `${rel} is inside a secrets directory — must never be written by the agent`;
   if (/\.(pem|key|p12|pfx|secret)$/.test(rel) || base === "credentials.json" || base === ".netrc" || base === ".secrets") {
     return `${rel} is a certificate or credential file — must never be committed`;
@@ -70,6 +74,11 @@ function bashCommandReason(cmd, branch) {
 
   if (/git\s+commit/.test(scan) && /--no-verify|\s-[a-zA-Z]*n/.test(scan)) {
     return "--no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead.";
+  }
+  // Equivalent full bypasses of the pre-commit hook layer: LEFTHOOK=0 / LEFTHOOK_EXCLUDE env-var
+  // assignment, and `git -c core.hooksPath=...` override (same effect as --no-verify).
+  if (/\bgit\b/.test(scan) && /\bcommit\b/.test(scan) && /(^|\s)LEFTHOOK(_EXCLUDE)?=|core\.hooksPath\s*=/.test(scan)) {
+    return "LEFTHOOK=0 / LEFTHOOK_EXCLUDE / 'git -c core.hooksPath=...' disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead.";
   }
   if (/git\s+commit/.test(cmd) && PROTECTED_BRANCHES.includes(branch)) {
     return `direct commit to protected branch '${branch}'. Create a feature branch first.`;

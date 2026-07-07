@@ -36,20 +36,14 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 ```json
 {
   "permissions": {
+    "allow": [
+      "Read(**/.env.example)",
+      "Read(**/.env.default)"
+    ],
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.development.*)",
-      "Read(**/.env.dev)",
-      "Read(**/.env.production)",
-      "Read(**/.env.production.*)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.staging.*)",
-      "Read(**/.env.uat)",
-      "Read(**/.env.test)",
+      "Read(**/.env.*)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)"
     ]
@@ -110,20 +104,14 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 ```json
 {
   "permissions": {
+    "allow": [
+      "Read(**/.env.example)",
+      "Read(**/.env.default)"
+    ],
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.development.*)",
-      "Read(**/.env.dev)",
-      "Read(**/.env.production)",
-      "Read(**/.env.production.*)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.staging.*)",
-      "Read(**/.env.uat)",
-      "Read(**/.env.test)",
+      "Read(**/.env.*)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)"
     ]
@@ -190,8 +178,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
-- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`), cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify` and equivalent hook-layer bypasses (`LEFTHOOK=0`/`LEFTHOOK_EXCLUDE`, `git -c core.hooksPath=…`), direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
 - `skill-usage-log.sh` (PostToolUse `Skill__.*`) — silently logs each skill invocation to `.claude/skill-usage.log` (gitignored, per-developer). Feeds `/skill-audit`, which surfaces repeated workflows worth capturing as a committed project skill. Never blocks (exit 0 always).
@@ -226,8 +214,10 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root="."
 rel="${file#"$root"/}"
 
-if [[ "$rel" == .github/workflows/* ]]; then
-  echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+if [[ "$rel" == .github/workflows/* || "$rel" == .github/actions/* || "$rel" == .azuredevops/* \
+   || "$base" == "azure-pipelines.yml" || "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
+   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ]]; then
+  echo "BLOCKED: $rel is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review." >&2
   exit 2
 elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
   echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
@@ -283,8 +273,10 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root="."
 rel="${file#"$root"/}"
 
-if [[ "$rel" == .github/workflows/* ]]; then
-  echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+if [[ "$rel" == .github/workflows/* || "$rel" == .github/actions/* || "$rel" == .azuredevops/* \
+   || "$base" == "azure-pipelines.yml" || "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
+   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ]]; then
+  echo "BLOCKED: $rel is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review." >&2
   exit 2
 elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
   echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
@@ -334,6 +326,12 @@ if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
   exit 2
 fi
+# Equivalent full bypasses of the pre-commit hook layer (same effect as --no-verify):
+#   LEFTHOOK=0 / LEFTHOOK_EXCLUDE=... env-var assignment, and  git -c core.hooksPath=...  override.
+if echo "$scan" | grep -qE '\bgit\b' && echo "$scan" | grep -qE '\bcommit\b' && echo "$scan" | grep -qE '(^|[[:space:]])LEFTHOOK(_EXCLUDE)?=|core\.hooksPath[[:space:]]*='; then
+  echo "BLOCKED: LEFTHOOK=0 / LEFTHOOK_EXCLUDE / 'git -c core.hooksPath=...' disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead." >&2
+  exit 2
+fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
   if [[ "$branch" == "main" || "$branch" == "uat" || "$branch" == "develop" ]]; then
@@ -370,6 +368,12 @@ scan=$(printf '%s' "$cmd" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
 
 if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
+  exit 2
+fi
+# Equivalent full bypasses of the pre-commit hook layer (same effect as --no-verify):
+#   LEFTHOOK=0 / LEFTHOOK_EXCLUDE=... env-var assignment, and  git -c core.hooksPath=...  override.
+if echo "$scan" | grep -qE '\bgit\b' && echo "$scan" | grep -qE '\bcommit\b' && echo "$scan" | grep -qE '(^|[[:space:]])LEFTHOOK(_EXCLUDE)?=|core\.hooksPath[[:space:]]*='; then
+  echo "BLOCKED: LEFTHOOK=0 / LEFTHOOK_EXCLUDE / 'git -c core.hooksPath=...' disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
@@ -434,7 +438,7 @@ const credentials = [
   [/github_pat_[A-Za-z0-9_]{82}/, 'GitHub fine-grained PAT'],
   [/sk-ant-[A-Za-z0-9\-_]{90,}/, 'Anthropic API key'],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'PEM private key block'],
-  [/mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, 'database URL with embedded credentials'],
+  [/(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp):\/\/[^:]+:[^@]+@/i, 'database/broker URL with embedded credentials'],
 ];
 for (const [re, label] of credentials) {
   if (re.test(prompt)) {
@@ -484,7 +488,7 @@ credentials = [
     (r'github_pat_[A-Za-z0-9_]{82}', 'GitHub fine-grained PAT'),
     (r'sk-ant-[A-Za-z0-9\-_]{90,}', 'Anthropic API key'),
     (r'-----BEGIN [A-Z ]*PRIVATE KEY-----', 'PEM private key block'),
-    (r'mongodb(\+srv)?://[^:]+:[^@]+@', 'database URL with embedded credentials'),
+    (r'(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^:]+:[^@]+@', 'database/broker URL with embedded credentials'),
 ]
 for pat, label in credentials:
     if re.search(pat, prompt):
@@ -1232,7 +1236,7 @@ claude plugin marketplace add obra/superpowers
 
 ```markdown
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), CI/CD definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`), cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`), and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
