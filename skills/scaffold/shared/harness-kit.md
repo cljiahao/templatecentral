@@ -822,7 +822,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4   # SHA-pin in production (see Skills Security)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 — SHA-pinned per Skills Security; re-verify/bump via the review utility, don't hand-edit
         with: { fetch-depth: 0 }    # diff-cover needs full history
       - uses: pnpm/action-setup@v4
         with: { version: "11" }
@@ -1016,7 +1016,7 @@ CI that validates this project's own harness: a job that scaffolds the project a
 
 Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
 
-**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+**Seam:** None yet — no trace hook exists in the seeded `.claude/settings.json` (it is comment-free JSON with no disabled/placeholder entries). This is a roadmap item: a future revision could add a dedicated hook (e.g. a `Stop` or `SessionEnd` trace-writer) once a concrete consumer for the captured traces is designed. Until then, treat this as unactivated design intent, not an existing seam.
 
 ## Environment Engineering
 
@@ -1196,9 +1196,9 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — append only if not already present:** All four stack templates and both migrate templates currently embed the `## AI Harness` and `## Skills Security` sections directly, so this check normally results in a skip. Before appending the shared tail fragment below, check whether `## AI Harness` already appears in the AGENTS.md just written: if it does, skip the append; if either section is missing (e.g., a custom or trimmed template), append the fragment now. The fragment below is the canonical reference for what those sections must say.
+**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — it is intentionally omitted from every one of them so this step is the *only* place it comes from. After the stack-specific AGENTS.md template body is written, unconditionally append the shared tail fragment below, substituting the `PostToolUse` line's `(see delta table for stack command)` placeholder with the current stack's **Typecheck feedback cmd** from the Per-stack delta table. Do this every time — for a fresh scaffold and for a migrate re-seed — so the tail can never drift out of sync with what's actually shipped: there is exactly one copy of this text in the whole repo (below), and every AGENTS.md gets it fresh from here.
 
-After the stack-specific AGENTS.md is written (appending the shared tail fragment if not already present), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+After the stack-specific AGENTS.md is written (with the shared tail fragment appended per above), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
