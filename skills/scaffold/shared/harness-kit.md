@@ -1246,6 +1246,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
+## Git Workflow
+
+**Branch source:** Always fork from an up-to-date `main`.
+Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
+
+<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
+
 ## Skill capture
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
 - Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.

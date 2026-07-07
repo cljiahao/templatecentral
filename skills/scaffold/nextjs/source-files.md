@@ -2100,6 +2100,13 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
+## Git Workflow
+
+**Branch source:** Always fork from an up-to-date `main`.
+Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
+
+<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
+
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```

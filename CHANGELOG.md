@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.9.0] — 2026-07-07
+
+### Added
+
+- **Universal Git Workflow / fetch-first branch-source section in scaffold AGENTS.md templates.** The embedded AGENTS.md template block in all four stack `source-files.md` files (Next.js, FastAPI, NestJS, Vite+React) and the shared AGENTS.md tail fragment (`shared/harness-kit.md`) now emit a `## Git Workflow` section: always fork feature branches from a freshly-pulled `main` (`git fetch -p`, `git pull --ff-only`). Only the universal fetch-first step is hardcoded; a per-repo placeholder comment marks where each deployment documents its own protected-branch route table (no `develop`/`uat`/`staging` route is baked in).
+
+---
+
 ## [5.8.0] — 2026-07-06
 
 ### Added
