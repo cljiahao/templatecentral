@@ -282,7 +282,7 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 ```
 
-For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend `no-inline-comments: 'warn'` (TS `eslint.config.*`) or Ruff `ERA` (`pyproject.toml`) so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
+For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same hard gate a fresh scaffold ships — `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives) plus `sonarjs/no-commented-code: 'error'` in the TS `eslint.config.*`, or Ruff `ERA` (`pyproject.toml`) for FastAPI — so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
 
 **Step 4c: Create `CLAUDE.md`**
 

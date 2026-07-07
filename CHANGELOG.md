@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Universal Git Workflow / fetch-first branch-source section in scaffold AGENTS.md templates.** The embedded AGENTS.md template block in all four stack `source-files.md` files (Next.js, FastAPI, NestJS, Vite+React) and the shared AGENTS.md tail fragment (`shared/harness-kit.md`) now emit a `## Git Workflow` section: always fork feature branches from a freshly-pulled `main` (`git fetch -p`, `git pull --ff-only`). Only the universal fetch-first step is hardcoded; a per-repo placeholder comment marks where each deployment documents its own protected-branch route table (no `develop`/`uat`/`staging` route is baked in).
 - **Full ESLint comment gate in scaffold eslint templates.** The `eslint.config.mjs` templates for the Next.js, Vite+React, and NestJS stacks (in each stack's `config-files.md`) now ship the complete comment gate instead of the previous non-blocking `'no-inline-comments': 'warn'`: `no-inline-comments` at `error` with an `ignorePattern` (`eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName`), `sonarjs/no-commented-code` at `error`, the `sonarjs` plugin registered, and `eslint-plugin-sonarjs` (`4.1.0`) added to each stack's `devDependencies`.
 
+### Fixed
+
+- **Completed the 5.9.0 rollout (previously half-applied).** Synced the code-standards and migrate docs that still described the old non-blocking `no-inline-comments: 'warn'` nudge to the shipped hard gate (`no-inline-comments: 'error'` + `sonarjs/no-commented-code: 'error'`): `standards/code-standards/{comments,nextjs,nestjs,vite-react}.md` and `migrate/general/implementation.md`. Bumped the three release-tracked version mirrors `5.8.0` → `5.9.0` (`.claude/harness.json`, README version badge, and the `harness.json` literal in `scaffold/shared/harness-kit.md` that stamps every scaffolded project).
+
 ---
 
 ## [5.8.0] — 2026-07-06
