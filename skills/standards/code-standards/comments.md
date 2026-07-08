@@ -17,10 +17,10 @@ Shared doctrine for `code-standards/<stack>.md`. Language-neutral — applies to
 
 ### Why (consensus basis)
 
-Tenets 1, 3, 4, 5 are near-universal (PEP 8, Google/Airbnb style guides, Ruff `ERA`, SonarQube, *Clean Code*). Tenet 2 is deliberately "sparingly, not banned" — PEP 8 permits inline comments used sparingly and ESLint's `no-inline-comments` is opt-in, so projects nudge rather than hard-gate it.
+Tenets 1, 3, 4, 5 are near-universal (PEP 8, Google/Airbnb style guides, Ruff `ERA`, SonarQube, *Clean Code*). Tenet 2 is deliberately "sparingly, not banned" as *doctrine* — PEP 8 permits inline comments used sparingly and ESLint's `no-inline-comments` is opt-in. templatecentral opts in: the TS stacks ship it as a hard gate (`error`, not `warn`) alongside `sonarjs/no-commented-code`, so a fresh scaffold enforces own-line comments rather than merely nudging.
 
 ### Enforcement (seeded per stack)
 
-- **TypeScript (Next.js, NestJS, Vite+React):** `no-inline-comments: 'warn'` in `eslint.config.*` — a non-blocking nudge for tenet 2.
+- **TypeScript (Next.js, NestJS, Vite+React):** `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) plus `sonarjs/no-commented-code: 'error'` in `eslint.config.*` — a hard gate that fails lint/CI, enforcing tenet 2 (own-line comments) and tenet 3 (no commented-out code).
 - **FastAPI (Python):** Ruff `ERA` rule family enabled in `pyproject.toml` — deterministically flags commented-out code (tenet 3), dependency-free.
 - **All stacks:** tenets 1, 4, 5 are judgment calls — the `templatecentral:standards (code-standards)` review pass and the seeded `AGENTS.md` rule are the enforcement surface a linter cannot cover.

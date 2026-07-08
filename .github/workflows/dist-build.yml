@@ -1,0 +1,69 @@
+name: Dist Build
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+on:
+  push:
+    paths:
+      - 'skills/**'
+      - 'scripts/build-agents-dist.sh'
+      - '.github/workflows/dist-build.yml'
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'scripts/build-agents-dist.sh'
+      - '.github/workflows/dist-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-dist:
+    # Regression-catcher for scripts/build-agents-dist.sh: builds dist/ into a clean temp
+    # location (never the repo's own gitignored dist/), asserts the build script exits 0, and
+    # does a basic sanity check on the output — not a full test suite.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Build agents-skills dist to a clean temp dir
+        run: |
+          out_dir="$(mktemp -d)/agents-skills"
+          echo "OUT_DIR=$out_dir" >> "$GITHUB_ENV"
+          bash scripts/build-agents-dist.sh skills "$out_dir"
+
+      - name: Sanity-check generated SKILL.md name/folder match
+        run: |
+          failed=0
+          checked=0
+          while IFS= read -r skill_file; do
+            skill_dir=$(basename "$(dirname "$skill_file")")
+            first_line=$(head -1 "$skill_file")
+            if [ "$first_line" != "---" ]; then
+              echo "SKIP: $skill_file (no YAML frontmatter — internal utility)"
+              continue
+            fi
+            name=$(grep -m1 '^name:' "$skill_file" | sed 's/name:[[:space:]]*//' | tr -d '"')
+            if [ -z "$name" ]; then
+              echo "FAIL: $skill_file — no 'name' in frontmatter after dist build"
+              failed=1
+              continue
+            fi
+            checked=$((checked + 1))
+            if [ "$name" != "$skill_dir" ]; then
+              echo "FAIL: $skill_file — name '$name' != folder '$skill_dir'"
+              failed=1
+            else
+              echo "OK:   $skill_file — name matches folder ($name)"
+            fi
+          done < <(find "$OUT_DIR" -name 'SKILL.md' | sort)
+
+          if [ "$failed" -ne 0 ]; then
+            echo ""
+            echo "One or more generated SKILL.md files failed the name/folder sanity check."
+            exit 1
+          fi
+          echo "All $checked namespaced SKILL.md file(s) have name == folder name."

@@ -10,10 +10,10 @@ Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (Pos
 
 For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. The Drizzle and Kysely leaf guides are PostgreSQL-only — if the user needs MySQL or SQLite, say so and adapt the guide's driver/dialect and schema imports manually.
 
-| Stack | Library | Load |
-|-------|---------|------|
 > `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
 
+| Stack | Library | Load |
+|-------|---------|------|
 | NestJS | Drizzle | `cat "<skill-dir>/database/typescript/nestjs-drizzle.md"` |
 | NestJS | Kysely | `cat "<skill-dir>/database/typescript/nestjs-kysely.md"` |
 | NestJS | Mongoose | `cat "<skill-dir>/database/typescript/nestjs-mongoose.md"` |

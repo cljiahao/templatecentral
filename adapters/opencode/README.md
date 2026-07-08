@@ -12,11 +12,14 @@ only the in-agent guards.
 | `block-no-verify.sh` (PreToolUse Bash) | `tool.execute.before` (bash) | Hard-block (throws): `git commit --no-verify`/`-n`, commit on `main`/`uat`/`develop`, force-push to a protected branch, `git checkout/restore` of a guard file, `rm -rf` of a source dir. |
 | `protect-files.sh` (PreToolUse Edit\|Write) | `tool.execute.before` (edit/write) | Hard-block (throws): `.env*` (except `.env.example`/`.env.default`), `secrets/`, cert/credential files, and governance files (`AGENTS.md`, `CLAUDE.md`, `docs/CONSTITUTION.md`, `.claude/**`, `Dockerfile`, `lefthook.yml`, `.gitleaks.toml`). |
 | `post-edit-typecheck.sh` (PostToolUse) | `tool.execute.after` (edit/write) | Feedback only (never blocks): runs `tsc --noEmit` (TS) or `pyright` (Python) and prints errors. |
+| `user-prompt-guard.<ext>` (UserPromptSubmit) | **Not ported** | **Claude-Code-only — no OpenCode equivalent shipped.** The prompt-injection guard (OWASP LLM01) and inline-credential guard (OWASP LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs) that Claude Code runs on every incoming prompt is **not** available in this adapter. OpenCode users get none of that prompt-level protection today — don't assume parity here. |
 
-**Not ported** (no clean OpenCode equivalent yet): the Stop test-gate (`stop-checks.sh`), SubagentStop
-type-gate, and SessionStart context re-injection. OpenCode has no blocking end-of-turn plugin hook;
-the test-gate stays enforced at commit/CI time via lefthook + the CI workflow. If OpenCode adds a
-blocking session-idle/turn-end hook, wire the test command in the `event` handler.
+**Not ported** (no clean OpenCode equivalent yet): the `user-prompt-guard` injection/credential guard
+(see table above), the Stop test-gate (`stop-checks.sh`), SubagentStop type-gate, and SessionStart
+context re-injection. OpenCode has no blocking `UserPromptSubmit`-equivalent or end-of-turn plugin
+hook; the test-gate stays enforced at commit/CI time via lefthook + the CI workflow. If OpenCode adds
+a blocking prompt-submit or session-idle/turn-end hook, port `user-prompt-guard` and wire the test
+command in the `event` handler.
 
 > **Difference from Claude Code:** the CC `protect-files` hook raises a soft *"ask the human"* prompt
 > for governance files. OpenCode plugins can't raise that prompt mid-tool, so this adapter

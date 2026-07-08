@@ -77,7 +77,7 @@ Use `getApiBaseUrl()` in services — NEVER use `ENV.API_BASE_URL ?? ''`. NEVER 
 
 - Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
 - JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
-- `no-inline-comments` is seeded as a `warn` in `eslint.config.mjs` — a nudge toward own-line comments.
+- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Both fail lint/CI.
 
 ### Security (Vite + React)
 
