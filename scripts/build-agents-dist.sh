@@ -25,17 +25,20 @@ if [[ ! -d "$SRC" ]]; then
   exit 1
 fi
 
-# Sanity-check OUT before the destructive rm -rf: reject empty/root/relative-root paths and any
-# path that doesn't look like a build-output dir (contains "dist"), so a mistyped second arg can't
-# wipe an unrelated directory.
+# Sanity-check OUT before the destructive rm -rf: reject empty/root/relative-root/home paths and
+# any path too shallow to plausibly be a scoped build-output dir, so a mistyped or misconfigured
+# second arg can't wipe an unrelated top-level directory. Deliberately does NOT require a literal
+# "dist" substring — callers legitimately pass a scoped mktemp dir (e.g. CI's
+# "$(mktemp -d)/agents-skills") that never contains that string.
 case "$OUT" in
-  "" | / | . | .. )
+  "" | / | . | .. | "$HOME" )
     echo "error: refusing to rm -rf unsafe OUT path '$OUT'" >&2
     exit 1
     ;;
 esac
-if [[ "$OUT" != *dist* ]]; then
-  echo "error: refusing to rm -rf OUT path '$OUT' — expected a build-output path containing 'dist' (got '$OUT')" >&2
+depth=$(awk -F'/' '{c=0; for (i=1;i<=NF;i++) if ($i!="") c++; print c}' <<<"$OUT")
+if [[ "$depth" -lt 2 ]]; then
+  echo "error: refusing to rm -rf OUT path '$OUT' — too shallow to be a safe scoped build-output dir" >&2
   exit 1
 fi
 
