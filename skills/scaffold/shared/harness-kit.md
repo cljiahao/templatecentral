@@ -1236,6 +1236,18 @@ done
 
 ---
 
+## Step E3. Generate per-folder documentation
+
+Seed the structural per-folder README convention (and, if the project opts in, Azure DevOps Code Wiki `.order` files) now that every source file, harness file, and project skill exists on disk:
+
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+Follow it exactly — it determines the ADO Code Wiki opt-in (asking once, then persisting the answer in `.claude/harness.json`), enumerates every folder in the project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
+
+---
+
 ## Step F. Create `.agents` symlink
 
 Create the cross-vendor symlink so the project works with any agent framework that resolves from `.agents/`:
