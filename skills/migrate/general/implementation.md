@@ -367,7 +367,7 @@ Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `leftho
 
 Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base Phase 5d uses to re-sync harness updates without clobbering edits. Commit `.claude/.harness-base/`; `protect-files.sh` guards it.
 
-**Step 4f-3: Generate per-folder documentation**
+**Step 4f-1c: Generate per-folder documentation**
 
 Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki opt-in, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
 
