@@ -1195,7 +1195,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "5.9.0",
+  "templatecentral_version": "5.9.1",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {

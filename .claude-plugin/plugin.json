@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "templatecentral",
   "displayName": "TemplateCentral",
-  "version": "5.9.0",
+  "version": "5.9.1",
   "description": "Production-ready project scaffolding for Next.js, Vite-React, FastAPI, and NestJS. Install once, scaffold anywhere — no repo cloning required.",
   "author": { "name": "Clarence" },
   "homepage": "https://github.com/cljiahao/templatecentral",

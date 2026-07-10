@@ -10,6 +10,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.9.1] — 2026-07-11
+
+### Fixed
+
+End-to-end smoke test — scaffolded all 4 stacks from scratch (not the installed plugin), ran install/typecheck/lint/tests/build, started each app, and exercised `readme-coupling` live via real commits. The README-governance feature itself worked correctly in all 4; these bugs were in the surrounding scaffold/harness pipeline and only manifest when a scaffold is actually run end to end, not on code review alone:
+
+- **Harness-integrity false-positive on the very first commit (all 4 stacks).** `format-lint`'s pre-commit glob had no exclusion for `.claude/hooks/*` (or its `.harness-base` snapshot copy), so prettier/ruff reformatted the seeded hooks and re-staged them with different bytes than `harness.json` had already hashed — `verify-harness.sh` reported `MODIFIED` before a human touched anything. Excluded the enforcement layer from the glob in both the TS and FastAPI `lefthook.yml` blocks.
+- **`user-prompt-guard.js` crashed on every invocation (Next.js, Vite+React).** `package.json` sets `"type": "module"`, so the plain `.js` hook loaded as ESM where `require()` is undefined — the OWASP LLM01/LLM02 prompt-injection guard silently never ran. Renamed to `.cjs`, which forces CommonJS regardless of that field.
+- **`## Skill capture` never got seeded, for any stack.** Step G's append gated on `## AI Harness` already being present — true for every stack template — so the whole tail fragment (including `## Skill capture`, never pre-embedded anywhere) was always skipped. Now gates each of the three tail sections independently.
+- **A correct, untouched fresh scaffold failed its own `pnpm run check` / CI quality gate.** `FUTURE.md`, `docs/CONSTITUTION.md`, every per-folder `README.md`, and the AGENTS.md tail are all written after the scaffold's one-time early format pass. Added a final `prettier --write .` at the end of Step G (Next.js/Vite+React only — FastAPI's ruff never touches non-`.py` files).
+- **FastAPI's lefthook commands didn't activate `.venv`**, unlike the parallel `.claude/hooks/*.sh` scripts — a shell without the venv pre-sourced hard-failed `git commit`/`git push` with `No module named pyright` on an otherwise-correct project. Added the same activation guard lefthook already uses elsewhere.
+- **NestJS — three first-commit blockers plus a build bug**, all reproduced on an untouched, byte-for-byte-correct scaffold: `eslint`'s `ignores` list didn't cover the sibling `vitest.config.ts`/`vitest.config.e2e.ts`, so linting them threw a parsing error; two trailing comments in the verbatim scaffold source (`genReqId`, HSTS) tripped `no-inline-comments`, which `--max-warnings=0` turns into a hard block; and `nest-cli.json`'s `deleteOutDir: true` combined with `tsconfig.build.json`'s inherited `incremental: true` made `nest build` trust a stale `.tsbuildinfo` cache and silently drop `dist/`'s contents on a second build (confirmed 100% reproducible). Also added a `.prettierignore` (NestJS had none) so the new format pass above doesn't reformat the enforcement layer.
+- **Next.js — a trailing comment in `check-route-logging.mjs` blocked the first commit** the same way as the NestJS case above.
+- **`documentation-kit.md`** — the folder-prune list can't anticipate every project-specific `.gitignore` pattern (e.g. a custom `log/` dir); now additionally filters the working set through `git check-ignore` when a git repo exists. The `Contents` bullet list no longer includes prune-list/gitignored entries verbatim (previously a root README could list `node_modules/` as project structure). The Azure DevOps Code Wiki opt-in now has a documented non-interactive default (`false`) instead of hanging or guessing on a headless run. The root-README special case now handles "no root README exists at all," not just "exists but lacks a Structure section."
+
+---
+
 ## [5.9.0] — 2026-07-10
 
 ### Added
