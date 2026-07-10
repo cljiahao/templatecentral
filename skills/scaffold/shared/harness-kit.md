@@ -880,9 +880,38 @@ jobs:
             echo "::error::src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
             exit 1
           fi
+  readme-freshness:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Require README.md update for changed folders (apply 'skip-readme-check' label to bypass)
+        env: { LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}" }
+        run: |
+          base="origin/${{ github.base_ref }}"
+          tmp=$(mktemp)
+          git diff --name-only "$base"...HEAD > "$tmp"
+          missing=""
+          while IFS= read -r f; do
+            case "$f" in */README.md|README.md) continue ;; esac
+            d=$(dirname "$f")
+            rm_path="README.md"
+            [ "$d" != "." ] && rm_path="$d/README.md"
+            grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
+          done < "$tmp"
+          rm -f "$tmp"
+          missing=$(printf '%b' "$missing" | sort -u)
+          if [ -n "$missing" ]; then
+            echo " $LABELS " | grep -q ' skip-readme-check ' && { echo "skip-readme-check label present — OK"; exit 0; }
+            echo "::error::Folders changed without updating their README.md (see list below)"
+            printf '%s\n' "$missing"
+            echo "Update the listed README.md files, or apply the 'skip-readme-check' label to bypass."
+            exit 1
+          fi
 ```
 
-**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog` job is identical):
+**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog` job and the README-freshness gate are identical):
 ```yaml
   quality:
     runs-on: ubuntu-latest
