@@ -829,7 +829,7 @@ chmod +x .lefthook/commit-msg.sh
 
 ## Step B3. Seed the CI quality gates (GitHub Actions)
 
-The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed one workflow that enforces what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, and a **changelog-touched** gate. (GitHub Actions is the seeded default — adapt the steps to GitLab CI / Azure Pipelines if the project uses them.)
+The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed one workflow that enforces what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, a **changelog-touched** gate, and a **readme-freshness** gate. (GitHub Actions is the seeded default — adapt the steps to GitLab CI / Azure Pipelines if the project uses them.)
 
 **Coverage reporter (so `diff-cover` has input):** `diff-cover` reads a Cobertura XML, which both runners emit — one gate works for every stack.
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
@@ -1293,8 +1293,8 @@ PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except 
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
-Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
-CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, and a full-history gitleaks scan.
+Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files, plus a readme-coupling staleness warning; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
+CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, a readme-freshness check, and a full-history gitleaks scan.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
