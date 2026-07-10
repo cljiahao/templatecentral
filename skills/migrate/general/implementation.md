@@ -367,6 +367,16 @@ Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `leftho
 
 Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base Phase 5d uses to re-sync harness updates without clobbering edits. Commit `.claude/.harness-base/`; `protect-files.sh` guards it.
 
+**Step 4f-3: Generate per-folder documentation**
+
+Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki opt-in, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
+
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+Follow it exactly over the full adopted project tree.
+
 **Step 4f-2: Create `.agents` symlink**
 
 If `.agents` does not already exist, create the cross-vendor symlink:
@@ -408,6 +418,7 @@ Changes made:
   .claude/harness.json   — Created with origin hashes
   .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
   (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
+  README.md (per folder)  — created/refreshed via documentation-kit.md
 
 Commit these files together.
 ```
