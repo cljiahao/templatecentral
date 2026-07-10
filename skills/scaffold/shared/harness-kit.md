@@ -18,8 +18,8 @@ This file is the single source of truth for the Claude Code agent harness seeded
 | **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental 2>&1 \| tail -5` | `pnpm test --run` | `vite-verify` | `pnpm check` |
 
 **Additional per-stack notes:**
-- `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.js` for all TS stacks.
-- `user-prompt-guard` settings.json invocation: `python3 .claude/hooks/user-prompt-guard.py` (fastapi) vs `node .claude/hooks/user-prompt-guard.js` (TS stacks).
+- `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js` — the scaffold's `package.json` sets `"type": "module"` for Next.js/Vite+React, which makes plain `.js` load as ESM and `require()` throw; `.cjs` forces CommonJS regardless of that field).
+- `user-prompt-guard` settings.json invocation: `python3 .claude/hooks/user-prompt-guard.py` (fastapi) vs `node .claude/hooks/user-prompt-guard.cjs` (TS stacks).
 - `harness.json` `"stack"` value: use the lowercase stack name (`fastapi` / `nestjs` / `nextjs` / `vite-react`).
 - `harness.json` verify-skill path: use the stack's verify-skill name(s) from the table above (next.js has two skills).
 - CLAUDE.md hash in `harness.json`: all stacks use the conditional form `[ -f CLAUDE.md ] && sha256_claude=$(...)` — CLAUDE.md is created in a later optional step.
@@ -67,7 +67,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/user-prompt-guard.js" }]
+        "hooks": [{ "type": "command", "command": "node .claude/hooks/user-prompt-guard.cjs" }]
       }
     ],
     "PostToolUse": [
@@ -192,7 +192,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 
 - `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
-- `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.js`.
+- `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.cjs`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
 - `skill-usage-log.sh` (PostToolUse `Skill__.*`) — silently logs each skill invocation to `.claude/skill-usage.log` (gitignored, per-developer). Feeds `/skill-audit`, which surfaces repeated workflows worth capturing as a committed project skill. Never blocks (exit 0 always).
 - `post-tool-failure.sh` (PostToolUseFailure) — surfaces tool error context for self-correction.
@@ -396,7 +396,7 @@ exit 0
 
 ---
 
-**`.claude/hooks/user-prompt-guard.js`** (TS stacks only):
+**`.claude/hooks/user-prompt-guard.cjs`** (TS stacks only — `.cjs`, not `.js`; see the delta-table note above):
 ```javascript
 #!/usr/bin/env node
 // UserPromptSubmit — OWASP LLM01 injection guard + LLM02 credential-leak detection. Exit 2 = block.
@@ -685,6 +685,12 @@ pre-commit:
   commands:
     format-lint:
       glob: "*.{ts,tsx,js,mjs,cjs}"
+      # Exclude the enforcement layer: reformatting .claude/hooks/*.cjs (and its .harness-base
+      # snapshot copy) here would re-stage it with different bytes than Step E hashed, making
+      # verify-harness.sh false-positive MODIFIED on the very first commit of a fresh scaffold.
+      exclude:
+        - .claude/hooks/*
+        - .claude/.harness-base/*
       run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
       stage_fixed: true
     typecheck:
@@ -736,10 +742,16 @@ pre-commit:
   commands:
     format-lint:
       glob: "*.py"
-      run: ruff format {staged_files} && ruff check --fix {staged_files}
+      # Exclude the enforcement layer: reformatting .claude/hooks/user-prompt-guard.py (and its
+      # .harness-base snapshot copy) here would re-stage it with different bytes than Step E
+      # hashed, making verify-harness.sh false-positive MODIFIED on the first commit.
+      exclude:
+        - .claude/hooks/*
+        - .claude/.harness-base/*
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff format {staged_files} && ruff check --fix {staged_files}'
       stage_fixed: true
     typecheck:
-      run: python -m pyright src/
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; python -m pyright src/'
     secret-scan:
       run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
     readme-coupling:
@@ -773,7 +785,7 @@ pre-push:
     harness-integrity:
       run: bash .claude/verify-harness.sh
     verify:
-      run: ruff check src/ && python -m pyright src/ && python -m pytest test/ -q
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ && python -m pyright src/ && python -m pytest test/ -q'
 ```
 
 **`.lefthook/commit-msg.sh`** (identical across stacks — Conventional Commits gate; lefthook passes the message-file path as `{1}`):
@@ -1211,7 +1223,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 }
 ```
 
-> `user-prompt-guard.<ext>` is `.js` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI.
+> `user-prompt-guard.<ext>` is `.cjs` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI.
 > Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step G (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
 
@@ -1264,9 +1276,11 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — append only if not already present:** All four stack templates and both migrate templates currently embed the `## AI Harness` and `## Skills Security` sections directly, so this check normally results in a skip. Before appending the shared tail fragment below, check whether `## AI Harness` already appears in the AGENTS.md just written: if it does, skip the append; if either section is missing (e.g., a custom or trimmed template), append the fragment now. The fragment below is the canonical reference for what those sections must say.
+**AGENTS.md tail — append only the sections not already present:** Check each of the three `##` sections in the shared tail fragment below **independently** — `## AI Harness`, `## Skills Security`, `## Skill capture` — against the AGENTS.md just written. All four stack templates and both migrate templates currently embed `## AI Harness` and `## Skills Security` directly, so those two normally already exist and are skipped. None of them embed `## Skill capture` — it must always be appended. Do NOT gate the whole fragment on a single section's presence (e.g. checking only `## AI Harness`): since that section is always already there, gating on it alone silently skips `## Skill capture` forever, which is the failure mode this note exists to prevent. Append each missing section (and only the missing ones) below the stack's Rules section. The fragment below is the canonical reference for what all three sections must say.
 
-After the stack-specific AGENTS.md is written (appending the shared tail fragment if not already present), run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+**Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)
+
+After the stack-specific AGENTS.md is written (appending whichever tail sections were missing) and the final format pass above, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
