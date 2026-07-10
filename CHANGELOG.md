@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Hierarchical README governance — per-folder documentation for every scaffolded + migrated project.** Every project directory now gets a structural `README.md` (short `Purpose`/`Contents`, plus a `Connectivity` section on folders that contain subfolders, capped at 2-4 sentences to avoid the verbosity that measurably hurts agent task performance — ETH Zurich). An opt-in Azure DevOps Code Wiki mode (`adoWiki`, persisted in `.claude/harness.json`) additionally maintains a `.order` file per folder, since ADO's "publish repo to wiki" renders a parent folder blank if it has only subfolders and no file of its own.
+  - **Content generation SSOT** — new `skills/scaffold/shared/documentation-kit.md`: the template, the folder-enumeration `find` (pruning dependency/build/VCS dirs), and the ADO opt-in read/write. Loaded by `scaffold` (automatically, via a new `harness-kit.md` Step E3), `migrate` (Step 4f-1c, plus a re-run after Step 4g's flat-to-directory skill conversion creates new folders), and a new on-demand `templatecentral:add (documentation)` capability (aliases `docs`, `readme`) for backfilling already-harnessed existing projects.
+  - **Two-layer enforcement, generalized from the existing `docs-coupling`/`changelog` precedent** — `harness-kit.md`'s env-var-specific `docs-coupling` lefthook check is now a general `readme-coupling` warn (any folder with staged changes needs its README staged too; never blocks locally); a new `readme-freshness` CI job hard-fails a PR that doesn't (bypassable via a `skip-readme-check` label, mirroring the existing `changelog`-touched gate).
+
 ---
 
 ## [5.8.0] — 2026-07-06
