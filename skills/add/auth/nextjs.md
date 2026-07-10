@@ -596,6 +596,7 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
 - **Password hashing**: better-auth handles password hashing internally. For any custom hashing outside better-auth, use argon2id (`argon2` package) — OWASP recommended.
+- **Breached-password check**: current password-hygiene guidance recommends rejecting passwords found in known-breach lists at creation/change time, in addition to the length floor — check candidates against a blocklist (e.g. the Have I Been Pwned k-anonymity range API) in the sign-up flow before calling `authClient.signUp.email()`.
 
 ### After Writing Code
 

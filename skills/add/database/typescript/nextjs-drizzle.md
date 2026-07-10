@@ -138,14 +138,15 @@ For rapid local iteration, `pnpm db:push` applies the schema directly without mi
 // src/app/api/users/route.ts
 import { NextResponse } from 'next/server';
 import { db, users } from '@/integrations/database';
+import { withLogging } from '@/lib/utils/with-logging';
 
-export async function GET() {
+export const GET = withLogging(async () => {
   // Select only fields needed — never send full records to the browser
   const all = await db
     .select({ id: users.id, email: users.email, name: users.name })
     .from(users);
   return NextResponse.json(all);
-}
+});
 ```
 
 **In Server Components** (direct DB access, no API hop):

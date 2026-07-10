@@ -22,7 +22,7 @@ The scaffolded file already imports `ErrorInfo` and defines `componentDidCatch` 
 
 ```tsx
 // src/components/layout/error-boundary.tsx
-import { logError } from '@/lib/errors/error-log-handler';    // new import
+import { logError } from '@/lib/errors/error-log-handler';
 
 // Replace the existing componentDidCatch with:
 componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -41,7 +41,7 @@ The scaffold already ships `src/lib/errors/global-handlers.ts` — `registerGlob
 
 ```ts
 // src/lib/errors/global-handlers.ts — extend the existing handler
-import { logError } from './error-log-handler';    // new import
+import { logError } from './error-log-handler';
 
 // Inside the existing unhandledrejection listener, replace the current
 // console/report line with a logError call:

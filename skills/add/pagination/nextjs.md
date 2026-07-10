@@ -128,7 +128,6 @@ import { paginationSchema } from '@/lib/validation/schemas';
 import { PaginationService } from '@/lib/pagination/pagination-service';
 import { NextResponse } from 'next/server';
 import { asc, count, desc } from 'drizzle-orm';
-import { z } from 'zod';
 import { db, projects } from '@/integrations/database';
 
 const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
@@ -153,11 +152,8 @@ export const GET = withLogging(async (request) => {
 
     const parsed = paginationSchema.safeParse(queryParams);
     if (!parsed.success) {
-      return handleApiError(
-        'Invalid query parameters',
-        parsed.error,
-        z.flattenError(parsed.error).fieldErrors as Record<string, string[]>
-      );
+      // ZodError branch of handleApiError derives fieldErrors itself — no third argument needed
+      return handleApiError('Invalid query parameters', parsed.error);
     }
 
     const { page, limit, sort } = parsed.data;

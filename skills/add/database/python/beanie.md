@@ -5,11 +5,11 @@
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt` (floors tracked in the templateCentral plugin's `.claude/rules/fastapi.md` — AsyncMongoClient requires a modern PyMongo):
+Add to `requirements.txt` — floors match the templateCentral plugin's `.claude/rules/fastapi.md`; the `pymongo` floor is a hard requirement, not just a security recommendation: `AsyncMongoClient` does not exist before 4.13, so an unpinned resolve that lands on an older PyMongo breaks the import in Step B2 below.
 
 ```
-beanie
-pymongo
+beanie>=2.0
+pymongo>=4.13
 ```
 
 > **Beanie** is an async ODM for MongoDB built on PyMongo's async API and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Beanie 2.x is built on PyMongo's native async client (`AsyncMongoClient`) — Motor is deprecated and must NOT be added as a dependency.

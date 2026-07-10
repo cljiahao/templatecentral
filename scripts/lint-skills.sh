@@ -862,6 +862,28 @@ check_ref_header_prereq_suffix() {
   fi
 }
 
+check_no_bare_nextjs_route_handlers() {
+  # Next.js scaffold wires check-route-logging.mjs into `pnpm check`, which fails the build
+  # on any bare `export async function GET/POST/...` App Router handler — every skill example
+  # must wrap handlers in withLogging() instead. Catches examples that regress to the bare form
+  # (found in four files during the 2026-07 audit: the database + auth-logging skills had drifted
+  # from the pattern add/endpoint/nextjs.md documents).
+  # TIMELESS: tied to the scaffold's own enforced convention (scripts/check-route-logging.mjs).
+  header "Bare Next.js route handler exports (must be wrapped in withLogging)"
+  local matches
+  matches=$(grep -rEn 'export[[:space:]]+(async[[:space:]]+)?function[[:space:]]+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[[:space:]]*\(' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'check-route-logging' \
+    | grep -v 'audit/implementation' \
+    | grep -v 'nextjs-backend-extraction' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Bare Next.js route handler export — wrap it in withLogging() (see add/endpoint/nextjs.md); pnpm check's check-route-logging.mjs fails the build on this pattern"
+  else
+    pass "No bare Next.js route handler exports"
+  fi
+}
+
 check_no_husky() {
   # The git-hook layer is lefthook (harness-kit Step B2) — the single source for ALL stacks,
   # since it installs from Node OR Python (Husky is Node-only and cannot run in a FastAPI scaffold).
@@ -902,6 +924,7 @@ check_no_absolute_plugin_path
 check_skilldir_refs_resolve
 check_ref_header_prereq_suffix
 check_no_husky
+check_no_bare_nextjs_route_handlers
 check_no_postToolUse_full_test_suite
 echo ""
 echo "ECOSYSTEM-ERA"

@@ -150,6 +150,12 @@ NEXT_PUBLIC_API_URL=http://localhost:[DEV_PORT]
 
 **[BACKEND] project (`../[project-name]-api`):** See the leaf file for the CORS config step — FastAPI uses `CORS_ORIGINS` in `src/.env.default`; NestJS reads `CLIENT_URL` from `src/config/env.config.ts`.
 
+Phases 4–7 created new module/router/service folders after the Phase 3 scaffold's one-time README pass, so those folders have no `README.md` yet. Re-run the documentation kit over `../[project-name]-api` now, before Phase 10 verification:
+```bash
+cd ../[project-name]-api
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
 Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 ```
 - Extracted from `[project-name]` (Next.js frontend) — see `../[project-name]`

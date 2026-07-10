@@ -108,7 +108,7 @@ export async function logoutUser(): Promise<void> {
 
 Update `src/features/auth/components/auth-provider.tsx` to check for an existing session on mount and call the backend for login/logout:
 
-```typescript
+```tsx
 import { ENV } from '@/lib/constants/env';
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { fetchCurrentUser, logoutUser } from '../api/auth-service';
@@ -176,7 +176,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 Update `src/features/auth/components/login-card.tsx`. Use the project's canonical form pattern (React Hook Form + Zod + `CustomFormField`):
 
-```typescript
+```tsx
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -259,7 +259,7 @@ export function LoginCard() {
 
 In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`. The template already has `<BrowserRouter>` wrapping the route tree — edit only inside the existing `<Routes>`:
 
-```typescript
+```tsx
 import { ProtectedRoute } from '@/features/auth';
 
 {/* Inside the existing <Routes> in router.tsx */}
@@ -284,7 +284,7 @@ Do NOT replace the entire `router.tsx` — only modify the route definitions ins
 
 Use the `useAuth()` hook to access `logout`:
 
-```typescript
+```tsx
 import { useAuth } from '@/features/auth';
 
 export function SignOutButton() {

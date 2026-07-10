@@ -2152,7 +2152,7 @@ Run `pnpm check && pnpm test` and report any failures.
 - If `pnpm test` fails: investigate root cause — do not skip or disable tests.
 ```
 
-Now execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), `.agents` symlink (Step F), AGENTS.md tail check (Step G — the tail is already embedded above, so skip the append), and plugin install (Step H).
+Now execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail check (Step G — the tail is already embedded above, so skip the append), and plugin install (Step H).
 
 ### 6d. Seed additional project skills
 

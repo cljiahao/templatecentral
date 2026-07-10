@@ -247,7 +247,14 @@ check_skill_frontmatter() {
       fail "$slug — description too long (${#desc} chars, max 150)"
       bad=$((bad + 1))
     fi
-  done < <(find "$skills_abs" -name 'SKILL.md' -not -path '*/.*' | sort)
+  done < <(find "$skills_abs" -name 'SKILL.md' | while IFS= read -r p; do
+    # Exclude only hidden components WITHIN skills_abs — checking the relative path (not the
+    # full absolute path) avoids false exclusion when the repo itself sits under a dot-directory
+    # (e.g. a git worktree at .claude/worktrees/<name>/, a standard Claude Code layout).
+    rel="${p#"${skills_abs%/}"/}"
+    if [[ "$rel" == .* || "$rel" == */.* ]]; then continue; fi
+    printf '%s\n' "$p"
+  done | sort)
 
   if [[ $((registered + unregistered)) -eq 0 ]]; then
     fail "No SKILL.md files found under $skills_rel — is the skills path correct?"

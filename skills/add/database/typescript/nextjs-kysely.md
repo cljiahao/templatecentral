@@ -214,21 +214,22 @@ DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/integrations/database';
+import { withLogging } from '@/lib/utils/with-logging';
 
-export async function GET() {
+export const GET = withLogging(async () => {
   // Select only fields needed — never send full records to the browser
   const users = await db.selectFrom('users')
     .select(['id', 'email', 'name'])
     .execute();
   return NextResponse.json(users);
-}
+});
 
 const createUserSchema = z.object({
   email: z.email(),
   name: z.string().min(1),
 });
 
-export async function POST(request: Request) {
+export const POST = withLogging(async (request) => {
   const result = createUserSchema.safeParse(await request.json());
   if (!result.success) {
     return NextResponse.json(
@@ -243,7 +244,7 @@ export async function POST(request: Request) {
     .returning(['id', 'email', 'name'])
     .executeTakeFirstOrThrow();
   return NextResponse.json(user, { status: 201 });
-}
+});
 ```
 
 **In Server Components**:

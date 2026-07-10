@@ -849,11 +849,11 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4   # SHA-pin in production (see Skills Security)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 — SHA-pinned per Skills Security; re-verify/bump via the review utility, don't hand-edit
         with: { fetch-depth: 0 }    # diff-cover needs full history
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
         with: { version: "11" }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
       - name: Harness integrity
@@ -863,12 +863,12 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
       - name: Secret scan (full history)
-        uses: gitleaks/gitleaks-action@v2       # SHA-pin in production
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
   changelog:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with: { fetch-depth: 0 }
       - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
         env: { LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}" }
@@ -884,7 +884,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with: { fetch-depth: 0 }
       - name: Require README.md update for changed folders (apply 'skip-readme-check' label to bypass)
         env: { LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}" }
@@ -916,9 +916,9 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with: { fetch-depth: 0 }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with: { python-version: "3.13" }
       - name: Install deps
         run: |
@@ -932,7 +932,7 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
       - name: Secret scan (full history)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
 ```
 
 **Notes:**
@@ -1183,7 +1183,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "5.8.0",
+  "templatecentral_version": "5.9.0",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {

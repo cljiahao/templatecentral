@@ -164,13 +164,14 @@ MONGODB_URL="mongodb://localhost:27017/mydb"
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/integrations/database';
 import { User } from '@/integrations/database/schemas/user';
+import { withLogging } from '@/lib/utils/with-logging';
 
-export async function GET() {
+export const GET = withLogging(async () => {
   await connectDB();
   // Select only fields needed — never send full documents to the browser
   const users = await User.find().select('name email -_id').lean();
   return NextResponse.json(users);
-}
+});
 ```
 
 **In Server Components**:

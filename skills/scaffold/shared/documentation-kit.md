@@ -96,6 +96,7 @@ find . \( \
     -name node_modules -o \
     -name .next -o \
     -name dist -o \
+    -name build -o \
     -name coverage -o \
     -name .turbo -o \
     -name .venv -o \
@@ -105,6 +106,8 @@ find . \( \
     -name .mypy_cache -o \
     -name .pyright -o \
     -name htmlcov -o \
+    -name .stryker-tmp -o \
+    -name .mutmut-cache -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print
 ```

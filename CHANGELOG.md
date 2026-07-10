@@ -8,11 +8,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [5.9.0] — 2026-07-10
+
 ### Added
 
 - **Hierarchical README governance — per-folder documentation for every scaffolded + migrated project.** Every project directory now gets a structural `README.md` (short `Purpose`/`Contents`, plus a `Connectivity` section on folders that contain subfolders, capped at 2-4 sentences to avoid the verbosity that measurably hurts agent task performance — ETH Zurich). An opt-in Azure DevOps Code Wiki mode (`adoWiki`, persisted in `.claude/harness.json`) additionally maintains a `.order` file per folder, since ADO's "publish repo to wiki" renders a parent folder blank if it has only subfolders and no file of its own.
   - **Content generation SSOT** — new `skills/scaffold/shared/documentation-kit.md`: the template, the folder-enumeration `find` (pruning dependency/build/VCS dirs), and the ADO opt-in read/write. Loaded by `scaffold` (automatically, via a new `harness-kit.md` Step E3), `migrate` (Step 4f-1c, plus a re-run after Step 4g's flat-to-directory skill conversion creates new folders), and a new on-demand `templatecentral:add (documentation)` capability (aliases `docs`, `readme`) for backfilling already-harnessed existing projects.
   - **Two-layer enforcement, generalized from the existing `docs-coupling`/`changelog` precedent** — `harness-kit.md`'s env-var-specific `docs-coupling` lefthook check is now a general `readme-coupling` warn (any folder with staged changes needs its README staged too; never blocks locally); a new `readme-freshness` CI job hard-fails a PR that doesn't (bypassable via a `skip-readme-check` label, mirroring the existing `changelog`-touched gate).
+- **Lint:** `check_no_bare_nextjs_route_handlers` — catches skill examples showing a bare `export async function GET/POST/...` App Router handler instead of the required `withLogging()` wrap (the scaffold's own `check-route-logging.mjs` fails `pnpm check` on this pattern). Excludes `migrate/nextjs-backend-extraction/*` (its Next.js-syntax table cells document source patterns being migrated *away from*, not code to paste into a project).
+
+### Fixed
+
+`/tc-audit` pass (2026-07-10), scoped to the README-governance feature plus a full fresh-eyes sweep of all 67 stack skill files:
+
+- **Next.js — 4 files had route-handler examples that would fail the scaffold's own `check-route-logging.mjs` gate** if copied literally: `add/database/typescript/nextjs-drizzle.md`, `nextjs-kysely.md` (×2 handlers), and `nextjs-mongoose.md` had bare `export async function GET/POST`; `add/logging/nextjs.md`'s auth-passthrough `POST` handler was missed by the 5.8.0 sweep (which covered `error-handling`/`validation-patterns`/`pagination` only) and needed a `NextResponse` re-wrap (`new NextResponse(response.body, response)`) to preserve better-auth's `Set-Cookie` headers while still satisfying `withLogging`'s return type.
+- **`add/pagination/nextjs.md`** dropped an unused `z` import and a redundant third argument to `handleApiError()` — its `ZodError` branch already derives `fieldErrors` itself.
+- **README-governance follow-through into adjacent flows** that create or delete folders after the main documentation pass already ran, so they'd otherwise leave stale/missing `README.md`s: `cleanup/remove-example/implementation.md` (deleting `example/` leaves the parent's `Contents` listing stale), `migrate/nextjs-backend-extraction/common.md` (new module/router/service folders created in Phases 4–7 have no README before Phase 10 verification), and `migrate/general/implementation.md` Phase 5 re-sync (newly-reseeded directories).
+- **`documentation-kit.md`'s folder-enumeration `find`** was missing `build/` (a real gitignored output dir in both the Next.js and FastAPI scaffold `.gitignore`s) and the opt-in mutation-testing artifact dirs `.stryker-tmp` / `.mutmut-cache` from its dependency/build-output prune list — same bug class as the dirs it already pruned.
+- **`beanie.md`** now pins explicit `pymongo>=4.13` / `beanie>=2.0` floors in the `requirements.txt` snippet (previously prose-only) — `AsyncMongoClient` doesn't exist before pymongo 4.13, so an unpinned resolve can break the import.
+- **Completed SHA-pinning** on the mutation-testing skills' CI job (`add/mutation-testing/python.md`, `typescript.md`) — `actions/checkout`, `actions/setup-python`, `pnpm/action-setup`, and `actions/setup-node` were still on floating tags while every other seeded workflow (`harness-kit.md`) was already pinned.
+- **`test/implementation.md`** — FastAPI test invocation corrected to `python -m pytest test/ -q`, matching the venv-based invocation convention (`python -m pyright`, `python -m pytest`) used everywhere else in the FastAPI skills.
+- **`migrate/general/implementation.md`** — reworded a hardcoded "7-event hook wiring" description to stop implying that's the total count of Claude Code hook events (it's only how many templateCentral seeds; the platform now documents ~30).
+- Minor structural/comment-hygiene cleanups: table-vs-note ordering in `add/database/python.md` and `add/database/typescript.md`; a trailing "// new import" change-narration comment removed from `add/error-handling/vite-react.md`; an inline comment moved to its own line in `scaffold/vite-react/config-files.md`.
+- **`scripts/validate-manifest.sh`** — `check_skill_frontmatter`'s `find ... -not -path '*/.*'` excluded every `SKILL.md` whenever the repo itself is checked out under a dot-directory (e.g. any `.claude/worktrees/<name>/` git worktree — the standard, documented Claude Code worktree layout, and the exact layout this audit ran in), because the exclusion matched the ancestor `.claude` path segment, not just hidden subdirectories inside `skills/`. Fixed to filter on the path *relative to* the skills directory.
+- Verified clean (no changes needed): the ecosystem-research cache's other flagged items were already resolved before this pass — NestJS `@nestjs/platform-fastify` floor, Starlette "current stable" doc text, React Router v8 migration, and the `nestjs-drizzle.md` missing-`@rc` bug all matched current guidance on inspection.
+
+### Infrastructure
+
+- Audit skill self-check confirmed: `.claude/skills/audit/implementation.md`'s own Step 2 cross-stack file inventory already listed `documentation-kit.md` and `add/documentation/implementation.md` (added proactively alongside the feature, not by this pass).
 
 ---
 

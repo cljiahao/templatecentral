@@ -542,7 +542,8 @@ export default defineConfig({
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": [] // TypeScript 6 default; add @types/* package names here if globally-visible types are needed
+    // TypeScript 6 default; add @types/* package names here if globally-visible types are needed
+    "types": []
   },
   "include": ["src", "vite-env.d.ts", "vite.config.ts"]
 }

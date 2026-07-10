@@ -303,7 +303,7 @@ cat "<skill-dir>/../scaffold/shared/harness-kit.md"
 ```
 
 Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; FastAPI: `python3`), execute kit Steps **A through D**:
-- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and the 7-event hook wiring).
+- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and wiring for the 7 hook events templateCentral seeds).
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-tool-failure`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
 - **Step B3** — CI quality gates (`.github/workflows/ci.yml`).
@@ -518,4 +518,11 @@ for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; c
 # recompute origin_hash for each in harness.json, and bump templatecentral_version to "$PLUGIN_VER"
 bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
 ```
+
+If any `MISSING` file reseeded above required creating a directory that did not previously exist (e.g. a whole `.claude/skills/<name>/` folder), re-run the documentation kit so that new folder gets a `README.md` too, the same way Phase 4g re-runs it after its flat-to-directory conversion:
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+Skip this re-run if nothing reseeded created a new directory.
+
 Then re-run Step 5b/5c and confirm everything is `UNCHANGED` and up to date.
