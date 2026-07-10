@@ -700,15 +700,17 @@ pre-commit:
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).
       # A root-level file (e.g. .env.example) is covered via folder "." — no special-casing needed.
       run: |
-        staged=$(git diff --cached --name-only)
+        tmp=$(mktemp)
+        git diff --cached --name-only > "$tmp"
         missing=""
-        for f in $staged; do
+        while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
-          echo "$staged" | grep -qx "$rm_path" || missing="$missing\n  - $d/"
-        done
+          grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
+        done < "$tmp"
+        rm -f "$tmp"
         missing=$(printf '%b' "$missing" | sort -u)
         if [ -n "$missing" ]; then
           echo "⚠ folders changed without staging their README.md (commit still proceeds):"
@@ -745,15 +747,17 @@ pre-commit:
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).
       # A root-level file (e.g. .env.example) is covered via folder "." — no special-casing needed.
       run: |
-        staged=$(git diff --cached --name-only)
+        tmp=$(mktemp)
+        git diff --cached --name-only > "$tmp"
         missing=""
-        for f in $staged; do
+        while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
-          echo "$staged" | grep -qx "$rm_path" || missing="$missing\n  - $d/"
-        done
+          grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
+        done < "$tmp"
+        rm -f "$tmp"
         missing=$(printf '%b' "$missing" | sort -u)
         if [ -n "$missing" ]; then
           echo "⚠ folders changed without staging their README.md (commit still proceeds):"
