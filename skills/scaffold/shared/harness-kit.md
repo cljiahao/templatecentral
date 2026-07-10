@@ -695,12 +695,25 @@ pre-commit:
     secret-scan:
       # Soft-skip when gitleaks isn't installed locally — CI is the hard gate.
       run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
-    docs-coupling:
-      # Warn-only (never blocks): an env-template change should be mirrored in README's Env Vars section.
+    readme-coupling:
+      # Warn-only (never blocks): a folder with staged file changes should have its own
+      # README.md staged too (per-folder documentation convention — see documentation-kit.md).
+      # Subsumes the previous env-var-specific check: .env.example lives at the repo root, so a
+      # root-folder change without README.md now falls under this same general rule.
       run: |
         staged=$(git diff --cached --name-only)
-        if echo "$staged" | grep -qE '^\.env\.(example|default)$' && ! echo "$staged" | grep -qx 'README.md'; then
-          echo "⚠ env template changed but README.md isn't staged — update the Env Vars section if you added/renamed/removed a variable (commit still proceeds)."
+        missing=""
+        for f in $staged; do
+          case "$f" in */README.md|README.md) continue ;; esac
+          d=$(dirname "$f")
+          rm_path="README.md"
+          [ "$d" != "." ] && rm_path="$d/README.md"
+          echo "$staged" | grep -qx "$rm_path" || missing="$missing\n  - $d/"
+        done
+        missing=$(printf '%b' "$missing" | sort -u)
+        if [ -n "$missing" ]; then
+          echo "⚠ folders changed without staging their README.md (commit still proceeds):"
+          printf '%s\n' "$missing"
         fi
         exit 0
 commit-msg:
@@ -728,12 +741,25 @@ pre-commit:
       run: python -m pyright src/
     secret-scan:
       run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --redact --no-banner || true
-    docs-coupling:
-      # Warn-only (never blocks): an env-template change should be mirrored in README's Env Vars section.
+    readme-coupling:
+      # Warn-only (never blocks): a folder with staged file changes should have its own
+      # README.md staged too (per-folder documentation convention — see documentation-kit.md).
+      # Subsumes the previous env-var-specific check: .env.example lives at the repo root, so a
+      # root-folder change without README.md now falls under this same general rule.
       run: |
         staged=$(git diff --cached --name-only)
-        if echo "$staged" | grep -qE '^\.env\.(example|default)$' && ! echo "$staged" | grep -qx 'README.md'; then
-          echo "⚠ env template changed but README.md isn't staged — update the Env Vars section if you added/renamed/removed a variable (commit still proceeds)."
+        missing=""
+        for f in $staged; do
+          case "$f" in */README.md|README.md) continue ;; esac
+          d=$(dirname "$f")
+          rm_path="README.md"
+          [ "$d" != "." ] && rm_path="$d/README.md"
+          echo "$staged" | grep -qx "$rm_path" || missing="$missing\n  - $d/"
+        done
+        missing=$(printf '%b' "$missing" | sort -u)
+        if [ -n "$missing" ]; then
+          echo "⚠ folders changed without staging their README.md (commit still proceeds):"
+          printf '%s\n' "$missing"
         fi
         exit 0
 commit-msg:
