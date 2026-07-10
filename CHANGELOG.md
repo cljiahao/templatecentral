@@ -37,7 +37,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Infrastructure
 
-- Audit skill self-check confirmed: `.claude/skills/audit/implementation.md`'s own Step 2 cross-stack file inventory already listed `documentation-kit.md` and `add/documentation/implementation.md` (added proactively alongside the feature, not by this pass).
+- Audit skill self-update: `.claude/skills/audit/implementation.md`'s own Step 2 cross-stack file inventory was missing `documentation-kit.md` and `add/documentation/implementation.md` — the README-governance feature added its own capability + shared kit but never registered them for future audit passes. Added (audit skill internal changelog bumped to 2.9.0).
+
+### Known
+
+- **Directory-deletion README staleness (systemic, deferred)** — the `readme-coupling`/`readme-freshness` checks catch a folder whose direct children changed but never detect "a subfolder was deleted, so the parent's `Contents` listing is now stale" in general. This pass closed the one concrete instance templateCentral itself triggers (`cleanup/remove-example`), but any other directory deletion (human- or agent-driven) has the same silent-drift exposure. A general fix means teaching the coupling script to diff directory-level deletions in both the TS and FastAPI `harness-kit.md` variants — architectural, left for a future pass.
+- **`mutmut` version-pin style** in `add/mutation-testing/python.md` pins an explicit floor (`mutmut>=3.5.0`) while its TypeScript sibling leaves StrykerJS unpinned in prose (versions are SSOT'd in `.claude/rules/*`) — a minor stylistic inconsistency, not a correctness issue. Left as-is.
 
 ---
 
