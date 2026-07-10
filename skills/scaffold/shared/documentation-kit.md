@@ -78,9 +78,11 @@ open(p,"w").write(json.dumps(j,indent=2)+"\n")'
 
 1. `existing=$(read_adowiki)`
 2. If `$existing` is `true` or `false`, use it. Do not ask the user again — the field already records their answer.
-3. If `$existing` is empty (field unset — first time this kit runs on this project), ask the user **exactly once**, worded around:
+3. If `$existing` is empty (field unset — first time this kit runs on this project) **and an interactive user is available to ask**, ask exactly once, worded around:
 
    > Does this project publish its repo to an Azure DevOps Code Wiki? If yes, I'll also maintain a `.order` file per folder so the wiki tree renders correctly — a parent folder with only subfolders and no file of its own shows up blank otherwise. (yes/no)
+
+   **No interactive user available** (a headless/automated invocation — e.g. a CI-driven scaffold, or an agent run with no human to answer): default to `false` and note the assumption in the Step 5 report (e.g. `adoWiki: defaulted to false — no interactive session available`), rather than hanging or guessing silently.
 
 4. Persist the answer immediately with `write_adowiki "true"` or `write_adowiki "false"` so future runs (this session or a later one) read it back in step 2 instead of asking again.
 
@@ -112,6 +114,32 @@ find . \( \
   \) -prune -o -type d -print
 ```
 
+**Respect the project's own `.gitignore` too.** The prune list above only covers well-known dependency/build directories common across templateCentral's own scaffolds — it cannot anticipate every project-specific ignore pattern (e.g. a custom `log/` directory). After the `find` above, drop any remaining entry that the project itself ignores, so this kit never writes a `README.md` that's invisible to git, CI, and teammates. If no git repository exists yet (very early in a fresh scaffold, before `git init` has run), skip this filter entirely and rely on the hardcoded prune list alone — the check below degrades to a no-op filter (keeps everything) in that case, which is safe:
+
+```bash
+tmp=$(mktemp)
+find . \( \
+    -path './.git' -o -name node_modules -o -name .next -o -name dist -o -name build -o \
+    -name coverage -o -name .turbo -o -name .venv -o -name __pycache__ -o \
+    -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .pyright -o \
+    -name htmlcov -o -name .stryker-tmp -o -name .mutmut-cache -o \
+    -path './.claude/.harness-base' \
+  \) -prune -o -type d -print > "$tmp"
+
+working_set=""
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  while IFS= read -r folder; do
+    git check-ignore -q "$folder" || working_set="$working_set$folder
+"
+  done < "$tmp"
+else
+  working_set=$(cat "$tmp")
+fi
+rm -f "$tmp"
+```
+
+`$working_set` (one folder path per line) is the final list — use it for Step 3 and, when `adoWiki` is true, Step 4.
+
 This is the working set for Step 3 (one `README.md` decision per directory it prints, including `.` — the repo root) and, when `adoWiki` is true, for Step 4.
 
 ---
@@ -124,8 +152,9 @@ This is the working set for Step 3 (one `README.md` decision per directory it pr
 
 The root folder's `README.md` is a human-facing project readme (title, badges, quickstart, etc. — whatever already exists there). **That prose must never be overwritten.** Only a missing `## Structure` section may be added to it:
 
-1. Check whether the existing root `README.md` already has a `## Structure` heading. If it does, leave the file untouched.
-2. If it does not, append a `## Structure` section at the end, generated the same way as `Contents` + `Connectivity` below — but nested one level down, as `### Contents` and `### Connectivity` subheadings under `## Structure` (the root always has subfolders, so `### Connectivity` is always included there). Do not touch any text above the appended section.
+1. **If no root `README.md` exists at all** (nothing upstream of this kit created one — this can happen on `templatecentral:add (documentation)`/`templatecentral:migrate` light-adoption against a project with no README, or a scaffold whose stack template doesn't seed one): create a minimal one first — a `# <project-name>` title line (derived from the directory name or `package.json`/`pyproject.toml`'s `name` field if present), nothing else — then proceed to step 2 below as if it always existed.
+2. Check whether the (now-existing) root `README.md` already has a `## Structure` heading. If it does, leave the file untouched.
+3. If it does not, append a `## Structure` section at the end, generated the same way as `Contents` + `Connectivity` below — but nested one level down, as `### Contents` and `### Connectivity` subheadings under `## Structure` (the root always has subfolders, so `### Connectivity` is always included there). Do not touch any text above the appended section.
 
 ### Every other folder — full template
 
@@ -154,7 +183,7 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 **Section rules:**
 
 - **Purpose** — 1-2 lines. What the folder holds and why it exists as its own unit.
-- **Contents** — mechanical, not narrative: one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check in Step 3 deterministic. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance. Do not add descriptive prose per bullet beyond the child's own name; this section is a manifest, not a summary.
+- **Contents** — mechanical, not narrative: one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check in Step 3 deterministic. **Exclude any child that matches the Step 2 prune list** (`node_modules`, `dist`, `.git`, etc.) or is itself gitignored, the same way Step 2 excludes them from the folder working set — otherwise the root's own `Contents` would list `node_modules/`, `.git`, build artifacts, and similar noise as if they were real project structure. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance. Do not add descriptive prose per bullet beyond the child's own name; this section is a manifest, not a summary.
 - **Connectivity** — deliberately capped at 2-4 sentences, and included only for folders that contain subfolders. Say how the subfolders relate to each other and to the parent (data flow, layering, dependency direction) — not what each one does individually (that's each subfolder's own `Purpose`). Keep this short on purpose: verbose, narratively-generated per-folder AI context measurably hurts agent task performance (per an ETH Zurich study cited in this feature's design doc) — the goal is a structural map an agent can skim in seconds, not an essay.
 - **Parent** — a relative link to the immediate parent's `README.md` (always `../README.md`, since Parent is always one level up).
 
@@ -201,3 +230,9 @@ If `adoWiki` is true, append a second line:
 ```
 
 Omit the `.order` line entirely when `adoWiki` is false or Step 4 was skipped.
+
+If Step 1 defaulted `adoWiki` to `false` because no interactive user was available, append a third line noting the assumption:
+
+```
+adoWiki: defaulted to false — no interactive session available
+```
