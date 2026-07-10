@@ -6,9 +6,13 @@
 
 Look for `<!-- templateCentral:` on line 1 of `AGENTS.md`.
 
-If absent → tell the user: "This project has no templateCentral harness yet. Run `templatecentral:migrate` first — it seeds the harness this capability depends on." Exit.
+If found → proceed to Step 1.
 
-If present → proceed to Step 1.
+If not found → invoke `templatecentral:migrate` (select the Project-migration path; its
+Phase 5 harness health check triggers automatically once the harness is current). Once
+complete, re-check for the marker.
+- Marker now present → proceed to Step 1.
+- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ## Step 1 — Backfill per-folder documentation
 
@@ -20,6 +24,13 @@ Follow it exactly over the existing project tree — it determines/updates the A
 
 ## Step 2 — Confirm enforcement is wired
 
-Check that `lefthook.yml` contains a `readme-coupling` command and `.github/workflows/ci.yml` contains a `readme-freshness` job. Both are seeded by `harness-kit.md` Step B2/B3 for any project already on this templateCentral version.
+Both are seeded by `harness-kit.md` Step B2/B3 for any project already on this templateCentral version:
 
-If either is missing (an older harness), tell the user: "This project's harness predates per-folder documentation enforcement. Run `templatecentral:migrate` to pick up the harness health check and safe re-sync (Phase 5) — it will pull in the missing lefthook/CI additions without clobbering your other harness customizations." Do not hand-splice the enforcement config here — that duplicates the merge logic `migrate` Phase 5 already owns.
+```bash
+grep -q "readme-coupling:" lefthook.yml
+grep -q "readme-freshness:" .github/workflows/ci.yml
+```
+
+If either check fails (an older harness), tell the user: "This project's harness predates per-folder documentation enforcement. Run `templatecentral:migrate` to pick up the harness health check and safe re-sync (Phase 5) — it will pull in the missing lefthook/CI additions without clobbering your other harness customizations." Do not hand-splice the enforcement config here — that duplicates the merge logic `migrate` Phase 5 already owns.
+
+If both checks pass, the capability is complete: Step 1 generated/refreshed the documentation and enforcement is already wired. No further action needed.
