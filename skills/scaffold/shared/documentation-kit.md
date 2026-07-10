@@ -103,6 +103,7 @@ find . \( \
     -name .pytest_cache -o \
     -name .ruff_cache -o \
     -name .mypy_cache -o \
+    -name .pyright -o \
     -name htmlcov -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print
@@ -121,7 +122,7 @@ This is the working set for Step 3 (one `README.md` decision per directory it pr
 The root folder's `README.md` is a human-facing project readme (title, badges, quickstart, etc. — whatever already exists there). **That prose must never be overwritten.** Only a missing `## Structure` section may be added to it:
 
 1. Check whether the existing root `README.md` already has a `## Structure` heading. If it does, leave the file untouched.
-2. If it does not, append a `## Structure` section at the end, generated the same way as `Contents` + `Connectivity` below (the root always has subfolders, so `Connectivity` is always included there). Do not touch any text above the appended section.
+2. If it does not, append a `## Structure` section at the end, generated the same way as `Contents` + `Connectivity` below — but nested one level down, as `### Contents` and `### Connectivity` subheadings under `## Structure` (the root always has subfolders, so `### Connectivity` is always included there). Do not touch any text above the appended section.
 
 ### Every other folder — full template
 
@@ -135,7 +136,7 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 
 ## Contents
 - `<child-1>`
-- `<child-2>`
+- `<child-2>/`
 - `<child-n>`
 
 ## Connectivity
@@ -150,7 +151,7 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 **Section rules:**
 
 - **Purpose** — 1-2 lines. What the folder holds and why it exists as its own unit.
-- **Contents** — mechanical, not narrative: one bullet per immediate child (file or subfolder), derived directly from `ls`. Do not add descriptive prose per bullet beyond the child's own name; this section is a manifest, not a summary.
+- **Contents** — mechanical, not narrative: one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check in Step 3 deterministic. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance. Do not add descriptive prose per bullet beyond the child's own name; this section is a manifest, not a summary.
 - **Connectivity** — deliberately capped at 2-4 sentences, and included only for folders that contain subfolders. Say how the subfolders relate to each other and to the parent (data flow, layering, dependency direction) — not what each one does individually (that's each subfolder's own `Purpose`). Keep this short on purpose: verbose, narratively-generated per-folder AI context measurably hurts agent task performance (per an ETH Zurich study cited in this feature's design doc) — the goal is a structural map an agent can skim in seconds, not an essay.
 - **Parent** — a relative link to the immediate parent's `README.md` (always `../README.md`, since Parent is always one level up).
 
