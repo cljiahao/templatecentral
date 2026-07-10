@@ -34,9 +34,9 @@ If ambiguous → ask. For a **new** project with no stack named, `templatecentra
 
 ## `templatecentral:add` capabilities
 
-`auth` · `database` · `page` · `feature` · `endpoint` · `form` · `integration` · `test` · `logging` · `error-handling` · `pagination` · `mutation-testing` · `ai-security`
+`auth` · `database` · `page` · `feature` · `endpoint` · `form` · `integration` · `test` · `logging` · `error-handling` · `pagination` · `mutation-testing` · `ai-security` · `documentation`
 
-(aliases accepted: `api-route`, `module` → endpoint; `component` → feature; `mutation` → mutation-testing)
+(aliases accepted: `api-route`, `module` → endpoint; `component` → feature; `mutation` → mutation-testing; `docs`, `readme` → documentation)
 
 ## Skill Scoping Model
 
