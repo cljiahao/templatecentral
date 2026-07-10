@@ -402,6 +402,14 @@ rm .claude/skills/<name>.md
 
 Flat skill files (`.claude/skills/<name>.md`) are silently ignored by Claude Code — skills must be directories with a `SKILL.md` entrypoint (flat files work only under `.claude/commands/`). After moving each file, recompute the SHA-256 hash of the new path and update the corresponding entry in `.claude/harness.json`: change the `path` key from `.claude/skills/<name>.md` to `.claude/skills/<name>/SKILL.md` and update the `origin_hash` to match the moved file.
 
+If any flat file was converted above, this step created new directories (`.claude/skills/<name>/`) that did not exist when Step 4f-1c's documentation scan ran. Re-run it now so those directories — and `.claude/skills/README.md`'s `Contents` listing, which otherwise still names the old flat file — are current before Step 4i's commit:
+
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+Skip this re-run if Step 4g converted nothing (no flat files were found).
+
 **Step 4h: Update the version marker**
 
 Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@5.0.0 -->`.
