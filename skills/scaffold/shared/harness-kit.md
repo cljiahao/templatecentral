@@ -698,8 +698,7 @@ pre-commit:
     readme-coupling:
       # Warn-only (never blocks): a folder with staged file changes should have its own
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).
-      # Subsumes the previous env-var-specific check: .env.example lives at the repo root, so a
-      # root-folder change without README.md now falls under this same general rule.
+      # A root-level file (e.g. .env.example) is covered via folder "." — no special-casing needed.
       run: |
         staged=$(git diff --cached --name-only)
         missing=""
@@ -744,8 +743,7 @@ pre-commit:
     readme-coupling:
       # Warn-only (never blocks): a folder with staged file changes should have its own
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).
-      # Subsumes the previous env-var-specific check: .env.example lives at the repo root, so a
-      # root-folder change without README.md now falls under this same general rule.
+      # A root-level file (e.g. .env.example) is covered via folder "." — no special-casing needed.
       run: |
         staged=$(git diff --cached --name-only)
         missing=""
