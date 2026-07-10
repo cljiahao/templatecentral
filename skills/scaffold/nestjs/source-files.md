@@ -78,7 +78,8 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? 'info',
-        genReqId: () => crypto.randomUUID(), // correlation ID
+        // correlation ID
+        genReqId: () => crypto.randomUUID(),
         transport:
           appConfig.ENVIRONMENT !== 'prod' && appConfig.ENVIRONMENT !== 'uat'
             ? { target: 'pino-pretty', options: { singleLine: true } }
@@ -242,7 +243,8 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': ["'none'"],
       },
     },
-    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true }, // HSTS
+    // HSTS
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     xFrameOptions: { action: 'deny' },
   });

@@ -502,6 +502,23 @@ allowBuilds:
 }
 ```
 
+### `.prettierignore`
+
+```
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+.claude
+
+# Enforcement-layer config — human-reviewed, never auto-formatted.
+# Prettier would otherwise rewrite these (yaml quoting/whitespace), drifting them from the
+# harness-integrity baseline and failing verify-harness.sh on the first push / in CI.
+lefthook.yml
+.github/
+.gitleaks.toml
+```
+
 ### `eslint.config.mjs`
 
 ```js
@@ -513,7 +530,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', '.claude/**'],
+    ignores: ['eslint.config.mjs', 'vitest.config.ts', 'vitest.config.e2e.ts', '.claude/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -639,7 +656,8 @@ export default defineConfig({
   "extends": "./tsconfig.json",
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"],
   "compilerOptions": {
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "incremental": false
   }
 }
 ```
@@ -647,5 +665,14 @@ export default defineConfig({
 > `rootDir: "./src"` is build-only (here, not in `tsconfig.json`): it makes `nest build` emit the
 > entrypoint to `dist/main.js` — which `start:prod` and the Dockerfile `CMD`/healthcheck expect.
 > The base `tsconfig.json` keeps `rootDir: "./"` so `tsc --noEmit` can still typecheck `test/`.
+>
+> `incremental: false` overrides the base config's `incremental: true` for this build-only path.
+> `nest-cli.json`'s `deleteOutDir: true` wipes `dist/` before every build, but with incremental
+> compilation on, `nest build` trusts its `.tsbuildinfo` cache and silently skips re-emitting
+> unchanged files anyway — so a second build with zero source changes produces an **empty**
+> `dist/` (confirmed reproducible: `dist/main.js` present after build 1, missing after build 2).
+> Incremental mode has no benefit here regardless (`deleteOutDir` already forces a full rebuild
+> every time); it stays `true` in the base `tsconfig.json` for `tsc --noEmit`'s fast typecheck
+> path, which never deletes anything and is unaffected by this interaction.
 
 ---
