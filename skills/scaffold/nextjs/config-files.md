@@ -87,7 +87,8 @@ import { join } from 'node:path';
 
 const ROOT = 'src/app/api';
 const METHODS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS';
-const ROUTE_FILE = /^route\.m?[jt]sx?$/; // route.ts|tsx|js|jsx|mjs|mts
+// Matches route.ts|tsx|js|jsx|mjs|mts
+const ROUTE_FILE = /^route\.m?[jt]sx?$/;
 
 // Match on comment-stripped, whole-file text (not line-by-line) so commented-out handlers
 // don't false-positive and prettier-wrapped `export const POST =\n  withLogging(...)` still passes.
