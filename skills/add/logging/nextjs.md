@@ -64,7 +64,7 @@ import { toNextJsHandler } from 'better-auth/next-js';
 
 const { GET: _GET, POST: _POST } = toNextJsHandler(auth);
 
-export { _GET as GET };
+export const GET = withLogging(async (req) => _GET(req));
 
 export const POST = withLogging(async (req) => {
   const url = new URL(req.url);

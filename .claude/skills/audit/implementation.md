@@ -276,7 +276,7 @@ Read each file in full, apply checklist above:
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
-- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.2.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.3.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
 
 ---
 
@@ -314,7 +314,7 @@ Read each file in full, apply checklist above:
 - [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
 - [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
 - [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
-- [ ] `@nestjs/platform-fastify ≥11.1.19` — a published security advisory (Fastify URL-encoding middleware bypass) is fixed in ≥11.1.14; Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.19` that may resolve to a vulnerable version.
+- [ ] `@nestjs/platform-fastify ≥11.1.27` — a critical trailing-slash auth-bypass advisory (fixed ≥11.1.24) supersedes the earlier Fastify URL-encoding middleware bypass (fixed ≥11.1.14); Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.24` that may resolve to a vulnerable version.
 
 ---
 

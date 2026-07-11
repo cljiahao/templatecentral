@@ -256,7 +256,7 @@ cat "<skill-dir>/../add/auth/fastapi.md"
 ```bash
 # 1. FastAPI backend
 cd ../[project-name]-api
-pip install -r requirements.txt && pytest
+pip install -r requirements.txt && python -m pytest test/ -q
 
 # 2. Next.js frontend
 cd [original-project-path]
