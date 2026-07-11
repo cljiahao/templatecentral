@@ -185,7 +185,7 @@ def list_users(db: Session = Depends(get_db)) -> Sequence[User]:
 ### A10. Validate
 
 ```bash
-pytest test/
+python -m pytest test/ -q
 ```
 
 Confirm all tests pass.

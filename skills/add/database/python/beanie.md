@@ -145,7 +145,7 @@ async def create_user(payload: CreateUserRequest):
 ### B8. Validate
 
 ```bash
-pytest test/
+python -m pytest test/ -q
 ```
 
 Confirm all tests pass.

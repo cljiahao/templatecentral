@@ -277,6 +277,7 @@ Read each file in full, apply checklist above:
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
 - [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.3.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Every `pytest` invocation in FastAPI skill bodies uses `python -m pytest` (never bare `pytest`) — a bare invocation resolves via PATH and silently breaks or picks up the wrong interpreter when the caller's shell doesn't have `.venv` activated. Lint-enforced by `check_no_bare_pytest_invocation`.
 
 ---
 
@@ -641,6 +642,8 @@ These carry intentional decisions — don't rewrite blindly. Read each, compare 
 Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
 
 ## Changelog
+### 2.10.0
+- FastAPI-specific additional checks gain a `python -m pytest` (never bare `pytest`) checklist item — a 2026-07 audit found 12 FastAPI skill files still invoking bare `pytest` in Validate sections, the same venv-resolution failure mode already fixed once in this pass's predecessor for a single file (`migrate/nextjs-backend-extraction/fastapi.md`) but never generalized. Now lint-enforced by `check_no_bare_pytest_invocation`.
 ### 2.9.0
 - Step 2 cross-stack file list gains `skills/add/documentation/implementation.md` and `skills/scaffold/shared/documentation-kit.md` — the per-folder README/`.order` governance feature added its own capability + shared kit but the audit's own file inventory was never updated to cover them.
 ### 2.8.0

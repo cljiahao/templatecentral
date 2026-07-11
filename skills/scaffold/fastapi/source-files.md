@@ -1117,11 +1117,11 @@ pip freeze > requirements.txt
 ### 5. Verification gate (do not proceed until this passes)
 
 ```bash
-python src/main.py &      # starts server; confirm http://localhost:8000 responds
-pytest test/ -v           # all tests must pass
-ruff check src/           # zero lint errors
-ruff format --check src/  # zero formatting drift
-python -m pyright src/    # zero type errors
+python src/main.py &       # starts server; confirm http://localhost:8000 responds
+python -m pytest test/ -v  # all tests must pass
+ruff check src/            # zero lint errors
+ruff format --check src/   # zero formatting drift
+python -m pyright src/     # zero type errors
 ```
 
 > Run `ruff format src/` once first if this is a fresh scaffold — formatting drift on newly generated files will cause the format check to fail until formatted.
@@ -1141,11 +1141,11 @@ FastAPI 0.136+ · Python 3.13 · Pydantic v2 · Uvicorn · Ruff · pytest · pyr
 
 ## Commands
 ```bash
-python src/main.py          # dev server (http://localhost:8000)
-pytest test/ -v             # run tests (from project root)
-ruff check src/             # lint
-ruff format src/            # format
-python -m pyright src/      # type check
+python src/main.py            # dev server (http://localhost:8000)
+python -m pytest test/ -v     # run tests (from project root)
+ruff check src/               # lint
+ruff format src/              # format
+python -m pyright src/        # type check
 ```
 
 ## Architecture

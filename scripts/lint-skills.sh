@@ -483,6 +483,27 @@ check_no_starlette_startup_events() {
   fi
 }
 
+check_no_bare_pytest_invocation() {
+  # A bare `pytest ...` invocation resolves via PATH — if the caller's shell doesn't have the
+  # project .venv activated (a documented, real failure mode: the same class of bug fixed in the
+  # scaffold's lefthook commands in 5.9.1), it silently runs a different/system pytest or fails
+  # with "command not found." `python -m pytest` always resolves via the active Python, matching
+  # the `python -m pyright` convention already used everywhere else in the FastAPI skills.
+  # TIMELESS: tied to the venv-based invocation convention (skills/test/implementation.md).
+  header "Bare pytest invocation (must use python -m pytest)"
+  local matches
+  matches=$(grep -rEn '(^|[^-.a-zA-Z])pytest[[:space:]]+(test/|-[a-zA-Z])' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'python -m pytest' \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Bare 'pytest ...' invocation — use 'python -m pytest' so it resolves via the active venv (see skills/test/implementation.md)"
+  else
+    pass "No bare pytest invocation"
+  fi
+}
+
 check_no_fastapi_orjson_response() {
   # ORJSONResponse and UJSONResponse deprecated in FastAPI 0.130+.
   # Native JSON serialization now uses Pydantic's Rust-based serializer.
@@ -926,6 +947,7 @@ check_ref_header_prereq_suffix
 check_no_husky
 check_no_bare_nextjs_route_handlers
 check_no_postToolUse_full_test_suite
+check_no_bare_pytest_invocation
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins

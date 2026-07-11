@@ -190,7 +190,7 @@ curl 'http://localhost:8000/projects?page=0&limit=10'
 curl 'http://localhost:8000/projects?page=1&limit=10&sort=invalid_field'
 # Expected 400 response
 
-pytest -v
+python -m pytest test/ -v
 ```
 
 ## After Writing Code

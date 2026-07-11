@@ -107,7 +107,7 @@ AWS_REGION=us-east-1
 ### Step 6 — Validate
 
 ```bash
-pytest test/
+python -m pytest test/ -q
 ```
 
 All tests should pass. If the app starts and connects, the migration is complete.
