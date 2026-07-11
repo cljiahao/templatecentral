@@ -18,7 +18,7 @@ Same as the build utility (`skills/build/implementation.md`): check for `next.co
 4. Write tests following the `templatecentral:add (test)` skill conventions
 5. Run the full test suite:
    - Next.js / Vite-React / NestJS: `pnpm test --run`
-   - FastAPI: `pytest test/`
+   - FastAPI: `python -m pytest test/ -q`
 6. Report results (see Reporting below)
 
 ## Reporting

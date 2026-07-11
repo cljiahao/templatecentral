@@ -90,8 +90,10 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
-    minPasswordLength: 12, // OWASP recommended minimum
+    // SSO only in prod; dev can sign up
+    disableSignUp: process.env.NODE_ENV === 'production',
+    // OWASP recommended minimum
+    minPasswordLength: 12,
     autoSignIn: true,
   },
 
@@ -115,12 +117,15 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 30 * 24 * 60 * 60, // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
-    updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
+    // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
+    expiresIn: 30 * 24 * 60 * 60,
+    // refresh after 1 day of activity
+    updateAge: 24 * 60 * 60,
     // freshAge: 43200,            // uncomment for high-assurance flows — forces re-auth after this period (see note below)
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60,              // 5-minute client-side cache
+      // 5-minute client-side cache
+      maxAge: 5 * 60,
     },
   },
 
@@ -132,7 +137,8 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies()], // must be last
+  // must be last
+  plugins: [nextCookies()],
 });
 ```
 
@@ -596,6 +602,7 @@ For simpler setups without Redis, use `next-rate-limit` with in-memory state (no
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
 - **Password hashing**: better-auth handles password hashing internally. For any custom hashing outside better-auth, use argon2id (`argon2` package) — OWASP recommended.
+- **Breached-password check**: current password-hygiene guidance recommends rejecting passwords found in known-breach lists at creation/change time, in addition to the length floor — check candidates against a blocklist (e.g. the Have I Been Pwned k-anonymity range API) in the sign-up flow before calling `authClient.signUp.email()`.
 
 ### After Writing Code
 

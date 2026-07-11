@@ -27,9 +27,10 @@ User-supplied content must never be concatenated directly into a system prompt.
 const prompt = `You are a helpful assistant. User says: ${userMessage}`;
 
 // ✅ Always: labelled boundary so the model knows what is user content
+// model sees the user entry as untrusted input
 const prompt = [
   { role: 'system', content: systemPrompt },
-  { role: 'user', content: userMessage },  // model sees this as untrusted input
+  { role: 'user', content: userMessage },
 ];
 ```
 
@@ -80,11 +81,13 @@ Never allow PII or credentials to enter LLM context. Strip before sending.
 
 ```ts
 // Redact common PII patterns before sending to the model
+// National ID pattern is broad — refine for your locale's format
+// International phone pattern — adapt to expected formats
 const PII_PATTERNS: Array<[RegExp, string]> = [
-  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],                            // National ID (broad pattern — refine for your locale's format)
-  [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],   // Credit card
+  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],
+  [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
   [/\b[\w.+-]+@[\w-]+\.\w{2,}\b/g, '[EMAIL]'],
-  [/\b\+?\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],    // International phone — adapt to expected formats
+  [/\b\+?\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],
 ];
 
 export function redactPII(text: string): string {
@@ -102,11 +105,11 @@ export function redactPII(text: string): string {
 Pin model identifiers explicitly. Never use `latest` or version-free aliases in production.
 
 ```ts
-// ❌ Never
-const model = 'gpt-4o';  // bare alias — behaviour changes without notice
+// ❌ Never — bare alias, behaviour changes without notice
+const model = 'gpt-4o';
 
-// ✅ Always — pin a specific dated snapshot from your provider's model catalogue
-const model = '<provider>-<model>-<snapshot-date>';  // pin a dated snapshot, never a floating alias
+// ✅ Always — pin a specific dated snapshot from your provider's model catalogue, never a floating alias
+const model = '<provider>-<model>-<snapshot-date>';
 ```
 
 For open-source / self-hosted models: verify checksums against the provider's published hash before loading.
@@ -158,7 +161,8 @@ def ingest_document(content: str, expected_hash: str | None = None) -> None:
 
 ```ts
 // Track output distribution — alert on sudden shift (may indicate poisoned context)
-const EXPECTED_REFUSAL_RATE = 0.02;  // baseline measured on clean data
+// Baseline measured on clean data
+const EXPECTED_REFUSAL_RATE = 0.02;
 
 function monitorOutputDrift(refusalCount: number, totalCount: number): void {
   const rate = refusalCount / totalCount;
@@ -302,9 +306,9 @@ Apply the same access controls to retrieved documents as to direct data access.
 const allDocs = await vectorDB.query(embedding);
 const authorizedDocs = allDocs.filter(d => userCanAccess(d, userId));
 
-// ✅ Always: filter at query time using metadata
+// ✅ Always: filter at query time using metadata — pushes access control into the vector DB query
 const docs = await vectorDB.query(embedding, {
-  filter: { userId },      // push access control into the vector DB query
+  filter: { userId },
   topK: 5,
 });
 ```
@@ -326,7 +330,8 @@ Do not invent statistics, names, dates, or URLs.
 const result = await callModel(prompt);
 if (requiresFactualGrounding(result.content)) {
   const verified = await crossReferenceDatabase(result.content);
-  return verified; // surface only confirmed facts
+  // surface only confirmed facts
+  return verified;
 }
 ```
 
@@ -340,10 +345,12 @@ Every LLM call must have explicit token limits and a per-user rate limit.
 
 ```ts
 // Always set max_tokens — never allow uncapped completions
+// model: pin a dated snapshot, never a floating alias
+// max_tokens: explicit cap — never omit
 const response = await openai.chat.completions.create({
-  model: '<provider>-<model>-<snapshot-date>',  // pin a dated snapshot, never a floating alias
+  model: '<provider>-<model>-<snapshot-date>',
   messages,
-  max_tokens: 1000,    // explicit cap — never omit
+  max_tokens: 1000,
   temperature: 0.7,
 });
 

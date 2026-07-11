@@ -247,7 +247,7 @@ export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  hashedPassword: text('hashed_password').notNull(), // add this line
+  hashedPassword: text('hashed_password').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
@@ -290,7 +290,8 @@ export class AuthService {
       .limit(1);
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    // argon2id by default
+    const hashedPassword = await argon2.hash(dto.password);
     const [user] = await this.drizzle.db
       .insert(users)
       .values({ email: dto.email, name: dto.name, hashedPassword })

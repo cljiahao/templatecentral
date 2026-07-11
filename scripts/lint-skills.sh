@@ -483,6 +483,27 @@ check_no_starlette_startup_events() {
   fi
 }
 
+check_no_bare_pytest_invocation() {
+  # A bare `pytest ...` invocation resolves via PATH — if the caller's shell doesn't have the
+  # project .venv activated (a documented, real failure mode: the same class of bug fixed in the
+  # scaffold's lefthook commands), it silently runs a different/system pytest or fails
+  # with "command not found." `python -m pytest` always resolves via the active Python, matching
+  # the `python -m pyright` convention already used everywhere else in the FastAPI skills.
+  # TIMELESS: tied to the venv-based invocation convention (skills/test/implementation.md).
+  header "Bare pytest invocation (must use python -m pytest)"
+  local matches
+  matches=$(grep -rEn '(^|[^-.a-zA-Z])pytest[[:space:]]+(test/|-[a-zA-Z])' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'python -m pytest' \
+    | grep -v 'audit/implementation' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Bare 'pytest ...' invocation — use 'python -m pytest' so it resolves via the active venv (see skills/test/implementation.md)"
+  else
+    pass "No bare pytest invocation"
+  fi
+}
+
 check_no_fastapi_orjson_response() {
   # ORJSONResponse and UJSONResponse deprecated in FastAPI 0.130+.
   # Native JSON serialization now uses Pydantic's Rust-based serializer.
@@ -862,6 +883,28 @@ check_ref_header_prereq_suffix() {
   fi
 }
 
+check_no_bare_nextjs_route_handlers() {
+  # Next.js scaffold wires check-route-logging.mjs into `pnpm check`, which fails the build
+  # on any bare `export async function GET/POST/...` App Router handler — every skill example
+  # must wrap handlers in withLogging() instead. Catches examples that regress to the bare form
+  # (found in four files during the 2026-07 audit: the database + auth-logging skills had drifted
+  # from the pattern add/endpoint/nextjs.md documents).
+  # TIMELESS: tied to the scaffold's own enforced convention (scripts/check-route-logging.mjs).
+  header "Bare Next.js route handler exports (must be wrapped in withLogging)"
+  local matches
+  matches=$(grep -rEn 'export[[:space:]]+(async[[:space:]]+)?function[[:space:]]+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[[:space:]]*\(' "$SKILLS_DIR/" 2>/dev/null \
+    | grep -v 'check-route-logging' \
+    | grep -v 'audit/implementation' \
+    | grep -v 'nextjs-backend-extraction' \
+    || true)
+  if [[ -n "$matches" ]]; then
+    echo "$matches"
+    fail "Bare Next.js route handler export — wrap it in withLogging() (see add/endpoint/nextjs.md); pnpm check's check-route-logging.mjs fails the build on this pattern"
+  else
+    pass "No bare Next.js route handler exports"
+  fi
+}
+
 check_no_husky() {
   # The git-hook layer is lefthook (harness-kit Step B2) — the single source for ALL stacks,
   # since it installs from Node OR Python (Husky is Node-only and cannot run in a FastAPI scaffold).
@@ -902,7 +945,9 @@ check_no_absolute_plugin_path
 check_skilldir_refs_resolve
 check_ref_header_prereq_suffix
 check_no_husky
+check_no_bare_nextjs_route_handlers
 check_no_postToolUse_full_test_suite
+check_no_bare_pytest_invocation
 echo ""
 echo "ECOSYSTEM-ERA"
 check_no_version_pins

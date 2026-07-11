@@ -41,7 +41,7 @@ Write these files exactly as shown.
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
-    "next": "^16.2.6",
+    "next": "^16.2.9",
     "next-themes": "^0.4.6",
     "pino": "^10.3.1",
     "react": "^19.2.7",
@@ -88,7 +88,8 @@ import { join } from 'node:path';
 
 const ROOT = 'src/app/api';
 const METHODS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS';
-const ROUTE_FILE = /^route\.m?[jt]sx?$/; // route.ts|tsx|js|jsx|mjs|mts
+// Matches route.ts|tsx|js|jsx|mjs|mts
+const ROUTE_FILE = /^route\.m?[jt]sx?$/;
 
 // Match on comment-stripped, whole-file text (not line-by-line) so commented-out handlers
 // don't false-positive and prettier-wrapped `export const POST =\n  withLogging(...)` still passes.

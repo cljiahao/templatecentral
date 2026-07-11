@@ -212,7 +212,7 @@ curl -X POST http://localhost:8000/projects \
 
 # Expected 422 response includes fieldErrors mapping
 
-pytest -v
+python -m pytest test/ -v
 ```
 
 ## After Writing Code

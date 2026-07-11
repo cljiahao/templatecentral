@@ -166,10 +166,10 @@ def test_is_eligible(age: int, expected: bool) -> None:
 ### Running Tests
 
 ```bash
-pytest test/                    # All tests
-pytest test/ -m unit            # Unit tests only
-pytest test/ -m end_to_end      # E2E tests only
-pytest test/test_api/           # API tests only
+python -m pytest test/                    # All tests
+python -m pytest test/ -m unit            # Unit tests only
+python -m pytest test/ -m end_to_end      # E2E tests only
+python -m pytest test/test_api/           # API tests only
 ```
 
 ### Independence

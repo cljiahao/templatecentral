@@ -216,7 +216,7 @@ curl -X POST http://localhost:8000/projects \
   -H "Content-Type: application/json" \
   -d '{"name": ""}'  # Should return 422
 
-pytest -v -s
+python -m pytest test/ -v -s
 ```
 
 ## After Writing Code

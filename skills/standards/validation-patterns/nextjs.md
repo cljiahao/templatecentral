@@ -210,7 +210,7 @@ export const GET = withLogging(async (request) => {
     }
 
     // Use parsed.data.page, parsed.data.limit, parsed.data.sort
-    const projects = []; // Your logic
+    const projects = [];
 
     return NextResponse.json({ data: projects });
   } catch (error) {

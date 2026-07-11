@@ -134,7 +134,8 @@ export const GET = withLogging<RouteContext<{ id: string }>>(async (request, { p
     const session = await auth.api.getSession({ headers: request.headers });
 
     // Check project exists AND user has access
-    const project = { id, name: 'Sample', ownerId: 'user-1' }; // replace with real DB lookup
+    // replace with real DB lookup
+    const project = { id, name: 'Sample', ownerId: 'user-1' };
 
     // Return 404 for BOTH missing AND unauthorized (same response)
     // Never say "you don't have access" — could reveal resource exists

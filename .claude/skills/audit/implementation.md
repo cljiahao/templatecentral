@@ -276,7 +276,8 @@ Read each file in full, apply checklist above:
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
-- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.2.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.3.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Every `pytest` invocation in FastAPI skill bodies uses `python -m pytest` (never bare `pytest`) — a bare invocation resolves via PATH and silently breaks or picks up the wrong interpreter when the caller's shell doesn't have `.venv` activated. Lint-enforced by `check_no_bare_pytest_invocation`.
 
 ---
 
@@ -314,7 +315,7 @@ Read each file in full, apply checklist above:
 - [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
 - [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
 - [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
-- [ ] `@nestjs/platform-fastify ≥11.1.19` — a published security advisory (Fastify URL-encoding middleware bypass) is fixed in ≥11.1.14; Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.19` that may resolve to a vulnerable version.
+- [ ] `@nestjs/platform-fastify ≥11.1.27` — a critical trailing-slash auth-bypass advisory (fixed ≥11.1.24) supersedes the earlier Fastify URL-encoding middleware bypass (fixed ≥11.1.14); Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.24` that may resolve to a vulnerable version.
 
 ---
 
@@ -387,11 +388,13 @@ Read each file in full, apply checklist above:
 Read each file in full, apply checklist above:
 
 - [ ] `skills/add/ai-security/implementation.md`
+- [ ] `skills/add/documentation/implementation.md` ← README backfill / enforcement-check capability
 - [ ] `skills/standards/code-standards/comments.md` ← shared comment doctrine (loaded first by code-standards)
 - [ ] `skills/standards/validation-patterns/patterns.md`
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
 - [ ] `skills/scaffold/shared/harness-kit.md`
+- [ ] `skills/scaffold/shared/documentation-kit.md` ← per-folder README/`.order` generation SSOT
 - [ ] `skills/migrate/general/implementation.md`
 - [ ] `skills/migrate/nextjs-backend-extraction.md`
 - [ ] `skills/migrate/nextjs-backend-extraction/nestjs.md`
@@ -639,13 +642,17 @@ These carry intentional decisions — don't rewrite blindly. Read each, compare 
 Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
 
 ## Changelog
+### 2.10.0
+- FastAPI-specific additional checks gain a `python -m pytest` (never bare `pytest`) checklist item — a 2026-07 audit found 12 FastAPI skill files still invoking bare `pytest` in Validate sections, the same venv-resolution failure mode already fixed once in this pass's predecessor for a single file (`migrate/nextjs-backend-extraction/fastapi.md`) but never generalized. Now lint-enforced by `check_no_bare_pytest_invocation`.
+### 2.9.0
+- Step 2 cross-stack file list gains `skills/add/documentation/implementation.md` and `skills/scaffold/shared/documentation-kit.md` — the per-folder README/`.order` governance feature added its own capability + shared kit but the audit's own file inventory was never updated to cover them.
+### 2.8.0
+- Harness kit extracted: 3H bullet updated — all scaffolds + migrate now load `scaffold/shared/harness-kit.md` (single source); verify the kit itself, then per-stack deltas. Step 2 cross-stack file list gains `skills/scaffold/shared/harness-kit.md`.
 ### 2.7.0
 - Conventions Compliance C1–C6 block replaced with a short lint-enforcement note: these checks are now fully covered by `scripts/lint-skills.sh` (`check_skillmd_description_length`, `check_ref_file_headers`, `check_skillmd_body_length`, `check_nesting_depth`, `check_no_jurisdiction_specific`). Run Step 1; no separate pass needed.
 - Step 0b community-consensus block: added loop-engineering research bullet — current community/team practice on agent loop design (goals, termination, budgets, scheduled self-prompting); graded per RECOMMENDED/CONSENSUS/EMERGING table.
 - Duplicate `### 2.4.0` changelog heading removed (was duplicated on two consecutive lines).
 - Utility skill category paths (`build/`, `test/`, `review/`, `cleanup/`) now documented as the canonical cat-path contract for de-registered agent utilities; Step 2 cross-stack file list confirms the correct paths.
-### 2.8.0
-- Harness kit extracted: 3H bullet updated — all scaffolds + migrate now load `scaffold/shared/harness-kit.md` (single source); verify the kit itself, then per-stack deltas. Step 2 cross-stack file list gains `skills/scaffold/shared/harness-kit.md`.
 ### 2.6.0
 - Step 0b: added "Claude Code harness engineering — community consensus & team recommendations" research item — scans official Anthropic guidance and community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded RECOMMENDED / CONSENSUS / EMERGING; RECOMMENDED and CONSENSUS findings become targeted Step 3H checks, EMERGING is tracked only. Cache template gained a matching subsection.
 ### 2.5.0

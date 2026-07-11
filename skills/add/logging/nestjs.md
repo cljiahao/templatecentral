@@ -118,13 +118,15 @@ import type { User } from '../../database/schema';
 export class AuthService {
   constructor(
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
-    private readonly usersService: UsersService, // existing collaborator — keep your project's user lookup service and its import
+    // existing collaborator — keep your project's user lookup service and its import
+    private readonly usersService: UsersService,
     // ...existing collaborators (JwtService, etc.)
   ) {}
 
   async login(user: User, method: string) {
     this.logger.info({ user_id: user.id, method }, 'Login success');
-    return this.createToken(user); // createToken: your existing token helper
+    // createToken: your existing token helper
+    return this.createToken(user);
   }
 
   async logout(userId: string) {

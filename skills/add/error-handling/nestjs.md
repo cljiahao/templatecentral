@@ -115,8 +115,9 @@ import { AppNotFoundException } from '../../common/exceptions/not-found.exceptio
 @Injectable()
 export class ProjectsService {
   async getProject(id: string) {
-    const project = null; // replace with: await this.drizzle.db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
-    
+    // replace with: await this.drizzle.db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
+    const project = null;
+
     if (!project) {
       throw new AppNotFoundException('Project not found');
     }

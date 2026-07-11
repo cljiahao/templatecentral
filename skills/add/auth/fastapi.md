@@ -318,7 +318,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 ### Validate
 
 ```bash
-pytest test/ -v     # auth tests pass
+python -m pytest test/ -v     # auth tests pass
 ruff check src/     # zero lint errors
 ```
 

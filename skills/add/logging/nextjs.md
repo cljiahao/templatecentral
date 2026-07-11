@@ -58,13 +58,15 @@ Unhandled exceptions are already captured by `logError` in `src/lib/errors/error
 // src/app/api/auth/[...all]/route.ts
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { withLogging } from '@/lib/utils/with-logging';
+import { NextResponse } from 'next/server';
 import { toNextJsHandler } from 'better-auth/next-js';
 
 const { GET: _GET, POST: _POST } = toNextJsHandler(auth);
 
-export { _GET as GET };
+export const GET = withLogging(async (req) => _GET(req));
 
-export async function POST(req: Request) {
+export const POST = withLogging(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.replace('/api/auth', '');
 
@@ -81,8 +83,10 @@ export async function POST(req: Request) {
     logger.info({ event: 'auth.logout' }, 'Logout');
   }
 
-  return response;
-}
+  // Re-wrap as NextResponse (withLogging's return type) while preserving
+  // better-auth's status/headers verbatim — it sets Set-Cookie on sign-in/out.
+  return new NextResponse(response.body, response);
+});
 ```
 
 For access denied, log in `proxy.ts` (route protection middleware):

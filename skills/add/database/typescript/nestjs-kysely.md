@@ -423,7 +423,8 @@ export class AuthService {
       .executeTakeFirst();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    // argon2id by default
+    const hashedPassword = await argon2.hash(dto.password);
     const user = await this.db
       .insertInto('users')
       .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })

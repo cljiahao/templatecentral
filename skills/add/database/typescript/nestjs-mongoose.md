@@ -260,7 +260,8 @@ export class AuthService {
     const existing = await this.userModel.findOne({ email: dto.email }).exec();
     if (existing) throw new ConflictException('Email already registered.');
 
-    const hashedPassword = await argon2.hash(dto.password);  // argon2id by default
+    // argon2id by default
+    const hashedPassword = await argon2.hash(dto.password);
     const user = await this.userModel.create({
       email: dto.email,
       name: dto.name,

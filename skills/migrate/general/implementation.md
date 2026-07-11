@@ -246,6 +246,10 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 
 (AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
 
+## Skill capture
+- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
+- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
+
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
@@ -273,7 +277,7 @@ cat "<skill-dir>/../scaffold/shared/harness-kit.md"
 ```
 
 Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; FastAPI: `python3`), execute kit Steps **A through D**:
-- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and the 7-event hook wiring).
+- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and wiring for the 7 hook events templateCentral seeds).
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-tool-failure`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
 - **Step B3** — CI quality gates (`.github/workflows/ci.yml`).
@@ -337,6 +341,16 @@ Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `leftho
 
 Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base Phase 5d uses to re-sync harness updates without clobbering edits. Commit `.claude/.harness-base/`; `protect-files.sh` guards it.
 
+**Step 4f-1c: Generate per-folder documentation**
+
+Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki opt-in, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
+
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+Follow it exactly over the full adopted project tree.
+
 **Step 4f-2: Create `.agents` symlink**
 
 If `.agents` does not already exist, create the cross-vendor symlink:
@@ -362,6 +376,14 @@ rm .claude/skills/<name>.md
 
 Flat skill files (`.claude/skills/<name>.md`) are silently ignored by Claude Code — skills must be directories with a `SKILL.md` entrypoint (flat files work only under `.claude/commands/`). After moving each file, recompute the SHA-256 hash of the new path and update the corresponding entry in `.claude/harness.json`: change the `path` key from `.claude/skills/<name>.md` to `.claude/skills/<name>/SKILL.md` and update the `origin_hash` to match the moved file.
 
+If any flat file was converted above, this step created new directories (`.claude/skills/<name>/`) that did not exist when Step 4f-1c's documentation scan ran. Re-run it now so those directories — and `.claude/skills/README.md`'s `Contents` listing, which otherwise still names the old flat file — are current before Step 4i's commit:
+
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+Skip this re-run if Step 4g converted nothing (no flat files were found).
+
 **Step 4h: Update the version marker**
 
 Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@5.0.0 -->`.
@@ -378,6 +400,7 @@ Changes made:
   .claude/harness.json   — Created with origin hashes
   .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
   (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
+  README.md (per folder)  — created/refreshed via documentation-kit.md
 
 Commit these files together.
 ```
@@ -469,4 +492,11 @@ for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; c
 # recompute origin_hash for each in harness.json, and bump templatecentral_version to "$PLUGIN_VER"
 bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
 ```
+
+If any `MISSING` file reseeded above required creating a directory that did not previously exist (e.g. a whole `.claude/skills/<name>/` folder), re-run the documentation kit so that new folder gets a `README.md` too, the same way Phase 4g re-runs it after its flat-to-directory conversion:
+```bash
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+Skip this re-run if nothing reseeded created a new directory.
+
 Then re-run Step 5b/5c and confirm everything is `UNCHANGED` and up to date.

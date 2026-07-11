@@ -229,7 +229,7 @@ The router will not be reachable until it is registered here — this step is ma
 ### Validate
 
 ```bash
-pytest test/ -v     # tests pass
+python -m pytest test/ -v     # tests pass
 ruff check src/     # zero lint errors
 ```
 

@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.9.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.10.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -92,7 +92,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 ✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests  
 ✅ Prettier + ESLint (hard comment gate) + lefthook
 
-> Add capabilities via `templatecentral:add` — `auth · database · page · feature · endpoint · form · integration · test · logging · error-handling · pagination · mutation-testing · ai-security` — keeping the base scaffold clean.
+> Add capabilities via `templatecentral:add` — `auth · database · page · feature · endpoint · form · integration · test · logging · error-handling · pagination · mutation-testing · ai-security · documentation` — keeping the base scaffold clean.
 
 ---
 
