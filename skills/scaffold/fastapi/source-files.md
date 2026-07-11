@@ -1103,6 +1103,7 @@ Update values as needed (project name, port, etc.). Never commit `src/.env`.
 ### 4. Set up virtual environment and install dependencies
 
 ```bash
+git init
 python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 
