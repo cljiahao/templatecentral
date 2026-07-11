@@ -9,6 +9,7 @@ on:
     paths:
       - 'skills/**'
       - 'scripts/**'
+      - 'adapters/**'
       - '.claude-plugin/**'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -23,6 +24,7 @@ on:
     paths:
       - 'skills/**'
       - 'scripts/**'
+      - 'adapters/**'
       - '.claude-plugin/**'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -130,3 +132,16 @@ jobs:
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
+      - name: pre-guard.sh behavioral test
+        run: bash scripts/pre-guard.test.sh
+
+  opencode-adapter-tests:
+    name: OpenCode adapter hook tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Run hooks.test.mjs
+        run: node adapters/opencode/hooks.test.mjs

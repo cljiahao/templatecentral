@@ -43,8 +43,8 @@ Add to `pyproject.toml`. Create the file at the project root if it does not exis
 
 ```toml
 [tool.mutmut]
-paths_to_mutate = ["src/"]
-tests_dir = "test/"
+source_paths = ["src/"]
+pytest_add_cli_args_test_selection = ["test/"]
 ```
 
 #### Step 2 — Update .gitignore
@@ -53,7 +53,7 @@ Append to `.gitignore`:
 
 ```
 # mutmut mutation testing
-.mutmut-cache
+mutants/
 ```
 
 #### Step 3 — Add CI job
@@ -72,16 +72,15 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
           python-version: "3.13"
           cache: "pip"
       - run: pip install -r requirements-dev.txt
-      - run: mutmut run --paths-to-mutate src/ || true
+      - run: mutmut run
       - run: mutmut results
-        continue-on-error: true
 ```
 
 ### Validate
 
 ```bash
-mutmut run --paths-to-mutate src/    # runs mutation tests
-mutmut results                        # prints kill-rate summary
+mutmut run        # runs mutation tests (source/test paths come from pyproject.toml)
+mutmut results     # prints kill-rate summary
 ```
 
 ### After Writing Code

@@ -81,7 +81,7 @@ After showing the convention report, ask the user:
 
 If user declines: skip to Step 6.
 
-If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch the update utility (`skills/review/update/implementation.md`).
+If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch the review utility (update operation — `cat "<skill-dir>/../review/SKILL.md"`).
 
 ## Step 6 — Security Audit
 

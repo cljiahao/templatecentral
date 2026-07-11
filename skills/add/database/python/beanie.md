@@ -123,6 +123,7 @@ Create Pydantic response schemas (in `api/schemas/`) and use `response_model`:
 ```python
 from api.schemas.request.user import CreateUserRequest  # create these schemas
 from api.schemas.response.user import UserResponse
+from core.security import hash_password
 from models.user import User
 
 @router.get("/users", response_model=list[UserResponse])
@@ -135,7 +136,10 @@ async def get_user(user_id: str):
 
 @router.post("/users", response_model=UserResponse, status_code=201)
 async def create_user(payload: CreateUserRequest):
-    user = User(**payload.model_dump(), hashed_password="...")  # use hash_password() from core/security.py
+    user = User(
+        **payload.model_dump(exclude={"password"}),
+        hashed_password=hash_password(payload.password),
+    )
     await user.insert()
     return user
 ```

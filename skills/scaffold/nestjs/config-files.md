@@ -55,11 +55,12 @@
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.1.27",
-    "@types/node": "^25.9.1",
+    "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-sonarjs": "4.1.0",
     "globals": "^17.6.0",
     "lefthook": "^2.1.9",
     "prettier": "^3.8.3",
@@ -497,8 +498,11 @@ allowBuilds:
 
 ```json
 {
+  "semi": true,
   "singleQuote": true,
-  "trailingComma": "all"
+  "trailingComma": "es5",
+  "tabWidth": 2,
+  "printWidth": 100
 }
 ```
 
@@ -525,6 +529,7 @@ lefthook.yml
 // @ts-check
 import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -548,13 +553,18 @@ export default tseslint.config(
     },
   },
   {
+    plugins: { sonarjs },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',
-      // Comment hygiene: nudge toward own-line comments (non-blocking). See templatecentral:standards code-standards/comments.md.
-      'no-inline-comments': 'warn',
+      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      'no-inline-comments': [
+        'error',
+        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
+      ],
+      'sonarjs/no-commented-code': 'error',
     },
   },
 );

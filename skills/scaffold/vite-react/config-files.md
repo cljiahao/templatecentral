@@ -28,8 +28,8 @@
     "test:ci": "vitest --run --coverage --reporter=dot",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --check .",
-    "format:write": "prettier --write .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "check": "prettier --check . && eslint . && tsc --noEmit",
     "prepare": "lefthook install"
   },
@@ -53,13 +53,14 @@
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^25.9.1",
+    "@types/node": "^24",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-sonarjs": "4.1.0",
     "globals": "^17.6.0",
     "lefthook": "^2.1.9",
     "jsdom": "^29.1.1",
@@ -383,6 +384,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ```mjs
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
+import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -397,11 +399,16 @@ export default tseslint.config(
     },
     plugins: {
       'react-hooks': reactHooks,
+      sonarjs,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      // Comment hygiene: nudge toward own-line comments (non-blocking). See templatecentral:standards code-standards/comments.md.
-      'no-inline-comments': 'warn',
+      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      'no-inline-comments': [
+        'error',
+        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
+      ],
+      'sonarjs/no-commented-code': 'error',
     },
   }
 );

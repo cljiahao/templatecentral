@@ -89,10 +89,13 @@ export function ContactForm() {
   });
 
   const onSubmit = async (values: ContactFormValues) => {
-    // TODO: replace with a real submit (mutation hook / API call) using `values`
-    console.log(values);
-    toast.success('Form submitted successfully!');
-    form.reset();
+    try {
+      throw new Error(
+        `TODO: wire up your submit handler (mutation hook / API call) with payload: ${JSON.stringify(values)}`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Submission failed.');
+    }
   };
 
   return (

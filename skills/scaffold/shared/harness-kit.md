@@ -39,17 +39,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.development.*)",
-      "Read(**/.env.dev)",
-      "Read(**/.env.production)",
-      "Read(**/.env.production.*)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.staging.*)",
-      "Read(**/.env.uat)",
-      "Read(**/.env.test)",
+      "Read(**/.env.*)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)"
     ]
@@ -113,17 +103,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
     "deny": [
       "Read(.env)",
       "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.development.*)",
-      "Read(**/.env.dev)",
-      "Read(**/.env.production)",
-      "Read(**/.env.production.*)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.staging.*)",
-      "Read(**/.env.uat)",
-      "Read(**/.env.test)",
+      "Read(**/.env.*)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)"
     ]
@@ -180,6 +160,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 }
 ```
 
+**`.env.example`/`.env.default` are intentionally not agent-readable.** The `Read(**/.env.*)` catch-all deny above also matches the committed `.env.example`/`.env.default` templates, and Claude Code evaluates `deny` before `allow` (a `deny` cannot carry allowlist exceptions), so pairing an `allow: Read(**/.env.example)` entry with the catch-all would be dead and misleading — those entries are deliberately omitted. This is the safer fail-closed posture: the templates stay writable via `protect-files.sh` and are non-secret (gitleaks-allowlisted). If an agent needs their content, copy it via bash (e.g. `cat .env.example`) rather than opening it as a `Read`.
+
 **Build-artefact `Read` denies** — also add these to `permissions.deny`, per stack. Generated/dependency dirs burn Claude's context if it greps or opens them; committing the denies gives every developer the same noise reduction (Anthropic, *How Claude Code Works in Large Codebases*). `.gitignore` already keeps gitignored paths out of *search* — these also block *opening* them and cover any checked-in artefacts.
 
 | Stack | Add to `permissions.deny` |
@@ -190,8 +172,8 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, `.github/workflows/`, cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
-- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify`, direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
+- `protect-files.sh` (PreToolUse Edit|Write) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`), cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/settings.local.json`, `.claude/hooks/*`, `.claude/agents/*`, `.mcp.json`, `Dockerfile`). Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `block-no-verify.sh` (PreToolUse Bash) — blocks `git commit --no-verify` and equivalent hook-layer bypasses (`LEFTHOOK=0`/`LEFTHOOK_EXCLUDE`, `git -c core.hooksPath=…`), direct commits/force-push to protected branches (`main`/`uat`/`develop`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs). FastAPI: `.py` / TS stacks: `.cjs`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Feedback-only; exit 0 always. See delta table for typecheck command.
 - `skill-usage-log.sh` (PostToolUse `Skill__.*`) — silently logs each skill invocation to `.claude/skill-usage.log` (gitignored, per-developer). Feeds `/skill-audit`, which surfaces repeated workflows worth capturing as a committed project skill. Never blocks (exit 0 always).
@@ -226,8 +208,10 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root="."
 rel="${file#"$root"/}"
 
-if [[ "$rel" == .github/workflows/* ]]; then
-  echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+if [[ "$rel" == .github/workflows/* || "$rel" == .github/actions/* || "$rel" == .azuredevops/* \
+   || "$base" == "azure-pipelines.yml" || "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
+   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ]]; then
+  echo "BLOCKED: $rel is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review." >&2
   exit 2
 elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
   echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
@@ -241,8 +225,10 @@ reason=""
 case "$rel" in
   AGENTS.md|*/AGENTS.md|CLAUDE.md|*/CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
   docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
-  .claude/settings.json|*/.claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
+  .claude/settings.json|*/.claude/settings.json|.claude/settings.local.json|*/.claude/settings.local.json) reason="harness config — editing it can silently disable every hook or add permissive perms (settings.local.json takes precedence over settings.json)" ;;
   .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
+  .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
   .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
@@ -283,8 +269,10 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root="."
 rel="${file#"$root"/}"
 
-if [[ "$rel" == .github/workflows/* ]]; then
-  echo "BLOCKED: $rel is a CI/CD pipeline definition — requires human review." >&2
+if [[ "$rel" == .github/workflows/* || "$rel" == .github/actions/* || "$rel" == .azuredevops/* \
+   || "$base" == "azure-pipelines.yml" || "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
+   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ]]; then
+  echo "BLOCKED: $rel is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review." >&2
   exit 2
 elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
   echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
@@ -298,8 +286,10 @@ reason=""
 case "$rel" in
   AGENTS.md|*/AGENTS.md|CLAUDE.md|*/CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
   docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
-  .claude/settings.json|*/.claude/settings.json) reason="harness config — editing it can silently disable every hook" ;;
+  .claude/settings.json|*/.claude/settings.json|.claude/settings.local.json|*/.claude/settings.local.json) reason="harness config — editing it can silently disable every hook or add permissive perms (settings.local.json takes precedence over settings.json)" ;;
   .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
+  .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
+  .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
   .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
@@ -332,6 +322,12 @@ scan=$(printf '%s' "$cmd" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
 
 if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
+  exit 2
+fi
+# Equivalent full bypasses of the pre-commit hook layer (same effect as --no-verify):
+#   LEFTHOOK=0 / LEFTHOOK_EXCLUDE=... env-var assignment, and  git -c core.hooksPath=...  override.
+if echo "$scan" | grep -qE '\bgit\b' && echo "$scan" | grep -qE '\bcommit\b' && echo "$scan" | grep -qE '(^|[[:space:]])LEFTHOOK(_EXCLUDE)?=|core\.hooksPath[[:space:]]*='; then
+  echo "BLOCKED: LEFTHOOK=0 / LEFTHOOK_EXCLUDE / 'git -c core.hooksPath=...' disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
@@ -370,6 +366,12 @@ scan=$(printf '%s' "$cmd" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g")
 
 if echo "$scan" | grep -qE 'git[[:space:]]+commit' && echo "$scan" | grep -qE '\-\-no-verify|[[:space:]]-[a-zA-Z]*n'; then
   echo "BLOCKED: --no-verify (or -n) on git commit bypasses the pre-commit hooks. Fix the failure instead." >&2
+  exit 2
+fi
+# Equivalent full bypasses of the pre-commit hook layer (same effect as --no-verify):
+#   LEFTHOOK=0 / LEFTHOOK_EXCLUDE=... env-var assignment, and  git -c core.hooksPath=...  override.
+if echo "$scan" | grep -qE '\bgit\b' && echo "$scan" | grep -qE '\bcommit\b' && echo "$scan" | grep -qE '(^|[[:space:]])LEFTHOOK(_EXCLUDE)?=|core\.hooksPath[[:space:]]*='; then
+  echo "BLOCKED: LEFTHOOK=0 / LEFTHOOK_EXCLUDE / 'git -c core.hooksPath=...' disables the pre-commit hook layer — the same bypass as --no-verify. Fix the failure instead." >&2
   exit 2
 fi
 if echo "$cmd" | grep -qE 'git[[:space:]]+commit'; then
@@ -434,7 +436,7 @@ const credentials = [
   [/github_pat_[A-Za-z0-9_]{82}/, 'GitHub fine-grained PAT'],
   [/sk-ant-[A-Za-z0-9\-_]{90,}/, 'Anthropic API key'],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'PEM private key block'],
-  [/mongodb(\+srv)?:\/\/[^:]+:[^@]+@/i, 'database URL with embedded credentials'],
+  [/(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp):\/\/[^:]+:[^@]+@/i, 'database/broker URL with embedded credentials'],
 ];
 for (const [re, label] of credentials) {
   if (re.test(prompt)) {
@@ -484,7 +486,7 @@ credentials = [
     (r'github_pat_[A-Za-z0-9_]{82}', 'GitHub fine-grained PAT'),
     (r'sk-ant-[A-Za-z0-9\-_]{90,}', 'Anthropic API key'),
     (r'-----BEGIN [A-Z ]*PRIVATE KEY-----', 'PEM private key block'),
-    (r'mongodb(\+srv)?://[^:]+:[^@]+@', 'database URL with embedded credentials'),
+    (r'(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^:]+:[^@]+@', 'database/broker URL with embedded credentials'),
 ]
 for pat, label in credentials:
     if re.search(pat, prompt):
@@ -831,7 +833,6 @@ paths = [
   '''\.env\.example$''',
   '''\.env\.default$''',
   '''(^|/)(pnpm-lock\.yaml|package-lock\.json|poetry\.lock|uv\.lock)$''',
-  '''(^|/)test/.*''',
 ]
 ```
 
@@ -1092,7 +1093,7 @@ CI that validates this project's own harness: a job that scaffolds the project a
 
 Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
 
-**Seam:** The disabled trace hook placeholder in `.claude/settings.json`.
+**Seam:** None yet — no trace hook exists in the seeded `.claude/settings.json` (it is comment-free JSON with no disabled/placeholder entries). This is a roadmap item: a future revision could add a dedicated hook (e.g. a `Stop` or `SessionEnd` trace-writer) once a concrete consumer for the captured traces is designed. Until then, treat this as unactivated design intent, not an existing seam.
 
 ## Environment Engineering
 
@@ -1284,11 +1285,11 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — append only the sections not already present:** Check each of the three `##` sections in the shared tail fragment below **independently** — `## AI Harness`, `## Skills Security`, `## Skill capture` — against the AGENTS.md just written. All four stack templates and both migrate templates currently embed `## AI Harness` and `## Skills Security` directly, so those two normally already exist and are skipped. None of them embed `## Skill capture` — it must always be appended. Do NOT gate the whole fragment on a single section's presence (e.g. checking only `## AI Harness`): since that section is always already there, gating on it alone silently skips `## Skill capture` forever, which is the failure mode this note exists to prevent. Append each missing section (and only the missing ones) below the stack's Rules section. The fragment below is the canonical reference for what all three sections must say.
+**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — it is intentionally omitted from every one of them so this step is the *only* place it comes from. After the stack-specific AGENTS.md template body is written, unconditionally append the shared tail fragment below, substituting the `PostToolUse` line's `(see delta table for stack command)` placeholder with the current stack's **Typecheck feedback cmd** from the Per-stack delta table. Do this every time — for a fresh scaffold and for a migrate re-seed — so the tail can never drift out of sync with what's actually shipped: there is exactly one copy of this text in the whole repo (below), and every AGENTS.md gets it fresh from here.
 
 **Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)
 
-After the stack-specific AGENTS.md is written (appending whichever tail sections were missing) and the final format pass above, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+After the stack-specific AGENTS.md is written (with the shared tail fragment appended per above) and the final format pass above, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
 
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
@@ -1323,7 +1324,7 @@ claude plugin marketplace add obra/superpowers
 
 ```markdown
 ## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
+PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), CI/CD definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`), cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`), and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
 Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
@@ -1336,6 +1337,15 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+
+## Git Workflow
+
+**Branch source:** Always fork from an up-to-date `main`.
+Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
+
+(The seeded hooks separately protect the common branch names `main`/`uat`/`develop` from direct commits and force-push regardless of which PR route you use — see "AI Harness" above. That protection is a fixed baseline safety net independent of the route table below; it is not "the route" this repo follows, just names the hooks always guard.)
+
+<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
 
 ## Skill capture
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.

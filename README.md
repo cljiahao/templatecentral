@@ -73,16 +73,16 @@ Claude reads the scaffold skill, generates every file, installs dependencies, ru
 Each scaffold produces a complete, working project — not a bare starter.
 
 **Every stack includes:**
-✅ AI harness — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall, `PreToolUse` secrets read/write guard + git guards, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
-✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility
+✅ AI harness — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall (Mongo/Postgres/MySQL/Redis/AMQP `user:pass@` URLs), `PreToolUse` secrets read/write guard + git guards — blocks `--no-verify` *and* hook-layer bypasses (`LEFTHOOK=0`, `core.hooksPath=`) — plus CI/CD pipeline-file protection across GitHub, Azure DevOps, GitLab, and Jenkins, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
+✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility · ✅ Git Workflow convention — always branch from a freshly fetched `main` (`git fetch -p` + `git pull --ff-only`)
 
 ### Next.js
 ✅ App Router + TypeScript · ✅ shadcn/ui + Tailwind CSS v4 · ✅ TanStack Query · ✅ React Hook Form + Zod  
-✅ Prettier + ESLint + lefthook · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example`
+✅ Prettier + ESLint (hard comment gate) + lefthook · ✅ Vitest + coverage · ✅ Docker · ✅ `.env.example`
 
 ### Vite + React
 ✅ React 19 + React Router v8 · ✅ TanStack Query · ✅ React Hook Form + Zod · ✅ Tailwind CSS v4  
-✅ Vitest + Testing Library · ✅ Prettier + ESLint + lefthook
+✅ Vitest + Testing Library · ✅ Prettier + ESLint (hard comment gate) + lefthook
 
 ### FastAPI
 ✅ FastAPI + Uvicorn + Pydantic v2 · ✅ Structured JSON logging · ✅ Ruff + Pyright  
@@ -90,7 +90,7 @@ Each scaffold produces a complete, working project — not a bare starter.
 
 ### NestJS
 ✅ NestJS + Fastify · ✅ Swagger docs · ✅ nestjs-pino + nestjs-zod · ✅ Vitest + e2e tests  
-✅ Prettier + ESLint + lefthook
+✅ Prettier + ESLint (hard comment gate) + lefthook
 
 > Add capabilities via `templatecentral:add` — `auth · database · page · feature · endpoint · form · integration · test · logging · error-handling · pagination · mutation-testing · ai-security · documentation` — keeping the base scaffold clean.
 

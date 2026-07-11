@@ -244,20 +244,7 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
-UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
-PostToolUse: `pnpm exec tsc --noEmit --incremental 2>&1 | tail -5` after every Edit/Write. Feedback-only.
-Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
-Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files, plus a readme-coupling staleness warning; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
-CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, a readme-freshness check, and a full-history gitleaks scan.
-Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
-Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
-
-## Skills Security
-- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
-- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
-- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
 
 ## Skill capture
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
@@ -267,30 +254,9 @@ Context load order (context only — not enforcement, broad → specific): manag
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
-For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. Check each of the three `##` sections below **independently** against the existing file — `## AI Harness`, `## Skills Security`, `## Skill capture` — and append only the ones not already present, before the final line. Do not gate the whole fragment on a single section's presence (e.g. checking only `## AI Harness`): a project migrated at an earlier templateCentral version may already carry `## AI Harness` and `## Skills Security` but never `## Skill capture`, and gating on the first section alone would silently skip it forever.
+For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit.md Step G (unconditionally, for every stack) — nothing to hand-append here.
 
-```markdown
-## AI Harness
-PreToolUse: blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), `.github/workflows/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify` and force-pushes to protected branches. Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact is observability-only and cannot inject).
-UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
-PostToolUse: incremental type-check (see delta table for stack command) after every Edit/Write. Feedback-only.
-Stop hook: runs full test suite; exit 2 feeds failures to Claude via stderr; exit 0 on pass.
-Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files, plus a readme-coupling staleness warning; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line gates run in CI.
-CI (GitHub Actions): hard gate on changed-line coverage (`diff-cover` ≥80%), lockfile-in-sync (`--frozen-lockfile`), a changelog-touched check, a readme-freshness check, and a full-history gitleaks scan.
-Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
-Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
-
-## Skills Security
-- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
-- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
-- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
-
-## Skill capture
-- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
-- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
-```
-
-For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend `no-inline-comments: 'warn'` (TS `eslint.config.*`) or Ruff `ERA` (`pyproject.toml`) so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
+For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same hard gate a fresh scaffold ships — `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives) plus `sonarjs/no-commented-code: 'error'` in the TS `eslint.config.*`, or Ruff `ERA` (`pyproject.toml`) for FastAPI — so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
 
 **Step 4c: Create `CLAUDE.md`**
 

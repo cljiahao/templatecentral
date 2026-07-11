@@ -25,7 +25,7 @@ check_json_syntax() {
   for f in "$PLUGIN_DIR/plugin.json" "$PLUGIN_DIR/marketplace.json"; do
     if [[ ! -f "$f" ]]; then
       fail "$(basename "$f") not found at $f"
-    elif python3 -c "import json; json.load(open('$f'))" 2>/dev/null; then
+    elif python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null; then
       pass "$(basename "$f") — valid JSON"
     else
       fail "$(basename "$f") — parse error (run: python3 -m json.tool $f)"
@@ -44,9 +44,10 @@ check_plugin_required_fields() {
   for field in name version description author skills; do
     if python3 -c "
 import json, sys
-d = json.load(open('$f'))
-sys.exit(0 if '$field' in d and d['$field'] not in ('', None) else 1)
-" 2>/dev/null; then
+f, field = sys.argv[1], sys.argv[2]
+d = json.load(open(f))
+sys.exit(0 if field in d and d[field] not in ('', None) else 1)
+" "$f" "$field" 2>/dev/null; then
       pass "field: $field"
     else
       fail "plugin.json missing or empty required field: $field"
@@ -64,9 +65,10 @@ check_plugin_extended_fields() {
   for field in displayName homepage repository license; do
     if python3 -c "
 import json, sys
-d = json.load(open('$f'))
-sys.exit(0 if '$field' in d and d['$field'] not in ('', None) else 1)
-" 2>/dev/null; then
+f, field = sys.argv[1], sys.argv[2]
+d = json.load(open(f))
+sys.exit(0 if field in d and d[field] not in ('', None) else 1)
+" "$f" "$field" 2>/dev/null; then
       pass "field: $field"
     else
       fail "plugin.json missing or empty extended field: $field"
@@ -80,7 +82,7 @@ check_plugin_semver() {
   local f="$PLUGIN_DIR/plugin.json"
   [[ -f "$f" ]] || return
   local v
-  v=$(python3 -c "import json; print(json.load(open('$f')).get('version',''))" 2>/dev/null || echo "")
+  v=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('version',''))" "$f" 2>/dev/null || echo "")
   if [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     pass "version: $v"
   else
@@ -94,7 +96,7 @@ check_skills_path_exists() {
   local f="$PLUGIN_DIR/plugin.json"
   [[ -f "$f" ]] || return
   local skills_rel skills_abs
-  skills_rel=$(python3 -c "import json; print(json.load(open('$f')).get('skills',''))" 2>/dev/null || echo "")
+  skills_rel=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('skills',''))" "$f" 2>/dev/null || echo "")
   if [[ -z "$skills_rel" ]]; then
     fail "plugin.json skills field is empty"
     return
@@ -118,9 +120,10 @@ check_marketplace_required_fields() {
   for field in name description owner plugins; do
     if python3 -c "
 import json, sys
-d = json.load(open('$f'))
-sys.exit(0 if '$field' in d and d['$field'] not in ('', None, []) else 1)
-" 2>/dev/null; then
+f, field = sys.argv[1], sys.argv[2]
+d = json.load(open(f))
+sys.exit(0 if field in d and d[field] not in ('', None, []) else 1)
+" "$f" "$field" 2>/dev/null; then
       pass "field: $field"
     else
       fail "marketplace.json missing or empty required field: $field"
@@ -135,9 +138,9 @@ check_marketplace_plugin_entries() {
   [[ -f "$f" ]] || return
 
   local result
-  result=$(python3 - <<PYEOF
+  result=$(python3 - "$f" <<'PYEOF'
 import json, sys
-f = "$f"
+f = sys.argv[1]
 d = json.load(open(f))
 plugins = d.get("plugins", [])
 if not plugins:
@@ -167,10 +170,10 @@ check_marketplace_version_and_source_consistency() {
   [[ -f "$pf" && -f "$mf" ]] || return
 
   local result
-  result=$(python3 - <<PYEOF
+  result=$(python3 - "$pf" "$mf" <<'PYEOF'
 import json, sys
-pf = "$pf"
-mf = "$mf"
+pf = sys.argv[1]
+mf = sys.argv[2]
 pdata = json.load(open(pf))
 mdata = json.load(open(mf))
 pv = pdata.get("version", "")
@@ -206,8 +209,8 @@ check_name_consistency() {
   local pf="$PLUGIN_DIR/plugin.json" mf="$PLUGIN_DIR/marketplace.json"
   [[ -f "$pf" && -f "$mf" ]] || return
   local pname mname
-  pname=$(python3 -c "import json; print(json.load(open('$pf')).get('name',''))" 2>/dev/null || echo "")
-  mname=$(python3 -c "import json; print(json.load(open('$mf')).get('name',''))" 2>/dev/null || echo "")
+  pname=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('name',''))" "$pf" 2>/dev/null || echo "")
+  mname=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('name',''))" "$mf" 2>/dev/null || echo "")
   if [[ "$pname" == "$mname" ]]; then
     pass "name consistent: $pname"
   else
@@ -225,7 +228,7 @@ check_skill_frontmatter() {
   local pf="$PLUGIN_DIR/plugin.json"
   [[ -f "$pf" ]] || return
   local skills_rel skills_abs
-  skills_rel=$(python3 -c "import json; print(json.load(open('$pf')).get('skills',''))" 2>/dev/null || echo "")
+  skills_rel=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('skills',''))" "$pf" 2>/dev/null || echo "")
   skills_abs="$(cd "$(dirname "$PLUGIN_DIR")" && pwd)/${skills_rel#./}"
   [[ -d "$skills_abs" ]] || return
 
@@ -270,7 +273,7 @@ check_skill_frontmatter() {
 # this is the exact failure that left AGENTS.md/harness.json stale across four releases.
 _repo_root() { cd "$(dirname "$PLUGIN_DIR")" && pwd; }
 _plugin_version() {
-  python3 -c "import json; print(json.load(open('$PLUGIN_DIR/plugin.json')).get('version',''))" 2>/dev/null || echo ""
+  python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('version',''))" "$PLUGIN_DIR/plugin.json" 2>/dev/null || echo ""
 }
 
 check_readme_badge_matches_plugin() {
@@ -293,7 +296,7 @@ check_repo_harness_version_matches_plugin() {
   local root pv hj hv
   root="$(_repo_root)"; pv="$(_plugin_version)"; hj="$root/.claude/harness.json"
   [[ -f "$hj" && -n "$pv" ]] || { pass ".claude/harness.json or version absent — skipping"; return; }
-  hv=$(python3 -c "import json; print(json.load(open('$hj')).get('templatecentral_version',''))" 2>/dev/null || echo "")
+  hv=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('templatecentral_version',''))" "$hj" 2>/dev/null || echo "")
   if [[ "$hv" == "$pv" ]]; then
     pass "harness.json templatecentral_version: $hv"
   else

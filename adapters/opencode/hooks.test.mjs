@@ -34,6 +34,12 @@ await allows("commit msg mentions --no-verify (scrubbed)", beforeFeature, { comm
 await allows("normal pnpm test",       beforeFeature, { command: "pnpm test --run" });
 await allows("rm single file",         beforeFeature, { command: "rm foo.txt" });
 await blocks("bash via args.cmd",      beforeFeature, { cmd: "git commit --no-verify -m x" });
+// hook-layer bypasses (equivalent to --no-verify)
+await blocks("LEFTHOOK=0 git commit",  beforeFeature, { command: 'LEFTHOOK=0 git commit -m "x"' });
+await blocks("LEFTHOOK_EXCLUDE commit", beforeFeature, { command: "LEFTHOOK_EXCLUDE=lint git commit -m msg" });
+await blocks("git -c core.hooksPath",  beforeFeature, { command: "git -c core.hooksPath=/dev/null commit -m msg" });
+await allows("LEFTHOOK=0 non-git",     beforeFeature, { command: "LEFTHOOK=0 pnpm test" });
+await allows("commit msg says LEFTHOOK (scrubbed)", beforeFeature, { command: 'git commit -m "chore: note LEFTHOOK=0 in docs"' });
 
 // ── protected-file guard ──
 await blocks(".env",                   beforeFeature, { filePath: "/proj/.env" });
@@ -42,6 +48,14 @@ await blocks("cert .pem",              beforeFeature, { filePath: "/proj/server.
 await blocks("AGENTS.md",              beforeFeature, { filePath: "/proj/AGENTS.md" });
 await blocks(".claude/settings.json",  beforeFeature, { filePath: "/proj/.claude/settings.json" });
 await blocks("Dockerfile",             beforeFeature, { filePath: "/proj/Dockerfile" });
+// CI pipeline files beyond GitHub workflows
+await blocks(".github/workflows",      beforeFeature, { filePath: "/proj/.github/workflows/ci.yml" });
+await blocks(".github/actions",        beforeFeature, { filePath: "/proj/.github/actions/x/action.yml" });
+await blocks("azure-pipelines.yml",    beforeFeature, { filePath: "/proj/azure-pipelines.yml" });
+await blocks("azure-pipelines*.yaml",  beforeFeature, { filePath: "/proj/azure-pipelines-prod.yaml" });
+await blocks(".azuredevops/",          beforeFeature, { filePath: "/proj/.azuredevops/pipeline.yml" });
+await blocks(".gitlab-ci.yml",         beforeFeature, { filePath: "/proj/.gitlab-ci.yml" });
+await blocks("Jenkinsfile",            beforeFeature, { filePath: "/proj/Jenkinsfile" });
 await blocks("file via args.path",     beforeFeature, { path: "/proj/.env" });
 await allows(".env.example",           beforeFeature, { filePath: "/proj/.env.example" });
 await allows(".env.default",           beforeFeature, { filePath: "/proj/.env.default" });
