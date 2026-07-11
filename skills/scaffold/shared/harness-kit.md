@@ -879,7 +879,7 @@ jobs:
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: pnpm run check                      # format:check + lint + typecheck
-      - run: pnpm test -- --run --coverage       # writes coverage/cobertura-coverage.xml
+      - run: pnpm exec vitest --run --coverage    # writes coverage/cobertura-coverage.xml
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
       - name: Secret scan (full history)
