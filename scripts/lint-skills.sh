@@ -486,7 +486,7 @@ check_no_starlette_startup_events() {
 check_no_bare_pytest_invocation() {
   # A bare `pytest ...` invocation resolves via PATH — if the caller's shell doesn't have the
   # project .venv activated (a documented, real failure mode: the same class of bug fixed in the
-  # scaffold's lefthook commands in 5.9.1), it silently runs a different/system pytest or fails
+  # scaffold's lefthook commands), it silently runs a different/system pytest or fails
   # with "command not found." `python -m pytest` always resolves via the active Python, matching
   # the `python -m pyright` convention already used everywhere else in the FastAPI skills.
   # TIMELESS: tied to the venv-based invocation convention (skills/test/implementation.md).
