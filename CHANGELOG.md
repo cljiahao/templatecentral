@@ -10,6 +10,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.9.2] — 2026-07-11
+
+### Fixed
+
+`/tc-audit` pass, run across three sessions (the first two stalled mid-run on Step 2's per-file semantic review — an infrastructure/timing issue, not a content problem — and their genuinely-correct output was reviewed and committed directly rather than re-run from scratch; this third session completed the cross-cutting checks and doc sync neither prior pass reached):
+
+- **Comment hygiene** — moved 17 skill files' trailing inline comments to their own line, matching this repo's comment doctrine (auth/database/endpoint/validation-pattern skills across FastAPI, NestJS, and Next.js).
+- **`## Skill capture` gating** — mirrored the existing gating fix into `migrate/general/implementation.md`, which hadn't received it.
+- **`.harness-base` exclude pattern** — hardened the glob in `harness-kit.md`; corrected an inline comment that had asserted a false claim about lefthook's `gobwas` glob matcher (verified empirically against the real lefthook binary before correcting the comment).
+- **Audit skill's own checklist had drifted stale** — `audit/implementation.md`'s FastAPI-specific checks still cited Starlette "current stable 1.2.1" (now 1.3.1) and a `@nestjs/platform-fastify` floor of `≥11.1.19` (a later trailing-slash auth-bypass advisory raised the correct floor to `≥11.1.27`).
+- **`add/logging/nextjs.md`'s auth route handler** wrapped `POST` in `withLogging()` but exported `GET` unwrapped — every GET request to the auth handler (session checks, OAuth callbacks) went unlogged.
+- **`migrate/nextjs-backend-extraction/fastapi.md`'s Phase 10 verify command** used bare `pytest` instead of `python -m pytest test/ -q`.
+- **Bare `pytest` invocation, generalized** — the fix above turned out to be one instance of a systemic pattern: 13 more FastAPI skill files (`add/auth`, `add/database/python/*`, `add/endpoint`, `add/error-handling`, `add/integration`, `add/pagination`, `add/test`, `migrate/database`, `scaffold/fastapi/source-files.md`, `standards/code-standards`, `standards/validation-patterns`) invoked bare `pytest` in their Validate sections instead of `python -m pytest`. A bare invocation resolves via PATH and silently breaks or picks up the wrong interpreter when the caller's shell doesn't have `.venv` activated — the same failure mode already fixed once in the scaffold's lefthook commands (5.9.1). All 13 files now use `python -m pytest`, matching the `python -m pyright` convention already used everywhere else in the FastAPI skills.
+
+### Infrastructure
+
+- Lint: added `check_no_bare_pytest_invocation` to `scripts/lint-skills.sh` to catch this pattern mechanically going forward.
+- `audit/implementation.md`: added a FastAPI-specific checklist item for the `python -m pytest` convention; internal skill changelog bumped to 2.10.0.
+
+---
+
 ## [5.9.1] — 2026-07-11
 
 ### Fixed
