@@ -259,11 +259,15 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
 
+## Skill capture
+- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
+- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
+
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ```
 
-For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md` but append `## AI Harness` before the final line if it is not already present:
+For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. Check each of the three `##` sections below **independently** against the existing file — `## AI Harness`, `## Skills Security`, `## Skill capture` — and append only the ones not already present, before the final line. Do not gate the whole fragment on a single section's presence (e.g. checking only `## AI Harness`): a project migrated at an earlier templateCentral version may already carry `## AI Harness` and `## Skills Security` but never `## Skill capture`, and gating on the first section alone would silently skip it forever.
 
 ```markdown
 ## AI Harness
@@ -280,6 +284,10 @@ Context load order (context only — not enforcement, broad → specific): manag
 - Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
 - Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
 - Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
+
+## Skill capture
+- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
+- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
 ```
 
 For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend `no-inline-comments: 'warn'` (TS `eslint.config.*`) or Ruff `ERA` (`pyproject.toml`) so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).

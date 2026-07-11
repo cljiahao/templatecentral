@@ -688,9 +688,13 @@ pre-commit:
       # Exclude the enforcement layer: reformatting .claude/hooks/*.cjs (and its .harness-base
       # snapshot copy) here would re-stage it with different bytes than Step E hashed, making
       # verify-harness.sh false-positive MODIFIED on the very first commit of a fresh scaffold.
+      # .harness-base mirrors seeded files at their full original path (e.g.
+      # .claude/.harness-base/.claude/hooks/user-prompt-guard.cjs); ** makes the "any depth"
+      # intent explicit rather than relying on a single *'s cross-segment matching (verified
+      # working under lefthook 2.1.10's default gobwas matcher, but not guaranteed by its docs).
       exclude:
         - .claude/hooks/*
-        - .claude/.harness-base/*
+        - .claude/.harness-base/**
       run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
       stage_fixed: true
     typecheck:
@@ -745,9 +749,13 @@ pre-commit:
       # Exclude the enforcement layer: reformatting .claude/hooks/user-prompt-guard.py (and its
       # .harness-base snapshot copy) here would re-stage it with different bytes than Step E
       # hashed, making verify-harness.sh false-positive MODIFIED on the first commit.
+      # .harness-base mirrors seeded files at their full original path (e.g.
+      # .claude/.harness-base/.claude/hooks/user-prompt-guard.py); ** makes the "any depth"
+      # intent explicit rather than relying on a single *'s cross-segment matching (verified
+      # working under lefthook 2.1.10's default gobwas matcher, but not guaranteed by its docs).
       exclude:
         - .claude/hooks/*
-        - .claude/.harness-base/*
+        - .claude/.harness-base/**
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff format {staged_files} && ruff check --fix {staged_files}'
       stage_fixed: true
     typecheck:

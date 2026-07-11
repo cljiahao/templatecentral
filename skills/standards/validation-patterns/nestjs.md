@@ -78,8 +78,9 @@ export class ProjectsController {
   @Get()
   @ApiOperation({ summary: 'List projects with pagination' })
   async list(
+    // z.infer is correct here — ZodValidationPipe applies defaults; this is the post-parse output type
     @Query(new ZodValidationPipe(paginationSchema))
-    query: z.infer<typeof paginationSchema>, // z.infer is correct here — ZodValidationPipe applies defaults; this is the post-parse output type
+    query: z.infer<typeof paginationSchema>,
   ) {
     return await this.service.listProjects(query.page, query.limit);
   }

@@ -69,7 +69,8 @@ const authUserSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.email(),
-  image: z.string().nullable().optional(), // AuthUser has it — without this, parse() silently strips it
+  // AuthUser has it — without this, parse() silently strips it
+  image: z.string().nullable().optional(),
 });
 
 export async function loginWithCredentials(

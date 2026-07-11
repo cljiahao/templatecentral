@@ -90,8 +90,10 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    disableSignUp: process.env.NODE_ENV === 'production', // SSO only in prod; dev can sign up
-    minPasswordLength: 12, // OWASP recommended minimum
+    // SSO only in prod; dev can sign up
+    disableSignUp: process.env.NODE_ENV === 'production',
+    // OWASP recommended minimum
+    minPasswordLength: 12,
     autoSignIn: true,
   },
 
@@ -115,12 +117,15 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 30 * 24 * 60 * 60, // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
-    updateAge: 24 * 60 * 60,       // refresh after 1 day of activity
+    // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
+    expiresIn: 30 * 24 * 60 * 60,
+    // refresh after 1 day of activity
+    updateAge: 24 * 60 * 60,
     // freshAge: 43200,            // uncomment for high-assurance flows — forces re-auth after this period (see note below)
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60,              // 5-minute client-side cache
+      // 5-minute client-side cache
+      maxAge: 5 * 60,
     },
   },
 
@@ -132,7 +137,8 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies()], // must be last
+  // must be last
+  plugins: [nextCookies()],
 });
 ```
 

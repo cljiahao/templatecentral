@@ -110,7 +110,8 @@ export class PaginationService {
     const direction = sort.slice(0, separatorIndex);
     const field = sort.slice(separatorIndex + 1);
     if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
-      return null; // Invalid sort - caller should reject
+      // Invalid sort - caller should reject
+      return null;
     }
 
     return { field, direction: direction as 'asc' | 'desc' };

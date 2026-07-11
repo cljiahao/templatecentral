@@ -67,7 +67,8 @@ const CreateProjectSchema = z.object({
 
 export const GET = withLogging(async () => {
   try {
-    const rows = []; // ← Replace: e.g. await db.select().from(projects)
+    // ← Replace: e.g. await db.select().from(projects)
+    const rows = [];
     return NextResponse.json(rows);
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
@@ -86,7 +87,8 @@ export const POST = withLogging(async (request) => {
       );
     }
 
-    const project = parsed.data; // ← Replace: e.g. await db.insert(projects).values(parsed.data).returning()
+    // ← Replace: e.g. await db.insert(projects).values(parsed.data).returning()
+    const project = parsed.data;
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);
@@ -107,7 +109,8 @@ import { NextResponse } from 'next/server';
 export const GET = withLogging<RouteContext<{ id: string }>>(async (_request, { params }) => {
   try {
     const { id } = await params;
-    const project = null; // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
+    // ← Replace: e.g. await db.select().from(projects).where(eq(projects.id, id)).then(r => r[0] ?? null)
+    const project = null;
     if (!project) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

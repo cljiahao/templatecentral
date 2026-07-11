@@ -60,7 +60,8 @@ import { z } from 'zod';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(12), // 12-char minimum — OWASP recommendation
+  // 12-char minimum — OWASP recommendation
+  password: z.string().min(12),
   name: z.string().min(1),
 });
 
@@ -295,7 +296,8 @@ import type { FastifyRequest } from 'fastify';
 @UseGuards(JwtAuthGuard)
 @Get('me')
 getMe(@Req() req: FastifyRequest & { user: { id: string; email: string } }): { id: string; email: string } {
-  return req.user; // { id, email } from JwtStrategy.validate()
+  // { id, email } from JwtStrategy.validate()
+  return req.user;
 }
 ```
 
