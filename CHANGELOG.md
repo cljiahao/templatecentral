@@ -10,6 +10,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.11.0] — 2026-07-15
+
+### Added
+
+- **`richReadme` opt-in for per-folder documentation — real per-file content instead of a filename manifest.** Real-world use (a from-scratch rewrite of all 80 per-folder `README.md`s on an adopted project, `qkit`) found the default `Contents` section — one bullet per child, filename only — no more informative than `ls`, and never describing what a file actually does. Investigating whether that shallow default was itself correctly justified surfaced a citation mismatch: 5.10.0's design doc cites an ETH Zurich study (Gloaguen et al., 2026, "Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?") to justify capping `Connectivity` at 2-4 sentences, but that study evaluates AGENTS.md-style files, which are forced into every agent task's context regardless of relevance — not per-folder `README.md`s, which an agent opens only on demand, much closer to how a human uses documentation. The finding doesn't transfer to this mechanism, so the doc was overstating its own justification.
+  - New `richReadme` field (`.claude/harness.json`, top-level sibling of `adoWiki` and `seeded_files`) follows the exact same opt-in pattern as `adoWiki` in `documentation-kit.md`: a `read_rich_readme()`/`write_rich_readme()` bash function pair (jq → node → python3 fallback), asked interactively exactly once when unset, defaulting to `false` when no interactive user is available, persisted immediately.
+  - **`richReadme: false` (default, unchanged from 5.10.0):** `Contents` stays a mechanical filename manifest; `Connectivity` stays capped at 2-4 sentences.
+  - **`richReadme: true`:** `Contents` bullets carry a real one-line description per file — actual exported functions/components/schemas/route handlers, read from the file rather than guessed from its name; `Connectivity` drops the sentence cap for genuinely useful cross-file relationships. Both require actually reading each file, not just `ls`.
+  - **Reworded the `Connectivity` cap's justification** to be honest about what it's actually for: a safe-by-default choice for projects that may not keep `readme-coupling`/`readme-freshness` enforcement airtight, not an agent-performance mitigation the ETH study doesn't cover for this on-demand mechanism. `richReadme` is the documented escape hatch for projects that do keep that enforcement active — the real risk with richer per-folder content is staleness (a rich claim about what a file does goes silently wrong the moment the file changes without its README following), which is exactly what `readme-coupling`/`readme-freshness` already exist to catch.
+  - Mirrored the `adoWiki`-opt-in mention into every caller that describes what `documentation-kit.md` does: `harness-kit.md` Step E3, `add/documentation/implementation.md`, `migrate/general/implementation.md` Step 4f-1c.
+
+### Fixed
+
+- **`/tc-audit` sweep (2026-07-15).** Ecosystem-research cache (`.claude/audit-ecosystem-research.md`, scanned 2026-06-29, still within its 30-day window) was re-applied against current file content rather than assumed stale-by-default; every item it flagged as needing action — the NestJS `@nestjs/platform-fastify` floor, the FastAPI/Starlette version note, the `nestjs-drizzle.md` install command, the better-auth OIDC-provider plugin reference, and the React Router major-version pin — was confirmed already corrected by the 5.10.0 audit passes, so no further code change was needed there.
+  - **`CONTRIBUTING.md`'s PR checklist was missing `bash scripts/validate-scaffold-configs.sh`** — this validator (added alongside the `scaffold-parse.yml` CI job) checks every fenced JSON/JS config block in `skills/scaffold/*/config-files.md`, but contributors touching those files had no local-run instruction for it. Added as a checklist item, scoped to scaffold config-file changes.
+  - No HIGH or MEDIUM findings. `bash scripts/lint-skills.sh skills/` and `bash scripts/validate-manifest.sh` both pass; repo harness health check (Step 6) all `OK`.
+- **`richReadme` review sweep** (8-angle diff review over `documentation-kit.md`'s new Step 1b): the literal README template embedded an HTML comment describing the `richReadme=true` Contents format directly inside the fenced block Step 3 says to "regenerate from," risking an agent copying that comment verbatim into every generated `README.md` regardless of the flag — removed, since the Section rules below already specify the format. Step 5's report showed the plain and `(rich mode)` summary lines stacked in one fence with no if/then framing, risking both being printed on the same run — split into two clearly-conditioned examples. Added a lockfile/binary-file exception to the rich-mode `Contents` rule (known lockfiles and binary assets get a generic description instead of a forced full read) and clarified that the `richReadme` file-read and the pre-existing Purpose/Connectivity-ambiguity read are one pass, not two.
+
+---
+
 ## [5.10.0] — 2026-07-11
 
 ### Added

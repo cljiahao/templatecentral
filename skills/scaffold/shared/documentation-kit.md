@@ -12,9 +12,11 @@ Execute all five numbered steps below, in order.
 
 ---
 
-## Step 1. Determine the Azure DevOps Code Wiki opt-in
+## Step 1. Determine per-project opt-ins
 
-**Guard first:** if `.claude/harness.json` does not exist yet, skip Step 1 and Step 4 entirely — proceed directly to Step 2 and Step 3. This should not normally happen, since this kit is loaded after `harness.json` is created, but the guard keeps the kit safe to invoke standalone (e.g. a future `templatecentral:add (documentation)` run against a project whose harness hasn't landed yet).
+**Guard first:** if `.claude/harness.json` does not exist yet, skip Step 1 (1a and 1b) and Step 4 entirely — proceed directly to Step 2 and Step 3, treating both `adoWiki` and `richReadme` as `false` for this run. This should not normally happen, since this kit is loaded after `harness.json` is created, but the guard keeps the kit safe to invoke standalone (e.g. a future `templatecentral:add (documentation)` run against a project whose harness hasn't landed yet).
+
+### Step 1a. Azure DevOps Code Wiki opt-in (`adoWiki`)
 
 Read the top-level `adoWiki` field from `.claude/harness.json`. This field lives at the top level of the manifest, as a **sibling** of `seeded_files` — never inside it:
 
@@ -23,6 +25,7 @@ Read the top-level `adoWiki` field from `.claude/harness.json`. This field lives
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "adoWiki": false,
+  "richReadme": false,
   "seeded_files": { "...": "..." }
 }
 ```
@@ -86,6 +89,69 @@ open(p,"w").write(json.dumps(j,indent=2)+"\n")'
 
 4. Persist the answer immediately with `write_adowiki "true"` or `write_adowiki "false"` so future runs (this session or a later one) read it back in step 2 instead of asking again.
 
+### Step 1b. Rich per-file content opt-in (`richReadme`)
+
+Read the top-level `richReadme` field from `.claude/harness.json`, the same way as `adoWiki` — a **sibling** of `seeded_files`, never inside it (see the schema in Step 1a).
+
+**Read function** (portable: jq → node → python3 fallback). Prints `true`, `false`, or an empty string if the field is unset:
+
+```bash
+read_rich_readme() {
+  local manifest=".claude/harness.json"
+  [ -f "$manifest" ] || { echo ""; return 0; }
+  if command -v jq >/dev/null 2>&1; then
+    jq -r 'if has("richReadme") then (.richReadme | tostring) else "" end' "$manifest"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),j=JSON.parse(fs.readFileSync("'"$manifest"'","utf8"));process.stdout.write(Object.prototype.hasOwnProperty.call(j,"richReadme")?String(j.richReadme):"")'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json
+j=json.load(open("'"$manifest"'"))
+print(str(j["richReadme"]).lower() if "richReadme" in j else "")'
+  else
+    echo "read_rich_readme: need jq, node, or python3" >&2
+    return 3
+  fi
+}
+```
+
+**Write function** (same fallback order). Sets or replaces the top-level `richReadme` field only — it must never read, write, or otherwise touch `seeded_files`:
+
+```bash
+write_rich_readme() {
+  local value="$1"   # literal "true" or "false"
+  local manifest=".claude/harness.json"
+  [ -f "$manifest" ] || { echo "write_rich_readme: $manifest missing" >&2; return 1; }
+  if command -v jq >/dev/null 2>&1; then
+    local tmp
+    tmp=$(mktemp)
+    jq --argjson v "$value" '.richReadme = $v' "$manifest" > "$tmp" && mv "$tmp" "$manifest"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),p="'"$manifest"'",j=JSON.parse(fs.readFileSync(p,"utf8"));j.richReadme='"$value"';fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json
+p="'"$manifest"'"
+j=json.load(open(p))
+j["richReadme"]='"$([ "$value" = "true" ] && echo True || echo False)"'
+open(p,"w").write(json.dumps(j,indent=2)+"\n")'
+  else
+    echo "write_rich_readme: need jq, node, or python3" >&2
+    return 3
+  fi
+}
+```
+
+**Decision logic:**
+
+1. `existing=$(read_rich_readme)`
+2. If `$existing` is `true` or `false`, use it. Do not ask the user again — the field already records their answer.
+3. If `$existing` is empty (field unset — first time this kit runs on this project) **and an interactive user is available to ask**, ask exactly once, worded around:
+
+   > Do you want per-folder READMEs to carry rich content — a `Contents` bullet per file with a real one-line description of what it does (its actual exported functions/components/constants, schemas, route handlers, or other genuinely defining behavior — read from the file, not guessed), and a `Connectivity` section with no length cap? This is more useful to read but only stays accurate as long as you keep `readme-coupling`/`readme-freshness` enforcement active — a rich description silently goes stale the moment the file changes without its README following. If no, I'll keep Contents to a plain filename manifest and Connectivity capped at 2-4 sentences. (yes/no)
+
+   **No interactive user available** (a headless/automated invocation — e.g. a CI-driven scaffold, or an agent run with no human to answer): default to `false` and note the assumption in the Step 5 report (e.g. `richReadme: defaulted to false — no interactive session available`), rather than hanging or guessing silently.
+
+4. Persist the answer immediately with `write_rich_readme "true"` or `write_rich_readme "false"` so future runs (this session or a later one) read it back in step 2 instead of asking again.
+
 ---
 
 ## Step 2. Enumerate folders
@@ -146,7 +212,7 @@ This is the working set for Step 3 (one `README.md` decision per directory it pr
 
 ## Step 3. Write or refresh README.md per folder
 
-**Read before you write.** For every folder in the Step 2 working set, actually list its immediate children (`ls`) and look at what they are before writing `Purpose` or `Connectivity`. Never invent behavior, a component's role, or a subfolder's relationship to its siblings — if it isn't visible from the folder's actual contents (file names, a couple of representative file bodies if genuinely ambiguous), don't assert it.
+**Read before you write.** For every folder in the Step 2 working set, actually list its immediate children (`ls`) and look at what they are before writing `Purpose` or `Connectivity`. Never invent behavior, a component's role, or a subfolder's relationship to its siblings — if it isn't visible from the folder's actual contents (file names, a couple of representative file bodies if genuinely ambiguous), don't assert it. **When `richReadme` is true** (determined in Step 1b), this applies to every child file too: open and actually read each one before writing its `Contents` bullet — never infer what a file does from its name alone. This is one read pass, not two — if a file was already opened above to resolve a `Purpose`/`Connectivity` ambiguity, reuse that same read for its `Contents` bullet instead of opening it again.
 
 ### Repo root — special case
 
@@ -172,7 +238,7 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 - `<child-n>`
 
 ## Connectivity
-<2-4 sentences — this section is included ONLY if the folder contains at least one subfolder>
+<2-4 sentences (richReadme=false) or as deep as genuinely useful (richReadme=true) — this section is included ONLY if the folder contains at least one subfolder>
 
 ## Parent
 [<parent-folder-name>](../README.md)
@@ -183,11 +249,15 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 **Section rules:**
 
 - **Purpose** — 1-2 lines. What the folder holds and why it exists as its own unit.
-- **Contents** — mechanical, not narrative: one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check in Step 3 deterministic. **Exclude any child that matches the Step 2 prune list** (`node_modules`, `dist`, `.git`, etc.) or is itself gitignored, the same way Step 2 excludes them from the folder working set — otherwise the root's own `Contents` would list `node_modules/`, `.git`, build artifacts, and similar noise as if they were real project structure. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance. Do not add descriptive prose per bullet beyond the child's own name; this section is a manifest, not a summary.
-- **Connectivity** — deliberately capped at 2-4 sentences, and included only for folders that contain subfolders. Say how the subfolders relate to each other and to the parent (data flow, layering, dependency direction) — not what each one does individually (that's each subfolder's own `Purpose`). Keep this short on purpose: verbose, narratively-generated per-folder AI context measurably hurts agent task performance (per an ETH Zurich study cited in this feature's design doc) — the goal is a structural map an agent can skim in seconds, not an essay.
+- **Contents** — one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check below deterministic. **Exclude any child that matches the Step 2 prune list** (`node_modules`, `dist`, `.git`, etc.) or is itself gitignored, the same way Step 2 excludes them from the folder working set — otherwise the root's own `Contents` would list `node_modules/`, `.git`, build artifacts, and similar noise as if they were real project structure. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance.
+  - **`richReadme` false (default):** mechanical, not narrative — a manifest, not a summary. Do not add descriptive prose per bullet beyond the child's own name.
+  - **`richReadme` true:** each bullet becomes `` `<child>` — <real one-line description> `` — the child's actual exported functions/components/constants, schemas, route handlers, or other genuinely defining behavior, taken from actually reading the file (per the Step 3 intro's read-before-you-write rule), never a restatement of the filename. Subfolders still just get their name (a subfolder's own `Purpose` covers it) — this only enriches file bullets. **Exception:** known lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `poetry.lock`, `Cargo.lock`, etc.) and binary files (images, fonts, and other non-text formats) get a brief generic description (e.g. "locked dependency versions") without opening them — reading a multi-thousand-line lockfile or a binary asset cover-to-cover for one bullet isn't worth the cost.
+- **Connectivity** — included only for folders that contain subfolders. Say how the subfolders relate to each other and to the parent (data flow, layering, dependency direction) — not what each one does individually (that's each subfolder's own `Purpose`).
+  - **`richReadme` false (default):** capped at 2-4 sentences. This cap is a safe-by-default choice, not a mitigation for the agent-performance regression an ETH Zurich study measured for verbose per-folder AI context — that study evaluates AGENTS.md-style files, which are forced into every agent task's context regardless of relevance; a per-folder `README.md` is opened on demand, only when an agent chooses to navigate there — much closer to how a human uses documentation — so that finding doesn't directly transfer here. The real risk this cap manages is staleness: a detailed claim about what subfolders do or how they relate goes silently wrong the moment the code changes without the README following — exactly what the `readme-coupling` lefthook check and `readme-freshness` CI job (`scaffold/shared/harness-kit.md`) exist to catch. Capping the default keeps that risk low for projects that may not keep that enforcement airtight.
+  - **`richReadme` true:** no sentence cap — write real cross-file relationships, as deep as genuinely useful. Still relational information only (how subfolders connect), not restating each child's own `Purpose`. This is the escape hatch for projects that do keep `readme-coupling`/`readme-freshness` enforcement active and want documentation-kit's on-demand per-folder READMEs to carry more than a structural skim.
 - **Parent** — a relative link to the immediate parent's `README.md` (always `../README.md`, since Parent is always one level up).
 
-If a `README.md` already exists for a non-root folder and its structural sections are already accurate against the folder's current contents, leave it unchanged rather than rewriting an identical file.
+If a `README.md` already exists for a non-root folder and its structural sections are already accurate against the folder's current contents, leave it unchanged rather than rewriting an identical file. **When `richReadme` is true**, don't expect byte-identical regeneration the way the mechanical `Contents` listing guarantees — judge "accurate" by whether the existing descriptions still hold for the file's current contents, not by exact-string comparison; only rewrite what's actually stale.
 
 ---
 
@@ -223,7 +293,13 @@ Print a one-line summary of what happened:
 README.md: N created, M updated, K unchanged
 ```
 
-If `adoWiki` is true, append a second line:
+If `richReadme` is true, append `(rich mode)` to that same line instead of printing it plain:
+
+```
+README.md: N created, M updated, K unchanged (rich mode)
+```
+
+If `adoWiki` is true, append a line:
 
 ```
 .order: J written
@@ -231,8 +307,14 @@ If `adoWiki` is true, append a second line:
 
 Omit the `.order` line entirely when `adoWiki` is false or Step 4 was skipped.
 
-If Step 1 defaulted `adoWiki` to `false` because no interactive user was available, append a third line noting the assumption:
+If Step 1a defaulted `adoWiki` to `false` because no interactive user was available, append a line noting the assumption:
 
 ```
 adoWiki: defaulted to false — no interactive session available
+```
+
+If Step 1b defaulted `richReadme` to `false` because no interactive user was available, append a line noting the assumption:
+
+```
+richReadme: defaulted to false — no interactive session available
 ```

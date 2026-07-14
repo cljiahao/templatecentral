@@ -1204,7 +1204,7 @@ sha256_regenh=$(shasum -a 256 .claude/regen-harness.sh | cut -d' ' -f1)
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "5.10.0",
+  "templatecentral_version": "5.11.0",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -1265,7 +1265,7 @@ Seed the structural per-folder README convention (and, if the project opts in, A
 cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 ```
 
-Follow it exactly — it determines the ADO Code Wiki opt-in (asking once, then persisting the answer in `.claude/harness.json`), enumerates every folder in the project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
+Follow it exactly — it determines the ADO Code Wiki and rich-content opt-ins (each asked once, then persisted in `.claude/harness.json`), enumerates every folder in the project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
 
 ---
 

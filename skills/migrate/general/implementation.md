@@ -343,7 +343,7 @@ Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harnes
 
 **Step 4f-1c: Generate per-folder documentation**
 
-Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki opt-in, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
+Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki and rich-content opt-ins, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
 
 ```bash
 cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
