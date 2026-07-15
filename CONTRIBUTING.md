@@ -45,6 +45,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] No version pins in skill body — floors/pins belong in `.claude/rules/*.md` only
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] `bash scripts/validate-manifest.sh` passes locally (validates `plugin.json` and `marketplace.json`)
+- [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if a `skills/scaffold/*/config-files.md` was touched (validates fenced JSON/JS config blocks)
 - [ ] README updated if skill count changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)

@@ -20,7 +20,7 @@ complete, re-check for the marker.
 cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 ```
 
-Follow it exactly over the existing project tree — it determines/updates the Azure DevOps Code Wiki opt-in, enumerates every folder, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
+Follow it exactly over the existing project tree — it determines/updates the Azure DevOps Code Wiki and rich-content opt-ins, enumerates every folder, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
 
 ## Step 2 — Confirm enforcement is wired
 
