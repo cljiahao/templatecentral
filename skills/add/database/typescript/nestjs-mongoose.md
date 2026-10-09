@@ -16,8 +16,9 @@ pnpm add @nestjs/mongoose mongoose
 **`src/database/database.module.ts`** (uses `serviceConfig` from `src/config/env.config.ts` — external service connections belong in `serviceConfig`, not `appConfig`):
 
 ```typescript
-import { Global, Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
+import { type Connection } from 'mongoose';
 import { serviceConfig } from '../config/env.config';
 
 @Global()
@@ -26,7 +27,17 @@ import { serviceConfig } from '../config/env.config';
     MongooseModule.forRoot(serviceConfig.MONGODB_URL),
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule implements OnModuleInit {
+  constructor(@InjectConnection() private readonly connection: Connection) {}
+
+  // Mongoose builds schema indexes in the background: on a fresh database, inserts
+  // made right after boot land before the unique index exists and duplicates get in.
+  // Awaiting init() holds the boot until every forFeature model's indexes are built
+  // (and fails it loudly if existing duplicates block a unique index).
+  async onModuleInit() {
+    await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
+  }
+}
 ```
 
 Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
@@ -150,7 +161,8 @@ MONGODB_URL=mongodb://localhost:27017/mydb
 `env.config.ts` now throws at import without `MONGODB_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
 
 ```typescript
-    env: { MONGODB_URL: 'mongodb://127.0.0.1:1/test' },
+    // `test.env` overwrites the shell/CI value, so fall back only when none is set.
+    env: { MONGODB_URL: process.env.MONGODB_URL ?? 'mongodb://127.0.0.1:1/test' },
 ```
 
 `MongooseModule.forRoot` connects (and retries) during boot, so every e2e suite that boots `AppModule` without MongoDB swaps `DatabaseModule` for an empty module and stubs each `forFeature` model it would otherwise resolve:
@@ -173,7 +185,7 @@ class NoDatabaseModule {}
       .compile();
 ```
 
-Suites that exercise real queries run against a disposable MongoDB (CI service container) with `MONGODB_URL` set in the job env, which `test.env` does not override.
+Suites that exercise real queries boot `AppModule` without these overrides against a disposable MongoDB (CI service container) whose `MONGODB_URL` is set in the job env — the `??` fallback above keeps it. Vitest runs files in parallel, so give each such file its own database name (or run them with `--no-file-parallelism`); one file's `dropDatabase()` also drops the unique index another file relies on.
 
 #### C9. Validate
 

@@ -49,7 +49,10 @@ export async function connectDB(): Promise<typeof mongoose> {
   }
 
   try {
-    cached.conn = await cached.promise;
+    const conn = await cached.promise;
+    // Mongoose builds indexes in the background; wait so unique constraints exist before the first write.
+    await Promise.all(conn.modelNames().map((name) => conn.model(name).init()));
+    cached.conn = conn;
   } catch (error) {
     // Drop the rejected promise so the next request retries instead of failing forever.
     cached.promise = null;
@@ -131,6 +134,8 @@ export const User =
 ```
 
 > **Why `mongoose.models.User ??`**: Prevents the "Cannot overwrite model once compiled" error during hot-reload in development.
+>
+> Import the model module before the first `connectDB()` call (route handlers import `User`, then connect) so `connectDB()` waits for its unique index.
 
 #### C4. Create Barrel Export
 

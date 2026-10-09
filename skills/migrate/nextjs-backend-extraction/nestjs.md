@@ -232,13 +232,9 @@ Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ## Phases 8–10 — NestJS-specific details
 
-**Phase 8, step 0 CORS:** Enable CORS credentials on the backend (`credentials: true`) if using cookie-based sessions.
+**Phase 8, step 0 CORS:** none. Browser calls arrive same-origin through the Next.js `/api/external` rewrite, so cookie mode needs no CORS change. Do not set `credentials: true` for the frontend's origin.
 
-**Phase 9 — NestJS CORS config:** The NestJS scaffold already reads `CLIENT_URL` (via `serviceConfig.CLIENT_URL` from `src/config/env.config.ts`, used by `setupCors`) — no code change needed. Set it to the Next.js origin. Add to `../[project-name]-api/.env.example`:
-```
-# Frontend origin for CORS
-CLIENT_URL=http://localhost:3000
-```
+**Phase 9 — NestJS CORS config:** no change. The scaffold's `CLIENT_URL` (`serviceConfig.CLIENT_URL` → `setupCors`) only matters for other browser origins that call with Bearer tokens. The Next.js frontend is same-origin through its rewrite, so leave `CLIENT_URL` at its scaffold default.
 
 **Phase 10 — Verify commands:**
 ```bash

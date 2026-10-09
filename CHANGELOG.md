@@ -10,6 +10,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.22.0] — 2026-10-10
+
+Closes the items left open in 5.21.0. Database paths were verified against real servers
+(PostgreSQL 18.3 via embedded-postgres, MongoDB 8.2 via the official mongod binary) and the nginx
+proxy against a real nginx 1.31 binary — all run from scratch directories, no system installs.
+
+### Fixed
+
+- **Mongo unique indexes raced first writes:** Mongoose builds indexes in the background, so on a
+  fresh database 20 concurrent duplicate sign-ups all succeeded. NestJS `DatabaseModule` and Next.js
+  `connectDB()` now await model `init()` (verified: 1 of 20 inserted). Beanie's example model gains a
+  unique email index (duplicates were stored).
+- NestJS Mongoose test config overrode CI's real `MONGODB_URL`; it now falls back to the placeholder
+  only when unset.
+- FastAPI SQLAlchemy never verified the database certificate in uat/prod (and could fall back to
+  plaintext); Postgres now uses `sslmode=verify-full` outside dev, matching NestJS and Next.js.
+- Next.js backend extraction Phase 8 called the backend cross-origin; browser calls now use a
+  same-origin `rewrites()` path (gated by `proxy.ts`), server code calls `BACKEND_URL` directly, and the
+  phase no longer deletes `/api/health`. CORS changes removed from the extraction leaves.
+- nginx `/api/` proxy forwarded `Host $host`, dropping the port; now `$http_host`.
+
+### Verified, no change needed
+
+- FastAPI PyMongo integration tests (previously always skipped), concurrent 409s, operator rejection;
+  NestJS Kysely/Drizzle and Next.js Drizzle + better-auth on real Postgres over TLS; Beanie
+  `fetch_links` / BackLink. The earlier Drizzle pagination failure was a PGlite artefact.
+- `/auth/session` stays a separate browser endpoint so the token never reaches JavaScript.
+
+---
+
 ## [5.21.0] — 2026-10-10
 
 Third, targeted sweep: every scaffold was built and every `add` skill applied end to end on the

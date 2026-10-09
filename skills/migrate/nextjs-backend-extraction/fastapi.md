@@ -225,9 +225,9 @@ Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ## Phases 8–10 — FastAPI-specific details
 
-**Phase 8, step 0 CORS:** Enable CORS credentials on the backend (`allow_credentials=True`) if using cookie-based sessions.
+**Phase 8, step 0 CORS:** none. Browser calls arrive same-origin through the Next.js `/api/external` rewrite, so cookie mode needs no CORS change. Do not set `allow_credentials=True` for the frontend's origin.
 
-**Phase 9 — FastAPI CORS config:** The FastAPI scaffold ships with `CORS_ORIGINS=http://localhost:3000` in `src/.env.default`. Verify this value is present. No separate `.env.example` — `src/.env.default` is the single source of truth for default env values.
+**Phase 9 — FastAPI CORS config:** no change. The Next.js frontend is same-origin through its rewrite, so `CORS_ORIGINS` (from `src/.env.default`) only matters for other browser origins calling with Bearer tokens. No separate `.env.example` — `src/.env.default` is the single source of truth for default env values.
 
 **Phase 10 — Verify commands:**
 ```bash

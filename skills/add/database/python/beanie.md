@@ -120,12 +120,16 @@ app = FastAPI(lifespan=lifespan, ...)
 If using `EmailStr`, add `email-validator` to `requirements.txt`.
 
 ```python
-from beanie import Document
+from typing import Annotated
+
+from beanie import Document, Indexed
 from pydantic import EmailStr
 
 
 class User(Document):
-    email: EmailStr
+    # The unique index (built by init_beanie at boot) is what makes B7's
+    # DuplicateKeyError → 409 fire; a plain `EmailStr` stores duplicates silently.
+    email: Annotated[EmailStr, Indexed(unique=True)]
     name: str
     hashed_password: str
 

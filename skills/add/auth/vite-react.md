@@ -63,7 +63,7 @@ The `AuthProvider` is provider-agnostic — it manages local state. You wire it 
 
 | Call | Endpoint | Notes |
 |------|----------|-------|
-| Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body |
+| Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body. It is separate from `/auth/login`, which still returns the JWT for API clients, so the token never reaches browser JavaScript |
 | Current user | `GET /auth/me` | cookie-authenticated; FastAPI returns `{ id, email, name }`, NestJS `{ id, email }` |
 | Logout | `POST /auth/logout` | 204, clears both cookies |
 | Any other non-GET | — | must send `X-CSRF-Token` (`csrfHeader()`, sent for you by `ApiClient` — Step 3) or the backend answers 403 |

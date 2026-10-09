@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Mongoose (MongoDB), compliance = AWS IAM (Amazon DocumentDB or MongoDB Atlas with AWS IAM). Loaded alongside nestjs-mongoose.md — overrides its C2 DatabaseModule and env fields and its C7 env. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Mongoose — IAM Auth Variant
 
-> **Add-on to `nestjs-mongoose.md`** (the router loads both). Work through that guide's C1–C9, but use the `DatabaseModule` below instead of its standard C2 module, and the IAM env fields below instead of its `MONGODB_URL` (C2 `envSchema`/`serviceConfig`, C7 `.env`, and C8 `test.env` — `MONGODB_HOST: '127.0.0.1', MONGODB_DB_NAME: 'test'`); then run its **After Writing Code** steps.
+> **Add-on to `nestjs-mongoose.md`** (the router loads both). Work through that guide's C1–C9, but use the `DatabaseModule` below instead of its standard C2 module, and the IAM env fields below instead of its `MONGODB_URL` (C2 `envSchema`/`serviceConfig`, C7 `.env`, and C8 `test.env` — `MONGODB_HOST: process.env.MONGODB_HOST ?? '127.0.0.1', MONGODB_DB_NAME: process.env.MONGODB_DB_NAME ?? 'test'`); then run its **After Writing Code** steps.
 
 If the user requires AWS IAM authentication (e.g., connecting to Amazon DocumentDB or MongoDB Atlas with AWS IAM), install the additional package:
 
@@ -14,9 +14,10 @@ pnpm add @aws-sdk/credential-providers
 Replace the `DatabaseModule` with:
 
 ```typescript
-import { Global, Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+import { type Connection } from 'mongoose';
 import { serviceConfig } from '../config/env.config';
 
 @Global()
@@ -32,7 +33,15 @@ import { serviceConfig } from '../config/env.config';
     ),
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule implements OnModuleInit {
+  constructor(@InjectConnection() private readonly connection: Connection) {}
+
+  // Same as the standard C2 module: hold the boot until schema indexes (the unique
+  // email index) exist, so early inserts cannot slip duplicates past them.
+  async onModuleInit() {
+    await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
+  }
+}
 ```
 
 Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if a required field is missing instead of surfacing as a runtime `undefined`:
