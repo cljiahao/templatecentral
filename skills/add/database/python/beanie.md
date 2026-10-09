@@ -3,6 +3,19 @@
      prereq: Stack = FastAPI, DB = Beanie (MongoDB async ODM). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + Beanie (MongoDB)
 
+### B0. Python version gate (Beanie does not yet support Python 3.14)
+
+The scaffold targets Python 3.14, but every Beanie release from 2.0.1 through 2.2.0 declares `Requires-Python <3.14` (upstream: Beanie's `Link` forward-reference resolution breaks under 3.14's PEP 649 deferred annotations; the PR lifting the cap, BeanieODM/beanie#1362, was closed unmerged). On 3.14, `pip install "beanie>=2.0"` does **not** fail — it silently backtracks to 2.0.0, the one 2.x release published without the cap (it predates the cap, not a fix) — so a 3.14 venv ends up on an old, unsupported Beanie with no error. First check whether a newer release lifted the cap:
+
+```bash
+python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/beanie/json'))['info']['requires_python'])"
+```
+
+If it still prints `<3.14`, tell the user and offer two options — never force-install with `--ignore-requires-python`:
+
+1. **Pin this project to Python 3.13** (security-fixes-only upstream until 2029-10): set `ARG PYTHON=python:3.13.16-slim` in the `Dockerfile`, `target-version = "py313"` in `pyproject.toml`, `"pythonVersion": "3.13"` in `pyrightconfig.json`, `python-version: "3.13"` in every setup-python step (`.github/workflows/ci.yml`, and `mutation.yml` if present), update the `Python 3.14` entry in AGENTS.md `## Stack`, then recreate the venv with `python3.13 -m venv .venv` and reinstall `requirements.txt` + `requirements-dev.txt`. Revert to 3.14 once Beanie supports it. `ci.yml` is a harness-seeded file: recompute its `origin_hash` in `.claude/harness.json` (harness-kit-finalize.md Step E) so `verify-harness.sh` accepts the change, and re-apply the 3.13 pin if a `templatecentral:migrate` re-sync rewrites `ci.yml`.
+2. **Stay on Python 3.14 without an ODM** — use PyMongo's `AsyncMongoClient` (`pymongo>=4.13`) directly with Pydantic schemas for validation. The steps below assume Beanie `Document` models, so this path means hand-writing the data-access layer — confirm the design with the user before continuing.
+
 ### B1. Install Dependencies
 
 Add to `requirements.txt` — floors match the templateCentral plugin's `.claude/rules/fastapi.md`; the `pymongo` floor is a hard requirement, not just a security recommendation: `AsyncMongoClient` does not exist before 4.13, so an unpinned resolve that lands on an older PyMongo breaks the import in Step B2 below.

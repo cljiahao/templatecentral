@@ -38,7 +38,7 @@ LoggerModule.forRoot({
 
 > Do NOT derive `user_id` in `pinoHttp.customProps`. pino-http evaluates `customProps` when the
 > request starts — before any guard runs — and again when the response finishes, so (verified on
-> NestJS 11.2 + `@nestjs/platform-fastify` + nestjs-pino 4.6 / pino-http 11) every log written
+> NestJS 12.1 + `@nestjs/platform-fastify` + nestjs-pino 5.3 / pino-http 11) every log written
 > inside the handler carries `user_id: null`, and the "request completed" line carries the key
 > twice (`"user_id":null,"user_id":"u-123"`) — log backends that keep the first duplicate show null.
 > `assign()` adds the field once, to the in-handler logs and the completion line.

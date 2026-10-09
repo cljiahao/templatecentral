@@ -139,8 +139,9 @@ describe('My Feature (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
+    // Same adapter options as main.ts (UUID request IDs), so log correlation matches the real app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
+      new FastifyAdapter({ genReqId: () => crypto.randomUUID() }),
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

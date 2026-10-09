@@ -1876,7 +1876,7 @@ Create `AGENTS.md` at the project root with this exact content (fill in `[Projec
 
 ## Stack
 Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
-React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
+React Hook Form · Zod v4 · Vitest · pnpm 12 · Node ≥24
 
 ## Commands
 ```bash
@@ -1926,7 +1926,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -2011,7 +2011,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This makes Claude Code automatically load `AGENTS.md` on every session without duplicating its content.
 
-After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit.md Step E).
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
 
 ### 7b. Optional: Task management
 

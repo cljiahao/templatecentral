@@ -218,7 +218,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — SHA-pinned per Skills Security; re-verify/bump via the review utility, don't hand-edit
         with: { fetch-depth: 0 }    # diff-cover needs full history
-      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0 — no `version:`; reads packageManager from package.json
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 — no `version:`; reads packageManager from package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
@@ -229,7 +229,7 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
       - name: Secret scan (full history)
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}   # required for org-owned repos (or run the gitleaks CLI instead)
@@ -326,9 +326,9 @@ jobs:
 **Notes:**
 - **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
 - **SHA-pin the actions** (`actions/checkout`, `setup-node`, `setup-python`, `pnpm/action-setup`, `gitleaks-action`) to the full commit SHA of the current major for supply-chain hygiene, with the version in a trailing comment; let Dependabot/Renovate (or the review utility) bump them — never hand-type a SHA.
-- **pnpm version comes from `packageManager`** in `package.json` — `pnpm/action-setup` is given no `version:` input so CI can never drift from the pinned pnpm. pnpm 12 needs `pnpm/action-setup` ≥ v6.1; bump that pin together with any move to pnpm 12.
+- **pnpm version comes from `packageManager`** in `package.json` — `pnpm/action-setup` is given no `version:` input so CI can never drift from the pinned pnpm. pnpm 12 needs `pnpm/action-setup` ≥ v6.1.0 (the floating `v6` tag lagged behind v6.1.0, so pin the v6.1.0+ SHA rather than `@v6`). The lockfile records the package manager too: after bumping `packageManager`, run a plain `pnpm install` and commit `pnpm-lock.yaml`, or the frozen install fails with `ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`. To disable frozen mode use `--no-frozen-lockfile` (pnpm 12 removed `--frozen-lockfile false`).
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
-- **gitleaks-action** needs `GITHUB_TOKEN` to read PR commits, and a `GITLEAKS_LICENSE` secret on **organization-owned** repos (free for personal repos). Without a license, replace the step with the gitleaks CLI (`gitleaks git --redact`) after installing the release binary.
+- **gitleaks-action** v3 only moves the runtime to Node 24 (v2 runs on Node 20, which GitHub scheduled for removal from hosted runners on 2026-09-16); inputs and env are unchanged. It needs `GITHUB_TOKEN` to read PR commits and comment on PRs, and a `GITLEAKS_LICENSE` secret on **organization-owned** repos (free for personal repos). Without a license, replace the step with the gitleaks CLI (`gitleaks git --redact`) after installing the release binary.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - The workflow lives under `.github/workflows/`, which `protect-files.sh` blocks the agent from editing — CI config is human-reviewed by design.
 

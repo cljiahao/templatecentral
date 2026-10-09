@@ -9,7 +9,7 @@ Write these files exactly as shown.
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint 10** (`^10.12.0`; engines `^20.19 || ^22.13 || >=24`, so Node ≥24 is fine). Direct plugins all peer-support `^10` (`eslint-config-next` `>=9`, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs`, `@eslint-community/eslint-plugin-eslint-comments`, `typescript-eslint` 8.x). `eslint-config-next` 16.4's transitive `eslint-plugin-react` 7.37 / `eslint-plugin-import` 2.32 / `eslint-plugin-jsx-a11y` 6.10 still declare peers only up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning — non-fatal (pnpm 11 does not enforce strict peers), and their rules (`react/jsx-key`, `jsx-a11y/alt-text`, `import/no-anonymous-default-export`, `@next/next/no-img-element`) were verified to fire normally under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it; the warning clears once those plugins ship `^10` peers.
+> **ESLint 10** (`^10.12.0`; engines `^20.19 || ^22.13 || >=24`, so Node ≥24 is fine). Direct plugins all peer-support `^10` (`eslint-config-next` `>=9`, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs`, `@eslint-community/eslint-plugin-eslint-comments`, `typescript-eslint` 8.x). `eslint-config-next` 16.4's transitive `eslint-plugin-react` 7.37 / `eslint-plugin-import` 2.32 / `eslint-plugin-jsx-a11y` 6.10 still declare peers only up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning — non-fatal (pnpm does not enforce strict peers by default), and their rules (`react/jsx-key`, `jsx-a11y/alt-text`, `import/no-anonymous-default-export`, `@next/next/no-img-element`) were verified to fire normally under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it; the warning clears once those plugins ship `^10` peers.
 
 ```json
 {
@@ -17,7 +17,7 @@ Write these files exactly as shown.
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.28.5",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
     "node": ">=24"
   },
@@ -619,19 +619,21 @@ next-env.d.ts
 ### `pnpm-workspace.yaml`
 
 ```yaml
-# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# pnpm-workspace.yaml — project-level pnpm 12 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
+# pnpm 12 errors with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on any key it does not
+# recognize (e.g. a typo) — use only documented setting names (pnpm.io/settings).
 
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
-# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# pnpm (≥11) blocks all install scripts by default; add native packages here as needed.
 allowBuilds:
   sharp: true          # Next.js image optimisation
   unrs-resolver: true  # required by eslint-config-next resolver
-  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
 ```
 
 ### `vitest.config.ts`

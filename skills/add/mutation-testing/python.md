@@ -71,7 +71,7 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
       # Runtime deps first — mutmut executes the test suite, which imports
       # fastapi/pydantic/structlog; requirements-dev.txt alone is not enough.

@@ -188,6 +188,10 @@ cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```
+   If the Next.js project uses AWS IAM auth for MongoDB (`@aws-sdk/credential-providers` in its `package.json`), also load the IAM add-on and apply it in place of the standard C2/C7 steps:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-iam.md"
+```
 3. Delete `src/integrations/database/` from the Next.js project.
 
 **NestJS + Kysely:**
@@ -220,7 +224,7 @@ If Phase 6 migrated a database, the auth skill's `AuthService` is a 501 stub. Ph
 |---|---|
 | Kysely | `cat "<skill-dir>/../add/database/typescript/nestjs-kysely-auth.md"` |
 | Drizzle | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"` |
-| Mongoose | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"` |
+| Mongoose | `cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-auth.md"` |
 
 Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 

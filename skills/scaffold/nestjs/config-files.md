@@ -5,7 +5,7 @@
 
 ### `package.json`
 
-> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nestjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
+> Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nestjs.md` and the current stable; `pnpm install` resolves the newest compatible. Extra test tooling is intentionally omitted — `templatecentral:add (test)` adds it. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins. `engines.node` matches the NestJS 12 CLI/schematics floor (`^24.15.0 || >=26.0.0`, the range `@nestjs/schematics` 12 declares for `nest generate`; the app runtime alone needs only ≥20.19/≥22.12, and the Docker `node:24-alpine` tag already resolves past 24.15). Nest 12 packages ship as ESM; this project stays CommonJS (no `"type": "module"`) and loads them through Node's `require(esm)`, so no `.js` import suffixes are needed. `pnpm install` reports an unmet-peer **warning** for `nestjs-zod` (5.5 still declares `@nestjs/common ^10 || ^11` / `@nestjs/swagger ≤11`; Nest 12 peer bump is pending upstream) — expected and safe to ignore: DTO validation, param pipes, and `cleanupOpenApiDoc` are verified on Nest 12.1.
 
 ```json
 {
@@ -14,9 +14,9 @@
   "description": "",
   "private": true,
   "license": "UNLICENSED",
-  "packageManager": "pnpm@11.28.5",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": ">=24"
+    "node": "^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "build": "nest build",
@@ -37,14 +37,14 @@
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^10.1.2",
-    "@nestjs/common": "^11.2.4",
-    "@nestjs/core": "^11.2.4",
-    "@nestjs/platform-fastify": "^11.2.4",
-    "@nestjs/swagger": "^11.4.4",
+    "@nestjs/common": "^12.1.2",
+    "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-fastify": "^12.1.2",
+    "@nestjs/swagger": "^12.0.2",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.5",
-    "nestjs-pino": "^4.6.1",
-    "nestjs-zod": "^5.4.0",
+    "nestjs-pino": "^5.3.1",
+    "nestjs-zod": "^5.5.0",
     "pino-pretty": "^13.1.3",
     "reflect-metadata": "^0.2.2",
     "zod": "^4.4.3",
@@ -53,9 +53,9 @@
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
-    "@nestjs/cli": "^11.0.21",
-    "@nestjs/schematics": "^11.1.0",
-    "@nestjs/testing": "^11.2.4",
+    "@nestjs/cli": "^12.0.8",
+    "@nestjs/schematics": "^12.0.6",
+    "@nestjs/testing": "^12.1.2",
     "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.12.0",
@@ -478,26 +478,22 @@ TRUST_PROXY=
 ### `pnpm-workspace.yaml`
 
 ```yaml
-# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# pnpm-workspace.yaml — project-level pnpm 12 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
+# pnpm 12 errors with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on any key it does not
+# recognize (e.g. a typo) — use only documented setting names (pnpm.io/settings).
 
 # Block git-URL, tarball, and local-path dependencies
-# (pnpm 11 default — kept explicit for auditability).
+# (pnpm default since v11 — kept explicit for auditability).
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
-# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# pnpm (≥11) blocks all install scripts by default; add native packages here as needed.
 allowBuilds:
   '@scarf/scarf': false
-  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
   # argon2: true        # uncomment when running `templatecentral:add (auth)` — argon2 is a native Node addon
-
-# Force every copy of fastify (including the one @nestjs/platform-fastify pulls in
-# transitively) onto a release with the High security advisories fixed.
-# pnpm 11 reads overrides from this file, not from package.json.
-overrides:
-  fastify: ^5.12.5
 ```
 
 > **Note:** if `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites `pnpm-workspace.yaml` with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` as appropriate and re-run `pnpm install`.
@@ -688,8 +684,6 @@ export default defineConfig({
     "sourceMap": true,
     "rootDir": "./",
     "outDir": "./dist",
-    "baseUrl": "./",
-    "ignoreDeprecations": "6.0",
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,

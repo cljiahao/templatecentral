@@ -294,6 +294,8 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/typescript/nestjs-kysely-iam.md` ← IAM add-on (canonical for migrate/database/nestjs.md IAM blocks)
 - [ ] `skills/add/database/typescript/nestjs-kysely-auth.md` ← auth-stub completion add-on
 - [ ] `skills/add/database/typescript/nestjs-mongoose.md`
+- [ ] `skills/add/database/typescript/nestjs-mongoose-iam.md` ← IAM add-on
+- [ ] `skills/add/database/typescript/nestjs-mongoose-auth.md` ← auth-stub completion add-on
 - [ ] `skills/add/endpoint/nestjs.md`
 - [ ] `skills/add/integration/nestjs.md`
 - [ ] `skills/add/test/nestjs.md`

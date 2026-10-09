@@ -15,7 +15,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@11.28.5",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
     "node": ">=24"
   },
@@ -351,17 +351,19 @@ yarn-error.log*
 ### `pnpm-workspace.yaml`
 
 ```yaml
-# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# pnpm-workspace.yaml — project-level pnpm 12 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
+# pnpm 12 errors with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on any key it does not
+# recognize (e.g. a typo) — use only documented setting names (pnpm.io/settings).
 
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
-# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# pnpm (≥11) blocks all install scripts by default; add native packages here as needed.
 allowBuilds:
-  lefthook: false # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+  lefthook: false # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
 # Add native build deps here if `pnpm install` reports ERR_PNPM_IGNORED_BUILDS, e.g.:
 #   esbuild: true
 #   sharp: true

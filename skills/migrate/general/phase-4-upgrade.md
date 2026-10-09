@@ -83,13 +83,13 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 - No secrets in `NEXT_PUBLIC_*` variables
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ~~~
 
-For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit.md Step G (unconditionally, for every stack) — nothing to hand-append here.
+For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit-finalize.md Step G (unconditionally, for every stack) — nothing to hand-append here.
 
 For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same gate a fresh scaffold ships — in the TS `eslint.config.*`: `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives), `sonarjs/no-commented-code: 'error'`, `linterOptions.reportUnusedDisableDirectives` + `reportUnusedInlineConfigs` at `'error'`, `@eslint-community/eslint-plugin-eslint-comments` `recommended` + `require-description` (`eslint-enable` exempt) + `disable-enable-pair` (`allowWholeFile`), and `sonarjs/todo-tag`/`fixme-tag` downgraded to `warn`; for FastAPI, Ruff `ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005` (`pyproject.toml`) — so the enforcement matches a freshly scaffolded project. The Enforcement section of `code-standards/comments.md` is the rationale source; copy exact rule config from the stack's scaffold `config-files.md`.
 
@@ -130,9 +130,9 @@ Create the stack-specific verify skill in `.claude/skills/` only if it does not 
 
 | Stack | Skill file | Command |
 |-------|-----------|---------|
-| nextjs | `.claude/skills/next-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
-| nestjs | `.claude/skills/nest-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
-| vite-react | `.claude/skills/vite-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
+| nextjs | `.claude/skills/next-verify/SKILL.md` | `pnpm check && pnpm test` |
+| nestjs | `.claude/skills/nest-verify/SKILL.md` | `pnpm check && pnpm test` |
+| vite-react | `.claude/skills/vite-verify/SKILL.md` | `pnpm check && pnpm test` |
 | fastapi | `.claude/skills/api-verify/SKILL.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
 
 Template for TypeScript stacks (replace `<stack>` and `<command>`):

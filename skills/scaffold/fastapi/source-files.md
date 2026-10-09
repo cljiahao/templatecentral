@@ -83,39 +83,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from api.routes import router
 from core.config import api_settings, common_settings
+from core.security_headers import SECURITY_HEADERS
 from error_handler import configure_exceptions
-
-
-def _build_security_headers() -> list[tuple[bytes, bytes]]:
-    # Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is skipped in dev — the
-    # built-in docs UI at /docs is otherwise blocked from rendering in IDE-embedded preview
-    # panes (most render via <iframe>, and browsers enforce these headers even for localhost).
-    # Full protection still applies in every deployed environment (prod, uat).
-    is_dev = common_settings.ENVIRONMENT == "dev"
-    headers = [
-        (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
-        (b"x-content-type-options", b"nosniff"),
-        (b"referrer-policy", b"strict-origin-when-cross-origin"),
-        (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-        # "0" disables the legacy XSS auditor, itself exploitable in older browsers.
-        (b"x-xss-protection", b"0"),
-        # API responses carry per-user data; never let shared caches store them.
-        (b"cache-control", b"no-store"),
-        # JSON-only API outside dev (docs are dev-only), so nothing may load: OWASP REST
-        # baseline. Dev stays loose enough for the /docs UI.
-        (
-            b"content-security-policy",
-            b"base-uri 'self'; object-src 'none'"
-            if is_dev
-            else b"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-        ),
-    ]
-    if not is_dev:
-        headers.append((b"x-frame-options", b"DENY"))
-    return headers
-
-
-_SECURITY_HEADERS = _build_security_headers()
 
 
 class SecurityHeadersMiddleware:
@@ -130,7 +99,7 @@ class SecurityHeadersMiddleware:
         async def _send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend(_SECURITY_HEADERS)
+                headers.extend(SECURITY_HEADERS)
                 message = {**message, "headers": headers}
             await send(message)
 
@@ -274,13 +243,14 @@ app = start_application()
 from collections.abc import Sequence
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette import status
 
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
+from core.security_headers import SECURITY_HEADERS
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
@@ -330,15 +300,9 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(
-        request: Request, exc: HTTPException
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers=dict(exc.headers) if exc.headers else None,
-        )
+    # HTTPException deliberately has no handler here: FastAPI's built-in one already
+    # returns this {"detail": ...} envelope with exc.headers, covers router-level 404/405,
+    # and sends an empty body for no-body statuses (1xx/204/205/304).
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(
@@ -361,6 +325,7 @@ def configure_exceptions(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": INTERNAL_SERVER_ERROR_DETAIL},
+            headers={k.decode(): v.decode() for k, v in SECURITY_HEADERS},
         )
 ```
 
@@ -370,6 +335,46 @@ def configure_exceptions(app: FastAPI) -> None:
 ```
 
 *(empty file)*
+
+### `src/core/security_headers.py`
+
+```python
+from core.config import common_settings
+
+
+def _build() -> list[tuple[bytes, bytes]]:
+    # Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is skipped in dev — the
+    # built-in docs UI at /docs is otherwise blocked from rendering in IDE-embedded preview
+    # panes (most render via <iframe>, and browsers enforce these headers even for localhost).
+    # Full protection still applies in every deployed environment (prod, uat).
+    is_dev = common_settings.ENVIRONMENT == "dev"
+    headers = [
+        (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+        (b"x-content-type-options", b"nosniff"),
+        (b"referrer-policy", b"strict-origin-when-cross-origin"),
+        (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+        # "0" disables the legacy XSS auditor, itself exploitable in older browsers.
+        (b"x-xss-protection", b"0"),
+        # API responses carry per-user data; never let shared caches store them.
+        (b"cache-control", b"no-store"),
+        # JSON-only API outside dev (docs are dev-only), so nothing may load: OWASP REST
+        # baseline. Dev stays loose enough for the /docs UI.
+        (
+            b"content-security-policy",
+            b"base-uri 'self'; object-src 'none'"
+            if is_dev
+            else b"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        ),
+    ]
+    if not is_dev:
+        headers.append((b"x-frame-options", b"DENY"))
+    return headers
+
+
+# Shared by SecurityHeadersMiddleware and the unhandled-exception handler: Starlette runs
+# that handler in ServerErrorMiddleware, outside every user middleware.
+SECURITY_HEADERS = _build()
+```
 
 ### `src/core/config.py`
 
@@ -1141,8 +1146,9 @@ Create `<target-directory>/` and write, verbatim:
 
 - From Part B (`config-files.md`): `Dockerfile`, `docker-entrypoint.sh`, `.dockerignore`, `.gitignore`, `.env.example`, `pyproject.toml`, `pyrightconfig.json`, `requirements-dev.txt`.
 - From Part C (this file): every `###`-headed source file above, at the path given in its heading.
+- `README.md` — brief project intro (name + the one-sentence description from Step 2) and a Quickstart listing the commands from Step 4 (venv + install) and the run/test/lint commands from the AGENTS.md `## Commands` block in Step 6. The documentation kit (harness-kit Step E3) never overwrites this prose — it only appends the root `## Structure` section.
 
-Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4. Do NOT create `README.md` here — the documentation kit generates it later (Step E3).
+Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4.
 
 ### 2. Update project settings
 
@@ -1163,10 +1169,10 @@ cp src/.env.default src/.env
 
 ```bash
 git init
-python -m venv .venv
+python3.14 -m venv .venv    # Python 3.14 — matches the Dockerfile image, ruff target-version and pyright pythonVersion
 source .venv/bin/activate   # Linux/Mac
 
-pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.9.0" pydantic-settings python-dotenv python-multipart "structlog>=25.1" "starlette>=1.0.1"
+pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.12" pydantic-settings python-dotenv "python-multipart>=0.0.31" "structlog>=25.1" "starlette>=1.3.1"
 
 # Freeze BEFORE dev deps are installed — requirements.txt is what the Dockerfile's
 # prod-deps stage installs, so it must contain runtime packages only.
@@ -1200,7 +1206,7 @@ Create `AGENTS.md` at the project root with this exact content (fill in `[Projec
 # AGENTS.md — [Project Name]
 
 ## Stack
-FastAPI 0.136+ · Python 3.13 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
+FastAPI 0.136+ · Python 3.14 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
 
 ## Commands
 ```bash
@@ -1244,7 +1250,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 - Comments explain *why*, not *what* — no commented-out code (Ruff `ERA`), no change-narration (`# was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -1309,7 +1315,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
-After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit.md Step E).
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
 
 ### 8. Task management (optional)
 

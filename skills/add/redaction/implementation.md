@@ -57,7 +57,7 @@ The hook code is runtime-specific — load **only** the file for this stack and 
 ## Step 4 — Wire the hook into `.claude/settings.json`
 
 Merge this entry into the existing `hooks.PostToolUse` array (do not overwrite other entries — same
-merge convention as `harness-kit.md` Step A):
+merge convention as `harness-kit-enforcement.md` Step A):
 
 **TS stacks:**
 ```json

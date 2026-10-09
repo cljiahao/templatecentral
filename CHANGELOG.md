@@ -10,6 +10,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.19.0] — 2026-10-09
+
+Clears the items deferred in 5.16.0–5.18.0. Every upgrade was verified by installing and
+running freshly extracted scaffolds.
+
+### Changed — stack upgrades
+
+- **NestJS 12** (`@nestjs/*` ^12.1.2, swagger ^12.0.2, nestjs-pino ^5.3.1; Node `^24.15.0 || >=26`).
+  Projects stay CommonJS and load Nest's ESM packages via `require(esm)`. Verified: build, unit/e2e,
+  auth + throttler + logging smoke, identical error mapping to Nest 11. nestjs-zod kept (works on 12,
+  peer warning only). The `overrides: fastify` workaround is gone (Nest 12.1.2 bundles fastify 5.12.5).
+- **pnpm 12** (`packageManager: pnpm@12.10.1`). Every `pnpm-workspace.yaml` key verified valid; unknown
+  keys now fail installs. Seeded CI: `pnpm/action-setup` v6.1.0 (the floating `v6` tag lacks pnpm 12
+  support — pin the SHA) and `gitleaks-action` v3.0.0 (Node 24 runtime; v2 stops working without Node 20).
+- **Python 3.14** for FastAPI (Docker `python:3.14.8-slim`, ruff `py314`, pyright, CI). Floors raised for
+  security advisories missed by the previous scan: Starlette ≥1.3.1 (High form-limit DoS), python-multipart
+  ≥0.0.31; pydantic ≥2.12 for 3.14 support.
+
+### Fixed
+
+- FastAPI scaffold's `HTTPException` handler sent JSON bodies on 204/304 (uvicorn reset the connection);
+  removed in favour of FastAPI's default. `add (error-handling)` keeps its envelope but sends no body for
+  no-body statuses.
+- FastAPI unhandled 500s were sent without security headers (the handler runs outside user middleware);
+  headers now live in `core/security_headers.py` and are attached by both handlers.
+- FastAPI scaffold now writes a README like NestJS (the documentation kit only appends to it).
+- NestJS e2e template uses the same UUID `genReqId` as `main.ts`; `nest-verify` no longer runs `tsc` twice.
+- `nestjs-mongoose` split into base + IAM + auth add-ons (typical run 355 → 173 lines); backend extraction
+  loads the Mongoose auth add-on in Phase 7.
+- Cross-references from the harness-kit split name the file that holds each step; migrate Phase 4 lists
+  the verify commands the scaffolds actually seed.
+- `CODE_OF_CONDUCT.md` routes reports to the maintainer privately instead of Security Advisories.
+- AI PR Review: `ai-review.yml` restored to match `main` so the review can run on this PR.
+
+### Known
+
+- Beanie 2.0.1–2.2.0 cap `Requires-Python <3.14`; the Beanie guide checks this first and offers a 3.13
+  pin or PyMongo's `AsyncMongoClient`.
+- nestjs-zod's dependency `deepmerge` has a reported prototype-pollution CVE with no fixed release
+  (schema handling only, not request input) — tracked in the research cache.
+- `ai-review.yml` stays on `actions/checkout` v6.0.2 until a follow-up PR after merge.
+- Organisation-owned repos must add the `GITLEAKS_LICENSE` secret (user action).
+
+---
+
 ## [5.18.0] — 2026-10-09
 
 Second fresh-eyes pass, focused on agent latency and the items deferred in 5.17.0.
@@ -199,7 +244,6 @@ and CI layers were unaffected.
 
 - NestJS 12, pnpm 12 and Python 3.14 migrations deferred.
 - OWASP LLM Top 10 2026 re-numbering unconfirmed against the official document — skill IDs unchanged.
-- gitleaks-action v3 and `pnpm/action-setup` v6 not adopted yet.
 - `block-no-verify.sh` remains a pattern guard; shell obfuscation (and a quoted `<<WORD` string, which the heredoc-body filter treats as a heredoc) can still evade it — lefthook and CI are the backstop.
 
 ---

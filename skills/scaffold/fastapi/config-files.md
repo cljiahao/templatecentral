@@ -13,7 +13,7 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-ARG PYTHON=python:3.13.14-slim
+ARG PYTHON=python:3.14.8-slim
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -408,7 +408,7 @@ TRUST_PROXY=
 ```toml
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 # `select`, not `extend-select`: ruff >=0.16 enables ~413 rules by default, and this is the
@@ -447,7 +447,7 @@ addopts = [
 {
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.13",
+  "pythonVersion": "3.14",
   "pythonPlatform": "Linux"
 }
 ```

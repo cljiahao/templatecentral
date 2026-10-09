@@ -31,14 +31,16 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
+from core.security_headers import SECURITY_HEADERS
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
+_NO_BODY_STATUSES = frozenset({204, 205, 304})
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:
@@ -67,9 +69,11 @@ def configure_exceptions(app: FastAPI) -> None:
     ) -> JSONResponse:
         logger.warning(
             "Invalid input",
-            path=request.url.path, detail=str(exc), code="INVALID_INPUT",
+            path=request.url.path,
+            detail=str(exc),
+            code="INVALID_INPUT",
         )
-        field_errors = getattr(exc, 'field_errors', {})
+        field_errors = getattr(exc, "field_errors", {})
         details: dict[str, Any] = {"code": "INVALID_INPUT"}
         if field_errors:
             details["fieldErrors"] = field_errors
@@ -80,12 +84,12 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(NoResultsFound)
-    async def no_results_handler(
-        request: Request, exc: NoResultsFound
-    ) -> JSONResponse:
+    async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
         logger.warning(
             "No results found",
-            path=request.url.path, detail=str(exc), code="NOT_FOUND",
+            path=request.url.path,
+            detail=str(exc),
+            code="NOT_FOUND",
         )
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -93,14 +97,20 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     # Starlette's base class also covers router-level 404/405 raised outside FastAPI routes.
+    # Replacing FastAPI's default handler means re-implementing its no-body rule:
+    # 1xx/204/205/304 must go out without a body, or uvicorn errors mid-response
+    # and resets the connection.
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
         request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    ) -> Response:
+        headers = dict(exc.headers) if exc.headers else None
+        if exc.status_code < 200 or exc.status_code in _NO_BODY_STATUSES:
+            return Response(status_code=exc.status_code, headers=headers)
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": exc.detail},
-            headers=dict(exc.headers) if exc.headers else None,
+            headers=headers,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -110,7 +120,8 @@ def configure_exceptions(app: FastAPI) -> None:
         field_errors = _sanitize_errors(exc.errors())
         logger.warning(
             "Request validation error",
-            path=request.url.path, code="VALIDATION_ERROR",
+            path=request.url.path,
+            code="VALIDATION_ERROR",
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -121,16 +132,17 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(
             "Unhandled exception",
-            path=request.url.path, code="INTERNAL_ERROR",
+            path=request.url.path,
+            code="INTERNAL_ERROR",
         )
+        # Runs in ServerErrorMiddleware, outside SecurityHeadersMiddleware: add them here.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": INTERNAL_SERVER_ERROR_DETAIL},
+            headers={k.decode(): v.decode() for k, v in SECURITY_HEADERS},
         )
 ```
 
