@@ -532,6 +532,7 @@ done
 # and exits with $STUB_EXIT: a finding must fail the commit, and an absent binary must skip.
 GLS="$T/gl-stub"
 mkdir -p "$GLS"
+# shellcheck disable=SC2016  # literal $* / $STUB_EXIT belong to the generated stub script.
 printf '#!/bin/sh\necho "$*" > "%s/argv"\nexit "${STUB_EXIT:-0}"\n' "$GLS" > "$GLS/gitleaks"
 chmod +x "$GLS/gitleaks"
 for kit_md in "${KIT_MDS[@]}"; do
