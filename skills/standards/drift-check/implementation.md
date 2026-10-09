@@ -31,7 +31,7 @@ Then exit.
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Exit silently.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
@@ -62,7 +62,7 @@ Ask:
 
 > "Dependency drift check is available — it compares your declared dependencies against the latest registry versions. Run it? (y/n)"
 
-If the user accepts, or the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, dispatch the review utility's `update` operation (`cat "<skill-dir>/../review/SKILL.md"`). The escape-hatch marker forces this step even when Step 3 found no convention drift.
+If the user accepts, or the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, dispatch the review utility's `update` operation (`cat "<skill-dir>/../review/SKILL.md"`). The marker skips the question and runs this step even when Step 3 found no convention drift.
 
 ## Step 6 — Security audit (optional)
 

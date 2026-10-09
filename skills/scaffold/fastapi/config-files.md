@@ -50,14 +50,15 @@ RUN apt-get update \
 
 # ---- Dependencies (dev) ----
 # Installs ALL Python packages (including dev deps like pytest, ruff, etc.)
-# into a virtual environment. Used by the dev stage.
+# into a virtual environment. Used by the dev stage. requirements-dev.txt lists
+# dev tools only, so it is installed alongside requirements.txt, never instead of it.
 FROM base AS deps
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
   if [ -f uv.lock ]; then pip install uv && uv sync --frozen; \
-  elif [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
+  elif [ -f requirements-dev.txt ]; then pip install -r requirements.txt -r requirements-dev.txt; \
   elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install .; \
   elif [ -f setup.py ]; then pip install .; \
@@ -142,12 +143,12 @@ WORKERS="${WORKERS:-2}"
 case "$MODE" in
   dev)
     echo "Starting FastAPI dev server (uvicorn --reload)..."
-    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --reload --log-config src/core/uvicorn_log_config.json
+    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --reload --no-server-header --log-config src/core/uvicorn_log_config.json
     ;;
 
   prod)
     echo "Starting FastAPI production server (uvicorn, $WORKERS workers)..."
-    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --workers "$WORKERS" --log-config src/core/uvicorn_log_config.json
+    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --workers "$WORKERS" --no-server-header --log-config src/core/uvicorn_log_config.json
     ;;
 
   *)
@@ -397,7 +398,8 @@ API_PORT=8000
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 
-# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+# Reverse proxy trust — comma-separated IPs/CIDRs (no hop count). One-hop ALB → App: ALB VPC CIDR (e.g. 10.0.0.0/8).
+# Two-hop ALB → Traefik → App: Traefik's AND the ALB's CIDRs. * only in closed networks. Empty for local dev.
 TRUST_PROXY=
 ```
 

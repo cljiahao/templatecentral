@@ -23,7 +23,7 @@ Locate both projects by scanning the current directory and its immediate subdire
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral:` anywhere in `AGENTS.md`.
+Confirm both `AGENTS.md` files found under **Inputs** carry the line-1 `<!-- templateCentral: <stack>@` marker.
 
 If found → proceed to Step 1.
 
@@ -83,14 +83,16 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/external/:path*',
-        destination: 'http://localhost:8000/:path*',
+        // Read at build time (rewrites are baked into the build output) — set BACKEND_URL
+        // in the build environment, not only at runtime.
+        destination: `${process.env.BACKEND_URL ?? 'http://localhost:8000'}/:path*`,
       },
     ];
   },
 };
 ```
 
-> Backend scaffolds serve routes at root; if you add a global `/api` prefix to the backend, change the destination back to `http://localhost:8000/api/:path*`.
+> Backend scaffolds serve routes at root; if you add a global `/api` prefix to the backend, append `/api` before `/:path*` in the destination.
 
 ### 3. Environment Variables
 
@@ -116,7 +118,7 @@ Backend: `CORS_ORIGINS` (FastAPI, `src/.env`) / `CLIENT_URL` (NestJS, `.env`) as
 
 ### 4. Frontend HTTP Client
 
-Both templates ship an abstract `FetchClient` — subclass it for the backend.
+Both templates ship an abstract `FetchClient` whose `request()` is `protected` — subclass it and expose one typed public method per backend endpoint (`getHealth()` below hits the `/health` route both backend scaffolds ship).
 
 #### Vite + React
 
@@ -130,6 +132,10 @@ export class ApiClient extends FetchClient {
     // getApiBaseUrl() throws if VITE_API_BASE_URL is missing — never pass the raw env var
     super(getApiBaseUrl(), {});
   }
+
+  getHealth(): Promise<{ status: string }> {
+    return this.request('health');
+  }
 }
 ```
 
@@ -141,7 +147,11 @@ Server-side only (route handlers, server components). Reach for `createAxiosClie
 // src/integrations/clients/backend-client.ts
 import { FetchClient } from './base/fetch-client';
 
-class BackendClient extends FetchClient {}
+class BackendClient extends FetchClient {
+  getHealth(): Promise<{ status: string }> {
+    return this.request('health');
+  }
+}
 
 let client: BackendClient | undefined;
 

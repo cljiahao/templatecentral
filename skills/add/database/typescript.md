@@ -21,4 +21,11 @@ For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit
 | Next.js | Kysely | `cat "<skill-dir>/database/typescript/nextjs-kysely.md"` |
 | Next.js | Mongoose | `cat "<skill-dir>/database/typescript/nextjs-mongoose.md"` |
 
-Run the chosen command and follow the loaded guide exactly.
+**NestJS + Kysely add-ons** — load alongside `nestjs-kysely.md` only when they apply (each is a sibling leaf; never skip the base guide):
+
+| Condition | Also load |
+|-----------|-----------|
+| AWS IAM auth required (high-security signal above) | `cat "<skill-dir>/database/typescript/nestjs-kysely-iam.md"` |
+| `src/modules/auth/auth.service.ts` exists (auth stubs from `templatecentral:add` auth) | `cat "<skill-dir>/database/typescript/nestjs-kysely-auth.md"` |
+
+Run the chosen command(s) and follow the loaded guide(s) exactly.

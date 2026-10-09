@@ -5,7 +5,7 @@
 #   Tier 2 ASK (permissionDecision "ask"): agent-instruction, governance, enforcement and CI
 #           files — editable only with explicit per-edit human approval.
 #   Tier 3 ALLOW (exit 0): skills, docs, source — everything else.
-# The *shipped* guard (harness-kit.md -> protect-files.sh) hard-blocks CI instead: downstream
+# The *shipped* guard (harness-kit-{ts,fastapi}.md -> protect-files.sh) hard-blocks CI instead: downstream
 # projects have a different threat model.
 
 command -v jq >/dev/null 2>&1 || { echo "BLOCKED: jq required for pre-guard.sh" >&2; exit 2; }

@@ -19,8 +19,8 @@ body:
   - type: input
     id: skill-name
     attributes:
-      label: Proposed skill name
-      placeholder: "e.g. nextjs-add-websocket"
+      label: Proposed capability
+      placeholder: "e.g. templatecentral:add (websocket)"
     validations:
       required: true
   - type: textarea

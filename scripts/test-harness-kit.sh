@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-# scripts/test-harness-kit.sh — behavioral regression tests for the hook scripts that
-# skills/scaffold/shared/harness-kit.md seeds into every project (TS and FastAPI variants).
+# scripts/test-harness-kit.sh — behavioral regression tests for the hook scripts that the
+# harness kit (skills/scaffold/shared/harness-kit*.md: index, ts/fastapi variants, enforcement,
+# finalize) seeds into every project (TS and FastAPI variants).
 # The kit is prose, so nothing else executes these scripts before they reach a real project.
 #
-# Usage: bash scripts/test-harness-kit.sh [HARNESS_KIT_MD]   (needs git, node, python3)
+# Usage: bash scripts/test-harness-kit.sh [KIT_MD ...]   (needs git, node, python3; default: every kit file)
 # No `set -e`: cases deliberately run commands that fail.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KIT_MD="${1:-$REPO_ROOT/skills/scaffold/shared/harness-kit.md}"
+if [[ $# -gt 0 ]]; then
+  KIT_MDS=("$@")
+else
+  KIT_MDS=("$REPO_ROOT"/skills/scaffold/shared/harness-kit*.md)
+fi
 
 for tool in git node python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "test-harness-kit: $tool not found" >&2; exit 2; }
 done
-[[ -f "$KIT_MD" ]] || { echo "test-harness-kit: $KIT_MD not found" >&2; exit 2; }
+for kit_md in "${KIT_MDS[@]}"; do
+  [[ -f "$kit_md" ]] || { echo "test-harness-kit: $kit_md not found" >&2; exit 2; }
+done
 
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
@@ -23,35 +30,37 @@ mkdir -p "$KIT"
 # ── Extraction ────────────────────────────────────────────────────────────────
 # A script is the first fence after its **`<path>`** heading; a "**For TS…" / "**For FastAPI…"
 # label before a fence marks a per-stack variant, written as <stem>.ts<ext> / <stem>.py<ext>.
-python3 - "$KIT_MD" "$KIT" <<'PY'
+# Each kit file is parsed independently (heading/variant state never carries across files).
+python3 - "$KIT" "${KIT_MDS[@]}" <<'PY'
 import os, re, sys
-src, out = sys.argv[1], sys.argv[2]
-lines = open(src, encoding="utf-8").read().split("\n")
+out, srcs = sys.argv[1], sys.argv[2:]
 heading = re.compile(r"^\*\*`([^`]+\.(?:sh|cjs|py))`\*\*")
-path = variant = None
-i = 0
-while i < len(lines):
-    line = lines[i]
-    m = heading.match(line)
-    if m:
-        path, variant = m.group(1), None
-    elif line.startswith("**For TS"):
-        variant = "ts"
-    elif line.startswith("**For FastAPI"):
-        variant = "py"
-    elif line.startswith("```") and len(line) > 3:
-        j = i + 1
-        while j < len(lines) and not lines[j].startswith("```"):
-            j += 1
-        body = lines[i + 1:j]
-        if path and body and (not path.endswith(".sh") or body[0].startswith("#!")):
-            stem, ext = os.path.splitext(os.path.basename(path))
-            name = stem + ("." + variant if variant else "") + ext
-            open(os.path.join(out, name), "w", encoding="utf-8").write("\n".join(body) + "\n")
-            if not variant:
-                path = None
-        i = j
-    i += 1
+for src in srcs:
+    lines = open(src, encoding="utf-8").read().split("\n")
+    path = variant = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = heading.match(line)
+        if m:
+            path, variant = m.group(1), None
+        elif line.startswith("**For TS"):
+            variant = "ts"
+        elif line.startswith("**For FastAPI"):
+            variant = "py"
+        elif line.startswith("```") and len(line) > 3:
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith("```"):
+                j += 1
+            body = lines[i + 1:j]
+            if path and body and (not path.endswith(".sh") or body[0].startswith("#!")):
+                stem, ext = os.path.splitext(os.path.basename(path))
+                name = stem + ("." + variant if variant else "") + ext
+                open(os.path.join(out, name), "w", encoding="utf-8").write("\n".join(body) + "\n")
+                if not variant:
+                    path = None
+            i = j
+        i += 1
 PY
 
 EXPECTED="protect-files.ts.sh protect-files.py.sh block-no-verify.ts.sh block-no-verify.py.sh
@@ -62,7 +71,7 @@ verify-harness.sh"
 missing=""
 for f in $EXPECTED; do [[ -s "$KIT/$f" ]] || missing+=" $f"; done
 if [[ -n "$missing" ]]; then
-  echo "test-harness-kit: could not extract from harness-kit.md:$missing" >&2
+  echo "test-harness-kit: could not extract from the kit files:$missing" >&2
   echo "  (each script needs a **\`<path>\`** heading followed by its fence)" >&2
   exit 1
 fi

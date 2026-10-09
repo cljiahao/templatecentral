@@ -326,6 +326,7 @@ check_hook_command_uses_args_array() {
   local bad="" m
   m=$(scan -E '"command"[[:space:]]*:[[:space:]]*\[')
   [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ array-valued \"command\" is silently ignored by Claude Code — use \"command\": \"bash\", \"args\": [...]"$'\n'
+  # shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is a literal pattern, not an expansion.
   m=$(scan -E '"(command|args)"[[:space:]]*:.*\.claude/hooks/' \
       | sed 's#\${CLAUDE_PROJECT_DIR}/\.claude/hooks/#__OK__#g' | grep -F '.claude/hooks/' || true)
   [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ hook script path must be \${CLAUDE_PROJECT_DIR}/.claude/hooks/... (hooks run in Claude's current dir)"$'\n'
@@ -338,18 +339,26 @@ check_hook_command_uses_args_array() {
 }
 
 check_scaffold_seeds_complete_harness() {
-  # The shared harness kit (skills/scaffold/shared/harness-kit.md) is the single source of truth
-  # for the complete harness: all 6 hook events, the permissions.deny secret-Read block,
+  # The shared harness kit (skills/scaffold/shared/harness-kit*.md — an index plus ts/fastapi
+  # variant files and the shared enforcement/finalize files) is the single source of truth for the
+  # complete harness: all 6 hook events, the permissions.deny secret-Read block,
   # skillListingBudgetFraction, the .claude/hooks/ script bodies, stop_hook_active guard,
   # CONSTITUTION.md, FUTURE.md, harness.json step, .agents symlink, and the shared AGENTS.md tail.
-  # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must reference
-  # the kit, and the kit itself must contain every universal harness element — this keeps the
-  # harness enforceable from one file rather than 5.
+  # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must load the
+  # index, the two shared files, and exactly the right variant, and each variant must carry the
+  # full per-stack hook set — this keeps the harness enforceable from one kit rather than 5 copies,
+  # while a run loads only its own stack's bodies.
   # TIMELESS: these are the load-bearing enforcement hooks; their presence is non-negotiable.
   header "Scaffold/migrate templates seed the complete harness"
 
-  local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md"
+  local kit_dir="$SKILLS_DIR/scaffold/shared"
+  local kit_files=(
+    "$kit_dir/harness-kit.md" "$kit_dir/harness-kit-ts.md" "$kit_dir/harness-kit-fastapi.md"
+    "$kit_dir/harness-kit-enforcement.md" "$kit_dir/harness-kit-finalize.md"
+  )
+  # migrate loads the kit from its router (keeps chains at 2 cat hops); Phase 4 seeds the skill.
   local migrate="$SKILLS_DIR/migrate/general/implementation.md"
+  local migrate_phase4="$SKILLS_DIR/migrate/general/phase-4-upgrade.md"
   local scaffolds=(
     "$SKILLS_DIR/scaffold/fastapi/source-files.md"
     "$SKILLS_DIR/scaffold/nestjs/source-files.md"
@@ -370,50 +379,88 @@ check_scaffold_seeds_complete_harness() {
     # authors it, and verify-harness.sh then hard-fails on MISSING for every fresh scaffold.
     '[Ww][Aa][Ss][[:space:]]'
   )
-  local missing="" tok f
-  if [[ ! -f "$kit" ]]; then
-    missing+="$kit — file not found"$'\n'
-  else
+  # Every per-stack variant file must author the full stack-specific set on its own — a run
+  # loads exactly one variant, so a token present only in the other variant never reaches it.
+  local variant_tokens=(
+    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"'
+    '"Stop"' '"SubagentStop"' '"SessionStart"'
+    'skillListingBudgetFraction' '"Read(.env)"'
+    '.claude/hooks/protect-files.sh' '.claude/hooks/block-no-verify.sh' '.claude/hooks/user-prompt-guard.'
+    '.claude/hooks/post-edit-typecheck.sh' '.claude/hooks/post-edit-comment-check.sh'
+    '.claude/hooks/stop-checks.sh' '.claude/hooks/subagent-stop.sh'
+    'stop_hook_active' '--no-verify' 'AKIA' 'lefthook.yml'
+  )
+  local missing="" tok f kf all_kit="" v other
+  for kf in "${kit_files[@]}"; do
+    [[ -f "$kf" ]] || missing+="$kf — file not found"$'\n'
+  done
+  if [[ -z "$missing" ]]; then
+    all_kit=$(cat "${kit_files[@]}")
     for tok in "${kit_tokens[@]}"; do
-      grep -qF -- "$tok" "$kit" || missing+="$kit — missing harness element: $tok"$'\n'
+      grep -qF -- "$tok" <<<"$all_kit" || missing+="$kit_dir/harness-kit*.md — missing harness element: $tok"$'\n'
+    done
+    for v in ts fastapi; do
+      for tok in "${variant_tokens[@]}"; do
+        grep -qF -- "$tok" "$kit_dir/harness-kit-$v.md" || \
+          missing+="$kit_dir/harness-kit-$v.md — variant missing harness element: $tok"$'\n'
+      done
     done
   fi
 
   for f in "${scaffolds[@]}" "$migrate"; do
     [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
     # Form-agnostic: matches the absolute path and the <skill-dir>-relative form.
-    grep -qF 'shared/harness-kit.md' "$f" || \
-      missing+="$f — does not reference shared/harness-kit.md"$'\n'
-    grep -qF -- '-verify/SKILL.md' "$f" || \
-      missing+="$f — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
+    for kf in harness-kit.md harness-kit-enforcement.md harness-kit-finalize.md; do
+      grep -qF "shared/$kf" "$f" || missing+="$f — does not load shared/$kf"$'\n'
+    done
+    case "$f" in
+      */scaffold/fastapi/*) v=fastapi; other=ts ;;
+      */scaffold/*) v=ts; other=fastapi ;;
+      *) v='' ; other='' ;;
+    esac
+    if [[ -n "$v" ]]; then
+      grep -qF "shared/harness-kit-$v.md" "$f" || missing+="$f — does not load its variant shared/harness-kit-$v.md"$'\n'
+      grep -qF "shared/harness-kit-$other.md" "$f" && \
+        missing+="$f — loads the other stack's variant shared/harness-kit-$other.md"$'\n'
+    else
+      # migrate detects the stack at runtime: one <variant-file> cat, with both names spelled out.
+      for kf in 'shared/<variant-file>' harness-kit-ts.md harness-kit-fastapi.md; do
+        grep -qF -- "$kf" "$f" || missing+="$f — variant loading must name $kf"$'\n'
+      done
+    fi
+    local seeder="$f"
+    [[ "$f" == "$migrate" ]] && seeder="$migrate_phase4"
+    grep -qF -- '-verify/SKILL.md' "$seeder" || \
+      missing+="$seeder — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
   done
 
   report "$missing" \
-    "Harness check failed — kit must contain all universal tokens; all 4 scaffolds + migrate must reference scaffold/shared/harness-kit.md; each scaffold must seed a *-verify/SKILL.md" \
-    "Shared harness kit contains all universal tokens; all scaffold/migrate files reference it"
+    "Harness check failed — kit (scaffold/shared/harness-kit*.md) must contain all universal tokens and each variant the full per-stack set; all 4 scaffolds + the migrate router must load the index, both shared files, and their own variant; each must seed a *-verify/SKILL.md" \
+    "Shared harness kit contains all universal tokens; every scaffold/migrate loader loads its own variant"
 }
 
 check_migrate_hook_inventory_matches_kit() {
-  # migrate/general/implementation.md enumerates the kit's hooks by name in prose (Step 4d),
+  # migrate/general/phase-4-upgrade.md enumerates the kit's hooks by name in prose (Step 4d),
   # separate from the kit's own authoring blocks — a hook added to the kit without updating
   # that list leaves every migrated project short a hook.
-  header "migrate hook inventory matches harness-kit.md"
-  local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md"
-  local migrate="$SKILLS_DIR/migrate/general/implementation.md"
-  if [[ ! -f "$kit" || ! -f "$migrate" ]]; then
-    fail "Missing $kit or $migrate"
+  header "migrate hook inventory matches the harness kit"
+  local kit_dir="$SKILLS_DIR/scaffold/shared"
+  local migrate="$SKILLS_DIR/migrate/general/phase-4-upgrade.md"
+  local kit_files=("$kit_dir"/harness-kit*.md)
+  if [[ ! -f "${kit_files[0]}" || ! -f "$migrate" ]]; then
+    fail "Missing $kit_dir/harness-kit*.md or $migrate"
     return
   fi
   local hooks missing="" h
-  hooks=$(grep -oE '^\*\*`\.claude/hooks/[a-zA-Z0-9_-]+' "$kit" | sed -E 's#.*/##' | sort -u)
+  hooks=$(cat "${kit_files[@]}" | grep -oE '^\*\*`\.claude/hooks/[a-zA-Z0-9_-]+' | sed -E 's#.*/##' | sort -u)
   for h in $hooks; do
     grep -qF -- "$h" "$migrate" || missing+="migrate is missing hook: $h"$'\n'
   done
   grep -qF -- '.claude/comment-hygiene-patterns.txt' "$migrate" || \
     missing+="migrate does not mention .claude/comment-hygiene-patterns.txt"$'\n'
   report "$missing" \
-    "migrate's hook/file inventory has drifted from harness-kit.md — update skills/migrate/general/implementation.md Step 4d" \
-    "migrate's hook inventory covers every hook + file authored in harness-kit.md"
+    "migrate's hook/file inventory has drifted from the harness kit — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
+    "migrate's hook inventory covers every hook + file authored in the harness kit"
 }
 
 check_duplicated_iam_blocks_match() {
@@ -446,13 +493,13 @@ PAIRS = [
      "add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`",
      "migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python"),
     ("NestJS IAM KyselyService",
-     "add/database/typescript/nestjs-kysely.md", "Replace the entire contents of `kysely.service.ts` with:",
+     "add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:",
      "migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript"),
     ("NestJS IAM envSchema fields",
-     "add/database/typescript/nestjs-kysely.md", "Add IAM fields to `envSchema`",
+     "add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`",
      "migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript"),
     ("NestJS IAM serviceConfig mapping",
-     "add/database/typescript/nestjs-kysely.md", "Then map the validated fields into `serviceConfig`",
+     "add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`",
      "migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript"),
 ]
 
@@ -748,7 +795,7 @@ check_no_middleware_ts() {
   # Excluded files are meta-documents (audit checklist, migration guides, scaffold templates)
   # that legitimately reference middleware.ts to explain the deprecation.
   header "middleware.ts references"
-  report "$(scan "" 'middleware\.ts' 'audit/implementation' 'migrate/general/implementation' 'scaffold/nextjs/source-files')" \
+  report "$(scan "" 'middleware\.ts' 'audit/implementation' 'migrate/general/phase-4-upgrade' 'scaffold/nextjs/source-files')" \
     "middleware.ts found — Next.js 16 uses proxy.ts" \
     "No middleware.ts references"
 }

@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.17.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.18.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -212,7 +212,7 @@ templatecentral/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
 │   ├── validate-scaffold-configs.sh # Parses fenced JSON/JS config blocks in scaffold files
-│   ├── test-harness-kit.sh  # Regression suite for the hooks harness-kit.md seeds
+│   ├── test-harness-kit.sh  # Regression suite for the hooks the harness kit (harness-kit*.md) seeds
 │   ├── build-agents-dist.sh # Builds the namespace-free copy for other agent tools
 │   ├── pre-guard.sh         # Repo guard: blocks secret access, asks before instruction/CI edits
 │   ├── bash-guard.sh        # Repo guard: blocks shell reads/writes of secret files

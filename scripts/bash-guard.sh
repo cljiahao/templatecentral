@@ -62,7 +62,7 @@ writes_to() {
       *">$q$t"*|*"> $q$t"*|*"tee $q$t"*|*"tee -a $q$t"*) return 0 ;;
     esac
   done
-  [[ "$CMD" =~ (^|[[:space:]])(cp|mv|ln|install|touch)[[:space:]].*[[:space:]\"\']$t[\"\']?[[:space:]]*($|[;&|]) ]]
+  [[ "$CMD" =~ (^|[[:space:]])(cp|mv|ln|install|touch)[[:space:]].*[[:space:]\"\']${t}[\"\']?[[:space:]]*($|[;&|]) ]]
 }
 
 # Candidate tokens: secret-looking names, or anything with glob characters (`.en?`, `.[e]nv`).

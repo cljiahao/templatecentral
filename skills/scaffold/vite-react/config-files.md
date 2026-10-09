@@ -7,7 +7,7 @@
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/vite-react.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@hookform/resolvers` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `npx shadcn@latest add form` respectively. `@testing-library/jest-dom` and `@testing-library/react` are included in devDependencies; only `@testing-library/user-event` is added later by `templatecentral:add (test)`. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint pinned at `^9`** — `^9` is the flat-config baseline every plugin in this devDependency set is verified against, so it is the known-good floor for a fresh scaffold. `eslint-plugin-react-hooks` 7.1.1 already peer-supports `^10`, so an ESLint 10 bump is not blocked by peers; it just needs `typescript-eslint`, `@eslint/js`, and `eslint-plugin-sonarjs` re-verified together before moving. Run the review utility (update mode) when you want to move the whole lint toolchain forward as one unit.
+> **ESLint 10** (`eslint ^10.12.0` + `@eslint/js ^10.0.1` — move them together; `@eslint/js` 10 peer-requires `eslint ^10`). Every plugin here peer-supports `^10` (`typescript-eslint` 8.x, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs` 4.x, `@eslint-community/eslint-plugin-eslint-comments` 4.8). ESLint 10's `js.configs.recommended` adds `no-unassigned-vars`, `no-useless-assignment`, and `preserve-caught-error` — rethrowing inside `catch` must pass `{ cause: err }` (`throw new Error('msg', { cause: err })`). Run the review utility (update mode) to move the whole lint toolchain forward as one unit.
 
 ```json
 {
@@ -49,7 +49,7 @@
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
-    "@eslint/js": "^9.0.0",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
@@ -59,7 +59,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.0.0",
+    "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-sonarjs": "^4.2.0",
     "globals": "^17.6.0",

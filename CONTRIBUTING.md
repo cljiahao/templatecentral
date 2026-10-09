@@ -46,7 +46,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] `bash scripts/validate-manifest.sh` passes locally (validates `plugin.json` and `marketplace.json`)
 - [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if a `skills/scaffold/*/config-files.md` was touched (validates fenced JSON/JS config blocks)
-- [ ] `bash scripts/test-harness-kit.sh` passes locally if `skills/scaffold/shared/harness-kit.md` was touched
+- [ ] `bash scripts/test-harness-kit.sh` passes locally if any `skills/scaffold/shared/harness-kit*.md` file was touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
 - [ ] README updated if the skill count, capability list, or stack list changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`

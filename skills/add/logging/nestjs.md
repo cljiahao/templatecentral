@@ -15,39 +15,42 @@ the marker.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
 **What already exists in the template:**
-- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with `genReqId` and a header `redact` block)
+- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `main.ts`)
 - `main.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true` and logs startup — no bootstrap changes needed
 - pino-http auto-logs every request/response (Tier 1 request logging is automatic)
 - `new Logger('X')` pattern works throughout
 
 #### Tier 1 — Base
 
-pino-http handles request/response logging automatically (method, path, status_code, duration_ms). Add `user_id` to request logs by extending `customProps` in `LoggerModule`:
+pino-http handles request/response logging automatically (method, path, status_code, duration_ms). Add `user_id` to request logs by turning on `assignResponse` in `LoggerModule` and calling `PinoLogger.assign()` from the auth guard once the user is known (Tier 2 guard below):
 
 ```ts
-// src/app.module.ts — add customProps to the existing pinoHttp object
-import type { IncomingMessage } from 'node:http';
-
+// src/app.module.ts — add assignResponse next to the existing pinoHttp object
 LoggerModule.forRoot({
+  // Fields set with PinoLogger.assign() during the request also land on pino-http's
+  // "request completed" line, not just on logs written after the assign() call.
+  assignResponse: true,
   pinoHttp: {
-    // ...keep existing level, genReqId, redact, transport
-    // pino-http receives the raw Node request on Fastify, not FastifyRequest — the auth
-    // guard (Tier 2) mirrors `user` onto `req.raw` so it is visible here.
-    customProps: (req: IncomingMessage & { user?: { id: string } }) => ({
-      user_id: req.user?.id ?? null,
-    }),
+    // ...keep existing level, redact, transport unchanged
   },
 }),
 ```
 
+> Do NOT derive `user_id` in `pinoHttp.customProps`. pino-http evaluates `customProps` when the
+> request starts — before any guard runs — and again when the response finishes, so (verified on
+> NestJS 11.2 + `@nestjs/platform-fastify` + nestjs-pino 4.6 / pino-http 11) every log written
+> inside the handler carries `user_id: null`, and the "request completed" line carries the key
+> twice (`"user_id":null,"user_id":"u-123"`) — log backends that keep the first duplicate show null.
+> `assign()` adds the field once, to the in-handler logs and the completion line.
+
 > Add the key; do not replace the config object. Replacing it wholesale silently drops the
 > scaffold's `redact` block, and every request then logs its bearer JWT and cookies.
 
-Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here; extend the filter from `templatecentral:add` (error-handling). If your copy lacks the status-logging block, add only these lines inside `catch()`, just before the final `reply.status(status).send(...)`:
+Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here; extend the filter from `templatecentral:add` (error-handling). The scaffold's filter already logs 5xx (`if (isServerError) this.logger.error(...)`); replace that one `if` with the block below so 4xx are logged too — never add it alongside, or every 5xx logs twice. Keep the generic client message for 5xx unchanged:
 
 ```ts
-// src/common/filters/http-exception.filter.ts — added lines only
-if (status >= 500) {
+// src/common/filters/http-exception.filter.ts — replaces the isServerError logging `if`
+if (isServerError) {
   this.logger.error(`HTTP ${status}: ${exception.message}`);
 } else {
   this.logger.warn(`HTTP ${status}: ${exception.message}`);
@@ -75,7 +78,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  handleRequest<TUser = { id: string; email: string }>(
+  handleRequest<TUser extends { id: string } = { id: string; email: string }>(
     err: unknown,
     user: TUser | false,
     _info: unknown,
@@ -90,7 +93,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (err instanceof Error) throw err;
       throw new UnauthorizedException();
     }
-    Object.assign(req.raw, { user });
+    // Binds user_id to every later log in this request and (assignResponse) the completion line.
+    this.logger.assign({ user_id: user.id });
     return user;
   }
 }
@@ -220,12 +224,13 @@ const rows = await this.drizzle.timedQuery('projects.findAll', () =>
 );
 ```
 
-**Sanitized request context** — extend `LoggerModule` `customProps`:
+**Sanitized request context** — add `customProps` to `pinoHttp` for request-start facts only (headers are fixed when the request starts; `user_id` stays on `assign()` from Tier 1/2):
 
 ```ts
-// src/app.module.ts  (extend pinoHttp customProps)
-customProps: (req: IncomingMessage & { user?: { id: string } }) => ({
-  user_id: req.user?.id ?? null,
+// src/app.module.ts  (add to the existing pinoHttp object)
+import type { IncomingMessage } from 'node:http';
+
+customProps: (req: IncomingMessage) => ({
   auth_present: !!req.headers.authorization,
 }),
 ```

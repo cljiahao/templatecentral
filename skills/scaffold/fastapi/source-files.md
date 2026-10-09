@@ -20,7 +20,8 @@ API_PORT=8000
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 
-# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+# Reverse proxy trust — comma-separated IPs/CIDRs (no hop count). One-hop ALB → App: ALB VPC CIDR (e.g. 10.0.0.0/8).
+# Two-hop ALB → Traefik → App: Traefik's AND the ALB's CIDRs. * only in closed networks. Empty for local dev.
 TRUST_PROXY=
 ```
 
@@ -55,7 +56,14 @@ def run_api() -> None:
     # the uvicorn/uvicorn.access loggers with propagate=False, which bypasses the root
     # handler setup_logging() configures. Without this, uvicorn's own startup/access logs
     # never go through structlog's JSON formatting in prod, only app-level logger calls do.
-    uvicorn.run("app:app", host=host, port=port, reload=reload, log_config=None)
+    uvicorn.run(
+        "app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_config=None,
+        server_header=False,
+    )
 
 
 if __name__ == "__main__":
@@ -91,13 +99,15 @@ def _build_security_headers() -> list[tuple[bytes, bytes]]:
         (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
         # "0" disables the legacy XSS auditor, itself exploitable in older browsers.
         (b"x-xss-protection", b"0"),
-        # CSP baseline — tighten after auth/analytics are wired. frame-ancestors
-        # replaces X-Frame-Options for CSP2+ browsers.
+        # API responses carry per-user data; never let shared caches store them.
+        (b"cache-control", b"no-store"),
+        # JSON-only API outside dev (docs are dev-only), so nothing may load: OWASP REST
+        # baseline. Dev stays loose enough for the /docs UI.
         (
             b"content-security-policy",
             b"base-uri 'self'; object-src 'none'"
             if is_dev
-            else b"frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+            else b"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
         ),
     ]
     if not is_dev:
@@ -128,10 +138,11 @@ class SecurityHeadersMiddleware:
 
 
 class ForwardedHostMiddleware:
-    """Patches scope['server'] from X-Forwarded-Host so request.base_url reflects the public hostname.
+    """Rewrites the Host header from X-Forwarded-Host so request.base_url reflects the public hostname.
 
     uvicorn's ProxyHeadersMiddleware handles X-Forwarded-Proto and X-Forwarded-For but not
-    X-Forwarded-Host, leaving request.base_url with the internal container hostname.
+    X-Forwarded-Host. Starlette builds request.url/base_url from the Host header (scope['server']
+    is only a fallback when Host is absent), so the Host header itself is what must change.
 
     Trust model: only mounted when TRUST_PROXY is set (see configure_proxy_headers), and added
     AFTER ProxyHeadersMiddleware so it runs outermost — scope['client'] is still the direct peer
@@ -166,13 +177,13 @@ class ForwardedHostMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket") and self._peer_is_trusted(scope):
-            headers = dict(scope["headers"])
-            if b"x-forwarded-host" in headers:
-                host = (
-                    headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
-                )
-                port = scope.get("server", (host, 80))[1]
-                scope["server"] = (host, port)
+            forwarded = next(
+                (v for k, v in scope["headers"] if k == b"x-forwarded-host"), None
+            )
+            host = forwarded.split(b",")[0].strip() if forwarded else b""
+            if host:
+                headers = [(k, v) for k, v in scope["headers"] if k != b"host"]
+                scope = {**scope, "headers": [*headers, (b"host", host)]}
         await self.app(scope, receive, send)
 
 
@@ -200,10 +211,15 @@ def configure_security_headers(app: FastAPI) -> None:
 def configure_proxy_headers(app: FastAPI) -> None:
     """Enables reverse-proxy header trust when TRUST_PROXY is set.
 
-    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments.
+    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments. uvicorn takes
+    comma-separated IPs/CIDRs, not a hop count: it walks X-Forwarded-For right-to-left and
+    returns the first address NOT in TRUST_PROXY as the client.
     One-hop (ALB → App): set TRUST_PROXY to the ALB's VPC CIDR (e.g. 10.0.0.0/8).
-    Two-hop (ALB → Traefik → App): set TRUST_PROXY to Traefik's container CIDR or use *.
-    Use * only in closed networks — it trusts any forwarded IP.
+    Two-hop (ALB → Traefik → App): TRUST_PROXY must cover BOTH Traefik's container CIDR and
+    the ALB's CIDR (comma-separated, or one VPC CIDR spanning both) — trusting Traefik alone
+    resolves every client to the ALB's IP. Traefik must also keep the ALB's X-Forwarded-For
+    (entryPoints forwardedHeaders.trustedIPs = ALB CIDR).
+    Use * only in closed networks — it takes the leftmost, client-supplied X-Forwarded-For entry.
     """
     if not api_settings.TRUST_PROXY:
         return
@@ -239,8 +255,9 @@ def start_application() -> FastAPI:
         },
     )
 
-    configure_security_headers(app)
+    # Last added runs outermost: security headers wrap CORS so preflight responses get them too.
     configure_cors(app)
+    configure_security_headers(app)
     configure_proxy_headers(app)
     configure_exceptions(app)
     app.include_router(router)
@@ -357,7 +374,7 @@ def configure_exceptions(app: FastAPI) -> None:
 ### `src/core/config.py`
 
 ```python
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -381,7 +398,9 @@ class CommonSettings(BaseSettings):
         - [Issues](https://www.github.com/issues)
         """
     )
-    ENVIRONMENT: str = Field(default="dev")
+    # Closed set (parity with NestJS's z.enum): an unknown value such as "production" must
+    # fail at boot, not slip past main.py's prod/uat check and run with auto-reload on.
+    ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
 
 
 class APISettings(BaseSettings):
@@ -1237,6 +1256,9 @@ Load the shared harness kit using the **fastapi** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-fastapi.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).

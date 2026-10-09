@@ -291,6 +291,8 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/typescript.md` ← stack router (NestJS + Next.js)
 - [ ] `skills/add/database/typescript/nestjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nestjs-kysely.md`
+- [ ] `skills/add/database/typescript/nestjs-kysely-iam.md` ← IAM add-on (canonical for migrate/database/nestjs.md IAM blocks)
+- [ ] `skills/add/database/typescript/nestjs-kysely-auth.md` ← auth-stub completion add-on
 - [ ] `skills/add/database/typescript/nestjs-mongoose.md`
 - [ ] `skills/add/endpoint/nestjs.md`
 - [ ] `skills/add/integration/nestjs.md`
@@ -389,14 +391,16 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/add/ai-security/implementation.md`
 - [ ] `skills/add/documentation/implementation.md` ← README backfill / enforcement-check capability
-- [ ] `skills/add/redaction/implementation.md` ← PII/secret masking + DLP capability
+- [ ] `skills/add/redaction/implementation.md` ← PII/secret masking + DLP capability (router for the per-runtime hook files below)
+- [ ] `skills/add/redaction/hook-node.md` ← Node `PostToolUse` masking hook + `user-prompt-guard.cjs` companion (TS stacks)
+- [ ] `skills/add/redaction/hook-python.md` ← Python `PostToolUse` masking hook + `user-prompt-guard.py` companion (FastAPI); masking logic must stay behaviourally identical to hook-node.md
 - [ ] `skills/standards/code-standards/comments.md` ← shared comment doctrine (loaded first by code-standards)
 - [ ] `skills/standards/validation-patterns/patterns.md`
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
-- [ ] `skills/scaffold/shared/harness-kit.md`
+- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`
 - [ ] `skills/scaffold/shared/documentation-kit.md` ← per-folder README/`.order` generation SSOT
-- [ ] `skills/migrate/general/implementation.md`
+- [ ] `skills/migrate/general/implementation.md` ← Phases 0–3 + router; `phase-4-upgrade.md` (full seed), `phase-5-health-check.md` (health check + re-sync)
 - [ ] `skills/migrate/nextjs-backend-extraction.md`
 - [ ] `skills/migrate/nextjs-backend-extraction/nestjs.md`
 - [ ] `skills/migrate/nextjs-backend-extraction/fastapi.md`

@@ -99,7 +99,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Tooling
 
-- **ESLint 9** — flat config with typescript-eslint + prettier.
+- **ESLint 10** — flat config (`eslint.config.mjs`, `sourceType: 'module'`) with typescript-eslint + prettier.
 - **Prettier** — single quotes, trailing commas.
 - **Vitest** — testing framework.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).

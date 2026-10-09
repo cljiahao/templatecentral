@@ -1,6 +1,6 @@
 // templatecentral.plugin.js — OpenCode adapter for templateCentral's in-agent harness guards.
 //
-// Ports the cleanly-mappable Claude Code hooks (scaffold/shared/harness-kit.md) to OpenCode's plugin API:
+// Ports the cleanly-mappable Claude Code hooks (scaffold/shared/harness-kit*.md) to OpenCode's plugin API:
 //   • bash-command guard   ← block-no-verify.sh      (PreToolUse Bash)       — hard-block, throws
 //   • protected-file guard ← protect-files.sh        (PreToolUse Edit|Write) — hard-block, throws
 //   • typecheck-on-edit    ← post-edit-typecheck.sh  (PostToolUse)           — feedback only

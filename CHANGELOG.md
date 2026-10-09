@@ -10,6 +10,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.18.0] — 2026-10-09
+
+Second fresh-eyes pass, focused on agent latency and the items deferred in 5.17.0.
+
+### Changed — smaller runtime loads (Anthropic progressive-disclosure guidance)
+
+- `scaffold/shared/harness-kit.md` is now an index plus `harness-kit-{ts,fastapi,enforcement,finalize}.md`;
+  a scaffold run loads only its stack's hooks (TS 1996 → 1443 lines, FastAPI 1996 → 1495). Step
+  letters and the index path are unchanged, so existing "harness-kit Step X" references resolve.
+- `migrate/general` split into Phases 0–3 plus `phase-4-upgrade.md` and `phase-5-health-check.md`
+  (unmarked-project run 557 → 218 lines). The router loads the kits next to the phase file so every
+  chain stays within two `cat` hops; an up-to-date project still runs the Phase 5 health check.
+- `add/redaction` hook split per runtime (971 → 585 lines per run); `nestjs-kysely` split into a base
+  leaf plus IAM and auth add-ons (typical run 581 → 341 lines). RDS CA-bundle steps live in the base
+  leaf, so password-auth RDS users get them too.
+- `scripts/test-harness-kit.sh` and the harness lint checks read the split kit files.
+
+### Changed — toolchain
+
+- TS scaffolds on ESLint 10 (`eslint ^10.12.0`, `@eslint/js ^10`), verified by installing and linting
+  each full scaffold. NestJS uses `sourceType: 'module'` (works around an ESLint 10 scope bug with
+  `commonjs` + `projectService`) and `@fastify/static ^10` (the platform-fastify peer).
+- mutmut floor ≥3.6.0 (`source_paths`); Stryker declares `@stryker-mutator/vitest-runner` explicitly
+  (pnpm's isolated layout hides it from plugin discovery). Both verified by real runs.
+
+### Fixed
+
+- NestJS `main.ts` didn't compile: fastify ≥5.12.1 dropped numeric `trustProxy`; `TRUST_PROXY` is now
+  `*` or an IP/CIDR list (two-hop lists both proxies) across scaffold, `.env.example` and `add (auth)`.
+- NestJS request IDs: `genReqId` moved to `FastifyAdapter` (the pino-http option was ignored on Fastify).
+- NestJS logging: `user_id` was null in handler logs and duplicated on completion lines; now set with
+  nestjs-pino `assign()`. Tier 1 replaces the scaffold's 5xx log instead of adding a second one.
+- NestJS 5xx `HttpException` messages no longer reach clients.
+- FastAPI `ForwardedHostMiddleware` had no effect (Starlette reads the Host header); dev Docker stage
+  lacked runtime packages; two-hop `TRUST_PROXY` docs made every client look like the ALB;
+  `ENVIRONMENT` is a `Literal`; security headers wrap CORS; Server header off; strict CSP
+  (`default-src 'none'`) and `Cache-Control: no-store` outside dev.
+- Backend extraction to NestJS left auth `501` stubs for every ORM (database phase ran before auth);
+  Phase 7 now completes auth integration for Kysely, Drizzle and Mongoose.
+- Repo scripts pass shellcheck (CI's first run flagged three findings).
+- `SECURITY.md` support policy, `FUTURE.md` status notes, OpenCode plugin path, PR/issue templates.
+
+### Known / deferred
+
+- `ai-security`, `auth/nextjs` and `validation-patterns/nextjs` kept whole: splitting saves little per run.
+- AI PR Review fails on PRs that edit `ai-review.yml` itself (the action requires the workflow to match
+  the default branch) — expected until merge.
+- `eslint-config-next` pulls plugins whose peers still say ESLint ≤9 (install warns; rules verified working).
+
+---
+
 ## [5.17.0] — 2026-10-09
 
 Fresh-eyes sweep of every skill, script and workflow, with each change re-reviewed by an

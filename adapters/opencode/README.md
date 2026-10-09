@@ -37,8 +37,8 @@ Add to `opencode.json` (project `./opencode.json` or global `~/.config/opencode/
 }
 ```
 
-Or drop the file into `.opencode/plugin/` in your project (OpenCode auto-discovers `*.js`/`*.ts`
-there). OpenCode loads config once at startup — **restart OpenCode after installing.**
+Or drop the file into `.opencode/plugins/` in your project (or `~/.config/opencode/plugins/` globally)
+— OpenCode auto-loads `*.js`/`*.ts` from those directories ([docs](https://opencode.ai/docs/plugins/)). OpenCode loads config once at startup — **restart OpenCode after installing.**
 
 ## Validation
 

@@ -9,7 +9,7 @@ Write these files exactly as shown.
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint pinned at `^9`** — `^9` is the flat-config baseline every plugin in this devDependency set is verified against. `eslint-plugin-react-hooks` 7.1.1 and `eslint-config-next` 16 already peer-support `^10`, so an ESLint 10 bump is not blocked by peers; re-verify `eslint-plugin-sonarjs` and `@eslint-community/eslint-plugin-eslint-comments` alongside it and move the lint toolchain as one unit.
+> **ESLint 10** (`^10.12.0`; engines `^20.19 || ^22.13 || >=24`, so Node ≥24 is fine). Direct plugins all peer-support `^10` (`eslint-config-next` `>=9`, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs`, `@eslint-community/eslint-plugin-eslint-comments`, `typescript-eslint` 8.x). `eslint-config-next` 16.4's transitive `eslint-plugin-react` 7.37 / `eslint-plugin-import` 2.32 / `eslint-plugin-jsx-a11y` 6.10 still declare peers only up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning — non-fatal (pnpm 11 does not enforce strict peers), and their rules (`react/jsx-key`, `jsx-a11y/alt-text`, `import/no-anonymous-default-export`, `@next/next/no-img-element`) were verified to fire normally under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it; the warning clears once those plugins ship `^10` peers.
 
 ```json
 {
@@ -60,7 +60,7 @@ Write these files exactly as shown.
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.0.0",
+    "eslint": "^10.12.0",
     "eslint-config-next": "^16.3.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-sonarjs": "4.1.0",

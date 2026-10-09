@@ -24,6 +24,7 @@ expires-after-days: 30
 **Current: 12.1.2** (NestJS 12 GA 2026-08-27). 11.x is `legacy` tag, latest 11.2.7.
 - High advisory: path-scoped middleware bypass via absolute-form request targets in platform-fastify, GHSA-9c5c-9qcx-q35q — fixed 11.2.4 / 12.0.2.
 - Nest 11.2.7 bundles fastify 5.11.3, exposed to 4 High fastify advisories (GHSA-p68q-wchp-6fh7 auth bypass via not-found handlers, GHSA-667r-xxjv-c9mm, GHSA-hwr6-493r-vm6h, GHSA-9q9j-q6p8-xq58) fixed in 5.12.2; plus Medium trustProxy X-Forwarded spoofing GHSA-3m5p-2c4r-xxw2. Nest 11 users need a `fastify ≥5.12.5` pnpm override. Nest 12.1.2 bundles 5.12.5.
+- fastify 5.12.1 dropped numeric `trustProxy` (types and runtime — a number now trusts nothing; tied to GHSA-3m5p-2c4r-xxw2). `TRUST_PROXY` must be `true`/`*` or an IP/CIDR list; two-hop lists both proxy CIDRs.
 - Nest 12 breaking: ESM packages; Node ≥20.19/≥22.12 (CLI ≥22.22.3/≥24.15/26); `@Optional()` not inherited; pipe/ArgumentMetadata signature changes; `@nestjs/config` Standard Schema; `--webpack` → `--builder rspack`; `nest upgrade` bumps TS 6. New: `@Body({ schema })` + `StandardSchemaValidationPipe` (native Zod). Migration DEFERRED.
 
 ### FastAPI + Starlette

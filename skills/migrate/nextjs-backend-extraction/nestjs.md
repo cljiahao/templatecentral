@@ -197,6 +197,10 @@ cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-kysely.md"
 ```
+   If the Next.js project uses AWS IAM auth (`@aws-sdk/rds-signer` in its `package.json`), also load the IAM add-on and apply it in place of the standard B2/B7 steps:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-kysely-iam.md"
+```
 3. Delete `src/integrations/database/` from the Next.js project.
 
 ---
@@ -209,6 +213,14 @@ Load and follow the NestJS auth skill in `../[project-name]-api`:
 ```bash
 cat "<skill-dir>/../add/auth/nestjs.md"
 ```
+
+If Phase 6 migrated a database, the auth skill's `AuthService` is a 501 stub. Phase 6 ran before these stubs existed, so its auth section was skipped — replace the stubs with the database-backed implementation now:
+
+| Phase 6 database | Follow |
+|---|---|
+| Kysely | `cat "<skill-dir>/../add/database/typescript/nestjs-kysely-auth.md"` |
+| Drizzle | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"` |
+| Mongoose | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"` |
 
 Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 

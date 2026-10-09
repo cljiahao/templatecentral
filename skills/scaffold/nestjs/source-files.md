@@ -20,25 +20,25 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
-// Fastify trustProxy: "*" → trust all; number = hop count (1 = ALB→App, 2 = ALB→Traefik→App);
-// any other string is a trusted CIDR range.
-function resolveTrustProxy(
-  value: string | undefined,
-): boolean | number | string | undefined {
-  let trustProxy: boolean | number | string | undefined = value;
-  if (value === '*') {
-    trustProxy = true;
-  } else if (value && /^\d+$/.test(value)) {
-    trustProxy = parseInt(value, 10);
-  }
-  return trustProxy;
+// Fastify trustProxy: "*" → trust every hop (closed networks only — the leftmost, client-supplied
+// X-Forwarded-For entry wins); otherwise comma-separated IPs/CIDRs that must cover EVERY proxy in
+// the chain (one-hop ALB → App: ALB CIDR; two-hop ALB → Traefik → App: Traefik's AND the ALB's
+// CIDRs). Numeric hop counts were removed in fastify 5.12.1 (security advisory): they
+// cannot validate the connecting peer, so they now trust nothing.
+function resolveTrustProxy(value: string | undefined): boolean | string | undefined {
+  return value === '*' ? true : value;
 }
 
 async function bootstrap(): Promise<void> {
   const trustProxy = resolveTrustProxy(appConfig.TRUST_PROXY);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(trustProxy ? { trustProxy } : {}),
+    // Fastify assigns req.id before pino-http runs, so the UUID generator must live here; a
+    // pino-http genReqId is ignored and logs show Fastify's sequential req-1, req-2.
+    new FastifyAdapter({
+      genReqId: () => crypto.randomUUID(),
+      ...(trustProxy ? { trustProxy } : {}),
+    }),
     { bufferLogs: true },
   );
   const logger = app.get(Logger);
@@ -50,8 +50,7 @@ async function bootstrap(): Promise<void> {
   setupCors(app);
   logger.log('CORS configured');
 
-  setupSwagger(app);
-  logger.log('Swagger documentation configured');
+  const docsEnabled = setupSwagger(app);
 
   await app.init();
   logger.log('Application initialized');
@@ -60,7 +59,9 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   logger.log(`${appConfig.PROJECT_NAME} running on: http://localhost:${port}`);
-  logger.log(`Swagger docs available at: http://localhost:${port}/docs`);
+  if (docsEnabled) {
+    logger.log(`Swagger docs available at: http://localhost:${port}/docs`);
+  }
 }
 
 bootstrap().catch((err) => {
@@ -85,7 +86,6 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: appConfig.LOG_LEVEL,
-        genReqId: () => crypto.randomUUID(),
         // pino-http's default serializer logs the whole headers object at info level.
         // Without this, every request writes its bearer JWT and session cookies to the log.
         redact: {
@@ -153,6 +153,7 @@ import {
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
+import { HTTP_STATUS_MESSAGES } from '../constants';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -169,9 +170,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
-    reply
-      .status(status)
-      .send({ statusCode: status, message: exception.message });
+    // A 5xx message is server-side detail (e.g. `new InternalServerErrorException(err.message)`)
+    // — log it, return the generic text, matching FastAPI's catch-all handler.
+    const isServerError = status >= 500;
+    if (isServerError) {
+      this.logger.error(exception.message, exception.stack);
+    }
+    reply.status(status).send({
+      statusCode: status,
+      message: isServerError ? HTTP_STATUS_MESSAGES.INTERNAL_ERROR : exception.message,
+    });
   }
 }
 ```
@@ -222,7 +230,7 @@ const envSchema = z.object({
   ENVIRONMENT: z.enum(['dev', 'uat', 'prod']).default('dev'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   CLIENT_URL: z.string().min(1).default('http://localhost:3000'),
-  // Reverse proxy trust: hop count, CIDR, or "*" — see main.ts's resolveTrustProxy().
+  // Reverse proxy trust: comma-separated IPs/CIDRs, or "*" — see main.ts's resolveTrustProxy().
   TRUST_PROXY: z.string().optional(),
   LOG_LEVEL: z
     .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
@@ -349,9 +357,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { appConfig } from '../env.config';
 
-export function setupSwagger(app: INestApplication): void {
-  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat')
-    return;
+/** Mounts Swagger UI at /docs outside prod/uat. Returns whether it was mounted. */
+export function setupSwagger(app: INestApplication): boolean {
+  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat') {
+    return false;
+  }
 
   const options = new DocumentBuilder()
     .setTitle(appConfig.PROJECT_NAME)
@@ -362,6 +372,7 @@ export function setupSwagger(app: INestApplication): void {
 
   const document = SwaggerModule.createDocument(app, options);
   SwaggerModule.setup('docs', app, cleanupOpenApiDoc(document));
+  return true;
 }
 ```
 
@@ -886,6 +897,9 @@ Load the shared harness kit using the **nestjs** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-ts.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -940,7 +954,15 @@ After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness
 
 ### 7b. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in templateCentral's root `AGENTS.md`. If no, skip.
+Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```
+
+If no, skip.
 
 ### 8. Remove Example Code (Optional)
 

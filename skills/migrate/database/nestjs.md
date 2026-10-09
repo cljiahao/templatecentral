@@ -38,8 +38,8 @@ rm -rf drizzle/
 ### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)
 
 > **Canonical source**: the `KyselyService` block below and the `serviceConfig` block in
-> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely.md` (its
-> "IAM Auth Variant" section) — treat that file as canonical. `scripts/lint-skills.sh`
+> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely-iam.md`
+> (the IAM Auth Variant add-on leaf) — treat that file as canonical. `scripts/lint-skills.sh`
 > fails the build if the two copies drift, so re-copy rather than hand-editing here.
 
 **Download the AWS RDS CA bundle first.** RDS server certificates chain to the Amazon RDS

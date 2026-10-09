@@ -1673,6 +1673,9 @@ Load the shared harness kit using the **vite-react** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-ts.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 7c below to create the verify skill. After step 7c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -1729,7 +1732,15 @@ After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness
 
 ### 9. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from "Scaffold: optional Task Management" in repository root `AGENTS.md`. If no, skip.
+Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```
+
+If no, skip.
 
 ### 10. Optional: Remove example code
 

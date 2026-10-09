@@ -6,14 +6,14 @@
 
 - [ ] Bug fix — a skill produced incorrect, broken, or insecure output
 - [ ] Accuracy fix — a skill referenced a deprecated API, wrong version, or outdated pattern
-- [ ] New skill — adds a `skills/<stack>-<name>/SKILL.md`
+- [ ] New capability — adds a reference file under an existing registered skill (e.g. `skills/add/<capability>/<stack>.md`); never a new `skills/<stack>-<name>/` skill (`skills/CONVENTIONS.md` §6)
 - [ ] New stack — adds scaffold + rules + AGENTS.md routing
 - [ ] Infrastructure — CI, lint script, audit tooling, templates
 
 ## Checklist
 
-- [ ] `SKILL.md` has valid `name` and `description` frontmatter
-- [ ] No version pins in skill bodies — floors/pins belong in `.claude/rules/*.md` only
+- [ ] Read `skills/CONVENTIONS.md`; any touched `SKILL.md` keeps valid `name`/`description` frontmatter and every reference file keeps its `<!-- ref: … -->` header
+- [ ] Any version floor/pin in a skill body matches `.claude/rules/<stack>.md` (the stack-version source of truth)
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] CI passes (frontmatter validation + lint-patterns)
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`

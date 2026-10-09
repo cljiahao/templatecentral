@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
-    "@fastify/static": "^9.1.3",
+    "@fastify/static": "^10.1.2",
     "@nestjs/common": "^11.2.4",
     "@nestjs/core": "^11.2.4",
     "@nestjs/platform-fastify": "^11.2.4",
@@ -52,13 +52,13 @@
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
-    "@eslint/js": "^9.0.0",
+    "@eslint/js": "^10.0.1",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.2.4",
     "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.0.0",
+    "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-sonarjs": "4.1.0",
@@ -461,7 +461,10 @@ PORT=3000
 # CORS
 CLIENT_URL=http://localhost:3000
 
-# Reverse proxy trust — 1 = one-hop (ALB → App), 2 = two-hop (ALB → Traefik → App), a VPC CIDR (e.g. 10.0.0.0/8), or * to trust all; leave empty for local dev
+# Reverse proxy trust — comma-separated IPs/CIDRs covering EVERY proxy hop (one-hop ALB → App: the ALB
+# CIDR, e.g. 10.0.0.0/8; two-hop ALB → Traefik → App: list both Traefik's and the ALB's CIDRs), or * to
+# trust all (closed networks only). Numeric hop counts (1/2) no longer work — fastify ≥5.12.1 treats a
+# number as trusting nothing (security advisory). Leave empty for local dev.
 TRUST_PROXY=
 ```
 
@@ -562,7 +565,9 @@ export default tseslint.config(
       globals: {
         ...globals.node,
       },
-      sourceType: 'commonjs',
+      // Source is ES-module syntax (tsc emits CJS). 'commonjs' + projectService under ESLint 10
+      // drops scope references for lib-global-named imports (e.g. `Body`) → false unused-import.
+      sourceType: 'module',
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
@@ -577,6 +582,8 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',
+      // Decorator-only imports (`@Body()`) are prone to false positives here; no-unused-vars covers unused imports.
+      'sonarjs/unused-import': 'off',
       // Honour the `_`-prefix convention for intentionally-unused args/vars.
       '@typescript-eslint/no-unused-vars': [
         'warn',

@@ -162,6 +162,7 @@ run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .en?'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .[e]nv'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat secrets/*'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'python3 -c "print(open(\".env\").read())"'
+# shellcheck disable=SC2016  # literal $PWD: the guard must expand it itself.
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat "$PWD/.env"'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'source .env && x'
 run_bash 2 "$NESTED" "$NESTED/backend" 'cat .env'
