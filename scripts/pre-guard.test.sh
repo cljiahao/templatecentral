@@ -146,8 +146,9 @@ echo "== (i) bash-guard.sh =="
 BG="$REPO_ROOT/scripts/bash-guard.sh"
 E=.env
 SANDBOX=$(mktemp -d)
-mkdir -p "$SANDBOX/backend" "$SANDBOX/secrets"
-touch "$SANDBOX/$E" "$SANDBOX/$E.example" "$SANDBOX/secrets/a"
+mkdir -p "$SANDBOX/backend" "$SANDBOX/secrets" "$SANDBOX/upper"
+# Separate dir: on case-insensitive filesystems .ENV and .env are the same file.
+touch "$SANDBOX/$E" "$SANDBOX/$E.example" "$SANDBOX/secrets/a" "$SANDBOX/upper/.ENV"
 NESTED=$(mktemp -d)
 mkdir -p "$NESTED/backend"
 touch "$NESTED/backend/$E"
@@ -157,7 +158,7 @@ run_bash() {
   expect_exit "bash: $4" "$1" "$?"
 }
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .env'
-run_bash 2 "$SANDBOX" "$SANDBOX" 'cat ./.ENV'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat ./upper/.ENV'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .en?'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .[e]nv'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat secrets/*'
