@@ -5,7 +5,7 @@ paths:
 
 # FastAPI Rules
 
-Stack: FastAPI 0.136+, Python 3.13, Pydantic ≥2.9.0 (camelCase schemas), Starlette ≥1.0.1 (BadHost auth-bypass advisory fix; current stable 1.3.1), Uvicorn, Ruff, pytest, Docker. Logging: structlog ≥25.1 (JSON in prod/uat, console in dev; kwargs not `extra=`). Request-ID correlation (via `templatecentral:add (logging)`): asgi-correlation-id ≥4.3. MongoDB: pymongo ≥4.13 (AsyncMongoClient GA floor), beanie ≥2.0 (built on PyMongo async — Motor is deprecated, never add it).
+Stack: FastAPI 0.136+ (current stable 0.143.x), Python 3.13 (now security-fixes-only upstream; 3.14.x is current stable — version change deferred), Pydantic ≥2.9.0 (camelCase schemas; current stable 2.14.x), Starlette ≥1.0.1 (BadHost auth-bypass advisory fix; current stable 1.7.x), Uvicorn, Ruff, pytest, Docker. Logging: structlog ≥25.1 (JSON in prod/uat, console in dev; kwargs not `extra=`). Request-ID correlation (via `templatecentral:add (logging)`): asgi-correlation-id ≥4.3. MongoDB: pymongo ≥4.13 (AsyncMongoClient GA floor), beanie ≥2.0 (built on PyMongo async — Motor is deprecated, never add it).
 
 ## Boundaries
 

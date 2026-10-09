@@ -68,8 +68,10 @@ the marker.
 #### 1. Install better-auth
 
 ```bash
-pnpm add better-auth
+pnpm add "better-auth@^1.7.7"
 ```
+
+> **Version floor:** better-auth ≥1.7.7 — two critical security advisories are fixed only in 1.7.7. If you later add the Drizzle adapter, regenerate the auth schema after upgrading (1.7 makes `Account.issuer` required and moves `experimental.joins` to `advanced.database.joins`).
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
@@ -564,7 +566,7 @@ Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.l
 
 Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
 
-> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidc-provider` plugin is deprecated for removal in an upcoming release, so migrate to `@better-auth/oauth-provider`. See: https://www.better-auth.com/docs/plugins/oauth-provider
+> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidcProvider` plugin was removed in better-auth 1.7. (MCP support likewise moved to `@better-auth/mcp`; generic OAuth providers are configured via `signIn.social` with PKCE on by default.) See: https://www.better-auth.com/docs/plugins/oauth-provider
 
 ### Rate Limiting (Required for Production)
 

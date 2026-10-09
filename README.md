@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-5.15.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-5.16.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -73,7 +73,7 @@ Claude reads the scaffold skill, generates every file, installs dependencies, ru
 Each scaffold produces a complete, working project — not a bare starter.
 
 **Every stack includes:**
-✅ AI harness — **7-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall (Mongo/Postgres/MySQL/Redis/AMQP `user:pass@` URLs), `PreToolUse` secrets read/write guard + git guards — blocks `--no-verify` *and* hook-layer bypasses (`LEFTHOOK=0`, `core.hooksPath=`) — plus CI/CD pipeline-file protection across GitHub, Azure DevOps, GitLab, and Jenkins, `PostToolUse` type-check, `PostToolUseFailure` error surface, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
+✅ AI harness — **6-event hook kit** seeded as `.claude/hooks/` scripts: `UserPromptSubmit` injection + credential firewall (Mongo/Postgres/MySQL/Redis/AMQP `user:pass@` URLs), `PreToolUse` secrets read/write guard + git guards — blocks `--no-verify` *and* hook-layer bypasses (`LEFTHOOK=0`, `core.hooksPath=`) — plus CI/CD pipeline-file protection across GitHub, Azure DevOps, GitLab, and Jenkins, `PostToolUse` type-check, `Stop` test gate, `SubagentStop` type-gate, `SessionStart` context recovery (re-injects AGENTS.md + `docs/CONSTITUTION.md` after compaction). `permissions.deny` blocks reading `.env*` and `secrets/**`. Self-contained — enforces even after plugin uninstall.  
 ✅ `AGENTS.md` + `CLAUDE.md` · ✅ `.agents → .claude` symlink for cross-framework compatibility · ✅ Git Workflow convention — always branch from a freshly fetched `main` (`git fetch -p` + `git pull --ff-only`)
 
 ### Next.js

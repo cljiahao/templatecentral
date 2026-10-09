@@ -14,7 +14,7 @@
   "description": "",
   "private": true,
   "license": "UNLICENSED",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.28.5",
   "engines": {
     "node": ">=24"
   },
@@ -37,12 +37,12 @@
   "dependencies": {
     "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^9.1.3",
-    "@nestjs/common": "^11.1.28",
-    "@nestjs/core": "^11.1.28",
-    "@nestjs/platform-fastify": "^11.1.28",
+    "@nestjs/common": "^11.2.4",
+    "@nestjs/core": "^11.2.4",
+    "@nestjs/platform-fastify": "^11.2.4",
     "@nestjs/swagger": "^11.4.4",
     "dotenv": "^17.4.2",
-    "fastify": "^5.8.5",
+    "fastify": "^5.12.5",
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.4.0",
     "pino-pretty": "^13.1.3",
@@ -54,7 +54,7 @@
     "@eslint/js": "^9.0.0",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
-    "@nestjs/testing": "^11.1.28",
+    "@nestjs/testing": "^11.2.4",
     "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
@@ -488,6 +488,12 @@ allowBuilds:
   '@scarf/scarf': false
   lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
   # argon2: true        # uncomment when running `templatecentral:add (auth)` — argon2 is a native Node addon
+
+# Force every copy of fastify (including the one @nestjs/platform-fastify pulls in
+# transitively) onto a release with the High security advisories fixed.
+# pnpm 11 reads overrides from this file, not from package.json.
+overrides:
+  fastify: ^5.12.5
 ```
 
 > **Note:** if `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites `pnpm-workspace.yaml` with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` as appropriate and re-run `pnpm install`.

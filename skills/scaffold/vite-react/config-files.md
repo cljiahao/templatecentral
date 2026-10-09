@@ -15,7 +15,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.28.5",
   "engines": {
     "node": ">=24"
   },

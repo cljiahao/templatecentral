@@ -1593,7 +1593,7 @@ If any check fails, diagnose and fix before proceeding.
 Only after the verification gate passes. Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ````markdown
-<!-- templateCentral: vite-react@5.0.0 -->
+<!-- templateCentral: vite-react@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack

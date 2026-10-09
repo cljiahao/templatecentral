@@ -827,7 +827,7 @@ If any command fails, diagnose and fix before proceeding.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nestjs@5.0.0 -->
+<!-- templateCentral: nestjs@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack
@@ -936,6 +936,8 @@ Create `CLAUDE.md` at the project root with exactly one line:
 ```
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
+
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit.md Step E).
 
 ### 7b. Optional: Task management
 

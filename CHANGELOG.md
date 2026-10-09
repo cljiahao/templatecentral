@@ -10,6 +10,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.16.0] — 2026-10-09
+
+### Fixed — seeded Claude Code hooks never ran (harness schema 6.0.0)
+
+Every hook in the seeded `.claude/settings.json` was written with an array-valued `command`
+(`"command": ["bash", ".claude/hooks/x.sh"]`). Claude Code silently ignores that shape — verified
+by execution on Claude Code 2.1.273, where an array-form hook never fired and the documented
+`"command": "bash", "args": [...]` form did. Our own lint check and the `/tc-audit` Step 3H
+checklist *required* the inert form, so projects scaffolded or migrated under harness schema 5.x
+had no live in-agent guards (`.env` protection, `--no-verify` block, Stop test gate). The git-hook
+and CI layers were unaffected.
+
+- **Hook form**: every hook entry is now `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<x>"]`
+  with an explicit `timeout`. Every script `cd`s to `$CLAUDE_PROJECT_DIR` first (guards fail closed,
+  feedback hooks fail open), so hooks keep working after Claude changes directory.
+- **Lint**: `check_hook_command_uses_args_array` now fails on any array-valued `command` and on any
+  `.claude/hooks/` path without the `${CLAUDE_PROJECT_DIR}` prefix.
+- **Schema floor 5.0.0 → 6.0.0**: `templatecentral:migrate` Phase 0 now routes `@5.x` projects to a
+  harness re-sync that replaces array-form entries instead of keeping them alongside.
+
+### Fixed — harness behaviour (found by executing every seeded script)
+
+- `post-edit-typecheck.sh` feedback now reaches Claude via `hookSpecificOutput.additionalContext`
+  (plain stdout on exit 0 only reaches the debug log). `post-tool-failure.sh` removed — Claude already
+  sees tool errors. Seeded hooks: 10 → 9.
+- `subagent-stop.sh`: honours `stop_hook_active`, skips read-only `Explore`/`Plan` subagents, skips
+  clean trees, uses `--incremental`.
+- `protect-files.sh`: case-insensitive matching (`.ENV` on case-insensitive filesystems), `./` prefix
+  stripping, symlink-safe root resolution, safe JSON for the governance "ask" prompt, `NotebookEdit` coverage.
+  `permissions.deny` lists explicit `.env` variants (a catch-all `Read(**/.env.*)` also blocks editing
+  `.env.example`, since Read denies now apply to Edit/Write) plus `*.pem`/`*.key`. Sandbox documented as opt-in.
+- `block-no-verify.sh` rewritten as a per-segment git parser: closes `git push --no-verify`,
+  `--force-with-lease`, `HEAD:main` refspecs, `git config core.hooksPath`, `git -C`, and apostrophe-in-message
+  bypasses; no longer blocks `git log -n` / `grep -n`.
+- `user-prompt-guard`: no longer blocks "disregard your last suggestion"-style prompts or loopback DB URLs.
+- `skill-usage-log.sh`: matcher `Skill` + `tool_input.skill` (was `Skill__.*`, which never matched).
+- `stop-checks.sh`: exits early on a clean tree; documents the 8-continuation cap (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`).
+- Lefthook: local gitleaks now actually blocks (dropped `|| true`); TS pre-commit runs sequentially
+  because the lockfile step runs `pnpm install`; whitespace-safe file loops; commit-msg accepts
+  `type(scope)!:`, `Revert`, `fixup!`, `squash!`, `amend!`, `Merge`.
+- `verify-harness.sh`: fails on a malformed, empty or placeholder manifest; `sha256sum` fallback.
+- AGENTS.md is re-hashed after Step G's final write, so a fresh scaffold no longer reports it as MODIFIED.
+  Next.js, NestJS and FastAPI scaffolds now hash `CLAUDE.md` like Vite + React already did.
+- CI: removed the `pnpm/action-setup` `version` input that conflicts with `packageManager`; checkout,
+  setup-node and setup-python moved to v7 (SHA-pinned, SHAs verified); `cache: pip`; `timeout-minutes`;
+  gitleaks-action gets `GITHUB_TOKEN` and `GITLEAKS_LICENSE`.
+- `add (redaction)`: hook wiring moved to the exec form; fail-open warnings surface via `systemMessage`.
+
+### Security — stack version floors
+
+- Next.js floor ≥16.3.8 (critical unauthenticated RCE security advisories; no 16.2.x fix).
+- `@nestjs/platform-fastify` ≥11.2.4 (path-scoped middleware bypass advisory); `fastify` ≥5.12.5 via
+  direct dependency and `pnpm-workspace.yaml` override (Nest 11 bundles an affected fastify).
+- better-auth ≥1.7.7 (critical OAuth advisories); 1.7 breaking changes documented.
+- pnpm pin → 11.28.5 (≥11.11.0 for path-traversal and secret-exfiltration advisories).
+
+### Changed — audit infrastructure
+
+- Ecosystem research cache rescanned (2026-10-09): 33 hook events, Stop-hook cap, `omitClaudeMd` on
+  custom subagents, exec-form semantics, permissions/sandbox changes.
+- `/tc-audit` Step 3H corrected and extended (exec form, `additionalContext`, timeouts, SubagentStop
+  guards, gitleaks blocking, manifest integrity, hash ordering). AGENTS.md subagent blind-spot section updated.
+
+### Known / deferred
+
+- NestJS 12, pnpm 12 and Python 3.14 migrations deferred.
+- OWASP LLM Top 10 2026 re-numbering unconfirmed against the official document — skill IDs unchanged.
+- gitleaks-action v3 and `pnpm/action-setup` v6 not adopted yet.
+- `block-no-verify.sh` remains a pattern guard; shell obfuscation (and a quoted `<<WORD` string, which the heredoc-body filter treats as a heredoc) can still evade it — lefthook and CI are the backstop.
+
+---
+
 ## [5.15.0] — 2026-08-13
 
 ### Added — static-analysis coverage (all four stacks)

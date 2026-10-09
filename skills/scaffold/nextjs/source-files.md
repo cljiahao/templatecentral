@@ -1835,7 +1835,7 @@ If check fails, a generated file violates the eslint or prettier config.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nextjs@5.0.0 -->
+<!-- templateCentral: nextjs@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 > STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
@@ -1974,6 +1974,8 @@ Create `CLAUDE.md` at the project root with exactly one line:
 ```
 
 This makes Claude Code automatically load `AGENTS.md` on every session without duplicating its content.
+
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit.md Step E).
 
 ### 7b. Optional: Task management
 

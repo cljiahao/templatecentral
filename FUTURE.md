@@ -151,7 +151,7 @@ The skills + `AGENTS.md` + git-hook/CI harness already run on every target tool 
 
 | Tool | In-agent harness adapter | Status |
 |---|---|---|
-| **Claude Code** | `.claude/hooks/` (7-event kit) | ✅ primary, complete |
+| **Claude Code** | `.claude/hooks/` (6-event kit) | ✅ primary, complete |
 | **OpenCode / OpenChamber** | `adapters/opencode/templatecentral.plugin.js` | ✅ **shipped & validated live** — plugin loads in a real OpenChamber container and the `git --no-verify` guard blocks end-to-end; 25-case `hooks.test.mjs`. (Was "Phase 3 / #17".) |
 | **Codex** | — | ⏳ **planned** (demand-gated) |
 | **Antigravity** | — | ⏳ **planned** (demand-gated) |

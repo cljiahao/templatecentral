@@ -311,6 +311,15 @@ function redactValue(value, config, map) {
   return { value, count: 0 };
 }
 
+function warnAndExit(message) {
+  // Fail-open warning. Plain stderr on exit 0 reaches only the debug log -- neither the user nor
+  // Claude sees it -- so the warning goes out as a `systemMessage` (shown to the user) while the
+  // stderr copy keeps the debug log useful. Exit 0: the hook never blocks a tool call.
+  process.stderr.write(`${message}\n`);
+  process.stdout.write(JSON.stringify({ systemMessage: message }));
+  process.exit(0);
+}
+
 function main() {
   if (!fs.existsSync(CONFIG_PATH)) process.exit(0);
 
@@ -318,14 +327,12 @@ function main() {
   try {
     config = loadJson(CONFIG_PATH, null);
   } catch (err) {
-    process.stderr.write(`redact-sensitive-output: malformed ${CONFIG_PATH} -- skipping this pass: ${err.message}\n`);
-    process.exit(0);
+    warnAndExit(`redact-sensitive-output: malformed ${CONFIG_PATH} -- skipping this pass: ${err.message}`);
   }
 
   const problem = validateConfig(config);
   if (problem) {
-    process.stderr.write(`redact-sensitive-output: invalid ${CONFIG_PATH} -- skipping this pass: ${problem}\n`);
-    process.exit(0);
+    warnAndExit(`redact-sensitive-output: invalid ${CONFIG_PATH} -- skipping this pass: ${problem}`);
   }
 
   let input;
@@ -348,18 +355,16 @@ function main() {
     const realCidrs = (config.cidrs || []).map(parseCidr);
     for (const cidrStr of config.cidrs || []) getOrAssignMaskedCidr(cidrStr, map, realCidrs);
   } catch (err) {
-    process.stderr.write(
-      `redact-sensitive-output: cannot build a synthetic address plan for ${CONFIG_PATH} -- skipping this pass: ${err.message}\n`
+    warnAndExit(
+      `redact-sensitive-output: cannot build a synthetic address plan for ${CONFIG_PATH} -- skipping this pass: ${err.message}`
     );
-    process.exit(0);
   }
 
   let redacted;
   try {
     redacted = redactValue(input.tool_output === undefined ? '' : input.tool_output, config, map);
   } catch (err) {
-    process.stderr.write(`redact-sensitive-output: redaction failed -- leaving this output unmasked: ${err.message}\n`);
-    process.exit(0);
+    warnAndExit(`redact-sensitive-output: redaction failed -- leaving this output unmasked: ${err.message}`);
   }
 
   if (redacted.count === 0) process.exit(0);
@@ -368,8 +373,7 @@ function main() {
     fs.mkdirSync(path.dirname(MAP_PATH), { recursive: true });
     saveMapAtomic(MAP_PATH, map);
   } catch (err) {
-    process.stderr.write(`redact-sensitive-output: could not persist ${MAP_PATH} -- leaving this output unmasked: ${err.message}\n`);
-    process.exit(0);
+    warnAndExit(`redact-sensitive-output: could not persist ${MAP_PATH} -- leaving this output unmasked: ${err.message}`);
   }
 
   const output = {
@@ -695,6 +699,15 @@ def redact_value(value, config, redaction_map):
     return value, 0
 
 
+def warn_and_exit(message):
+    # Fail-open warning. Plain stderr on exit 0 reaches only the debug log -- neither the user
+    # nor Claude sees it -- so the warning goes out as a `systemMessage` (shown to the user)
+    # while the stderr copy keeps the debug log useful. Exit 0: the hook never blocks a tool call.
+    sys.stderr.write(f'{message}\n')
+    sys.stdout.write(json.dumps({'systemMessage': message}, separators=(',', ':')))
+    sys.exit(0)
+
+
 def main():
     if not CONFIG_PATH.exists():
         sys.exit(0)
@@ -702,13 +715,11 @@ def main():
     try:
         config = load_json(CONFIG_PATH, None)
     except (json.JSONDecodeError, OSError) as err:
-        sys.stderr.write(f'redact-sensitive-output: malformed {CONFIG_PATH} -- skipping this pass: {err}\n')
-        sys.exit(0)
+        warn_and_exit(f'redact-sensitive-output: malformed {CONFIG_PATH} -- skipping this pass: {err}')
 
     problem = validate_config(config)
     if problem:
-        sys.stderr.write(f'redact-sensitive-output: invalid {CONFIG_PATH} -- skipping this pass: {problem}\n')
-        sys.exit(0)
+        warn_and_exit(f'redact-sensitive-output: invalid {CONFIG_PATH} -- skipping this pass: {problem}')
 
     try:
         input_data = json.loads(sys.stdin.read())
@@ -727,17 +738,15 @@ def main():
         for cidr_str in config.get('cidrs') or []:
             get_or_assign_masked_cidr(cidr_str, redaction_map, real_cidrs)
     except ValueError as err:
-        sys.stderr.write(
+        warn_and_exit(
             f'redact-sensitive-output: cannot build a synthetic address plan for {CONFIG_PATH} '
-            f'-- skipping this pass: {err}\n'
+            f'-- skipping this pass: {err}'
         )
-        sys.exit(0)
 
     try:
         masked_output, count = redact_value(input_data.get('tool_output', ''), config, redaction_map)
     except Exception as err:
-        sys.stderr.write(f'redact-sensitive-output: redaction failed -- leaving this output unmasked: {err}\n')
-        sys.exit(0)
+        warn_and_exit(f'redact-sensitive-output: redaction failed -- leaving this output unmasked: {err}')
 
     if count == 0:
         sys.exit(0)
@@ -746,8 +755,7 @@ def main():
         MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
         save_map_atomic(MAP_PATH, redaction_map)
     except OSError as err:
-        sys.stderr.write(f'redact-sensitive-output: could not persist {MAP_PATH} -- leaving this output unmasked: {err}\n')
-        sys.exit(0)
+        warn_and_exit(f'redact-sensitive-output: could not persist {MAP_PATH} -- leaving this output unmasked: {err}')
 
     output = {
         'hookSpecificOutput': {
@@ -778,7 +786,7 @@ merge convention as `harness-kit.md` Step A):
 ```json
 {
   "matcher": "Bash|Read|Grep|Glob",
-  "hooks": [{ "type": "command", "command": ["node", ".claude/hooks/redact-sensitive-output.cjs"] }]
+  "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/redact-sensitive-output.cjs"], "timeout": 10 }]
 }
 ```
 
@@ -786,7 +794,7 @@ merge convention as `harness-kit.md` Step A):
 ```json
 {
   "matcher": "Bash|Read|Grep|Glob",
-  "hooks": [{ "type": "command", "command": ["python3", ".claude/hooks/redact_sensitive_output.py"] }]
+  "hooks": [{ "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/redact_sensitive_output.py"], "timeout": 10 }]
 }
 ```
 
@@ -955,8 +963,9 @@ Capability is complete once all five checks pass.
   because those four are where infra data surfaces in practice. `WebFetch`, MCP tool results, and
   subagent/`Task` output are NOT masked — treat them as unprotected surfaces, not as an oversight.
 - **Range sizing.** A declared real range that covers an entire synthetic space has no disjoint block to
-  map onto; the hook writes a named warning to stderr and passes the output through unmasked rather than
+  map onto; the hook emits a named warning (as a user-facing `systemMessage`) and passes the output through unmasked rather than
   emitting a "mask" identical to the input. Declare narrower ranges (see Step 1).
 - **Fail-open by design.** Malformed config, invalid CIDR entries, an unsatisfiable address plan, or any
-  unexpected error during masking all produce a stderr warning and exit 0. The hook never blocks a tool
+  unexpected error during masking all produce a `systemMessage` warning (plain stderr on exit 0 would
+  reach only the debug log) and exit 0. The hook never blocks a tool
   call; a broken redaction config degrades to no masking, visibly, not to a stalled session.

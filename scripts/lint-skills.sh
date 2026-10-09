@@ -31,7 +31,12 @@ FAILED=0
 # `.claude/skills/<name>/SKILL.md`. Flat skill files are silently ignored by Claude Code
 # (flat files only work under `.claude/commands/`). Projects seeded before v5.0.0 must run
 # `templatecentral:migrate` to convert their flat skill files to the directory layout.
-HARNESS_SCHEMA_VERSION="5.0.0"
+#
+# v6.0.0 — settings.json hooks moved from an array-valued `"command": [...]` (which Claude Code
+# silently ignores — those hooks never ran) to the exec form `"command": "<bin>", "args": [...]`
+# with `${CLAUDE_PROJECT_DIR}`-anchored script paths. Projects marked below v6.0.0 carry inert
+# hooks and must re-sync settings.json + hooks from the harness kit via `templatecentral:migrate`.
+HARNESS_SCHEMA_VERSION="6.0.0"
 
 fail() { echo "FAIL: $*"; FAILED=1; }
 pass() { echo "OK:   $*"; }
@@ -750,8 +755,8 @@ check_seeded_skill_paths_are_directories() {
 
 check_scaffold_seeds_complete_harness() {
   # The shared harness kit (skills/scaffold/shared/harness-kit.md) is the single source of truth
-  # for the complete harness: all 7 hook events, the permissions.deny secret-Read block,
-  # skillListingBudgetFraction, the 8 .claude/hooks/ script bodies, stop_hook_active guard,
+  # for the complete harness: all 6 hook events, the permissions.deny secret-Read block,
+  # skillListingBudgetFraction, the 9 .claude/hooks/ script bodies, stop_hook_active guard,
   # CONSTITUTION.md, FUTURE.md, harness.json step, .agents symlink, and the shared AGENTS.md tail.
   # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must reference
   # the kit (contain 'scaffold/shared/harness-kit.md'). The kit itself must contain every universal
@@ -770,11 +775,11 @@ check_scaffold_seeds_complete_harness() {
 
   # (a) The kit must contain all universal harness tokens:
   local kit_tokens=(
-    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"' '"PostToolUseFailure"'
+    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"'
     '"Stop"' '"SubagentStop"' '"SessionStart"'
     'skillListingBudgetFraction' '"Read(.env)"' '"Read(**/.env)"'
     'protect-files.sh' 'block-no-verify.sh' 'user-prompt-guard'
-    'post-edit-typecheck.sh' 'post-tool-failure.sh' 'stop-checks.sh'
+    'post-edit-typecheck.sh' 'stop-checks.sh'
     'subagent-stop.sh' 'session-context.sh'
     'stop_hook_active' '--no-verify' 'AKIA'
     'node' 'python3'
@@ -1002,21 +1007,37 @@ check_no_toplevel_command_in_hooks() {
 }
 
 check_hook_command_uses_args_array() {
-  # Simple hook commands (single interpreter + script path, no shell metacharacters) should use
-  # the args[] exec form ("command": ["bash", ".claude/hooks/x.sh"]) instead of a shell string
-  # ("command": "bash .claude/hooks/x.sh") — array form invokes via execve() with no shell
-  # interpolation, so it can't be hijacked by injection. Scoped to .claude/hooks/ references only;
-  # every "command": key in skills/ is a hook definition (verified — no unrelated JSON matches).
-  # TIMELESS: args[] exec form has been supported since v2.1.139; this is a security best practice,
-  # not a version-gated feature.
-  header "Hook commands use args[] exec form, not shell strings"
-  local matches
-  matches=$(grep -rn '"command": "[^"]*\.claude/hooks/' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail 'Hook command uses a shell string — use array exec form: "command": ["bash", ".claude/hooks/x.sh"]'
+  # Hook definitions must use Claude Code's exec form: a STRING "command" naming the binary plus
+  # an "args" array — "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh"].
+  # Three failure modes, each silent at runtime:
+  #   (1) "command": [ ... ] — an array-valued command is not a valid hook; Claude Code skips the
+  #       hook without any error, so the guard simply never runs.
+  #   (2) A .claude/hooks/ path without the ${CLAUDE_PROJECT_DIR} prefix — hooks execute in
+  #       Claude's current working directory, so a relative path breaks as soon as Claude cd's
+  #       into a subdirectory. Claude Code substitutes ${CLAUDE_PROJECT_DIR} in command and args.
+  #   (3) A shell-string command ("command": "bash .claude/hooks/x.sh") — runs through a shell,
+  #       so the path is subject to word-splitting/interpolation; the exec form passes argv
+  #       directly with no shell in between.
+  # Every "command"/"args" key in skills/ that mentions .claude/hooks/ is a hook definition.
+  # TIMELESS: string command + args[] is the documented exec form; the invariant is not
+  # version-gated.
+  header "Hook commands use exec form (string command + args[]) with \${CLAUDE_PROJECT_DIR} paths"
+  local bad="" m
+  # (1) array-valued command
+  m=$(grep -rnE '"command"[[:space:]]*:[[:space:]]*\[' "$SKILLS_DIR/" 2>/dev/null || true)
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ array-valued \"command\" is silently ignored by Claude Code — use \"command\": \"bash\", \"args\": [...]"$'\n'
+  # (2) .claude/hooks/ reference in a command/args line not prefixed by ${CLAUDE_PROJECT_DIR}/
+  m=$(grep -rnE '"(command|args)"[[:space:]]*:.*\.claude/hooks/' "$SKILLS_DIR/" 2>/dev/null \
+      | sed 's#\${CLAUDE_PROJECT_DIR}/\.claude/hooks/#__OK__#g' | grep -F '.claude/hooks/' || true)
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ hook script path must be \${CLAUDE_PROJECT_DIR}/.claude/hooks/... (hooks run in Claude's current dir)"$'\n'
+  # (3) shell-string command invoking a hook script
+  m=$(grep -rnE '"command"[[:space:]]*:[[:space:]]*"[^"]*[[:space:]][^"]*\.claude/hooks/' "$SKILLS_DIR/" 2>/dev/null || true)
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ shell-string hook command — use exec form: \"command\": \"bash\", \"args\": [\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh\"]"$'\n'
+  if [[ -n "$bad" ]]; then
+    echo "$bad"
+    fail 'Hook command form invalid — use "command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]'
   else
-    pass "All hook commands use args[] exec form"
+    pass "All hook commands use exec form with \${CLAUDE_PROJECT_DIR}-anchored script paths"
   fi
 }
 

@@ -17,7 +17,7 @@ Write these files exactly as shown.
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.28.5",
   "engines": {
     "node": ">=24"
   },
@@ -41,7 +41,7 @@ Write these files exactly as shown.
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
-    "next": "^16.2.12",
+    "next": "^16.3.8",
     "next-themes": "^0.4.6",
     "pino": "^10.3.1",
     "react": "^19.2.7",
@@ -60,7 +60,7 @@ Write these files exactly as shown.
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^16.2.12",
+    "eslint-config-next": "^16.3.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-sonarjs": "4.1.0",
     "lefthook": "^2.1.9",
