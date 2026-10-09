@@ -48,6 +48,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^9.0.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.19",
@@ -218,13 +219,10 @@ CMD ["nginx", "-g", "daemon off;"]
 ```sh
 #!/bin/sh
 
-# Check for Yarn lock file
 if [ -f "yarn.lock" ]; then
   exec yarn "$@"
-# Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
   exec sh -c 'corepack enable pnpm && exec pnpm "$@"' sh "$@"
-# Default to npm
 else
   exec npm "$@"
 fi
@@ -390,9 +388,10 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ### `eslint.config.mjs`
 
-> `sonarjs.configs.recommended` enables ~217 of the plugin's 280 rules at `error` (bugs, code smell, tests, React/JSX). This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference.
+> `sonarjs.configs.recommended` enables ~217 of the plugin's 280 rules at `error` (bugs, code smell, tests, React/JSX). This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```mjs
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -403,6 +402,13 @@ const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
   { ignores: ['dist', '.claude/**'] },
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+      reportUnusedInlineConfigs: 'error',
+    },
+  },
+  eslintComments.recommended,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
@@ -417,13 +423,23 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...sonarjs.configs.recommended.rules,
-      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
-      // recommended leaves this off; templateCentral's comment-hygiene gate requires it.
       'sonarjs/no-commented-code': 'error',
+      // TODO/FIXME with context is allowed; keep them visible without failing lint.
+      'sonarjs/todo-tag': 'warn',
+      'sonarjs/fixme-tag': 'warn',
+      '@eslint-community/eslint-comments/require-description': [
+        'error',
+        { ignore: ['eslint-enable'] },
+      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': [
+        'error',
+        { allowWholeFile: true },
+      ],
     },
   },
   {
@@ -525,10 +541,7 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    // Uncomment to proxy API calls to a backend during local dev:
-    // proxy: {
-    //   '/api': { target: 'http://localhost:8000', changeOrigin: true },
-    // },
+    // Backend proxy (`server.proxy`) is added by templatecentral:standards (full-stack-pairing).
   },
   preview: {
     port: 3000,

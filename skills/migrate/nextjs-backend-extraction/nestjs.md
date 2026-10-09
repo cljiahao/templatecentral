@@ -23,7 +23,7 @@ cat "<skill-dir>/../scaffold/nestjs/config-files.md"
 cat "<skill-dir>/../scaffold/nestjs/source-files.md"
 ```
 
-Set the project name to `[project-name]-api` in `package.json`. (See `common.md` Phase 3 for shared context.)
+Set the project name to `[project-name]-api` in `package.json`.
 
 ---
 
@@ -50,7 +50,7 @@ For each `route.ts` file identified in Phase 1c, create the corresponding NestJS
 ```typescript
 // src/modules/users/users.controller.ts
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -60,44 +60,27 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @ApiOperation({ summary: 'List users' })
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a user by ID' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Post()
   @HttpCode(201)
+  @ApiOperation({ summary: 'Create a user' })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 }
 ```
 
-**Service template** (move business logic from the route handler body here):
-
-```typescript
-// src/modules/users/users.service.ts
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class UsersService {
-  async findAll() {
-    return [];
-  }
-
-  async findOne(id: string) {
-    return null;
-  }
-
-  async create(dto: unknown) {
-    return dto;
-  }
-}
-```
+**Service** — `src/modules/users/users.service.ts`: an `@Injectable()` class whose methods (`findAll`, `findOne(id)`, `create(dto: CreateUserDto)`) take over each route handler's body verbatim, minus the `NextResponse`/`handleApiError` wrapping. Throw `NotFoundException` / `BadRequestException` where the handler returned 404/400.
 
 **Module template:**
 
@@ -154,13 +137,19 @@ For each integration file identified in Phase 1d (API-route-imported + base clie
 ```typescript
 // Example: src/integrations/services/github.service.ts in ../[project-name]-api
 import { Injectable } from '@nestjs/common';
+import { serviceConfig } from '../../config/env.config';
 import { FetchClient } from '../clients/base/fetch-client';
 
+// In src/config/env.config.ts: add both fields to `envSchema` (so a missing value fails at
+// boot, not as `Bearer undefined`), e.g. `GITHUB_API_URL: z.url(), GITHUB_TOKEN: z.string().min(1),`
+// AND expose them on the hand-written `serviceConfig` object:
+//   GITHUB_API_URL: env.GITHUB_API_URL,
+//   GITHUB_TOKEN: env.GITHUB_TOKEN,
 @Injectable()
 export class GithubService extends FetchClient {
   constructor() {
-    super(process.env.GITHUB_API_URL!, {
-      Authorization: `Bearer ${process.env.GITHUB_TOKEN!}`,
+    super(serviceConfig.GITHUB_API_URL, {
+      Authorization: `Bearer ${serviceConfig.GITHUB_TOKEN}`,
     });
   }
 
@@ -174,12 +163,7 @@ Copy base client files (`fetch-client.ts`, `axios-client.ts`, `https-agent.ts`) 
 
 Copy schemas alongside the service they belong to.
 
-Register each service as a provider in the relevant feature module (or in a shared `IntegrationsModule` if used by multiple modules).
-
-**Clean up Next.js `src/integrations/`:**
-- Delete each file that was moved.
-- If `src/integrations/` is empty after removal (no frontend-only entries remain), delete the directory.
-- If frontend-only entries remain, leave the directory intact.
+Register each service as a provider in the relevant feature module (or in a shared `IntegrationsModule` if used by multiple modules). Then apply the Phase 5 cleanup in `common.md`.
 
 ---
 
@@ -206,6 +190,15 @@ cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```
 3. Delete `src/integrations/database/` from the Next.js project.
 
+**NestJS + Kysely:**
+
+1. Copy `src/integrations/database/types.ts` and `migrations/` → `../[project-name]-api/src/database/`
+2. Load and follow the Kysely database skill for NestJS:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-kysely.md"
+```
+3. Delete `src/integrations/database/` from the Next.js project.
+
 ---
 
 ## Phase 7 — Migrate Auth (autonomous)
@@ -217,7 +210,7 @@ Load and follow the NestJS auth skill in `../[project-name]-api`:
 cat "<skill-dir>/../add/auth/nestjs.md"
 ```
 
-**Important:** `proxy.ts` remains in the Next.js project — it continues to protect frontend routes at the edge. After migration, update any hardcoded Next.js `/api/auth/...` paths in `proxy.ts` to use `process.env.BACKEND_URL` — `proxy.ts` runs server-side on the Node runtime, so it must read the unprefixed var. `NEXT_PUBLIC_*` values are embedded in the client bundle and must never carry the real backend address.
+Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ---
 

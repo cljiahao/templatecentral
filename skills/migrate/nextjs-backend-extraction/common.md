@@ -42,7 +42,13 @@ List all files under `src/integrations/` that were NOT collected in 1d.
 
 **1f. Detect database**
 
-Check for `drizzle.config.ts` (Drizzle) or `src/integrations/database/` containing `.schema.ts` files (Mongoose schemas). Record which ORM if found.
+Record the first match (these are the files `templatecentral:add (database)` creates):
+
+| Signal | DB layer |
+|---|---|
+| `drizzle.config.ts` | Drizzle |
+| `src/integrations/database/kysely-client.ts` | Kysely |
+| `src/integrations/database/mongoose-client.ts` | Mongoose |
 
 **1g. Detect auth**
 
@@ -80,13 +86,10 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` ([BACKEND]), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
-If yes → before making any changes, ensure a clean tree. If uncommitted changes exist, commit them on the **current** branch (or stash them) — do not switch branches with work in flight:
+If yes → require a clean tree before making any changes. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (NEVER commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
 ```bash
-git add -A
-git diff --cached --quiet || git commit -m "chore: pre-extraction snapshot"
-snapshot_commit=$(git rev-parse HEAD)
+git rev-parse HEAD
 ```
-Print the snapshot commit (`$snapshot_commit`) to the user so they can restore it if needed.
 
 If no → print "No changes made." and exit.
 
@@ -99,6 +102,13 @@ Determine the sibling path: `../[project-name]-api`.
 Load and follow the [BACKEND] scaffold steps — see the leaf file for the exact `cat` paths (fastapi or nestjs scaffold dirs differ). Work from `../[project-name]-api` as the project root.
 
 **Do not run post-scaffold agents** (build, test, update, review) — verification happens in Phase 10.
+
+---
+
+## Shared rules for leaf Phases 5 and 7
+
+- **Phase 5 cleanup** — in the Next.js project, delete each integration file that moved. Delete `src/integrations/` only if nothing frontend-only remains in it.
+- **Phase 7 `proxy.ts`** — it stays in the Next.js project and keeps protecting frontend routes. Point any hardcoded `/api/auth/...` calls in it at `process.env.BACKEND_URL`: `proxy.ts` runs server-side, so it reads the server-only var, not `NEXT_PUBLIC_API_URL`.
 
 ---
 
@@ -119,7 +129,7 @@ export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:[DEV_PORT]';
 ```
 
-> Direct client→backend calls require the CORS setup above; alternatively keep the Next.js rewrites proxy model from `templatecentral:standards` (full-stack-pairing).
+> `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at build time — it may only hold the backend's public origin, never credentials or an internal-only address. Direct browser→backend calls need the CORS setup above; to keep the backend address private instead, use the Next.js rewrites proxy model from `templatecentral:standards` (full-stack-pairing) and set `NEXT_PUBLIC_API_URL` to the relative proxy path.
 
 3. **Update feature service files** — for each file under `src/features/` that calls `fetch('/api/...')`, replace with `API_BASE`:
 
@@ -135,20 +145,21 @@ const res = await fetch(`${API_BASE}/users`);
 4. **Update `.env.example`** — add:
 
 ```
-# Backend API ([BACKEND])
-# Dev default: http://localhost:[DEV_PORT]
+# Backend API ([BACKEND]) — browser-visible origin
 NEXT_PUBLIC_API_URL=http://localhost:[DEV_PORT]
+# Server-side calls (route protection in proxy.ts, server components) — never exposed
+BACKEND_URL=http://localhost:[DEV_PORT]
 ```
 
-5. **Update `.env.local`** — add the same line.
+5. **`.env.local`** — ask the user to add the same lines (agent edits to `.env*` files are hook-blocked by design).
 
-6. **Clean up `src/integrations/`** — after Phase 5 cleanup, scan for any remaining entries that are now unused (no imports anywhere in the Next.js codebase). Delete unused files. If the directory is empty, delete it.
+6. **Clean up `src/integrations/`** — after the Phase 5 cleanup, delete any remaining entry with no imports left anywhere in the Next.js codebase, then the directory if it is empty.
 
 ---
 
 ## Phase 9 — Update Config & Docs (autonomous)
 
-**[BACKEND] project (`../[project-name]-api`):** See the leaf file for the CORS config step — FastAPI uses `CORS_ORIGINS` in `src/.env.default`; NestJS reads `CLIENT_URL` from `src/config/env.config.ts`.
+**[BACKEND] project (`../[project-name]-api`):** apply the leaf file's CORS config step.
 
 Phases 4–7 created new module/router/service folders after the Phase 3 scaffold's one-time README pass, so those folders have no `README.md` yet. Re-run the documentation kit over `../[project-name]-api` now, before Phase 10 verification:
 ```bash
@@ -176,7 +187,7 @@ Update `AGENTS.md` Architecture Decisions — replace the BFF note with:
 
 Run in sequence. Stop and report the exact error on first failure.
 
-See the leaf file for the exact verify commands (pip+pytest for FastAPI; pnpm for NestJS).
+Use the leaf file's verify commands.
 
 **If all pass**, print:
 

@@ -47,8 +47,6 @@ src/features/<feature-name>/
 
 ### 2. Create `types.ts`
 
-Define types and interfaces first — this establishes the contract before implementation:
-
 ```ts
 export interface ProjectItem {
   id: string;
@@ -85,9 +83,7 @@ export const projectItemSchema = z.object({
 
 Export from barrel: `schemas/index.ts`
 
-Then create the client-side service that fetches data from the backend API and parses responses with the schema.
-
-> **`getApiBaseUrl()`** is pre-provided in `src/lib/constants/env.ts` — it throws at startup if `VITE_API_BASE_URL` is missing, preventing silent network failures at runtime. Always use it instead of `ENV.API_BASE_URL` directly.
+Then the client-side service. Use `getApiBaseUrl()` (`src/lib/constants/env.ts`, throws when `VITE_API_BASE_URL` is unset) rather than `ENV.API_BASE_URL`:
 
 ```ts
 // api/project-service.ts
@@ -96,25 +92,30 @@ import { APIError } from '@/lib/errors';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
-// Resolved per-request, never at module scope: getApiBaseUrl() throws when
-// VITE_API_BASE_URL is unset, and a module-scope throw kills bundle evaluation
-// before createRoot() runs — a blank page with no ErrorBoundary to catch it.
+// Called per request, never at module scope: a module-scope throw (unset env var)
+// kills bundle evaluation before createRoot() — a blank page no ErrorBoundary catches.
 const apiBase = () => getApiBaseUrl();
 
+// `message` is the fallback only when the error body is not JSON.
+async function assertOk(res: Response, message: string): Promise<void> {
+  if (res.ok) return;
+  throw new APIError({
+    statusCode: res.status,
+    data: await res.json().catch(() => ({ message })),
+  });
+}
+
 export const ProjectService = {
-  getAll: async (): Promise<ProjectItem[]> => {
-    const res = await fetch(`${apiBase()}/projects`);
-    if (!res.ok) {
-      throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Failed to fetch projects' })) });
-    }
+  getAll: async (signal?: AbortSignal): Promise<ProjectItem[]> => {
+    const res = await fetch(`${apiBase()}/projects`, { signal });
+    await assertOk(res, 'Failed to fetch projects');
     return projectItemSchema.array().parse(await res.json());
   },
 
-  getById: async (id: string): Promise<ProjectItem> => {
-    const res = await fetch(`${apiBase()}/projects/${encodeURIComponent(id)}`);
-    if (!res.ok) {
-      throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Project not found' })) });
-    }
+  getById: async (id: string, signal?: AbortSignal): Promise<ProjectItem> => {
+    // Encoding stops a crafted id from rewriting the path (`../admin`).
+    const res = await fetch(`${apiBase()}/projects/${encodeURIComponent(id)}`, { signal });
+    await assertOk(res, 'Project not found');
     return projectItemSchema.parse(await res.json());
   },
 };
@@ -124,7 +125,7 @@ Export from barrel: `api/index.ts`
 
 ### 5. Create Components (in `components/`)
 
-**Before writing any UI, check the template's component library** (see `code-standards/SKILL.md` → *Component Library*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
+**Before writing any UI, check the template's component library** (`templatecentral:standards` → `code-standards/vite-react.md` → *Component Best Practices*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
 
 Feature-specific components. Use `function` declarations:
 
@@ -158,7 +159,7 @@ import { ProjectService } from '../api';
 export const useProjects = () => {
   return useQuery({
     queryKey: ['projects'],
-    queryFn: () => ProjectService.getAll(),
+    queryFn: ({ signal }) => ProjectService.getAll(signal),
   });
 };
 ```
@@ -188,11 +189,10 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 ## Rules
 
 - **Direct imports** OK within the same feature
-- If a component is used by 2+ features, promote it to `src/components/widgets/`; NEVER place feature-specific components there until used by 2+ features
-- NEVER import from one feature into another — if shared, promote to `components/widgets/` or `lib/`
+- NEVER import from one feature into another — promote shared code to `components/widgets/` (only once 2+ features use it) or `lib/`
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
-- NEVER hardcode API URLs in services — use `getApiBaseUrl()` from `src/lib/constants/env.ts` (throws at startup if `VITE_API_BASE_URL` is missing)
+- NEVER hardcode API URLs in services — use `getApiBaseUrl()`
 
 ## Standalone Components
 
@@ -216,7 +216,6 @@ npx shadcn@latest add <component-name>
 This installs into `src/components/ui/`. Do not manually create UI primitives there.
 
 Rules:
-- Don't prematurely extract — keep inline until a second consumer needs it; NEVER move to `widgets/` until used by 2+ features
 - NEVER add boolean flag props to configure variants — prefer composition with children
 - Always add to barrel `index.ts` when creating in shared folders — NEVER omit the barrel export
 

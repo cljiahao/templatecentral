@@ -63,7 +63,7 @@ export default function AnalyticsPage() {
 }
 ```
 
-Note: `export default` is required by Next.js for pages.
+`export default` is required by Next.js for route files (`page`, `layout`, `loading`, `error`, `not-found`).
 
 ### 3. Add a Loading State (Required for Data-Fetching Pages)
 
@@ -84,8 +84,6 @@ export default function AnalyticsLoading() {
 ```
 
 ### 4. Add Error Handling (Optional)
-
-The `error` prop contains the thrown error (with an optional `digest` for server errors). The `reset` function re-renders the route segment.
 
 ```tsx
 // src/app/dashboard/analytics/error.tsx
@@ -120,8 +118,10 @@ export default function AnalyticsError({ error, reset }: {
 
 ### 5. Add Not Found (Optional, for Dynamic Routes)
 
+Rendered when the page (or its feature) calls `notFound()` from `next/navigation` for a missing ID.
+
 ```tsx
-// src/app/dashboard/[id]/not-found.tsx
+// src/app/dashboard/projects/[id]/not-found.tsx
 export default function ProjectNotFound() {
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
@@ -141,17 +141,6 @@ export const PAGE_ROUTES = {
   ANALYTICS: '/dashboard/analytics',
 } as const;
 ```
-
-## Next.js Special Files Reference
-
-| File | Purpose |
-|------|---------|
-| `layout.tsx` | Persistent UI wrapping child routes (shared across navigations) |
-| `page.tsx` | Unique UI for a route segment |
-| `template.tsx` | Like layout but re-mounts on navigation (for transitions) |
-| `loading.tsx` | Suspense loading fallback |
-| `error.tsx` | Error boundary |
-| `not-found.tsx` | 404 UI |
 
 ### 7. Validate
 

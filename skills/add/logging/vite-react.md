@@ -101,7 +101,9 @@ console.error(`${label}:`, {
 
 ### 3. Create `src/lib/logging/log-batcher.ts`
 
-Batched delivery to a backend `/logs` endpoint with console-JSON fallback in dev. Cross-references the `/api` prefix proxy convention: if your project pairs a backend via `VITE_API_BASE_URL`, POST to `${getApiBaseUrl()}/logs`; otherwise logs stay local.
+Batched delivery to a backend `/logs` endpoint with console-JSON fallback in dev. If your project pairs a backend via `VITE_API_BASE_URL`, POST to `${getApiBaseUrl()}/logs`; otherwise logs stay local.
+
+The backend `/logs` endpoint receives attacker-controllable input: validate it with a strict schema (bounded array length and string sizes), rate-limit it, and log entries as structured fields — never interpolate them into a message string, or a crafted `label` with newlines forges log lines.
 
 ```ts
 // src/lib/logging/log-batcher.ts
@@ -255,14 +257,14 @@ NEVER log passwords, tokens, email addresses, or other personal data.
 grep -rn "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" src/lib/logging/ src/lib/errors/
 ```
 
-Any match must be removed or redacted before the code ships.
+Review every match: hits in comments and in `redactLabel` are expected; a hit in a value passed to `logEvent` / `enqueueLog` must be removed before the code ships.
 
 **The grep is necessary but not sufficient.** It scans source text for literal keywords; it cannot see what a value actually holds at runtime. The two payloads that carry PII in this design contain no such keyword anywhere in the source:
 
 | Runtime payload | Why grep misses it | Required control |
 |-----------------|--------------------|------------------|
 | `APIError.data` | An opaque `unknown` — the backend decides what is in it (echoed form fields, session ids, stack traces) | Never forward it to `enqueueLog`; keep it behind `import.meta.env.DEV` for the console only (Step 2) |
-| Breadcrumb labels | `location.pathname` is a plain string — `/reset-password/<token>` matches nothing | `redactLabel()` at `addBreadcrumb()` entry (Step 1) collapses non-word segments |
+| Breadcrumb labels | `location.pathname` is a plain string — `/reset-password/<token>` matches nothing | `redactLabel()` at `addBreadcrumb()` entry (Step 1) collapses non-word segments. Word-shaped values (`/users/alice`) still pass — avoid usernames/emails in paths, or tighten `SAFE_SEGMENT` to an allowlist of known route words |
 
 Before shipping, confirm both by inspection, not by grep:
 

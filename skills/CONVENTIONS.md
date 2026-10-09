@@ -53,20 +53,21 @@ Use when a skill has **> 2 variants per stack** (e.g., multiple ORMs or drivers)
 ```
 skills/
   add/
+    SKILL.md                ← registered skill (detection + cat to stack router)
     database/
-      SKILL.md              ← registered skill (detection + cat to stack router)
       python.md             ← stack router (detects DB variant + cat to leaf)
       python/
         sqlalchemy.md       ← leaf reference file
-        beanie.md           ← leaf reference file
+        sqlalchemy-iam.md
+        beanie.md
       typescript.md         ← stack router (detects DB variant + cat to leaf)
       typescript/
-        drizzle.md          ← leaf reference file
-        kysely.md           ← leaf reference file
-        mongoose.md         ← leaf reference file
+        nestjs-drizzle.md   ← leaf (stack-prefixed: subdir shared by two stacks, §7)
+        nextjs-kysely.md
+        …
 ```
 
-The chain is: `SKILL.md` → stack router → leaf file (2 `cat` calls).
+The chain is: `add/SKILL.md` → stack router → leaf file (2 `cat` calls).
 
 ### Hard Rules
 
@@ -164,11 +165,9 @@ Every reference file must begin with this comment block as its **first line**:
 - The `prereq:` field must contain `Do not invoke this file directly` (as a phrase), followed by a note naming the skill that loads it: `— it is loaded at runtime by the templatecentral:<skill> skill.`
 - No blank lines between the opening `<!--` and closing `-->`.
 
-### Exception
+### Agent-utility variant
 
-Scaffold reference files (`source-files.md`, `config-files.md`) that predate this convention may be retrofitted gradually. They are not required to have the header immediately, but new scaffold reference files must include it.
-
-Agent-utility prereq variant: reference files belonging to de-registered agent utilities (build/test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
+Reference files belonging to de-registered agent utilities (build/test/review/cleanup) use "— it is catted by agents via skills/<name>/SKILL.md (de-registered agent utility)." instead of the registered-skill suffix.
 
 ---
 
@@ -235,8 +234,8 @@ Every new file must start with the correct `<!-- ref: ... -->` header per Sectio
 Example for `skills/add/auth/django.md`:
 ```
 <!-- ref: add/auth/django.md
-     loaded-by: add/auth/SKILL.md
-     prereq: Stack identified as Django. Do not invoke this file directly. -->
+     loaded-by: add/SKILL.md
+     prereq: Stack identified as Django. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ```
 
 **3. Add stack detection signal and `cat` command to `skills/add/SKILL.md`.**
@@ -288,7 +287,7 @@ When adding a new framework, define its detection signal clearly and add it to t
 - Variant names in leaf file paths use lowercase with hyphens: `sqlalchemy`, `drizzle`, `mongoose`.
 - When a single subdir is shared by multiple stacks (e.g., `typescript/` serves both NestJS and Next.js), prefix with the stack name to disambiguate: `nestjs-drizzle.md`, `nextjs-drizzle.md`.
 - Do not use `index.md` as a filename — every file should have a descriptive name.
-- Scaffold skills (`<stack>-scaffold/`) are stack-specific and follow their own internal structure; they are not subject to the shared-skill naming rule.
+- Scaffold reference files (`scaffold/<stack>/`, `scaffold/shared/`) follow their own internal structure; they are not subject to the shared-skill naming rule.
 
 ---
 
@@ -328,4 +327,4 @@ This checklist matches what `/tc-audit` enforces automatically. Use it for manua
 
 ---
 
-*Last updated: 2026-06-29. Maintained by the templateCentral skill architecture. Registered skill count reduced from 10 → 4: build, test, review, cleanup de-registered as agent utilities; audit, write-skill moved to `.claude/skills/` (repo-internal project skills) in v5.1.0.*
+*Change history for these conventions lives in `CHANGELOG.md`.*

@@ -14,15 +14,16 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-**1. Pagination DTO**
+**1. Pagination Query DTO** (shared — every paginated module reuses it)
 
 ```ts
-// src/modules/projects/dto/pagination.dto.ts
+// src/common/dto/pagination.dto.ts
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().positive('Page must be 1 or greater').default(1),
+  // Capped: OFFSET cost grows with page, so an unbounded page is a cheap DoS lever.
+  page: z.coerce.number().int().min(1, 'Page must be 1 or greater').max(10_000).default(1),
   limit: z.coerce
     .number()
     .int()
@@ -31,6 +32,7 @@ export const paginationSchema = z.object({
     .default(10),
   sort: z
     .string()
+    .max(64)
     .regex(/^(asc|desc)_\w+$/, 'Invalid sort format: use asc_fieldName or desc_fieldName')
     .optional(),
 });
@@ -38,12 +40,7 @@ export const paginationSchema = z.object({
 export class PaginationDto extends createZodDto(paginationSchema) {}
 
 export type PaginationParams = z.infer<typeof paginationSchema>;
-```
 
-**2. Pagination Response DTO**
-
-```ts
-// src/common/dto/pagination.dto.ts
 export interface PaginationMetadata {
   page: number;
   limit: number;
@@ -59,7 +56,7 @@ export interface PaginatedResponse<T> {
 }
 ```
 
-**3. Pagination Service**
+**2. Pagination Service**
 
 ```ts
 // src/common/services/pagination.service.ts
@@ -118,22 +115,42 @@ import { ProjectsService } from './projects.service';
 export class ProjectsModule {}
 ```
 
+**3. Project Response DTO**
+
+`src/modules/projects/projects.dto.ts` may already exist (from `templatecentral:add (endpoint)` or
+`(error-handling)`, holding `CreateProjectDto`). **Add** the schema and class below to it — do not
+overwrite the existing DTOs. Create the file (with the two imports) only if it is absent.
+
+```ts
+// src/modules/projects/projects.dto.ts — append (keep existing CreateProjectDto etc.)
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+// Response shape: parsing a DB row through it strips any column not listed here.
+export const ProjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export class ProjectDto extends createZodDto(ProjectSchema) {}
+```
+
 **4. Controller with Pagination**
 
-Sort parsing, offset math, and row mapping are business logic and belong in the service
-(`.claude/rules/nestjs.md`: *NEVER put business logic in controllers*). The controller only
-declares the contract and delegates.
+Sort parsing, offset math, and row mapping belong in the service — the controller only declares the contract and delegates.
 
 ```ts
 // src/modules/projects/projects.controller.ts
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { PaginationDto, type PaginatedResponse } from '../../common/dto/pagination.dto';
+import type { ProjectDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
-import { PaginationDto } from './dto/pagination.dto';
-import type { PaginatedResponse } from '../../common/dto/pagination.dto';
-import { ProjectDto } from './dto/project.dto';
 
-@ApiTags('projects')
+@ApiTags('Projects')
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
@@ -143,11 +160,9 @@ export class ProjectsController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({ name: 'sort', required: false, example: 'asc_name' })
-  // The scaffold's global APP_PIPE ZodValidationPipe validates PaginationDto — no explicit pipe needed
-  async list(
-    @Query() query: PaginationDto,
-  ): Promise<PaginatedResponse<ProjectDto>> {
-    return await this.projectsService.listProjects(query);
+  // Validated by the scaffold's global ZodValidationPipe (APP_PIPE).
+  list(@Query() query: PaginationDto): Promise<PaginatedResponse<ProjectDto>> {
+    return this.projectsService.listProjects(query);
   }
 }
 ```
@@ -159,12 +174,11 @@ export class ProjectsController {
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { asc, count, desc } from 'drizzle-orm';
 
+import type { PaginatedResponse, PaginationParams } from '../../common/dto/pagination.dto';
 import { PaginationService } from '../../common/services/pagination.service';
-import type { PaginatedResponse } from '../../common/dto/pagination.dto';
 import { DrizzleService } from '../../database/drizzle.service';
 import { projects } from '../../database/schema';
-import type { PaginationParams } from './dto/pagination.dto';
-import { ProjectDto } from './dto/project.dto';
+import { ProjectDto } from './projects.dto';
 
 type SortField = 'name' | 'createdAt' | 'updatedAt';
 const SORT_COLUMNS = {
@@ -191,8 +205,7 @@ export class ProjectsService {
       ALLOWED_SORT_FIELDS,
     );
     if (query.sort && !orderBy) {
-      // The body is pre-built in the filter's ErrorResponse shape so the allowed field
-      // list survives HttpExceptionFilter — see the coupling note below.
+      // Pre-built in the filter's ErrorResponse shape so the allowed list survives it (see note below).
       throw new BadRequestException({
         error: 'Invalid sort field',
         details: {
@@ -208,7 +221,7 @@ export class ProjectsService {
 
     return {
       data: {
-        // createZodDto classes have no mapping constructor — validate rows via the static schema
+        // createZodDto classes have no mapping constructor; parsing also strips unlisted columns.
         items: rows.map((p) => ProjectDto.schema.parse(p)),
         pagination: this.pagination.createMetadata(
           query.page,
@@ -240,13 +253,9 @@ export class ProjectsService {
 }
 ```
 
-> **Coupling with `add/error-handling/nestjs`.** `HttpExceptionFilter` rewrites the body of
-> most 400s to a generic `{ error: 'Bad request', details: { code: 'BAD_REQUEST' } }`. If
-> that happens here, the client never learns which sort fields are valid and the endpoint
-> becomes guesswork. The filter therefore passes a 400 body through unchanged when it is
-> already an object carrying an `error` key — which is exactly the shape thrown above.
-> **If you edit that filter, preserve the pass-through branch**, and after any change
-> confirm with:
+> **Coupling with `add/error-handling/nestjs`.** Its `HttpExceptionFilter` collapses most
+> 400 bodies to `{ error: 'Bad request' }` but passes through a body that already carries an
+> `error` key — the shape thrown above. **Preserve that pass-through branch** and confirm with:
 >
 > ```bash
 > curl 'http://localhost:3000/projects?sort=asc_bogus'
@@ -257,14 +266,9 @@ export class ProjectsService {
 
 ```bash
 pnpm start:dev
-
-# Test paginated endpoint
 curl 'http://localhost:3000/projects?page=1&limit=10'
-
-# Test invalid params
+# Expect 400
 curl 'http://localhost:3000/projects?page=-1&limit=10'
-# Expected 400 response
-
 pnpm test
 ```
 

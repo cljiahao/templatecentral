@@ -43,27 +43,25 @@ from core.logging import logger
 
 
 async def log_requests(request: Request, call_next):
-    # Bind the correlation id (set by CorrelationIdMiddleware) so every log line for this
-    # request carries request_id — no threading it through call sites.
+    # Clear at the START, not in a `finally`: the scaffold's `Exception` handler runs in
+    # Starlette's outermost ServerErrorMiddleware, i.e. after this function unwinds — clearing
+    # on the way out would strip request_id from the one log line you most need it on.
+    structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(request_id=correlation_id.get())
     start = time.monotonic()
-    try:
-        response = await call_next(request)
-        duration_ms = round((time.monotonic() - start) * 1000)
-        user_id = getattr(request.state, "user_id", None)
-        logger.info(
-            "Request",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=duration_ms,
-            user_id=user_id,
-        )
-        return response
-    finally:
-        # Clear even if call_next raised, so context never leaks to the next request.
-        structlog.contextvars.clear_contextvars()
+    response = await call_next(request)
+    logger.info(
+        "Request",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration_ms=round((time.monotonic() - start) * 1000),
+        user_id=getattr(request.state, "user_id", None),
+    )
+    return response
 ```
+
+Keep `CorrelationIdMiddleware`'s default UUID validator — it discards a malformed inbound `X-Request-ID` and generates a fresh one, so a client cannot inject arbitrary text (newlines, fake fields) into every log line via the header.
 
 Register both middlewares inside `start_application()`, the same way the scaffold's `configure_*` helpers register things. Middleware registration is LIFO — the **last** registered runs outermost — and `CorrelationIdMiddleware` must wrap the request logger so the correlation id contextvar is already set when `log_requests` reads it. So register `log_requests` **first** and `CorrelationIdMiddleware` **last**:
 
@@ -73,11 +71,13 @@ app.middleware("http")(log_requests)
 app.add_middleware(CorrelationIdMiddleware)
 ```
 
-App startup/shutdown — add lifespan events in `src/app.py`:
+App startup/shutdown — add a module-level lifespan in `src/app.py` and pass it to the existing `FastAPI(...)` call inside `start_application()`:
 
 ```python
 # src/app.py
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
 
 from core.config import api_settings, common_settings
 from core.logging import logger
@@ -90,7 +90,8 @@ async def lifespan(app: FastAPI):
     logger.info("App shutdown", environment=common_settings.ENVIRONMENT)
 
 
-app = FastAPI(lifespan=lifespan, ...)
+# inside start_application():
+app = FastAPI(lifespan=lifespan, title=common_settings.PROJECT_NAME, ...)
 ```
 
 `user_id` is `None` until authentication is wired — after `templatecentral:add` (auth), have `get_current_user` set `request.state.user_id = user_id` as a side effect before returning. `log_requests` reads `request.state` only after `await call_next(request)` completes (which runs the full dependency chain), so it picks up the value automatically with no other change needed.
@@ -118,14 +119,9 @@ async def login(body: LoginRequest, request: Request) -> TokenResponse:
         logger.warning(
             "Login failure",
             reason="invalid_credentials",
-            # request.client.host is the proxy's IP unless TRUST_PROXY is set —
-            # one-hop (ALB → App): TRUST_PROXY=<VPC CIDR, e.g. 10.0.0.0/8>;
-            # two-hop (ALB → Traefik → App): TRUST_PROXY=10.0.0.0/8,172.16.0.0/12.
-            # See `templatecentral:add` (auth) — Rate Limiting section.
-            # request.client is None on some ASGI transports — guard it, or this
-            # failure path raises AttributeError inside the failure path itself.
+            # Proxy IP unless TRUST_PROXY is set (see add (auth) — Rate Limiting);
+            # request.client is None on some ASGI transports.
             ip=request.client.host if request.client else None,
-            # Never log: body.password
         )
         raise
 
@@ -139,21 +135,32 @@ Access denied — log in your auth dependency once you've added role-based acces
 
 ```python
 # src/api/dependencies/auth.py  (example — adapt once you have a User model with roles)
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request
+
 from core.logging import logger
 
 
-async def require_role(required_role: str, request: Request, user_id: str = Depends(get_current_user)):
-    user = await get_user_with_roles(user_id)  # your own lookup, once a database is wired
-    if required_role not in user.roles:
-        logger.warning(
-            "Access denied",
-            user_id=user_id,
-            path=request.url.path,
-            required_role=required_role,
-        )
-        raise HTTPException(status_code=404, detail="Not found")
-    return user
+def require_role(required_role: str):
+    # Factory: a bare `required_role: str` parameter on a dependency would be parsed as a
+    # client-supplied query param, letting the caller choose the role being checked.
+    async def checker(request: Request, user_id: Annotated[str, Depends(get_current_user)]):
+        user = await get_user_with_roles(user_id)
+        if required_role not in user.roles:
+            logger.warning(
+                "Access denied",
+                user_id=user_id,
+                path=request.url.path,
+                required_role=required_role,
+            )
+            raise HTTPException(status_code=404, detail="Not found")
+        return user
+
+    return checker
 ```
+
+Use as `Depends(require_role("admin"))`.
 
 **Outbound HTTP calls** — create a wrapper in `src/utils/http_client.py`:
 
@@ -168,9 +175,12 @@ from core.logging import logger
 
 
 def _sanitize_url(url: str) -> str:
-    """Strip query string to avoid logging secrets in query params."""
+    """Drop userinfo, query, and fragment — any of them can carry credentials or tokens."""
     parsed = urlparse(url)
-    return urlunparse(parsed._replace(query=""))
+    netloc = parsed.hostname or ""
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse(parsed._replace(netloc=netloc, query="", fragment=""))
 
 
 async def http_get(url: str, **kwargs) -> httpx.Response:
@@ -190,7 +200,8 @@ async def http_get(url: str, **kwargs) -> httpx.Response:
         return response
     except Exception as exc:
         duration_ms = round((time.monotonic() - start) * 1000)
-        logger.error("Outbound HTTP error", method="GET", url=safe_url, duration_ms=duration_ms, error=str(exc))
+        # Exception type only — httpx messages embed the full, unsanitized request URL.
+        logger.error("Outbound HTTP error", method="GET", url=safe_url, duration_ms=duration_ms, error_type=type(exc).__name__)
         raise
 ```
 
@@ -235,11 +246,10 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
             "Slow DB query",
             query_name=query_name,
             duration_ms=total_ms,
-            # Never log: statement (full SQL text), parameters (bound values)
         )
 ```
 
-If using a Python ORM client, add middleware at the client level instead.
+On Beanie/PyMongo, register a `pymongo.monitoring.CommandListener` instead and log `event.command_name` + `event.duration_micros // 1000` from `succeeded()` — never `event.command` (it contains the filter values).
 
 **Sanitized request context** — bind extra fields in the `log_requests` middleware (they flow to every line for the request):
 
@@ -249,8 +259,6 @@ structlog.contextvars.bind_contextvars(
     method=request.method,
     path=request.url.path,
     auth_present="authorization" in request.headers,
-    # Never bind the authorization header VALUE — the redaction processor drops it by key,
-    # but don't rely on that as your only guard.
 )
 ```
 
@@ -263,6 +271,7 @@ from core.logging import logger
 
 async def cache_get(key: str):
     value = await redis.get(key)
+    # Log a key prefix, not the full key, if keys embed user data (e.g. "session:<email>").
     logger.debug("Cache lookup", cache_key=key, hit=value is not None)
     return value
 ```

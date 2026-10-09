@@ -23,8 +23,7 @@ ARG PORT=8000
 
 # ---- Base ----
 # Shared Debian-slim + Python foundation. Installs OS-level packages once.
-# The non-root user is created here so all downstream stages inherit it,
-# matching the hardening pattern used in the Next.js and Vite Dockerfiles.
+# The non-root user is created here so all downstream stages inherit it.
 FROM ${PYTHON} AS base
 ARG APP_DIR
 ARG APP_UID
@@ -70,8 +69,8 @@ RUN \
 # exists it is preferred; otherwise falls back to the same file as deps.
 # This venv is what ships in the final prod image.
 FROM base AS prod-deps
-# `requirements.txt` must contain runtime deps ONLY — it is frozen before
-# requirements-dev.txt is installed (see source-files.md Step 4; freeze order matters).
+# `requirements.txt` must contain runtime deps ONLY — freeze it before installing
+# requirements-dev.txt, or dev tools leak into the prod image.
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
@@ -410,25 +409,13 @@ line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
-# Pinned explicitly via `select` (not `extend-select`) because merely having a [tool.ruff] table
-# present makes ruff enable ~400 rules across ~38 categories by default as of ruff 0.15+ —
-# `extend-select` would layer onto that much larger set instead of this deliberate list.
-# Each category below was verified clean (or fixed to be clean) against the actual generated
-# scaffold source before being added — see templatecentral:standards code-standards for the
-# per-tier rationale. Tiers: E4/E7/E9/F = ruff's historical default set; I = isort; ERA = flag
-# commented-out code (comment hygiene, see code-standards/comments.md); S = flake8-bandit
-# (security — hardcoded secrets, weak crypto, unsafe eval/exec); B = flake8-bugbear (likely
-# bugs); FAST = FastAPI-specific rules (e.g. redundant `response_model`); SIM/C4/RET = code
-# smells (simplifiable branches, comprehensions, redundant returns); PT = pytest style; PIE =
-# misc bug-prone patterns (e.g. dead `pass` after a docstring); UP = pyupgrade (modern syntax).
-# Deliberately deferred (need per-repo tuning or are highly opinionated, not zero-noise): PL
-# (mixes real findings like magic-value-in-assert with stylistic import-placement opinions),
-# ANN (would require retrofitting type annotations project-wide), ARG (false-positives on
-# framework-mandated callback signatures like FastAPI exception handlers), TRY/EM (opinionated
-# exception-message formatting), DTZ (single-rule category, not worth its own tier here).
+# `select`, not `extend-select`: ruff >=0.16 enables ~413 rules by default, and this is the
+# deliberate scaffold-verified set. Per-tier and deferral rationale: templatecentral:standards
+# code-standards (fastapi.md, comments.md).
 select = [
-  "E4", "E7", "E9", "F", "I", "ERA",
+  "E4", "E7", "E9", "F", "I",
   "S", "B", "FAST", "SIM", "C4", "RET", "PT", "PIE", "UP",
+  "ERA", "PGH003", "PGH004", "RUF100", "TD005",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -437,7 +424,8 @@ select = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "test"]
-asyncio_mode = "auto"  # pytest-asyncio: treat `async def test_*` as coroutine tests without per-test markers
+# Run `async def test_*` as coroutine tests without per-test markers.
+asyncio_mode = "auto"
 
 markers = [
     "unit: unit tests",

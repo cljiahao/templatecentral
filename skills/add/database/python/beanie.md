@@ -116,42 +116,62 @@ This list is imported by `database/mongo.py` during `init_beanie()`.
 
 ### B7. Usage
 
-Beanie documents are used directly — no session injection needed:
+Beanie documents are used directly — no session injection needed. Keep construction and hashing in a service, and let the router only map HTTP to it.
 
-Create Pydantic response schemas (in `api/schemas/`) and use `response_model`:
+**`src/api/services/user_service.py`**:
+
+```python
+from beanie import PydanticObjectId
+
+from api.schemas.request.user import CreateUserRequest
+from core.security import hash_password
+from models.user import User
+
+
+async def list_users() -> list[User]:
+    return await User.find().to_list()
+
+
+async def get_user(user_id: PydanticObjectId) -> User | None:
+    return await User.get(user_id)
+
+
+async def create_user(payload: CreateUserRequest) -> User:
+    user = User(
+        **payload.model_dump(exclude={"password"}),
+        hashed_password=hash_password(payload.password),
+    )
+    return await user.insert()
+```
+
+**Router:**
 
 ```python
 from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
-from api.schemas.request.user import CreateUserRequest  # create these schemas
+from api.schemas.request.user import CreateUserRequest
 from api.schemas.response.user import UserResponse
-from core.security import hash_password
-from models.user import User
+from api.services import user_service
+
 
 @router.get("/users", response_model=list[UserResponse])
-async def list_users():
-    return await User.find().to_list()
+async def list_users() -> list[UserResponse]:
+    return await user_service.list_users()
 
+
+# PydanticObjectId as the path type makes FastAPI reject malformed ids with 422.
 @router.get("/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: str):
-    try:
-        oid = PydanticObjectId(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        ) from None
-    return await User.get(oid)
-
-@router.post("/users", response_model=UserResponse, status_code=201)
-async def create_user(payload: CreateUserRequest):
-    user = User(
-        **payload.model_dump(exclude={"password"}),
-        hashed_password=hash_password(payload.password),
-    )
-    await user.insert()
+async def get_user(user_id: PydanticObjectId) -> UserResponse:
+    user = await user_service.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
+
+
+@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(payload: CreateUserRequest) -> UserResponse:
+    return await user_service.create_user(payload)
 ```
 
 > **Unbounded query**: `User.find().to_list()` loads the entire collection into memory. Paginate it for real use — run `templatecentral:add` (pagination).
@@ -206,15 +226,18 @@ DOCUMENT_MODELS = [User]
 ### Step B — Replace stubs in `src/api/services/auth_service.py`
 
 ```python
+import secrets
+
+from bson import ObjectId
 from fastapi import HTTPException, status
-from beanie import PydanticObjectId
 
 from core.security import create_access_token, hash_password, verify_password
 from models.user import User
 
 # Verified on the miss path so an unknown email costs the same as a wrong
-# password — without it, response timing leaks which accounts exist.
-DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
+# password — without it, response timing leaks which accounts exist. Hashed at
+# import with the live PasswordHasher so its cost always matches real hashes.
+DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 async def register_user(email: str, password: str, name: str) -> dict:
@@ -243,14 +266,7 @@ async def login_user(email: str, password: str) -> str:
 
 
 async def get_user(user_id: str) -> dict:
-    try:
-        oid = PydanticObjectId(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        ) from None
-    user = await User.get(oid)
+    user = await User.get(ObjectId(user_id)) if ObjectId.is_valid(user_id) else None
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -20,7 +20,8 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
-// Fastify trustProxy: "*" → trust all; number = hop count (1 = one-hop ALB→App, 2 = two-hop ALB→Traefik→App); CIDR string = trusted range.
+// Fastify trustProxy: "*" → trust all; number = hop count (1 = ALB→App, 2 = ALB→Traefik→App);
+// any other string is a trusted CIDR range.
 function resolveTrustProxy(
   value: string | undefined,
 ): boolean | number | string | undefined {
@@ -84,7 +85,6 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: appConfig.LOG_LEVEL,
-        // correlation ID
         genReqId: () => crypto.randomUUID(),
         // pino-http's default serializer logs the whole headers object at info level.
         // Without this, every request writes its bearer JWT and session cookies to the log.
@@ -311,7 +311,6 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': isDev ? null : ["'none'"],
       },
     },
-    // HSTS
     strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     // frameguard sets X-Frame-Options (xFrameOptions is an equivalent alias). action must be

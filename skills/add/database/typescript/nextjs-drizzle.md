@@ -3,15 +3,15 @@
      prereq: Stack = Next.js, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js + Drizzle (SQL)
 
-> **Pre-release notice**: Drizzle ORM v1 is still pre-release — pin a specific RC in `package.json` (current RC tracked in `.claude/rules/nextjs.md`). The `drizzle-zod` integration is now merged into `drizzle-orm/zod`. Import from `drizzle-orm/zod`, not the old `drizzle-zod` package.
+> **Pre-release notice**: Drizzle ORM v1 is still pre-release — pin the RC exactly. `drizzle-zod` is merged into `drizzle-orm/zod` — import from there, not the old `drizzle-zod` package.
 
 #### A1. Install Dependencies
 
-Read the exact RC from `.claude/rules/nextjs.md` (the SSOT for version floors) and install that version — never the floating `@rc` tag, which silently resolves to a different RC on every install:
+Read the exact RC from the plugin's version SSOT — `cat "<skill-dir>/../../.claude/rules/nextjs.md"` (the scaffolded project has no copy) — and install it exactly; never the floating `@rc` tag, which resolves to a different RC on every install:
 
 ```bash
-pnpm add drizzle-orm@<exact-rc-from-rules> postgres
-pnpm add -D drizzle-kit@<exact-rc-from-rules>
+pnpm add --save-exact drizzle-orm@<exact-rc-from-rules> postgres
+pnpm add -D --save-exact drizzle-kit@<exact-rc-from-rules>
 ```
 
 Both packages must be on the same RC — a `drizzle-kit` that disagrees with `drizzle-orm` generates migrations the runtime cannot read.
@@ -38,9 +38,8 @@ Add to `package.json`:
 ```ts
 import { defineConfig } from 'drizzle-kit';
 
-// drizzle-kit does not load .env.local (Next.js convention) — load it explicitly.
-// NOTE: process.loadEnvFile() throws if the file does not exist — make sure
-// .env.local is created (step A8) before running any db:* script.
+// drizzle-kit only auto-loads .env, not Next.js's .env.local. loadEnvFile throws
+// if the file is missing — create .env.local (step A8) before any db:* script.
 process.loadEnvFile('.env.local');
 
 export default defineConfig({
@@ -81,13 +80,10 @@ export type NewUser = typeof users.$inferInsert;
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import * as schema from './schema';
+// v1's drizzle() generic is TRelations, not the schema; tables are passed per query.
+const globalForDb = globalThis as unknown as { db?: ReturnType<typeof drizzle> };
 
-const globalForDb = globalThis as unknown as { db: ReturnType<typeof drizzle<typeof schema>> };
-
-const client = postgres(process.env.DATABASE_URL!);
-
-export const db = globalForDb.db ?? drizzle(client, { schema });
+export const db = globalForDb.db ?? drizzle({ client: postgres(process.env.DATABASE_URL!) });
 
 if (process.env.NODE_ENV !== 'production') globalForDb.db = db;
 ```
@@ -126,8 +122,8 @@ DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 #### A9. Generate & Run Migrations
 
 ```bash
-pnpm db:generate  # generate SQL migration files from schema
-pnpm db:migrate   # apply pending migrations to the database
+pnpm db:generate
+pnpm db:migrate
 ```
 
 For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
@@ -143,7 +139,7 @@ import { db, users } from '@/integrations/database';
 import { withLogging } from '@/lib/utils/with-logging';
 
 export const GET = withLogging(async () => {
-  // Select only fields needed — never send full records to the browser
+  // Explicit column list — never send full records to the browser.
   const all = await db
     .select({ id: users.id, email: users.email, name: users.name })
     .from(users);
@@ -158,7 +154,7 @@ export const GET = withLogging(async () => {
 import { db, users } from '@/integrations/database';
 
 export default async function UsersPage() {
-  const all = await db.select().from(users);
+  const all = await db.select({ id: users.id, name: users.name }).from(users);
   return <UserList users={all} />;
 }
 ```
@@ -180,10 +176,6 @@ pnpm db:generate && pnpm build
 
 Confirm the migration file was generated and the build succeeds with no type errors.
 
-> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (select Kysely when prompted) instead.
-
----
-
 > **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
 
 ---
@@ -196,7 +188,7 @@ Confirm the migration file was generated and the build succeeds with no type err
 - Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
 - NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
 
 ---
 

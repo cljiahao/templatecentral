@@ -15,7 +15,7 @@ Add a migration script to `package.json`:
 ```json
 {
   "scripts": {
-    "migrate": "tsx src/integrations/database/migrate.ts"
+    "migrate": "tsx --env-file=.env.local src/integrations/database/migrate.ts"
   }
 }
 ```
@@ -30,26 +30,27 @@ import { Pool } from 'pg';
 
 import type { Database } from './types';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // TLS in transit is required for any non-local database. Verify the server
-  // certificate — `rejectUnauthorized: false` accepts a MITM proxy silently.
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
-  max: 10,
-});
+function createPool() {
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+    // TLS is required for any non-local database. Verify the server certificate —
+    // `rejectUnauthorized: false` accepts a MITM proxy silently.
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
+    max: 10,
+  });
+}
 
-const globalForKysely = globalThis as unknown as { db: Kysely<Database> };
+const globalForKysely = globalThis as unknown as { db?: Kysely<Database> };
 
-export const db = globalForKysely.db ?? new Kysely<Database>({
-  dialect: new PostgresDialect({ pool }),
-});
+export const db =
+  globalForKysely.db ?? new Kysely<Database>({ dialect: new PostgresDialect({ pool: createPool() }) });
 
 if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 ```
 
-> **Why the singleton**: Next.js hot-reloads modules in development. The `globalThis` cache prevents connection exhaustion.
+> **Why the singleton**: Next.js hot-reloads modules in development; caching the Kysely instance (and the pool created inside it) on `globalThis` prevents connection exhaustion.
 
-> **TLS**: the `ssl` option above is the enforcement point. If your managed provider expects TLS to be negotiated from the connection string instead, append `?sslmode=require` (or `?sslmode=verify-full`, which also checks the hostname) to `DATABASE_URL` — same requirement as the IAM variant's `ssl: { rejectUnauthorized: true }` below. Plaintext connections are acceptable only against a local database.
+> **TLS**: the `ssl` option above is the enforcement point. If your managed provider expects TLS to be negotiated from the connection string instead, append `?sslmode=require` (or `?sslmode=verify-full`, which also checks the hostname) to `DATABASE_URL` — same requirement as the IAM variant's `ssl: { rejectUnauthorized: true, ca }` below. Plaintext connections are acceptable only against a local database.
 
 ##### IAM Auth Variant
 
@@ -59,9 +60,18 @@ If the user requires AWS IAM authentication, install the additional package:
 pnpm add @aws-sdk/rds-signer
 ```
 
+Download the AWS global RDS CA bundle — the Amazon RDS root CA is not in Node's default trust store, so `rejectUnauthorized: true` without `ca` fails with `SELF_SIGNED_CERT_IN_CHAIN` (and `rejectUnauthorized: false` is never the fix). Commit it (public certificate, not a secret) or bake it into the image:
+
+```bash
+mkdir -p certs
+curl -fsSL -o certs/rds-global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+```
+
 Replace the pool creation in `kysely-client.ts` with:
 
 ```ts
+import { readFileSync } from 'node:fs';
 import { Kysely, PostgresDialect } from 'kysely';
 import { Signer } from '@aws-sdk/rds-signer';
 import { Pool } from 'pg';
@@ -74,21 +84,23 @@ const signer = new Signer({
   username: process.env.DATABASE_USER!,
 });
 
-const pool = new Pool({
-  host: process.env.DATABASE_HOST,
-  port: Number(process.env.DATABASE_PORT ?? '5432'),
-  user: process.env.DATABASE_USER,
-  database: process.env.DATABASE_NAME,
-  password: () => signer.getAuthToken(),
-  ssl: { rejectUnauthorized: true },
-  max: 10,
-});
+function createPool() {
+  return new Pool({
+    host: process.env.DATABASE_HOST,
+    port: Number(process.env.DATABASE_PORT ?? '5432'),
+    user: process.env.DATABASE_USER,
+    database: process.env.DATABASE_NAME,
+    // Called per new connection, so each one gets a fresh 15-minute IAM token.
+    password: () => signer.getAuthToken(),
+    ssl: { rejectUnauthorized: true, ca: readFileSync(process.env.RDS_CA_BUNDLE_PATH!, 'utf8') },
+    max: 10,
+  });
+}
 
-const globalForKysely = globalThis as unknown as { db: Kysely<Database> };
+const globalForKysely = globalThis as unknown as { db?: Kysely<Database> };
 
-export const db = globalForKysely.db ?? new Kysely<Database>({
-  dialect: new PostgresDialect({ pool }),
-});
+export const db =
+  globalForKysely.db ?? new Kysely<Database>({ dialect: new PostgresDialect({ pool: createPool() }) });
 
 if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 ```
@@ -100,6 +112,7 @@ DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
 DATABASE_PORT=5432
 DATABASE_USER=iam_db_user
 DATABASE_NAME=mydb
+RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 ```
 
 > **IAM fields replace `DATABASE_URL`** — remove `DATABASE_URL` from `.env` when using IAM auth. `@aws-sdk/rds-signer` generates a short-lived token automatically from the instance's IAM role.
@@ -128,7 +141,7 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 ```
 
-> **Tip**: After the database exists, run `npx kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
+> **Tip**: After the database exists, run `pnpm exec kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
 
 #### B4. Create Barrel Export
 
@@ -149,8 +162,6 @@ import { type Kysely, sql } from 'kysely';
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
     .createTable('users')
-    // gen_random_uuid() returns uuid; PostgreSQL has no assignment cast to text,
-    // so the cast is required for a text-typed primary key.
     .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()::text`))
     .addColumn('email', 'text', (col) => col.notNull().unique())
     .addColumn('name', 'text', (col) => col.notNull())
@@ -227,7 +238,7 @@ import { db } from '@/integrations/database';
 import { withLogging } from '@/lib/utils/with-logging';
 
 export const GET = withLogging(async () => {
-  // Select only fields needed — never send full records to the browser
+  // Explicit column list — never send full records to the browser.
   const users = await db.selectFrom('users')
     .select(['id', 'email', 'name'])
     .execute();
@@ -264,7 +275,7 @@ export const POST = withLogging(async (request) => {
 import { db } from '@/integrations/database';
 
 export default async function UsersPage() {
-  // Select only fields needed — never send full records to the browser
+  // Explicit column list — never send full records to the browser.
   const users = await db.selectFrom('users').select(['id', 'email', 'name']).execute();
   return <UserList users={users} />;
 }

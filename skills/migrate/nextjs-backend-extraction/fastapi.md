@@ -12,7 +12,7 @@ Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients 
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle (requires ORM choice at Phase 6) / ✓ Mongoose → Beanie / None detected]`.
+**Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → Beanie / None detected]`.
 
 ---
 
@@ -23,7 +23,7 @@ cat "<skill-dir>/../scaffold/fastapi/config-files.md"
 cat "<skill-dir>/../scaffold/fastapi/source-files.md"
 ```
 
-Set the project name in `src/.env.default`. (See `common.md` Phase 3 for shared context.)
+Set `PROJECT_NAME` in `src/.env.default`.
 
 ---
 
@@ -36,12 +36,12 @@ For each `route.ts` file identified in Phase 1c, create the corresponding FastAP
 | Next.js | FastAPI |
 |---|---|
 | `src/app/api/<resource>/route.ts` | `src/api/routers/<resource>.py` in `../[project-name]-api` |
-| `export async function GET()` | `@router.get('/')` |
-| `export async function POST(request: Request)` | `@router.post('/', status_code=201)` with Pydantic request model |
-| `export async function PUT(request, { params })` | `@router.put('/{id}')` with path param |
-| `export async function PATCH(request, { params })` | `@router.patch('/{id}')` with path param |
-| `export async function DELETE(_, { params })` | `@router.delete('/{id}')` |
-| `handleApiError(label, error)` | `raise HTTPException(status_code=..., detail=...)` |
+| `export async function GET()` | `@router.get("/<resource>")` |
+| `export async function POST(request: Request)` | `@router.post("/<resource>", status_code=201)` with Pydantic request model |
+| `export async function PUT(request, { params })` | `@router.put("/<resource>/{id}")` |
+| `export async function PATCH(request, { params })` | `@router.patch("/<resource>/{id}")` |
+| `export async function DELETE(_, { params })` | `@router.delete("/<resource>/{id}")` |
+| `handleApiError(label, error)` / error `NextResponse` | Service raises `NoResultsFound` (404) / `InvalidInputError` (400) from `core.exceptions`; `src/error_handler.py` renders them |
 | Dynamic segment `[id]/route.ts` | `/{id}` path parameter on the same router |
 | Zod `safeParse` validation | Pydantic model as function parameter (FastAPI validates automatically) |
 
@@ -51,7 +51,7 @@ The scaffold uses a layered architecture: **router → service → schemas**. Do
 
 ```python
 # src/api/routers/users.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from api.schemas.request.users import CreateUserRequest
 from api.schemas.response.users import UserResponse
@@ -67,10 +67,7 @@ async def get_users() -> list[UserResponse]:
 
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str) -> UserResponse:
-    user = await UsersService.find_one(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Not found")
-    return user
+    return await UsersService.find_one(user_id)
 
 
 @router.post("/users", response_model=UserResponse, status_code=201)
@@ -82,15 +79,17 @@ async def create_user(body: CreateUserRequest) -> UserResponse:
 
 ```python
 # src/api/schemas/request/users.py
+from pydantic import EmailStr, Field
+
 from api.schemas.base import BaseRequestSchema
 
 
 class CreateUserRequest(BaseRequestSchema):
-    name: str
-    email: str
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
 ```
 
-Note: `BaseRequestSchema` uses `alias_generator=to_camel` — define fields in `snake_case` and FastAPI will accept both `snake_case` and `camelCase` JSON keys automatically.
+Port every constraint from the route's Zod schema — a bare `str` silently drops the old validation. `EmailStr` needs `email-validator` in `requirements.txt`. Fields are `snake_case`; `BaseRequestSchema`'s `to_camel` alias generator accepts both key styles.
 
 **Response schema template:**
 
@@ -105,27 +104,7 @@ class UserResponse(BaseResponseSchema):
     email: str
 ```
 
-**Service template** (move business logic from the route handler body here):
-
-```python
-# src/api/services/users.py
-from api.schemas.request.users import CreateUserRequest
-from api.schemas.response.users import UserResponse
-
-
-class UsersService:
-    @staticmethod
-    async def find_all() -> list[UserResponse]:
-        return []
-
-    @staticmethod
-    async def find_one(user_id: str) -> UserResponse | None:
-        return None
-
-    @staticmethod
-    async def create(dto: CreateUserRequest) -> UserResponse:
-        raise NotImplementedError
-```
+**Service** — `src/api/services/users.py`: `UsersService` with `find_all()`, `find_one(user_id)` (raises `NoResultsFound` when absent), and `create(body: CreateUserRequest)`, each taking over the route handler's body.
 
 **Register each new router in `../[project-name]-api/src/api/routes.py`:**
 
@@ -154,15 +133,17 @@ For each integration file identified in Phase 1d (API-route-imported):
 
 ```python
 # Example: src/integrations/github_client.py in ../[project-name]-api
-import httpx
 from functools import lru_cache
-import os
+
+import httpx
+
+from core.config import github_settings
 
 
 class GithubClient:
-    def __init__(self):
-        self._base_url = os.environ["GITHUB_API_URL"]
-        self._headers = {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}"}
+    def __init__(self) -> None:
+        self._base_url = github_settings.GITHUB_API_URL
+        self._headers = {"Authorization": f"Bearer {github_settings.GITHUB_TOKEN.get_secret_value()}"}
 
     async def get_repos(self) -> list[dict]:
         async with httpx.AsyncClient(
@@ -178,23 +159,9 @@ def get_github_client() -> GithubClient:
     return GithubClient()
 ```
 
-Use `get_github_client` as a FastAPI dependency:
+`github_settings` is a `pydantic-settings` class added to `src/core/config.py` alongside `APISettings` (`GITHUB_API_URL: str`, `GITHUB_TOKEN: SecretStr`), so a missing value fails at boot. Resolve the client on the route with `Annotated[GithubClient, Depends(get_github_client)]` and pass it to the service — the router stays thin.
 
-```python
-from fastapi import Depends
-from ..integrations.github_client import GithubClient, get_github_client
-
-@router.get("/repos", response_model=list)
-async def list_repos(client: GithubClient = Depends(get_github_client)):
-    return await client.get_repos()
-```
-
-Note: The TypeScript base client files (`fetch-client.ts`, `axios-client.ts`) have no Python equivalent — write the `httpx` wrapper directly as shown above. Do not copy the TypeScript files.
-
-**Clean up Next.js `src/integrations/`:**
-- Delete each file that was moved.
-- If `src/integrations/` is empty after removal (no frontend-only entries remain), delete the directory.
-- If frontend-only entries remain, leave the directory intact.
+Do not copy the TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) — the `httpx` wrapper replaces them. Then apply the Phase 5 cleanup in `common.md`.
 
 ---
 
@@ -202,10 +169,10 @@ Note: The TypeScript base client files (`fetch-client.ts`, `axios-client.ts`) ha
 
 **If no database detected in Phase 1f:** Skip this phase.
 
-**FastAPI + Drizzle:** ⛔ GATE — Drizzle is TypeScript-only and has no Python equivalent.
+**FastAPI + Drizzle or Kysely:** ⛔ GATE — both are TypeScript-only.
 
 Ask:
-> "Your Next.js project uses Drizzle ORM (TypeScript-only). FastAPI requires a Python ORM. Which would you like to use?
+> "Your Next.js project uses [Drizzle / Kysely] (TypeScript-only). FastAPI requires a Python ORM. Which would you like to use?
 > - SQLAlchemy — relational databases (PostgreSQL, MySQL, SQLite)
 > - Beanie — MongoDB (async, Pydantic-native)"
 
@@ -218,9 +185,9 @@ cat "<skill-dir>/../add/database/python/sqlalchemy.md"
 cat "<skill-dir>/../add/database/python/beanie.md"
 ```
 
-The Drizzle schema files define the shape of your data. Port each Drizzle table definition to an equivalent SQLAlchemy model or Beanie document, then present the ported schemas to the user for review before proceeding. The database skill scaffolds the connection layer; schema porting is a required step before Phase 7.
+The database skill scaffolds only the connection layer. Port each Drizzle table / Kysely `types.ts` interface to a SQLAlchemy model or Beanie document and present the ported schemas to the user for review before Phase 7.
 
-Delete `src/integrations/database/` and `drizzle.config.ts` from the Next.js project after confirming the FastAPI schema is in place.
+After the user confirms, delete `src/integrations/database/` (and `drizzle.config.ts`, if present) from the Next.js project.
 
 **FastAPI + Mongoose:**
 
@@ -242,7 +209,7 @@ Load and follow the FastAPI auth skill in `../[project-name]-api`:
 cat "<skill-dir>/../add/auth/fastapi.md"
 ```
 
-**Important:** `proxy.ts` remains in the Next.js project — it continues to protect frontend routes at the edge. After migration, update any hardcoded Next.js `/api/auth/...` paths in `proxy.ts` to use `process.env.BACKEND_URL` — `proxy.ts` runs server-side on the Node runtime, so it must read the unprefixed var. `NEXT_PUBLIC_*` values are embedded in the client bundle and must never carry the real backend address.
+Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ---
 

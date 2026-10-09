@@ -36,8 +36,6 @@ the marker.
 
 #### 1. Create Zod Schemas
 
-Define schemas first — the client and service will import types from here:
-
 ```ts
 // src/integrations/schemas/github-schemas.ts
 import { z } from 'zod';
@@ -54,9 +52,7 @@ export type GithubRepo = z.infer<typeof githubRepoSchema>;
 
 #### 2. Create the Client
 
-Extend the base `FetchClient` (at `src/integrations/clients/base/fetch-client.ts`) which handles response parsing, error mapping, and content-type negotiation:
-
-The client returns `unknown`, not the schema type. Nothing has been validated at this layer — a `request<GithubRepo[]>` annotation would be a type assertion over untrusted network data, and any caller reaching for the client directly would get a compile-time guarantee the runtime does not back. `unknown` makes the trust boundary explicit: the value is unusable until the service `safeParse()`s it below.
+Extend `FetchClient` (`src/integrations/clients/base/fetch-client.ts` — response parsing, `APIError` mapping, 30 s `AbortSignal.timeout`, no retries). Return `unknown`, not the schema type: `request<GithubRepo[]>` would be a type assertion over untrusted network data. The service `safeParse()`s it.
 
 ```ts
 // src/integrations/clients/github-client.ts
@@ -72,8 +68,7 @@ export class GithubClient extends FetchClient {
   }
 
   async getRepo(owner: string, repo: string): Promise<unknown> {
-    // FetchClient.request concatenates the path onto the base URL — encode every
-    // interpolated segment so a value like `../../` cannot traverse off the intended path
+    // request() concatenates onto the base URL — encoding stops `../` from escaping the path.
     return this.request<unknown>(
       `repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
     );
@@ -94,8 +89,7 @@ export class GithubService {
 
   async getRepos(): Promise<GithubRepo[]> {
     const data = await this.client.getRepos();
-    // safeParse, not parse — a raw ZodError escaping the integration layer bypasses
-    // the APIError contract every consumer of this layer relies on
+    // safeParse so a ZodError never escapes the layer's APIError contract.
     const parsed = githubRepoSchema.array().safeParse(data);
 
     if (!parsed.success) {
@@ -111,6 +105,8 @@ export class GithubService {
 
 ```ts
 // src/integrations/factories.ts
+// Build error if a client component imports this — keeps tokens out of the browser bundle.
+import 'server-only';
 import { GithubClient } from './clients/github-client';
 import { GithubService } from './services/github-service';
 
@@ -132,7 +128,7 @@ export function Github() {
 
 #### 5. Consume via Factory
 
-In feature services or API routes:
+Server-side only — route handlers, server components, server actions. Never from a feature's `api/` service (those run in the browser):
 
 ```ts
 import { Github } from '@/integrations/factories';
@@ -150,14 +146,12 @@ Confirm the build succeeds with no type errors. Verify the integration works end
 
 ### Rules
 
-- Clients are thin — they only make HTTP requests. NEVER put business logic in clients
-- Schemas validate external responses with Zod — NEVER skip validation on external API responses
-- Services contain business logic and call clients
-- Factories create configured service instances
+- NEVER put business logic in clients; NEVER skip Zod validation of external responses
+- Retry only idempotent GETs, with backoff — FetchClient does not retry
 - Always throw `APIError` for HTTP failures (imported from `@/integrations/error`) — NEVER throw generic `Error`
 - Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets. Add commented placeholders to `.env.example` so other developers know what's needed.
 - NEVER put API keys or tokens in `NEXT_PUBLIC_*` — they are exposed to every browser. Server-side integrations use `process.env` without the prefix. For APIs requiring auth from the browser, proxy through a Next.js API route.
-- NEVER consume integrations directly in components — go through feature services or API routes
+- NEVER import integrations into client components or feature `api/` services — consume them server-side; `import 'server-only'` in `factories.ts` enforces this
 - For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
 - For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
 

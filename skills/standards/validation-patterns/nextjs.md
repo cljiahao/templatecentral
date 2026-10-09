@@ -3,20 +3,19 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### Next.js (TypeScript + React + Zod)
 
+Shared schemas (`emailSchema`, `paginationSchema`, `fileUploadSchema`, …) come from `src/lib/validation/schemas.ts` in `patterns.md` — import them, don't redefine. The route examples rely on the `ZodError` branch of `handleApiError` (400 + `fieldErrors` + `VALIDATION_ERROR`), which `templatecentral:add (error-handling)` installs; the scaffold-default handler maps a `ZodError` to a generic 500.
+
 **1. Form Schema with Client & Server Validation**
 
 ```ts
 // src/features/auth/schemas/login-form.ts
 import { z } from 'zod';
+import { emailSchema } from '@/lib/validation/schemas';
 
 export const LoginFormSchema = z.object({
-  email: z
-    .email({ error: 'Invalid email address' })
-    .toLowerCase(),
-  password: z
-    .string()
-    .min(1, 'Password is required'),
-  rememberMe: z.boolean().optional().default(false),
+  email: emailSchema,
+  password: z.string().min(1, 'Password is required'),
+  rememberMe: z.boolean().default(false),
 });
 
 export type LoginFormData = z.input<typeof LoginFormSchema>;
@@ -194,27 +193,17 @@ export const POST = withLogging(async (request) => {
 
 ```ts
 // src/app/api/projects/route.ts
-import { z } from 'zod';
 import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
+import { paginationSchema } from '@/lib/validation/schemas';
+import { listProjects } from '@/features/projects/api/list-projects';
 import { NextResponse } from 'next/server';
-
-// A hard ceiling on `limit` is what stops a client from asking for the whole table.
-// Simplified for illustration — the canonical schema (with per-rule error messages and
-// a sort-format regex) lives in `src/lib/validation/schemas.ts` via
-// `templatecentral:add (pagination)`. Keep the bounds and defaults identical.
-const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-  sort: z.string().optional(),
-});
 
 export const GET = withLogging(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
-    // searchParams.get() returns null for missing params. `.default()` only fires on
-    // undefined, and z.coerce.number() would turn that null into 0 and fail min(1) —
-    // coalesce to undefined so the defaults apply.
+    // get() returns null for a missing param; z.coerce.number() turns null into 0 and
+    // `.default()` only fires on undefined — coalesce so the defaults apply
     const queryObj = {
       page: searchParams.get('page') ?? undefined,
       limit: searchParams.get('limit') ?? undefined,
@@ -227,8 +216,7 @@ export const GET = withLogging(async (request) => {
       return handleApiError('Invalid query parameters', parsed.error);
     }
 
-    // Use parsed.data.page, parsed.data.limit, parsed.data.sort
-    const projects: unknown[] = [];
+    const projects = await listProjects(parsed.data);
 
     return NextResponse.json({ data: projects });
   } catch (error) {
@@ -249,31 +237,30 @@ export const GET = withLogging(async (request) => {
 
 ```ts
 // src/app/api/upload/route.ts
-import { z } from 'zod';
+import { APIError } from '@/integrations/error';
 import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
+import {
+  ALLOWED_UPLOAD_TYPES,
+  fileUploadSchema,
+  MAX_UPLOAD_BYTES,
+} from '@/lib/validation/schemas';
+import { storeUpload } from '@/features/uploads/api/store-upload';
 import { NextResponse } from 'next/server';
 
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'application/pdf'] as const;
-
-// Claimed metadata only — see the magic-byte check below for the real gate
-const fileUploadSchema = z.object({
-  name: z.string().min(1).max(255),
-  size: z.number().int().positive().max(MAX_UPLOAD_BYTES),
-  type: z.enum(ALLOWED_TYPES),
-});
+type AllowedType = (typeof ALLOWED_UPLOAD_TYPES)[number];
 
 // Leading signature bytes per allowed type. For formats beyond these, use a
 // maintained detector (e.g. file-type) rather than extending this by hand.
-const MAGIC_BYTES: Record<(typeof ALLOWED_TYPES)[number], number[]> = {
+const MAGIC_BYTES: Record<AllowedType, number[]> = {
   'image/png': [0x89, 0x50, 0x4e, 0x47],
   'image/jpeg': [0xff, 0xd8, 0xff],
   'application/pdf': [0x25, 0x50, 0x44, 0x46],
 };
 
-function matchesDeclaredType(buffer: ArrayBuffer, type: (typeof ALLOWED_TYPES)[number]): boolean {
+function matchesDeclaredType(buffer: ArrayBuffer, type: AllowedType): boolean {
   const signature = MAGIC_BYTES[type];
+  if (buffer.byteLength < signature.length) return false;
   const head = new Uint8Array(buffer, 0, signature.length);
   return signature.every((byte, i) => head[i] === byte);
 }
@@ -283,17 +270,15 @@ export const POST = withLogging(async (request) => {
     // Reject oversized bodies BEFORE formData() buffers them into memory
     const declaredLength = Number(request.headers.get('content-length') ?? 0);
     if (declaredLength > MAX_UPLOAD_BYTES) {
-      return NextResponse.json({ error: 'File too large' }, { status: 413 });
+      return handleApiError('File too large', new APIError({ statusCode: 413 }));
     }
 
     const formData = await request.formData();
-    const file = formData.get('file') as File | null;
+    const file = formData.get('file');
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'File is required' },
-        { status: 400 }
-      );
+    // get() returns a string for a non-file field — narrow instead of casting
+    if (!(file instanceof File)) {
+      return handleApiError('File is required', new APIError({ statusCode: 400 }));
     }
 
     const parsed = fileUploadSchema.safeParse({
@@ -308,19 +293,15 @@ export const POST = withLogging(async (request) => {
 
     const buffer = await file.arrayBuffer();
 
-    // Verify the bytes match the claimed type — file.type is client-supplied
     if (!matchesDeclaredType(buffer, parsed.data.type)) {
-      return NextResponse.json({ error: 'File content does not match its type' }, { status: 400 });
+      return handleApiError('File content does not match its type', new APIError({ statusCode: 400 }));
     }
 
-    // Generate the storage key — never build a path from parsed.data.name
+    // Never build a path from parsed.data.name
     const storageKey = crypto.randomUUID();
-    // Call your storage upload logic here using storageKey and buffer
+    await storeUpload(storageKey, buffer);
 
-    return NextResponse.json(
-      { url: `https://example.com/files/${storageKey}` },
-      { status: 201 }
-    );
+    return NextResponse.json({ data: { storageKey } }, { status: 201 });
   } catch (error) {
     return handleApiError('Upload failed', error);
   }
@@ -391,9 +372,10 @@ pnpm dev
 # Fill form incorrectly, verify errors appear
 
 # Test API validation (server-side)
-curl -X POST http://localhost:3000/api/projects \
+# Invalid email → 400 with fieldErrors.email
+curl -X POST http://localhost:3000/api/sessions \
   -H "Content-Type: application/json" \
-  -d '{"name": ""}'  # Should return 400
+  -d '{"email": "not-an-email", "password": "x"}'
 
 pnpm test
 ```

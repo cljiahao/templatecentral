@@ -231,7 +231,7 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 ```
 
-> **Tip**: After the database exists, run `npx kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
+> **Tip**: After the database exists, run `pnpm exec kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
 
 #### B4. Create DatabaseModule
 
@@ -276,7 +276,7 @@ import { type Kysely, sql } from 'kysely';
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
     .createTable('users')
-    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()::text`))
     .addColumn('email', 'text', (col) => col.notNull().unique())
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
@@ -300,13 +300,17 @@ import { Kysely, PostgresDialect } from 'kysely';
 import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { Pool } from 'pg';
 
-import { serviceConfig } from '../config/env.config';
+import { appConfig, serviceConfig } from '../config/env.config';
 import type { Database } from './types';
 
 async function migrate() {
   const db = new Kysely<Database>({
     dialect: new PostgresDialect({
-      pool: new Pool({ connectionString: serviceConfig.DATABASE_URL }),
+      pool: new Pool({
+        connectionString: serviceConfig.DATABASE_URL,
+        // Same TLS policy as KyselyService — migrations carry credentials too.
+        ssl: appConfig.ENVIRONMENT === 'dev' ? false : { rejectUnauthorized: true },
+      }),
     }),
   });
 
@@ -380,19 +384,26 @@ import { KyselyService } from '../../database/kysely.service';
 export class UserService {
   constructor(private readonly db: KyselyService) {}
 
+  // Explicit columns, not selectAll(): once auth lands, users carries hashed_password.
+  private static readonly PUBLIC_COLUMNS = ['id', 'email', 'name', 'created_at'] as const;
+
   findAll() {
-    return this.db.selectFrom('users').selectAll().execute();
+    return this.db.selectFrom('users').select(UserService.PUBLIC_COLUMNS).execute();
   }
 
   findById(id: string) {
-    return this.db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst();
+    return this.db
+      .selectFrom('users')
+      .select(UserService.PUBLIC_COLUMNS)
+      .where('id', '=', id)
+      .executeTakeFirst();
   }
 
   create(data: { email: string; name: string }) {
     return this.db
       .insertInto('users')
       .values(data)
-      .returningAll()
+      .returning(UserService.PUBLIC_COLUMNS)
       .executeTakeFirstOrThrow();
   }
 }
@@ -421,7 +432,7 @@ Confirm the build succeeds and all tests pass.
 
 ## Completing Auth Integration
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
 
 **Step A — Update `src/database/types.ts` and add migration**
 
@@ -476,15 +487,16 @@ Run: `pnpm migrate`
 ```typescript
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 
 import { KyselyService } from '../../database/kysely.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
 // Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist.
-const DUMMY_HASH =
-  '$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo';
+// password — without it, response timing leaks which accounts exist. Hashed at
+// startup with the same defaults as real passwords so the cost matches exactly.
+const DUMMY_HASH = argon2.hash(randomUUID());
 
 @Injectable()
 export class AuthService {
@@ -518,7 +530,8 @@ export class AuthService {
       .where('email', '=', dto.email)
       .executeTakeFirst();
     const passwordOk = await argon2.verify(
-      user?.hashed_password ?? DUMMY_HASH,
+      // `||`, not `??`: rows backfilled by 002_add_auth hold '' — argon2.verify throws on it.
+      user?.hashed_password || (await DUMMY_HASH),
       dto.password,
     );
     if (!user || !passwordOk) {

@@ -3,7 +3,7 @@
      prereq: Stack = FastAPI, DB = SQLAlchemy + AWS IAM (high compliance, PostgreSQL only). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + SQLAlchemy + AWS IAM (High Compliance)
 
-> **Supported databases:** PostgreSQL only (the IAM token signer uses `psycopg2` — MySQL with IAM requires a different driver and SSL setup not covered here).
+> **Supported databases:** PostgreSQL only (the engine uses the `psycopg` (psycopg 3) driver with boto3-signed tokens — MySQL with IAM requires a different driver and SSL setup not covered here).
 
 ### A1. Install Dependencies
 
@@ -13,7 +13,7 @@ Add to `requirements.txt`:
 sqlalchemy
 alembic
 boto3
-psycopg2-binary
+psycopg[binary]
 ```
 
 ### A2. Create Database Base
@@ -70,7 +70,7 @@ def _get_iam_token() -> str:
 
 
 engine = create_engine(
-    f"postgresql+psycopg2://{api_settings.DATABASE_USER}@"
+    f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}",
     # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
     # credential, so the server certificate must be verified against the AWS
@@ -131,10 +131,23 @@ In `alembic/env.py`, replace the `set_main_option` call with:
 from core.config import api_settings
 
 sqlalchemy_url = (
-    f"postgresql+psycopg2://{api_settings.DATABASE_USER}@"
+    f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}"
 )
 config.set_main_option("sqlalchemy.url", sqlalchemy_url)
+```
+
+This URL carries no password, so online migrations must connect through the shared `engine` from `database.session` — it holds the `do_connect` token listener and `verify-full` TLS. A fresh `engine_from_config()` (the `alembic init` default) would fail authentication:
+
+```python
+from database.session import engine
+
+
+def run_migrations_online():
+    with engine.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
 ```
 
 ### A7. Create a Model
@@ -167,7 +180,7 @@ alembic upgrade head
 
 ### A9. Usage
 
-Inject the database session via FastAPI's dependency injection:
+Inject the session via `Depends(get_db)` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
@@ -176,7 +189,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.schemas.response.project import ProjectResponse  # create this schema
+from api.schemas.response.project import ProjectResponse
 from database.session import get_db
 from models.project import Project
 
@@ -186,7 +199,7 @@ def list_projects(db: Session = Depends(get_db)) -> Sequence[Project]:
     return db.scalars(stmt).all()
 ```
 
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
+> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool; an `async def` handler would block the event loop on every query.
 >
 > **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema.
 
@@ -202,16 +215,14 @@ Confirm all tests pass.
 
 ## Completing Auth Integration (SQLAlchemy + IAM)
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations. The auth wiring is identical to the standard SQLAlchemy path — only the session/config setup differs (already handled above).
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
 
-The repository, service, and router wiring is **identical** to the standard SQLAlchemy path — only the session/config setup differs (already handled in sections A2–A6 above). Apply these steps from `add/database/python/sqlalchemy.md`, exactly as written there:
+The repository, service, and router wiring is **identical** to the standard SQLAlchemy path — only the session/config setup differs (sections A2–A6 above). Load `cat "<skill-dir>/database/python/sqlalchemy.md"` and apply its "Completing Auth Integration" steps exactly as written:
 
 - **Step A** — Create `src/models/user.py`
 - **Step B** — Create `src/api/repositories/user_repository.py`
 - **Step C** — Replace stubs in `src/api/services/auth_service.py`
 - **Step D** — Replace `src/api/routers/auth.py`
-
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
 
 ---
 

@@ -1,13 +1,41 @@
 {
   "skillListingBudgetFraction": 0.02,
+  "permissions": {
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.development)",
+      "Read(**/.env.production)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.test)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/secrets/**)",
+      "Read(**/.secrets/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|NotebookEdit|Read|Grep",
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/pre-guard.sh"
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/pre-guard.sh"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/bash-guard.sh"],
+            "timeout": 10
           }
         ]
       }
@@ -18,7 +46,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/lint-skills.sh skills/ 2>&1 | tail -10"
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/post-edit-lint.sh"],
+            "timeout": 60
           }
         ]
       }

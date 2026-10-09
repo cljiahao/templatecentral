@@ -5,9 +5,10 @@
 # blocks are JSONC, so a string-aware pass strips // and /* */ comments first (URLs like
 # "https://..." are preserved). Also extracts every ```js/```mjs/```javascript fenced block
 # (eslint.config.mjs and other JS config templates, all written as ESM) and syntax-checks each
-# with `node --check` (loaded as a module via a .mjs temp file). Fails (exit 1) on the first
-# malformed block so a broken scaffold config template is caught by a PR check, not only by the
+# with `node --check` (loaded as a module via a .mjs temp file). Reports every malformed block and
+# exits 1, so a broken scaffold config template is caught by a PR check, not only by the
 # optional monthly LLM scaffold-verify cron.
+# No `set -e`: a failing block is reported and the loop continues to the next one.
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || { echo "validate-scaffold-configs: jq not found" >&2; exit 2; }
@@ -21,20 +22,26 @@ trap 'rm -rf "$workdir"' EXIT
 
 # String-aware JSONC comment stripper — preserves // and /* inside string literals.
 strip_jsonc() {
-  if command -v node >/dev/null 2>&1; then
-    node -e '
-      const s=require("fs").readFileSync(0,"utf8");let o="",i=0,st=false,esc=false;
-      while(i<s.length){const c=s[i],n=s[i+1];
-        if(st){o+=c;if(esc)esc=false;else if(c==="\\")esc=true;else if(c==="\"")st=false;i++;continue;}
-        if(c==="\""){st=true;o+=c;i++;continue;}
-        if(c==="/"&&n==="/"){while(i<s.length&&s[i]!=="\n")i++;continue;}
-        if(c==="/"&&n==="*"){i+=2;while(i<s.length&&!(s[i]==="*"&&s[i+1]==="/"))i++;i+=2;continue;}
-        o+=c;i++;}
-      process.stdout.write(o);' 2>/dev/null
-  else
-    # Fallback: drop whole-line // comments and trailing " //" comments, never touching "://".
-    sed -E 's@([^:])//[^"]*$@\1@; /^[[:space:]]*\/\//d'
-  fi
+  node -e '
+    const s=require("fs").readFileSync(0,"utf8");let o="",i=0,st=false,esc=false;
+    while(i<s.length){const c=s[i],n=s[i+1];
+      if(st){o+=c;if(esc)esc=false;else if(c==="\\")esc=true;else if(c==="\"")st=false;i++;continue;}
+      if(c==="\""){st=true;o+=c;i++;continue;}
+      if(c==="/"&&n==="/"){while(i<s.length&&s[i]!=="\n")i++;continue;}
+      if(c==="/"&&n==="*"){i+=2;while(i<s.length&&!(s[i]==="*"&&s[i+1]==="/"))i++;i+=2;continue;}
+      o+=c;i++;}
+    process.stdout.write(o);' 2>/dev/null
+}
+
+# split_fences <md-file> <fence-tag-ERE> <ext> — writes each matching fence body to
+# $workdir/<start-line>.<ext>, so failures can be reported by source line.
+split_fences() {
+  rm -f "$workdir"/*."$3" 2>/dev/null || true
+  awk -v dir="$workdir" -v ext="$3" -v open='^```('"$2"')[[:space:]]*$' '
+    $0 ~ open { inblk=1; out=dir "/" NR "." ext; next }
+    inblk && /^```[[:space:]]*$/ { close(out); inblk=0; next }
+    inblk { print > out }
+  ' "$1"
 }
 
 fail=0
@@ -42,14 +49,8 @@ total=0
 
 for f in skills/scaffold/*/config-files.md; do
   [ -f "$f" ] || continue
-  # Split each ```json ... ``` block into its own file named by its start line.
-  rm -f "$workdir"/*.json 2>/dev/null || true
-  awk -v dir="$workdir" '
-    /^```json[[:space:]]*$/ { inblk=1; start=NR; out=dir "/" NR ".json"; next }
-    inblk && /^```[[:space:]]*$/ { close(out); inblk=0; next }
-    inblk { print > out }
-  ' "$f"
 
+  split_fences "$f" 'json' json
   for blk in "$workdir"/*.json; do
     [ -e "$blk" ] || continue
     total=$((total + 1))
@@ -63,16 +64,9 @@ for f in skills/scaffold/*/config-files.md; do
     fi
   done
 
-  # Split each ```js / ```mjs / ```javascript ... ``` block into its own .mjs file named by its
-  # start line. All scaffold JS config templates (eslint.config.mjs, postcss.config.mjs, ...) are
-  # written as ESM, so every extracted block is checked as a module regardless of its fence tag.
-  rm -f "$workdir"/*.mjs 2>/dev/null || true
-  awk -v dir="$workdir" '
-    /^```(js|mjs|javascript)[[:space:]]*$/ { inblk=1; start=NR; out=dir "/" NR ".mjs"; next }
-    inblk && /^```[[:space:]]*$/ { close(out); inblk=0; next }
-    inblk { print > out }
-  ' "$f"
-
+  # All scaffold JS config templates (eslint.config.mjs, postcss.config.mjs, ...) are ESM, so
+  # every block is checked as a module regardless of its fence tag.
+  split_fences "$f" 'js|mjs|javascript' mjs
   for blk in "$workdir"/*.mjs; do
     [ -e "$blk" ] || continue
     total=$((total + 1))

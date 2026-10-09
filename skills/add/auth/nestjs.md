@@ -25,8 +25,8 @@ allowBuilds:
 Then install:
 
 ```bash
-pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt argon2 ms
-pnpm add -D @types/passport-jwt @types/ms
+pnpm add @nestjs/passport @nestjs/jwt passport passport-jwt argon2
+pnpm add -D @types/passport-jwt
 ```
 
 ### Steps
@@ -62,14 +62,14 @@ import { z } from 'zod';
 
 const registerSchema = z.object({
   email: z.email(),
-  // 12-char minimum — OWASP recommendation
-  password: z.string().min(12),
+  // 128-char cap bounds argon2 hashing cost on this unauthenticated endpoint.
+  password: z.string().min(12).max(128),
   name: z.string().min(1),
 });
 
 const loginSchema = z.object({
   email: z.email(),
-  password: z.string(),
+  password: z.string().min(1).max(128),
 });
 
 const tokenSchema = z.object({
@@ -84,13 +84,13 @@ export class TokenDto extends createZodDto(tokenSchema) {}
 
 #### 3. Add Config
 
-Add `JWT_SECRET` and `JWT_EXPIRES_IN` to `envSchema` in **`src/config/env.config.ts`** — validated at import time, so a missing/short secret fails boot loudly instead of surfacing as a runtime `undefined`:
+Add `JWT_SECRET` and `JWT_EXPIRES_IN_SECONDS` to `envSchema` in **`src/config/env.config.ts`** — validated at import time, so a missing/short secret fails boot loudly instead of surfacing as a runtime `undefined`:
 
 ```typescript
 const envSchema = z.object({
   // ... existing fields ...
   JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default('30m'),
+  JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(1800),
 });
 ```
 
@@ -98,14 +98,14 @@ const envSchema = z.object({
 export const appConfig = {
   // ... existing fields ...
   JWT_SECRET: env.JWT_SECRET,
-  JWT_EXPIRES_IN: env.JWT_EXPIRES_IN,
+  JWT_EXPIRES_IN_SECONDS: env.JWT_EXPIRES_IN_SECONDS,
 };
 ```
 
 Add to `.env` (generate real value — never commit):
 ```
 JWT_SECRET=
-JWT_EXPIRES_IN=30m
+JWT_EXPIRES_IN_SECONDS=1800
 ```
 
 > Run `openssl rand -hex 32` and paste the output as `JWT_SECRET`.
@@ -113,7 +113,7 @@ JWT_EXPIRES_IN=30m
 Document in `.env.example`:
 ```
 JWT_SECRET=<generate with: openssl rand -hex 32>
-JWT_EXPIRES_IN=30m
+JWT_EXPIRES_IN_SECONDS=1800
 ```
 
 NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
@@ -169,7 +169,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {}
 
 ```typescript
 import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 
 import type { RegisterDto, LoginDto } from './auth.dto';
 
@@ -184,10 +183,6 @@ const STUB_REMEDIATION =
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly jwtService: JwtService) {}
-
-  // Both methods are deliberate stubs (synchronous throws, unused params prefixed with _)
-  // until templatecentral:add (database) replaces them with real implementations.
   register(_dto: RegisterDto) {
     this.logger.error(STUB_REMEDIATION);
     throw new NotImplementedException('Not implemented.');
@@ -238,11 +233,6 @@ export class AuthController {
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-// ms's published `latest` is still 2.x (CommonJS `export =`, default import under
-// esModuleInterop); `StringValue` is backported onto it by @types/ms as a namespace member,
-// not a named export — `import { ms, ... }` does not resolve. @types/ms must be an explicit
-// devDependency: pnpm's strict node_modules won't expose a transitive-only @types package to tsc.
-import ms, { type StringValue } from 'ms';
 
 import { appConfig } from '../../config/env.config';
 import { AuthController } from './auth.controller';
@@ -254,12 +244,9 @@ import { JwtStrategy } from './jwt.strategy';
     PassportModule,
     JwtModule.register({
       secret: appConfig.JWT_SECRET,
-      // @nestjs/jwt's expiresIn accepts a number of seconds or `ms`'s branded StringValue —
-      // not a plain string, which is what a Zod-validated env var actually is. Cast once here
-      // and convert to seconds so the .env stays human-readable ("30m").
-      signOptions: {
-        expiresIn: Math.floor(ms(appConfig.JWT_EXPIRES_IN as StringValue) / 1000),
-      },
+      // Seconds, not an "30m" string: @nestjs/jwt types expiresIn as number | ms.StringValue,
+      // which a plain Zod-validated string does not satisfy.
+      signOptions: { algorithm: 'HS256', expiresIn: appConfig.JWT_EXPIRES_IN_SECONDS },
     }),
   ],
   controllers: [AuthController],
@@ -298,7 +285,7 @@ export class AppModule {}
 Use the `JwtAuthGuard` on any controller or endpoint that requires authentication:
 
 ```typescript
-import { UseGuards } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -311,19 +298,19 @@ export class TaskController {
 Or on a single endpoint:
 
 ```typescript
+import { Get, Req, UseGuards } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 
 @UseGuards(JwtAuthGuard)
 @Get('me')
 getMe(@Req() req: FastifyRequest & { user: { id: string; email: string } }): { id: string; email: string } {
-  // { id, email } from JwtStrategy.validate()
   return req.user;
 }
 ```
 
 ### Rate Limiting (Required for Production)
 
-Industry best practice: cap auth attempts at roughly 3 per 15 minutes per IP. Install `@nestjs/throttler`:
+Target: cap auth attempts at roughly 3 per 15 minutes per IP. Install `@nestjs/throttler`:
 
 ```bash
 pnpm add @nestjs/throttler

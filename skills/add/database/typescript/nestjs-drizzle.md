@@ -3,15 +3,15 @@
      prereq: Stack = NestJS, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Drizzle (SQL)
 
-> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage). Pin the current v1 RC exactly in `package.json` (see `.claude/rules/nestjs.md`). The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage) — pin the RC exactly. The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
 
 #### A1. Install Dependencies
 
-Read the exact RC from `.claude/rules/nestjs.md` (the SSOT for version floors) and install that version — never the floating `@rc` tag, which silently resolves to a different RC on every install:
+Read the exact RC from the plugin's version SSOT — `cat "<skill-dir>/../../.claude/rules/nestjs.md"` (the scaffolded project has no copy) — and install it exactly; never the floating `@rc` tag, which resolves to a different RC on every install:
 
 ```bash
-pnpm add drizzle-orm@<exact-rc-from-rules> postgres
-pnpm add -D drizzle-kit@<exact-rc-from-rules>
+pnpm add --save-exact drizzle-orm@<exact-rc-from-rules> postgres
+pnpm add -D --save-exact drizzle-kit@<exact-rc-from-rules>
 ```
 
 Both packages must be on the same RC — a `drizzle-kit` that disagrees with `drizzle-orm` generates migrations the runtime cannot read.
@@ -171,8 +171,8 @@ DATABASE_URL="postgresql://DBUSER:DBPASSWORD@localhost:5432/DBNAME"
 #### A9. Generate & Run Migrations
 
 ```bash
-pnpm db:generate  # generate SQL migration files from schema
-pnpm db:migrate   # apply pending migrations to the database
+pnpm db:generate
+pnpm db:migrate
 ```
 
 For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
@@ -206,8 +206,6 @@ export class UserService {
 }
 ```
 
-> Import `eq` from `drizzle-orm`: `import { eq } from 'drizzle-orm';`
-
 #### A11. Validate
 
 ```bash
@@ -215,10 +213,6 @@ pnpm db:generate && pnpm build && pnpm test
 ```
 
 Confirm the migration file was generated, build succeeds, and all tests pass.
-
-> **AWS IAM auth**: Drizzle does not include a native IAM token-fetching variant. If AWS IAM database authentication is required, use **Kysely** (select Kysely when prompted) instead.
-
----
 
 > **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
 
@@ -231,13 +225,13 @@ Confirm the migration file was generated, build succeeds, and all tests pass.
 - `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
 - Place `DrizzleService` and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Add `*.db` and `*.db-journal` to `.gitignore` for SQLite. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
 
 ---
 
 ## Completing Auth Integration
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
+> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
 
 **Step A — Add `hashedPassword` to `src/database/schema.ts`**
 
@@ -269,6 +263,7 @@ pnpm db:migrate
 ```typescript
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { eq } from 'drizzle-orm';
 
@@ -277,9 +272,9 @@ import { users } from '../../database/schema';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
 // Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist.
-const DUMMY_HASH =
-  '$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo';
+// password — without it, response timing leaks which accounts exist. Hashed at
+// startup with the same defaults as real passwords so the cost matches exactly.
+const DUMMY_HASH = argon2.hash(randomUUID());
 
 @Injectable()
 export class AuthService {
@@ -312,7 +307,7 @@ export class AuthService {
       .where(eq(users.email, dto.email))
       .limit(1);
     const passwordOk = await argon2.verify(
-      user?.hashedPassword ?? DUMMY_HASH,
+      user?.hashedPassword ?? (await DUMMY_HASH),
       dto.password,
     );
     if (!user || !passwordOk) {

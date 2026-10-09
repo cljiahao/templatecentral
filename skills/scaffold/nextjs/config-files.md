@@ -9,7 +9,7 @@ Write these files exactly as shown.
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint pinned at `^9`** — `eslint-plugin-react-hooks` 7.x peer-supports only `^9`; bumping to ESLint 10 breaks `pnpm install` under strict peer enforcement until the plugin ships ESLint 10 support. Do not upgrade eslint past `^9` without verifying `eslint-plugin-react-hooks` peer compatibility.
+> **ESLint pinned at `^9`** — `^9` is the flat-config baseline every plugin in this devDependency set is verified against. `eslint-plugin-react-hooks` 7.1.1 and `eslint-config-next` 16 already peer-support `^10`, so an ESLint 10 bump is not blocked by peers; re-verify `eslint-plugin-sonarjs` and `@eslint-community/eslint-plugin-eslint-comments` alongside it and move the lint toolchain as one unit.
 
 ```json
 {
@@ -53,6 +53,7 @@ Write these files exactly as shown.
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^24",
@@ -140,9 +141,10 @@ console.log(`Route logging check passed (${files.length} route file(s)).`);
 
 > Next.js 16 ships `eslint-config-next` as native flat configs — `FlatCompat` causes circular JSON crashes. Import the flat config objects directly and spread them. `pnpm check` runs `eslint .`, so this file must exist.
 
-> `sonarjs.configs.recommended` enables ~206 of the plugin's 268 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.1.0`, no caret) below — `configs.recommended`'s enabled-rule set is not stable across minor versions (4.2.0 enables ~217 of 280 rules, a different set); bump deliberately and re-verify, don't let `pnpm install` silently resolve a newer minor.
+> `sonarjs.configs.recommended` enables ~206 of the plugin's 268 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.1.0`, no caret) below — `configs.recommended`'s enabled-rule set is not stable across minor versions (4.2.0 enables ~217 of 280 rules, a different set); bump deliberately and re-verify, don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```javascript
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -153,6 +155,13 @@ const config = [
   ...coreWebVitals,
   ...typescript,
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+      reportUnusedInlineConfigs: 'error',
+    },
+  },
+  eslintComments.recommended,
+  {
     ...sonarjs.configs.recommended,
     rules: {
       ...sonarjs.configs.recommended.rules,
@@ -161,13 +170,23 @@ const config = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
       ],
-      // recommended leaves this off; templateCentral's comment-hygiene gate requires it.
       'sonarjs/no-commented-code': 'error',
+      // TODO/FIXME with context is allowed; keep them visible without failing lint.
+      'sonarjs/todo-tag': 'warn',
+      'sonarjs/fixme-tag': 'warn',
+      '@eslint-community/eslint-comments/require-description': [
+        'error',
+        { ignore: ['eslint-enable'] },
+      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': [
+        'error',
+        { allowWholeFile: true },
+      ],
     },
   },
   {
@@ -234,10 +253,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 
-  // Uncomment and add domains when using next/image with external URLs:
-  // images: {
-  //   remotePatterns: [{ protocol: 'https', hostname: 'example.com' }],
-  // },
+  // next/image refuses external hosts until they are allowlisted in `images.remotePatterns`.
 
   async headers() {
     // Anti-clickjacking headers (X-Frame-Options, CSP frame-ancestors) are omitted in dev —
@@ -431,13 +447,10 @@ CMD ["node", "server.js"]
 ```sh
 #!/bin/sh
 
-# Check for Yarn lock file
 if [ -f "yarn.lock" ]; then
   exec yarn "$@"
-# Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
   exec sh -c 'corepack enable pnpm && exec pnpm "$@"' -- "$@"
-# Default to npm
 else
   exec npm "$@"
 fi

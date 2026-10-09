@@ -117,14 +117,14 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError
 
 from core.config import api_settings
 
 ALGORITHM = "HS256"
 
-# argon2id with OWASP-recommended parameters — t=3, m=64 MiB, p=1.
-# Set explicitly: argon2-cffi's library defaults differ from these.
+# argon2id, t=3 / m=64 MiB / p=1 — above OWASP's minimums. Set explicitly because
+# argon2-cffi's defaults (RFC 9106 low-memory profile) use p=4.
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
 
 
@@ -135,22 +135,27 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return _ph.verify(hashed_password, plain_password)
-    except (VerifyMismatchError, VerificationError, InvalidHashError):
+    except (VerificationError, InvalidHashError):
         return False
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode = {"sub": subject, "exp": expire}
-    return jwt.encode(to_encode, api_settings.SECRET_KEY, algorithm=ALGORITHM)
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    return jwt.encode({"sub": subject, "iat": now, "exp": expire}, api_settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> str | None:
     """Decode and validate a JWT token. Returns the subject or None."""
     try:
-        # algorithms is a security whitelist — never omit or use ["none"]; omitting allows algorithm confusion attacks
-        payload = jwt.decode(token, api_settings.SECRET_KEY, algorithms=[ALGORITHM])
+        # Pinned algorithm list blocks alg-confusion / "none"; require rejects tokens missing exp/sub.
+        payload = jwt.decode(
+            token,
+            api_settings.SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub"]},
+        )
         return payload.get("sub")
     except jwt.PyJWTError:
         return None
@@ -261,9 +266,10 @@ router.include_router(auth.router, tags=[APITags.AUTH])
 Use the `get_current_user` dependency on any endpoint that requires auth:
 
 ```python
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from api.dependencies.auth import get_current_user
+
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
@@ -276,7 +282,7 @@ async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 
 ### Rate Limiting (Required for Production)
 
-Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi` to `requirements.txt`, then:
+Target: max 3 auth attempts per 15 minutes per client IP. Add `slowapi` to `requirements.txt`, then:
 
 ```python
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -284,13 +290,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
-# WARNING: TRUST_PROXY must be set in your environment — otherwise
-# get_remote_address returns the proxy IP and all users behind a load
-# balancer share one rate limit bucket (making limiting completely ineffective).
-#
-# In your .env file, set to a trusted CIDR or '*' for all proxies:
-# TRUST_PROXY=10.0.0.0/8   # single-hop (ALB → App): trust your VPC CIDR
-# TRUST_PROXY=*            # or trust all proxies (dev/internal only)
+# get_remote_address reads request.client.host — correct behind a proxy only when
+# TRUST_PROXY is set (see Rules), otherwise every user shares the proxy's bucket.
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter
@@ -313,6 +314,7 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
 - Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
+- When completing `login_user`, return the same 401 for unknown email and wrong password, and run `verify_password` against a dummy hash when the user is missing — otherwise response timing reveals which emails are registered.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
 

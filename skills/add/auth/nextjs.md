@@ -99,34 +99,15 @@ export const auth = betterAuth({
     autoSignIn: true,
   },
 
-  socialProviders: {
-    // --- Add your SSO providers here ---
-    // Uncomment and supply env vars for each provider you want to enable.
-    //
-    // google: {
-    //   clientId: process.env.GOOGLE_CLIENT_ID!,
-    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    // },
-    // github: {
-    //   clientId: process.env.GITHUB_CLIENT_ID!,
-    //   clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-    // },
-    // microsoft: {
-    //   clientId: process.env.MICROSOFT_CLIENT_ID!,
-    //   clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-    //   tenantId: 'common', // or a specific tenant ID for single-tenant apps
-    // },
-  },
+  // SSO providers go here — see Step 14 for the per-provider config blocks.
+  socialProviders: {},
 
   session: {
-    // 30 days (standard) — elevated sessions reduce to 43200 (12h) + 30-min inactivity; high-assurance use 28800 (8h) + 15-min inactivity
+    // Standard tier. Elevated: 12h + 30-min inactivity; high-assurance: 8h + 15-min inactivity (add `freshAge`, see note below).
     expiresIn: 30 * 24 * 60 * 60,
-    // refresh after 1 day of activity
     updateAge: 24 * 60 * 60,
-    // freshAge: 43200,            // uncomment for high-assurance flows — forces re-auth after this period (see note below)
     cookieCache: {
       enabled: true,
-      // 5-minute client-side cache
       maxAge: 5 * 60,
     },
   },
@@ -139,20 +120,21 @@ export const auth = betterAuth({
     },
   },
 
-  // must be last
+  // nextCookies() must stay the last plugin so Server Actions can set cookies.
   plugins: [nextCookies()],
 });
 ```
 
-> `freshAge` is measured from session `createdAt`, not last activity. If you uncomment a short `freshAge` (e.g. 43200 for elevated-assurance flows), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
+> `freshAge` (add under `session` for high-assurance flows) is measured from session `createdAt`, not last activity. With a short `freshAge` (e.g. `43200`), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
-> **Database**: Without a `database` option, better-auth falls back to an in-memory adapter — accounts and sessions live in server process memory only. This is **not** a persistent stateless-cookie mode: everything is lost on every restart/redeploy, and it does not work across multiple instances (serverless, multi-replica deployments). The JWE-encrypted `cookieCache` is only a short-lived (5-minute) read-through cache in front of this store, not a replacement for it. Add a database adapter after running `templatecentral:add` (database) before anything beyond quick local prototyping. The Drizzle adapter is a separate package (`@better-auth/drizzle-adapter` — install alongside `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+> **Database**: Without a `database` option, better-auth falls back to an in-memory adapter — accounts and sessions live in server process memory only. This is **not** a persistent stateless-cookie mode: everything is lost on every restart/redeploy, and it does not work across multiple instances (serverless, multi-replica deployments). The HMAC-signed `cookieCache` (default `strategy: 'compact'`) is only a short-lived (5-minute) read-through cache in front of this store, not a replacement for it. Add a database adapter after running `templatecentral:add` (database) before anything beyond quick local prototyping. The Drizzle adapter ships with better-auth — import `drizzleAdapter` from `better-auth/adapters/drizzle` (peer: `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
 > **Password hashing**: better-auth's default hasher is scrypt, not argon2id. To use argon2id instead, install `@node-rs/argon2` and override `emailAndPassword.password.hash`/`.verify`:
 > ```ts
 > import { hash, verify, type Options } from '@node-rs/argon2';
 >
-> const opts: Options = { memoryCost: 65536, timeCost: 3, parallelism: 4, outputLen: 32, algorithm: 2 };
+> // Argon2id is the @node-rs/argon2 default algorithm; 64 MiB / t=3 / p=1.
+> const opts: Options = { memoryCost: 65536, timeCost: 3, parallelism: 1, outputLen: 32 };
 >
 > emailAndPassword: {
 >   // ...other options
@@ -521,6 +503,7 @@ Add under `## Architecture Decisions`:
 
 ```ts
 import { auth } from '@/lib/auth';
+import { PAGE_ROUTES } from '@/lib/constants/routes';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -528,7 +511,6 @@ const session = await auth.api.getSession({ headers: await headers() });
 if (!session) redirect(PAGE_ROUTES.LOGIN);
 
 const { user } = session;
-// user.id, user.name, user.email, user.image
 ```
 
 **Unauthenticated API response (never JSON — information-disclosure risk):**
@@ -556,7 +538,22 @@ export function UserAvatar() {
 
 #### 14. Adding an SSO provider
 
-Uncomment the relevant block in `src/lib/auth.ts` and add credentials to `.env.local`. Then add a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`.
+Add the provider to `socialProviders` in `src/lib/auth.ts`, put its credentials in `.env.local`, then render a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`:
+
+```ts
+socialProviders: {
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  },
+  microsoft: {
+    clientId: process.env.MICROSOFT_CLIENT_ID!,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+    // 'common' admits any Entra tenant; set your tenant ID for single-tenant apps.
+    tenantId: 'common',
+  },
+},
+```
 
 | Provider | Config key | Required env vars | Callback URL |
 |----------|------------|-------------------|--------------|
@@ -570,7 +567,7 @@ Full provider list: https://www.better-auth.com/docs/authentication/social-sign-
 
 ### Rate Limiting (Required for Production)
 
-Industry best practice: max 3 auth attempts per 15 minutes. better-auth does not include built-in rate limiting — add it at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` middleware using `@upstash/ratelimit` (Redis-backed, edge-compatible):
+Target: max 3 credential attempts per 15 minutes. better-auth's built-in limiter (`rateLimit`) is on in production only, defaults to in-memory storage (per-instance — useless across replicas), and keys on `advanced.ipAddress.ipAddressHeaders`, which is client-forgeable without a trusted proxy. For multi-instance deployments, enforce the limit at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` with `@upstash/ratelimit` (Redis-backed, edge-compatible):
 
 ```bash
 pnpm add @upstash/ratelimit @upstash/redis
@@ -595,6 +592,7 @@ const ratelimit = new Ratelimit({
 const RATE_LIMITED_AUTH_PATHS = [
   '/api/auth/sign-in',
   '/api/auth/sign-up',
+  '/api/auth/request-password-reset',
   '/api/auth/forget-password',
   '/api/auth/reset-password',
 ];
@@ -632,7 +630,7 @@ if (RATE_LIMITED_AUTH_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {
 
 > **TRUST_PROXY required**: Only trust `X-Forwarded-For` if your deployment topology has a controlled reverse proxy (ALB, Traefik). Without a proxy, any client can forge `X-Forwarded-For` to bypass rate limits. Set `TRUST_PROXY` to the number of trusted proxy hops — `TRUST_PROXY=1` for one-hop (ALB → App), `TRUST_PROXY=2` for two-hop (ALB → Traefik → App); leave it empty/unset when there is no proxy (headers not trusted). See the scaffold's `src/lib/utils/request-origin.ts` for the same convention.
 
-For simpler setups without Redis, use `next-rate-limit` with in-memory state (not suitable for multi-instance deployments).
+Single-instance deployments can rely on better-auth's built-in limiter instead: set `rateLimit: { storage: 'database', customRules: { '/sign-in/*': { window: 900, max: 3 } } }` (paths are relative to `/api/auth`).
 
 ### Security Rules
 

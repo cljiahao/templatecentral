@@ -8,14 +8,14 @@ Review changed files against two layers: (1) the universal code quality principl
 
 ## Stack Detection
 
-Check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI. If multiple markers are found (monorepo), ask the user which stack to review before continuing.
+Use the build utility's Stack Detection table (`<skill-dir>/../build/implementation.md`). If multiple markers are found (monorepo), ask the user which stack to review before continuing.
 
 ## Steps
 
 1. Detect stack
 2. Read the project's `AGENTS.md` — load its `## Rules` section for project-specific constraints (the universal quality principles are listed under **What to check** below, not in `AGENTS.md`)
-3. Cat the detected stack's code-standards file:
-   `cat "<skill-dir>/../standards/code-standards/<detected-stack>.md"`
+3. Cat the shared comment doctrine, then the detected stack's code-standards file:
+   `cat "<skill-dir>/../standards/code-standards/comments.md" "<skill-dir>/../standards/code-standards/<detected-stack>.md"`
 4. Identify files to review (see **Scoping** below)
 5. Review each file against both layers — quality principles first, then style rules
 6. Report violations (see **Reporting** below)
@@ -57,6 +57,7 @@ If the project has no commits yet, skip writing the baseline.
 - **SoC**: layers bleeding into each other (UI doing data fetching, validation mixed with business logic, config hardcoded in implementation)
 - **Premature abstractions**: abstracted from only 1–2 callsites — wait for the third
 - **Dead code**: commented-out blocks, unused imports, unused variables, TODO stubs
+- **Comment hygiene**: WHAT-comments restating code, change-narration (`was X, now Y`, dates, ticket refs), redundant trailing comments
 - **Tech debt markers**: `// fix later`, `// temp`, empty catch blocks, swallowed errors
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
 - **Overly broad responses**: full DB records or internal fields returned when a subset is sufficient
@@ -99,13 +100,3 @@ Rules:
 ## Callers
 
 Dispatched by: `templatecentral:scaffold` (all stacks, post-scaffold review), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
-
-## Changelog
-### 1.2.0
-- Added baseline scoping: uses `git diff <last-reviewed-commit>..HEAD` instead of full session files after first scaffold review
-- Writes/updates `.claude/review-baseline.md` after each review run
-### 1.1.0
-- Added Layer 1 quality checks (YAGNI, dead code, boundary validation, least privilege, no secrets)
-- Updated stack detection to use full skill names
-### 1.0.0
-- Initial plugin release

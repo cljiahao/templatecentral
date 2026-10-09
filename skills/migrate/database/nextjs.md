@@ -3,7 +3,7 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## Next.js Database Migration
 
-**Read `drizzle-to-kysely.md` first** — shared steps (1, 5, 8 up-body, 9 translation table, 10 env block, After Writing Code) live there.
+**Read `drizzle-to-kysely.md` first** — shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code) live there.
 
 ```bash
 cat "<skill-dir>/database/drizzle-to-kysely.md"
@@ -40,34 +40,51 @@ rm -rf drizzle/
 
 ### Step 4 — Create `src/integrations/database/kysely-client.ts` (IAM variant)
 
+Download the CA bundle first — the Amazon RDS root CA is not in Node's default trust store, so `rejectUnauthorized: true` without `ca` fails with `SELF_SIGNED_CERT_IN_CHAIN` (and `rejectUnauthorized: false` is never the fix). Commit it (public certificate) or bake it into the image:
+
+```bash
+mkdir -p certs
+curl -fsSL -o certs/rds-global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+```
+
 ```typescript
-import { Kysely, PostgresDialect } from 'kysely';
+import { readFileSync } from 'node:fs';
 import { Signer } from '@aws-sdk/rds-signer';
+import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 
 import type { Database } from './types';
 
-const signer = new Signer({
-  hostname: process.env.DATABASE_HOST!,
-  port: Number(process.env.DATABASE_PORT ?? '5432'),
-  username: process.env.DATABASE_USER!,
-});
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
 
-const pool = new Pool({
-  host: process.env.DATABASE_HOST,
-  port: Number(process.env.DATABASE_PORT ?? '5432'),
-  user: process.env.DATABASE_USER,
-  database: process.env.DATABASE_NAME,
-  password: () => signer.getAuthToken(),
-  ssl: { rejectUnauthorized: true },
-  max: 10,
-});
+function createDb(): Kysely<Database> {
+  const host = requireEnv('DATABASE_HOST');
+  const port = Number(process.env.DATABASE_PORT ?? '5432');
+  const user = requireEnv('DATABASE_USER');
+  const signer = new Signer({ hostname: host, port, username: user });
 
-const globalForKysely = globalThis as unknown as { db: Kysely<Database> };
+  const pool = new Pool({
+    host,
+    port,
+    user,
+    database: requireEnv('DATABASE_NAME'),
+    password: () => signer.getAuthToken(),
+    ssl: { rejectUnauthorized: true, ca: readFileSync(requireEnv('RDS_CA_BUNDLE_PATH'), 'utf8') },
+    max: 10,
+  });
 
-export const db = globalForKysely.db ?? new Kysely<Database>({
-  dialect: new PostgresDialect({ pool }),
-});
+  return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
+}
+
+// Reuse one pool across dev hot reloads instead of leaking a new one per reload
+const globalForKysely = globalThis as unknown as { db?: Kysely<Database> };
+
+export const db = globalForKysely.db ?? createDb();
 
 if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
 ```
@@ -92,7 +109,7 @@ async function migrate() {
     provider: new FileMigrationProvider({
       fs,
       path,
-      // ESM project ("type": "module") — __dirname does not exist
+      // The Next.js scaffold is ESM ("type": "module") — __dirname does not exist
       migrationFolder: path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations'),
     }),
   });
@@ -126,15 +143,7 @@ export type { Database, User, NewUser, UserUpdate } from './types';
 
 ### Step 8 — Write first Kysely migration
 
-Create `src/integrations/database/migrations/001_initial.ts`. Use the `up` body from `drizzle-to-kysely.md` Step 8.
-
-Next.js `down` drops the table:
-
-```typescript
-export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('users').execute();
-}
-```
+Create `src/integrations/database/migrations/001_initial.ts` with the `up`/`down` pair from `drizzle-to-kysely.md` Step 8.
 
 ### Step 9 — Update query code in API routes and Server Components
 

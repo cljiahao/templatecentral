@@ -81,14 +81,12 @@ export class GithubIntegrationService {
   constructor(private readonly http: HttpService) {}
 
   async listRepos(): Promise<GithubRepo[]> {
-    let data: unknown[];
+    let data: unknown;
 
     try {
-      ({ data } = await firstValueFrom(this.http.get<unknown[]>(UPSTREAM)));
+      ({ data } = await firstValueFrom(this.http.get<unknown>(UPSTREAM)));
     } catch (error) {
-      // NEVER log the raw AxiosError: `error.config.headers` carries the outbound
-      // `Authorization: Bearer <token>`, so a raw dump writes the credential to the log.
-      // Status and path are the only safe fields.
+      // Never log the raw AxiosError — `error.config.headers` carries the Bearer token.
       const status =
         error instanceof AxiosError ? (error.response?.status ?? 0) : 0;
       const timedOut =
@@ -101,9 +99,13 @@ export class GithubIntegrationService {
       throw new BadGatewayException('Upstream request failed.');
     }
 
-    // safeParse, not parse: a raw ZodError is not an HttpException, so it would escape
-    // HttpExceptionFilter as an unformatted 500 — and one malformed row would discard
-    // the entire list. Skip the bad rows and record how many were dropped.
+    if (!Array.isArray(data)) {
+      this.logger.error(`GitHub ${UPSTREAM} returned a non-array body`);
+      throw new BadGatewayException('Upstream returned an unexpected shape.');
+    }
+
+    // Per-row safeParse: a ZodError is not an HttpException (it would surface as an
+    // unformatted 500), and one bad row should not discard the whole list.
     const repos: GithubRepo[] = [];
     let skipped = 0;
 
@@ -132,12 +134,12 @@ export class GithubIntegrationService {
 
 #### 4. Add Config
 
-Add the API token to `envSchema` in **`src/config/env.config.ts`** — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
+Add to `envSchema` in **`src/config/env.config.ts`** (validated at import — boot fails if missing):
 
 ```typescript
 const envSchema = z.object({
   // ... existing fields ...
-  GITHUB_API_URL: z.string().min(1).default('https://api.github.com'),
+  GITHUB_API_URL: z.url({ protocol: /^https$/ }).default('https://api.github.com'),
   GITHUB_TOKEN: z.string().min(1),
 });
 ```
@@ -150,13 +152,7 @@ export const serviceConfig = {
 };
 ```
 
-Add to `.env` (real token — never commit):
-```
-GITHUB_API_URL=https://api.github.com
-GITHUB_TOKEN=
-```
-
-Document in `.env.example` (placeholder for documentation):
+Put the real token in `.env` (never committed) and a placeholder in `.env.example`:
 ```
 GITHUB_API_URL=https://api.github.com
 GITHUB_TOKEN=your_github_token_here
@@ -182,7 +178,9 @@ import { GithubIntegrationService } from './<name>-integration.service';
       headers: {
         Authorization: `Bearer ${serviceConfig.GITHUB_TOKEN}`,
       },
-      timeout: 30000,
+      timeout: 30_000,
+      // Never follow a redirect off the configured host with the Bearer header attached.
+      maxRedirects: 0,
     }),
   ],
   providers: [GithubIntegrationService],
@@ -224,9 +222,9 @@ Confirm the server starts with no DI or import errors.
 ### Rules
 
 - Use `@nestjs/axios` + `HttpModule` — not raw `axios` or `fetch`
-- Validate all external responses with Zod schemas — external data is untrusted. Use `safeParse`; a bare `.parse()` throws a `ZodError`, which is not an `HttpException` and escapes `HttpExceptionFilter` as an unformatted 500
-- Wrap every upstream call in try/catch and convert failures to `BadGatewayException` / `GatewayTimeoutException` — NEVER log the raw error object, whose `config.headers` contains the outbound `Authorization` token. Log status and path only
-- Configure `HttpModule.register()` with `baseURL`, auth headers, and timeout
+- Validate all external responses with Zod `safeParse` — never bare `.parse()`
+- Convert upstream failures to `BadGatewayException` / `GatewayTimeoutException`; log status and path only, never the raw error
+- Configure `HttpModule.register()` with `baseURL`, auth headers, `timeout`, and `maxRedirects: 0`. No automatic retries — add them only for idempotent GETs, with backoff
 - Export the service from the integration module so other modules can import it
 - Keep API tokens in environment variables — NEVER hardcode
 - Integration modules are self-contained — each has its own module, service, and schemas

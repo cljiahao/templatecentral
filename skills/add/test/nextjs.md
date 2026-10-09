@@ -49,26 +49,9 @@ test/
 
 The Next.js template uses `globals: false` in Vitest — always import `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` explicitly from `'vitest'`.
 
-Import route handler functions directly and call them with `NextRequest` objects — no HTTP server needed:
+Import route handler functions directly and call them with `NextRequest` objects — no HTTP server needed.
 
-```ts
-import { NextRequest } from 'next/server';
-import { describe, expect, it } from 'vitest';
-
-import { GET } from '@/app/api/projects/route';
-
-describe('GET /api/projects', () => {
-  it('should return all projects', async () => {
-    const response = await GET(new NextRequest('http://localhost/api/projects'));
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(Array.isArray(data)).toBe(true);
-  });
-});
-```
-
-> **Why direct imports**: Next.js API route handlers are plain async functions that accept a request and return a response. Calling them directly is fast, requires no server setup, and gives full access to the response object.
+> **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) must get its own 401 test.
 
 > **Always pass a `NextRequest`, never a plain `Request`.** `withLogging`-wrapped handlers are typed against `NextRequest` (it adds `nextUrl` and `cookies`), so a plain `Request` — or a zero-argument `GET()` call — fails `pnpm check` with a type error even though it would run fine at runtime.
 
@@ -88,7 +71,7 @@ Place tests in `test/api/` matching the route path:
 
 ```ts
 import { NextRequest } from 'next/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from '@/app/api/projects/route';
 
@@ -122,6 +105,7 @@ describe('GET /api/projects', () => {
     const response = await GET(new NextRequest('http://localhost/api/projects'));
 
     expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain('DB down');
   });
 });
 ```
@@ -264,13 +248,13 @@ function makeParams<T extends Record<string, string>>(values: T) {
 
 - Test API route handlers only — NEVER write frontend component tests in this pattern
 - One concept per test — test a single behavior in each `it()` block
-- Mock at boundaries — mock your data access services (feature service modules, integration clients), not internal utilities
+- Mock at boundaries — mock integration-layer services/clients (`src/integrations/`), not internal utilities
 - Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
 - Always call `vi.resetAllMocks()` in `afterEach` — prevent mock leakage between tests. `vi.restoreAllMocks()` is not enough: it only restores `vi.spyOn` spies, so a `mockResolvedValue` queued on a `vi.fn()` from a `vi.mock` factory (the pattern used above) survives into the next test. Setting `mockReset: true` in `vitest.config.ts` achieves the same thing globally.
 - Use descriptive test names — `it('should return 404 when project not found')`
 - NEVER test implementation details — test the HTTP status and response body, not how the handler calls services internally
 - NEVER share mutable state between tests — each test sets up its own mocks
-- NEVER skip error path tests — always test what happens when services throw
+- NEVER skip error path tests — always test what happens when services throw, and assert the 500 body does not echo the internal error message
 - NEVER hardcode URLs in assertions — test the response shape and status code
 
 ## After Writing Code

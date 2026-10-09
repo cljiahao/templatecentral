@@ -10,6 +10,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.17.0] — 2026-10-09
+
+Fresh-eyes sweep of every skill, script and workflow, with each change re-reviewed by an
+independent pass. Focus: correctness of generated code, security, agent token cost, and a
+harness that blocks only what must be blocked.
+
+### Security — this repo's own harness
+
+- `.claude/settings.json` hooks moved to the exec form (`command` + `args` with `${CLAUDE_PROJECT_DIR}`),
+  with timeouts and `permissions.deny` Read rules for secret files.
+- `scripts/pre-guard.sh` (Edit/Write/NotebookEdit/Read/Grep): hard-blocks secret and `.env` files
+  (`.env.example` and other templates stay editable); asks before editing agent-instruction files
+  (`AGENTS.md`, `CLAUDE.md`, `CONSTITUTION.md`, `GEMINI.md`, `.claude/rules|skills|commands`),
+  harness, plugin-manifest, MCP and CI files. Case-insensitive, `./`/`..`-folded, safe JSON output.
+  Reading instruction files needs no approval.
+- New `scripts/bash-guard.sh`: blocks shell reads of existing secret files (globs, `$PWD`, `~`,
+  Claude's current directory) and writes that would create one; ignores heredoc bodies and plain
+  mentions of `.env`, so normal grep/sed work is unaffected.
+- New `scripts/post-edit-lint.sh`: lint feedback only for files that affect it, returned as
+  `additionalContext` with file:line (the previous plain-stdout hook never reached Claude).
+
+### Fixed — generated code
+
+- `add (redaction)` hooks read `tool_output`; the PostToolUse field is `tool_response`, so nothing
+  was ever masked.
+- Auth/database: invalid `drizzle(client, { schema })` call for the pinned RC; NestJS Mongoose
+  `expiresIn` type error; Beanie `InvalidId` never caught and missing user service; Mongoose failed
+  connections cached forever; commented-out code that failed the scaffold's own lint; Vite login/logout
+  missing the CSRF token; argon2 dummy hashes that leaked user existence through timing.
+- Endpoints/pagination/integration: business logic moved out of controllers and route handlers;
+  malformed JSON and validation errors return 400 instead of 500; unbounded page/sort inputs capped;
+  integrations map upstream errors without leaking details and keep tokens as secret types; Vite page
+  examples that didn't compile; wrong `/api/` prefix and incomplete query keys in Vite pagination.
+- Logging: `require_role` became a client-controlled query parameter; outbound-HTTP logging used an
+  inbound-only interceptor; pino import broke the Next.js Edge runtime; request IDs lost on error logs.
+- Migrate/standards: auto `git add -A && commit` removed from backend extraction; RDS IAM pools now
+  load the CA bundle; FastAPI IAM Alembic uses the shared engine with psycopg 3; Next.js validation no
+  longer claims ZodError returns 400 without the error-handling capability.
+- Scaffold UI (Next.js, Vite): accessible form errors, landmarks and heading order, focus rings,
+  `prefers-reduced-motion`, loading/error/empty states, theme toggle hydration fix, plain sentence-case copy.
+
+### Added — comment and suppression linting (all four scaffolds)
+
+- TypeScript: `reportUnusedDisableDirectives` / `reportUnusedInlineConfigs` as errors,
+  `@eslint-community/eslint-plugin-eslint-comments` (descriptions required on directives, no blanket
+  disables); sonarjs `todo-tag`/`fixme-tag` lowered to `warn` so TODOs with context stay allowed.
+- FastAPI: Ruff `PGH003`, `PGH004`, `RUF100`, `TD005` alongside `ERA`. Migrate recommends the same set.
+
+### Changed — speed, tests and CI
+
+- `lint-skills.sh` runs in ~1.5s instead of ~9s with byte-identical results; shared helpers replace
+  ~40 duplicated blocks. `validate-manifest.sh` and `validate-scaffold-configs.sh` deduplicated.
+- New `scripts/test-harness-kit.sh`: 407 regression cases extracted from `harness-kit.md` (both stack
+  variants), wired into CI. `pre-guard.test.sh` covers both repo guards (58 cases). OpenCode adapter
+  brought to parity with the Claude Code guards (81 cases).
+- Workflows: `actions/checkout` v7.0.1 (SHA-pinned), `ubuntu-24.04` everywhere, explicit least-privilege
+  permissions and timeouts on every job.
+- Skill runtime token cost cut: changelog sections removed from runtime files, duplicated tables and
+  prose consolidated (e.g. cleanup 133 → 71 lines, drift-check 124 → 78).
+
+### Known / deferred
+
+- Splits proposed for long files (redaction, ai-security, auth/nextjs, migrate/general,
+  validation-patterns/nextjs, nestjs-kysely) — deferred because they change paths that lint and
+  `/tc-audit` reference.
+- ESLint 10 toolchain upgrade (all plugins already accept `^10`); mutmut 3.x `source_paths` key unverified;
+  NestJS `user_id` log correlation on Fastify reasoned, not run.
+- `shellcheck` not available locally — first run is CI.
+
+---
+
 ## [5.16.0] — 2026-10-09
 
 ### Fixed — seeded Claude Code hooks never ran (harness schema 6.0.0)

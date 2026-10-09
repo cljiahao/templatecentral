@@ -14,19 +14,19 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-**1. Error Boundary (Already Present — Wire in `logError`)**
+**1. Error Boundary (Already Wired by the Scaffold — No Changes Required)**
 
-The scaffold already ships `src/components/layout/error-boundary.tsx`. Do NOT rewrite it — apply this small delta so caught errors go through the central error logger:
+The scaffold already ships `src/components/layout/error-boundary.tsx`, which imports `logError` from `@/lib/errors` and calls `logError('react.error-boundary', error)` in `componentDidCatch(error: Error)`. Do NOT rewrite it and do NOT add a second `logError` import.
 
-The scaffolded file already imports `ErrorInfo` and defines `componentDidCatch` — only the `logError` import is new.
+Optional — dev-only component-stack logging: add `type ErrorInfo` to the existing `react` import and the `errorInfo` parameter, keeping the existing `logError` call:
 
 ```tsx
-// src/components/layout/error-boundary.tsx
-import { logError } from '@/lib/errors/error-log-handler';
+// src/components/layout/error-boundary.tsx — edit in place
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-  logError('ErrorBoundary caught an error', error);
-  if (import.meta.env.DEV) {
+  logError('react.error-boundary', error);
+  if (ENV.IS_DEV) {
     console.error('Component stack:', errorInfo.componentStack);
   }
 }
@@ -40,7 +40,7 @@ Async error coverage needs no work. `src/lib/errors/global-handlers.ts` already 
 
 **3. React Query Error Handler**
 
-> The `defaultOptions` below match the scaffolded `providers.tsx` client exactly — only the `queryCache`/`mutationCache` handlers are new. If you tune `staleTime` or `refetchOnWindowFocus`, change them here only; this singleton replaces the one `providers.tsx` created.
+> `defaultOptions` match the scaffolded `providers.tsx` client — only the cache handlers are new. This singleton replaces the one `providers.tsx` created, so tune options here only.
 
 ```ts
 // src/lib/clients/query-client.ts
@@ -48,9 +48,8 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { logError } from '@/lib/errors/error-log-handler';
 
 export const queryClient = new QueryClient({
-  // Cache-level onError always fires — a per-mutation onError (useMutation still
-  // supports one; useQuery does not, as of TanStack Query v5) would silently
-  // replace a handler placed in defaultOptions.
+  // Cache-level onError fires for every query/mutation; a per-hook onError would
+  // override a defaultOptions handler, and v5 useQuery has no onError at all.
   queryCache: new QueryCache({
     onError: (error, query) => {
       if (error instanceof Error) {
@@ -67,7 +66,6 @@ export const queryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
-      retry: 1,
       staleTime: 60 * 1000,
       refetchOnWindowFocus: false,
     },

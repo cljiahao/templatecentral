@@ -104,67 +104,54 @@ export class HttpExceptionFilter implements ExceptionFilter {
 }
 ```
 
+Non-`HttpException` errors bypass this filter and get Nest's default `{ statusCode, message: 'Internal server error' }` — no leak, but a different shape. To unify, add a second `@Catch()` filter that logs the error and sends `{ error: 'Internal server error' }` with 500.
+
 **2. Custom Exception Example**
 
 ```ts
 // src/common/exceptions/not-found.exception.ts
-// Name with a domain prefix to avoid shadowing @nestjs/common's built-in NotFoundException
+// Domain prefix avoids shadowing @nestjs/common's built-in NotFoundException.
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class AppNotFoundException extends HttpException {
-  constructor(message: string = 'Resource not found') {
+  constructor(message = 'Resource not found') {
     super(message, HttpStatus.NOT_FOUND);
   }
 }
+```
 
-// src/modules/projects/projects.service.ts
-import { Injectable } from '@nestjs/common';
-import { AppNotFoundException } from '../../common/exceptions/not-found.exception';
-
-interface Project {
+```ts
+// src/modules/projects/projects.types.ts
+export interface Project {
   id: string;
   name: string;
   description?: string;
 }
+```
+
+```ts
+// src/modules/projects/projects.service.ts
+import { randomUUID } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
+import { AppNotFoundException } from '../../common/exceptions/not-found.exception';
+import type { CreateProjectDto } from './projects.dto';
+import type { Project } from './projects.types';
 
 @Injectable()
 export class ProjectsService {
-  // In-memory stand-in for the database client added by `templatecentral:add (database)`.
-  // Replace `read`/`write` with the real queries; `getProject`/`createProject` stay unchanged.
+  // In-memory stand-in until `templatecentral:add (database)` wires a real repository.
   private readonly store = new Map<string, Project>();
 
-  private read(id: string): Promise<Project | undefined> {
-    // Swap for a Drizzle select-by-id once templatecentral:add (database) has run.
-    return Promise.resolve(this.store.get(id));
-  }
-
-  private write(project: Project): Promise<Project> {
-    // Swap for a Drizzle insert with .returning() once templatecentral:add (database) has run.
-    this.store.set(project.id, project);
-    return Promise.resolve(project);
-  }
-
-  async getProject(id: string): Promise<Project> {
-    const project = await this.read(id);
-
-    if (!project) {
-      throw new AppNotFoundException('Project not found');
-    }
-
+  getProject(id: string): Project {
+    const project = this.store.get(id);
+    if (!project) throw new AppNotFoundException('Project not found');
     return project;
   }
 
-  async createProject(dto: {
-    name: string;
-    description?: string;
-  }): Promise<Project> {
-    const created = await this.write({
-      id: crypto.randomUUID(),
-      name: dto.name,
-      description: dto.description,
-    });
-
-    return created;
+  createProject(dto: CreateProjectDto): Project {
+    const project: Project = { id: randomUUID(), ...dto };
+    this.store.set(project.id, project);
+    return project;
   }
 }
 ```
@@ -172,29 +159,26 @@ export class ProjectsService {
 **3. API Route with Validation**
 
 ```ts
-// src/modules/projects/projects.controller.ts
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+// src/modules/projects/projects.dto.ts
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { ProjectsService } from './projects.service';
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
 });
 
-class CreateProjectDto extends createZodDto(CreateProjectSchema) {}
+export class CreateProjectDto extends createZodDto(CreateProjectSchema) {}
+```
 
-@ApiTags('projects')
+```ts
+// src/modules/projects/projects.controller.ts
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CreateProjectDto } from './projects.dto';
+import { ProjectsService } from './projects.service';
+
+@ApiTags('Projects')
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly service: ProjectsService) {}
@@ -204,29 +188,23 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Create a new project' })
   @ApiResponse({ status: 201, description: 'Project created' })
   @ApiResponse({ status: 400, description: 'Validation failed' })
-  async create(@Body() dto: CreateProjectDto) {
-    return await this.service.createProject(dto);
+  create(@Body() dto: CreateProjectDto) {
+    return this.service.createProject(dto);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get project by ID' })
   @ApiResponse({ status: 200, description: 'Project found' })
   @ApiResponse({ status: 404, description: 'Project not found' })
-  async getById(@Param('id') id: string) {
-    return await this.service.getProject(id);
+  getById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getProject(id);
   }
 }
 ```
 
 ## Validate
 
-```bash
-# Test controller validation
-pnpm test
-
-# Check Swagger docs at /docs includes error schemas
-pnpm start:dev
-```
+Run `pnpm test`, then `pnpm start:dev` and confirm Swagger at `/docs` lists the 400/404 responses.
 
 ## After Writing Code
 

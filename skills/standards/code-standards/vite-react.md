@@ -69,7 +69,7 @@ Centralized in `src/lib/constants/env.ts` — read that file for the authoritati
 
 - Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
 - JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
-- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Both fail lint/CI.
+- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Directive hygiene is gated too: `linterOptions.reportUnusedDisableDirectives`/`reportUnusedInlineConfigs: 'error'`, `@eslint-community/eslint-comments` (`recommended` + `require-description`), and typescript-eslint's `ban-ts-comment` (via `recommended`) — every suppression must be scoped, used, and carry a `-- reason`. `sonarjs/todo-tag`/`fixme-tag` are downgraded to `warn` — TODO/FIXME with context is allowed. See `comments.md` → Enforcement.
 
 ### Static Analysis (`eslint-plugin-sonarjs`)
 

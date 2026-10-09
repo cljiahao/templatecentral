@@ -9,8 +9,6 @@ harness, a DB migration, or a framework upgrade), or when another skill's Step 0
 directs here. Detects the project stack, presents a choice to the user, and executes
 autonomously after the decision.
 
-**Do not invoke this skill directly unless directed to by another skill's Step 0.**
-
 ---
 
 ## Phase 0 — Check for Version Upgrade (agent, autonomous)
@@ -107,7 +105,7 @@ Scan the current directory for stack signals:
 | `next.config.ts` or `next.config.js` or `next.config.mjs` present | Next.js |
 | `vite.config.ts` or `vite.config.js` present AND no `next.config.*` | Vite + React |
 | `requirements.txt` contains `fastapi` | FastAPI |
-| `nest-cli.json` present | NestJS |
+| `nest-cli.json` present, or `@nestjs/core` in `package.json` | NestJS |
 
 If multiple signals found (likely a mono repo root) → ask the user: "Which project
 should be adopted first — frontend or backend? Please provide the subdirectory path."
@@ -237,7 +235,7 @@ Replace `AGENTS.md` with the compressed template for the detected stack. If the 
 ## Stack
 Next.js · App Router · TypeScript strict · shadcn/ui · TanStack Query
 React Hook Form · Zod · Vitest · pnpm · Node
-Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md` (`<skill-dir>/../../`)
+Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md`
 
 ## Commands
 ```bash
@@ -254,8 +252,8 @@ src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
 src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
 src/components/widgets/ — reusable composed components (project-owned)
 proxy.ts + src/lib/auth.ts — auth layer
-src/lib/db/             — database layer
-src/config/env.ts       — environment validation (Zod)
+src/integrations/database/ — database layer (after `templatecentral:add (database)`)
+src/lib/constants/env.ts — environment constants
 
 ## Skills
 
@@ -287,17 +285,13 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 
 (AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
 
-## Skill capture
-- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
-- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
-
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ~~~
 
 For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit.md Step G (unconditionally, for every stack) — nothing to hand-append here.
 
-For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same hard gate a fresh scaffold ships — `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives) plus `sonarjs/no-commented-code: 'error'` in the TS `eslint.config.*`, or Ruff `ERA` (`pyproject.toml`) for FastAPI — so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
+For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same gate a fresh scaffold ships — in the TS `eslint.config.*`: `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives), `sonarjs/no-commented-code: 'error'`, `linterOptions.reportUnusedDisableDirectives` + `reportUnusedInlineConfigs` at `'error'`, `@eslint-community/eslint-plugin-eslint-comments` `recommended` + `require-description` (`eslint-enable` exempt) + `disable-enable-pair` (`allowWholeFile`), and `sonarjs/todo-tag`/`fixme-tag` downgraded to `warn`; for FastAPI, Ruff `ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005` (`pyproject.toml`) — so the enforcement matches a freshly scaffolded project. The Enforcement section of `code-standards/comments.md` is the rationale source; copy exact rule config from the stack's scaffold `config-files.md`.
 
 **Step 4c: Create `CLAUDE.md`**
 
@@ -544,7 +538,7 @@ Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, o
     fi
     ```
     `git merge-file` cleanly combines edits separated by unchanged context and leaves conflict markers only where your edit and the upstream change overlap (standard `git merge` behaviour). Resolve any markers by hand.
-- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Instead merge structurally — add any new seeded `hooks`/`permissions.deny` entries into the existing object without removing the user's, exactly as Phase 4 Step 4 (settings.json) describes. **Replace** (do not keep alongside) any entry pointing at a `.claude/hooks/` script whose `command` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` — pre-6.0.0 forms that never ran. Remove the `PostToolUseFailure` → `post-tool-failure.sh` entry; list `.claude/hooks/post-tool-failure.sh` and its `harness.json` entry for deletion in the dry-run plan (no longer seeded — Claude already sees tool errors).
+- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Instead merge structurally — add any new seeded `hooks`/`permissions.deny` entries into the existing object without removing the user's, exactly as Phase 4 Step 4d (Adoption: merge, never clobber) describes. **Replace** (do not keep alongside) any entry pointing at a `.claude/hooks/` script whose `command` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` — pre-6.0.0 forms that never ran. Remove the `PostToolUseFailure` → `post-tool-failure.sh` entry; list `.claude/hooks/post-tool-failure.sh` and its `harness.json` entry for deletion in the dry-run plan (no longer seeded — Claude already sees tool errors).
 - `MISSING` → reseed (write the current canonical content).
 
 **After applying** (only the files actually written):

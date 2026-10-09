@@ -40,33 +40,9 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-### 1. Toast feedback — already wired
+### 1. Define the Zod Schema
 
-The scaffold pre-installs `sonner` and mounts `<Toaster />` in `src/components/layout/providers.tsx` — call `toast.success()` / `toast.error()` directly; no setup needed. **Skip this step** for scaffolded projects.
-
-**Fallback (non-scaffold projects only):** if `sonner` is missing from `package.json`, run:
-
-```bash
-npx shadcn@latest add sonner
-```
-
-Then mount exactly one `<Toaster />` in a shared client provider (e.g. inside `Providers`):
-
-```tsx
-import { Toaster } from 'sonner';
-// ...
-<Providers>
-  {children}
-  <Toaster richColors />
-</Providers>
-```
-
-Never mount more than one `<Toaster />` — duplicate toasts result.
-
-### 2. Define the Zod Schema
-
-
-Create the schema in the feature's `schemas/` directory:
+`sonner` and a single `<Toaster />` are already mounted in `providers.tsx` — call `toast.*` directly. (Non-scaffold project without it: `npx shadcn@latest add sonner`, then mount exactly one `<Toaster />` in `Providers`.)
 
 **`src/features/<feature>/schemas/<form-name>.schema.ts`**:
 
@@ -78,11 +54,12 @@ import { z } from 'zod';
 export const MESSAGE_MIN_LENGTH = 10;
 
 export const contactFormSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().min(1, 'Name is required').max(100),
   email: z.email({ error: 'Invalid email address' }),
   message: z
     .string()
-    .min(MESSAGE_MIN_LENGTH, `Message must be at least ${MESSAGE_MIN_LENGTH} characters`),
+    .min(MESSAGE_MIN_LENGTH, `Message must be at least ${MESSAGE_MIN_LENGTH} characters`)
+    .max(2000),
 });
 
 export type ContactFormValues = z.input<typeof contactFormSchema>;
@@ -90,7 +67,7 @@ export type ContactFormValues = z.input<typeof contactFormSchema>;
 
 > **Zod v4 note**: Use `z.input` (not `z.infer`) for form value types. `z.input` gives the **input** type (what the user types), while `z.infer` gives the **output** type (after transforms like `.default()`, `.coerce`). `useForm` works with input types.
 
-### 3. Create the Form Component
+### 2. Create the Form Component
 
 **`src/features/<feature>/components/<form-name>-form.tsx`**:
 
@@ -123,11 +100,11 @@ export function ContactForm() {
     },
   });
 
-  // Must stay async — form.formState.isSubmitting only tracks a promise-returning handler,
-  // so the disabled/"Submitting..." state below never engages for a sync handler.
-  // Rename _values to values once the real server action / API call is wired in.
+  // Async so formState.isSubmitting tracks the returned promise.
   const onSubmit = async (_values: ContactFormValues) => {
-    toast.error('TODO: wire up submit');
+    // TODO: call the server action / mutation hook. Never echo `values` into a toast or
+    // Error message — form payloads routinely carry passwords and tokens.
+    toast.error('Submit handler not wired yet');
   };
 
   return (
@@ -158,7 +135,7 @@ export function ContactForm() {
 }
 ```
 
-### 4. Export from Feature Barrel
+### 3. Export from Feature Barrel
 
 Add the form component to `src/features/<feature>/components/index.ts`:
 
@@ -172,7 +149,7 @@ Ensure the feature root barrel (`src/features/<feature>/index.ts`) re-exports co
 export * from './components';
 ```
 
-### 5. Use in a Page
+### 4. Use in a Page
 
 ```tsx
 import { ContactForm } from '@/features/<feature>';
@@ -195,16 +172,16 @@ export default function ContactPage() {
 - Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring automatically.
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields to avoid uncontrolled-to-controlled warnings.
-- Use `toast.success()` / `toast.error()` from Sonner for user feedback — the scaffold already mounts `<Toaster />` in `src/components/layout/providers.tsx` (see Step 1).
+- Use `toast.success()` / `toast.error()` from Sonner for user feedback.
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
-- **Client-side validation is not a security boundary.** `zodResolver` runs in the browser and any client can skip it entirely — a crafted request reaches the server action or route handler with arbitrary input. The server action / route handler MUST re-parse the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before touching the database or any side effect. The client-side parse exists only to give the user immediate feedback.
+- **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler MUST re-parse the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
 - Add `'use client'` directive — forms are inherently interactive.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `templatecentral:standards` (validation-patterns).
 
 ## Validate
 
 ```bash
-pnpm build    # zero errors
+pnpm build
 ```
 
 ## After Writing Code

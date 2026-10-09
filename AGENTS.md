@@ -76,7 +76,7 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill
 - Lint gate: `bash scripts/lint-skills.sh skills/` — must pass before any commit
 - Write new skills: `/tc-write-skill` (repo-internal project skill in `.claude/skills/`)
-- PostToolUse hook: `bash scripts/lint-skills.sh skills/ 2>&1 | tail -10` runs after every Edit/Write — feedback only
+- Repo harness (`.claude/settings.json`): `scripts/pre-guard.sh` blocks secret/`.env` reads and writes (`.env.example` stays editable) and asks before editing instruction, harness or CI files; `scripts/bash-guard.sh` blocks shell access to secret files; `scripts/post-edit-lint.sh` returns lint failures after skill edits — feedback only
 
 ## Rules
 

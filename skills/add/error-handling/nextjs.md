@@ -99,16 +99,15 @@ const CreateProjectSchema = z.object({
 
 export const POST = withLogging(async (request) => {
   try {
-    const body = await request.json();
+    // Malformed JSON parses to null so it fails validation (400) instead of hitting the 500 path.
+    const body: unknown = await request.json().catch(() => null);
     const parsed = CreateProjectSchema.safeParse(body);
-
     if (!parsed.success) {
-      // ZodError branch derives fieldErrors itself — no third argument needed
       return handleApiError('Failed to create project', parsed.error);
     }
 
-    // Your logic here: const [project] = await db.insert(projects).values(parsed.data).returning()
-    const project = { id: '1', ...parsed.data };
+    // Placeholder — replace with the data layer from `templatecentral:add (database)`.
+    const project = { id: crypto.randomUUID(), ...parsed.data };
 
     return NextResponse.json({ data: project }, { status: 201 });
   } catch (error) {
@@ -119,10 +118,12 @@ export const POST = withLogging(async (request) => {
 
 **2b. Dynamic Route with Unauthorized Access (404 Pattern)**
 
-Rule #9: Return 404 for both missing resources AND unauthorized access (never reveal whether resource exists):
+No session → 401. Missing resource **and** someone else's resource → the same 404, so the response never confirms the ID exists:
 
 ```ts
 // src/app/api/projects/[id]/route.ts
+// Your data-layer lookup; must return the row or null.
+import { findProjectById } from '@/integrations/database/queries/find-project';
 import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';
 import { type RouteContext, withLogging } from '@/lib/utils/with-logging';
@@ -130,16 +131,13 @@ import { NextResponse } from 'next/server';
 
 export const GET = withLogging<RouteContext<{ id: string }>>(async (request, { params }) => {
   try {
-    const { id } = await params;
     const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return new Response(null, { status: 401 });
 
-    // Check project exists AND user has access
-    // replace with real DB lookup
-    const project = { id, name: 'Sample', ownerId: 'user-1' };
+    const { id } = await params;
+    const project = await findProjectById(id);
 
-    // Return 404 for BOTH missing AND unauthorized (same response)
-    // Never say "you don't have access" — could reveal resource exists
-    if (!project || project.ownerId !== session?.user?.id) {
+    if (!project || project.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
@@ -152,7 +150,7 @@ export const GET = withLogging<RouteContext<{ id: string }>>(async (request, { p
 
 **3. Error Boundary Components**
 
-Both boundaries below render the same failure state, so it lives in one component. Keeping it separate also makes the fallback renderable in isolation — a Storybook story or a test can mount it without throwing anything:
+Route-segment render errors are already handled by `src/app/error.tsx` (scaffold) and per-route `error.tsx` (`templatecentral:add (page)`). Add the boundaries below only for component-level isolation inside a page or for unhandled promise rejections. Both share one fallback:
 
 ```tsx
 // src/components/layout/error-fallback.tsx
@@ -275,33 +273,17 @@ export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
 ## Validate
 
 ```bash
-# Test API route with validation error
+# Expect 400 {"error":"Validation failed","details":{"fieldErrors":{"name":["Name is required"]},"code":"VALIDATION_ERROR"}}
 curl -X POST http://localhost:3000/api/projects \
   -H "Content-Type: application/json" \
   -d '{"name": ""}'
-
-# Expected 400 response:
-# {
-#   "error": "Validation failed",
-#   "details": {
-#     "fieldErrors": {
-#       "name": ["Name is required"]
-#     },
-#     "code": "VALIDATION_ERROR"
-#   }
-# }
-
 pnpm test
 pnpm build
-
-# Test error boundary (client-side)
-pnpm dev
-# Trigger unhandled error in browser console, verify error boundary displays
 ```
 
 ### Next.js Error Boundary Tests
 
-> **Deps not in scaffold**: Run `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom` first. Also add `environment: 'jsdom'` to `vitest.config.ts` test options (or use the inline `@vitest-environment jsdom` comment).
+> **Deps not in scaffold**: run `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom` (or `templatecentral:add (test)`). The `@vitest-environment jsdom` docblock keeps the scaffold's `node` default for API tests.
 
 ```typescript
 // test/error-boundary.test.tsx
@@ -311,38 +293,21 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ErrorBoundary } from '@/components/layout/error-boundary';
 
+const Thrower = () => {
+  throw new Error('internal detail');
+};
+
 describe('ErrorBoundary', () => {
-  it('displays fallback UI when render error occurs', () => {
-    const ThrowComponent = () => {
-      throw new Error('Test error');
-    };
-
+  // Vitest runs with NODE_ENV=test, so the production (generic) message path is exercised.
+  it('renders the generic fallback without leaking the error message', () => {
     render(
       <ErrorBoundary>
-        <ThrowComponent />
+        <Thrower />
       </ErrorBoundary>
     );
 
-    // In development, error message is shown
-    if (process.env.NODE_ENV === 'development') {
-      expect(screen.getByText(/Test error/)).toBeInTheDocument();
-    } else {
-      // In production, generic message is shown
-      expect(screen.getByText(/unexpected error/i)).toBeInTheDocument();
-    }
-  });
-
-  it('shows reload button', () => {
-    const ThrowComponent = () => {
-      throw new Error('Test');
-    };
-
-    render(
-      <ErrorBoundary>
-        <ThrowComponent />
-      </ErrorBoundary>
-    );
-
+    expect(screen.getByText(/unexpected error/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument();
   });
 });

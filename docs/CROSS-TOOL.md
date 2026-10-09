@@ -15,7 +15,7 @@ templateCentral is built on two cross-vendor open standards, so most of it trave
 | **Skills** (`skills/`) | ✅ | [Agent Skills](https://agentskills.io) open standard (`SKILL.md`). The `<skill-dir>` reference form resolves in every compliant tool — each surfaces the skill's base directory at invocation (Claude Code & OpenCode print `Base directory for this skill:`, Codex injects the skill's `(file: …)` path, Antigravity resolves relative paths from the skill root). |
 | **`AGENTS.md`** | ✅ | A Linux Foundation / Agentic AI Foundation standard. Read natively by Codex and Antigravity; Claude Code reads it via the `CLAUDE.md = @AGENTS.md` import. |
 | **Harness — git/CI half** | ✅ | lefthook git-hooks + gitleaks + the seeded CI workflow fire at commit/CI time for any tool or human. |
-| **Harness — in-agent half** | per-tool | `.claude/hooks/` + `settings.json` are Claude Code-specific. An OpenCode adapter lives at [`adapters/opencode/`](../adapters/opencode/) (Phase 3). |
+| **Harness — in-agent half** | per-tool | `.claude/hooks/` + `settings.json` are Claude Code-specific. An OpenCode adapter lives at [`adapters/opencode/`](../adapters/opencode/). |
 
 **The one snag: skill naming.** templateCentral's registered skills are named with the
 `templatecentral:` namespace (e.g. `name: templatecentral:scaffold`) — a Claude Code plugin
@@ -84,9 +84,10 @@ Point the tool at `dist/agents-skills/` (or copy it into the tool's skill direct
 ## What you get without Claude Code
 
 A non-Claude-Code user gets the full scaffold logic, the `AGENTS.md` routing/conventions, and the
-git-hook + CI enforcement — roughly 80% of the value. The remaining 20% (the in-agent live guards:
-typecheck-on-edit, the Stop test-gate, secret/prompt-injection guards, session recovery) is
-Claude Code-specific; an OpenCode port is in [`adapters/opencode/`](../adapters/opencode/).
+git-hook + CI enforcement. The in-agent live guards (prompt-injection/credential firewall,
+secret-file and git-bypass guards, typecheck-on-edit, the Stop test gate, session recovery) are
+Claude Code-specific. The OpenCode adapter ports the secret-file, git-bypass, and typecheck guards;
+see its [README](../adapters/opencode/README.md) for what is not ported.
 
 ## Publishing to a registry (maintainer step)
 

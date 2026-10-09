@@ -37,11 +37,9 @@ the marker.
 
 ### 1. Create Module Directory
 
-Create `src/modules/<name>/` with the following files:
+Create `src/modules/<name>/`; Steps 2–7 fill it.
 
 ### 2. Define Types
-
-Define the domain interface first — this establishes the data shape before any implementation.
 
 Create `src/modules/<name>/<name>.types.ts`:
 
@@ -79,7 +77,7 @@ export class UpdateTaskDto extends createZodDto(UpdateTaskSchema) {}
 Create `src/modules/<name>/<name>.repository.ts`:
 
 ```typescript
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { Task } from './<name>.types';
 
 @Injectable()
@@ -90,36 +88,30 @@ export class TaskRepository {
     return [...this.tasks.values()];
   }
 
-  findById(id: string): Task {
-    const task = this.tasks.get(id);
-    if (!task) throw new NotFoundException(`Task ${id} not found`);
-    return task;
+  findById(id: string): Task | undefined {
+    return this.tasks.get(id);
   }
 
-  create(task: Task): Task {
+  save(task: Task): Task {
     this.tasks.set(task.id, task);
     return task;
   }
 
-  update(id: string, data: Partial<Task>): Task {
-    const existing = this.findById(id);
-    const updated = { ...existing, ...data, updatedAt: new Date().toISOString() };
-    this.tasks.set(id, updated);
-    return updated;
-  }
-
-  remove(id: string): void {
-    if (!this.tasks.delete(id)) throw new NotFoundException(`Task ${id} not found`);
+  remove(id: string): boolean {
+    return this.tasks.delete(id);
   }
 }
 ```
+
+The repository is persistence-only — it returns `undefined`/`false` for a missing row and the service decides that is a 404. Swap the `Map` for Drizzle/Mongoose after `templatecentral:add (database)`.
 
 ### 5. Create Service
 
 Create `src/modules/<name>/<name>.service.ts`:
 
 ```typescript
-import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { TaskRepository } from './<name>.repository';
 import { CreateTaskDto, UpdateTaskDto } from './<name>.dto';
 import type { Task } from './<name>.types';
@@ -128,20 +120,29 @@ import type { Task } from './<name>.types';
 export class TaskService {
   constructor(private readonly repository: TaskRepository) {}
 
-  findAll(): Task[] { return this.repository.findAll(); }
-  findOne(id: string): Task { return this.repository.findById(id); }
+  findAll(): Task[] {
+    return this.repository.findAll();
+  }
+
+  findOne(id: string): Task {
+    const task = this.repository.findById(id);
+    if (!task) throw new NotFoundException('Task not found');
+    return task;
+  }
 
   create(dto: CreateTaskDto): Task {
     const now = new Date().toISOString();
-    const task: Task = { id: crypto.randomUUID(), ...dto, createdAt: now, updatedAt: now };
-    return this.repository.create(task);
+    return this.repository.save({ id: randomUUID(), ...dto, createdAt: now, updatedAt: now });
   }
 
   update(id: string, dto: UpdateTaskDto): Task {
-    return this.repository.update(id, dto);
+    const existing = this.findOne(id);
+    return this.repository.save({ ...existing, ...dto, updatedAt: new Date().toISOString() });
   }
 
-  remove(id: string): void { this.repository.remove(id); }
+  remove(id: string): void {
+    if (!this.repository.remove(id)) throw new NotFoundException('Task not found');
+  }
 }
 ```
 
@@ -150,7 +151,9 @@ export class TaskService {
 Create `src/modules/<name>/<name>.controller.ts`:
 
 ```typescript
-import { Controller, Get, Post, Put, Delete, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiBody } from '@nestjs/swagger';
 import { TaskService } from './<name>.service';
 import { CreateTaskDto, UpdateTaskDto } from './<name>.dto';
@@ -167,8 +170,8 @@ export class TaskController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get task by ID' })
-  @ApiParam({ name: 'id', type: 'string' })
-  findOne(@Param('id') id: string): Task { return this.taskService.findOne(id); }
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  findOne(@Param('id', ParseUUIDPipe) id: string): Task { return this.taskService.findOne(id); }
 
   @Post()
   @ApiOperation({ summary: 'Create task' })
@@ -176,19 +179,19 @@ export class TaskController {
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateTaskDto): Task { return this.taskService.create(dto); }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Update task' })
-  @ApiParam({ name: 'id', type: 'string' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiBody({ type: UpdateTaskDto })
-  update(@Param('id') id: string, @Body() dto: UpdateTaskDto): Task {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTaskDto): Task {
     return this.taskService.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete task' })
-  @ApiParam({ name: 'id', type: 'string' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string): void { this.taskService.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string): void { this.taskService.remove(id); }
 }
 ```
 
@@ -218,7 +221,7 @@ as, so treat authorization as a required decision, not an optional extra.
   Without `@ApiBearerAuth()` the routes still work but Swagger renders them as
   unauthenticated, so "try it out" fails with a confusing 401.
 
-- **If the project has no auth yet**, ask the user explicitly: *"POST/PUT/DELETE on
+- **If the project has no auth yet**, ask the user explicitly: *"POST/PATCH/DELETE on
   `/tasks` will be reachable without credentials — is unauthenticated write access
   intended?"* If it is not, run `templatecentral:add` (auth) before shipping the module.
 - **Ownership is separate from authentication.** A guard only proves *someone* is logged

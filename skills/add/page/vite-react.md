@@ -88,11 +88,10 @@ For dynamic segments:
 <Route path="projects/:id" element={<ProjectDetailPage />} />
 ```
 
-Access params in the page:
-
-Route params are user input — anything can be typed into the address bar. Validate the shape with Zod before it reaches a service call, exactly as you would an API response; a presence check (`!id`) is not validation.
+Route params are user input — validate their shape with Zod before any service call; a presence check (`!id`) is not validation.
 
 ```tsx
+import { ProjectDetail } from '@/features/projects';
 import { NotFoundPage } from '@/pages/not-found';
 import { useParams } from 'react-router';
 import { z } from 'zod';
@@ -102,25 +101,22 @@ import { z } from 'zod';
 const paramsSchema = z.object({ id: z.uuid() });
 
 export function ProjectDetailPage() {
-  // Call every hook before the first conditional return. Inlining useParams() into
-  // the safeParse argument works today, but the guard below then sits above any
-  // useQuery/useEffect a later edit adds — which breaks the Rules of Hooks silently.
-  const params = useParams();
-  const parsed = paramsSchema.safeParse(params);
-
+  // Data hooks live in <ProjectDetail>, so this early return cannot break the Rules of Hooks.
+  const parsed = paramsSchema.safeParse(useParams());
   if (!parsed.success) return <NotFoundPage />;
 
-  const { id } = parsed.data;
-  // Pass the validated `id` to a service call and render the result here.
+  return <ProjectDetail id={parsed.data.id} />;
 }
 ```
 
-Query-string values need the same treatment — `useSearchParams` returns `string | null` for anything, so parse it rather than trusting it:
+Query-string values need the same treatment:
 
 ```tsx
+import { ProjectList } from '@/features/projects';
 import { useSearchParams } from 'react-router';
 import { z } from 'zod';
 
+// `.catch()` falls back to a default instead of throwing on junk input.
 const searchSchema = z.object({
   page: z.coerce.number().int().min(1).catch(1),
   status: z.enum(['active', 'archived']).catch('active'),
@@ -129,7 +125,7 @@ const searchSchema = z.object({
 export function ProjectListPage() {
   const [searchParams] = useSearchParams();
   const { page, status } = searchSchema.parse(Object.fromEntries(searchParams));
-  // `page` and `status` are validated — `.catch()` falls back instead of throwing on junk input.
+  return <ProjectList page={page} status={status} />;
 }
 ```
 
@@ -152,7 +148,7 @@ export const PAGE_ROUTES = {
 } as const;
 ```
 
-> **Nested routes**: `PAGE_ROUTES` values must be the **full path**, not the relative segment. For example, if `analytics` is nested under `dashboard` in the router (`<Route path="dashboard"><Route path="analytics" /></Route>`), use `ANALYTICS: '/dashboard/analytics'`.
+> `PAGE_ROUTES` values are **full paths** — `analytics` nested under `dashboard` is `'/dashboard/analytics'`.
 
 ### 5. Add Navigation (Optional)
 
@@ -164,17 +160,6 @@ const NAV_LINKS = [
   { label: 'Analytics', href: PAGE_ROUTES.ANALYTICS },
 ] as const;
 ```
-
-## React Router Key Concepts
-
-| Concept | Syntax | Example |
-|---------|--------|---------|
-| Static route | `path="analytics"` | `/analytics` |
-| Dynamic segment | `path="projects/:id"` | `/projects/123` |
-| Index route | `<Route index />` | Matches parent path exactly |
-| Nested routes | `<Route path="parent"><Route path="child" /></Route>` | `/parent/child` |
-| Catch-all | `path="*"` | 404 fallback |
-| Layout route | `<Route element={<Layout />}>` | Wraps children with shared UI |
 
 ### 6. Validate
 
@@ -189,9 +174,9 @@ Confirm the build succeeds with no type errors and all tests pass.
 - Always add to `src/pages/index.ts` barrel export
 - Always add to `src/lib/constants/routes.ts`
 - Always add the `<Route>` in `src/router.tsx` — the page won't be accessible otherwise
-- Protected pages MUST be nested inside `<Route element={<ProtectedRoute />}>` in `src/router.tsx` — otherwise unauthenticated users can access them
+- Protected pages MUST be nested inside `<Route element={<ProtectedRoute />}>` in `src/router.tsx`. This is UX gating only — the SPA bundle is public, so the backend must authorize every data request
 - Use layout routes for shared navigation/chrome
-- Always validate `useParams` / `useSearchParams` values with Zod before using them — they are user input, not trusted data; a `!id` presence check is not validation
+- Always validate `useParams` / `useSearchParams` values with Zod before using them
 - NEVER hardcode route paths in components — use `PAGE_ROUTES` constants
 - NEVER create deeply nested route files — keep pages flat in `src/pages/`; nesting is in the router
 

@@ -9,7 +9,7 @@ Schemas live under `src/api/schemas/request/` and `src/api/schemas/response/`, o
 
 ```python
 # src/api/schemas/request/project.py
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from api.schemas.base import BaseRequestSchema
 
@@ -18,14 +18,9 @@ class CreateProjectRequest(BaseRequestSchema):
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "name": "My Project",
-                "description": "A great project",
-            }
-        }
-    }
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"name": "My Project", "description": "A great project"}}
+    )
 ```
 
 ```python
@@ -42,6 +37,8 @@ class ProjectResponse(BaseResponseSchema):
     created_at: datetime
 ```
 
+`EmailStr` needs `email-validator` in `requirements.txt` (installed by `templatecentral:add (auth)`).
+
 ```python
 # src/api/schemas/request/auth.py
 from pydantic import EmailStr, Field
@@ -51,106 +48,98 @@ from api.schemas.base import BaseRequestSchema
 
 class LoginRequest(BaseRequestSchema):
     email: EmailStr
-    password: str = Field(..., min_length=12)
+    # Login accepts any non-empty password — the 12-char minimum is a signup/reset rule.
+    # Enforcing it here would lock out existing accounts and disclose the policy.
+    password: str = Field(..., min_length=1, max_length=128)
 ```
 
 ```python
 # src/api/schemas/request/pagination.py
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from api.schemas.base import BaseRequestSchema
 
 
-class PaginationQuery(BaseModel):
-    page: int = Field(default=1, ge=1)
+class PaginationQuery(BaseRequestSchema):
+    page: int = Field(default=1, ge=1, le=10_000)
     limit: int = Field(default=10, ge=1, le=100)
-    sort: str | None = Field(None, pattern=r'^(asc|desc)_\w+$')
+    sort: str | None = Field(None, max_length=64, pattern=r"^(asc|desc)_\w+$")
 ```
 
-**2. API Endpoint with Validation**
+**2. Router validates, service decides**
+
+Request bodies, query models, and `UploadFile` are validated by FastAPI before the handler runs; a failure raises `RequestValidationError`, which `src/error_handler.py` turns into a sanitized 422. Routers stay thin — every check beyond the schema lives in `api/services/`.
 
 ```python
 # src/api/routers/projects.py
-from datetime import datetime
-from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, File, Query, UploadFile, status
 
+from api.schemas.request.pagination import PaginationQuery
 from api.schemas.request.project import CreateProjectRequest
 from api.schemas.response.project import ProjectResponse
-from core.exceptions import InvalidInputError
+from api.services import projects as project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
 async def create_project(req: CreateProjectRequest) -> ProjectResponse:
-    """Create a new project.
-
-    Pydantic automatically validates the request body.
-    Returns 422 if validation fails.
-    """
-    # req is guaranteed to be valid
-    project = ProjectResponse(
-        id="1",
-        name=req.name,
-        description=req.description,
-        created_at=datetime.now(),
-    )
-    return project
+    return await project_service.create_project(req)
 
 
 @router.get("", response_model=list[ProjectResponse])
-async def list_projects(
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-) -> list[ProjectResponse]:
-    """List projects with pagination.
-
-    Query parameters are automatically validated and coerced.
-    """
-    # page and limit are guaranteed to be valid integers
-    offset = (page - 1) * limit
-    # Your logic: projects = await db.projects.find(skip=offset, limit=limit)
-    return []
+async def list_projects(query: Annotated[PaginationQuery, Query()]) -> list[ProjectResponse]:
+    return await project_service.list_projects(query)
 
 
 @router.post("/upload", response_model=dict[str, dict[str, str]])
-async def upload_project_file(file: UploadFile = File(...)):
-    """Upload a project file with validation."""
-    # Validate file type. content_type is the client-supplied Content-Type header —
-    # trivially spoofable, so treat this as a cheap first filter only. For anything
-    # security-sensitive, follow up with magic-byte sniffing (e.g. python-magic) or
-    # server-side re-encoding before the file is stored or served.
-    allowed_types = {"image/jpeg", "image/png", "application/pdf"}
-    if file.content_type not in allowed_types:
-        raise InvalidInputError(
-            f"File type {file.content_type} not allowed. "
-            f"Allowed: {', '.join(allowed_types)}"
-        )
+async def upload_project_file(file: Annotated[UploadFile, File()]) -> dict[str, dict[str, str]]:
+    storage_key = await project_service.store_project_file(file)
+    return {"data": {"storageKey": storage_key}}
+```
 
-    # Validate file size (max 10MB) — file.size comes from the parsed multipart
-    # spool (not the client header): reject based on the parsed spool size before
-    # loading the file into memory, then re-check after reading
-    max_size = 10 * 1024 * 1024
-    if file.size is not None and file.size > max_size:
+```python
+# src/api/services/projects.py (upload excerpt)
+import uuid
+
+from fastapi import UploadFile
+
+from core.exceptions import InvalidInputError
+
+ALLOWED_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "application/pdf"})
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+async def store_project_file(file: UploadFile) -> str:
+    """Validate an upload and persist it under a server-generated key."""
+    # content_type is the client-supplied header — a cheap first filter only. For anything
+    # security-sensitive, also sniff magic bytes (e.g. python-magic) before storing/serving.
+    # The message is fixed: never echo the submitted value back.
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise InvalidInputError("File type must be JPEG, PNG, or PDF")
+
+    # file.size comes from the parsed multipart spool, so it can reject before read();
+    # the post-read length check covers a missing size.
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise InvalidInputError("File must be under 10MB")
     contents = await file.read()
-    if len(contents) > max_size:
+    if len(contents) > MAX_UPLOAD_BYTES:
         raise InvalidInputError("File must be under 10MB")
 
-    # Validate filename — may be None, and may contain path components (traversal)
-    if not file.filename:
-        raise InvalidInputError("Filename is required")
-    if Path(file.filename).name != file.filename:
-        raise InvalidInputError("Invalid filename")
-
-    # Both file.filename and contents are validated — hand them to the storage layer here.
-
-    return {"data": {"message": "File uploaded successfully"}}
+    # file.filename is attacker-controlled (`../`, absolute paths, NUL bytes) — NEVER build
+    # a storage path from it. Keep it as display metadata only.
+    storage_key = str(uuid.uuid4())
+    # Hand storage_key + contents to the storage layer here.
+    return storage_key
 ```
+
+> Also cap the request body at the reverse proxy / ingress — `UploadFile` spools the whole part to disk before any of these checks run.
 
 **3. Form Data Validation**
 
-Annotate a Pydantic model with `Form()` — FastAPI validates form bodies against the model natively (model form data since 0.113, `extra="forbid"` support since 0.114). No manual parsing, and no risk of echoing the submitted password: a failure raises `RequestValidationError`, which the project's handler in `src/error_handler.py` turns into a sanitized 422.
+Annotate a Pydantic model with `Form()` — FastAPI validates form bodies against the model natively (model form data since 0.113, `extra="forbid"` support since 0.114). A failure goes through the same sanitized 422 handler, so the submitted password is never echoed.
 
 ```python
 # src/api/routers/auth.py
@@ -159,68 +148,70 @@ from typing import Annotated
 from fastapi import APIRouter, Form, status
 
 from api.schemas.request.auth import LoginRequest
+from api.services import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=dict[str, dict[str, str]], status_code=status.HTTP_200_OK)
-async def login(req: Annotated[LoginRequest, Form()]):
-    """Login via form data with validation."""
-    # req is guaranteed to be valid — safe to use req.email, req.password
-    return {"data": {"message": "Login successful"}}
+async def login(req: Annotated[LoginRequest, Form()]) -> dict[str, dict[str, str]]:
+    return await auth_service.login(req)
 ```
 
 **4. External API Response Validation**
 
 ```python
 # src/integrations/github_service.py
-import httpx
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from urllib.parse import quote
 
-from core.exceptions import InvalidInputError
+import httpx
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from core.exceptions import NoResultsFound
+from core.logging import logger
+
 
 class GitHubUser(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # external API shape — don't inherit BaseResponseSchema
+    # External API shape: ignore unknown fields, and don't inherit BaseResponseSchema
+    model_config = ConfigDict(extra="ignore")
 
-    id: int | str
-    login: str
+    id: int
+    login: str = Field(min_length=1)
     email: str | None = None
-
-    @field_validator("login", mode="before")
-    @classmethod
-    def validate_login(cls, v: object):
-        if not v or not isinstance(v, str):
-            raise ValueError("login is required")
-        return v
 
 
 async def fetch_github_user(username: str) -> GitHubUser:
-    """Fetch and validate GitHub user data."""
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.github.com/users/{username}")
+    """Fetch a GitHub user; raise NoResultsFound (404) if absent, RuntimeError (500) otherwise."""
+    # Encode the path segment — an unencoded `../` or `?` rewrites the request URL
+    url = f"https://api.github.com/users/{quote(username, safe='')}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(url)
 
-    if response.status_code != 200:
-        raise InvalidInputError("GitHub user not found")
+    if response.status_code == httpx.codes.NOT_FOUND:
+        raise NoResultsFound("GitHub user not found")
+    response.raise_for_status()
 
     try:
-        data = response.json()
-        user = GitHubUser.model_validate(data)  # Pydantic v2 idiomatic form; respects mode="before" validators
-        return user
+        return GitHubUser.model_validate(response.json())
     except ValidationError as e:
-        # Never interpolate the raw ValidationError — its str() echoes the input values
-        # (info disclosure). Log the detail server-side; return a generic message.
-        raise InvalidInputError("Invalid GitHub API response") from e
+        # An upstream contract break is a 500, not the caller's 400. str(e) echoes input
+        # values, so log the structured errors without them and drop the exception chain.
+        logger.error(
+            "GitHub response failed validation",
+            errors=e.errors(include_input=False, include_url=False),
+        )
+        raise RuntimeError("Invalid GitHub API response") from None
 ```
 
 ## Testing / Verification
 
 ```bash
-# Test endpoint validation
+# Empty name → 422
 curl -X POST http://localhost:8000/projects \
   -H "Content-Type: application/json" \
-  -d '{"name": ""}'  # Should return 422
+  -d '{"name": ""}'
 
-python -m pytest test/ -v -s
+python -m pytest test/ -v
 ```
 
 ## After Writing Code

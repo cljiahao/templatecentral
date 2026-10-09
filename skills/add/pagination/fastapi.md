@@ -1,7 +1,7 @@
 <!-- ref: add/pagination/fastapi.md
      loaded-by: add/SKILL.md
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-### FastAPI (Python + Pydantic + SQLAlchemy)
+### FastAPI (Pydantic + SQLAlchemy)
 
 ### Step 0 — Verify context
 
@@ -14,192 +14,177 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
-> **Prerequisites**
-> This skill assumes the FastAPI scaffold from `templatecentral:scaffold`. File paths below use
-> `src/core/` and `src/api/` matching that scaffold layout.
-> **If you're using async SQLAlchemy** (`AsyncSession`), ensure `create_async_engine`
-> is configured in your project — the default scaffold uses sync SQLAlchemy.
-> For sync SQLAlchemy, replace `AsyncSession` with `Session` and remove `await` from
-> database calls.
+> **Prerequisites**: FastAPI scaffold + `templatecentral:add (database)` with SQLAlchemy (sync `Session` from `src/database/session.py`). For `AsyncSession`, make the service and handler `async def` and `await` each `session.execute(...)`.
 
-**1. Reusable Pagination Schema**
+**1. Request Schema**
 
 ```python
-# src/core/validation/schemas.py
-from pydantic import BaseModel, Field
+# src/api/schemas/request/pagination.py
+from pydantic import Field
 
-class PaginationParams(BaseModel):
-    # extra='forbid' rejects unknown query params outright — only takes effect
-    # when the model is bound with Annotated[..., Query()] (see step 4).
-    model_config = {'extra': 'forbid'}
+from api.schemas.base import BaseRequestSchema
 
-    page: int = Field(default=1, ge=1, le=10_000, description='Page number (1-indexed)')
-    limit: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description='Items per page (max 100)'
-    )
+
+class PaginationParams(BaseRequestSchema):
+    """Shared query params for every paginated list endpoint."""
+
+    # le caps OFFSET cost — an unbounded page is a cheap DoS lever.
+    page: int = Field(default=1, ge=1, le=10_000, description="Page number (1-indexed).")
+    limit: int = Field(default=10, ge=1, le=100, description="Items per page.")
     sort: str | None = Field(
         default=None,
-        pattern=r'^(asc|desc)_\w+$',
-        description='Sort format: asc_fieldName or desc_fieldName'
+        max_length=64,
+        pattern=r"^(asc|desc)_\w+$",
+        description="asc_<field> or desc_<field>.",
     )
 ```
 
-**2. Pagination Response Model**
+**2. Response Schema**
 
 ```python
-# src/core/types/pagination.py
-from pydantic import BaseModel, Field
-from typing import Generic, TypeVar
+# src/api/schemas/response/pagination.py
+from api.schemas.base import BaseResponseSchema
 
-T = TypeVar('T')
 
-class PaginationMetadata(BaseModel):
+class PaginationMetadata(BaseResponseSchema):
     page: int
     limit: int
     total: int
-    has_more: bool = Field(..., serialization_alias='hasMore')
+    has_more: bool
 
-class PaginatedData(BaseModel, Generic[T]):
+
+class PaginatedData[T](BaseResponseSchema):
     items: list[T]
     pagination: PaginationMetadata
 
-class PaginatedResponse(BaseModel, Generic[T]):
+
+class PaginatedResponse[T](BaseResponseSchema):
     data: PaginatedData[T]
 ```
 
-**3. Pagination Service**
+`BaseResponseSchema` serializes `has_more` as `hasMore`, matching the other stacks' envelope.
+
+**3. Pagination Helpers**
 
 ```python
-# src/core/pagination/pagination_service.py
+# src/utils/pagination.py
+from typing import Literal, cast
 
-class PaginationService:
-    """Pagination utilities for consistent pagination across endpoints."""
+from api.schemas.response.pagination import PaginationMetadata
 
-    @staticmethod
-    def calculate_offset(page: int, limit: int) -> int:
-        """Calculate offset from page number (1-indexed to 0-indexed)."""
-        return (page - 1) * limit
+type SortDirection = Literal["asc", "desc"]
 
-    @staticmethod
-    def create_metadata(page: int, limit: int, total: int) -> dict:
-        """Create pagination metadata for response."""
-        return {
-            'page': page,
-            'limit': limit,
-            'total': total,
-            'has_more': page * limit < total,
-        }
 
-    @staticmethod
-    def parse_sort_param(
-        sort: str | None,
-        allowed_fields: list[str]
-    ) -> tuple[str, str] | None:
-        """Parse sort parameter to (field, direction) tuple.
+def calculate_offset(page: int, limit: int) -> int:
+    return (page - 1) * limit
 
-        Args:
-            sort: Sort string format: 'asc_fieldName' or 'desc_fieldName'
-            allowed_fields: Whitelist of allowed field names
 
-        Returns:
-            Tuple of (field, direction) or None if invalid
-        """
-        if not sort:
-            return None
+def create_metadata(page: int, limit: int, total: int) -> PaginationMetadata:
+    return PaginationMetadata(page=page, limit=limit, total=total, has_more=page * limit < total)
 
-        parts = sort.split('_', 1)
-        if len(parts) != 2:
-            return None
 
-        direction, field = parts
-        if field not in allowed_fields or direction not in ['asc', 'desc']:
-            return None
-
-        return (field, direction)
+def parse_sort_param(
+    sort: str | None, allowed_fields: set[str]
+) -> tuple[str, SortDirection] | None:
+    """Return (field, direction) for an allow-listed `asc_<field>`/`desc_<field>`, else None."""
+    if not sort:
+        return None
+    # Split once: field names may themselves contain underscores.
+    direction, _, field = sort.partition("_")
+    if field not in allowed_fields or direction not in ("asc", "desc"):
+        return None
+    return field, cast(SortDirection, direction)
 ```
 
-**4. API Endpoint with Pagination**
+**4. Service + Router**
 
-Sync SQLAlchemy (scaffold default):
+Query building and sort validation are business logic — they live in the service; the router only binds params and delegates.
 
-> Bind the params model with `Annotated[PaginationParams, Query()]` — the documented form for
-> query-parameter models since FastAPI 0.115. Plain `Depends()` still works but ignores
-> `extra='forbid'`, so unknown query params pass through silently.
+```python
+# src/api/services/projects.py
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from api.schemas.request.pagination import PaginationParams
+from api.schemas.response.pagination import PaginatedData, PaginatedResponse
+from api.schemas.response.project import ProjectResponse
+from core.exceptions import InvalidInputError
+from models.project import Project
+from utils.pagination import calculate_offset, create_metadata, parse_sort_param
+
+# API-facing (camelCase) name -> column. The allow-list IS this mapping, so it cannot drift.
+SORT_COLUMNS = {
+    "name": Project.name,
+    "createdAt": Project.created_at,
+    "updatedAt": Project.updated_at,
+}
+
+
+def list_projects(session: Session, params: PaginationParams) -> PaginatedResponse[ProjectResponse]:
+    sort = parse_sort_param(params.sort, set(SORT_COLUMNS))
+    if params.sort and not sort:
+        raise InvalidInputError(f"Invalid sort field. Allowed: {', '.join(SORT_COLUMNS)}")
+
+    if sort:
+        column = SORT_COLUMNS[sort[0]]
+        order_by = column.asc() if sort[1] == "asc" else column.desc()
+    else:
+        order_by = Project.created_at.desc()
+
+    stmt = (
+        select(Project)
+        .order_by(order_by)
+        .offset(calculate_offset(params.page, params.limit))
+        .limit(params.limit)
+    )
+    rows = session.execute(stmt).scalars().all()
+    total = session.execute(select(func.count(Project.id))).scalar_one()
+
+    return PaginatedResponse(
+        data=PaginatedData(
+            items=[ProjectResponse.model_validate(row) for row in rows],
+            pagination=create_metadata(params.page, params.limit, total),
+        )
+    )
+```
 
 ```python
 # src/api/routers/projects.py
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
+from api.schemas.request.pagination import PaginationParams
+from api.schemas.response.pagination import PaginatedResponse
 from api.schemas.response.project import ProjectResponse
-from core.exceptions import InvalidInputError
-from core.pagination.pagination_service import PaginationService
-from core.types.pagination import PaginatedData, PaginatedResponse, PaginationMetadata
-from core.validation.schemas import PaginationParams
+from api.services.projects import list_projects
 from database.session import get_db
-from models.project import Project as ProjectModel
 
-router = APIRouter(prefix='/projects', tags=['projects'])
+router = APIRouter(prefix="/projects")
 
-ALLOWED_SORT_FIELDS = ['name', 'created_at', 'updated_at']
 
-@router.get('', response_model=PaginatedResponse[ProjectResponse])
-def list_projects(
+@router.get("", response_model=PaginatedResponse[ProjectResponse])
+def get_projects(
+    # Query() (not Depends()) is what makes extra="forbid" reject unknown query params.
     params: Annotated[PaginationParams, Query()],
-    session: Session = Depends(get_db),
+    session: Annotated[Session, Depends(get_db)],
 ) -> PaginatedResponse[ProjectResponse]:
-    sort_result = PaginationService.parse_sort_param(params.sort, ALLOWED_SORT_FIELDS)
-    if params.sort and not sort_result:
-        raise InvalidInputError("Invalid sort parameter")
-
-    offset = PaginationService.calculate_offset(params.page, params.limit)
-
-    stmt = select(ProjectModel).offset(offset).limit(params.limit)
-    if sort_result:
-        field_name, direction = sort_result
-        order_col = getattr(ProjectModel, field_name)
-        stmt = stmt.order_by(order_col.asc() if direction == 'asc' else order_col.desc())
-    else:
-        stmt = stmt.order_by(ProjectModel.created_at.desc())
-
-    projects = session.execute(stmt).scalars().all()
-
-    count_stmt = select(func.count(ProjectModel.id))
-    total = session.execute(count_stmt).scalar() or 0
-
-    pagination_metadata = PaginationService.create_metadata(params.page, params.limit, total)
-    return PaginatedResponse(
-        data=PaginatedData(
-            items=[ProjectResponse.model_validate(p) for p in projects],
-            pagination=PaginationMetadata(**pagination_metadata),
-        )
-    )
+    """List projects, paginated and optionally sorted."""
+    return list_projects(session, params)
 ```
 
-> **Async variant**: If you configured `create_async_engine` and `AsyncSession`, replace `from sqlalchemy.orm import Session` with `from sqlalchemy.ext.asyncio import AsyncSession`, change `Session` → `AsyncSession` in the dependency type, make the handler `async def`, and add `await` before each `session.execute(...)` call.
+Register with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`).
 
 ## Validate
 
 ```bash
-# Test pagination endpoint
+# Expect 200 with data.pagination
 curl 'http://localhost:8000/projects?page=1&limit=10'
-
-# Expected 200 response with pagination metadata
-
-# Test invalid page
+# Expect 422
 curl 'http://localhost:8000/projects?page=0&limit=10'
-# Expected 422 response
-
-# Test invalid sort
-curl 'http://localhost:8000/projects?page=1&limit=10&sort=invalid_field'
-# Expected 400 response
-
+# Expect 400
+curl 'http://localhost:8000/projects?sort=asc_bogus'
 python -m pytest test/ -v
 ```
 

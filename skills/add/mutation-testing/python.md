@@ -66,8 +66,8 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
     needs: [test]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: "pip"
@@ -82,8 +82,8 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
 ### Validate
 
 ```bash
-mutmut run        # runs mutation tests (source/test paths come from pyproject.toml)
-mutmut results     # prints kill-rate summary
+mutmut run       # paths come from pyproject.toml
+mutmut results   # kill-rate summary
 ```
 
 ### After Writing Code

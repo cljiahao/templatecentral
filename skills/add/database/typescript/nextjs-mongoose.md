@@ -48,7 +48,13 @@ export async function connectDB(): Promise<typeof mongoose> {
     });
   }
 
-  cached.conn = await cached.promise;
+  try {
+    cached.conn = await cached.promise;
+  } catch (error) {
+    // Drop the rejected promise so the next request retries instead of failing forever.
+    cached.promise = null;
+    throw error;
+  }
   return cached.conn;
 }
 ```
@@ -65,10 +71,9 @@ If the user requires AWS IAM authentication (e.g., connecting to Amazon Document
 pnpm add @aws-sdk/credential-providers
 ```
 
-Replace the `mongoose.connect` call in `mongoose-client.ts` with:
+In `mongoose-client.ts`, replace the `MONGODB_URL` guard with the one below and the `mongoose.connect(...)` assignment inside `connectDB()` with the IAM connect (the cache and retry logic stay unchanged):
 
 ```ts
-import mongoose from 'mongoose';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 
 const MONGODB_HOST = process.env.MONGODB_HOST;
@@ -78,37 +83,15 @@ if (!MONGODB_HOST || !MONGODB_DB_NAME) {
   throw new Error('MONGODB_HOST and MONGODB_DB_NAME environment variables are required');
 }
 
-interface MongooseCache {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
-}
-
-const globalForMongoose = globalThis as unknown as { mongoose: MongooseCache };
-
-const cached: MongooseCache = globalForMongoose.mongoose ?? { conn: null, promise: null };
-
-if (!globalForMongoose.mongoose) {
-  globalForMongoose.mongoose = cached;
-}
-
-export async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) return cached.conn;
-
-  if (!cached.promise) {
-    // For DocumentDB: mongodb://${MONGODB_HOST}:27017/${MONGODB_DB_NAME}?authSource=...&tls=true
-    // For Atlas:      mongodb+srv://${MONGODB_HOST}/${MONGODB_DB_NAME}?authSource=...
-    const url = `mongodb://${MONGODB_HOST}:27017/${MONGODB_DB_NAME}?authSource=%24external&authMechanism=MONGODB-AWS&tls=true`;
-
-    cached.promise = mongoose.connect(url, {
-      authMechanismProperties: {
-        AWS_CREDENTIAL_PROVIDER: fromNodeProviderChain(),
-      },
-    });
-  }
-
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
+// Inside connectDB():
+cached.promise = mongoose.connect(
+  `mongodb://${MONGODB_HOST}:27017/${MONGODB_DB_NAME}?authSource=%24external&authMechanism=MONGODB-AWS&tls=true`,
+  {
+    serverSelectionTimeoutMS: 5_000,
+    maxPoolSize: 10,
+    authMechanismProperties: { AWS_CREDENTIAL_PROVIDER: fromNodeProviderChain() },
+  },
+);
 ```
 
 IAM environment variables (add to `.env.local` and `.env.example`):
@@ -125,9 +108,10 @@ MONGODB_DB_NAME=mydb
 **`src/integrations/database/schemas/user.ts`**:
 
 ```ts
-import mongoose, { type Document } from 'mongoose';
+import mongoose, { type Model } from 'mongoose';
 
-export interface IUser extends Document {
+// Plain interface — Mongoose discourages extending `Document` for schema types.
+export interface IUser {
   email: string;
   name: string;
   createdAt: Date;
@@ -142,7 +126,8 @@ const userSchema = new mongoose.Schema<IUser>(
   { timestamps: true },
 );
 
-export const User = mongoose.models.User ?? mongoose.model<IUser>('User', userSchema);
+export const User =
+  (mongoose.models.User as Model<IUser> | undefined) ?? mongoose.model<IUser>('User', userSchema);
 ```
 
 > **Why `mongoose.models.User ??`**: Prevents the "Cannot overwrite model once compiled" error during hot-reload in development.
@@ -176,7 +161,7 @@ import { withLogging } from '@/lib/utils/with-logging';
 
 export const GET = withLogging(async () => {
   await connectDB();
-  // Select only fields needed — never send full documents to the browser
+  // Explicit projection — never send full documents to the browser.
   const users = await User.find().select('name email -_id').lean();
   return NextResponse.json(users);
 });
@@ -191,7 +176,7 @@ import { User } from '@/integrations/database/schemas/user';
 
 export default async function UsersPage() {
   await connectDB();
-  // Select only fields needed — never send full documents to the browser
+  // Explicit projection — never send full documents to the browser.
   const users = await User.find().select('name email -_id').lean();
   return <UserList users={users} />;
 }

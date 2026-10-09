@@ -15,8 +15,8 @@ the marker.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
 **What already exists in the template:**
-- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()`
-- `Logger` from `nestjs-pino` injected via DI
+- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with `genReqId` and a header `redact` block)
+- `main.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true` and logs startup — no bootstrap changes needed
 - pino-http auto-logs every request/response (Tier 1 request logging is automatic)
 - `new Logger('X')` pattern works throughout
 
@@ -25,33 +25,23 @@ the marker.
 pino-http handles request/response logging automatically (method, path, status_code, duration_ms). Add `user_id` to request logs by extending `customProps` in `LoggerModule`:
 
 ```ts
-// src/app.module.ts  (extend existing LoggerModule.forRoot config)
-import { LoggerModule } from 'nestjs-pino';
+// src/app.module.ts — add customProps to the existing pinoHttp object
+import type { IncomingMessage } from 'node:http';
 
 LoggerModule.forRoot({
   pinoHttp: {
-    customProps: (req: import('fastify').FastifyRequest & { user?: { id: string } }) => ({
+    // ...keep existing level, genReqId, redact, transport
+    // pino-http receives the raw Node request on Fastify, not FastifyRequest — the auth
+    // guard (Tier 2) mirrors `user` onto `req.raw` so it is visible here.
+    customProps: (req: IncomingMessage & { user?: { id: string } }) => ({
       user_id: req.user?.id ?? null,
     }),
-    level: process.env.LOG_LEVEL ?? 'info',
-    // Keep the scaffold's redact block. pino-http's default request serializer logs the
-    // whole headers object, so without it every request writes its bearer JWT and
-    // session cookies at info level.
-    redact: {
-      paths: [
-        'req.headers.authorization',
-        'req.headers.cookie',
-        'res.headers["set-cookie"]',
-      ],
-      remove: true,
-    },
   },
 }),
 ```
 
-> `redact` is set once, on the `pinoHttp` object. Because this snippet *extends* the
-> scaffold's existing `LoggerModule.forRoot` config, verify the block is present after
-> editing — replacing the config object wholesale silently drops it and re-opens the leak.
+> Add the key; do not replace the config object. Replacing it wholesale silently drops the
+> scaffold's `redact` block, and every request then logs its bearer JWT and cookies.
 
 Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here; extend the filter from `templatecentral:add` (error-handling). If your copy lacks the status-logging block, add only these lines inside `catch()`, just before the final `reply.status(status).send(...)`:
 
@@ -64,21 +54,7 @@ if (status >= 500) {
 }
 ```
 
-App startup/shutdown — use NestJS lifecycle hooks:
-
-```ts
-// Excerpt — integrate ONLY the logger wiring into your existing src/main.ts bootstrap.
-// The scaffold already handles trustProxy, CORS, and app.listen — do NOT copy those here.
-import { Logger } from 'nestjs-pino';
-
-// Inside existing bootstrap(), after NestFactory.create():
-const logger = app.get(Logger);
-app.useLogger(logger);
-// ...rest of existing bootstrap continues unchanged...
-// Note: nestjs-pino's Logger has Nest's (message, context) signature — a second string
-// argument becomes the Nest context, not a pino message. Interpolate instead:
-logger.log(`App started on port ${port} (${process.env.NODE_ENV})`);
-```
+App startup is already logged by the scaffold's `bootstrap()`. nestjs-pino's `Logger` keeps Nest's `(message, context)` signature — a second string argument becomes the context, so interpolate values into the message.
 
 #### Tier 2 — Standard (+ Tier 1)
 
@@ -114,6 +90,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (err instanceof Error) throw err;
       throw new UnauthorizedException();
     }
+    Object.assign(req.raw, { user });
     return user;
   }
 }
@@ -156,11 +133,8 @@ export class AuthService {
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user || !(await argon2.verify(user.hashedPassword, password))) {
-      this.logger.warn(
-        { reason: 'invalid_credentials' },
-        'Login failure'
-        // Never log: email (PII), password
-      );
+      // No email: it is PII, and logging it on failure builds a list of probed accounts.
+      this.logger.warn({ reason: 'invalid_credentials' }, 'Login failure');
       return null;
     }
     return user;
@@ -168,33 +142,40 @@ export class AuthService {
 }
 ```
 
-**Outbound HTTP calls** — create an interceptor that wraps the outbound handler:
+**Outbound HTTP calls** — wrap `fetch` in a provider (a `NestInterceptor` only sees inbound handlers, never outbound calls):
 
 ```ts
-// src/common/interceptors/outbound-http-logging.interceptor.ts
-import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
-import { Observable, tap } from 'rxjs';
+// src/common/http/http-client.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 @Injectable()
-export class OutboundHttpLoggingInterceptor implements NestInterceptor {
-  private readonly logger = new Logger('OutboundHttp');
+export class HttpClientService {
+  constructor(@InjectPinoLogger(HttpClientService.name) private readonly logger: PinoLogger) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+  async request(url: string, init?: RequestInit): Promise<Response> {
+    // origin + path only: userinfo, query, and fragment can all carry credentials.
+    const { origin, pathname } = new URL(url);
+    const safeUrl = `${origin}${pathname}`;
+    const method = init?.method ?? 'GET';
     const start = Date.now();
-    return next.handle().pipe(
-      tap(() => {
-        // Log after the observable completes (response returned from HttpService call)
-        this.logger.log({
-          event: 'http.outbound',
-          duration_ms: Date.now() - start,
-        });
-      }),
-    );
+    try {
+      const res = await fetch(url, init);
+      this.logger.info(
+        { method, url: safeUrl, status_code: res.status, duration_ms: Date.now() - start },
+        'Outbound HTTP',
+      );
+      return res;
+    } catch (err) {
+      this.logger.error(
+        { method, url: safeUrl, duration_ms: Date.now() - start, error_type: (err as Error).name },
+        'Outbound HTTP error',
+      );
+      throw err;
+    }
   }
 }
 ```
-
-> **Note**: For more detailed logging (url, status_code), wrap `HttpService.get/post` directly in a service method and time the call there — interceptors do not have access to the outbound URL or response status.
 
 **Key domain events** — log in service methods for state changes (`this.logger` is an injected `PinoLogger`, as in the auth examples above):
 
@@ -223,8 +204,8 @@ async timedQuery<T>(name: string, fn: () => Promise<T>): Promise<T> {
   const result = await fn();
   const duration = Date.now() - start;
   if (duration > 500) {
-    this.logger.warn({ event: 'db.slow_query', name, duration_ms: duration });
-    // NEVER log query params — may contain PII or sensitive data
+    // Label only — query params may contain PII.
+    this.logger.warn({ name, duration_ms: duration }, 'Slow DB query');
   }
   return result;
 }
@@ -243,10 +224,9 @@ const rows = await this.drizzle.timedQuery('projects.findAll', () =>
 
 ```ts
 // src/app.module.ts  (extend pinoHttp customProps)
-customProps: (req: import('fastify').FastifyRequest & { user?: { id: string } }) => ({
+customProps: (req: IncomingMessage & { user?: { id: string } }) => ({
   user_id: req.user?.id ?? null,
-  auth_present: !!req.headers['authorization'],
-  // Never log: req.headers['authorization'] value
+  auth_present: !!req.headers.authorization,
 }),
 ```
 
@@ -256,6 +236,7 @@ customProps: (req: import('fastify').FastifyRequest & { user?: { id: string } })
 // src/common/cache/cache.service.ts
 async get<T>(key: string): Promise<T | null> {
   const value = await this.redis.get(key);
+  // Log a key prefix, not the full key, if keys embed user data (e.g. "session:<email>").
   this.logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
   return value ? JSON.parse(value) : null;
 }
@@ -278,12 +259,13 @@ curl http://localhost:3000/health
 
 # Tier 3
 # Trigger a slow DB query (or lower threshold temporarily to 0 for testing)
-# Expect: { name: "...", duration_ms: <n> } warn log
+# Expect: { msg: "Slow DB query", name: "...", duration_ms: <n> } warn log
 
 # Confirm no prohibited fields leaked.
 # INVERTED CHECK: this grep must print NOTHING. Any match is a FAILURE — a prohibited
 # field reached the logs. Investigate immediately and do not ship until it is silent.
-grep -i "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" <log-output>
+# Matches JSON keys, so log messages like "Token refresh" do not false-positive.
+grep -iE '"(password|secret|token|access_token|api_key|authorization|cookie|email|phone|address|credit_card)"' <log-output>
 ```
 
 ## See Also

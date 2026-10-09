@@ -89,11 +89,10 @@ def _build_security_headers() -> list[tuple[bytes, bytes]]:
         (b"x-content-type-options", b"nosniff"),
         (b"referrer-policy", b"strict-origin-when-cross-origin"),
         (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-        (
-            b"x-xss-protection",
-            b"0",
-        ),  # Disable legacy XSS auditor (exploitable in older browsers)
-        # CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
+        # "0" disables the legacy XSS auditor, itself exploitable in older browsers.
+        (b"x-xss-protection", b"0"),
+        # CSP baseline — tighten after auth/analytics are wired. frame-ancestors
+        # replaces X-Frame-Options for CSP2+ browsers.
         (
             b"content-security-policy",
             b"base-uri 'self'; object-src 'none'"
@@ -235,8 +234,8 @@ def start_application() -> FastAPI:
         redoc_url="/redoc" if is_dev else None,
         openapi_url="/openapi.json" if is_dev else None,
         swagger_ui_parameters={
-            "defaultModelsExpandDepth": -1,  # Hide models section by default
-            "docExpansion": "none",  # Collapse all sections by default
+            "defaultModelsExpandDepth": -1,
+            "docExpansion": "none",
         },
     )
 
@@ -249,7 +248,6 @@ def start_application() -> FastAPI:
     return app
 
 
-# Initialize the FastAPI application
 app = start_application()
 ```
 
@@ -497,11 +495,9 @@ class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         file_path = Path(default_name)
         tail = file_path.name
 
-        # Ensure log directory and subdirectories exist
         mth_fol = dm.log_dir / dt.now().strftime("%b%Y")
         dm.create_directory(mth_fol)
 
-        # Construct new filename with the month-year prefix
         arr = tail.split(".")
         ext = arr.pop()
         fname = "_".join(arr) + f".{ext}"
@@ -627,7 +623,6 @@ class DirectoryManager:
         """Initialize directory paths and ensure required folders exist."""
         self.base_dir = Path(__file__).resolve().parent.parent
 
-        # Log folder
         self.log_dir = self.base_dir / "log"
 
         self._initialize_base_folders()

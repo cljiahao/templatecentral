@@ -43,27 +43,9 @@ export type UserUpdate = Updateable<UsersTable>;
 
 > **Tip**: Run `npx kysely-codegen` after connecting to generate types automatically from the live schema. Note it connects via a `DATABASE_URL` with password auth — which this migration removes — so point it at a temporary password-auth connection string for the run (e.g. `DATABASE_URL=postgresql://user:pass@host:5432/db npx kysely-codegen`).
 
-### Step 7 — Migrate result handling pattern
-
-Both leaf `migrate.ts` files share this result-processing block (place after `migrator.migrateToLatest()`):
-
-```typescript
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
-  }
-
-  await db.destroy();
-```
-
 ### Step 8 — Write first Kysely migration for existing tables
 
-The migration file path and content differ slightly per stack (see leaf file), but the pattern is the same. Example `up` body:
+The file path differs per stack (see leaf file); the body is the same:
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -79,9 +61,14 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('updated_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
     .execute();
 }
+
+export async function down(_db: Kysely<unknown>): Promise<void> {
+  // No-op by design: the table pre-existed this adoption migration, so dropping it on
+  // rollback would destroy production data.
+}
 ```
 
-> Use `.ifNotExists()` to make the migration idempotent — the table already exists in the database from the Drizzle setup.
+> `.ifNotExists()` makes `up` idempotent — the table already exists from the Drizzle setup.
 
 ### Step 9 — Query translation reference
 
@@ -97,13 +84,17 @@ Drizzle → Kysely query translation reference:
 
 ### Step 10 — Update env vars
 
-Replace `DATABASE_URL` with IAM fields in your env file and `.env.example`:
+Replace `DATABASE_URL` with the IAM fields in `.env.example` yourself; **ask the user** to make the same change in their real env file (agent edits to `.env*` files are hook-blocked by design).
 
 ```env
 DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
 DATABASE_PORT=5432
 DATABASE_USER=iam_db_user
 DATABASE_NAME=mydb
+# Region for the RDS token signer
+AWS_REGION=us-east-1
+# Amazon RDS CA bundle — not in Node's default trust store
+RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 ```
 
 ### Step 11 — Validate

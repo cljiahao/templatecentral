@@ -38,9 +38,10 @@ Add an explicit startup log in `src/instrumentation.ts` (Next.js instrumentation
 
 ```ts
 // src/instrumentation.ts
-import { logger } from '@/lib/logger';
-
 export async function register() {
+  // register() also runs in the Edge runtime, where pino cannot load — import lazily, Node only.
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  const { logger } = await import('@/lib/logger');
   logger.info(
     { port: process.env.PORT ?? 3000, environment: process.env.NODE_ENV },
     'App starting'
@@ -73,24 +74,17 @@ export const GET = withLogging(async (req) => {
 });
 
 export const POST = withLogging(async (req) => {
-  const url = new URL(req.url);
-  const path = url.pathname.replace('/api/auth', '');
+  const path = new URL(req.url).pathname.replace('/api/auth', '');
+  const response = await _POST(req);
 
-  const response = await _POST(req.clone() as Request);
-
-  if (path.startsWith('/sign-in') && response.status === 200) {
-    logger.info({ event: 'auth.login_success', path }, 'Login success');
-  } else if (path.startsWith('/sign-in') && response.status !== 200) {
-    logger.warn(
-      { event: 'auth.login_failure', path, status: response.status },
-      'Login failure'
-    );
+  if (path.startsWith('/sign-in')) {
+    // Never log the request body — it holds the email and password.
+    if (response.ok) logger.info({ event: 'auth.login_success', path }, 'Login success');
+    else logger.warn({ event: 'auth.login_failure', path, status: response.status }, 'Login failure');
   } else if (path.startsWith('/sign-out')) {
     logger.info({ event: 'auth.logout' }, 'Logout');
   }
 
-  // better-auth sets Set-Cookie on sign-in/out — passing `response` as the init
-  // object carries its status and headers through unchanged.
   return new NextResponse(response.body, response);
 });
 ```
@@ -115,15 +109,10 @@ if (!hasSession) {
 // src/integrations/clients/http-client.ts
 import { logger } from '@/lib/logger';
 
+// origin + path only: userinfo, query, and fragment can all carry credentials.
 function sanitizeUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    // Remove query params that might contain secrets
-    u.search = '';
-    return u.toString();
-  } catch {
-    return url.split('?')[0];
-  }
+  const { origin, pathname } = new URL(url);
+  return `${origin}${pathname}`;
 }
 
 export async function httpGet(url: string, options?: RequestInit): Promise<Response> {
@@ -138,7 +127,7 @@ export async function httpGet(url: string, options?: RequestInit): Promise<Respo
     return res;
   } catch (err) {
     logger.error(
-      { method: 'GET', url: safeUrl, duration_ms: Date.now() - start, error: (err as Error).message },
+      { method: 'GET', url: safeUrl, duration_ms: Date.now() - start, error_type: (err as Error).name },
       'Outbound HTTP error'
     );
     throw err;
@@ -146,7 +135,7 @@ export async function httpGet(url: string, options?: RequestInit): Promise<Respo
 }
 ```
 
-**Key domain events** — log inside service functions for state changes:
+**Key domain events** — log where the state change happens:
 
 ```ts
 // src/app/api/projects/route.ts  (example — adapt to your domain)
@@ -172,8 +161,8 @@ export async function withSlowQueryLog<T>(
   const result = await fn();
   const duration = Date.now() - start;
   if (duration > 500) {
-    logger.warn({ event: 'db.slow_query', name, duration_ms: duration });
-    // NEVER log query params — may contain PII or sensitive data
+    // Label only — query params may contain PII.
+    logger.warn({ event: 'db.slow_query', name, duration_ms: duration }, 'Slow DB query');
   }
   return result;
 }
@@ -208,7 +197,7 @@ logger.debug(
 **Cache hits/misses** — log inside cache utility functions:
 
 ```ts
-// wherever you call your cache (e.g. Redis, in-memory)
+// wherever you call your cache — log a key prefix instead if keys embed user data
 logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
 ```
 
@@ -234,7 +223,7 @@ curl http://localhost:3000/api/health
 # Confirm no prohibited field reaches the log unredacted.
 # The negative lookahead skips pino's own "[Redacted]" markers, so any line that
 # matches is a real leak. Lookahead needs PCRE (grep -P), not -E.
-pnpm dev 2>&1 | grep -P '"(password|secret|token|api_key|email|phone|address|credit_card)":\s*"(?!\[Redacted\])'
+pnpm dev 2>&1 | grep -P '"(password|secret|token|api_key|authorization|cookie|email|phone|address|credit_card)":\s*"(?!\[Redacted\])'
 ```
 
 Expect zero matches. On macOS, BSD `grep` has no `-P` — use `rg` instead (same pattern, PCRE is

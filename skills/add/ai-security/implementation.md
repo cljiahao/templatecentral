@@ -26,8 +26,7 @@ User-supplied content must never be concatenated directly into a system prompt.
 // ❌ Never: direct interpolation
 const prompt = `You are a helpful assistant. User says: ${userMessage}`;
 
-// ✅ Always: labelled boundary so the model knows what is user content
-// model sees the user entry as untrusted input
+// ✅ Always: role separation — user content stays in the user turn
 const prompt = [
   { role: 'system', content: systemPrompt },
   { role: 'user', content: userMessage },
@@ -37,11 +36,12 @@ const prompt = [
 **Validation gate** — reject inputs that attempt to override instructions:
 
 ```ts
+// Narrow phrases only — bare words like "disregard" or "system prompt" reject ordinary input.
 const INJECTION_PATTERNS = [
-  /ignore (previous|above|all) instructions/i,
-  /system prompt/i,
-  /you are now/i,
-  /disregard/i,
+  /ignore (all |the )?(previous|above|prior) instructions/i,
+  /disregard (all |the )?(previous|above|prior) instructions/i,
+  /reveal (your|the) system prompt/i,
+  /you are now (in )?(developer|dan|jailbreak) mode/i,
 ];
 
 export function validateUserPrompt(input: string): void {
@@ -57,10 +57,10 @@ export function validateUserPrompt(input: string): void {
 import re
 
 INJECTION_PATTERNS = [
-    r'ignore (previous|above|all) instructions',
-    r'system prompt',
-    r'you are now',
-    r'disregard',
+    r'ignore (all |the )?(previous|above|prior) instructions',
+    r'disregard (all |the )?(previous|above|prior) instructions',
+    r'reveal (your|the) system prompt',
+    r'you are now (in )?(developer|dan|jailbreak) mode',
 ]
 
 def validate_user_prompt(text: str) -> None:
@@ -80,14 +80,14 @@ def validate_user_prompt(text: str) -> None:
 Never allow PII or credentials to enter LLM context. Strip before sending.
 
 ```ts
-// Redact common PII patterns before sending to the model
-// National ID pattern is broad — refine for your locale's format
-// International phone pattern — adapt to expected formats
+// Order matters: specific patterns run before broad ones, or the bare-digit national-ID
+// pattern consumes card and phone numbers first. Replace NATIONAL-ID with your locale's
+// exact format — "any 6-12 digits" also hits order numbers and amounts.
 const PII_PATTERNS: Array<[RegExp, string]> = [
-  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],
+  [/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.\w{2,}\b/g, '[EMAIL]'],
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
-  [/\b[\w.+-]+@[\w-]+\.\w{2,}\b/g, '[EMAIL]'],
-  [/\b\+?\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],
+  [/\+?\b\d{1,3}[\s-]?\d{3,5}[\s-]?\d{4,8}\b/g, '[PHONE]'],
+  [/\b\d{6,12}\b/g, '[NATIONAL-ID]'],
 ];
 
 export function redactPII(text: string): string {
@@ -126,45 +126,38 @@ Training data, fine-tuning sets, and retrieval corpora are attack surfaces. Comp
 - Never pull model weights from unverified mirrors — use only signed releases from the original provider
 
 ```ts
-// When ingesting documents into a RAG corpus, treat them as untrusted input
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
-async function ingestDocument(content: string, expectedHash?: string): Promise<void> {
-  if (expectedHash) {
-    const actualHash = createHash('sha256').update(content).digest('hex');
-    if (actualHash !== expectedHash) {
-      throw new Error('Document hash mismatch — possible content tampering');
-    }
+// Store provenance with every chunk so a poisoned source can be traced and purged later.
+// Regex-stripping HTML here is not a control (bypassable); rendering safety is LLM05's job.
+async function ingestDocument(content: string, source: string, expectedHash?: string): Promise<void> {
+  const hash = createHash('sha256').update(content).digest('hex');
+  if (expectedHash && hash !== expectedHash) {
+    throw new Error('Document hash mismatch — possible content tampering');
   }
-  // Strip executable content before embedding
-  const sanitized = content.replace(/<script[\s\S]*?<\/script>/gi, '');
-  await embedAndStore(sanitized);
+  await embedAndStore(content, { source, sha256: hash });
 }
 ```
 
 ```python
-# Python equivalent — hash verification before embedding
 import hashlib
 
-def ingest_document(content: str, expected_hash: str | None = None) -> None:
-    if expected_hash:
-        actual_hash = hashlib.sha256(content.encode()).hexdigest()
-        if actual_hash != expected_hash:
-            raise ValueError("Document hash mismatch — possible content tampering")
-    # Strip executable patterns before embedding
-    import re
-    sanitized = re.sub(r'<script[\s\S]*?</script>', '', content, flags=re.IGNORECASE)
-    embed_and_store(sanitized)
+
+def ingest_document(content: str, source: str, expected_hash: str | None = None) -> None:
+    digest = hashlib.sha256(content.encode()).hexdigest()
+    if expected_hash and digest != expected_hash:
+        raise ValueError("Document hash mismatch — possible content tampering")
+    embed_and_store(content, metadata={"source": source, "sha256": digest})
 ```
 
 **Monitoring gate** — detect unexpected output drift in production:
 
 ```ts
-// Track output distribution — alert on sudden shift (may indicate poisoned context)
-// Baseline measured on clean data
+// Baseline measured on clean data — a sudden shift may indicate poisoned context.
 const EXPECTED_REFUSAL_RATE = 0.02;
 
 function monitorOutputDrift(refusalCount: number, totalCount: number): void {
+  if (totalCount === 0) return;
   const rate = refusalCount / totalCount;
   if (rate > EXPECTED_REFUSAL_RATE * 3) {
     logger.warn({ rate, expected: EXPECTED_REFUSAL_RATE }, 'Abnormal refusal rate — possible data poisoning');
@@ -200,25 +193,31 @@ const AnswerSchema = z.object({
   sources: z.array(z.url()).max(5),
 });
 
-const raw = await openai.chat.completions.create({ ... });
-const parsed = AnswerSchema.safeParse(JSON.parse(raw.choices[0].message.content ?? '{}'));
-if (!parsed.success) throw new Error('Model returned invalid structure');
+function parseAnswer(content: string | null): z.infer<typeof AnswerSchema> {
+  let json: unknown;
+  try {
+    json = JSON.parse(content ?? '');
+  } catch {
+    throw new Error('Model returned non-JSON output');
+  }
+  const parsed = AnswerSchema.safeParse(json);
+  if (!parsed.success) throw new Error('Model returned invalid structure');
+  return parsed.data;
+}
 ```
 
 ```python
-# Python equivalent using Pydantic
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Annotated
-from annotated_types import Len
+
 
 class AnswerResponse(BaseModel):
-    answer: Annotated[str, Len(max_length=2000)]
+    answer: str = Field(max_length=2000)
     confidence: float = Field(ge=0, le=1)
-    sources: list[HttpUrl]
+    sources: list[HttpUrl] = Field(max_length=5)
 
-import json
-raw = client.chat.completions.create(...)
-parsed = AnswerResponse.model_validate(json.loads(raw.choices[0].message.content or "{}"))
+
+# Raises pydantic.ValidationError on non-JSON or off-schema output.
+parsed = AnswerResponse.model_validate_json(content or "")
 ```
 
 ---
@@ -245,6 +244,7 @@ export async function executeToolWithGate(
   args: unknown,
   confirmFn: (name: string, args: unknown) => Promise<boolean>
 ): Promise<unknown> {
+  validateToolCall(toolName);
   if (IRREVERSIBLE_TOOLS.has(toolName)) {
     const confirmed = await confirmFn(toolName, args);
     if (!confirmed) throw new Error('Tool execution cancelled by user');
@@ -344,19 +344,15 @@ if (requiresFactualGrounding(result.content)) {
 Every LLM call must have explicit token limits and a per-user rate limit.
 
 ```ts
-// Always set max_tokens — never allow uncapped completions
-// model: pin a dated snapshot, never a floating alias
-// max_tokens: explicit cap — never omit
 const response = await openai.chat.completions.create({
   model: '<provider>-<model>-<snapshot-date>',
   messages,
-  max_tokens: 1000,
-  temperature: 0.7,
+  // Newer OpenAI models reject `max_tokens`; Anthropic's Messages API requires `max_tokens`.
+  max_completion_tokens: Number(process.env.AI_MAX_TOKENS_PER_REQUEST ?? 1000),
 });
-
-// Per-user rate limiting
-// Use @upstash/ratelimit or infrastructure-layer rate limiting
 ```
+
+Enforce the per-user limit server-side, keyed on the authenticated user id (not IP) — reuse the project's auth rate limiter or the gateway.
 
 **Environment variables to document in `.env.example`:**
 
@@ -432,10 +428,3 @@ The overarching design principle is **Least Agency**: grant each agent only the 
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
 
-## Changelog
-### 1.2.0
-- Expanded OWASP Agentic Top 10 to full ASI01–ASI10 table with mitigation focus per entry
-### 1.1.0
-- Added OWASP Top 10 for Agentic Applications (ASI prefix codes) reference for Capability C systems
-### 1.0.0
-- Initial release — OWASP LLM Top 10 v2.0 controls for A/B/C AI capability tiers

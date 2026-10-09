@@ -13,7 +13,7 @@ alembic
 ```
 
 Add a driver for the target database:
-- PostgreSQL: `psycopg2-binary`
+- PostgreSQL: `psycopg[binary]` (psycopg 3) — use the `postgresql+psycopg://` URL scheme
 - SQLite: built-in (no extra driver needed for sync usage)
 - MySQL: `pymysql`
 
@@ -41,7 +41,7 @@ class APISettings(BaseSettings):
 
 Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
-DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DBNAME
+DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
 ```
 
 ### A4. Create Database Session
@@ -91,7 +91,8 @@ from database.base import Base
 from database.session import engine
 
 config = context.config
-config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL)
+# Escape % — alembic's ConfigParser treats it as interpolation (URL-encoded passwords break otherwise).
+config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -135,9 +136,7 @@ alembic upgrade head
 
 ### A8. Usage
 
-Inject the database session via FastAPI's dependency injection:
-
-Create a Pydantic response schema (in `api/schemas/`) and use `response_model`:
+Inject the session via `Depends(get_db)` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
@@ -146,7 +145,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.schemas.response.project import ProjectResponse  # create this schema
+from api.schemas.response.project import ProjectResponse
 from database.session import get_db
 from models.project import Project
 
@@ -156,7 +155,7 @@ def list_projects(db: Session = Depends(get_db)) -> Sequence[Project]:
     return db.scalars(stmt).all()
 ```
 
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free. `async def` with sync SQLAlchemy also works (FastAPI wraps sync dependencies via `run_in_threadpool`), but `def` is cleaner and consistent with the scaffold convention.
+> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool. An `async def` handler calling sync SQLAlchemy blocks the event loop for every query (only the `get_db` dependency runs in the thread pool, not the handler body).
 >
 > **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema. This ensures serialization and prevents leaking internal fields.
 
@@ -229,6 +228,8 @@ def create_user(db: Session, email: str, hashed_password: str, name: str) -> Use
 ### Step C — Replace stubs in `src/api/services/auth_service.py`
 
 ```python
+import secrets
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -237,7 +238,8 @@ from core.security import create_access_token, hash_password, verify_password
 
 # Verified on the miss path so an unknown email costs the same as a wrong
 # password — without it, response timing leaks which accounts exist.
-DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
+# Hashed at import with the live PasswordHasher so its cost always matches real hashes.
+DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def register_user(db: Session, email: str, password: str, name: str) -> dict:
@@ -311,8 +313,6 @@ def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_d
     user = get_user(db=db, user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
-
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
 
 ---
 

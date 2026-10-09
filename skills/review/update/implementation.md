@@ -8,10 +8,9 @@ Fetch latest dependency versions from npm or PyPI, apply patch/minor bumps, roll
 
 ## Stack Detection
 
-Same as the build utility (load it with: `cat "<skill-dir>/../build/SKILL.md"`): check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
+Use the build utility's Stack Detection table (`<skill-dir>/../build/implementation.md`). Node stacks read `package.json` (plus `overrides` / `allowBuilds` in `pnpm-workspace.yaml`); FastAPI reads `requirements.txt`.
 
-Node stacks (Next.js, Vite-React, NestJS): read `package.json`.
-FastAPI: read `requirements.txt`.
+**Never break a pin or floor:** an exact pin (e.g. a pre-release like `"drizzle-orm": "1.0.0-rc.4"`) stays exact and is only moved deliberately, never to a `^` range; never lower a version below the security floor in the plugin's `.claude/rules/<stack>.md`; keep `pnpm-workspace.yaml` overrides at or above their floors.
 
 ## Steps
 
@@ -24,7 +23,7 @@ FastAPI: read `requirements.txt`.
    - **Patch or minor bump** → add to auto-update list
    - **Major bump** → add to report-only list
    - **Current** → skip
-4. Rewrite `package.json` with bumped versions (keep `^` prefix for all updated deps)
+4. Rewrite `package.json` with bumped versions, keeping each dependency's existing specifier style (`^` stays `^`, exact stays exact)
 5. Run `pnpm install`
 6. Dispatch the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`
 7. If build fails → rollback (see Rollback below)
@@ -43,7 +42,7 @@ FastAPI: read `requirements.txt`.
 3. Compare versions:
    - **Patch or minor bump** → auto-update list
    - **Major bump** → report-only list
-4. Rewrite `requirements.txt` with exact pinned versions (`package==new_version`)
+4. Rewrite `requirements.txt` keeping each line's specifier style (`==` pins move to the new version; `>=` floors are raised to it)
 5. Run `pip install -r requirements.txt`
 6. Dispatch the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`
 7. If build fails → rollback
@@ -59,8 +58,8 @@ If the build utility (load it with: `cat "<skill-dir>/../build/SKILL.md"`) repor
 
 1. Save list of updated packages + old/new versions
 2. Restore original `package.json` / `requirements.txt`
-3. Restore one package at a time — re-apply all updates except one, run `pnpm install` / `pip install`, dispatch the build utility (load it with: `cat "<skill-dir>/../build/SKILL.md"`)
-4. Repeat until the breaking package is identified
+3. Re-apply all updates except one package, reinstall (`pnpm install` / `pip install -r requirements.txt`), and rebuild
+4. Rotate the excluded package until the build passes — that package is the breaking one
 5. Keep all updates except the breaking package
 6. Report which package could not be updated and its current vs attempted version
 
@@ -90,7 +89,3 @@ Security advisories:
 ## Callers
 
 Dispatched by: `templatecentral:scaffold` (all stacks), `templatecentral:standards` drift-check (when drift detected and user accepts update).
-
-## Changelog
-### 1.0.0
-- Initial plugin release

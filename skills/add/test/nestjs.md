@@ -58,10 +58,6 @@ describe('MyController', () => {
     service = module.get<MyService>(MyService);
   });
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
-
   it('should return all items', () => {
     const result = controller.findAll();
     expect(Array.isArray(result)).toBe(true);
@@ -162,7 +158,7 @@ describe('My Feature (e2e)', () => {
     });
 
     expect(result.statusCode).toBe(201);
-    const body = JSON.parse(result.payload) as { id: string; name: string };
+    const body = result.json<{ id: string; name: string }>();
     expect(body.name).toBe('Test Item');
     expect(body.id).toBeDefined();
   });
@@ -174,7 +170,7 @@ describe('My Feature (e2e)', () => {
     });
 
     expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.payload) as { id: string; name: string }[];
+    const body = result.json<{ id: string; name: string }[]>();
     expect(Array.isArray(body)).toBe(true);
   });
 });
@@ -195,17 +191,10 @@ test/
 ### Running Tests
 
 ```bash
-# Unit tests
-pnpm test
-
-# Unit tests (watch mode)
-pnpm test:watch
-
-# Coverage report
-pnpm test:cov
-
-# E2E tests
-pnpm test:e2e
+pnpm test        # unit
+pnpm test:watch  # unit, watch mode
+pnpm test:cov    # coverage report
+pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 ```
 
 ### Rules

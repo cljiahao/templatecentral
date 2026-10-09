@@ -6,7 +6,7 @@
 
 Guide for adding a new API endpoint following the router → service architecture.
 
-> **Placeholder names**: All examples use a single resource stem, `my_thing` — schema, service, and router files are all `my_thing.py` in their respective directories, with classes `MyThingRequest` / `MyThingResponse`. Replace the stem with your actual resource name throughout (e.g., for a `tasks` resource: `tasks.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
+> **Placeholder names**: All examples use a single resource stem, `my_thing` — schema, service, and router files are all `my_thing.py` in their respective directories, with classes `MyThingRequest` / `MyThingResponse`. Replace the stem with your actual resource name throughout (e.g., for a `task` resource: `task.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ the marker.
 
 ### 1. Define Request/Response Schemas
 
-Create Pydantic schemas in `src/api/schemas/`. Request schemas inherit from `BaseRequestSchema` and response schemas from `BaseResponseSchema` (both defined in `src/api/schemas/base.py`). They share common config from `BaseSchema` — see the file for the full `ConfigDict`. Key behaviors: `extra="forbid"` rejects unknown fields, `alias_generator=to_camel` converts snake_case to camelCase, and `from_attributes=True` enables ORM-style attribute access. `BaseResponseSchema` additionally sets `serialize_by_alias=True` so responses serialize using camelCase.
+Request schemas inherit `BaseRequestSchema`, responses `BaseResponseSchema` (`src/api/schemas/base.py`: `extra="forbid"`, camelCase aliases, camelCase serialization on responses). Bound every string/list field (`max_length`) — unbounded input is a cheap DoS vector.
 
 **Request** (`src/api/schemas/request/my_thing.py`):
 ```python
@@ -39,7 +39,7 @@ from api.schemas.base import BaseRequestSchema
 class MyThingRequest(BaseRequestSchema):
     """Request schema for the new endpoint."""
 
-    field_name: str = Field(description="Description of the field.")
+    field_name: str = Field(min_length=1, max_length=200, description="Description of the field.")
 ```
 
 **Response** (`src/api/schemas/response/my_thing.py`):
@@ -57,9 +57,7 @@ class MyThingResponse(BaseResponseSchema):
 
 ### 2. Add Service Function
 
-Create the service function in `src/api/services/my_thing.py`. Services contain the business logic — they parse schemas, process data, and serialize results back.
-
-For simple endpoints, the service can process directly:
+Create `src/api/services/my_thing.py`. Simple endpoints process directly:
 
 ```python
 from api.schemas.request.my_thing import MyThingRequest
@@ -72,7 +70,7 @@ def run_my_thing_service(request: MyThingRequest) -> MyThingResponse:
     return MyThingResponse(result=processed)
 ```
 
-For non-trivial endpoints with business logic, the service converts Pydantic schemas to domain models, processes, and serializes back. Create domain models in `models/` as needed:
+Non-trivial endpoints convert the schema to a domain model in `src/models/`, process, and serialize back:
 
 ```python
 from api.schemas.request.my_thing import MyThingRequest
@@ -86,8 +84,6 @@ def run_my_thing_service(request: MyThingRequest) -> MyThingResponse:
     result = item.process()
     return MyThingResponse(result=result)
 ```
-
-> Create `src/models/my_thing.py` for domain models — `src/models/base.py` exists as the base. For complex processing, keep pure functions in the model or a utility module under `src/utils/`.
 
 ### 3. Add Router
 
@@ -133,8 +129,6 @@ from api.tags import APITags
 # `router` is the root APIRouter defined at the top of this file
 router.include_router(my_thing.router, tags=[APITags.MY_TAG])
 ```
-
-Note: `my_thing.router` refers to the `router = APIRouter()` instance inside `src/api/routers/my_thing.py`. The import name matches the filename (e.g., `example.py` → `from api.routers import example`).
 
 ### 5. Add Tests
 

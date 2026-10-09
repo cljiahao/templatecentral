@@ -95,13 +95,11 @@ describe('ProjectCard', () => {
 
 ### Component Tests with User Interaction
 
-Install `@testing-library/user-event` first — the scaffold ships `@testing-library/jest-dom` and `@testing-library/react`, but not this package:
+Use `@testing-library/user-event` for interactions. The scaffold does not ship it:
 
 ```bash
 pnpm add -D @testing-library/user-event
 ```
-
-Use `@testing-library/user-event` for clicks, typing, and other interactions:
 
 ```tsx
 // src/features/project/components/project-form.test.tsx
@@ -286,12 +284,6 @@ pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.
-
-### Helper Patterns
-
-#### React Query Wrapper
-
-Reuse the `createWrapper` factory shown in the hook-test example above — a fresh `QueryClient` (with `retry: false`) wrapped in `QueryClientProvider`. Define it once per test file (or a shared `test/utils.tsx`) and pass it as the `wrapper` option to `renderHook`.
 
 ### Rules
 

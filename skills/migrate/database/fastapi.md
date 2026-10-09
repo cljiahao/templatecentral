@@ -14,7 +14,7 @@ On the application side this is a **config-only change** — no schema or query 
 
 ### Step 0 — Prerequisites (AWS side, before any code change)
 
-Confirm all three with the user — none of them are things this skill can do for you:
+Confirm all four with the user — this skill cannot do any of them:
 
 1. **IAM database authentication is enabled on the RDS instance** — `aws rds modify-db-instance --db-instance-identifier <id> --enable-iam-database-authentication --apply-immediately` (Aurora: `modify-db-cluster`).
 2. **The database user is IAM-enabled** — connect as a master user and run `GRANT rds_iam TO <user>;` (PostgreSQL). A user without the `rds_iam` role will reject every IAM token.
@@ -26,13 +26,16 @@ Confirm all three with the user — none of them are things this skill can do fo
 curl -o /path/to/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 ```
 
-### Step 1 — Install boto3
+### Step 1 — Install boto3 + psycopg 3
 
 Add to `requirements.txt`:
 
 ```
 boto3
+psycopg[binary]
 ```
+
+If `requirements.txt` still lists `psycopg2-binary`, replace it — the engine URL below uses the psycopg 3 `postgresql+psycopg://` scheme.
 
 ### Step 2 — Replace `src/database/session.py`
 
@@ -61,7 +64,7 @@ def _get_iam_token() -> str:
 
 
 engine = create_engine(
-    f"postgresql+psycopg2://{api_settings.DATABASE_USER}@"
+    f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}",
     # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
     # credential, so the server certificate must be verified against the AWS
@@ -109,10 +112,23 @@ Replace the `set_main_option` call:
 from core.config import api_settings
 
 sqlalchemy_url = (
-    f"postgresql+psycopg2://{api_settings.DATABASE_USER}@"
+    f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}"
 )
 config.set_main_option("sqlalchemy.url", sqlalchemy_url)
+```
+
+This URL carries no password, so online migrations must connect through the shared `engine` from `database.session` — it holds the `do_connect` token listener and `verify-full` TLS. A fresh `engine_from_config()` (the `alembic init` default) would fail authentication:
+
+```python
+from database.session import engine
+
+
+def run_migrations_online():
+    with engine.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
 ```
 
 ### Step 5 — Update `src/.env` and `src/.env.default`

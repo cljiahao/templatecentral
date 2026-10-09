@@ -362,7 +362,7 @@ function main() {
 
   let redacted;
   try {
-    redacted = redactValue(input.tool_output === undefined ? '' : input.tool_output, config, map);
+    redacted = redactValue(input.tool_response === undefined ? '' : input.tool_response, config, map);
   } catch (err) {
     warnAndExit(`redact-sensitive-output: redaction failed -- leaving this output unmasked: ${err.message}`);
   }
@@ -744,7 +744,7 @@ def main():
         )
 
     try:
-        masked_output, count = redact_value(input_data.get('tool_output', ''), config, redaction_map)
+        masked_output, count = redact_value(input_data.get('tool_response', ''), config, redaction_map)
     except Exception as err:
         warn_and_exit(f'redact-sensitive-output: redaction failed -- leaving this output unmasked: {err}')
 
@@ -947,11 +947,11 @@ python3 -c "import sys; sys.path.insert(0,'.claude/hooks'); import redact_sensit
 grep -q "PostToolUse" .claude/settings.json
 grep -q "redaction-config.json" .claude/settings.json
 # structured-output contract: masks the string leaves, keeps the rest of the shape
-echo '{"tool_output":{"stdout":"host at <a real IP from the configured range>","stderr":"","interrupted":false}}' \
+echo '{"tool_response":{"stdout":"host at <a real IP from the configured range>","stderr":"","interrupted":false,"isImage":false}}' \
   | node .claude/hooks/redact-sensitive-output.cjs   # FastAPI: python3 .claude/hooks/redact_sensitive_output.py
 ```
 
-The last check must print an `updatedToolOutput` **object** (`{"stdout":...,"stderr":"","interrupted":false}`)
+The last check must print an `updatedToolOutput` **object** (`{"stdout":...,"stderr":"","interrupted":false,"isImage":false}`)
 with the real IP replaced — a flat string there would be silently discarded by Claude Code for built-in
 tools, leaving the output unmasked.
 

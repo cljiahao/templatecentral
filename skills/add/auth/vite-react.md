@@ -83,13 +83,22 @@ const authUserSchema = z.object({
   image: z.string().nullable().optional(),
 });
 
+// Double-submit CSRF (Step 1): echo the backend-issued XSRF-TOKEN cookie on every non-GET.
+function csrfHeader(): Record<string, string> {
+  const token = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('XSRF-TOKEN='))
+    ?.slice('XSRF-TOKEN='.length);
+  return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
+}
+
 export async function loginWithCredentials(
   email: string,
   password: string
 ): Promise<AuthUser> {
   const res = await fetch(`${authBase()}/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...csrfHeader() },
     body: JSON.stringify({ email, password }),
     credentials: 'include',
   });
@@ -108,10 +117,12 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
 }
 
 export async function logoutUser(): Promise<void> {
-  await fetch(`${authBase()}/logout`, {
+  const res = await fetch(`${authBase()}/logout`, {
     method: 'POST',
+    headers: csrfHeader(),
     credentials: 'include',
   });
+  if (!res.ok) throw new APIError({ statusCode: res.status });
 }
 ```
 
@@ -167,8 +178,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
-    await logoutUser();
-    setUser(null);
+    try {
+      await logoutUser();
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo(
@@ -240,7 +254,7 @@ export function LoginCard() {
   };
 
   return (
-    <CustomCard header="Sign In" description="Enter your credentials to continue.">
+    <CustomCard header="Sign in" headingLevel="h1" description="Enter your credentials to continue.">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <CustomFormField name="email" label="Email">

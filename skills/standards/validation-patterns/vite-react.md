@@ -5,7 +5,7 @@
 
 **1. Schemas live in `schemas/`, never in the component file**
 
-A schema is data-shape policy, not view code. Keeping it in its own module is what lets a service, a test, and a form all validate against the same definition instead of drifting apart:
+Keeping the schema in its own module lets a service, a test, and a form validate against one definition:
 
 ```ts
 // src/features/projects/schemas/create-project.schema.ts
@@ -19,19 +19,7 @@ export const createProjectSchema = z.object({
 export type CreateProjectData = z.input<typeof createProjectSchema>;
 ```
 
-```ts
-// src/features/auth/schemas/password.schema.ts
-// Modern authenticator guidance: require length and screen against breached-password
-// lists; do NOT impose character-composition rules. Long passphrases beat short complex
-// strings. Canonical definition lives in standards/validation-patterns/patterns.md —
-// keep these identical.
-import { z } from 'zod';
-
-export const passwordSchema = z
-  .string()
-  .min(12, 'Password must be at least 12 characters')
-  .max(128, 'Password must be at most 128 characters');
-```
+Cross-feature schemas (`passwordSchema`, `emailSchema`, `fileUploadSchema`, `paginationSchema`) are defined once in `src/lib/validation/schemas.ts` (`patterns.md`) — import them, never copy them into a feature.
 
 **2. Form Component with Validation**
 
@@ -74,7 +62,7 @@ export function CreateProjectForm() {
         return;
       }
 
-      // Success
+      form.reset();
     } catch {
       setSubmitError('An unexpected error occurred');
     }
@@ -91,7 +79,7 @@ export function CreateProjectForm() {
           <Input placeholder="Project description (optional)" />
         </CustomFormField>
 
-        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+        {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
 
         <Button
           type="submit"
@@ -110,58 +98,21 @@ export function CreateProjectForm() {
 
 **3. File Upload with Server-Side Validation (Critical)**
 
-⚠️ **Important:** Client validation can be bypassed. Server-side validation is MANDATORY.
+Client checks are fast feedback only — the server must repeat them and add the size cap, magic-byte sniff, and server-generated storage key (see the backend stack's `validation-patterns` file).
 
 ```tsx
 // src/features/projects/components/file-upload-form.tsx
 import { getApiBaseUrl } from '@/lib/constants';
 import { logError } from '@/lib/errors';
+import {
+  ALLOWED_UPLOAD_EXTENSIONS,
+  fileUploadSchema,
+} from '@/lib/validation/schemas';
 import { type ChangeEvent, useState } from 'react';
 import { z } from 'zod';
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-// One whitelist per representation of the same rule. ALLOWED_EXTENSIONS drives the
-// `accept` attribute below, so the picker and the validator can never disagree;
-// ALLOWED_TYPES cannot be derived from it and must be edited alongside.
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf'] as const;
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'] as const;
-const ACCEPT_ATTRIBUTE = ALLOWED_EXTENSIONS.map((ext) => `.${ext}`).join(',');
-
-// Canonical definition lives in standards/validation-patterns/patterns.md (fileUploadSchema)
-// — keep the extension whitelist and path-traversal checks identical; do not weaken.
-const fileUploadSchema = z.object({
-  name: z
-    .string()
-    .refine(
-      (name) => {
-        try {
-          const decoded = decodeURIComponent(name);
-          return (
-            !decoded.includes('..') &&
-            !decoded.startsWith('/') &&
-            !decoded.startsWith('./') &&
-            !decoded.includes('\x00')
-          );
-        } catch {
-          return false;
-        }
-      },
-      'Invalid filename'
-    )
-    .refine(
-      (name) => {
-        try {
-          const ext = decodeURIComponent(name).split('.').pop()?.toLowerCase() ?? '';
-          return (ALLOWED_EXTENSIONS as readonly string[]).includes(ext);
-        } catch {
-          return false;
-        }
-      },
-      'File type not allowed'
-    ),
-  size: z.number().max(MAX_UPLOAD_BYTES, 'File must be under 10MB'),
-  type: z.enum(ALLOWED_TYPES, { error: 'File type must be JPEG, PNG, or PDF' }),
-});
+// Derived from the same whitelist the schema checks, so picker and validator never disagree
+const ACCEPT_ATTRIBUTE = ALLOWED_UPLOAD_EXTENSIONS.map((ext) => `.${ext}`).join(',');
 
 export function FileUploadForm() {
   const [error, setError] = useState<string | null>(null);
@@ -193,8 +144,8 @@ export function FileUploadForm() {
 
       const response = await fetch(`${getApiBaseUrl()}/projects/upload`, {
         method: 'POST',
+        // No Content-Type header — the browser must add its own multipart boundary
         body: formData,
-        // Don't set Content-Type — the browser must add its own multipart boundary
       });
 
       if (!response.ok) {
@@ -271,7 +222,7 @@ export async function fetchProject(id: string): Promise<Project> {
   const response = await fetch(`${getApiBaseUrl()}/projects/${encodeURIComponent(parsedId.data)}`);
 
   if (!response.ok) {
-    throw new APIError({ statusCode: response.status, data: await response.json().catch(() => ({ message: 'Failed to fetch project' })) });
+    throw new APIError({ statusCode: response.status, data: { message: 'Failed to fetch project.' } });
   }
 
   const data: unknown = await response.json();
@@ -305,12 +256,7 @@ export async function fetchProject(id: string): Promise<Project> {
 ## Testing / Verification
 
 ```bash
-pnpm dev
-
-# Test form validation (client shows error)
-# Submit invalid form, verify errors appear
-
-# Test API response validation (if API changes, error caught)
+pnpm dev   # submit the form with invalid values — field errors render before any request
 pnpm test
 ```
 
@@ -320,10 +266,6 @@ pnpm test
 - `templatecentral:add` (logging) — Log validation failures with context
 - Stack-specific `code-standards` — Type annotation and schema standards
 - `templatecentral:add (endpoint)` / `templatecentral:add (form)` — Use validation patterns in new routes/forms
-
-## Validate
-
-Run the stack's build and test commands (see `AGENTS.md` → Scaffold verification).
 
 ## After Writing Code
 

@@ -4,21 +4,11 @@
 
 # Full-Stack Pairing Guide
 
-Cross-stack guidance for connecting a templateCentral frontend to a templateCentral backend.
-
-## Prerequisites
-
-Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
+Connect a templateCentral frontend to a templateCentral backend.
 
 ## Inputs
 
-- **Frontend project path** — current directory if running from inside the frontend
-  project, or ask if running from a mono repo root. The agent should scan immediate
-  subdirectories for a `<!-- templateCentral:` marker to identify the frontend path
-  automatically before asking.
-- **Backend project path** — ask the user. The agent should scan immediate
-  subdirectories for a second `<!-- templateCentral:` marker to suggest the backend
-  path.
+Locate both projects by scanning the current directory and its immediate subdirectories for an `AGENTS.md` whose line 1 is a `<!-- templateCentral: <stack>@` marker. The stack in each marker tells you which is frontend and which is backend. Ask only if this finds zero or more than one candidate for either side.
 
 ## Supported Pairings
 
@@ -52,9 +42,7 @@ The template already has `configure_cors()` in `src/app.py` using `api_settings.
 CORS_ORIGINS=http://localhost:3000
 ```
 
-> For multiple origins: `CORS_ORIGINS=http://localhost:3000,http://localhost:3001`. Port defaults and conflict resolution: see the port-alignment note in Step 3.
-
-No code changes needed — `_compute_allowed_cors()` already reads `CORS_ORIGINS` and splits by comma for non-dev environments. In dev, common localhost origins (`localhost:3000`, `localhost:5173`, `127.0.0.1` variants) are allowed automatically.
+No code changes — `_compute_allowed_cors()` splits `CORS_ORIGINS` on commas outside dev; in dev it allows the common localhost origins (`:3000`, `:3001`, `:5173`) automatically.
 
 #### NestJS (`src/config/setups/security.setup.ts`)
 
@@ -64,9 +52,7 @@ The template already configures CORS via `serviceConfig.CLIENT_URL` (from `src/c
 CLIENT_URL=http://localhost:3000
 ```
 
-> **Port note**: NestJS and the Vite/Next.js templates all default to port `3000` — change one to avoid conflict (e.g., set NestJS to `3001`). See the port-alignment note in Step 3.
-
-The template's `setupCors()` reads this automatically — no code changes needed unless you need multiple origins (comma-separated: `CLIENT_URL=http://localhost:3000,http://localhost:3001`).
+No code changes — `setupCors()` reads it and accepts a comma-separated list.
 
 ### 2. Configure Frontend Proxy (Development)
 
@@ -77,7 +63,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        // FastAPI or NestJS
+        // FastAPI :8000; NestJS — whatever PORT you moved it to (see Port alignment)
         target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
@@ -116,33 +102,23 @@ Ask the user to set these in the `.env` files (agent edits to `.env` files are h
 # Vite + React
 VITE_API_BASE_URL=/api
 
-# Next.js (add these — the template ships with NEXT_PUBLIC_BASE_URL only)
+# Next.js (the template ships with NEXT_PUBLIC_BASE_URL only)
 NEXT_PUBLIC_BACKEND_URL=/api/external
-# server-side direct calls — never exposed to the browser
+# Server-side only — never exposed to the browser
 BACKEND_URL=http://localhost:8000
 ```
 
 > **Security**: `NEXT_PUBLIC_BACKEND_URL` must be a **relative proxy path** (e.g., `/api/external`) — NEVER the actual backend server address (`http://...`). `NEXT_PUBLIC_*` vars are embedded in the client bundle and visible to users. Use `BACKEND_URL` (no `NEXT_PUBLIC_` prefix) for the real backend address — it stays server-side only.
 
-#### Backend `.env`
+Backend: `CORS_ORIGINS` (FastAPI, `src/.env`) / `CLIENT_URL` (NestJS, `.env`) as in Step 1.
 
-```env
-# FastAPI — update CORS_ORIGINS in src/.env
-CORS_ORIGINS=http://localhost:3000
-
-# NestJS — already in .env.example
-CLIENT_URL=http://localhost:3000
-```
-
-> **Port alignment**: FastAPI defaults to `8000`, NestJS defaults to `3000`, Vite defaults to `3000`, Next.js defaults to `3000`. Ensure your proxy target port matches the backend. When pairing NestJS with Vite or Next.js, change one port to avoid conflict.
+> **Port alignment**: FastAPI defaults to `8000`; NestJS, Vite (template-configured), and Next.js all default to `3000`. When pairing NestJS with either frontend, move NestJS (`PORT=3001`) and point the proxy target at it.
 
 ### 4. Frontend HTTP Client
 
-Both templates have a base HTTP client. Configure it with the API base URL:
+Both templates ship an abstract `FetchClient` — subclass it for the backend.
 
 #### Vite + React
-
-`FetchClient` is abstract — create a concrete subclass for your backend API:
 
 ```typescript
 // src/lib/clients/api-client.ts
@@ -151,7 +127,7 @@ import { getApiBaseUrl } from '@/lib/constants/env';
 
 export class ApiClient extends FetchClient {
   constructor() {
-    // getApiBaseUrl() throws at startup if VITE_API_BASE_URL is missing — never pass the raw env var
+    // getApiBaseUrl() throws if VITE_API_BASE_URL is missing — never pass the raw env var
     super(getApiBaseUrl(), {});
   }
 }
@@ -159,43 +135,44 @@ export class ApiClient extends FetchClient {
 
 #### Next.js
 
-Use `createAxiosClient` from the template's base client:
+Server-side only (route handlers, server components). Reach for `createAxiosClient` only for mTLS / pinning / interceptor chains, per `src/integrations/factories.ts`.
 
 ```typescript
 // src/integrations/clients/backend-client.ts
-import { createAxiosClient } from './base/axios-client';
+import { FetchClient } from './base/fetch-client';
 
-// BACKEND_URL is absolute and server-side only; a relative fallback has no origin to
-// resolve against here, so fail at startup rather than ship a client that silently 404s
-const backendUrl = process.env.BACKEND_URL;
-if (!backendUrl) {
-  throw new Error('BACKEND_URL is not set — required for server-side backend calls');
+class BackendClient extends FetchClient {}
+
+let client: BackendClient | undefined;
+
+// Resolved on first use, not at import — `next build` evaluates route modules, and a
+// module-scope throw would fail builds where BACKEND_URL is only set at runtime.
+// A relative fallback has no origin to resolve against server-side, so fail loudly.
+export function getBackendClient(): BackendClient {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) {
+    throw new Error('BACKEND_URL is not set — required for server-side backend calls');
+  }
+  client ??= new BackendClient(backendUrl, {});
+  return client;
 }
-
-export const backendClient = createAxiosClient({
-  baseURL: backendUrl,
-});
 ```
 
 ### 5. Cookie Forwarding (Auth)
 
-If using cookie-based auth (e.g., session tokens), ensure:
+If using cookie-based auth:
 
-- Backend sets `SameSite=Lax` (or `None` + `Secure` for cross-origin)
-- Frontend proxy preserves cookies (both Vite proxy and Next.js rewrites do this by default)
-- `credentials: 'include'` on fetch calls, or `withCredentials: true` on Axios
+- Backend sets session cookies `HttpOnly`, `Secure` (outside localhost), and `SameSite=Lax` — `SameSite=None` only for a genuinely cross-site deployment, and then pair it with CSRF protection
+- Same-origin proxy paths (Vite proxy, Next.js rewrites) forward cookies as-is
+- Cross-origin calls need `credentials: 'include'` (fetch) / `withCredentials: true` (Axios) plus credentialed CORS on the backend — with an explicit origin list, never `*`
 
 ### 6. Production Deployment
 
-In production, you typically:
-- Deploy frontend and backend separately
-- Use a reverse proxy (Nginx, Caddy) or API gateway to route `/api` to the backend
-- Set absolute URLs in environment variables instead of relying on dev proxy
+Dev proxies don't exist in production: route `/api` to the backend with a reverse proxy (Nginx, Caddy) or API gateway, and set the production origins in `CORS_ORIGINS` / `CLIENT_URL`.
 
 ## Rules
 
-- Dev proxies (`server.proxy`, `rewrites`) are for development only — do not rely on them in production.
-- Always set `allow_credentials=True` / `credentials: true` in CORS if using cookies.
 - Keep API base URLs in environment variables — never hardcode.
+- NEVER put the real backend address in `NEXT_PUBLIC_*` / `VITE_*`.
 - The frontend should never call the backend directly by hostname in client-side code — always go through the proxy path (e.g., `/api`).
 - For Next.js server components / route handlers, you can call the backend directly using `BACKEND_URL` (server-side env var, not exposed to client).

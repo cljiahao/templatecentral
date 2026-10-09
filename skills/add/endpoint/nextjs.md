@@ -46,9 +46,7 @@ src/app/api/
 
 Keep route handlers thin — delegate to server-side data access:
 
-> **Important**: Route handlers run on the server. They access data via `integrations/` (clients, services, factories) — NOT through the feature's `api/` services, which use `fetch('/api/...')` and would cause the route to call itself recursively. Feature `api/` services are for client-side React Query hooks only. See the `templatecentral:add (integration)` skill for external APIs.
->
-> **Note**: The data access imports below are **placeholders** — `factories.ts` starts empty. Replace them with your actual data layer: Drizzle/Mongoose via the `templatecentral:add (database)` skill, or external API clients via the `templatecentral:add (integration)` skill.
+> **Important**: Route handlers access data via `integrations/` (clients, services, factories) — NOT the feature's `api/` services, which `fetch('/api/...')` and would make the route call itself. Data access below is a **placeholder** — wire it via `templatecentral:add (database)` or `templatecentral:add (integration)`.
 
 > **Wrap every handler in `withLogging`.** Next.js has no global request-logging layer, so each handler must be wrapped — and `pnpm check` fails the build on any unwrapped route (`scripts/check-route-logging.mjs`). See `add/logging/nextjs.md`.
 
@@ -78,7 +76,8 @@ export const GET = withLogging(async () => {
 
 export const POST = withLogging(async (request) => {
   try {
-    const body = await request.json();
+    // Malformed JSON must be a 400, not a 500 from the catch below.
+    const body: unknown = await request.json().catch(() => null);
     const parsed = CreateProjectSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -194,7 +193,7 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 - Always use `handleApiError()` for error responses — NEVER return raw error objects or stack traces
 - Use `NextResponse.json()` for all responses
 - Use dynamic segments `[id]` for resource IDs
-- If `src/proxy.ts` exists (i.e. `templatecentral:add` (auth) has been run), unauthenticated requests to non-public paths are rejected automatically. Add route-level `auth()` checks only for role-based or resource-level authorization beyond authentication. If auth has not been added yet, all API routes are unprotected — run `templatecentral:add` (auth) first
+- **Authenticate in the handler.** `src/proxy.ts` (after `templatecentral:add` (auth)) only checks session-cookie *presence* — it does not validate the session. Every non-public handler must call `const session = await auth.api.getSession({ headers: request.headers })` and return `new Response(null, { status: 401 })` when it is `null`, then enforce ownership/role checks. Without auth added, every API route is public — run `templatecentral:add` (auth) first
 - NEVER use `request.json()` without validation — parse with Zod and return 400 on failure
 - NEVER expose internal error details in responses — rely on `handleApiError()` for generic messages
 - NEVER skip the routes constant — always add new API routes to `src/lib/constants/routes.ts`

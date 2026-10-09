@@ -33,20 +33,22 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 
 ### Adding a new stack
 
-1. Add reference files under `skills/scaffold/<stack>/` (e.g., `source-files.md`, `config-files.md`)
-2. Add a routing branch for the new stack in `skills/scaffold/SKILL.md`
+1. Add reference files under `skills/scaffold/<stack>/` (e.g., `source-files.md`, `config-files.md`) and route to them from `skills/scaffold/SKILL.md`
+2. Add `skills/add/<capability>/<stack>.md` for each supported capability and its detection row in `skills/add/SKILL.md` (procedure: `skills/CONVENTIONS.md` §6)
 3. Add `.claude/rules/<stack>.md` with stack-specific agent rules
-4. Update `AGENTS.md` to include the new stack in the routing table
-5. Update `README.md` to add the stack to the skills table
+4. Add the detection signal to the Stack Detection table in `AGENTS.md`
+5. Add the stack to `README.md` → **What You Get**
 
 ## Pull Request Checklist
 
 - [ ] `SKILL.md` has valid `name` and `description` frontmatter
-- [ ] No version pins in skill body — floors/pins belong in `.claude/rules/*.md` only
+- [ ] Version floors in skill files agree with `.claude/rules/*.md` (the floor of record)
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] `bash scripts/validate-manifest.sh` passes locally (validates `plugin.json` and `marketplace.json`)
 - [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if a `skills/scaffold/*/config-files.md` was touched (validates fenced JSON/JS config blocks)
-- [ ] README updated if skill count changed
+- [ ] `bash scripts/test-harness-kit.sh` passes locally if `skills/scaffold/shared/harness-kit.md` was touched
+- [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
+- [ ] README updated if the skill count, capability list, or stack list changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`
 - [ ] CI passes (frontmatter validation + `lint-patterns` job run automatically)
 
@@ -69,7 +71,7 @@ Two monthly GitHub Actions workflows run automatically on the 1st of each month.
 | `ecosystem-refresh.yml` | 02:00 UTC on the 1st | Runs a full web scan (Step 0b of `.claude/skills/tc-audit/implementation.md`), overwrites `.claude/audit-ecosystem-research.md`, and opens a PR summarising new versions, advisories, harness-consensus findings, and any result that invalidates a current skill. |
 | `scaffold-verify.yml` | 03:00 UTC on the 1st | Scaffolds each stack (`fastapi`, `nestjs`, `nextjs`, `vite-react`) into a clean directory, runs all quality gates exactly as documented, and fails if any template file is missing or any gate does not pass. |
 
-**Handling scaffold-verify failures:** when any matrix leg fails the workflow automatically opens a GitHub issue titled `scaffold-verify: <stack> failed <date>`. Triage these issues the same way as `accuracy_fix` reports — identify the broken template section and file named in the agent output, then open a fix PR.
+**Handling scaffold-verify failures:** when any matrix leg fails the workflow automatically opens a GitHub issue titled `scaffold-verify: <stack> failed <date>`. Triage: find the broken template section named in the agent output, then open a fix PR.
 
 ## Questions
 
