@@ -8,13 +8,10 @@
 ```typescript
 import { config } from 'dotenv';
 
-config();
+config({ quiet: true });
 
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
@@ -39,7 +36,7 @@ async function bootstrap(): Promise<void> {
       genReqId: () => crypto.randomUUID(),
       ...(trustProxy ? { trustProxy } : {}),
     }),
-    { bufferLogs: true },
+    { bufferLogs: true }
   );
   const logger = app.get(Logger);
   app.useLogger(logger);
@@ -89,11 +86,7 @@ import { appConfig } from './config';
         // pino-http's default serializer logs the whole headers object at info level.
         // Without this, every request writes its bearer JWT and session cookies to the log.
         redact: {
-          paths: [
-            'req.headers.authorization',
-            'req.headers.cookie',
-            'res.headers["set-cookie"]',
-          ],
+          paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           remove: true,
         },
         transport:
@@ -143,13 +136,7 @@ export * from './http.constants';
 ### `src/common/filters/http-exception.filter.ts`
 
 ```typescript
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  Logger,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
@@ -205,7 +192,7 @@ export function isExpired(expiresAt: Date): boolean {
 ```typescript
 export function convertStrToList(
   value: string | undefined,
-  delimiter: string,
+  delimiter: string
 ): string[] | undefined {
   if (!value) return undefined;
   return value
@@ -232,24 +219,18 @@ const envSchema = z.object({
   CLIENT_URL: z.string().min(1).default('http://localhost:3000'),
   // Reverse proxy trust: comma-separated IPs/CIDRs, or "*" — see main.ts's resolveTrustProxy().
   TRUST_PROXY: z.string().optional(),
-  LOG_LEVEL: z
-    .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
 });
 
 // An empty value in `.env` means "not set" — drop it so the schema default applies.
-const rawEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([, value]) => value !== ''),
-);
+const rawEnv = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ''));
 
 const parsed = envSchema.safeParse(rawEnv);
 
 // Fail at import time. A `!` assertion is erased at compile time and would surface a
 // missing variable as an obscure runtime failure on the first request instead.
 if (!parsed.success) {
-  throw new Error(
-    `Invalid environment configuration:\n${z.prettifyError(parsed.error)}`,
-  );
+  throw new Error(`Invalid environment configuration:\n${z.prettifyError(parsed.error)}`);
 }
 
 const env = parsed.data;
@@ -327,14 +308,8 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
-    void reply.header(
-      'Cache-Control',
-      'no-cache, no-store, must-revalidate, private',
-    );
-    void reply.header(
-      'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=()',
-    );
+    void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+    void reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;
   });
 }
@@ -641,10 +616,7 @@ export interface ExampleItem {
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 
 describe('AppController (e2e)', () => {
@@ -658,7 +630,7 @@ describe('AppController (e2e)', () => {
     // Mirror main.ts's adapter options so request IDs (and anything keyed off them, e.g. log
     // correlation) behave the same under test as in the running app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter({ genReqId: () => crypto.randomUUID() }),
+      new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

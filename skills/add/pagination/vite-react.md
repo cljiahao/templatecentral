@@ -72,16 +72,20 @@ export { usePagination, type Paginated } from './use-pagination';
 
 **3. Schema + API Service**
 
-All three templateCentral backends return the `{ data: { items, pagination } }` envelope — validate it as-is.
+The FastAPI and NestJS pagination endpoints (`templatecentral:add (pagination)` on the backend) both return `{ data: { items, pagination: { page, limit, total, hasMore } } }` — the one wrapped shape; their non-list endpoints return bare bodies. Validate it as-is.
+
+**Update, don't overwrite**: if `templatecentral:add (feature)` already created `project.schema.ts`, keep its `projectItemSchema` and add only `paginatedProjectsSchema`; if `types.ts` already declares `ProjectItem`, skip the `ProjectItem` export below and import the type from `../types`. Create the file as shown only when it is absent.
 
 ```ts
-// src/features/projects/schemas/project.schema.ts
+// src/features/project/schemas/project.schema.ts
 import { z } from 'zod';
 
+// Canonical project schema (same as add (feature)). nullish: FastAPI emits `null`, a NestJS
+// DTO may omit the key; extra fields (createdAt, updatedAt) are stripped.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullish(),
 });
 
 export type ProjectItem = z.infer<typeof projectItemSchema>;
@@ -99,29 +103,33 @@ export const paginatedProjectsSchema = z.object({
 });
 ```
 
+The service calls the backend through `ApiClient` (`src/lib/clients/api-client.ts`, defined in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client; create it from there if missing), which carries the session cookie and CSRF header once `templatecentral:add (auth)` is applied. The list endpoint's shape changes from a bare array to the paginated envelope, so if `api/project-service.ts` already exists (from add (feature)), replace `ProjectClient.list` with the one below, add `fetchProjects`, and remove `ProjectService.getAll` (update its callers to `fetchProjects`) — do not overwrite the file's other methods.
+
 ```ts
-// src/features/projects/api/project-service.ts
+// src/features/project/api/project-service.ts
 import type { Paginated } from '@/hooks';
-import { getApiBaseUrl } from '@/lib/constants/env';
+import { ApiClient } from '@/lib/clients/api-client';
 import { APIError, logError } from '@/lib/errors';
 import { paginatedProjectsSchema, type ProjectItem } from '../schemas/project.schema';
+
+class ProjectClient extends ApiClient {
+  // unknown: fetchProjects parses, so network data is never type-asserted.
+  list(page: number, limit: number, signal?: AbortSignal): Promise<unknown> {
+    return this.request('projects', 'GET', undefined, { page, limit }, signal);
+  }
+}
+
+// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset — at module scope
+// that kills bundle evaluation before createRoot().
+let client: ProjectClient | undefined;
+const projects = (): ProjectClient => (client ??= new ProjectClient());
 
 export async function fetchProjects(
   page: number,
   limit: number,
   signal?: AbortSignal
 ): Promise<Paginated<ProjectItem>> {
-  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
-  const response = await fetch(`${getApiBaseUrl()}/projects?${query}`, { signal });
-
-  if (!response.ok) {
-    throw new APIError({
-      statusCode: response.status,
-      data: await response.json().catch(() => ({ message: 'Failed to fetch projects' })),
-    });
-  }
-
-  const parsed = paginatedProjectsSchema.safeParse(await response.json());
+  const parsed = paginatedProjectsSchema.safeParse(await projects().list(page, limit, signal));
   if (!parsed.success) {
     // Log the issue paths for debugging; the user sees only the generic APIError.
     logError('fetchProjects: response failed schema validation', parsed.error);
@@ -134,7 +142,7 @@ export async function fetchProjects(
 **4. Projects List Component**
 
 ```tsx
-// src/features/projects/components/projects-list.tsx
+// src/features/project/components/projects-list.tsx
 import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks';
 import { fetchProjects } from '../api/project-service';

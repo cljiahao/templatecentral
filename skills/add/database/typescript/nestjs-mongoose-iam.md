@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Mongoose (MongoDB), compliance = AWS IAM (Amazon DocumentDB or MongoDB Atlas with AWS IAM). Loaded alongside nestjs-mongoose.md — overrides its C2 DatabaseModule and env fields and its C7 env. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Mongoose — IAM Auth Variant
 
-> **Add-on to `nestjs-mongoose.md`** (the router loads both). Work through that guide's C1–C8, but use the `DatabaseModule` below instead of its standard C2 module, and the IAM env fields below instead of its `MONGODB_URL` (C2 `envSchema`/`serviceConfig` and C7 `.env`); then run its **After Writing Code** steps.
+> **Add-on to `nestjs-mongoose.md`** (the router loads both). Work through that guide's C1–C9, but use the `DatabaseModule` below instead of its standard C2 module, and the IAM env fields below instead of its `MONGODB_URL` (C2 `envSchema`/`serviceConfig`, C7 `.env`, and C8 `test.env` — `MONGODB_HOST: '127.0.0.1', MONGODB_DB_NAME: 'test'`); then run its **After Writing Code** steps.
 
 If the user requires AWS IAM authentication (e.g., connecting to Amazon DocumentDB or MongoDB Atlas with AWS IAM), install the additional package:
 

@@ -16,6 +16,12 @@ pnpm add -D --save-exact drizzle-kit@<exact-rc-from-rules>
 
 Both packages must be on the same RC — a `drizzle-kit` that disagrees with `drizzle-orm` generates migrations the runtime cannot read.
 
+`drizzle-kit` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its platform binary ships as an optional dependency, so the script is not needed — add under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
+
+```yaml
+  esbuild: false
+```
+
 #### A2. Add Database Scripts
 
 Add to `package.json`:
@@ -36,6 +42,8 @@ Add to `package.json`:
 **`drizzle.config.ts`** (project root):
 
 ```ts
+// drizzle-kit runs outside main.ts and does not read .env on its own.
+import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
@@ -46,7 +54,7 @@ export default defineConfig({
 });
 ```
 
-> `drizzle.config.ts` reads `process.env` directly — it runs as a standalone CLI command outside NestJS, so it cannot use `serviceConfig`.
+> `drizzle.config.ts` reads `process.env` directly — it runs as a standalone CLI command outside NestJS, so it cannot use `serviceConfig`. Against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
 #### A4. Define Schema
 
@@ -80,7 +88,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 
-import { serviceConfig } from '../config/env.config';
+import { appConfig, serviceConfig } from '../config/env.config';
 
 @Injectable()
 export class DrizzleService implements OnModuleInit, OnModuleDestroy {
@@ -91,7 +99,11 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
   readonly db: ReturnType<typeof drizzle>;
 
   constructor() {
-    this.client = postgres(serviceConfig.DATABASE_URL);
+    this.client = postgres(serviceConfig.DATABASE_URL, {
+      // postgres.js defaults to plaintext. Local Docker Postgres serves no TLS, so only dev
+      // skips it; 'verify-full' checks the certificate chain and hostname.
+      ssl: appConfig.ENVIRONMENT === 'dev' ? false : 'verify-full',
+    });
     this.db = drizzle({ client: this.client });
   }
 
@@ -206,13 +218,36 @@ export class UserService {
 }
 ```
 
-#### A11. Validate
+#### A11. Keep Tests Runnable Without a Database
 
-```bash
-pnpm db:generate && pnpm build && pnpm test
+`env.config.ts` now throws at import without `DATABASE_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+
+```typescript
+    // postgres.js connects lazily, so this placeholder is never dialled unless a test queries.
+    env: { DATABASE_URL: 'postgresql://localhost:5432/test' },
 ```
 
-Confirm the migration file was generated, build succeeds, and all tests pass.
+`DrizzleService.onModuleInit` probes the database, so every e2e suite that boots `AppModule` without one (`test/app.e2e-spec.ts`, `test/auth.e2e-spec.ts`, …) overrides it:
+
+```typescript
+import { DrizzleService } from '../src/database/drizzle.service';
+
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+      // No database in this suite: skip DrizzleService's connection probe.
+      .overrideProvider(DrizzleService)
+      .useValue({})
+      .compile();
+```
+
+Suites that exercise real queries run against a disposable Postgres (CI service container) with `DATABASE_URL` set in the job env, which `test.env` does not override.
+
+#### A12. Validate
+
+```bash
+pnpm db:generate && pnpm check && pnpm build && pnpm test && pnpm test:e2e
+```
+
+Confirm the migration file was generated and every command passes.
 
 > **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
 
@@ -276,6 +311,8 @@ import type { LoginDto, RegisterDto } from './auth.dto';
 // startup with the same defaults as real passwords so the cost matches exactly.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
+const PG_UNIQUE_VIOLATION = '23505';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -284,20 +321,22 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const [existing] = await this.drizzle.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, dto.email))
-      .limit(1);
-    if (existing) throw new ConflictException('Email already registered.');
-
     // argon2id by default
     const hashedPassword = await argon2.hash(dto.password);
-    const [user] = await this.drizzle.db
-      .insert(users)
-      .values({ email: dto.email, name: dto.name, hashedPassword })
-      .returning({ id: users.id, email: users.email, name: users.name });
-    return user;
+    try {
+      const [user] = await this.drizzle.db
+        .insert(users)
+        .values({ email: dto.email, name: dto.name, hashedPassword })
+        .returning({ id: users.id, email: users.email, name: users.name });
+      return user;
+    } catch (error) {
+      // The unique index, not a SELECT-then-INSERT pre-check, is race-free under concurrent
+      // sign-ups. Drizzle v1 wraps driver errors in DrizzleQueryError; the pg code is on `cause`.
+      if ((error as { cause?: { code?: string } }).cause?.code === PG_UNIQUE_VIOLATION) {
+        throw new ConflictException('Email already registered.');
+      }
+      throw error;
+    }
   }
 
   async login(dto: LoginDto) {

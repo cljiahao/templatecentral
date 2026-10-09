@@ -132,6 +132,13 @@ AWS_REGION=us-east-1
 RDS_CA_BUNDLE_PATH=/path/to/global-bundle.pem
 ```
 
+CI has no `src/.env` and `session.py` builds the engine at import, so seed placeholders in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (see `templatecentral:add` (auth) Step 10 for the conftest shape). Tests override `get_db`, so nothing connects:
+
+```python
+for key in ("DATABASE_HOST", "DATABASE_USER", "DATABASE_NAME", "RDS_CA_BUNDLE_PATH"):
+    os.environ.setdefault(key, "test-placeholder")
+```
+
 ### A6. Update `alembic/env.py` for IAM fields
 
 In `alembic/env.py`, replace the `set_main_option` call with:
@@ -149,7 +156,13 @@ config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 This URL carries no password, so online migrations must connect through the shared `engine` from `database.session` — it holds the `do_connect` token listener and `verify-full` TLS. A fresh `engine_from_config()` (the `alembic init` default) would fail authentication:
 
 ```python
+from database.base import Base
 from database.session import engine
+
+# Autogenerate only sees tables whose model modules were imported — list every one.
+from models import project  # noqa: F401
+
+target_metadata = Base.metadata
 
 
 def run_migrations_online():
@@ -164,10 +177,12 @@ def run_migrations_online():
 **`src/models/project.py`** (example — a generic entity; the `User` model comes from Step A of the auth integration section below):
 
 ```python
+from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
 
 from database.base import Base
 
@@ -179,7 +194,13 @@ class Project(Base):
         String, primary_key=True, default=lambda: str(uuid4())
     )
     name: Mapped[str] = mapped_column(String, index=True)
-    description: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 ```
 
 ### A8. Generate First Migration

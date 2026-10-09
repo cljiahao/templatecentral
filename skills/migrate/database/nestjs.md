@@ -136,9 +136,13 @@ export class DatabaseModule {}
 ### Step 7 — Create `src/database/migrate.ts`
 
 ```typescript
+// Runs outside main.ts, so it must load .env itself before env.config validates.
+import 'dotenv/config';
 import path from 'node:path';
 import { promises as fs, readFileSync } from 'node:fs';
-import { FileMigrationProvider, Migrator, Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect } from 'kysely';
+// kysely ≥0.29 types the root-export Migrator/FileMigrationProvider as errors pointing here.
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { Signer } from '@aws-sdk/rds-signer';
 import { Pool } from 'pg';
 

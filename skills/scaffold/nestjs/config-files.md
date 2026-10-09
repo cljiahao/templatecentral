@@ -61,7 +61,7 @@
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.5.6",
-    "eslint-plugin-sonarjs": "4.1.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "globals": "^17.6.0",
     "lefthook": "^2.1.9",
     "prettier": "^3.8.3",
@@ -537,7 +537,7 @@ lefthook.yml
 
 ### `eslint.config.mjs`
 
-> `sonarjs.configs.recommended` enables ~206 of the plugin's 268 rules at `error` (bugs, security, code smell, tests). Mixing it with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.1.0`, no caret) below — `configs.recommended`'s enabled-rule set is not stable across minor versions (4.2.0 enables ~217 of 280 rules, a different set); bump deliberately and re-verify, don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
+> `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, security, code smell, tests). Mixing it with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret; peer `eslint ^8 || ^9 || ^10`) and kept identical across the nextjs, nestjs, and vite-react scaffolds — `configs.recommended`'s enabled-rule set and rule heuristics change across minor versions (4.1.0 enabled ~206 of 268; 4.2.x also skips low-entropy literals in `no-hardcoded-passwords`, which can turn an existing `eslint-disable` for it into an unused-directive error); bump all three together, deliberately, and re-verify — don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```js
 // @ts-check
@@ -599,7 +599,7 @@ export default tseslint.config(
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
       'sonarjs/no-commented-code': 'error',
-      // TODO/FIXME with context is allowed; keep them visible without failing lint.
+      // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',
       'sonarjs/fixme-tag': 'warn',
       '@eslint-community/eslint-comments/require-description': [

@@ -254,15 +254,15 @@ In `src/modules/index.ts`, add (replace `<name>` with the module name, e.g., `ta
 export * from './task/task.module';
 ```
 
-In `src/app.module.ts`, add to imports (keep existing modules like `ExampleModule` until you remove example code):
+In `src/app.module.ts`, add `TaskModule` to the existing `./modules` import and **append** it to the `imports` array — never rewrite the array, which also holds `LoggerModule`, `ThrottlerModule`, `DatabaseModule`, and the other feature modules:
 
 ```typescript
-import { TaskModule } from './modules';
+import { BaseModule, ExampleModule, TaskModule } from './modules';
 
-@Module({
-  imports: [BaseModule, ExampleModule, TaskModule],
-  // ...
-})
+  imports: [
+    // ...existing entries, unchanged
+    TaskModule,
+  ],
 ```
 
 ### 9. Add Tests
@@ -275,6 +275,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TaskController } from '../../src/modules/task/task.controller';
 import { TaskService } from '../../src/modules/task/task.service';
 import { TaskRepository } from '../../src/modules/task/task.repository';
+import { JwtAuthGuard } from '../../src/modules/auth/jwt-auth.guard';
 
 describe('TaskController', () => {
   let controller: TaskController;
@@ -283,7 +284,12 @@ describe('TaskController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TaskController],
       providers: [TaskService, TaskRepository],
-    }).compile();
+    })
+      // The guard's own deps (PassportStrategy, PinoLogger) are not in this module; the 401
+      // path belongs in an e2e test against the real AppModule.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<TaskController>(TaskController);
   });
@@ -293,6 +299,8 @@ describe('TaskController', () => {
   });
 });
 ```
+
+Drop the `JwtAuthGuard` import and `.overrideGuard(...)` lines if the controller is deliberately public.
 
 ### 10. Validate
 

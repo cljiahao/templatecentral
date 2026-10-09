@@ -194,7 +194,9 @@ async def create_project(req: CreateProjectRequest) -> ProjectResponse:
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(project_id: str) -> ProjectResponse:
     """Get a project by ID."""
-    raise NotImplementedError("Call the project service; raise NoResultsFound when the lookup returns nothing.")
+    raise NotImplementedError(
+        "Call the project service; raise NoResultsFound when the lookup returns nothing."
+    )
 ```
 
 Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.

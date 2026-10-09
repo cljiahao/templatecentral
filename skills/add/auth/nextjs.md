@@ -80,8 +80,11 @@ Security-critical file. Write exactly as shown.
 ```ts
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
-if (!process.env.BETTER_AUTH_SECRET) {
+// `next build` evaluates this module while collecting page data, and build environments
+// (CI, the Docker builder stage) carry no runtime secrets — so enforce it at runtime only.
+if (!process.env.BETTER_AUTH_SECRET && process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD) {
   throw new Error('BETTER_AUTH_SECRET environment variable is required — generate with: openssl rand -base64 32');
 }
 
@@ -127,7 +130,7 @@ export const auth = betterAuth({
 
 > `freshAge` (add under `session` for high-assurance flows) is measured from session `createdAt`, not last activity. With a short `freshAge` (e.g. `43200`), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
-> **Database**: Without a `database` option, better-auth falls back to an in-memory adapter — accounts and sessions live in server process memory only. This is **not** a persistent stateless-cookie mode: everything is lost on every restart/redeploy, and it does not work across multiple instances (serverless, multi-replica deployments). The HMAC-signed `cookieCache` (default `strategy: 'compact'`) is only a short-lived (5-minute) read-through cache in front of this store, not a replacement for it. Add a database adapter after running `templatecentral:add` (database) before anything beyond quick local prototyping. The Drizzle adapter ships with better-auth — import `drizzleAdapter` from `better-auth/adapters/drizzle` (peer: `drizzle-orm`). See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+> **Database**: Without a `database` option, better-auth falls back to an in-memory adapter — accounts and sessions live in server process memory only. This is **not** a persistent stateless-cookie mode: everything is lost on every restart/redeploy, and it does not work across multiple instances (serverless, multi-replica deployments). The HMAC-signed `cookieCache` (default `strategy: 'compact'`) is only a short-lived (5-minute) read-through cache in front of this store, not a replacement for it. Add a database adapter after running `templatecentral:add` (database) before anything beyond quick local prototyping. With Drizzle v1, follow `add/database/typescript/nextjs-drizzle.md` Step A9b — it uses the adapter's Relations v2 entry point; the default `better-auth/adapters/drizzle` entry generates code Drizzle v1 cannot compile. See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
 
 > **Password hashing**: better-auth's default hasher is scrypt, not argon2id. To use argon2id instead, install `@node-rs/argon2` and override `emailAndPassword.password.hash`/`.verify`:
 > ```ts
@@ -227,11 +230,18 @@ export const config = {
 
 #### 5. Create `src/app/api/auth/[...all]/route.ts`
 
+Every handler is wrapped in `withLogging` — `pnpm check` (`scripts/check-route-logging.mjs`) rejects a destructured `export const { GET, POST } = toNextJsHandler(auth)`.
+
 ```ts
-import { auth } from '@/lib/auth';
 import { toNextJsHandler } from 'better-auth/next-js';
 
-export const { GET, POST } = toNextJsHandler(auth);
+import { auth } from '@/lib/auth';
+import { withLogging } from '@/lib/utils/with-logging';
+
+const handlers = toNextJsHandler(auth);
+
+export const GET = withLogging(handlers.GET);
+export const POST = withLogging(handlers.POST);
 ```
 
 #### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
@@ -250,11 +260,14 @@ export const PAGE_ROUTES = {
 ```tsx
 import { LoginCard } from '@/features/auth';
 
+// The (public) layout already renders <main>; a second one here is an a11y violation.
+// CardTitle renders a <div>, so the page's level-one heading is supplied here.
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center px-6">
+      <h1 className="sr-only">Sign in</h1>
       <LoginCard />
-    </main>
+    </div>
   );
 }
 ```
@@ -397,7 +410,6 @@ import { CustomCard } from '@/components/widgets/custom-card';
 // better-auth's email validator rejects single-label domains — 'dev@local' fails with
 // INVALID_EMAIL on both sign-in and sign-up. Use a dotted domain.
 const DEV_EMAIL = 'dev@dev.local';
-// eslint-disable-next-line sonarjs/no-hardcoded-passwords -- isDev-gated dev-only login, not a real credential
 const DEV_PASSWORD = 'dev-password-local';
 
 export function LoginCard() {

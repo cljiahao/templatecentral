@@ -278,6 +278,8 @@ jobs:
           missing=""
           while IFS= read -r f; do
             case "$f" in */README.md|README.md) continue ;; esac
+            # documentation-kit.md never writes a README into these folders, so never demand one
+            case "$f" in .github/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
             d=$(dirname "$f")
             rm_path="README.md"
             [ "$d" != "." ] && rm_path="$d/README.md"
@@ -329,9 +331,11 @@ jobs:
           fi
 ```
 
-**Why only the first 10 lines of the pattern file feed this hard gate:** `comment-hygiene-patterns.txt` has 13 lines — 10 anchored change-narration keyword patterns, then a date pattern, a ticket-reference pattern, and an issue-reference pattern. The last three are unavoidably lower-precision: `^[A-Z]{2,}-[0-9]+` matches a real ticket code like `ABC-123`, but it matches identically shaped, entirely legitimate technical terms just as often — `UTF-8`, `SHA-256`, `RFC-7231` — when they open a comment (anchoring to comment-start, the fix that works for the keyword patterns, does not help here, since the collision is with the *first word* of the comment, not a mid-comment occurrence). A blocking gate cannot carry that false-positive rate. The live hook and lefthook command (both warn-only) still read the full 13-line file, so ticket/date/issue detection stays active as an advisory signal — it only drops out of the surface that can fail a PR.
+**Why only the first 10 pattern lines gate CI:** the date / ticket / issue patterns also match legitimate comment openers (`UTF-8`, `SHA-256`, `RFC-7231`), a false-positive rate a blocking gate cannot carry; the warn-only hook and lefthook command still read all 13.
 
-**Why this gate scans only added lines, not whole files:** `git diff -U0 "$base"...HEAD -- "$f"` plus a `^+`/`^+++` filter isolates exactly the lines a PR introduces, mirroring the design's stated intent for the commit-time surfaces. This matters most for `templatecentral:migrate`-adopted projects: without it, a PR that touches any part of a file carrying a pre-existing narration comment (inherited from before this convention existed) would hard-fail CI forever, and the only relief would be applying the bypass label to every single PR — which defeats the gate. Restricting to added lines means CI only ever fails on narration a PR itself introduces. The live hook and lefthook command (both warn-only) still scan whole file content — a false nudge about a pre-existing comment while editing that file is advisory, not blocking, so the same restriction isn't required there.
+**Why only added lines:** a PR touching a file with pre-existing narration (common in `templatecentral:migrate`-adopted projects) would otherwise fail forever and train everyone to apply the bypass label. The warn-only surfaces scan whole files — a nudge about old comments is harmless there.
+
+**Why the readme gates skip `.github/`, `.claude/`, and secrets dirs:** `documentation-kit.md` never seeds a README there (`protect-files.sh` blocks or gates those writes), so demanding one would fail every harness or CI change.
 
 **FastAPI:** replace the `quality` job above with the variant file's **Step B3** block (`harness-kit-fastapi.md`); the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical.
 
@@ -431,6 +435,9 @@ elif command -v python3 >/dev/null 2>&1; then
 else
   echo "regen-harness: need node or python3" >&2; exit 3
 fi
+```
+
+```bash
 chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
 ```
 

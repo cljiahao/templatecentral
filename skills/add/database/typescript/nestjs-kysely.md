@@ -7,9 +7,15 @@ Kysely is a type-safe SQL query builder with full SQL control and minimal overhe
 
 #### B1. Install Dependencies
 
+`tsx` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its platform binary ships as an optional dependency, so the script is not needed — add under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
+
+```yaml
+  esbuild: false
+```
+
 ```bash
 pnpm add kysely pg
-pnpm add -D kysely-codegen @types/pg tsx
+pnpm add -D @types/pg tsx
 ```
 
 Add a migration script to `package.json`:
@@ -115,7 +121,7 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 ```
 
-> **Tip**: After the database exists, run `pnpm exec kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
+> **Tip**: After the database exists, `pnpm dlx kysely-codegen` generates these types from the live schema. Run it ad hoc rather than as a devDependency — its `micromatch → braces` chain carries a High advisory with no fixed release, which fails `pnpm audit --audit-level=high`.
 
 #### B4. Create DatabaseModule
 
@@ -176,6 +182,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 Create a migration runner at **`src/database/migrate.ts`**:
 
 ```typescript
+// Runs outside main.ts, so it must load .env itself before env.config validates.
+import 'dotenv/config';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { Kysely, PostgresDialect } from 'kysely';
@@ -293,13 +301,34 @@ export class UserService {
 }
 ```
 
-#### B9. Validate
+#### B9. Keep Tests Runnable Without a Database
 
-```bash
-pnpm build && pnpm test
+`env.config.ts` now throws at import without `DATABASE_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+
+```typescript
+    // pg connects lazily, so this placeholder is never dialled unless a test queries.
+    env: { DATABASE_URL: 'postgresql://localhost:5432/test' },
 ```
 
-Confirm the build succeeds and all tests pass.
+`KyselyService.onModuleInit` probes the database, so every e2e suite that boots `AppModule` without one (`test/app.e2e-spec.ts`, `test/auth.e2e-spec.ts`, …) overrides it:
+
+```typescript
+import { KyselyService } from '../src/database/kysely.service';
+
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+      // No database in this suite: skip KyselyService's connection probe.
+      .overrideProvider(KyselyService)
+      .useValue({})
+      .compile();
+```
+
+Suites that exercise real queries run against a disposable Postgres (CI service container) with `DATABASE_URL` set in the job env, which `test.env` does not override.
+
+#### B10. Validate
+
+```bash
+pnpm check && pnpm build && pnpm test && pnpm test:e2e
+```
 
 ---
 
@@ -310,7 +339,7 @@ Confirm the build succeeds and all tests pass.
 - `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
 - Place `KyselyService` and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor from `nestjs-kysely-iam.md` — no query code changes needed.
+- **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor from `nestjs-kysely-iam.md` — no query code changes needed.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-kysely-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 
 ---

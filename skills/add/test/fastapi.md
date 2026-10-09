@@ -68,6 +68,8 @@ def client() -> Generator[TestClient]:
         yield client
 ```
 
+After `templatecentral:add` (auth) or (database), the conftest seeds placeholder settings with `os.environ.setdefault(...)` and imports `app` inside the fixture — keep that shape: anything importing `core.config` at module top runs before the seeding and fails in CI, where there is no `src/.env`.
+
 Extend it for database tests by overriding dependencies:
 
 ```python
@@ -76,13 +78,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.base import Base
-from database.session import get_db
-
 
 @pytest.fixture
 def db_client() -> Generator[TestClient]:
     """TestClient with a clean in-memory database for each test."""
+    # Imported here, after the env seeding; importing app also registers every
+    # model on Base.metadata, so create_all sees all tables.
+    from app import app
+    from database.base import Base
+    from database.session import get_db
+
     # StaticPool + check_same_thread=False are mandatory here: SQLite's
     # in-memory database lives inside a single connection, and TestClient
     # runs the app in a different thread. The default pool hands that thread

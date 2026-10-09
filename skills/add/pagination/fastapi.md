@@ -29,7 +29,9 @@ class PaginationParams(BaseRequestSchema):
     """Shared query params for every paginated list endpoint."""
 
     # le caps OFFSET cost — an unbounded page is a cheap DoS lever.
-    page: int = Field(default=1, ge=1, le=10_000, description="Page number (1-indexed).")
+    page: int = Field(
+        default=1, ge=1, le=10_000, description="Page number (1-indexed)."
+    )
     limit: int = Field(default=10, ge=1, le=100, description="Items per page.")
     sort: str | None = Field(
         default=None,
@@ -120,10 +122,14 @@ SORT_COLUMNS = {
 }
 
 
-def list_projects(session: Session, params: PaginationParams) -> PaginatedResponse[ProjectResponse]:
+def list_projects(
+    session: Session, params: PaginationParams
+) -> PaginatedResponse[ProjectResponse]:
     sort = parse_sort_param(params.sort, set(SORT_COLUMNS))
     if params.sort and not sort:
-        raise InvalidInputError(f"Invalid sort field. Allowed: {', '.join(SORT_COLUMNS)}")
+        raise InvalidInputError(
+            f"Invalid sort field. Allowed: {', '.join(SORT_COLUMNS)}"
+        )
 
     if sort:
         column = SORT_COLUMNS[sort[0]]
@@ -133,7 +139,8 @@ def list_projects(session: Session, params: PaginationParams) -> PaginatedRespon
 
     stmt = (
         select(Project)
-        .order_by(order_by)
+        # id breaks ties so rows with equal sort keys never repeat or vanish across pages.
+        .order_by(order_by, Project.id)
         .offset(calculate_offset(params.page, params.limit))
         .limit(params.limit)
     )
@@ -174,7 +181,7 @@ def get_projects(
     return list_projects(session, params)
 ```
 
-Register with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`).
+If `src/api/routers/projects.py` already exists (e.g. from `templatecentral:add` (error-handling)), add this handler and its imports to it instead of replacing the file. Register with an `APITags` tag in `src/api/routes.py` and, when `src/api/dependencies/auth.py` exists, add the auth dependency (see `add/endpoint/fastapi.md` Rules).
 
 ## Validate
 

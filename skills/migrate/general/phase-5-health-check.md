@@ -68,24 +68,24 @@ These four files (`harness-kit.md`, the variant file, `harness-kit-enforcement.m
 
 Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
 
-- **Enforcement layer** (`.claude/hooks/*`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical content from this skill / `scaffold/shared/harness-kit.md`. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. Warn if one was `MODIFIED` — and before overwriting, check whether the difference came from a `templatecentral:add` capability that extends a canonical hook (e.g. `add (redaction)` splices a companion block into `user-prompt-guard`); if so, tell the user which capability to re-apply afterwards.
-- **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`):
+- **Enforcement layer** (`.claude/hooks/*`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical content from this skill / `scaffold/shared/harness-kit.md`. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. `.github/workflows/ci.yml` is the exception to *who* writes it: `protect-files.sh` hard-blocks agent writes there, so put its diff in the dry-run plan and have the human apply it. Warn if one was `MODIFIED` — and before overwriting, check whether the difference came from a `templatecentral:add` capability that extends a canonical hook (e.g. `add (redaction)` splices a companion block into `user-prompt-guard`); if so, tell the user which capability to re-apply afterwards.
+- **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`, `.claude/skills/skill-audit/SKILL.md`, nextjs `next-migrate`):
   - `UNCHANGED` → overwrite with the new canonical.
   - `MODIFIED` → **3-way merge** against the base snapshot:
     ```bash
+    f="<seeded path>"                       # not `path`: zsh ties $path to $PATH
     PLUGIN_VER="<current plugin.json version>"
-    base=".claude/.harness-base/$path"      # the as-seeded content
-    new="$(mktemp)"                          # write the CURRENT canonical content for $path here
-    # → generate $path's new canonical content from this skill / harness-kit into $new
+    base=".claude/.harness-base/$f"         # the as-seeded content
+    new="$(mktemp)"                          # write the CURRENT canonical content for $f here
     if [ -f "$base" ]; then
-      cp "$path" "$path.merging"
+      cp "$f" "$f.merging"
       git merge-file -L "your version" -L "seeded base" -L "templateCentral $PLUGIN_VER" \
-        "$path.merging" "$base" "$new"
-      rc=$?; mv "$path.merging" "$path"
-      [ $rc -ne 0 ] && echo "⚠ $path: merge conflicts — resolve the <<<<<<< markers, then re-run verify."
+        "$f.merging" "$base" "$new"
+      rc=$?; mv "$f.merging" "$f"
+      [ $rc -ne 0 ] && echo "⚠ $f: merge conflicts — resolve the <<<<<<< markers, then re-run verify."
     else
-      echo "No base snapshot for $path (project predates .harness-base). Showing a diff for MANUAL merge — not overwriting:"
-      diff -u "$path" "$new" || true
+      echo "No base snapshot for $f (project predates .harness-base). Showing a diff for MANUAL merge — not overwriting:"
+      diff -u "$f" "$new" || true
     fi
     ```
     `git merge-file` cleanly combines edits separated by unchanged context and leaves conflict markers only where your edit and the upstream change overlap (standard `git merge` behaviour). Resolve any markers by hand.

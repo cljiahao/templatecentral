@@ -99,7 +99,7 @@ Use the shared types template from `drizzle-to-kysely.md` Step 5.
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { FileMigrationProvider, Migrator } from 'kysely';
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 
 import { db } from './kysely-client';
 

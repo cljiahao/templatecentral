@@ -145,13 +145,41 @@ Add to `.env` and `.env.example`:
 MONGODB_URL=mongodb://localhost:27017/mydb
 ```
 
-#### C8. Validate
+#### C8. Keep Tests Runnable Without a Database
 
-```bash
-pnpm build && pnpm test
+`env.config.ts` now throws at import without `MONGODB_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+
+```typescript
+    env: { MONGODB_URL: 'mongodb://127.0.0.1:1/test' },
 ```
 
-Confirm the build succeeds and all tests pass.
+`MongooseModule.forRoot` connects (and retries) during boot, so every e2e suite that boots `AppModule` without MongoDB swaps `DatabaseModule` for an empty module and stubs each `forFeature` model it would otherwise resolve:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { getModelToken } from '@nestjs/mongoose';
+import { DatabaseModule } from '../src/database/database.module';
+import { User } from '../src/modules/auth/schemas/user.schema';
+
+@Module({})
+class NoDatabaseModule {}
+
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideModule(DatabaseModule)
+      .useModule(NoDatabaseModule)
+      // One override per MongooseModule.forFeature model in the app.
+      .overrideProvider(getModelToken(User.name))
+      .useValue({})
+      .compile();
+```
+
+Suites that exercise real queries run against a disposable MongoDB (CI service container) with `MONGODB_URL` set in the job env, which `test.env` does not override.
+
+#### C9. Validate
+
+```bash
+pnpm check && pnpm build && pnpm test && pnpm test:e2e
+```
 
 ---
 

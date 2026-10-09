@@ -5,26 +5,27 @@
 
 ### B0. Opt-in gate — Beanie pins the project to Python 3.13
 
-The default MongoDB path is PyMongo async — `cat "<skill-dir>/database/python/pymongo-async.md"` — which runs on the scaffold's Python 3.14. Continue here only if the user explicitly wants the Beanie ODM **and** accepts the Python 3.13 pin below.
+The default MongoDB path is PyMongo async — `cat "<skill-dir>/database/python/pymongo-async.md"` — which stays on the scaffold's Python 3.14. Continue only if the user explicitly wants the Beanie ODM **and** accepts a Python 3.13 pin.
 
-Every Beanie release from 2.0.1 through 2.2.0 declares `Requires-Python <3.14`. The cap is a maintainer decision pending Beanie v3 (no release date) — see BeanieODM/beanie#1257, #1362 (the PR lifting it, closed unmerged) and #1373 — not a reproduced failure: models, `Link`/`BackLink`, inserts and queries showed no breakage on 3.14, but `fetch_links` and migrations are untested, and installing past `Requires-Python` is unsupported. Never force it with `--ignore-requires-python`. First check whether a newer release lifted the cap:
+Beanie 2.0.1–2.2.0 declare `Requires-Python <3.14` — a maintainer decision pending v3 (BeanieODM/beanie#1257, #1362, #1373), not a reproduced failure. Never bypass it with `--ignore-requires-python`. Check whether a newer release lifted the cap:
 
 ```bash
 python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/beanie/json'))['info']['requires_python'])"
 ```
 
-If it no longer excludes 3.14, skip the checklist (if that release is 3.x, raise the `<3` ceiling in B1 only after checking its breaking changes against this guide). If it still prints `<3.14`, confirm the trade-off with the user, then **pin this project to Python 3.13** (security-fixes-only upstream until 2029-10): set `ARG PYTHON=python:3.13.16-slim` in the `Dockerfile`, `target-version = "py313"` in `pyproject.toml`, `"pythonVersion": "3.13"` in `pyrightconfig.json`, `python-version: "3.13"` in every setup-python step (`.github/workflows/ci.yml`, and `mutation.yml` if present), update the `Python 3.14` entry in AGENTS.md `## Stack`, then recreate the venv with `python3.13 -m venv .venv` and reinstall `requirements.txt` + `requirements-dev.txt`. Revert to 3.14 once Beanie supports it. `ci.yml` is a harness-seeded file: recompute its `origin_hash` in `.claude/harness.json` (harness-kit-finalize.md Step E) so `verify-harness.sh` accepts the change, and re-apply the 3.13 pin if a `templatecentral:migrate` re-sync rewrites `ci.yml`.
+- **No longer excludes 3.14** → skip the pin (if that release is 3.x, raise B1's `<3` ceiling only after checking its breaking changes against this guide).
+- **Still `<3.14`** → confirm the trade-off with the user (3.13 gets security fixes until 2029-10), then pin: `ARG PYTHON=python:3.13.16-slim` in `Dockerfile`, `target-version = "py313"` in `pyproject.toml`, `"pythonVersion": "3.13"` in `pyrightconfig.json`, `python-version: "3.13"` in every setup-python step (`ci.yml`, and `mutation.yml` if present), `Python 3.13` in AGENTS.md `## Stack`; recreate the venv with `python3.13 -m venv .venv` and reinstall both requirements files. `ci.yml` is harness-seeded: recompute its `origin_hash` in `.claude/harness.json` (harness-kit-finalize.md Step E), and re-apply the pin if `templatecentral:migrate` re-syncs it. Revert to 3.14 once Beanie supports it.
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt` — floors match the templateCentral plugin's `.claude/rules/fastapi.md`. The `beanie` floor makes a 3.14 venv fail loudly instead of silently resolving 2.0.0 (the only 2.x release without the cap); the `pymongo` floor is a hard requirement: `AsyncMongoClient` does not exist before 4.13, so an older PyMongo breaks the import in Step B2 below.
+Add to `requirements.txt`. The `beanie` floor makes a 3.14 venv fail loudly instead of silently resolving 2.0.0 (the only uncapped 2.x); `AsyncMongoClient` needs `pymongo>=4.13`.
 
 ```
 beanie>=2.2,<3
 pymongo>=4.13
 ```
 
-> **Beanie** is an async ODM for MongoDB built on PyMongo's async API and Pydantic v2. It integrates natively with FastAPI's Pydantic ecosystem. Beanie 2.x is built on PyMongo's native async client (`AsyncMongoClient`) — Motor is deprecated and must NOT be added as a dependency.
+> Beanie 2.x runs on PyMongo's `AsyncMongoClient` — never add Motor (deprecated).
 
 ### B2. Create MongoDB Connection
 
@@ -34,14 +35,21 @@ pymongo>=4.13
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
-from core.config import api_settings
+from core.config import api_settings, common_settings
 
 mongo_client: AsyncMongoClient | None = None
 
 
 async def init_mongo() -> None:
     global mongo_client
-    mongo_client = AsyncMongoClient(api_settings.MONGODB_URL)
+    mongo_client = AsyncMongoClient(
+        api_settings.MONGODB_URL.get_secret_value(),
+        # Outside dev, require TLS (overrides any tls=false in the URL): a non-TLS
+        # server fails the boot instead of receiving credentials in plaintext.
+        tls=common_settings.ENVIRONMENT != "dev",
+        serverSelectionTimeoutMS=5000,
+        tz_aware=True,
+    )
     db = mongo_client[api_settings.MONGODB_DB_NAME]
 
     from models import DOCUMENT_MODELS
@@ -52,18 +60,19 @@ async def init_mongo() -> None:
 async def close_mongo() -> None:
     global mongo_client
     if mongo_client:
-        await mongo_client.close()  # AsyncMongoClient.close() is a coroutine
+        await mongo_client.close()
         mongo_client = None
 ```
 
 ### B3. Add Configuration
 
-Add to `APISettings` in **`src/core/config.py`**:
+Add to `APISettings` in **`src/core/config.py`** (`from pydantic import SecretStr`):
 
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    MONGODB_URL: str = Field(
+    # SecretStr: the URL usually embeds credentials; keeps them out of repr()/logs.
+    MONGODB_URL: SecretStr = Field(
         description="MongoDB connection URL — must be set in environment"
     )
     MONGODB_DB_NAME: str = Field(description="MongoDB database name")
@@ -82,6 +91,7 @@ MONGODB_DB_NAME=mydb
 Update **`src/app.py`** — add the lifespan to the `start_application()` function where the `FastAPI` instance is created:
 
 ```python
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -90,9 +100,10 @@ from database.mongo import close_mongo, init_mongo
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_mongo()
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
+        # init_beanie connects and builds indexes, so a bad URL fails the boot.
+        await init_mongo()
         yield
     finally:
         await close_mongo()
@@ -154,7 +165,7 @@ class CreateUserRequest(BaseRequestSchema):
     )
 ```
 
-**`src/api/schemas/response/user.py`** — no `hashed_password` field, and `extra="forbid"` on the base keeps it that way:
+**`src/api/schemas/response/user.py`** — no `hashed_password` field:
 
 ```python
 from pydantic import Field
@@ -171,7 +182,11 @@ class UserResponse(BaseResponseSchema):
 **`src/api/services/user_service.py`**:
 
 ```python
+import asyncio
+
 from beanie import PydanticObjectId
+from fastapi import HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from api.schemas.request.user import CreateUserRequest
 from core.security import hash_password
@@ -187,23 +202,29 @@ async def get_user(user_id: PydanticObjectId) -> User | None:
 
 
 async def create_user(payload: CreateUserRequest) -> User:
-    user = User(
-        **payload.model_dump(exclude={"password"}),
-        hashed_password=hash_password(payload.password),
-    )
-    return await user.insert()
+    # argon2 is ~100 ms of CPU: off the event loop, or it stalls every request.
+    hashed = await asyncio.to_thread(hash_password, payload.password)
+    user = User(email=payload.email, name=payload.name, hashed_password=hashed)
+    try:
+        return await user.insert()
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered."
+        ) from None
 ```
 
-**Router:**
+**`src/api/routers/users.py`** (register it in `src/api/routes.py` with a `USERS` tag). It has no auth of its own — keep it off deployed environments until Step D below (or your own guard) protects it:
 
 ```python
 from beanie import PydanticObjectId
-from fastapi import HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from api.schemas.request.user import CreateUserRequest
 from api.schemas.response.user import UserResponse
 from api.services import user_service
 from models.user import User
+
+router = APIRouter()
 
 
 def to_response(user: User) -> UserResponse:
@@ -239,13 +260,32 @@ async def create_user(payload: CreateUserRequest) -> UserResponse:
 >
 > **Important**: Never return raw Beanie documents directly — always map to a Pydantic response schema (declared as the return annotation) to control serialization and avoid leaking internal fields like `hashed_password`.
 
-### B8. Validate
+### B8. Tests and Validate
 
-```bash
-python -m pytest test/ -q
+The lifespan connects to MongoDB, so a `with TestClient(app)` fixture fails every test on a machine or CI runner without one. In **`test/conftest.py`**, seed the settings (CI has no `src/.env`) and build the client without `with` — merge, keeping any seeding and fixtures already there (`SECRET_KEY`, `auth_headers` from `templatecentral:add` (auth)):
+
+```python
+os.environ.setdefault("MONGODB_URL", "mongodb://localhost:27017")
+os.environ.setdefault("MONGODB_DB_NAME", "app_test")
+
+
+@pytest.fixture
+def client() -> Generator[TestClient]:
+    """FastAPI test client — without `with`, so the MongoDB lifespan does not run."""
+    from app import app
+
+    client = TestClient(app)
+    yield client
+    client.close()
 ```
 
-Confirm all tests pass.
+Data-access tests need a real MongoDB (mongomock has no async API) — follow the `docker-compose.yml` service and skip-if-unreachable fixture pattern in `pymongo-async.md` M8, calling `init_beanie(database=..., document_models=DOCUMENT_MODELS)` on the throwaway database instead of `ensure_indexes()`.
+
+```bash
+ruff check src/ test/
+python -m pyright src/
+python -m pytest test/ -q
+```
 
 ---
 
@@ -287,10 +327,12 @@ DOCUMENT_MODELS = [User]
 ### Step B — Replace stubs in `src/api/services/auth_service.py`
 
 ```python
+import asyncio
 import secrets
 
 from bson import ObjectId
 from fastapi import HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from core.security import create_access_token, hash_password, verify_password
 from models.user import User
@@ -301,24 +343,24 @@ from models.user import User
 DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
+# argon2 is ~100 ms of CPU per call: asyncio.to_thread keeps it off the event loop.
 async def register_user(email: str, password: str, name: str) -> dict:
-    if await User.find_one(User.email == email):
+    hashed = await asyncio.to_thread(hash_password, password)
+    # The unique index, not a find-then-insert check, stops concurrent duplicates.
+    try:
+        user = await User(email=email, hashed_password=hashed, name=name).insert()
+    except DuplicateKeyError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered.",
-        )
-    user = await User(
-        email=email,
-        hashed_password=hash_password(password),
-        name=name,
-    ).insert()
+        ) from None
     return {"id": str(user.id), "email": user.email, "name": user.name}
 
 
 async def login_user(email: str, password: str) -> str:
     user = await User.find_one(User.email == email)
-    password_ok = verify_password(
-        password, user.hashed_password if user else DUMMY_HASH
+    password_ok = await asyncio.to_thread(
+        verify_password, password, user.hashed_password if user else DUMMY_HASH
     )
     if user is None or not password_ok:
         raise HTTPException(
@@ -375,6 +417,16 @@ async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResp
     user = await get_user(user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
+
+### Step D — Lock down `src/api/routers/users.py`
+
+`POST /auth/register` now creates users, so drop `create_user` from the users router (and service) unless admins need it, and require a login on the rest — unauthenticated, `GET /users` lists every account's email:
+
+```python
+router = APIRouter(dependencies=[Depends(get_current_user)])
+```
+
+Scope `get_user` to the caller's own id, or gate it on an admin role, before exposing it.
 
 ---
 

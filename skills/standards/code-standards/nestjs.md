@@ -77,6 +77,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 - Use NestJS built-in exceptions: `NotFoundException`, `BadRequestException`, etc.
 - The global `HttpExceptionFilter` is registered with `@Catch(HttpException)` — it formats `HttpException` subclasses only. Non-`HttpException` throws (a raw `Error`, a `ZodError` escaping a manual `.parse()`, a driver error) bypass it and fall through to Nest's built-in handler as an unformatted 500. Convert those to an `HttpException` at the boundary rather than letting them escape.
 - For domain-specific errors, extend `HttpException`.
+- Uniqueness is enforced by the database index: catch the duplicate-key error (Postgres `23505` — on `error.cause` under Drizzle v1 — or Mongo `11000`) and throw `ConflictException`; a SELECT-then-INSERT pre-check races under concurrent requests.
 
 ### Imports
 
@@ -106,7 +107,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Backend Testing (mandatory)
 
-Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change.
+Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change. Vitest does not load `.env`: every required `envSchema` field gets a placeholder in `test.env` of both Vitest configs, and e2e suites without a live database override the DB provider (see the `add (database)` guide).
 
 ### Comments
 
@@ -116,7 +117,7 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 
 ### Static Analysis (`eslint-plugin-sonarjs`)
 
-`eslint.config.mjs` extends `sonarjs.configs.recommended` (~206 of the plugin's 268 rules, at `error`) covering bugs, hardcoded secrets/weak crypto/insecure JWT/cookies, and code smells — this is the tier that matters most here since NestJS owns request validation and auth. Test files (`test/**`, `**/*.spec.ts`, `**/*.e2e-spec.ts`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols` so fake fixtures don't false-positive. `no-duplicate-string` and `max-switch-cases` are left at the plugin's own defaults, not hand-tuned.
+`eslint.config.mjs` extends `sonarjs.configs.recommended` (~230 of the plugin's 295 rules at the pinned 4.2.2, at `error`) covering bugs, hardcoded secrets/weak crypto/insecure JWT/cookies, and code smells — this is the tier that matters most here since NestJS owns request validation and auth. Test files (`test/**`, `**/*.spec.ts`, `**/*.e2e-spec.ts`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols` so fake fixtures don't false-positive. `no-duplicate-string` and `max-switch-cases` are left at the plugin's own defaults, not hand-tuned.
 
 ### Security (NestJS)
 

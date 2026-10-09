@@ -160,6 +160,8 @@ GITHUB_TOKEN=your_github_token_here
 
 NEVER use a fallback like `?? ''` for tokens — fail fast at startup instead.
 
+Vitest does not load `.env`, so add `GITHUB_TOKEN: 'test'` to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create it under `test:` if absent) — otherwise every suite importing `AppModule` fails at the env check.
+
 #### 5. Create the Module
 
 **`src/modules/<name>-integration/<name>-integration.module.ts`**:
@@ -202,22 +204,61 @@ export * from './<name>-integration/<name>-integration.module';
 ```typescript
 import { GithubIntegrationModule } from './modules';
 
-@Module({
   imports: [
+    // ...existing entries, unchanged
     GithubIntegrationModule,
-    // ...
   ],
-})
-export class AppModule {}
 ```
 
-#### 8. Validate
+#### 8. Add Tests
+
+**`test/modules/<name>-integration.service.spec.ts`** — stub `HttpService` with an observable; no network:
+
+```typescript
+import { BadGatewayException, GatewayTimeoutException } from '@nestjs/common';
+import type { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
+import { type Observable, of, throwError } from 'rxjs';
+import { describe, expect, it } from 'vitest';
+import { GithubIntegrationService } from '../../src/modules/<name>-integration/<name>-integration.service';
+
+const repo = {
+  id: 1,
+  full_name: 'o/r',
+  description: null,
+  html_url: 'https://github.com/o/r',
+  stargazers_count: 3,
+};
+
+function serviceReturning(response: Observable<unknown>): GithubIntegrationService {
+  return new GithubIntegrationService({ get: () => response } as unknown as HttpService);
+}
+
+describe('GithubIntegrationService', () => {
+  it('keeps valid rows and skips malformed ones', async () => {
+    const service = serviceReturning(of({ data: [repo, { id: 'bad' }] }));
+    await expect(service.listRepos()).resolves.toEqual([repo]);
+  });
+
+  it('maps an upstream error to 502', async () => {
+    const error = new AxiosError('boom', 'ERR_BAD_RESPONSE');
+    const service = serviceReturning(throwError(() => error));
+    await expect(service.listRepos()).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('maps a timeout to 504', async () => {
+    const error = new AxiosError('slow', 'ECONNABORTED');
+    const service = serviceReturning(throwError(() => error));
+    await expect(service.listRepos()).rejects.toBeInstanceOf(GatewayTimeoutException);
+  });
+});
+```
+
+#### 9. Validate
 
 ```bash
-pnpm start:dev
+pnpm check && pnpm build && pnpm test && pnpm test:e2e
 ```
-
-Confirm the server starts with no DI or import errors.
 
 ### Rules
 

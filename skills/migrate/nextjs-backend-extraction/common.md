@@ -116,8 +116,7 @@ Load and follow the [BACKEND] scaffold steps — see the leaf file for the exact
 
 0. **Rewire auth before deleting routes** (only if auth was detected in Phase 1g) — `src/app/api/` includes the better-auth handler (`src/app/api/auth/[...all]/route.ts`). The Phase 7 backend uses JWT auth, which does not speak the better-auth protocol — re-pointing the better-auth client at it will not work. Before deleting the handler:
    - **Replace** `lib/auth-client.ts` (better-auth client) with a small client that calls the new backend's JWT endpoints (`/auth/login`, `/auth/me`) and update `features/auth/` consumers accordingly
-   - Enable CORS credentials on the backend (see leaf file for the stack-specific setting) if using cookie-based sessions
-   - If sessions are cookie-based, set auth cookies to `SameSite=None; Secure` for cross-origin (same-site localhost dev may use `Lax`); JWT bearer tokens in the `Authorization` header need no cookie attributes
+   - If sessions are cookie-based, enable the backend auth skill's cookie mode, which requires same-origin: browser calls go through Next.js `rewrites` (`templatecentral:standards (full-stack-pairing)`), never cross-origin with `SameSite=None` or credentialed CORS. JWT bearer tokens in the `Authorization` header need no cookie attributes
    - Verify the login flow end-to-end before proceeding
 
 1. **Delete `src/app/api/`** — all route handlers have moved to [BACKEND].

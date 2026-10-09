@@ -53,29 +53,13 @@ Unhandled exceptions are already captured by `logError` in `src/lib/errors/error
 
 #### Tier 2 — Standard (+ Tier 1)
 
-**Auth events** — wrap the auth API route handler to log sign-in and sign-out events:
+**Auth events** — the auth route from `templatecentral:add (auth)` already wraps both handlers in `withLogging`. Add `import { logger } from '@/lib/logger';` and replace its `POST` export:
 
 ```ts
 // src/app/api/auth/[...all]/route.ts
-import { auth } from '@/lib/auth';
-import { logger } from '@/lib/logger';
-import { withLogging } from '@/lib/utils/with-logging';
-import { NextResponse } from 'next/server';
-import { toNextJsHandler } from 'better-auth/next-js';
-
-const { GET: _GET, POST: _POST } = toNextJsHandler(auth);
-
-// better-auth's handlers return a plain Response; withLogging is typed to return
-// NextResponse, so both branches re-wrap the response while preserving its
-// status and headers verbatim.
-export const GET = withLogging(async (req) => {
-  const response = await _GET(req);
-  return new NextResponse(response.body, response);
-});
-
 export const POST = withLogging(async (req) => {
-  const path = new URL(req.url).pathname.replace('/api/auth', '');
-  const response = await _POST(req);
+  const response = await handlers.POST(req);
+  const path = req.nextUrl.pathname.replace('/api/auth', '');
 
   if (path.startsWith('/sign-in')) {
     // Never log the request body — it holds the email and password.
@@ -85,7 +69,7 @@ export const POST = withLogging(async (req) => {
     logger.info({ event: 'auth.logout' }, 'Logout');
   }
 
-  return new NextResponse(response.body, response);
+  return response;
 });
 ```
 

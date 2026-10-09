@@ -14,6 +14,7 @@ Stack: NestJS 12 (`@nestjs/common`/`core`/`platform-fastify`/`testing` ≥12.1.2
 - For simple CRUD, services may use Drizzle/Kysely/Mongoose directly; extract a repository layer when query logic grows complex
 - NEVER skip Swagger docs — every endpoint needs `@ApiTags()` + `@ApiOperation()`
 - NEVER use Express APIs — this uses Fastify; use `app.inject()` for e2e tests
+- Browser SPA clients authenticate via the auth skill's cookie mode (`@fastify/cookie` 11, HttpOnly `__Host-session` + session-bound `XSRF-TOKEN`/`X-CSRF-Token`, `POST /auth/session`/`/auth/logout`) — keep Vite's auth service, `add/auth/nestjs.md`, and `standards/full-stack-pairing` aligned on these names
 
 ## Architecture
 

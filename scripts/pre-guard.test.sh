@@ -132,6 +132,10 @@ run_guard '{"tool_name":"Read","tool_input":{"file_path":".env.uat"}}'
 expect_exit "Read .env.uat blocked" 2 "$code"
 run_guard '{"tool_name":"Grep","tool_input":{"path":"config/credentials.json"}}'
 expect_exit "Grep credentials.json blocked" 2 "$code"
+run_guard '{"tool_name":"Grep","tool_input":{"path":"secrets"}}'
+expect_exit "Grep secrets/ dir blocked" 2 "$code"
+run_guard '{"tool_name":"Read","tool_input":{"file_path":"docs/secrets.md"}}'
+expect_exit "Read docs/secrets.md (name contains secrets) allowed" 0 "$code"
 run_guard '{"tool_name":"Read","tool_input":{"file_path":"AGENTS.md"}}'
 expect_exit "Read AGENTS.md allowed without ask" 0 "$code"
 if [[ -z "$out" ]]; then
@@ -167,6 +171,10 @@ run_bash 2 "$SANDBOX" "$SANDBOX" 'python3 -c "print(open(\".env\").read())"'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'cat "$PWD/.env"'
 run_bash 2 "$SANDBOX" "$SANDBOX" 'source .env && x'
 run_bash 2 "$NESTED" "$NESTED/backend" 'cat .env'
+run_bash 2 "$NESTED" "$NESTED" 'cd backend && cat .env'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'tar czf x.tgz secrets'
+run_bash 2 "$NESTED" "$NESTED" 'cd "backend" && cat .env'
+run_bash 2 "$NESTED" "$NESTED/backend" 'cd .. && cd backend; cat .env'
 run_bash 2 "$NESTED" "$NESTED" 'echo A > .env.local'
 run_bash 2 "$NESTED" "$NESTED" 'cp .env.example .env'
 run_bash 2 "$NESTED" "$NESTED" 'echo x | tee .env.prod'
@@ -178,6 +186,9 @@ run_bash 0 "$SANDBOX" "$SANDBOX" 'cat .env.example'
 run_bash 0 "$SANDBOX" "$SANDBOX" 'ls *.md'
 run_bash 0 "$NESTED" "$NESTED" 'echo ".env" > notes.txt'
 run_bash 0 "$NESTED" "$NESTED" 'git status'
+run_bash 0 "$NESTED" "$NESTED" 'grep -rn secrets docs'
+run_bash 0 "$NESTED" "$NESTED" 'cd backend && cat .env.example'
+run_bash 0 "$NESTED" "$NESTED" 'cd nowhere && cat .env'
 run_bash 0 "$NESTED" "$NESTED" 'sed -n 1p .env.example > out.txt'
 run_bash 0 "$NESTED" "$NESTED" "cat > t.sh <<'EOF'
 cp .env.example .env

@@ -32,7 +32,7 @@ export type UserUpdate = Updateable<UsersTable>;
 
 **If `001_initial.ts` has not been applied yet:** add `hashed_password text NOT NULL` directly to the `createTable` call in `001_initial.ts`.
 
-**If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/002_add_auth.ts`:
+**If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/NNN_add_auth.ts`, where `NNN` is the next unused number in that directory (e.g. `002` if only `001_initial.ts` exists, `003` if `002_projects.ts` is already there) — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed, so never reuse or back-fill a number:
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -69,6 +69,8 @@ import type { LoginDto, RegisterDto } from './auth.dto';
 // startup with the same defaults as real passwords so the cost matches exactly.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
+const PG_UNIQUE_VIOLATION = '23505';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -77,21 +79,21 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.db
-      .selectFrom('users')
-      .select('id')
-      .where('email', '=', dto.email)
-      .executeTakeFirst();
-    if (existing) throw new ConflictException('Email already registered.');
-
     // argon2id by default
     const hashedPassword = await argon2.hash(dto.password);
-    const user = await this.db
-      .insertInto('users')
-      .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
-      .returning(['id', 'email', 'name'])
-      .executeTakeFirstOrThrow();
-    return user;
+    try {
+      return await this.db
+        .insertInto('users')
+        .values({ email: dto.email, name: dto.name, hashed_password: hashedPassword })
+        .returning(['id', 'email', 'name'])
+        .executeTakeFirstOrThrow();
+    } catch (error) {
+      // The unique index, not a SELECT-then-INSERT pre-check, is race-free under concurrent sign-ups.
+      if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) {
+        throw new ConflictException('Email already registered.');
+      }
+      throw error;
+    }
   }
 
   async login(dto: LoginDto) {
@@ -101,7 +103,7 @@ export class AuthService {
       .where('email', '=', dto.email)
       .executeTakeFirst();
     const passwordOk = await argon2.verify(
-      // `||`, not `??`: rows backfilled by 002_add_auth hold '' — argon2.verify throws on it.
+      // `||`, not `??`: rows backfilled by the NNN_add_auth migration hold '' — argon2.verify throws on it.
       user?.hashed_password || (await DUMMY_HASH),
       dto.password,
     );

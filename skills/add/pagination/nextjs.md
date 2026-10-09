@@ -91,7 +91,7 @@ export function parseSortParam(
 
 **4. Data Access + API Route**
 
-Query building is data access — keep it out of the route handler:
+The query targets a `projects` table (`id`, `name`, `description`, `createdAt`, `updatedAt`) in `src/integrations/database/schema.ts` — add it, or swap in your own table, then `pnpm db:generate`. Query building is data access — keep it out of the route handler:
 
 ```ts
 // src/integrations/database/queries/list-projects.ts
@@ -133,9 +133,12 @@ export async function listProjects({ page, limit, sort }: PaginationParams) {
 }
 ```
 
+If `src/app/api/projects/route.ts` already exists (e.g. the `POST` from `templatecentral:add (error-handling)`), add this `GET` beside it — never overwrite the file:
+
 ```ts
 // src/app/api/projects/route.ts
 import { ALLOWED_SORT_FIELDS, InvalidSortError, listProjects } from '@/integrations/database/queries/list-projects';
+import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
 import { paginationSchema } from '@/lib/validation/schemas';
@@ -144,6 +147,10 @@ import { z } from 'zod';
 
 export const GET = withLogging(async (request) => {
   try {
+    // proxy.ts only checks cookie presence; omit in a project without templatecentral:add (auth).
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return new Response(null, { status: 401 });
+
     const parsed = paginationSchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) {
       return NextResponse.json(
@@ -170,14 +177,17 @@ export const GET = withLogging(async (request) => {
 
 **5. Paginated UI (feature schema → service → hook → component)**
 
+**Update, don't overwrite**: if `templatecentral:add (feature)` already created `project.schema.ts`, keep its `projectItemSchema` and add only `paginatedProjectsSchema`. Likewise, if `api/project-service.ts` exists, add `fetchProjects` and remove `ProjectService.getAll` (the list route no longer returns `{ data: ProjectItem[] }`; update its callers) instead of overwriting the file; replace the existing `useProjects` hook rather than adding a second one.
+
 ```ts
-// src/features/projects/schemas/project.schema.ts
+// src/features/project/schemas/project.schema.ts
 import { z } from 'zod';
 
+// Canonical project schema (same as add (feature)); extra columns are stripped.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullish(),
 });
 
 export const paginatedProjectsSchema = z.object({
@@ -194,7 +204,7 @@ export const paginatedProjectsSchema = z.object({
 ```
 
 ```ts
-// src/features/projects/api/project-service.ts
+// src/features/project/api/project-service.ts
 // Not '@/lib/errors' — that barrel pulls server-only modules into the client bundle.
 import { APIError } from '@/integrations/error';
 import { paginatedProjectsSchema } from '../schemas/project.schema';
@@ -219,7 +229,7 @@ export async function fetchProjects(page: number, limit: number, signal?: AbortS
 ```
 
 ```ts
-// src/features/projects/hooks/use-projects.query.ts
+// src/features/project/hooks/use-projects.query.ts
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchProjects } from '../api/project-service';
 
@@ -233,7 +243,7 @@ export const useProjects = (page: number, limit: number) =>
 ```
 
 ```tsx
-// src/features/projects/components/projects-list.tsx
+// src/features/project/components/projects-list.tsx
 'use client';
 
 import { useState } from 'react';

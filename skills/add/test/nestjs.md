@@ -71,49 +71,44 @@ describe('MyController', () => {
 });
 ```
 
+Guarded controller (`add (auth)`)? Chain `.overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })` before `.compile()` — the guard's own deps (Passport strategy, `PinoLogger`) are not in this module, and the 401 path belongs in an e2e test.
+
 #### Service Test with Mocked Repository
 
 ```typescript
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { MyService } from '../../src/modules/my/my.service';
 import { MyRepository } from '../../src/modules/my/my.repository';
-import { NotFoundException } from '@nestjs/common';
 
 describe('MyService', () => {
   let service: MyService;
-  let repository: MyRepository;
+  // A plain object of vi.fn() — asserting on class methods trips @typescript-eslint/unbound-method.
+  const repository = {
+    findAll: vi.fn(),
+    findById: vi.fn(),
+    save: vi.fn(),
+    remove: vi.fn(),
+  };
 
   beforeEach(async () => {
+    vi.resetAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        MyService,
-        {
-          provide: MyRepository,
-          useValue: {
-            findAll: vi.fn().mockReturnValue([]),
-            findById: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            remove: vi.fn(),
-          },
-        },
-      ],
+      providers: [MyService, { provide: MyRepository, useValue: repository }],
     }).compile();
 
     service = module.get<MyService>(MyService);
-    repository = module.get<MyRepository>(MyRepository);
   });
 
   it('should return all items', () => {
+    repository.findAll.mockReturnValue([]);
     expect(service.findAll()).toEqual([]);
     expect(repository.findAll).toHaveBeenCalled();
   });
 
   it('should throw NotFoundException for missing item', () => {
-    vi.spyOn(repository, 'findById').mockImplementation(() => {
-      throw new NotFoundException();
-    });
+    repository.findById.mockReturnValue(undefined);
     expect(() => service.findOne('nonexistent')).toThrow(NotFoundException);
   });
 });
@@ -121,30 +116,41 @@ describe('MyService', () => {
 
 ### E2E Tests
 
+The example assumes `add (auth)` (guarded routes → signed token) and `add (database)` (Kysely override shown — use the override your database guide specifies: `DrizzleService`, or the Mongoose `DatabaseModule` swap). Drop either part your project lacks.
+
 E2E tests go in `test/app.e2e-spec.ts` or `test/<name>.e2e-spec.ts`.
 
 > **Placeholder names**: All examples use `My*`, `/my-items`, etc. Replace these with your actual module name and route path (e.g., for a `task` module with `@Controller('tasks')`: `TaskController`, `/tasks`).
 
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
+import { KyselyService } from '../src/database/kysely.service';
 
 describe('My Feature (e2e)', () => {
   let app: NestFastifyApplication;
+  let headers: Record<string, string>;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // Database override from the `add (database)` guide — this suite needs no DB.
+      .overrideProvider(KyselyService)
+      .useValue({})
+      .compile();
 
     // Same adapter options as main.ts (UUID request IDs), so log correlation matches the real app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter({ genReqId: () => crypto.randomUUID() }),
+      new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
+    const token = await app.get(JwtService).signAsync({ sub: 'user-1', email: 'a@example.com' });
+    headers = { authorization: `Bearer ${token}` };
   });
 
   afterAll(async () => {
@@ -155,24 +161,19 @@ describe('My Feature (e2e)', () => {
     const result = await app.inject({
       method: 'POST',
       url: '/my-items',
-      payload: { name: 'Test Item' },
+      headers,
+      payload: { title: 't' },
     });
 
     expect(result.statusCode).toBe(201);
-    const body = result.json<{ id: string; name: string }>();
-    expect(body.name).toBe('Test Item');
+    const body = result.json<{ id: string; title: string }>();
+    expect(body.title).toBe('t');
     expect(body.id).toBeDefined();
   });
 
-  it('GET /my-items should return items', async () => {
-    const result = await app.inject({
-      method: 'GET',
-      url: '/my-items',
-    });
-
-    expect(result.statusCode).toBe(200);
-    const body = result.json<{ id: string; name: string }[]>();
-    expect(Array.isArray(body)).toBe(true);
+  it('GET /my-items should reject a request without a token', async () => {
+    const result = await app.inject({ method: 'GET', url: '/my-items' });
+    expect(result.statusCode).toBe(401);
   });
 });
 ```

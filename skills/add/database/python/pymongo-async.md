@@ -7,7 +7,7 @@ PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer �
 
 ### M1. Install Dependencies
 
-Add to `requirements.txt` (floor matches the templateCentral plugin's `.claude/rules/fastapi.md` — `AsyncMongoClient` does not exist before 4.13):
+Add to `requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
 
 ```
 pymongo>=4.13
@@ -251,7 +251,7 @@ class UpdateUserRequest(BaseRequestSchema):
     name: str | None = Field(default=None, min_length=1, max_length=100)
 ```
 
-**`src/api/schemas/response/user.py`** — no `hashed_password` field, and `extra="forbid"` on the base keeps it that way:
+**`src/api/schemas/response/user.py`** — no `hashed_password` field; `model_validate(..., from_attributes=True)` copies only declared fields:
 
 ```python
 from pydantic import Field
@@ -268,6 +268,7 @@ class UserResponse(BaseResponseSchema):
 **`src/api/services/user_service.py`**:
 
 ```python
+import asyncio
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -296,11 +297,9 @@ async def get_user(db: Db, user_id: str) -> User:
 
 
 async def create_user(db: Db, payload: CreateUserRequest) -> User:
-    user = User(
-        email=payload.email,
-        name=payload.name,
-        hashed_password=hash_password(payload.password),
-    )
+    # argon2 is ~100 ms of CPU: off the event loop, or it stalls every request.
+    hashed = await asyncio.to_thread(hash_password, payload.password)
+    user = User(email=payload.email, name=payload.name, hashed_password=hashed)
     try:
         return await UserRepository(db).insert(user)
     except DuplicateKeyError:
@@ -310,7 +309,9 @@ async def create_user(db: Db, payload: CreateUserRequest) -> User:
 
 
 async def update_user(db: Db, user_id: str, payload: UpdateUserRequest) -> User:
-    changes = payload.model_dump(exclude_unset=True)
+    # exclude_none: an explicit `"name": null` would otherwise $set null and leave a
+    # document that no longer validates as User.
+    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
     user = await UserRepository(db).update(user_id, changes)
     if user is None:
         raise HTTPException(
@@ -321,7 +322,7 @@ async def update_user(db: Db, user_id: str, payload: UpdateUserRequest) -> User:
 
 `core.security.hash_password` comes from `templatecentral:add` (auth). Without auth, create `src/core/security.py` with the argon2id `PasswordHasher` block from that guide (Step 3) and add `argon2-cffi` to `requirements.txt`.
 
-**`src/api/routers/users.py`** (register it in `src/api/routes.py` and add a `USERS` tag to `APITags`):
+**`src/api/routers/users.py`** (register it in `src/api/routes.py` and add a `USERS` tag to `APITags`). It has no auth of its own — keep it off any deployed environment until `pymongo-async-auth.md` Step C (or your own guard) protects it:
 
 ```python
 from typing import Annotated
@@ -388,7 +389,7 @@ volumes:
 
 Add `"integration: needs a running MongoDB"` to `markers` in `pyproject.toml`.
 
-**`test/conftest.py`** — settings are read at import and CI has no `src/.env`, so seed placeholders:
+**`test/conftest.py`** — settings are read at import and CI has no `src/.env`, so seed placeholders, and build the client without `with` so unit tests never open a MongoDB connection. Merge, don't overwrite: keep any seeding and fixtures already there (`SECRET_KEY` and `auth_headers` from `templatecentral:add` (auth)):
 
 ```python
 """Root conftest — shared fixtures available to all tests."""

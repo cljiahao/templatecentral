@@ -30,10 +30,10 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { CustomFormField } from '@/components/widgets';
-import { getApiBaseUrl } from '@/lib/constants';
-import { logError } from '@/lib/errors';
+import { APIError, logError } from '@/lib/errors';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { createProject } from '../api/project-service';
 import { createProjectSchema, type CreateProjectData } from '../schemas/create-project.schema';
 
 export function CreateProjectForm() {
@@ -46,24 +46,16 @@ export function CreateProjectForm() {
   const onSubmit = async (data: CreateProjectData) => {
     try {
       setSubmitError(null);
-      const response = await fetch(`${getApiBaseUrl()}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
+      await createProject(data);
+      form.reset();
+    } catch (error) {
+      if (error instanceof APIError) {
         // The backend's error text is for engineers, not users — it can carry stack
         // traces, SQL fragments, or internal identifiers. Log it, show a fixed string.
-        const body = await response.json().catch(() => ({}));
-        logError('CreateProjectForm: create failed', new Error(String(body.error ?? response.status)));
+        logError('CreateProjectForm: create failed', error);
         setSubmitError('Failed to create project. Please try again.');
         return;
       }
-
-      form.reset();
-    } catch {
       setSubmitError('An unexpected error occurred');
     }
   };
@@ -102,14 +94,14 @@ Client checks are fast feedback only — the server must repeat them and add the
 
 ```tsx
 // src/features/projects/components/file-upload-form.tsx
-import { getApiBaseUrl } from '@/lib/constants';
-import { logError } from '@/lib/errors';
+import { APIError, logError } from '@/lib/errors';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
   fileUploadSchema,
 } from '@/lib/validation/schemas';
 import { type ChangeEvent, useState } from 'react';
 import { z } from 'zod';
+import { uploadProjectFile } from '../api/project-service';
 
 // Derived from the same whitelist the schema checks, so picker and validator never disagree
 const ACCEPT_ATTRIBUTE = ALLOWED_UPLOAD_EXTENSIONS.map((ext) => `.${ext}`).join(',');
@@ -141,21 +133,14 @@ export function FileUploadForm() {
 
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch(`${getApiBaseUrl()}/projects/upload`, {
-        method: 'POST',
-        // No Content-Type header — the browser must add its own multipart boundary
-        body: formData,
-      });
-
-      if (!response.ok) {
+      await uploadProjectFile(formData);
+    } catch (error) {
+      if (error instanceof APIError) {
         // The backend's error text is for engineers, not users — log it, show a fixed string.
-        const body = await response.json().catch(() => ({}));
-        logError('FileUploadForm: upload failed', new Error(String(body.error ?? response.status)));
+        logError('FileUploadForm: upload failed', error);
         setError('Upload failed. Please try again.');
         return;
       }
-    } catch {
       setError('An error occurred during upload');
     } finally {
       setIsUploading(false);
@@ -190,15 +175,18 @@ export function FileUploadForm() {
 }
 ```
 
-**4. API Client with Response Validation**
+**4. Service through `ApiClient`, with Response Validation**
+
+Both forms above and the read below call the backend through `ApiClient` (`src/lib/clients/api-client.ts` — the SPA's one backend client, defined in `templatecentral:standards (full-stack-pairing)`). It maps non-2xx to `APIError`, passes `FormData` through with the browser's multipart boundary, and — with `templatecentral:add (auth)` applied — sends the session cookie plus `X-CSRF-Token` on the POSTs. No paired backend means no `ApiClient`: these examples need one.
 
 `id` arrives from `useParams` — it is user input, so it is validated before it is used and encoded before it is interpolated into a path. Validation rejects the wrong *kind* of value; `encodeURIComponent` stops a `/` or `?` in the value from rewriting the URL.
 
 ```ts
-// src/lib/clients/api-client.ts
-import { getApiBaseUrl } from '@/lib/constants';
+// src/features/projects/api/project-service.ts
+import { ApiClient } from '@/lib/clients/api-client';
 import { APIError, logError } from '@/lib/errors';
 import { z } from 'zod';
+import type { CreateProjectData } from '../schemas/create-project.schema';
 
 const projectIdSchema = z.uuid();
 
@@ -211,23 +199,40 @@ const projectSchema = z.object({
 
 type Project = z.infer<typeof projectSchema>;
 
+class ProjectClient extends ApiClient {
+  create(data: CreateProjectData): Promise<unknown> {
+    return this.request('projects', 'POST', data);
+  }
+
+  upload(formData: FormData): Promise<unknown> {
+    return this.request('projects/upload', 'POST', formData);
+  }
+
+  get(id: string): Promise<unknown> {
+    return this.request(`projects/${encodeURIComponent(id)}`);
+  }
+}
+
+// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset — at module scope
+// that aborts bundle evaluation before createRoot() runs and renders a blank page.
+let client: ProjectClient | undefined;
+const projects = (): ProjectClient => (client ??= new ProjectClient());
+
+export async function createProject(data: CreateProjectData): Promise<void> {
+  await projects().create(data);
+}
+
+export async function uploadProjectFile(formData: FormData): Promise<void> {
+  await projects().upload(formData);
+}
+
 export async function fetchProject(id: string): Promise<Project> {
   const parsedId = projectIdSchema.safeParse(id);
   if (!parsedId.success) {
     throw new APIError({ statusCode: 400, data: { message: 'Invalid project id.' } });
   }
 
-  // getApiBaseUrl() is called here, not at module scope — a module-scope throw would
-  // abort bundle evaluation before createRoot() runs and render a blank page.
-  const response = await fetch(`${getApiBaseUrl()}/projects/${encodeURIComponent(parsedId.data)}`);
-
-  if (!response.ok) {
-    throw new APIError({ statusCode: response.status, data: { message: 'Failed to fetch project.' } });
-  }
-
-  const data: unknown = await response.json();
-
-  const parsed = projectSchema.safeParse(data);
+  const parsed = projectSchema.safeParse(await projects().get(parsedId.data));
   if (!parsed.success) {
     // APIError, never a generic Error — the app's error handling is keyed on it.
     // Field detail goes to the log; the thrown message stays user-safe.
@@ -248,7 +253,7 @@ export async function fetchProject(id: string): Promise<Project> {
 ## Rules
 
 - Schemas live in `schemas/` — NEVER define or export a schema from a component file
-- NEVER hardcode `/api/...` paths — build every URL from `getApiBaseUrl()`, called inside the request function
+- Call the backend through an `ApiClient` subclass — NEVER raw `fetch` or a hardcoded `/api/...` path
 - Always validate route params / query values with Zod before use, and `encodeURIComponent` any value interpolated into a path
 - Throw `APIError`, never a generic `Error` — and never embed validation field detail in the thrown message
 - NEVER render a backend error string to the user — log it, show a fixed generic message

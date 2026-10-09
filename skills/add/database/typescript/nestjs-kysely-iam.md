@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Kysely, compliance = AWS IAM (PostgreSQL only). Loaded alongside nestjs-kysely.md — overrides its B2 service, B6 migration-runner pool, and B7 env. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Kysely — IAM Auth Variant
 
-> **Add-on to `nestjs-kysely.md`** (the router loads both). Work through that guide's B1–B9, but use the `KyselyService` below instead of its standard B2 service and the IAM env fields below instead of its B7 `DATABASE_URL`; then run its **After Writing Code** steps.
+> **Add-on to `nestjs-kysely.md`** (the router loads both). Work through that guide's B1–B10, but use the `KyselyService` below instead of its standard B2 service and the IAM env fields below instead of its B7 `DATABASE_URL`; then run its **After Writing Code** steps.
 
 If the user requires AWS IAM authentication, install the additional package:
 
@@ -109,6 +109,8 @@ DATABASE_USER=iam_db_user
 DATABASE_NAME=mydb
 RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 ```
+
+> **Tests:** in B9's `test.env`, replace the `DATABASE_URL` placeholder with `DATABASE_HOST: 'localhost'`, `DATABASE_USER: 'test'`, `DATABASE_NAME: 'test'` — the pool still connects lazily.
 
 > IAM auth does not use a password — `@aws-sdk/rds-signer` generates a short-lived token automatically from the instance's IAM role.
 

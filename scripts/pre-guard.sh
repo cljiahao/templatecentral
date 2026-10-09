@@ -47,7 +47,7 @@ case "$base" in .env.example|.env.default|.env.sample|.env.template) exit 0 ;; e
 
 # Tier 1 — HARD BLOCK.
 if [[ "$path" =~ (^|/)\.env(\.[^/]*)?$ ]] || \
-   [[ "$path" =~ (^|/)\.?secrets/ ]] || \
+   [[ "$path" =~ (^|/)\.?secrets(/|$) ]] || \
    [[ "$path" =~ \.(pem|key|p12|pfx|secret|keystore|jks)$ ]] || \
    [[ "$base" == "credentials.json" || "$base" == ".netrc" || "$base" == ".npmrc" || "$base" == ".pypirc" ]]; then
   echo "BLOCKED (secret/credential): $FILE — never read or written by the agent. Put placeholders in .env.example." >&2

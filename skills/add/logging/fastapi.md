@@ -33,16 +33,19 @@ Define the middleware as a module-level function — `app` does not exist at imp
 ```python
 # src/app.py
 import time
+from collections.abc import Awaitable, Callable
 
 import structlog
 from asgi_correlation_id import CorrelationIdMiddleware
 from asgi_correlation_id.context import correlation_id
-from fastapi import Request
+from fastapi import Request, Response
 
 from core.logging import logger
 
 
-async def log_requests(request: Request, call_next):
+async def log_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     # Clear at the START, not in a `finally`: the scaffold's `Exception` handler runs in
     # Starlette's outermost ServerErrorMiddleware, i.e. after this function unwinds — clearing
     # on the way out would strip request_id from the one log line you most need it on.
@@ -75,6 +78,7 @@ App startup/shutdown — add a module-level lifespan in `src/app.py` and pass it
 
 ```python
 # src/app.py
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -84,8 +88,12 @@ from core.logging import logger
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("App starting", port=api_settings.API_PORT, environment=common_settings.ENVIRONMENT)
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logger.info(
+        "App starting",
+        port=api_settings.API_PORT,
+        environment=common_settings.ENVIRONMENT,
+    )
     yield
     logger.info("App shutdown", environment=common_settings.ENVIRONMENT)
 
@@ -94,13 +102,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, title=common_settings.PROJECT_NAME, ...)
 ```
 
-`user_id` is `None` until authentication is wired — after `templatecentral:add` (auth), have `get_current_user` set `request.state.user_id = user_id` as a side effect before returning. `log_requests` reads `request.state` only after `await call_next(request)` completes (which runs the full dependency chain), so it picks up the value automatically with no other change needed.
+`user_id` is `None` until authentication is wired — after `templatecentral:add` (auth), add a `request: Request` parameter to `get_current_user` and set `request.state.user_id = user_id` before returning. `log_requests` reads `request.state` only after `await call_next(request)` completes (which runs the full dependency chain), so it picks up the value automatically with no other change needed.
 
 Unhandled exceptions are already logged via the `Exception` handler in `src/error_handler.py` (`logger.exception`). No extra wiring for Tier 1.
 
 #### Tier 2 — Standard (+ Tier 1)
 
-**Auth events** — log inside `src/api/routers/auth.py`, against the actual routes and return types from `templatecentral:add` (auth) — `get_current_user` returns the bare user-id string (subject), not a `User` object, until a database-backed user model exists:
+**Auth events** — log inside `src/api/routers/auth.py`. Keep each handler's current signature and service call (`def` with a `db` session after SQLAlchemy, `async def` + `await` on PyMongo) — add only the `request: Request` parameter and the `try`/`except` around the call. Shown against the `add (auth)` stub:
 
 ```python
 # src/api/routers/auth.py
@@ -112,9 +120,9 @@ from core.security import decode_access_token
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, request: Request) -> TokenResponse:
+def login(body: LoginRequest, request: Request) -> TokenResponse:
     try:
-        token = login_user(body.email, body.password)
+        token = login_user(email=body.email, password=body.password)
     except HTTPException:
         logger.warning(
             "Login failure",
@@ -145,7 +153,9 @@ from core.logging import logger
 def require_role(required_role: str):
     # Factory: a bare `required_role: str` parameter on a dependency would be parsed as a
     # client-supplied query param, letting the caller choose the role being checked.
-    async def checker(request: Request, user_id: Annotated[str, Depends(get_current_user)]):
+    async def checker(
+        request: Request, user_id: Annotated[str, Depends(get_current_user)]
+    ):
         user = await get_user_with_roles(user_id)
         if required_role not in user.roles:
             logger.warning(
@@ -201,7 +211,13 @@ async def http_get(url: str, **kwargs) -> httpx.Response:
     except Exception as exc:
         duration_ms = round((time.monotonic() - start) * 1000)
         # Exception type only — httpx messages embed the full, unsanitized request URL.
-        logger.error("Outbound HTTP error", method="GET", url=safe_url, duration_ms=duration_ms, error_type=type(exc).__name__)
+        logger.error(
+            "Outbound HTTP error",
+            method="GET",
+            url=safe_url,
+            duration_ms=duration_ms,
+            error_type=type(exc).__name__,
+        )
         raise
 ```
 
@@ -241,7 +257,11 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
     total_ms = round((time.monotonic() - conn.info["query_start_time"].pop()) * 1000)
     if total_ms > 500:
         # Use the SQL verb as a label — never log full SQL text or bound parameters
-        query_name = statement.split()[0].upper() if isinstance(statement, str) and statement.strip() else "unknown"
+        query_name = (
+            statement.split()[0].upper()
+            if isinstance(statement, str) and statement.strip()
+            else "unknown"
+        )
         logger.warning(
             "Slow DB query",
             query_name=query_name,

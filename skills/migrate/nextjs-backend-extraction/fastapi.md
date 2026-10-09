@@ -143,7 +143,9 @@ from core.config import github_settings
 class GithubClient:
     def __init__(self) -> None:
         self._base_url = github_settings.GITHUB_API_URL
-        self._headers = {"Authorization": f"Bearer {github_settings.GITHUB_TOKEN.get_secret_value()}"}
+        self._headers = {
+            "Authorization": f"Bearer {github_settings.GITHUB_TOKEN.get_secret_value()}"
+        }
 
     async def get_repos(self) -> list[dict]:
         async with httpx.AsyncClient(

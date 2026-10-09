@@ -46,12 +46,15 @@ LoggerModule.forRoot({
 > Add the key; do not replace the config object. Replacing it wholesale silently drops the
 > scaffold's `redact` block, and every request then logs its bearer JWT and cookies.
 
-Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here; extend the filter from `templatecentral:add` (error-handling). The scaffold's filter already logs 5xx (`if (isServerError) this.logger.error(...)`); replace that one `if` with the block below so 4xx are logged too — never add it alongside, or every 5xx logs twice. Keep the generic client message for 5xx unchanged:
+Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here. Check `src/common/filters/http-exception.filter.ts` first:
+
+- **`templatecentral:add (error-handling)` already applied** (the filter has an `else` branch calling `this.logger.warn(...)`): it already logs 5xx at `error` and 4xx at `warn` — skip this step.
+- **Scaffold filter only** (a lone `if (isServerError) this.logger.error(...)`): replace that one `if` with the block below so 4xx are logged too — never add it alongside, or every 5xx logs twice. Keep the generic client message for 5xx unchanged:
 
 ```ts
-// src/common/filters/http-exception.filter.ts — replaces the isServerError logging `if`
+// src/common/filters/http-exception.filter.ts — scaffold filter only; replaces the isServerError logging `if`
 if (isServerError) {
-  this.logger.error(`HTTP ${status}: ${exception.message}`);
+  this.logger.error(`HTTP ${status}: ${exception.message}`, exception.stack);
 } else {
   this.logger.warn(`HTTP ${status}: ${exception.message}`);
 }
@@ -100,86 +103,28 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 }
 ```
 
-For login/logout events, log in your auth service:
+For login events, add logging to the `AuthService` that `templatecentral:add (database)` generated (same `login(dto)` shape for Drizzle, Kysely, and Mongoose). Inject the logger next to the existing collaborators, then log on both branches:
 
 ```ts
-// src/modules/auth/auth.service.ts  (excerpt — logging calls added to your existing service)
-import { Injectable } from '@nestjs/common';
+// src/modules/auth/auth.service.ts — additions only
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import * as argon2 from 'argon2';
 
-import type { User } from '../../database/schema';
-
-@Injectable()
-export class AuthService {
   constructor(
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
-    // existing collaborator — keep your project's user lookup service and its import
-    private readonly usersService: UsersService,
-    // ...existing collaborators (JwtService, etc.)
+    // ...existing jwtService + database collaborator, unchanged
   ) {}
 
-  async login(user: User, method: string) {
-    this.logger.info({ user_id: user.id, method }, 'Login success');
-    // createToken: your existing token helper
-    return this.createToken(user);
-  }
+  // in login(), inside the existing `if (!user || !passwordOk)` branch, before the throw:
+  // No email: it is PII, and logging it on failure builds a list of probed accounts.
+  this.logger.warn({ reason: 'invalid_credentials' }, 'Login failure');
 
-  async logout(userId: string) {
-    this.logger.info({ user_id: userId }, 'Logout');
-  }
-
-  async refreshToken(userId: string) {
-    this.logger.info({ user_id: userId }, 'Token refresh');
-    // ... return new token
-  }
-
-  async validateUser(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
-    if (!user || !(await argon2.verify(user.hashedPassword, password))) {
-      // No email: it is PII, and logging it on failure builds a list of probed accounts.
-      this.logger.warn({ reason: 'invalid_credentials' }, 'Login failure');
-      return null;
-    }
-    return user;
-  }
-}
+  // in login(), just before the return:
+  this.logger.info({ user_id: user.id }, 'Login success');
 ```
 
-**Outbound HTTP calls** — wrap `fetch` in a provider (a `NestInterceptor` only sees inbound handlers, never outbound calls):
+For Mongoose, the id is `user._id.toString()`. Log logout/refresh the same way if you add those endpoints.
 
-```ts
-// src/common/http/http-client.service.ts
-import { Injectable } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-
-@Injectable()
-export class HttpClientService {
-  constructor(@InjectPinoLogger(HttpClientService.name) private readonly logger: PinoLogger) {}
-
-  async request(url: string, init?: RequestInit): Promise<Response> {
-    // origin + path only: userinfo, query, and fragment can all carry credentials.
-    const { origin, pathname } = new URL(url);
-    const safeUrl = `${origin}${pathname}`;
-    const method = init?.method ?? 'GET';
-    const start = Date.now();
-    try {
-      const res = await fetch(url, init);
-      this.logger.info(
-        { method, url: safeUrl, status_code: res.status, duration_ms: Date.now() - start },
-        'Outbound HTTP',
-      );
-      return res;
-    } catch (err) {
-      this.logger.error(
-        { method, url: safeUrl, duration_ms: Date.now() - start, error_type: (err as Error).name },
-        'Outbound HTTP error',
-      );
-      throw err;
-    }
-  }
-}
-```
+**Outbound HTTP calls** — go through an `@nestjs/axios` integration (`templatecentral:add (integration)`), whose service already logs failures with status + path only. To also log successes, time the `firstValueFrom(...)` call in that service and log `{ path, status_code, duration_ms }` — never the URL query, headers, or raw `AxiosError` (its `config.headers` carries the bearer token).
 
 **Key domain events** — log in service methods for state changes (`this.logger` is an injected `PinoLogger`, as in the auth examples above):
 

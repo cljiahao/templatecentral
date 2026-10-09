@@ -27,7 +27,7 @@ cat "<skill-dir>/general/phase-5-health-check.md"
 ```
 On an approved 5d re-sync, load the same five kit files as Phase 4 (everything after its first line).
 
-`<skill-dir>` is this skill's directory, as in `migrate/SKILL.md`. "Step 4h" (cited by the `@5.x` route below) means: confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@6.0.0 -->`.
+`<skill-dir>` is this skill's directory, as in `migrate/SKILL.md`. "The Step 4b marker update" (cited by the `@5.x` route below) means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
 
 ---
 
@@ -83,9 +83,10 @@ v6.0 re-seeds the enforcement layer from the harness kit:
 
 Re-sync? (A) Yes  (B) Skip
 ```
-User A → if `.claude/harness.json` exists, run Phase 5 (5a–5c report) then Step 5d re-sync —
-the settings.json rule there replaces inert array-form entries. If it does not exist, proceed to
-Phase 4 (full seed). Either way, finish by setting the line-1 marker to `@6.0.0` (Step 4h).
+User A → first set the line-1 marker to `@6.0.0` (the Step 4b marker update) — before anything
+hashes `AGENTS.md`, or its `origin_hash` goes stale. Then, if `.claude/harness.json` exists, run
+Phase 5 (5a–5c report) then Step 5d re-sync — the settings.json rule there replaces inert
+array-form entries. If it does not exist, proceed to Phase 4 (full seed).
 User B → print "No changes made — hooks remain inert until re-synced." Exit.
 
 **If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:

@@ -51,6 +51,8 @@ import type { LoginDto, RegisterDto } from './auth.dto';
 // startup with the same defaults as real passwords so the cost matches exactly.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
+const MONGO_DUPLICATE_KEY = 11000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -59,17 +61,22 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.userModel.findOne({ email: dto.email }).exec();
-    if (existing) throw new ConflictException('Email already registered.');
-
     // argon2id by default
     const hashedPassword = await argon2.hash(dto.password);
-    const user = await this.userModel.create({
-      email: dto.email,
-      name: dto.name,
-      hashedPassword,
-    });
-    return { id: user._id.toString(), email: user.email, name: user.name };
+    try {
+      const user = await this.userModel.create({
+        email: dto.email,
+        name: dto.name,
+        hashedPassword,
+      });
+      return { id: user._id.toString(), email: user.email, name: user.name };
+    } catch (error) {
+      // The unique index, not a findOne-then-create pre-check, is race-free under concurrent sign-ups.
+      if ((error as { code?: number }).code === MONGO_DUPLICATE_KEY) {
+        throw new ConflictException('Email already registered.');
+      }
+      throw error;
+    }
   }
 
   async login(dto: LoginDto) {

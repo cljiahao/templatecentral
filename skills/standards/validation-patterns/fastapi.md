@@ -19,7 +19,9 @@ class CreateProjectRequest(BaseRequestSchema):
     description: str | None = Field(None, max_length=500)
 
     model_config = ConfigDict(
-        json_schema_extra={"example": {"name": "My Project", "description": "A great project"}}
+        json_schema_extra={
+            "example": {"name": "My Project", "description": "A great project"}
+        }
     )
 ```
 
@@ -90,12 +92,16 @@ async def create_project(req: CreateProjectRequest) -> ProjectResponse:
 
 
 @router.get("", response_model=list[ProjectResponse])
-async def list_projects(query: Annotated[PaginationQuery, Query()]) -> list[ProjectResponse]:
+async def list_projects(
+    query: Annotated[PaginationQuery, Query()],
+) -> list[ProjectResponse]:
     return await project_service.list_projects(query)
 
 
 @router.post("/upload", response_model=dict[str, dict[str, str]])
-async def upload_project_file(file: Annotated[UploadFile, File()]) -> dict[str, dict[str, str]]:
+async def upload_project_file(
+    file: Annotated[UploadFile, File()],
+) -> dict[str, dict[str, str]]:
     storage_key = await project_service.store_project_file(file)
     return {"data": {"storageKey": storage_key}}
 ```
@@ -153,7 +159,9 @@ from api.services import auth as auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=dict[str, dict[str, str]], status_code=status.HTTP_200_OK)
+@router.post(
+    "/login", response_model=dict[str, dict[str, str]], status_code=status.HTTP_200_OK
+)
 async def login(req: Annotated[LoginRequest, Form()]) -> dict[str, dict[str, str]]:
     return await auth_service.login(req)
 ```

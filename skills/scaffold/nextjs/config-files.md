@@ -63,7 +63,7 @@ Write these files exactly as shown.
     "eslint": "^10.12.0",
     "eslint-config-next": "^16.3.8",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-sonarjs": "4.1.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "lefthook": "^2.1.9",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.8.3",
@@ -97,6 +97,9 @@ const ROUTE_FILE = /^route\.m?[jt]sx?$/;
 const bareFn = new RegExp(`export\\s+(?:async\\s+)?function\\s+(?:${METHODS})\\b`, 'g');
 // Whitespace lives INSIDE the lookahead so it can't backtrack to zero and false-pass `= withLogging`.
 const unwrapped = new RegExp(`export\\s+const\\s+(?:${METHODS})\\b\\s*=(?!\\s*withLogging\\b)`, 'g');
+// Destructured (`export const { GET } = …`) and re-exported (`export { GET } from …`) handlers
+// can never be wrapped in place, so either form is a violation.
+const indirect = new RegExp(`export\\s+(?:const\\s+)?\\{[^}]*\\b(?:${METHODS})\\b[^}]*\\}`, 'g');
 
 function walk(dir) {
   const out = [];
@@ -127,6 +130,9 @@ for (const file of files) {
   for (const m of src.matchAll(unwrapped)) {
     violations.push(`${file}:${lineOf(src, m.index)} — handler not wrapped in withLogging()`);
   }
+  for (const m of src.matchAll(indirect)) {
+    violations.push(`${file}:${lineOf(src, m.index)} — destructured/re-exported handler; export each one as withLogging(...)`);
+  }
 }
 
 if (violations.length > 0) {
@@ -141,7 +147,7 @@ console.log(`Route logging check passed (${files.length} route file(s)).`);
 
 > Next.js 16 ships `eslint-config-next` as native flat configs — `FlatCompat` causes circular JSON crashes. Import the flat config objects directly and spread them. `pnpm check` runs `eslint .`, so this file must exist.
 
-> `sonarjs.configs.recommended` enables ~206 of the plugin's 268 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.1.0`, no caret) below — `configs.recommended`'s enabled-rule set is not stable across minor versions (4.2.0 enables ~217 of 280 rules, a different set); bump deliberately and re-verify, don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
+> `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret; peer `eslint ^8 || ^9 || ^10`) and kept identical across the nextjs, nestjs, and vite-react scaffolds — `configs.recommended`'s enabled-rule set and rule heuristics change across minor versions (4.1.0 enabled ~206 of 268; 4.2.x also skips low-entropy literals in `no-hardcoded-passwords`, which can turn an existing `eslint-disable` for it into an unused-directive error); bump all three together, deliberately, and re-verify — don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```javascript
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
@@ -173,10 +179,10 @@ const config = [
       // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
-        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
+        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName|@__PURE__' },
       ],
       'sonarjs/no-commented-code': 'error',
-      // TODO/FIXME with context is allowed; keep them visible without failing lint.
+      // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',
       'sonarjs/fixme-tag': 'warn',
       '@eslint-community/eslint-comments/require-description': [

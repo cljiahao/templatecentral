@@ -61,7 +61,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-sonarjs": "^4.2.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "globals": "^17.6.0",
     "lefthook": "^2.1.9",
     "jsdom": "^30.0.1",
@@ -372,7 +372,8 @@ allowBuilds:
 ### `.env.example`
 
 ```
-VITE_API_BASE_URL=http://localhost:8000
+# Same-origin path, proxied to the backend (Vite server.proxy in dev, nginx in production)
+VITE_API_BASE_URL=/api
 ```
 
 ### `.prettierrc`
@@ -390,7 +391,7 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ### `eslint.config.mjs`
 
-> `sonarjs.configs.recommended` enables ~217 of the plugin's 280 rules at `error` (bugs, code smell, tests, React/JSX). This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
+> `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, code smell, tests, React/JSX). `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret), identical to the nextjs and nestjs scaffolds — the recommended rule set changes across minor versions, so bump all three together and re-verify. This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```mjs
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
@@ -425,13 +426,18 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...sonarjs.configs.recommended.rules,
+      // Honour the `_`-prefix convention for intentionally-unused args/vars.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
       'sonarjs/no-commented-code': 'error',
-      // TODO/FIXME with context is allowed; keep them visible without failing lint.
+      // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',
       'sonarjs/fixme-tag': 'warn',
       '@eslint-community/eslint-comments/require-description': [
@@ -489,6 +495,9 @@ server {
     # CSP baseline — tighten after analytics/auth are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
     add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
 
+    # Backend API: templatecentral:standards (full-stack-pairing) adds `location /api/` here —
+    # a same-origin proxy, required by cookie auth.
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -543,7 +552,8 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    // Backend proxy (`server.proxy`) is added by templatecentral:standards (full-stack-pairing).
+    // Same-origin `/api` proxy to the backend (`server.proxy`, required by cookie auth) is added
+    // by templatecentral:standards (full-stack-pairing).
   },
   preview: {
     port: 3000,
@@ -556,6 +566,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // CI has no .env (gitignored), and getApiBaseUrl() throws without it — pin one for tests.
+    env: { VITE_API_BASE_URL: 'http://api.test' },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
     coverage: {

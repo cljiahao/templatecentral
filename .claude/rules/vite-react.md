@@ -14,6 +14,7 @@ Stack: Vite 8, React ≥19.2.7 (RSC DoS advisory fix; 19.2.6 had a Server-Action
 - NEVER put secrets, API keys, or tokens in `VITE_*` — they are embedded in the client bundle
 - NEVER use `export default` in application code (exception: tooling configs like `vite.config.ts`, `eslint.config.mjs`)
 - NEVER put data-fetching logic directly in components — use React Query hooks in features
+- Auth targets the backend cookie mode (`POST /auth/session`, `GET /auth/me`, `POST /auth/logout`; every backend call goes through `ApiClient`, which sends `credentials: 'include'` and `X-CSRF-Token` from `csrfHeader()` on non-GET; `FetchClient` uses `AbortSignal.any`, so browsers ≥ Chrome 116 / Safari 17.4 / Firefox 124) — change these names only together with `add/auth/{fastapi,nestjs}.md`
 
 ## Architecture
 

@@ -89,7 +89,7 @@ Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
 ~~~
 
-For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit-finalize.md Step G (unconditionally, for every stack) — nothing to hand-append here.
+For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`, but set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here, for every stack — Step 4f hashes `AGENTS.md` and Step 4f-3 re-baselines it, so a later marker edit leaves a stale `origin_hash` and base snapshot. The `## AI Harness` tail is appended by harness-kit-finalize.md Step G (unconditionally, for every stack) — nothing to hand-append here.
 
 For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same gate a fresh scaffold ships — in the TS `eslint.config.*`: `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives), `sonarjs/no-commented-code: 'error'`, `linterOptions.reportUnusedDisableDirectives` + `reportUnusedInlineConfigs` at `'error'`, `@eslint-community/eslint-plugin-eslint-comments` `recommended` + `require-description` (`eslint-enable` exempt) + `disable-enable-pair` (`allowWholeFile`), and `sonarjs/todo-tag`/`fixme-tag` downgraded to `warn`; for FastAPI, Ruff `ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005` (`pyproject.toml`) — so the enforcement matches a freshly scaffolded project. The Enforcement section of `code-standards/comments.md` is the rationale source; copy exact rule config from the stack's scaffold `config-files.md`.
 
@@ -123,6 +123,21 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
 
 **Adoption (merge, never clobber):** if `.claude/settings.json`, `lefthook.yml`, `.github/workflows/ci.yml`, or `.gitleaks.toml` already exists, merge the kit's entries into the existing file instead of overwriting; warn on any conflict. In `settings.json`, an existing hook entry that points at a `.claude/hooks/` script with an array-valued `command` (pre-6.0.0 form — Claude Code never ran it) or without the `${CLAUDE_PROJECT_DIR}` prefix is **replaced** by the kit's exec-form entry, not kept alongside it; a leftover `PostToolUseFailure` → `post-tool-failure.sh` entry is removed **and** `.claude/hooks/post-tool-failure.sh` itself is deleted (with its `harness.json` entry, if any) — the script is no longer seeded, and a stale copy would otherwise linger as an un-wired, un-hashed file.
+
+**Step 4d-1: Convert seeded skills to directory form**
+
+For each flat file `.claude/skills/<name>.md` found in the project, convert it to directory form:
+
+```bash
+# For each flat .claude/skills/<name>.md:
+mkdir -p .claude/skills/<name>
+cp .claude/skills/<name>.md .claude/skills/<name>/SKILL.md
+rm .claude/skills/<name>.md
+```
+
+Run this before Step 4e (so it sees the converted skills) and before Step 4f (so Step E hashes the final paths).
+
+No documentation refresh is needed for this step: the directories it creates live under `.claude/`, which the documentation kit prunes as harness-internal (documentation-kit.md Step 2 — the same prune that keeps the kit from writing into paths `protect-files.sh` blocks).
 
 **Step 4e: Seed project skills**
 
@@ -202,32 +217,17 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 **Never commit the symlink** — add `.agents` to the project's `.gitignore` (with a note that it is recreated per machine). A git-tracked symlink breaks Windows CI build agents (e.g. Azure DevOps hosted runners).
 
-**Step 4g: Convert seeded skills to directory form**
+**Step 4f-3: Finish the AGENTS.md tail and re-baseline**
 
-For each flat file `.claude/skills/<name>.md` found in the project, convert it to directory form:
+Execute kit **Step G** up to (not including) its post-scaffold utilities list: append the shared AGENTS.md tail fragment, then the re-baseline block. For the TS final format pass, run Prettier only on the files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md <each README.md written by Step E3>`), never `.` — an adopted codebase is not yours to reformat. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
-```bash
-# For each flat .claude/skills/<name>.md:
-mkdir -p .claude/skills/<name>
-cp .claude/skills/<name>.md .claude/skills/<name>/SKILL.md
-rm .claude/skills/<name>.md
-```
-
-Flat skill files (`.claude/skills/<name>.md`) are silently ignored by Claude Code — skills must be directories with a `SKILL.md` entrypoint (flat files work only under `.claude/commands/`). After moving each file, recompute the SHA-256 hash of the new path and update the corresponding entry in `.claude/harness.json`: change the `path` key from `.claude/skills/<name>.md` to `.claude/skills/<name>/SKILL.md` and update the `origin_hash` to match the moved file.
-
-No documentation refresh is needed for this step: the directories it creates live under `.claude/`, which the documentation kit prunes as harness-internal (documentation-kit.md Step 2 — the same prune that keeps the kit from writing into paths `protect-files.sh` blocks).
-
-**Step 4h: Update the version marker**
-
-Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@6.0.0 -->`.
-
-**Step 4i: Print summary**
+**Step 4h: Print summary**
 
 ```
 ✓ Upgraded to templateCentral v6.0.
 
 Changes made:
-  AGENTS.md                      — Compressed to indexed format; marker updated to @6.0.0
+  AGENTS.md                      — Marker @6.0.0 + shared tail (nextjs: compressed template)
   CLAUDE.md                      — Created (@AGENTS.md one-liner)
   .claude/settings.json          — Created/merged: permissions.deny secret-read block,
                                    skillListingBudgetFraction, 6 hook events
@@ -244,7 +244,7 @@ Changes made:
   .gitleaks.toml                 — secret-scan config
   .github/workflows/ci.yml       — CI quality gates
   .claude/verify-harness.sh      — harness integrity verifier
-  .claude/regen-harness.sh       — canonical re-seed helper
+  .claude/regen-harness.sh       — human-run baseline re-bless (never agent-run)
   .claude/skills/skill-audit/    — repeat-workflow surfacing skill
   .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
   (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)

@@ -48,10 +48,11 @@ src/features/<feature-name>/
 ### 2. Create `types.ts`
 
 ```ts
+// Mirrors the projects table (id, name, description) used across templateCentral backends.
 export interface ProjectItem {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  description?: string | null;
 }
 ```
 
@@ -60,9 +61,10 @@ export interface ProjectItem {
 Static data goes here — NOT in components:
 
 ```ts
-export const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
+// Values use the API `sort` format (`asc_<field>` / `desc_<field>`).
+export const SORT_OPTIONS = [
+  { value: 'asc_name', label: 'Name (A-Z)' },
+  { value: 'desc_createdAt', label: 'Newest first' },
 ] as const;
 ```
 
@@ -74,10 +76,12 @@ Client-side services consumed by React Query hooks. Validate every response with
 // schemas/project.schema.ts
 import { z } from 'zod';
 
+// One canonical project schema — templatecentral:add (pagination) extends this same file.
+// Extra row fields (createdAt, updatedAt) are stripped by z.object().
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  status: z.enum(['active', 'archived']),
+  description: z.string().nullish(),
 });
 ```
 
@@ -87,9 +91,14 @@ Then create the service:
 
 ```ts
 // api/project-service.ts
+import { z } from 'zod';
+
 import { APIError } from '@/integrations/error';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
+
+// Route handlers wrap every success body as `{ data }` (see templatecentral:add (endpoint)).
+const envelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 
 // `message` is the fallback only when the error body is not JSON.
 async function assertOk(res: Response, message: string): Promise<void> {
@@ -104,14 +113,14 @@ export const ProjectService = {
   getAll: async (): Promise<ProjectItem[]> => {
     const res = await fetch('/api/projects');
     await assertOk(res, 'Failed to fetch projects');
-    return projectItemSchema.array().parse(await res.json());
+    return envelope(projectItemSchema.array()).parse(await res.json()).data;
   },
 
   getById: async (id: string): Promise<ProjectItem> => {
     // Encoding stops a crafted id from rewriting the path (`../admin`).
     const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
     await assertOk(res, 'Project not found');
-    return projectItemSchema.parse(await res.json());
+    return envelope(projectItemSchema).parse(await res.json()).data;
   },
 
   create: async (data: Omit<ProjectItem, 'id'>): Promise<ProjectItem> => {
@@ -121,10 +130,12 @@ export const ProjectService = {
       body: JSON.stringify(data),
     });
     await assertOk(res, 'Failed to create project');
-    return projectItemSchema.parse(await res.json());
+    return envelope(projectItemSchema).parse(await res.json()).data;
   },
 };
 ```
+
+`getAll` assumes an unpaginated `GET /api/projects` returning `{ data: ProjectItem[] }`. Once `templatecentral:add (pagination)` is applied, that route returns `{ data: { items, pagination } }` — update the service there rather than keeping both shapes.
 
 Export from barrel: `api/index.ts`
 
@@ -139,7 +150,6 @@ import { z } from 'zod';
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500).optional(),
-  status: z.enum(['active', 'archived']),
 });
 
 export type CreateProjectInput = z.input<typeof createProjectSchema>;
@@ -164,7 +174,9 @@ export function ProjectCard({ project }: { project: ProjectItem }) {
   return (
     <div className="rounded-lg border p-4">
       <h3 className="font-semibold">{project.name}</h3>
-      <span className="text-sm text-muted-foreground">{project.status}</span>
+      {project.description && (
+        <p className="text-sm text-muted-foreground">{project.description}</p>
+      )}
     </div>
   );
 }

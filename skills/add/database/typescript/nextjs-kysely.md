@@ -181,7 +181,7 @@ Create a migration runner script at **`src/integrations/database/migrate.ts`**:
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { FileMigrationProvider, Migrator } from 'kysely';
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 
 import { db } from './kysely-client';
 
@@ -299,7 +299,7 @@ Confirm the build succeeds with no type errors.
 - Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
 - NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
+- **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
 
 ---
 

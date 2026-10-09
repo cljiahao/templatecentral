@@ -32,7 +32,7 @@ the marker.
 ```
 src/features/<feature-name>/
 ├── api/                         # Data access services (calls to external backend API)
-│   ├── <name>-service.ts        # Service with fetch calls to backend endpoints
+│   ├── <name>-service.ts        # ApiClient subclass + Zod-parsing service
 │   └── index.ts
 ├── components/                  # Feature-specific UI
 │   └── index.ts
@@ -48,10 +48,11 @@ src/features/<feature-name>/
 ### 2. Create `types.ts`
 
 ```ts
+// Mirrors the backend Project response (FastAPI `ProjectResponse`, NestJS `ProjectDto`).
 export interface ProjectItem {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  description?: string | null;
 }
 ```
 
@@ -60,9 +61,10 @@ export interface ProjectItem {
 Put all static data here — NOT in components:
 
 ```ts
-export const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
+// Values use the backend `sort` format (`asc_<field>` / `desc_<field>`).
+export const SORT_OPTIONS = [
+  { value: 'asc_name', label: 'Name (A-Z)' },
+  { value: 'desc_createdAt', label: 'Newest first' },
 ] as const;
 ```
 
@@ -74,52 +76,56 @@ First define a Zod schema for the API response shape — every external response
 // schemas/project.schema.ts
 import { z } from 'zod';
 
+// One canonical project schema — templatecentral:add (pagination) extends this same file.
+// nullish: FastAPI emits `null`; a NestJS DTO may omit the key. Extra backend fields
+// (createdAt, updatedAt) are stripped by z.object().
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  status: z.enum(['active', 'archived']),
+  description: z.string().nullish(),
 });
 ```
 
 Export from barrel: `schemas/index.ts`
 
-Then the client-side service. Use `getApiBaseUrl()` (`src/lib/constants/env.ts`, throws when `VITE_API_BASE_URL` is unset) rather than `ENV.API_BASE_URL`:
+Then the client and service. Call the backend through `ApiClient` (`src/lib/clients/api-client.ts`) — the SPA's one backend client, defined in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client; create it from there if it is missing. It owns the base URL, timeout and `APIError` mapping, and once `templatecentral:add (auth)` is applied it also sends the session cookie and, on non-GET, `X-CSRF-Token` — so feature code never touches `fetch`, credentials or CSRF:
 
 ```ts
 // api/project-service.ts
-import { getApiBaseUrl } from '@/lib/constants/env';
-import { APIError } from '@/lib/errors';
+import { ApiClient } from '@/lib/clients/api-client';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
-// Called per request, never at module scope: a module-scope throw (unset env var)
-// kills bundle evaluation before createRoot() — a blank page no ErrorBoundary catches.
-const apiBase = () => getApiBaseUrl();
+// The FastAPI (response_model) and NestJS (plain return) backends send bare bodies — no
+// `{ data }` envelope — so parse the body directly. Only paginated list endpoints wrap
+// (`{ data: { items, pagination } }`, see templatecentral:add (pagination)).
+// Methods return unknown: the service parses, so network data is never type-asserted.
+class ProjectClient extends ApiClient {
+  list(signal?: AbortSignal): Promise<unknown> {
+    return this.request('projects', 'GET', undefined, {}, signal);
+  }
 
-// `message` is the fallback only when the error body is not JSON.
-async function assertOk(res: Response, message: string): Promise<void> {
-  if (res.ok) return;
-  throw new APIError({
-    statusCode: res.status,
-    data: await res.json().catch(() => ({ message })),
-  });
+  get(id: string, signal?: AbortSignal): Promise<unknown> {
+    // Encoding stops a crafted id from rewriting the path (`../admin`).
+    return this.request(`projects/${encodeURIComponent(id)}`, 'GET', undefined, {}, signal);
+  }
 }
 
-export const ProjectService = {
-  getAll: async (signal?: AbortSignal): Promise<ProjectItem[]> => {
-    const res = await fetch(`${apiBase()}/projects`, { signal });
-    await assertOk(res, 'Failed to fetch projects');
-    return projectItemSchema.array().parse(await res.json());
-  },
+// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset, and a module-scope
+// throw kills bundle evaluation before createRoot() — a blank page no ErrorBoundary catches.
+let client: ProjectClient | undefined;
+const projects = (): ProjectClient => (client ??= new ProjectClient());
 
-  getById: async (id: string, signal?: AbortSignal): Promise<ProjectItem> => {
-    // Encoding stops a crafted id from rewriting the path (`../admin`).
-    const res = await fetch(`${apiBase()}/projects/${encodeURIComponent(id)}`, { signal });
-    await assertOk(res, 'Project not found');
-    return projectItemSchema.parse(await res.json());
-  },
+export const ProjectService = {
+  getAll: async (signal?: AbortSignal): Promise<ProjectItem[]> =>
+    projectItemSchema.array().parse(await projects().list(signal)),
+
+  getById: async (id: string, signal?: AbortSignal): Promise<ProjectItem> =>
+    projectItemSchema.parse(await projects().get(id, signal)),
 };
 ```
+
+`getAll` assumes an unpaginated `GET /projects` returning a bare array. Once `templatecentral:add (pagination)` is applied to the backend, that endpoint returns `{ data: { items, pagination } }` — update the service there rather than keeping both shapes.
 
 Export from barrel: `api/index.ts`
 
@@ -135,7 +141,7 @@ import { CustomCard } from '@/components/widgets';
 import type { ProjectItem } from '../types';
 
 export function ProjectCard({ project }: { project: ProjectItem }) {
-  return <CustomCard header={project.name} description={project.status} />;
+  return <CustomCard header={project.name} description={project.description ?? undefined} />;
 }
 ```
 
@@ -192,7 +198,7 @@ Confirm the build succeeds with no TypeScript errors and all tests pass. Verify 
 - NEVER import from one feature into another — promote shared code to `components/widgets/` (only once 2+ features use it) or `lib/`
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
-- NEVER hardcode API URLs in services — use `getApiBaseUrl()`
+- Call the backend through an `ApiClient` subclass — NEVER raw `fetch` or a hardcoded URL (it would skip the session cookie and CSRF header)
 
 ## Standalone Components
 

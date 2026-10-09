@@ -558,6 +558,60 @@ for kit_md in "${KIT_MDS[@]}"; do
   check 0 "$(grep -c 'log-opts=.*first-parent' "$kit_md")" "$k CI PR range has no --first-parent"
 done
 
+# ── README gates (lefthook readme-coupling + CI readme-freshness) ─────────────
+
+# extract_run <kit_md> <anchor-regex> — the dedented `run: |` body after the anchor line.
+extract_run() {
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+for i, l in enumerate(lines):
+    if not re.search(sys.argv[2], l):
+        continue
+    j = next((j for j in range(i, len(lines)) if re.match(r"^\s*run: \|$", lines[j])), None)
+    if j is None:
+        sys.exit()
+    ind = len(lines[j]) - len(lines[j].lstrip()) + 2
+    body = []
+    for b in lines[j + 1:]:
+        if b.strip() and len(b) - len(b.lstrip()) < ind:
+            break
+        body.append(b[ind:])
+    print("\n".join(body).replace("${{ github.base_ref }}", "main"))
+    sys.exit()
+PY
+}
+# Harness-internal folders never get a README (documentation-kit prunes them), so a change
+# there must not trip either gate; an ordinary folder without its README still must.
+for kit_md in "${KIT_MDS[@]}"; do
+  k=$(basename "$kit_md")
+  for gate in '^    readme-coupling:' '^  readme-freshness:'; do
+    body=$(extract_run "$kit_md" "$gate")
+    [[ -n "$body" ]] || continue
+    r=$(new_repo main)
+    mkdir -p "$r/src" "$r/.claude/hooks" "$r/.github/workflows"
+    touch "$r/src/a.ts" "$r/src/README.md" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml"
+    git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm base
+    git -C "$r" update-ref refs/remotes/origin/main HEAD
+    echo 1 >> "$r/.claude/hooks/x.sh"; echo 1 >> "$r/.github/workflows/ci.yml"
+    git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm harness
+    if [[ "$gate" == *coupling* ]]; then
+      echo 2 >> "$r/.claude/hooks/x.sh"; git -C "$r" add -A
+      out=$(cd "$r" && sh -c "$body" 2>&1)
+      check 0 "$(printf '%s' "$out" | grep -c '\.claude\|\.github')" "$k readme-coupling skips harness folders"
+      echo 1 >> "$r/src/a.ts"; git -C "$r" add -A
+      out=$(cd "$r" && sh -c "$body" 2>&1)
+      check 1 "$(printf '%s' "$out" | grep -c '  - src/')" "$k readme-coupling warns on src/ without README"
+    else
+      (cd "$r" && LABELS="" bash -c "$body") >/dev/null 2>&1
+      check 0 "$?" "$k readme-freshness passes a harness-only PR"
+      echo 1 >> "$r/src/a.ts"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm src
+      (cd "$r" && LABELS="" bash -c "$body") >/dev/null 2>&1
+      check 1 "$?" "$k readme-freshness fails src/ without README"
+    fi
+  done
+done
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo "test-harness-kit: $PASS passed, $FAIL failed"

@@ -45,7 +45,7 @@ is_secret() {
     .env.example|.env.default|.env.sample|.env.template) return 1 ;;
     .env|.env.*|*.pem|*.key|*.p12|*.pfx|credentials.json|.netrc) return 0 ;;
   esac
-  case "$lc" in secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 0 ;; esac
+  case "$lc" in secrets|*/secrets|.secrets|*/.secrets|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 0 ;; esac
   return 1
 }
 
@@ -67,11 +67,19 @@ writes_to() {
 
 # Candidate tokens: secret-looking names, or anything with glob characters (`.en?`, `.[e]nv`).
 delim="[:space:]\"'\`;|&<>()="
-tokens=$(printf '%s' "$CMD" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets/|[*?[])[^$delim]*" || true)
+tokens=$(printf '%s' "$CMD" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
 [[ -z "$tokens" ]] && exit 0
 
 dirs=("$ROOT")
 [[ -n "$CWD" && "$CWD" != "$ROOT" ]] && dirs+=("$CWD")
+# `cd sub && cat .env.local` resolves the token inside sub/, so check there too.
+while IFS= read -r cdt; do
+  cdt="${cdt##*[[:space:]]}"; cdt="${cdt//[\"\']/}"; cdt="${cdt/#\~/$HOME}"
+  for b in "$ROOT" ${CWD:+"$CWD"}; do
+    case "$cdt" in /*) p="$cdt" ;; *) p="$b/$cdt" ;; esac
+    [[ -d "$p" ]] && dirs+=("$p")
+  done
+done < <(printf '%s\n' "$CMD" | grep -oE '(^|[;&|(]|[[:space:]])cd[[:space:]]+[^;&|()[:space:]]+' || true)
 
 while IFS= read -r tok; do
   [[ -z "$tok" ]] && continue

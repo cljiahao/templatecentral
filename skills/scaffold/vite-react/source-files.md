@@ -1233,7 +1233,9 @@ export function Pill({ children, variant = 'outline' }: PillProps) {
 ### `src/lib/clients/fetch-client.ts`
 
 ```ts
-import { APIError } from '@/lib/errors';
+// Not the '@/lib/errors' barrel: it loads error-log-handler, which add (logging) wires to an
+// ApiClient subclass — importing through it makes a cycle that breaks `extends`.
+import { APIError } from '@/lib/errors/api-error';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -1252,16 +1254,26 @@ const TEXT_CONTENT_TYPES = ['text/plain', 'text/html', 'text/csv', 'text/xml', '
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export abstract class FetchClient {
+  // Subclass knobs: cookie auth (add auth) sends 'include'; unload-time senders need keepalive.
+  protected credentials: RequestCredentials = 'same-origin';
+  protected keepalive = false;
+
   constructor(
     protected baseUrl: string,
     protected headers: Record<string, string>
   ) {}
 
+  /** Per-request headers (e.g. a CSRF token) — the base client has no auth knowledge. */
+  protected requestHeaders(_method: HttpMethod): Record<string, string> {
+    return {};
+  }
+
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',
     body?: unknown,
-    query: Record<string, string | number | boolean | undefined> = {}
+    query: Record<string, string | number | boolean | undefined> = {},
+    signal?: AbortSignal
   ): Promise<T> {
     const url = new URL(
       `${this.baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`,
@@ -1272,18 +1284,26 @@ export abstract class FetchClient {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
 
-    const headers: Record<string, string> = { ...this.headers };
-    if (body !== undefined) {
+    const headers: Record<string, string> = { ...this.headers, ...this.requestHeaders(method) };
+    let payload: BodyInit | undefined;
+    if (body instanceof FormData) {
+      // No Content-Type — the browser must add its own multipart boundary.
+      payload = body;
+    } else if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
     }
 
+    // fetch has no default timeout — an unresponsive upstream would leave the
+    // calling React Query hook pending indefinitely without this.
+    const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const res = await fetch(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      // fetch has no default timeout — an unresponsive upstream would leave the
-      // calling React Query hook pending indefinitely without this.
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      body: payload,
+      credentials: this.credentials,
+      keepalive: this.keepalive,
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
 
     if (!res.ok) {
@@ -1591,6 +1611,8 @@ npx shadcn@latest add accordion avatar button button-group card checkbox dialog 
 ```
 
 `button-group`, `field`, and `input-group` are registry components — the CLI owns them, so never hand-write or hand-edit those files. `src/components/widgets/custom-form-field.tsx` imports from `@/components/ui/field`, so the `field` install must succeed before the verification gate.
+
+shadcn ≥4.21 emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
 
 ### 6. Verification gate
 

@@ -38,7 +38,7 @@ Tests live in `test/api/` mirroring `src/app/api/`:
 ```
 test/
 └── api/
-    ├── health.test.ts              # GET /api + GET /api/health (probe paths)
+    ├── health.test.ts              # GET /api/health (Docker probe path)
     ├── <resource>/
     │   ├── route.test.ts           # GET, POST /api/<resource>
     │   └── [id]/
@@ -96,7 +96,7 @@ describe('GET /api/projects', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toEqual(mockProjects);
+    expect(data).toEqual({ data: mockProjects });
   });
 
   it('should return 500 when service throws', async () => {
@@ -138,7 +138,7 @@ describe('POST /api/projects', () => {
     const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(data).toEqual(created);
+    expect(data).toEqual({ data: created });
   });
 
   it('should return 400 for invalid body', async () => {
@@ -180,7 +180,7 @@ describe('GET /api/projects/[id]', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toEqual(project);
+    expect(data).toEqual({ data: project });
   });
 
   it('should return 404 when project not found', async () => {
@@ -191,6 +191,22 @@ describe('GET /api/projects/[id]', () => {
 
     expect(response.status).toBe(404);
   });
+});
+```
+
+#### 4b. Routes That Check the Session
+
+Importing a handler that imports `@/lib/auth` throws without `BETTER_AUTH_SECRET` and would need a live session store — mock the module and drive `getSession` per test:
+
+```ts
+vi.mock('@/lib/auth', () => ({ auth: { api: { getSession: vi.fn() } } }));
+
+import { auth } from '@/lib/auth';
+
+it('should return 401 without a session', async () => {
+  vi.mocked(auth.api.getSession).mockResolvedValue(null);
+  const response = await GET(new NextRequest('http://localhost/api/projects/1'), makeParams({ id: '1' }));
+  expect(response.status).toBe(401);
 });
 ```
 

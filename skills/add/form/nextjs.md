@@ -151,6 +151,8 @@ export * from './components';
 
 ### 4. Use in a Page
 
+Create the route with `templatecentral:add (page)` — it covers placement and, once auth is installed, the `PUBLIC_PATHS` entry a public form page needs.
+
 ```tsx
 import { ContactForm } from '@/features/<feature>';
 

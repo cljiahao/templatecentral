@@ -85,8 +85,11 @@ export const handleApiError = (
 
 **2. API Route Example with Validation**
 
+`proxy.ts` passes any request carrying a session cookie, forged or not — so the handler validates the session itself (omit those two lines only in a project without `templatecentral:add (auth)`):
+
 ```ts
 // src/app/api/projects/route.ts
+import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
@@ -99,6 +102,9 @@ const CreateProjectSchema = z.object({
 
 export const POST = withLogging(async (request) => {
   try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return new Response(null, { status: 401 });
+
     // Malformed JSON parses to null so it fails validation (400) instead of hitting the 500 path.
     const body: unknown = await request.json().catch(() => null);
     const parsed = CreateProjectSchema.safeParse(body);
@@ -273,6 +279,7 @@ export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
 ## Validate
 
 ```bash
+# With auth installed, send the session cookie (-b) or proxy.ts answers 401 first.
 # Expect 400 {"error":"Validation failed","details":{"fieldErrors":{"name":["Name is required"]},"code":"VALIDATION_ERROR"}}
 curl -X POST http://localhost:3000/api/projects \
   -H "Content-Type: application/json" \
@@ -288,7 +295,7 @@ pnpm build
 ```typescript
 // test/error-boundary.test.tsx
 // @vitest-environment jsdom
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ErrorBoundary } from '@/components/layout/error-boundary';

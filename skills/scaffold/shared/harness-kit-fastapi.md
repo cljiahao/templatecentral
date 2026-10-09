@@ -537,13 +537,8 @@ pre-commit:
   commands:
     format-lint:
       glob: "*.py"
-      # Exclude the enforcement layer: reformatting .claude/hooks/user-prompt-guard.py (and its
-      # .harness-base snapshot copy) here would re-stage it with different bytes than Step E
-      # hashed, making verify-harness.sh false-positive MODIFIED on the first commit.
-      # .harness-base mirrors seeded files at their full original path (e.g.
-      # .claude/.harness-base/.claude/hooks/user-prompt-guard.py); ** makes the "any depth"
-      # intent explicit rather than relying on a single *'s cross-segment matching (verified
-      # working under lefthook 2.1.10's default gobwas matcher, but not guaranteed by its docs).
+      # Reformatting a hashed hook (or its .harness-base copy, at any depth) would make
+      # verify-harness.sh report MODIFIED on the first commit.
       exclude:
         - .claude/hooks/*
         - .claude/.harness-base/**
@@ -564,6 +559,8 @@ pre-commit:
         missing=""
         while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
+          # documentation-kit.md never writes a README into these folders, so never demand one
+          case "$f" in .github/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
@@ -577,8 +574,7 @@ pre-commit:
         fi
         exit 0
     comment-hygiene:
-      # Warn-only (never blocks): flags change-narration comments and oversized comment
-      # blocks. Patterns come from .claude/comment-hygiene-patterns.txt (see comments.md).
+      # Warn-only (never blocks). Patterns come from .claude/comment-hygiene-patterns.txt.
       run: |
         patterns=".claude/comment-hygiene-patterns.txt"
         [ -f "$patterns" ] || exit 0

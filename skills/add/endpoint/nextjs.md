@@ -68,7 +68,7 @@ export const GET = withLogging(async () => {
   try {
     // ← Replace: e.g. await db.select().from(projects)
     const rows: unknown[] = [];
-    return NextResponse.json(rows);
+    return NextResponse.json({ data: rows });
   } catch (error) {
     return handleApiError('Failed to fetch projects', error);
   }
@@ -89,7 +89,7 @@ export const POST = withLogging(async (request) => {
 
     // ← Replace: e.g. await db.insert(projects).values(parsed.data).returning()
     const project = parsed.data;
-    return NextResponse.json(project, { status: 201 });
+    return NextResponse.json({ data: project }, { status: 201 });
   } catch (error) {
     return handleApiError('Failed to create project', error);
   }
@@ -114,7 +114,7 @@ export const GET = withLogging<RouteContext<{ id: string }>>(async (_request, { 
     if (!project) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    return NextResponse.json(project);
+    return NextResponse.json({ data: project });
   } catch (error) {
     return handleApiError('Failed to fetch project', error);
   }
@@ -181,7 +181,7 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 
 ## Response Conventions
 
-- **Success**: Return data with appropriate status code (200, 201)
+- **Success**: Return `{ data: … }` with the appropriate status (200, 201) — the envelope the feature services, pagination, and error-handling guides all parse
 - **Error**: Use `handleApiError()` which logs and returns consistent JSON error response
 - **Not Found**: Return `{ error: 'Not found' }` with status 404
 - **Validation**: Parse with Zod's `safeParse()` and return 400 with `z.flattenError(error)` on failure

@@ -63,12 +63,19 @@ import httpx
 class GithubClient:
     """HTTP client for the GitHub API."""
 
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        # transport: tests pass httpx.MockTransport; production leaves it None.
         self._client = httpx.AsyncClient(
             base_url=base_url,
             headers={"Authorization": f"Bearer {token}"},
             # httpx defaults to follow_redirects=False — keep it so the token never follows a redirect.
             timeout=30.0,
+            transport=transport,
         )
 
     async def get_repos(self) -> list[dict[str, Any]]:
@@ -80,7 +87,9 @@ class GithubClient:
     async def get_repo(self, owner: str, repo: str) -> dict[str, Any]:
         """Fetch a specific repository."""
         # safe="" also escapes "/" so a caller-supplied "../" cannot change the upstream path.
-        response = await self._client.get(f"/repos/{quote(owner, safe='')}/{quote(repo, safe='')}")
+        response = await self._client.get(
+            f"/repos/{quote(owner, safe='')}/{quote(repo, safe='')}"
+        )
         response.raise_for_status()
         return response.json()
 
@@ -183,6 +192,12 @@ class APISettings(BaseSettings):
     GITHUB_TOKEN: SecretStr
 ```
 
+Seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (CI has no `src/.env`; see `templatecentral:add` (auth) Step 10 for the conftest shape):
+
+```python
+os.environ.setdefault("GITHUB_TOKEN", "test-placeholder")
+```
+
 Ask the user to add `GITHUB_TOKEN` to `src/.env` (real token — never commit; agent edits to `.env` files are hook-blocked by design):
 ```
 GITHUB_TOKEN=
@@ -198,14 +213,14 @@ GITHUB_TOKEN=your_github_token_here
 **`src/api/dependencies/<name>.py`**:
 
 ```python
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 
 from core.config import api_settings
 from integrations.github_client import GithubClient
 from integrations.github_service import GithubService
 
 
-async def get_github_service() -> AsyncGenerator[GithubService, None]:
+async def get_github_service() -> AsyncIterator[GithubService]:
     """Provide a GithubService instance with managed client lifecycle."""
     client = GithubClient(
         base_url=api_settings.GITHUB_API_URL,
@@ -227,20 +242,25 @@ class APITags(StrEnum):
     GITHUB = "github"
 ```
 
-Then create **`src/api/routers/<name>.py`**:
+Then create **`src/api/routers/<name>.py`**. Every call spends the server's own token, so the router requires a logged-in user — drop the `dependencies=` line only if the project has no `src/api/dependencies/auth.py` and the data is genuinely public:
 
 ```python
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 
+from api.dependencies.auth import get_current_user
 from api.dependencies.github import get_github_service
 from integrations.github_schemas import GithubRepo
 from integrations.github_service import GithubService
 
-router = APIRouter(prefix="/github")
+router = APIRouter(prefix="/github", dependencies=[Depends(get_current_user)])
 
 
 @router.get("/repos", response_model=list[GithubRepo])
-async def list_repos(service: GithubService = Depends(get_github_service)) -> list[GithubRepo]:
+async def list_repos(
+    service: Annotated[GithubService, Depends(get_github_service)],
+) -> list[GithubRepo]:
     """List authenticated user's GitHub repos."""
     return await service.list_repos()
 ```
@@ -258,6 +278,52 @@ router.include_router(github.router, tags=[APITags.GITHUB])
 
 Mandatory — the router is unreachable until registered.
 
+#### 9. Tests
+
+**`test/test_integrations/test_github_service.py`** (plus an empty `__init__.py`) — `httpx.MockTransport` stands in for the network, so the error mapping is tested without calling GitHub:
+
+```python
+"""Tests for GithubService upstream-error mapping."""
+
+import httpx
+import pytest
+from fastapi import HTTPException
+
+from core.exceptions import NoResultsFound
+from integrations.github_client import GithubClient
+from integrations.github_service import GithubService
+
+REPO = {"id": 1, "full_name": "o/r", "html_url": "https://github.com/o/r"}
+
+
+def make_service(status: int, body: object) -> GithubService:
+    transport = httpx.MockTransport(lambda _req: httpx.Response(status, json=body))
+    client = GithubClient("https://api.test", "token", transport=transport)
+    return GithubService(client)
+
+
+@pytest.mark.unit
+async def test_get_repo_returns_validated_model() -> None:
+    """A 200 body is validated into GithubRepo."""
+    repo = await make_service(200, REPO).get_repo("o", "r")
+    assert repo.full_name == "o/r"
+
+
+@pytest.mark.unit
+async def test_upstream_404_maps_to_not_found() -> None:
+    """Upstream 404 becomes the domain NoResultsFound (-> 404)."""
+    with pytest.raises(NoResultsFound, match="not found"):
+        await make_service(404, {}).get_repo("o", "missing")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("status", "body"), [(500, {}), (200, {"id": "x"})])
+async def test_upstream_failure_maps_to_502(status: int, body: object) -> None:
+    """Upstream 5xx and schema-violating bodies both become a 502."""
+    with pytest.raises(HTTPException, match="Upstream service error"):
+        await make_service(status, body).get_repo("o", "r")
+```
+
 ### Rules
 
 - Use `httpx.AsyncClient` for async HTTP — not `requests`.
@@ -274,7 +340,8 @@ Mandatory — the router is unreachable until registered.
 
 ```bash
 python -m pytest test/ -v
-ruff check src/
+ruff check src/ test/
+python -m pyright src/
 ```
 
 ### After Writing Code

@@ -1098,14 +1098,15 @@ import { logger } from '@/lib/logger';
 //   export const GET = withLogging<RouteContext<{ id: string }>>(async (req, { params }) => …)  // dynamic
 export type RouteContext<P = Record<string, string>> = { params: Promise<P> };
 
-type RouteHandler<C> = (req: NextRequest, ctx: C) => Promise<NextResponse>;
+// Plain `Response` (not NextResponse) so library handlers such as better-auth's wrap directly.
+type RouteHandler<C> = (req: NextRequest, ctx: C) => Promise<Response>;
 
 // The returned handler takes the context via a variadic tuple ([ctx] | []) so static routes
 // (and unit tests) can call it with just the request, while dynamic routes still receive
 // their typed params. Next.js passes the context for dynamic segments at runtime.
 export function withLogging<C = unknown>(
   handler: RouteHandler<C>
-): (req: NextRequest, ...rest: [ctx: C] | []) => Promise<NextResponse> {
+): (req: NextRequest, ...rest: [ctx: C] | []) => Promise<Response> {
   return async (req, ...rest) => {
     const start = Date.now();
     const { method } = req;
@@ -1840,6 +1841,8 @@ npx shadcn@latest add button card dialog field form input label select separator
 ```
 
 `field` is a registry component — the CLI owns it, never hand-write or hand-edit that file. `src/components/widgets/custom-form-field.tsx` imports from `@/components/ui/field`, so the `field` install must succeed before the verification gate.
+
+shadcn ≥4.21 emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
 
 ### 5. Copy `.env.example` to `.env.local`
 

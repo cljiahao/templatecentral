@@ -36,6 +36,8 @@ the marker.
 | Public page | `src/app/(public)/<path>/page.tsx` |
 | Dashboard/authenticated page | `src/app/dashboard/<path>/page.tsx` |
 
+> **Public pages with auth installed:** `src/proxy.ts` redirects every path not in `PUBLIC_PATHS` to `/login`, route group or not. Add the new `PAGE_ROUTES` constant (Step 6) to `PUBLIC_PATHS` there, or the "public" page is login-gated.
+
 > **Dashboard pages require auth.** If `src/app/dashboard/` does not exist yet, run the `templatecentral:add` (auth) skill first — it creates the dashboard route group along with the full auth stack.
 
 > `proxy.ts` only gates routing on cookie presence — it is NOT the authoritative check. Every protected route group must additionally `await auth.api.getSession({ headers: await headers() })` in its `layout.tsx` and `redirect()` when null — see `templatecentral:add (auth)` Step 8.

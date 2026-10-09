@@ -19,7 +19,7 @@ Add a driver for the target database:
 
 ### A2. Create Database Base
 
-**`src/database/base.py`**:
+**`src/database/base.py`** (plus an empty `src/database/__init__.py`):
 
 ```python
 from sqlalchemy.orm import DeclarativeBase
@@ -46,6 +46,12 @@ Required fields make pyright flag `api_settings = APISettings()` (it cannot see 
 Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
 DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
+```
+
+CI has no `src/.env` and `session.py` builds the engine at import, so seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (add `import os` and move `from app import app` into the fixture if they are not there yet — see `templatecentral:add` (auth) Step 10). Tests override `get_db`, so this URL is never queried:
+
+```python
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 ```
 
 ### A4. Create Database Session
@@ -94,6 +100,9 @@ from core.config import api_settings
 from database.base import Base
 from database.session import engine
 
+# Autogenerate only sees tables whose model modules were imported — list every one.
+from models import project  # noqa: F401
+
 config = context.config
 # Escape % — alembic's ConfigParser treats it as interpolation (URL-encoded passwords break otherwise).
 config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL.replace("%", "%%"))
@@ -116,10 +125,12 @@ def run_migrations_online():
 **`src/models/project.py`** (example — a generic entity; the `User` model is defined separately in the auth integration section below):
 
 ```python
+from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
 
 from database.base import Base
 
@@ -131,7 +142,13 @@ class Project(Base):
         String, primary_key=True, default=lambda: str(uuid4())
     )
     name: Mapped[str] = mapped_column(String, index=True)
-    description: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 ```
 
 ### A7. Generate First Migration
@@ -186,6 +203,8 @@ Confirm all tests pass.
 
 ### Step A — Create `src/models/user.py`
 
+Add `user` to the `from models import ...` line in `alembic/env.py`, then generate its migration (`alembic revision --autogenerate -m "create users table"` + `alembic upgrade head`).
+
 ```python
 from datetime import datetime
 from uuid import uuid4
@@ -213,7 +232,7 @@ class User(Base):
 
 ### Step B — Create `src/api/repositories/user_repository.py`
 
-> Create the `api/repositories/` directory if it does not already exist.
+> Create the `api/repositories/` directory (with an empty `__init__.py`) if it does not already exist.
 
 ```python
 from sqlalchemy import select
@@ -244,6 +263,7 @@ def create_user(db: Session, email: str, hashed_password: str, name: str) -> Use
 import secrets
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.repositories.user_repository import (
@@ -260,17 +280,21 @@ DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def register_user(db: Session, email: str, password: str, name: str) -> dict:
-    if get_user_by_email(db, email):
+    # The unique index, not a find-then-insert check, is what stops duplicate
+    # accounts under concurrent registrations.
+    try:
+        user = create_user(
+            db=db,
+            email=email,
+            hashed_password=hash_password(password),
+            name=name,
+        )
+    except IntegrityError:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered.",
-        )
-    user = create_user(
-        db=db,
-        email=email,
-        hashed_password=hash_password(password),
-        name=name,
-    )
+        ) from None
     return {"id": str(user.id), "email": user.email, "name": user.name}
 
 
