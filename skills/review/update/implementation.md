@@ -32,6 +32,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
    - If the command fails for a non-advisory reason (network error, registry unreachable): add "pnpm audit failed — security advisory check skipped" to the report and continue to step 9
    - Report any high/critical advisories under "Security advisories" in the results summary
    - Do NOT auto-rollback — advisories are report-only; the user decides next steps
+   - Review every configured ignore (`audit.ignore` in `pnpm-workspace.yaml`): list each entry in the report and propose removing it once a fixed release exists or its documented reason no longer holds
 9. Report results (see Reporting below)
 
 ### FastAPI

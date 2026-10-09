@@ -46,7 +46,14 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=12, max_length=128, description="User password — 12-128 characters (OWASP minimum; the upper bound caps argon2 hashing cost on this unauthenticated endpoint).")
+    password: str = Field(
+        min_length=12,
+        max_length=128,
+        description=(
+            "User password — 12-128 characters (OWASP minimum; the upper bound"
+            " caps argon2 hashing cost on this unauthenticated endpoint)."
+        ),
+    )
     name: str = Field(description="User display name.")
 
 
@@ -86,9 +93,13 @@ Add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `APISettings` in **`src/co
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
+    SECRET_KEY: str = Field(
+        description="JWT signing key — generate with: openssl rand -hex 32"
+    )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
 ```
+
+Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
 
 > `TRUST_PROXY` already exists in the scaffold's `APISettings` (`src/core/config.py`) and `src/.env.default` — do not re-add it.
 
@@ -113,7 +124,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 **`src/core/security.py`** — JWT token creation/verification and password hashing:
 
 ```python
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from argon2 import PasswordHasher
@@ -126,6 +137,9 @@ ALGORITHM = "HS256"
 # argon2id, t=3 / m=64 MiB / p=1 — above OWASP's minimums. Set explicitly because
 # argon2-cffi's defaults (RFC 9106 low-memory profile) use p=4.
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
+# A named tuple, not `except A, B:` — that unparenthesized form (PEP 758) is a
+# SyntaxError before 3.14, and the Beanie path pins projects to 3.13.
+_VERIFY_ERRORS = (VerificationError, InvalidHashError)
 
 
 def hash_password(password: str) -> str:
@@ -135,15 +149,21 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return _ph.verify(hashed_password, plain_password)
-    except (VerificationError, InvalidHashError):
+    except _VERIFY_ERRORS:
         return False
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
-    now = datetime.now(timezone.utc)
-    expire = now + (expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    return jwt.encode({"sub": subject, "iat": now, "exp": expire}, api_settings.SECRET_KEY, algorithm=ALGORITHM)
+    now = datetime.now(UTC)
+    expire = now + (
+        expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return jwt.encode(
+        {"sub": subject, "iat": now, "exp": expire},
+        api_settings.SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
 
 
 def decode_access_token(token: str) -> str | None:
@@ -166,6 +186,8 @@ def decode_access_token(token: str) -> str | None:
 Create **`src/api/dependencies/`** directory (does not exist in base template), then add both **`src/api/dependencies/__init__.py`** (empty, marks the directory as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
 ```python
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -175,7 +197,7 @@ bearer_scheme = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> str:
     """Extract and validate the current user from the JWT token."""
     user_id = decode_access_token(credentials.credentials)
@@ -266,13 +288,15 @@ router.include_router(auth.router, tags=[APITags.AUTH])
 Use the `get_current_user` dependency on any endpoint that requires auth:
 
 ```python
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
 
 from api.dependencies.auth import get_current_user
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
+async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResponse:
     """Get the current authenticated user. Implement DB lookup after running `templatecentral:add` (database)."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -285,10 +309,10 @@ async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
 Target: max 3 auth attempts per 15 minutes per client IP. Add `slowapi` to `requirements.txt`, then:
 
 ```python
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from fastapi import Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 # get_remote_address reads request.client.host — correct behind a proxy only when
 # TRUST_PROXY is set (see Rules), otherwise every user shares the proxy's bucket.
@@ -297,11 +321,13 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
 # On auth endpoints — limit /register as well as /login (both are
 # unauthenticated and CPU-expensive via argon2 hashing):
 @router.post("/register", response_model=UserResponse)
 @limiter.limit("3/15minutes")
 async def register(request: Request, body: RegisterRequest) -> UserResponse: ...
+
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("3/15minutes")

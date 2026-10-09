@@ -69,7 +69,10 @@ engine = create_engine(
     # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
     # credential, so the server certificate must be verified against the AWS
     # RDS CA bundle or an on-path attacker can intercept it.
-    connect_args={"sslmode": "verify-full", "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH},
+    connect_args={
+        "sslmode": "verify-full",
+        "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH,
+    },
 )
 
 
@@ -81,7 +84,7 @@ def provide_token(dialect, conn_rec, cargs, cparams):
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db
@@ -100,8 +103,12 @@ class APISettings(BaseSettings):
     DATABASE_PORT: int = Field(default=5432, description="RDS port")
     DATABASE_USER: str = Field(description="IAM database user")
     DATABASE_NAME: str = Field(description="Database name")
-    AWS_REGION: str = Field(default="us-east-1", description="AWS region for RDS signer")
-    RDS_CA_BUNDLE_PATH: str = Field(description="Path to the AWS global RDS CA bundle used for sslmode=verify-full")
+    AWS_REGION: str = Field(
+        default="us-east-1", description="AWS region for RDS signer"
+    )
+    RDS_CA_BUNDLE_PATH: str = Field(
+        description="Path to the AWS global RDS CA bundle used for sslmode=verify-full"
+    )
 ```
 
 ### Step 4 — Update `alembic/env.py`

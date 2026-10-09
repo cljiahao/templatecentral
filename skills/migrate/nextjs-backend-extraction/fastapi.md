@@ -12,7 +12,7 @@ Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients 
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → Beanie / None detected]`.
+**Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → PyMongo async / None detected]`.
 
 ---
 
@@ -174,29 +174,29 @@ Do not copy the TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) �
 Ask:
 > "Your Next.js project uses [Drizzle / Kysely] (TypeScript-only). FastAPI requires a Python ORM. Which would you like to use?
 > - SQLAlchemy — relational databases (PostgreSQL, MySQL, SQLite)
-> - Beanie — MongoDB (async, Pydantic-native)"
+> - PyMongo async — MongoDB (Pydantic models + repositories; Beanie ODM only on explicit request — it pins Python 3.13)"
 
 After the user answers, load and follow the corresponding skill:
 ```bash
 # If SQLAlchemy
 cat "<skill-dir>/../add/database/python/sqlalchemy.md"
 
-# If Beanie
-cat "<skill-dir>/../add/database/python/beanie.md"
+# If MongoDB (Beanie instead only if the user explicitly asked for it)
+cat "<skill-dir>/../add/database/python/pymongo-async.md"
 ```
 
-The database skill scaffolds only the connection layer. Port each Drizzle table / Kysely `types.ts` interface to a SQLAlchemy model or Beanie document and present the ported schemas to the user for review before Phase 7.
+The database skill scaffolds only the connection layer. Port each Drizzle table / Kysely `types.ts` interface to a SQLAlchemy model or a Pydantic model + repository and present the ported schemas to the user for review before Phase 7.
 
 After the user confirms, delete `src/integrations/database/` (and `drizzle.config.ts`, if present) from the Next.js project.
 
 **FastAPI + Mongoose:**
 
-Load and follow the Beanie skill (Beanie is the Pydantic-native equivalent for MongoDB in Python):
+Load and follow the PyMongo async skill (Pydantic models + repositories on PyMongo's `AsyncMongoClient`; use `beanie.md` instead only if the user explicitly wants an ODM — it pins Python 3.13):
 ```bash
-cat "<skill-dir>/../add/database/python/beanie.md"
+cat "<skill-dir>/../add/database/python/pymongo-async.md"
 ```
 
-Port Mongoose schemas to Beanie Documents. Delete `src/integrations/database/` from the Next.js project.
+Port Mongoose schemas to Pydantic models in `src/models/` with a `BaseRepository` subclass each (carry unique indexes into `ensure_indexes`). Delete `src/integrations/database/` from the Next.js project.
 
 ---
 
@@ -208,6 +208,14 @@ Load and follow the FastAPI auth skill in `../[project-name]-api`:
 ```bash
 cat "<skill-dir>/../add/auth/fastapi.md"
 ```
+
+If Phase 6 migrated a database, the auth skill's `auth_service.py` is a 501 stub. Phase 6 ran before these stubs existed, so its auth section was skipped — replace the stubs with the database-backed implementation now:
+
+| Phase 6 database | Follow |
+|---|---|
+| SQLAlchemy | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/python/sqlalchemy.md"` |
+| PyMongo async | `cat "<skill-dir>/../add/database/python/pymongo-async-auth.md"` |
+| Beanie | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/python/beanie.md"` |
 
 Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 

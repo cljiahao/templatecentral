@@ -36,8 +36,12 @@ Add `DATABASE_URL` to `APISettings` in **`src/core/config.py`**:
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    DATABASE_URL: str = Field(description="Database connection URL — must be set in environment")
+    DATABASE_URL: str = Field(
+        description="Database connection URL — must be set in environment"
+    )
 ```
+
+Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
 
 Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
@@ -60,7 +64,7 @@ engine = create_engine(api_settings.DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db
@@ -96,6 +100,7 @@ config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL.replace("%", 
 
 target_metadata = Base.metadata
 
+
 def run_migrations_online():
     connectable = engine
     with connectable.connect() as connection:
@@ -122,7 +127,9 @@ from database.base import Base
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
     name: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[str] = mapped_column(String)
 ```
@@ -136,10 +143,11 @@ alembic upgrade head
 
 ### A8. Usage
 
-Inject the session via `Depends(get_db)` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
+Inject the session via `Annotated[Session, Depends(get_db)]` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
+from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -149,8 +157,9 @@ from api.schemas.response.project import ProjectResponse
 from database.session import get_db
 from models.project import Project
 
+
 @router.get("/projects", response_model=list[ProjectResponse])
-def list_projects(db: Session = Depends(get_db)) -> Sequence[Project]:
+def list_projects(db: Annotated[Session, Depends(get_db)]) -> Sequence[Project]:
     stmt = select(Project)
     return db.scalars(stmt).all()
 ```
@@ -191,11 +200,15 @@ from database.base import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
     name: Mapped[str] = mapped_column(String)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 ```
 
 ### Step B — Create `src/api/repositories/user_repository.py`
@@ -233,7 +246,11 @@ import secrets
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from api.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
+from api.repositories.user_repository import (
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+)
 from core.security import create_access_token, hash_password, verify_password
 
 # Verified on the miss path so an unknown email costs the same as a wrong
@@ -259,7 +276,9 @@ def register_user(db: Session, email: str, password: str, name: str) -> dict:
 
 def login_user(db: Session, email: str, password: str) -> str:
     user = get_user_by_email(db, email)
-    password_ok = verify_password(password, user.hashed_password if user else DUMMY_HASH)
+    password_ok = verify_password(
+        password, user.hashed_password if user else DUMMY_HASH
+    )
     if user is None or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -281,6 +300,8 @@ def get_user(db: Session, user_id: str) -> dict:
 ### Step D — Replace `src/api/routers/auth.py`
 
 ```python
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -294,21 +315,28 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post("/register", response_model=UserResponse)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> UserResponse:
+def register(
+    body: RegisterRequest, db: Annotated[Session, Depends(get_db)]
+) -> UserResponse:
     """Register a new user account."""
-    user = register_user(db=db, email=body.email, password=body.password, name=body.name)
+    user = register_user(
+        db=db, email=body.email, password=body.password, name=body.name
+    )
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> TokenResponse:
     """Authenticate and receive a JWT token."""
     token = login_user(db=db, email=body.email, password=body.password)
     return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
+def get_me(
+    user_id: Annotated[str, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> UserResponse:
     """Get the current authenticated user."""
     user = get_user(db=db, user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])

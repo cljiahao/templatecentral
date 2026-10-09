@@ -249,7 +249,7 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
         )
 ```
 
-On Beanie/PyMongo, register a `pymongo.monitoring.CommandListener` instead and log `event.command_name` + `event.duration_micros // 1000` from `succeeded()` — never `event.command` (it contains the filter values).
+On PyMongo (or Beanie), register a `pymongo.monitoring.CommandListener` instead and log `event.command_name` + `event.duration_micros // 1000` from `succeeded()` — never `event.command` (it contains the filter values).
 
 **Sanitized request context** — bind extra fields in the `log_requests` middleware (they flow to every line for the request):
 

@@ -72,7 +72,7 @@ Ask:
 
 If accepted:
 
-- **Node stacks**: `pnpm audit --audit-level=high`.
+- **Node stacks**: `pnpm audit --audit-level=high`. Also list every `audit.ignore` entry in `pnpm-workspace.yaml` and flag any whose advisory now has a fixed release or whose documented reason no longer holds.
 - **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped".
 
 Zero findings → "No known vulnerabilities found." Otherwise list package, severity, advisory ID, and whether a fixed version exists, and recommend the review utility's `update` operation. Never auto-upgrade.

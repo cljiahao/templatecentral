@@ -444,7 +444,9 @@ class APISettings(BaseSettings):
 
 
 common_settings = CommonSettings()
-api_settings = APISettings()
+# Fields without a default (e.g. added by templatecentral:add) are filled from the
+# environment at runtime; pyright only sees the constructor signature and flags them.
+api_settings = APISettings()  # pyright: ignore[reportCallIssue]
 ```
 
 ### `src/core/exceptions.py`
@@ -1238,7 +1240,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 | Skill | When to use |
 |-------|-------------|
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
-| `templatecentral:add (database)` | connect SQLAlchemy/Beanie |
+| `templatecentral:add (database)` | connect SQLAlchemy/MongoDB |
 | `templatecentral:add (endpoint)` | new route + schema + service method |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |

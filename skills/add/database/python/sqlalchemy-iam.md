@@ -75,7 +75,10 @@ engine = create_engine(
     # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
     # credential, so the server certificate must be verified against the AWS
     # RDS CA bundle or an on-path attacker can intercept it.
-    connect_args={"sslmode": "verify-full", "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH},
+    connect_args={
+        "sslmode": "verify-full",
+        "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH,
+    },
 )
 
 
@@ -87,7 +90,7 @@ def provide_token(dialect, conn_rec, cargs, cparams):
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db
@@ -106,9 +109,15 @@ class APISettings(BaseSettings):
     DATABASE_PORT: int = Field(default=5432, description="RDS port")
     DATABASE_USER: str = Field(description="IAM database user")
     DATABASE_NAME: str = Field(description="Database name")
-    AWS_REGION: str = Field(default="us-east-1", description="AWS region for RDS signer")
-    RDS_CA_BUNDLE_PATH: str = Field(description="Path to the AWS global RDS CA bundle used for sslmode=verify-full")
+    AWS_REGION: str = Field(
+        default="us-east-1", description="AWS region for RDS signer"
+    )
+    RDS_CA_BUNDLE_PATH: str = Field(
+        description="Path to the AWS global RDS CA bundle used for sslmode=verify-full"
+    )
 ```
+
+Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
 
 Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 
@@ -166,7 +175,9 @@ from database.base import Base
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
     name: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[str] = mapped_column(String)
 ```
@@ -180,10 +191,11 @@ alembic upgrade head
 
 ### A9. Usage
 
-Inject the session via `Depends(get_db)` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
+Inject the session via `Annotated[Session, Depends(get_db)]` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
+from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -193,8 +205,9 @@ from api.schemas.response.project import ProjectResponse
 from database.session import get_db
 from models.project import Project
 
+
 @router.get("/projects", response_model=list[ProjectResponse])
-def list_projects(db: Session = Depends(get_db)) -> Sequence[Project]:
+def list_projects(db: Annotated[Session, Depends(get_db)]) -> Sequence[Project]:
     stmt = select(Project)
     return db.scalars(stmt).all()
 ```

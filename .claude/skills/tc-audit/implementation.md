@@ -258,7 +258,9 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/database/python.md` ← stack router
 - [ ] `skills/add/database/python/sqlalchemy.md`
 - [ ] `skills/add/database/python/sqlalchemy-iam.md`
-- [ ] `skills/add/database/python/beanie.md`
+- [ ] `skills/add/database/python/pymongo-async.md` ← MongoDB default
+- [ ] `skills/add/database/python/pymongo-async-auth.md` ← auth-stub completion add-on
+- [ ] `skills/add/database/python/beanie.md` ← opt-in, pins Python 3.13
 - [ ] `skills/add/endpoint/fastapi.md`
 - [ ] `skills/add/integration/fastapi.md`
 - [ ] `skills/add/test/fastapi.md`
@@ -466,7 +468,7 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
 - [ ] **block-`--no-verify` PreToolUse hook present**: Scaffold settings.json includes a `PreToolUse` hook with `matcher: "Bash"` that checks incoming Bash commands and exits 2 if `--no-verify` is found. Must read `tool_input.command` from stdin JSON — **not** top-level `command`. TS stacks use `node` via exec form; FastAPI uses `python3`. Without this hook, an agent can bypass Stop (and all other hooks) by running `git commit --no-verify`.
 - [ ] **migrate seeds the FULL harness-kit (scaffold parity)**: `migrate/general` Phase 4 must execute harness-kit Steps **A–E** (incl. B2 git-hook layer, B3 CI, B4 integrity verifier, B5 `/skill-audit`), not just A–B — a migrated project must get the same enforcement layer as a scaffolded one. Its `harness.json` must defer to kit **Step E** (all 9 hooks incl. `skill-usage-log.sh`, `post-edit-comment-check.sh`, `lefthook.yml`, `.gitleaks.toml`, `ci.yml`, `verify/regen-harness.sh`, `skill-audit`, `.claude/comment-hygiene-patterns.txt`), never a hand-maintained partial copy. Phase 5d re-sync + the pre-push hook call `verify-harness.sh`, so B4 MUST be seeded. Flag any stale "10 hooks" / `post-tool-failure.sh` reference or partial-manifest drift.
-- [ ] **Local gitleaks is blocking**: the seeded `lefthook.yml` gitleaks command must NOT end in `|| true` (or otherwise swallow the exit code) — a non-blocking local secret scan lets a leaked credential reach the remote before CI runs.
+- [ ] **Local gitleaks is blocking**: the seeded `lefthook.yml` gitleaks command must NOT end in `|| true` (or otherwise swallow the exit code) — a non-blocking local secret scan lets a leaked credential reach the remote before CI runs. It must use `gitleaks git --pre-commit --staged` (not the deprecated `gitleaks protect`). The seeded CI must install the MIT gitleaks CLI with the version + SHA-256 in ONE `env` block and `sha256sum -c` (never `gitleaks/gitleaks-action`, which needs a paid `GITLEAKS_LICENSE` on org repos), scan `origin/<base>..HEAD` on PRs (no `--first-parent` — on GitHub's synthetic merge it scans nothing) and full history on push, and the seeded `.gitleaks.toml` must use `[[allowlists]]` (top-level `[allowlist]` deprecated since v8.25).
 - [ ] **verify-harness fails closed on a bad manifest**: the seeded `verify-harness.sh` exits non-zero when `.claude/harness.json` is missing, empty, unparseable, or has an empty file list — it must never report OK because there was nothing to check.
 - [ ] **AGENTS.md hashed after its final write**: the scaffold/migrate step that records `harness.json` hashes runs AFTER the last edit to AGENTS.md (incl. any stack-specific append). Hashing earlier records a stale SHA and every fresh project reports drift on its first verify.
 

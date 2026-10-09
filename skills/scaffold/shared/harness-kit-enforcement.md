@@ -172,7 +172,7 @@ fi
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Known non-secrets"
 paths = [
   '''\.env\.example$''',
@@ -184,7 +184,7 @@ paths = [
 **Install wiring:**
 - **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install || true"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone; the `|| true` keeps Docker builds — which exclude `.git` via `.dockerignore` — from failing, since `lefthook install` hard-errors when no `.git` is present and has no built-in graceful skip). Freshen the `lefthook` pin with the review utility.
 - **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
-- **gitleaks** is a system binary, not a package dependency. The pre-commit command skips only when it is absent (CI is the hard gate) and fails the commit on a finding when present; document `brew install gitleaks` / the release binary in the README.
+- **gitleaks** is a system binary, not a package dependency. The pre-commit command (`gitleaks git --pre-commit --staged` — the v8.19+ form; `gitleaks protect`/`detect` are deprecated) skips only when it is absent (CI is the hard gate) and fails the commit on a finding when present; document `brew install gitleaks` / the release binary in the README. A reviewed false positive goes in `.gitleaksignore` (one finding fingerprint per line) or the `[[allowlists]]` table above — never a real secret.
 
 Then create the lefthook commit-msg script executable:
 ```bash
@@ -228,11 +228,23 @@ jobs:
       - run: pnpm exec vitest --run --coverage    # writes coverage/cobertura-coverage.xml
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
-      - name: Secret scan (full history)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      - name: Install gitleaks (MIT CLI, checksum-verified)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}   # required for org-owned repos (or run the gitleaks CLI instead)
+          GITLEAKS_VERSION: "8.30.1"   # bump VERSION and SHA256 together, from the release's gitleaks_<version>_checksums.txt
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"   # gitleaks_<version>_linux_x64.tar.gz
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C /usr/local/bin gitleaks
+      - name: Secret scan (gitleaks)   # PR: the PR's commits; push: full history
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            gitleaks git --redact --no-banner --log-opts="origin/${BASE_REF}..HEAD"
+          else
+            gitleaks git --redact --no-banner
+          fi
   changelog:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -325,10 +337,30 @@ jobs:
 
 **Notes:**
 - **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
-- **SHA-pin the actions** (`actions/checkout`, `setup-node`, `setup-python`, `pnpm/action-setup`, `gitleaks-action`) to the full commit SHA of the current major for supply-chain hygiene, with the version in a trailing comment; let Dependabot/Renovate (or the review utility) bump them — never hand-type a SHA.
+- **SHA-pin the actions** (`actions/checkout`, `setup-node`, `setup-python`, `pnpm/action-setup`) to the full commit SHA of the current major for supply-chain hygiene, with the version in a trailing comment; let Dependabot/Renovate (or the review utility) bump them — never hand-type a SHA.
 - **pnpm version comes from `packageManager`** in `package.json` — `pnpm/action-setup` is given no `version:` input so CI can never drift from the pinned pnpm. pnpm 12 needs `pnpm/action-setup` ≥ v6.1.0 (the floating `v6` tag lagged behind v6.1.0, so pin the v6.1.0+ SHA rather than `@v6`). The lockfile records the package manager too: after bumping `packageManager`, run a plain `pnpm install` and commit `pnpm-lock.yaml`, or the frozen install fails with `ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`. To disable frozen mode use `--no-frozen-lockfile` (pnpm 12 removed `--frozen-lockfile false`).
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
-- **gitleaks-action** v3 only moves the runtime to Node 24 (v2 runs on Node 20, which GitHub scheduled for removal from hosted runners on 2026-09-16); inputs and env are unchanged. It needs `GITHUB_TOKEN` to read PR commits and comment on PRs, and a `GITLEAKS_LICENSE` secret on **organization-owned** repos (free for personal repos). Without a license, replace the step with the gitleaks CLI (`gitleaks git --redact`) after installing the release binary.
+- **gitleaks runs as the CLI, not `gitleaks/gitleaks-action`:** the action needs a paid `GITLEAKS_LICENSE` secret on organization-owned repos; the CLI is MIT, needs no key or token, and is the same current scanner (upstream calls gitleaks feature-complete; its maintainer's successor is Betterleaks — note only). The version and SHA-256 live once, in the install step's `env` — bump both together from the release's `gitleaks_<version>_checksums.txt`; `sha256sum -c` fails the job on any mismatch. A PR scans only its own commits (`origin/<base>..HEAD` — correct on GitHub's synthetic merge checkout; do NOT add `--first-parent`, which follows the base side of that merge and scans nothing); a push to `main` scans full history. Both need `fetch-depth: 0`. Exit code 1 on any finding fails the job; `--redact` keeps secrets out of the log.
+- **Azure Pipelines equivalent** (ADO PR builds also check out a merge commit, so the same range applies):
+  ```yaml
+  steps:
+    - checkout: self
+      fetchDepth: 0   # ADO defaults new pipelines to a shallow fetch
+    - bash: |
+        set -euo pipefail
+        GITLEAKS_VERSION=8.30.1   # bump VERSION and SHA256 together
+        GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        curl -fsSL -o "$AGENT_TEMPDIRECTORY/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        echo "${GITLEAKS_SHA256}  $AGENT_TEMPDIRECTORY/gitleaks.tar.gz" | sha256sum -c -
+        sudo tar -xzf "$AGENT_TEMPDIRECTORY/gitleaks.tar.gz" -C /usr/local/bin gitleaks
+        if [ -n "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}" ]; then
+          gitleaks git --redact --no-banner --log-opts="origin/${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}..HEAD"
+        else
+          gitleaks git --redact --no-banner
+        fi
+      displayName: Secret scan (gitleaks)
+  ```
+- **Push protection is the third secret layer** (after the pre-commit hook and this CI scan): the host rejects a push containing a recognised secret before it lands. Enable it in repo settings — free on public GitHub repos; private repos need GitHub Secret Protection, and Azure Repos need GitHub Advanced Security for Azure DevOps. It is a setting, not a seeded file.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - The workflow lives under `.github/workflows/`, which `protect-files.sh` blocks the agent from editing — CI config is human-reviewed by design.
 

@@ -553,7 +553,7 @@ pre-commit:
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; python -m pyright src/'
     secret-scan:
       # Skips only when gitleaks isn't installed locally (CI is the hard gate); a finding fails the commit.
-      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks protect --staged --redact --no-banner; fi
+      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
     readme-coupling:
       # Warn-only (never blocks): a folder with staged file changes should have its own
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).
@@ -666,9 +666,21 @@ pre-push:
       - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
       - name: Changed-line coverage (>= 80%)
         run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
-      - name: Secret scan (full history)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      - name: Install gitleaks (MIT CLI, checksum-verified)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}   # required for org-owned repos (or run the gitleaks CLI instead)
+          GITLEAKS_VERSION: "8.30.1"   # bump VERSION and SHA256 together, from the release's gitleaks_<version>_checksums.txt
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"   # gitleaks_<version>_linux_x64.tar.gz
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C /usr/local/bin gitleaks
+      - name: Secret scan (gitleaks)   # PR: the PR's commits; push: full history
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            gitleaks git --redact --no-banner --log-opts="origin/${BASE_REF}..HEAD"
+          else
+            gitleaks git --redact --no-banner
+          fi
 ```

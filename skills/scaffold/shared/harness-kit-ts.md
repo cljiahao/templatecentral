@@ -536,7 +536,7 @@ pre-commit:
     secret-scan:
       # Skips only when gitleaks isn't installed locally (CI is the hard gate); when it IS
       # installed, a finding fails the commit — no `|| true` swallowing real leaks.
-      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks protect --staged --redact --no-banner; fi
+      run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
     readme-coupling:
       # Warn-only (never blocks): a folder with staged file changes should have its own
       # README.md staged too (per-folder documentation convention — see documentation-kit.md).

@@ -59,6 +59,8 @@ skills/
       python/
         sqlalchemy.md       ← leaf reference file
         sqlalchemy-iam.md
+        pymongo-async.md
+        pymongo-async-auth.md   ← add-on leaf (loaded alongside its base guide)
         beanie.md
       typescript.md         ← stack router (detects DB variant + cat to leaf)
       typescript/

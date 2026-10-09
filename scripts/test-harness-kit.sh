@@ -526,6 +526,37 @@ for m in 'added stuff' 'feat:no space' 'Feat: x' 'feat(x)!:x'; do
   expect_commit_msg 1 "$m"
 done
 
+# ── gitleaks (lefthook secret-scan + CI) ──────────────────────────────────────
+
+# The lefthook secret-scan `run:` line, run against a stub gitleaks that records its argv
+# and exits with $STUB_EXIT: a finding must fail the commit, and an absent binary must skip.
+GLS="$T/gl-stub"
+mkdir -p "$GLS"
+printf '#!/bin/sh\necho "$*" > "%s/argv"\nexit "${STUB_EXIT:-0}"\n' "$GLS" > "$GLS/gitleaks"
+chmod +x "$GLS/gitleaks"
+for kit_md in "${KIT_MDS[@]}"; do
+  line=$(grep -A3 '^    secret-scan:' "$kit_md" | grep -m1 '^      run: ' | sed 's/^      run: //')
+  [[ -n "$line" ]] || continue
+  k=$(basename "$kit_md")
+  rm -f "$GLS/argv"
+  STUB_EXIT=1 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
+  check 1 "$?" "$k secret-scan blocks on a finding"
+  check "git --pre-commit --staged --redact --no-banner" "$(cat "$GLS/argv" 2>/dev/null)" "$k secret-scan uses gitleaks git --pre-commit"
+  STUB_EXIT=0 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
+  check 0 "$?" "$k secret-scan passes when clean"
+  PATH=/usr/bin:/bin bash -c "$line" >/dev/null 2>&1
+  check 0 "$?" "$k secret-scan skips when gitleaks is absent"
+done
+for kit_md in "${KIT_MDS[@]}"; do
+  grep -q 'Install gitleaks' "$kit_md" || continue
+  k=$(basename "$kit_md")
+  check 0 "$(grep -cE 'uses: gitleaks/|secrets\.GITLEAKS_LICENSE|gitleaks protect --' "$kit_md")" "$k uses no gitleaks-action / licence / protect"
+  check 1 "$(grep -c '^          GITLEAKS_SHA256: ' "$kit_md")" "$k CI pins the gitleaks SHA-256 once"
+  grep -q '| sha256sum -c -$' "$kit_md"
+  check 0 "$?" "$k CI verifies the gitleaks checksum"
+  check 0 "$(grep -c 'log-opts=.*first-parent' "$kit_md")" "$k CI PR range has no --first-parent"
+done
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo "test-harness-kit: $PASS passed, $FAIL failed"

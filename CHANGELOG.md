@@ -10,6 +10,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.20.0] — 2026-10-09
+
+Implements the recommendations from the research into the items left open in 5.19.0.
+
+### Changed
+
+- Seeded CI runs the MIT gitleaks CLI (v8.30.1, SHA-256-verified) instead of `gitleaks-action`, so
+  organisation-owned repos no longer need a `GITLEAKS_LICENSE` secret (the action also bundled an old
+  scanner and a proprietary EULA). PRs scan only their own commits (`origin/<base>..HEAD` —
+  `--first-parent` would scan nothing on GitHub's merge HEAD); pushes to `main` scan full history. The
+  kit adds an Azure Pipelines equivalent and notes push protection as the third secret layer.
+- Seeded lefthook uses `gitleaks git --pre-commit --staged` (`gitleaks protect` is deprecated);
+  seeded `.gitleaks.toml` uses `[[allowlists]]`.
+- FastAPI + MongoDB defaults to PyMongo `AsyncMongoClient` (new `pymongo-async.md` + auth add-on:
+  repository layer, `_id`↔`id` mapping, allow-listed `$set` updates against NoSQL injection, ObjectId
+  validation, TLS outside dev). Beanie is opt-in and pins the project to Python 3.13 (every Beanie
+  release since 2.0.1 caps `<3.14`); floor `beanie>=2.2,<3` fails loudly instead of resolving 2.0.0.
+- NestJS: scoped `audit.ignore` for the deepmerge advisory pulled in by nestjs-zod (only reached during
+  OpenAPI generation, never request data; removed when nestjs-zod drops deepmerge) and
+  `--disable-proto=delete` in the production image. Audits now review every ignore entry.
+
+### Fixed
+
+- FastAPI skills pass the scaffold's own ruff/pyright: `Annotated` dependencies (B008/FAST002),
+  `datetime.UTC`, a single scoped `pyright: ignore[reportCallIssue]` for settings, py3.13-safe `except`
+  tuples; Beanie router returns `UserResponse`, creates its schemas and closes the client on failed
+  startup; Beanie models must not use `from __future__ import annotations` (silently breaks links).
+- FastAPI backend extraction now completes auth integration for its database layer (Phase 7).
+
+---
+
 ## [5.19.0] — 2026-10-09
 
 Clears the items deferred in 5.16.0–5.18.0. Every upgrade was verified by installing and
