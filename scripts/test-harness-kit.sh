@@ -580,6 +580,10 @@ for g in changelog readme comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"
 done
+for g in changelog readme comments; do
+  (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" no-such-branch) >/dev/null 2>&1
+  check 1 "$?" "ci-gates $g fails closed when the base ref is missing"
+done
 
 # ── README gates (lefthook readme-coupling) + CI gates (ci-gates.sh) ──────────
 
@@ -644,6 +648,10 @@ echo 1 >> "$r/src/a.ts"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit
 expect_gate 1 readme "$r" "fails src/ without README"
 expect_gate 0 readme "$r" "honours skip-readme-check" "x skip-readme-check"
 expect_gate 1 changelog "$r" "fails src/ without CHANGELOG"
+big=$(gate_repo)
+for i in $(seq 1 3000); do echo "src/f$i.ts"; done | (cd "$big" && xargs touch)
+git -C "$big" add -A && git -C "$big" "${GIT_ID[@]}" commit -qm many
+expect_gate 1 changelog "$big" "fails a large src/ change without CHANGELOG"
 expect_gate 0 changelog "$r" "honours skip-changelog" "skip-changelog"
 echo 1 >> "$r/CHANGELOG.md"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm log
 expect_gate 0 changelog "$r" "passes src/ with CHANGELOG"

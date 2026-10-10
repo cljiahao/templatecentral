@@ -562,7 +562,7 @@ pre-commit:
         while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
           # documentation-kit.md never writes a README into these folders, so never demand one
-          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
+          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
@@ -663,7 +663,9 @@ pre-push:
       - run: python -m pyright src/
       - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
       - name: Changed-line coverage (>= 80%)
-        run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pipx run diff-cover coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}

@@ -18,6 +18,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   hard-blocking them. Secrets, `.env*` (except `.env.example`/`.env.default`) and cert files stay
   hard-blocked. The re-sync drops `Edit`/`Write` denies on CI and governance paths, because a deny
   outranks the hook's ask and blocks the approved edit too.
+  The prompt is now the only stop for CI edits: never add a `permissions.allow` rule or run in a
+  bypass mode that would auto-approve Edit on CI paths.
 - CI: the secret-scan, changelog, readme-freshness and comment-hygiene gates live once in a seeded
   `.claude/ci-gates.sh`, which GitHub Actions and Azure Pipelines both call. Job names are unchanged,
   so branch-protection required checks keep working.
@@ -37,6 +39,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `verify-harness.sh` hash-checks `.claude/ci-gates.sh` and `azure-pipelines/templatecentral-gates.yml`, so a
   tampered gate fails the harness check.
 - The `ci-gates.sh` secrets gate installs gitleaks into a temp dir (no `sudo`), so it runs on self-hosted agents.
+- The PR-only gates fail closed when `origin/<target>` is missing (they used to pass), and the changelog
+  gate no longer passes a large PR because of a SIGPIPE under `pipefail`.
+- `diff-cover` reads the base branch from `env`, not inline `${{ github.base_ref }}`.
 - The documentation kit and the readme gates skip `azure-pipelines/` and `.azuredevops/`, like `.github/`.
 
 ---

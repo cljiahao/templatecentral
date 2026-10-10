@@ -41,7 +41,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 - `session-context.sh` (SessionStart: startup/resume/clear/compact) — re-injects AGENTS.md routing context + universal invariants. PostCompact fires after compaction and its stdout is injected as context too — both PostCompact and SessionStart(source: compact) are valid re-injection mechanisms, but SessionStart also covers session resume and startup, so it stays the single seeded path here.
 - `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the budget.
 
-**Project-local guards — extra hooks, never edits to canonical ones.** A re-sync overwrites the seeded hook scripts, so a project rule (a protected `sit` branch, an extra credential pattern, an approval prompt for `src/auth.ts`) goes in its own script under `.claude/hooks/local/` with its own `settings.json` entry on the same event and matcher. Claude Code runs every matching hook, and any one blocking (exit 2) or asking wins, so a local hook can only tighten the canonical guards. Re-sync never touches `.claude/hooks/local/` or the `settings.json` entries pointing at it, `protect-files.sh` still asks before edits there, and Step E hashes those scripts like any other hook.
+**Project-local guards — extra hooks, never edits to canonical ones.** A re-sync overwrites the seeded hook scripts, so a project rule (a protected `sit` branch, an extra credential pattern, an approval prompt for `src/auth.ts`) goes in its own script under `.claude/hooks/local/` with its own `settings.json` entry on the same event and matcher. Claude Code runs every matching hook, and any one blocking (exit 2) or asking wins, so a local hook can only tighten the canonical guards. Re-sync never touches `.claude/hooks/local/` or the `settings.json` entries pointing at it, `protect-files.sh` still asks before edits there, and Step E hashes those scripts like any other hook — so a human blesses each local-guard change with `regen-harness.sh`, exactly as for canonical hooks.
 
 ---
 
@@ -197,7 +197,7 @@ chmod +x .lefthook/commit-msg.sh
 
 ## Step B3. Seed the CI quality gates (GitHub Actions or Azure Pipelines)
 
-The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed one workflow that enforces what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, a **changelog-touched** gate, and a **readme-freshness** gate. (GitHub Actions and Azure Pipelines are seeded; for GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
+The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed the gate script plus one CI file for the host, enforcing what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, a **changelog-touched** gate, and a **readme-freshness** gate. (GitHub Actions and Azure Pipelines are seeded; for GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
 
 **Coverage reporter (so `diff-cover` has input):** `diff-cover` reads a Cobertura XML, which both runners emit — one gate works for every stack.
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
@@ -231,7 +231,9 @@ jobs:
       - run: pnpm run check                      # format:check + lint + typecheck
       - run: pnpm exec vitest --run --coverage    # writes coverage/cobertura-coverage.xml
       - name: Changed-line coverage (>= 80%)
-        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -297,7 +299,7 @@ steps:
     env: { LABELS: $(LABELS) }
 ```
 
-The template carries only the harness gates: the project's own pipeline keeps its install / lint / typecheck / test steps. Add `pipx run diff-cover <cobertura.xml> --compare-branch="origin/${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}" --fail-under=80` after its test step for the changed-line coverage gate. Wiring the `template:` line into the PR pipeline is a pipeline edit, so `protect-files.sh` asks the human first.
+The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every branch by default; a `fetchFilter` or `fetchTags`-only setup must keep it), and the PR-only gates fail closed without it. It carries only the harness gates: the project's own pipeline keeps its install / lint / typecheck / test steps. Add `pipx run diff-cover <cobertura.xml> --compare-branch="origin/${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}" --fail-under=80` after its test step for the changed-line coverage gate. Wiring the `template:` line into the PR pipeline is a pipeline edit, so `protect-files.sh` asks the human first.
 
 **`.claude/ci-gates.sh`** (identical across stacks and CI hosts — the PR merge gates both `.github/workflows/ci.yml` and `azure-pipelines/templatecentral-gates.yml` call):
 ```bash
@@ -322,6 +324,7 @@ bypassed() {
 }
 pr_only() {
   [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
+  git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
 }
 
 case "$gate" in
@@ -343,8 +346,9 @@ case "$gate" in
     ;;
   changelog)
     pr_only
-    changed=$(git diff --name-only "$base"...HEAD)
-    if printf '%s\n' "$changed" | grep -qE '^src/' && ! printf '%s\n' "$changed" | grep -qx 'CHANGELOG.md'; then
+    changed=$(git diff --name-only "$base"...HEAD) || fail "cannot diff against $base"
+    # Here-strings, not pipes: under pipefail, grep -q exiting early would SIGPIPE printf and flip the result.
+    if grep -qE '^src/' <<< "$changed" && ! grep -qx 'CHANGELOG.md' <<< "$changed"; then
       bypassed skip-changelog && exit 0
       fail "src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
     fi
@@ -352,12 +356,12 @@ case "$gate" in
   readme)
     pr_only
     tmp=$(mktemp)
-    git diff --name-only "$base"...HEAD > "$tmp"
+    git diff --name-only "$base"...HEAD > "$tmp" || fail "cannot diff against $base"
     missing=""
     while IFS= read -r f; do
       case "$f" in */README.md|README.md) continue ;; esac
       # documentation-kit.md never writes a README into these folders, so never demand one
-      case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
+      case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
       d=$(dirname "$f")
       rm_path="README.md"
       [ "$d" != "." ] && rm_path="$d/README.md"

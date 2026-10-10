@@ -178,7 +178,7 @@ find . \( \
     -name .mutmut-cache -o \
     -name .github -o \
     -name .azuredevops -o \
-    -path './azure-pipelines' -o \
+    -name azure-pipelines -o \
     -name secrets -o \
     -name .secrets -o \
     -name .claude -o \
@@ -197,7 +197,7 @@ find . \( \
     -name coverage -o -name .turbo -o -name .venv -o -name __pycache__ -o \
     -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .pyright -o \
     -name htmlcov -o -name .stryker-tmp -o -name .mutmut-cache -o \
-    -name .github -o -name .azuredevops -o -path './azure-pipelines' -o \
+    -name .github -o -name .azuredevops -o -name azure-pipelines -o \
     -name secrets -o -name .secrets -o -name .claude -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print > "$tmp"

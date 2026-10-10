@@ -543,7 +543,7 @@ pre-commit:
         while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
           # documentation-kit.md never writes a README into these folders, so never demand one
-          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
+          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
