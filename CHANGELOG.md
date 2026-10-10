@@ -34,6 +34,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `protect-files.sh` now guards a whole `azure-pipelines/` folder. 6.0.1 matched only root files named
   `azure-pipelines*.yaml`, which left folder-based pipelines unguarded.
 - `user-prompt-guard.py` imports pass ruff (I001/E401).
+- `verify-harness.sh` hash-checks `.claude/ci-gates.sh` and `azure-pipelines/templatecentral-gates.yml`, so a
+  tampered gate fails the harness check.
 - The documentation kit and the readme gates skip `azure-pipelines/` and `.azuredevops/`, like `.github/`.
 
 ---

@@ -512,6 +512,12 @@ expect_verify 2 '{"seeded_files":{}}' "empty seeded_files"
 expect_verify 2 '{"seeded_files":{"a":{"path":"AGENTS.md","origin_hash":"abc"}}}' "no guarded hook files"
 expect_verify 2 "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"},\"b\":{\"path\":\".claude/hooks/b.sh\",\"origin_hash\":\"<sha256_hook_2>\"}}}" "unfilled hash placeholder"
 expect_verify 2 '{"nothing":1}' "missing seeded_files"
+for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
+  mkdir -p "$V/$(dirname "$gp")"; echo x > "$V/$gp"
+  CG="{\"seeded_files\":{\"g\":{\"path\":\"$gp\",\"origin_hash\":\"$(sha "$V/$gp")\"}}}"
+  echo y >> "$V/$gp"
+  expect_verify 1 "$CG" "flags a modified $gp"
+done
 
 # ── commit-msg.sh ─────────────────────────────────────────────────────────────
 
