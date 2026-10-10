@@ -13,7 +13,7 @@ Shared doctrine for `code-standards/<stack>.md`. Language-neutral — applies to
 4. **No change-narration.** Never `// was X, now Y`, `added`, `removed`, `updated`, `renamed`, `refactored`, `per review`, dates, or ticket refs in code. A comment describes the code *as it is*; edit history belongs in the commit message / PR description.
 5. **Public-API docs document the contract.** Docstrings / JSDoc on exported functions, classes, and endpoints state inputs, outputs, behavior, and why it exists — not a line-by-line walkthrough of the implementation.
 
-**Keep:** purpose comments, non-obvious "why", `TODO`/`FIXME` with context, and tooling directives (`eslint-disable-*`, `# type: ignore`, `# noqa`, `@ts-expect-error`).
+**Keep:** purpose comments, non-obvious "why", `TODO`/`FIXME` with context, and *scoped* tooling directives that state their reason (`// eslint-disable-next-line <rule> -- <why>`, `@ts-expect-error <why>`, `# noqa: <code>`, `# type: ignore[<code>]`). Blanket or unused suppressions are not kept.
 
 ### Why (consensus basis)
 
@@ -21,8 +21,14 @@ Tenets 1, 3, 4, 5 are near-universal (PEP 8, Google/Airbnb style guides, Ruff `E
 
 ### Enforcement (seeded per stack)
 
-- **TypeScript (Next.js, NestJS, Vite+React):** `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) plus `sonarjs/no-commented-code: 'error'` in `eslint.config.*` — a hard gate that fails lint/CI, enforcing tenet 2 (own-line comments) and tenet 3 (no commented-out code).
-- **FastAPI (Python):** Ruff `ERA` rule family enabled in `pyproject.toml` — deterministically flags commented-out code (tenet 3), dependency-free.
+- **TypeScript (Next.js, NestJS, Vite+React)** — `eslint.config.*`, all at `error` (fails lint/CI) unless noted:
+  - `no-inline-comments` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) — tenet 2; `sonarjs/no-commented-code` — tenet 3.
+  - `linterOptions.reportUnusedDisableDirectives` + `reportUnusedInlineConfigs` — stale suppressions and redundant inline config fail ([ESLint docs](https://eslint.org/docs/latest/use/configure/configuration-files#configuring-linter-options); core defaults are `warn`/`off`).
+  - `@eslint-community/eslint-plugin-eslint-comments` `recommended` (no blanket `eslint-disable`, paired/non-aggregating/non-duplicate directives) + `require-description` (every directive needs `-- <why>`; `eslint-enable` exempt) + `disable-enable-pair` with `allowWholeFile`. Its `no-unused-disable` is deprecated in favour of the core option above.
+  - `@typescript-eslint/ban-ts-comment` (already on via typescript-eslint `recommended`): `@ts-ignore`/`@ts-nocheck` banned, `@ts-expect-error` needs a description.
+  - `sonarjs/todo-tag` / `fixme-tag` downgraded to `warn` — `sonarjs` `recommended` sets them to `error`, which would block the `TODO`/`FIXME`-with-context this doctrine keeps.
+- **FastAPI (Python)** — Ruff `select` in `pyproject.toml`: `ERA` (tenet 3), `PGH003`/`PGH004` (blanket `# type: ignore` / `# noqa`), `RUF100` (unused `noqa`), `TD005` (bare `TODO`/`FIXME` with no description).
+- **Deliberately not enabled:** ESLint `no-warning-comments` (duplicates the sonarjs tag rules), `spaced-comment`/`multiline-comment-style` (deprecated in core, moved to `@stylistic`), `capitalized-comments` (pure style, high churn); Ruff `FIX` (bans every TODO/FIXME), `TD001` (rejects `FIXME`), `TD002`/`TD003` (mandatory author/issue link), `TD004`/`TD006`/`TD007` (formatting only).
 - **All stacks:** tenets 1, 4, 5 are judgment calls — the `templatecentral:standards (code-standards)` review pass and the seeded `AGENTS.md` rule are the enforcement surface a linter cannot cover.
 
 ### Mechanical enforcement — change-narration + oversized blocks
@@ -36,4 +42,4 @@ Tenets 1 and 5 stay judgment calls — no linter can reliably tell WHY from WHAT
 - **Comment-block length** (a run of plain `#`/`//` lines exceeding 5 lines) is flagged as likely non-concise — advisory only, never a CI failure, and never applied to structured doc-comment blocks (those are tenet 5's territory, expected to run longer).
 - **Three enforcement tiers**, all warn-only except the last: a live PostToolUse hook (feedback the instant a file is edited), a warn-only lefthook command (a backstop at `git commit`), and a hard CI gate on the PR diff (bypassable via a `skip-comment-check` label) — this last one only fires on the 10 high-precision keyword patterns, never on the length heuristic or the 3 lower-precision date/ticket/issue patterns.
 
-**Secrets in comments** are covered by the existing gitleaks pre-commit + CI scan (`lefthook.yml`'s `secret-scan` command, `.github/workflows/ci.yml`'s "Secret scan (full history)" step) — those scan entire file text, comments included, so no separate mechanism exists here.
+**Secrets in comments** are covered by the existing gitleaks pre-commit + CI scan (`lefthook.yml`'s `secret-scan` command, `.github/workflows/ci.yml`'s "Secret scan (gitleaks)" step) — those scan entire file text, comments included, so no separate mechanism exists here.

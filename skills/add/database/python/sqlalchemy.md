@@ -13,13 +13,13 @@ alembic
 ```
 
 Add a driver for the target database:
-- PostgreSQL: `psycopg2-binary`
+- PostgreSQL: `psycopg[binary]` (psycopg 3) — use the `postgresql+psycopg://` URL scheme
 - SQLite: built-in (no extra driver needed for sync usage)
 - MySQL: `pymysql`
 
 ### A2. Create Database Base
 
-**`src/database/base.py`**:
+**`src/database/base.py`** (plus an empty `src/database/__init__.py`):
 
 ```python
 from sqlalchemy.orm import DeclarativeBase
@@ -36,12 +36,22 @@ Add `DATABASE_URL` to `APISettings` in **`src/core/config.py`**:
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    DATABASE_URL: str = Field(description="Database connection URL — must be set in environment")
+    DATABASE_URL: str = Field(
+        description="Database connection URL — must be set in environment"
+    )
 ```
+
+Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
 
 Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
 ```
-DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DBNAME
+DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
+```
+
+CI has no `src/.env` and `session.py` builds the engine at import, so seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (add `import os` and move `from app import app` into the fixture if they are not there yet — see `templatecentral:add` (auth) Step 10). Tests override `get_db`, so this URL is never queried:
+
+```python
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 ```
 
 ### A4. Create Database Session
@@ -51,16 +61,30 @@ DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DBNAME
 ```python
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from typing import Any
+
+from sqlalchemy import create_engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from core.config import api_settings
+from core.config import api_settings, common_settings
 
-engine = create_engine(api_settings.DATABASE_URL, echo=False)
+url = make_url(api_settings.DATABASE_URL)
+# libpq's default sslmode=prefer never verifies the server certificate and silently falls
+# back to plaintext. Local Docker Postgres serves no TLS, so only dev skips verify-full.
+# `system` = the OS CA store (libpq ≥ 16); a private CA (e.g. the RDS bundle) goes in the
+# URL as `?sslrootcert=/path/ca.pem`.
+connect_args: dict[str, Any] = {}
+if url.get_backend_name() == "postgresql" and common_settings.ENVIRONMENT != "dev":
+    connect_args = {
+        "sslmode": "verify-full",
+        "sslrootcert": url.query.get("sslrootcert", "system"),
+    }
+
+engine = create_engine(url, echo=False, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db
@@ -90,10 +114,15 @@ from core.config import api_settings
 from database.base import Base
 from database.session import engine
 
+# Autogenerate only sees tables whose model modules were imported — list every one.
+from models import project  # noqa: F401
+
 config = context.config
-config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL)
+# Escape % — alembic's ConfigParser treats it as interpolation (URL-encoded passwords break otherwise).
+config.set_main_option("sqlalchemy.url", api_settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
+
 
 def run_migrations_online():
     connectable = engine
@@ -110,10 +139,12 @@ def run_migrations_online():
 **`src/models/project.py`** (example — a generic entity; the `User` model is defined separately in the auth integration section below):
 
 ```python
+from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
 
 from database.base import Base
 
@@ -121,9 +152,17 @@ from database.base import Base
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
     name: Mapped[str] = mapped_column(String, index=True)
-    description: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 ```
 
 ### A7. Generate First Migration
@@ -135,28 +174,28 @@ alembic upgrade head
 
 ### A8. Usage
 
-Inject the database session via FastAPI's dependency injection:
-
-Create a Pydantic response schema (in `api/schemas/`) and use `response_model`:
+Inject the session via `Annotated[Session, Depends(get_db)]` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
+from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.schemas.response.project import ProjectResponse  # create this schema
+from api.schemas.response.project import ProjectResponse
 from database.session import get_db
 from models.project import Project
 
+
 @router.get("/projects", response_model=list[ProjectResponse])
-def list_projects(db: Session = Depends(get_db)) -> Sequence[Project]:
+def list_projects(db: Annotated[Session, Depends(get_db)]) -> Sequence[Project]:
     stmt = select(Project)
     return db.scalars(stmt).all()
 ```
 
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free. `async def` with sync SQLAlchemy also works (FastAPI wraps sync dependencies via `run_in_threadpool`), but `def` is cleaner and consistent with the scaffold convention.
+> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool. An `async def` handler calling sync SQLAlchemy blocks the event loop for every query (only the `get_db` dependency runs in the thread pool, not the handler body).
 >
 > **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema. This ensures serialization and prevents leaking internal fields.
 
@@ -178,6 +217,8 @@ Confirm all tests pass.
 
 ### Step A — Create `src/models/user.py`
 
+Add `user` to the `from models import ...` line in `alembic/env.py`, then generate its migration (`alembic revision --autogenerate -m "create users table"` + `alembic upgrade head`).
+
 ```python
 from datetime import datetime
 from uuid import uuid4
@@ -192,16 +233,20 @@ from database.base import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid4())
+    )
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
     name: Mapped[str] = mapped_column(String)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 ```
 
 ### Step B — Create `src/api/repositories/user_repository.py`
 
-> Create the `api/repositories/` directory if it does not already exist.
+> Create the `api/repositories/` directory (with an empty `__init__.py`) if it does not already exist.
 
 ```python
 from sqlalchemy import select
@@ -229,35 +274,49 @@ def create_user(db: Session, email: str, hashed_password: str, name: str) -> Use
 ### Step C — Replace stubs in `src/api/services/auth_service.py`
 
 ```python
+import secrets
+
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from api.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
+from api.repositories.user_repository import (
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+)
 from core.security import create_access_token, hash_password, verify_password
 
 # Verified on the miss path so an unknown email costs the same as a wrong
 # password — without it, response timing leaks which accounts exist.
-DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
+# Hashed at import with the live PasswordHasher so its cost always matches real hashes.
+DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def register_user(db: Session, email: str, password: str, name: str) -> dict:
-    if get_user_by_email(db, email):
+    # The unique index, not a find-then-insert check, is what stops duplicate
+    # accounts under concurrent registrations.
+    try:
+        user = create_user(
+            db=db,
+            email=email,
+            hashed_password=hash_password(password),
+            name=name,
+        )
+    except IntegrityError:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered.",
-        )
-    user = create_user(
-        db=db,
-        email=email,
-        hashed_password=hash_password(password),
-        name=name,
-    )
+        ) from None
     return {"id": str(user.id), "email": user.email, "name": user.name}
 
 
 def login_user(db: Session, email: str, password: str) -> str:
     user = get_user_by_email(db, email)
-    password_ok = verify_password(password, user.hashed_password if user else DUMMY_HASH)
+    password_ok = verify_password(
+        password, user.hashed_password if user else DUMMY_HASH
+    )
     if user is None or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -279,6 +338,8 @@ def get_user(db: Session, user_id: str) -> dict:
 ### Step D — Replace `src/api/routers/auth.py`
 
 ```python
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -292,27 +353,32 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post("/register", response_model=UserResponse)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> UserResponse:
+def register(
+    body: RegisterRequest, db: Annotated[Session, Depends(get_db)]
+) -> UserResponse:
     """Register a new user account."""
-    user = register_user(db=db, email=body.email, password=body.password, name=body.name)
+    user = register_user(
+        db=db, email=body.email, password=body.password, name=body.name
+    )
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> TokenResponse:
     """Authenticate and receive a JWT token."""
     token = login_user(db=db, email=body.email, password=body.password)
     return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
+def get_me(
+    user_id: Annotated[str, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> UserResponse:
     """Get the current authenticated user."""
     user = get_user(db=db, user_id=user_id)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 ```
-
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool, keeping the event loop free.
 
 ---
 

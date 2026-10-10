@@ -47,13 +47,12 @@ src/features/<feature-name>/
 
 ### 2. Create `types.ts`
 
-Define types and interfaces first — this establishes the contract before implementation:
-
 ```ts
+// Mirrors the projects table (id, name, description) used across templateCentral backends.
 export interface ProjectItem {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  description?: string | null;
 }
 ```
 
@@ -62,26 +61,27 @@ export interface ProjectItem {
 Static data goes here — NOT in components:
 
 ```ts
-export const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
+// Values use the API `sort` format (`asc_<field>` / `desc_<field>`).
+export const SORT_OPTIONS = [
+  { value: 'asc_name', label: 'Name (A-Z)' },
+  { value: 'desc_createdAt', label: 'Newest first' },
 ] as const;
 ```
 
 ### 4. Create API Services (in `api/`)
 
-Data access services consumed by React Query hooks on the client side:
-
-First define a Zod schema for the API response shape — every response is validated at the boundary, so the declared return type is earned at runtime rather than asserted:
+Client-side services consumed by React Query hooks. Validate every response with a Zod schema so the return type is checked at runtime, not asserted:
 
 ```ts
 // schemas/project.schema.ts
 import { z } from 'zod';
 
+// One canonical project schema — templatecentral:add (pagination) extends this same file.
+// Extra row fields (createdAt, updatedAt) are stripped by z.object().
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  status: z.enum(['active', 'archived']),
+  description: z.string().nullish(),
 });
 ```
 
@@ -91,11 +91,16 @@ Then create the service:
 
 ```ts
 // api/project-service.ts
+import { z } from 'zod';
+
 import { APIError } from '@/integrations/error';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
-// The fallback message applies only when the body is not valid JSON
+// Route handlers wrap every success body as `{ data }` (see templatecentral:add (endpoint)).
+const envelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
+
+// `message` is the fallback only when the error body is not JSON.
 async function assertOk(res: Response, message: string): Promise<void> {
   if (res.ok) return;
   throw new APIError({
@@ -108,14 +113,14 @@ export const ProjectService = {
   getAll: async (): Promise<ProjectItem[]> => {
     const res = await fetch('/api/projects');
     await assertOk(res, 'Failed to fetch projects');
-    return projectItemSchema.array().parse(await res.json());
+    return envelope(projectItemSchema.array()).parse(await res.json()).data;
   },
 
   getById: async (id: string): Promise<ProjectItem> => {
-    // Encode interpolated path segments — ids are frequently user-supplied
+    // Encoding stops a crafted id from rewriting the path (`../admin`).
     const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
     await assertOk(res, 'Project not found');
-    return projectItemSchema.parse(await res.json());
+    return envelope(projectItemSchema).parse(await res.json()).data;
   },
 
   create: async (data: Omit<ProjectItem, 'id'>): Promise<ProjectItem> => {
@@ -125,25 +130,26 @@ export const ProjectService = {
       body: JSON.stringify(data),
     });
     await assertOk(res, 'Failed to create project');
-    return projectItemSchema.parse(await res.json());
+    return envelope(projectItemSchema).parse(await res.json()).data;
   },
 };
 ```
+
+`getAll` assumes an unpaginated `GET /api/projects` returning `{ data: ProjectItem[] }`. Once `templatecentral:add (pagination)` is applied, that route returns `{ data: { items, pagination } }` — update the service there rather than keeping both shapes.
 
 Export from barrel: `api/index.ts`
 
 ### 4b. Add Form Schemas (in `schemas/`)
 
-Step 4 already added the response schema. Add an input schema alongside it whenever the feature has a form:
+When the feature has a form, add an input schema next to the response schema:
 
 ```ts
-// schemas/project-schemas.ts
+// schemas/project.schema.ts (same file as the response schema)
 import { z } from 'zod';
 
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500).optional(),
-  status: z.enum(['active', 'archived']),
 });
 
 export type CreateProjectInput = z.input<typeof createProjectSchema>;
@@ -156,7 +162,7 @@ Use these schemas in:
 
 ### 5. Create Components (in `components/`)
 
-**Before writing any UI, check the template's component library** (see `code-standards/SKILL.md` → *Component Library*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
+**Before writing any UI, check the template's component library** (`templatecentral:standards` → `code-standards/nextjs.md` → *Component Best Practices*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
 
 Feature-specific components. Use `function` declarations:
 
@@ -168,7 +174,9 @@ export function ProjectCard({ project }: { project: ProjectItem }) {
   return (
     <div className="rounded-lg border p-4">
       <h3 className="font-semibold">{project.name}</h3>
-      <span className="text-sm text-muted-foreground">{project.status}</span>
+      {project.description && (
+        <p className="text-sm text-muted-foreground">{project.description}</p>
+      )}
     </div>
   );
 }
@@ -231,9 +239,7 @@ After creating all files:
 ## Rules
 
 - **Direct imports** OK within the same feature
-- If a component is used by 2+ features, promote it to `src/components/widgets/`
-- NEVER import from one feature into another — promote shared code to `components/widgets/` or `lib/`
-- NEVER place feature-specific components in `src/components/widgets/` until used by 2+ features
+- NEVER import from one feature into another — promote shared code to `components/widgets/` (only once 2+ features use it) or `lib/`
 - NEVER export internal implementation details from the barrel — only the public API
 - NEVER skip creating `types.ts` — define interfaces before building components
 
@@ -259,7 +265,6 @@ npx shadcn@latest add <component-name>
 This installs into `src/components/ui/`. Do not manually create UI primitives there.
 
 Rules:
-- Don't prematurely extract — keep inline until a second consumer needs it; NEVER move to `widgets/` until used by 2+ features
 - NEVER add boolean flag props to configure variants — prefer composition with children
 - Add exports to the folder's `index.ts` barrel
 

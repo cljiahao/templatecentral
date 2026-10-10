@@ -32,12 +32,7 @@ Running pytest belongs to the test utility (`skills/test/implementation.md`) —
 
 ## Steps
 
-1. Detect stack (see above)
-2. Run the build command for that stack
-3. Capture full stdout + stderr
-4. Evaluate result:
-   - **Success**: report "Build passed" with stack name
-   - **Failure**: report failures (see Failure Reporting below)
+Run the stack's command, capturing stdout + stderr. Success → report "Build passed — <stack>". Failure → report as below.
 
 ## Failure Reporting
 
@@ -73,8 +68,4 @@ Do not attempt to run any build command.
 
 ## Callers
 
-This utility is dispatched by: `templatecentral:scaffold`, the review utility (update mode), `templatecentral:add` (feature), `templatecentral:add` (component), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
-
-## Changelog
-### 1.0.0
-- Initial plugin release
+Dispatched by `templatecentral:scaffold`, `templatecentral:add`, `templatecentral:migrate`, `templatecentral:standards`, and the review utility (`update` operation).

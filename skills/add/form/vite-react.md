@@ -52,11 +52,12 @@ import { z } from 'zod';
 export const MESSAGE_MIN_LENGTH = 10;
 
 export const contactFormSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().min(1, 'Name is required').max(100),
   email: z.email({ error: 'Invalid email address' }),
   message: z
     .string()
-    .min(MESSAGE_MIN_LENGTH, `Message must be at least ${MESSAGE_MIN_LENGTH} characters`),
+    .min(MESSAGE_MIN_LENGTH, `Message must be at least ${MESSAGE_MIN_LENGTH} characters`)
+    .max(2000),
 });
 
 export type ContactFormValues = z.input<typeof contactFormSchema>;
@@ -95,11 +96,11 @@ export function ContactForm() {
     },
   });
 
+  // Async so formState.isSubmitting tracks the returned promise.
   const onSubmit = async (_values: ContactFormValues) => {
-    // TODO: replace with the feature's mutation hook / API call.
-    // Never serialize `values` into a toast or an Error message — form payloads
-    // routinely carry passwords and tokens, and both surfaces are user-visible.
-    toast.success('TODO: wire up submit handler');
+    // TODO: call the feature's mutation hook. Never echo `values` into a toast or
+    // Error message — form payloads routinely carry passwords and tokens.
+    toast.error('Submit handler not wired yet');
   };
 
   return (
@@ -168,12 +169,13 @@ export function ContactPage() {
 - Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
+- **Client-side validation is UX, not security** — the backend endpoint MUST re-validate the same payload.
 - For complex validation (file uploads, password rules, OWASP/CWE compliance): use `templatecentral:standards` (validation-patterns).
 
 ## Validate
 
 ```bash
-pnpm build    # zero errors
+pnpm build
 ```
 
 ## After Writing Code

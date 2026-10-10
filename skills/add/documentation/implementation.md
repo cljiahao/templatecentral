@@ -24,7 +24,7 @@ Follow it exactly over the existing project tree — it determines/updates the A
 
 ## Step 2 — Confirm enforcement is wired
 
-Both are seeded by `harness-kit.md` Step B2/B3 for any project already on this templateCentral version:
+Both are seeded by `harness-kit-enforcement.md` Steps B2/B3 for any project already on this templateCentral version:
 
 ```bash
 grep -q "readme-coupling:" lefthook.yml

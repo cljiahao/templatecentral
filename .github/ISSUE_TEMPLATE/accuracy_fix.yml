@@ -19,7 +19,7 @@ body:
     id: skill
     attributes:
       label: Affected skill
-      placeholder: "e.g. nestjs-add-auth"
+      placeholder: "e.g. templatecentral:add (auth), scaffold/nestjs/source-files.md"
     validations:
       required: true
   - type: textarea
@@ -47,4 +47,4 @@ body:
     id: version
     attributes:
       label: templatecentral version
-      description: "Run `claude plugin list` and paste the version here"
+      description: "The `version` in the installed plugin's `.claude-plugin/plugin.json` (or the Installed tab of `/plugin` in Claude Code)"

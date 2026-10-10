@@ -7,7 +7,7 @@
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/vite-react.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@hookform/resolvers` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `npx shadcn@latest add form` respectively. `@testing-library/jest-dom` and `@testing-library/react` are included in devDependencies; only `@testing-library/user-event` is added later by `templatecentral:add (test)`. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint pinned at `^9`** — `^9` is the flat-config baseline every plugin in this devDependency set is verified against, so it is the known-good floor for a fresh scaffold. `eslint-plugin-react-hooks` 7.1.1 already peer-supports `^10`, so an ESLint 10 bump is not blocked by peers; it just needs `typescript-eslint`, `@eslint/js`, and `eslint-plugin-sonarjs` re-verified together before moving. Run the review utility (update mode) when you want to move the whole lint toolchain forward as one unit.
+> **ESLint 10** (`eslint ^10.12.0` + `@eslint/js ^10.0.1` — move them together; `@eslint/js` 10 peer-requires `eslint ^10`). Every plugin here peer-supports `^10` (`typescript-eslint` 8.x, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs` 4.x, `@eslint-community/eslint-plugin-eslint-comments` 4.8). ESLint 10's `js.configs.recommended` adds `no-unassigned-vars`, `no-useless-assignment`, and `preserve-caught-error` — rethrowing inside `catch` must pass `{ cause: err }` (`throw new Error('msg', { cause: err })`). Run the review utility (update mode) to move the whole lint toolchain forward as one unit.
 
 ```json
 {
@@ -15,7 +15,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
     "node": ">=24"
   },
@@ -48,7 +48,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
@@ -58,9 +59,9 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.0.0",
+    "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-sonarjs": "^4.2.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "globals": "^17.6.0",
     "lefthook": "^2.1.9",
     "jsdom": "^30.0.1",
@@ -218,13 +219,10 @@ CMD ["nginx", "-g", "daemon off;"]
 ```sh
 #!/bin/sh
 
-# Check for Yarn lock file
 if [ -f "yarn.lock" ]; then
   exec yarn "$@"
-# Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
   exec sh -c 'corepack enable pnpm && exec pnpm "$@"' sh "$@"
-# Default to npm
 else
   exec npm "$@"
 fi
@@ -353,17 +351,19 @@ yarn-error.log*
 ### `pnpm-workspace.yaml`
 
 ```yaml
-# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# pnpm-workspace.yaml — project-level pnpm 12 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
+# pnpm 12 errors with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on any key it does not
+# recognize (e.g. a typo) — use only documented setting names (pnpm.io/settings).
 
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
-# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# pnpm (≥11) blocks all install scripts by default; add native packages here as needed.
 allowBuilds:
-  lefthook: false # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+  lefthook: false # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
 # Add native build deps here if `pnpm install` reports ERR_PNPM_IGNORED_BUILDS, e.g.:
 #   esbuild: true
 #   sharp: true
@@ -372,7 +372,8 @@ allowBuilds:
 ### `.env.example`
 
 ```
-VITE_API_BASE_URL=http://localhost:8000
+# Same-origin path, proxied to the backend (Vite server.proxy in dev, nginx in production)
+VITE_API_BASE_URL=/api
 ```
 
 ### `.prettierrc`
@@ -390,9 +391,10 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ### `eslint.config.mjs`
 
-> `sonarjs.configs.recommended` enables ~217 of the plugin's 280 rules at `error` (bugs, code smell, tests, React/JSX). This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference.
+> `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, code smell, tests, React/JSX). `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret), identical to the nextjs and nestjs scaffolds — the recommended rule set changes across minor versions, so bump all three together and re-verify. This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```mjs
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -403,6 +405,13 @@ const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
 
 export default tseslint.config(
   { ignores: ['dist', '.claude/**'] },
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+      reportUnusedInlineConfigs: 'error',
+    },
+  },
+  eslintComments.recommended,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
@@ -417,13 +426,28 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...sonarjs.configs.recommended.rules,
-      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      // Honour the `_`-prefix convention for intentionally-unused args/vars.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
-      // recommended leaves this off; templateCentral's comment-hygiene gate requires it.
       'sonarjs/no-commented-code': 'error',
+      // Task tags with context are allowed; keep them visible without failing lint.
+      'sonarjs/todo-tag': 'warn',
+      'sonarjs/fixme-tag': 'warn',
+      '@eslint-community/eslint-comments/require-description': [
+        'error',
+        { ignore: ['eslint-enable'] },
+      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': [
+        'error',
+        { allowWholeFile: true },
+      ],
     },
   },
   {
@@ -470,6 +494,9 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     # CSP baseline — tighten after analytics/auth are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
     add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+
+    # Backend API: templatecentral:standards (full-stack-pairing) adds `location /api/` here —
+    # a same-origin proxy, required by cookie auth.
 
     location / {
         try_files $uri $uri/ /index.html;
@@ -525,10 +552,8 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    // Uncomment to proxy API calls to a backend during local dev:
-    // proxy: {
-    //   '/api': { target: 'http://localhost:8000', changeOrigin: true },
-    // },
+    // Same-origin `/api` proxy to the backend (`server.proxy`, required by cookie auth) is added
+    // by templatecentral:standards (full-stack-pairing).
   },
   preview: {
     port: 3000,
@@ -541,6 +566,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // CI has no .env (gitignored), and getApiBaseUrl() throws without it — pin one for tests.
+    env: { VITE_API_BASE_URL: 'http://api.test' },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
     coverage: {

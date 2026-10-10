@@ -8,37 +8,35 @@
 ```typescript
 import { config } from 'dotenv';
 
-config();
+config({ quiet: true });
 
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
-// Fastify trustProxy: "*" → trust all; number = hop count (1 = one-hop ALB→App, 2 = two-hop ALB→Traefik→App); CIDR string = trusted range.
-function resolveTrustProxy(
-  value: string | undefined,
-): boolean | number | string | undefined {
-  let trustProxy: boolean | number | string | undefined = value;
-  if (value === '*') {
-    trustProxy = true;
-  } else if (value && /^\d+$/.test(value)) {
-    trustProxy = parseInt(value, 10);
-  }
-  return trustProxy;
+// Fastify trustProxy: "*" → trust every hop (closed networks only — the leftmost, client-supplied
+// X-Forwarded-For entry wins); otherwise comma-separated IPs/CIDRs that must cover EVERY proxy in
+// the chain (one-hop ALB → App: ALB CIDR; two-hop ALB → Traefik → App: Traefik's AND the ALB's
+// CIDRs). Numeric hop counts were removed in fastify 5.12.1 (security advisory): they
+// cannot validate the connecting peer, so they now trust nothing.
+function resolveTrustProxy(value: string | undefined): boolean | string | undefined {
+  return value === '*' ? true : value;
 }
 
 async function bootstrap(): Promise<void> {
   const trustProxy = resolveTrustProxy(appConfig.TRUST_PROXY);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(trustProxy ? { trustProxy } : {}),
-    { bufferLogs: true },
+    // Fastify assigns req.id before pino-http runs, so the UUID generator must live here; a
+    // pino-http genReqId is ignored and logs show Fastify's sequential req-1, req-2.
+    new FastifyAdapter({
+      genReqId: () => crypto.randomUUID(),
+      ...(trustProxy ? { trustProxy } : {}),
+    }),
+    { bufferLogs: true }
   );
   const logger = app.get(Logger);
   app.useLogger(logger);
@@ -49,8 +47,7 @@ async function bootstrap(): Promise<void> {
   setupCors(app);
   logger.log('CORS configured');
 
-  setupSwagger(app);
-  logger.log('Swagger documentation configured');
+  const docsEnabled = setupSwagger(app);
 
   await app.init();
   logger.log('Application initialized');
@@ -59,7 +56,9 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   logger.log(`${appConfig.PROJECT_NAME} running on: http://localhost:${port}`);
-  logger.log(`Swagger docs available at: http://localhost:${port}/docs`);
+  if (docsEnabled) {
+    logger.log(`Swagger docs available at: http://localhost:${port}/docs`);
+  }
 }
 
 bootstrap().catch((err) => {
@@ -84,16 +83,10 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: appConfig.LOG_LEVEL,
-        // correlation ID
-        genReqId: () => crypto.randomUUID(),
         // pino-http's default serializer logs the whole headers object at info level.
         // Without this, every request writes its bearer JWT and session cookies to the log.
         redact: {
-          paths: [
-            'req.headers.authorization',
-            'req.headers.cookie',
-            'res.headers["set-cookie"]',
-          ],
+          paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           remove: true,
         },
         transport:
@@ -143,16 +136,11 @@ export * from './http.constants';
 ### `src/common/filters/http-exception.filter.ts`
 
 ```typescript
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  Logger,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodSerializationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
+import { HTTP_STATUS_MESSAGES } from '../constants';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -169,9 +157,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
-    reply
-      .status(status)
-      .send({ statusCode: status, message: exception.message });
+    // A 5xx message is server-side detail (e.g. `new InternalServerErrorException(err.message)`)
+    // — log it, return the generic text, matching FastAPI's catch-all handler.
+    const isServerError = status >= 500;
+    if (isServerError) {
+      this.logger.error(exception.message, exception.stack);
+    }
+    reply.status(status).send({
+      statusCode: status,
+      message: isServerError ? HTTP_STATUS_MESSAGES.INTERNAL_ERROR : exception.message,
+    });
   }
 }
 ```
@@ -197,7 +192,7 @@ export function isExpired(expiresAt: Date): boolean {
 ```typescript
 export function convertStrToList(
   value: string | undefined,
-  delimiter: string,
+  delimiter: string
 ): string[] | undefined {
   if (!value) return undefined;
   return value
@@ -222,26 +217,20 @@ const envSchema = z.object({
   ENVIRONMENT: z.enum(['dev', 'uat', 'prod']).default('dev'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   CLIENT_URL: z.string().min(1).default('http://localhost:3000'),
-  // Reverse proxy trust: hop count, CIDR, or "*" — see main.ts's resolveTrustProxy().
+  // Reverse proxy trust: comma-separated IPs/CIDRs, or "*" — see main.ts's resolveTrustProxy().
   TRUST_PROXY: z.string().optional(),
-  LOG_LEVEL: z
-    .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
 });
 
 // An empty value in `.env` means "not set" — drop it so the schema default applies.
-const rawEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([, value]) => value !== ''),
-);
+const rawEnv = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ''));
 
 const parsed = envSchema.safeParse(rawEnv);
 
 // Fail at import time. A `!` assertion is erased at compile time and would surface a
 // missing variable as an obscure runtime failure on the first request instead.
 if (!parsed.success) {
-  throw new Error(
-    `Invalid environment configuration:\n${z.prettifyError(parsed.error)}`,
-  );
+  throw new Error(`Invalid environment configuration:\n${z.prettifyError(parsed.error)}`);
 }
 
 const env = parsed.data;
@@ -311,7 +300,6 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
         'frame-ancestors': isDev ? null : ["'none'"],
       },
     },
-    // HSTS
     strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     // frameguard sets X-Frame-Options (xFrameOptions is an equivalent alias). action must be
@@ -320,14 +308,8 @@ export async function setupSecurity(app: INestApplication): Promise<void> {
   });
 
   fastify.addHook('onSend', async (_request, reply, payload) => {
-    void reply.header(
-      'Cache-Control',
-      'no-cache, no-store, must-revalidate, private',
-    );
-    void reply.header(
-      'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=()',
-    );
+    void reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+    void reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;
   });
 }
@@ -350,9 +332,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { appConfig } from '../env.config';
 
-export function setupSwagger(app: INestApplication): void {
-  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat')
-    return;
+/** Mounts Swagger UI at /docs outside prod/uat. Returns whether it was mounted. */
+export function setupSwagger(app: INestApplication): boolean {
+  if (appConfig.ENVIRONMENT === 'prod' || appConfig.ENVIRONMENT === 'uat') {
+    return false;
+  }
 
   const options = new DocumentBuilder()
     .setTitle(appConfig.PROJECT_NAME)
@@ -363,6 +347,7 @@ export function setupSwagger(app: INestApplication): void {
 
   const document = SwaggerModule.createDocument(app, options);
   SwaggerModule.setup('docs', app, cleanupOpenApiDoc(document));
+  return true;
 }
 ```
 
@@ -631,10 +616,7 @@ export interface ExampleItem {
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 
 describe('AppController (e2e)', () => {
@@ -645,8 +627,10 @@ describe('AppController (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
+    // Mirror main.ts's adapter options so request IDs (and anything keyed off them, e.g. log
+    // correlation) behave the same under test as in the running app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
+      new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -827,11 +811,11 @@ If any command fails, diagnose and fix before proceeding.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nestjs@5.0.0 -->
+<!-- templateCentral: nestjs@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack
-NestJS 11 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vitest · pnpm · Node ≥24
+NestJS 12 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vitest · pnpm · Node ≥24.15
 
 ## Commands
 ```bash
@@ -875,7 +859,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -887,6 +871,9 @@ Load the shared harness kit using the **nestjs** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-ts.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -904,10 +891,10 @@ description: Run typecheck, lint, and tests for this NestJS project in one pass
 allowed-tools: Bash(pnpm *)
 ---
 
-Run all quality checks in sequence:
+Run all quality checks in sequence (`pnpm check` already runs `tsc --noEmit` after format + lint):
 
 ```bash
-pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test
+pnpm check && pnpm test
 ```
 
 Report failures with the exact error output. Fix before proceeding.
@@ -937,9 +924,19 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
+
 ### 7b. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from **Scaffold: optional Task Management** in templateCentral's root `AGENTS.md`. If no, skip.
+Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```
+
+If no, skip.
 
 ### 8. Remove Example Code (Optional)
 

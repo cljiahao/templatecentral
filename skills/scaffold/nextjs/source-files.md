@@ -39,24 +39,31 @@ export function CustomFormField({
     <Controller
       name={name}
       control={control}
-      render={({ field: { ref, ...field }, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel
-            htmlFor={name}
-            className="text-foreground text-lg leading-tight font-semibold tracking-tight"
-          >
-            {label}
-          </FieldLabel>
-          {cloneElement(children, {
-            id: name,
-            ref,
-            'aria-invalid': fieldState.invalid,
-            ...field,
-          })}
-          {description && <FieldDescription>{description}</FieldDescription>}
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )}
+      render={({ field: { ref, ...field }, fieldState }) => {
+        const descriptionId = description ? `${name}-description` : undefined;
+        const errorId = fieldState.invalid ? `${name}-error` : undefined;
+        const describedBy =
+          [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
+
+        return (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={name}>{label}</FieldLabel>
+            {cloneElement(children, {
+              id: name,
+              ref,
+              'aria-invalid': fieldState.invalid,
+              'aria-describedby': describedBy,
+              ...field,
+            })}
+            {description && (
+              <FieldDescription id={descriptionId}>{description}</FieldDescription>
+            )}
+            {fieldState.invalid && (
+              <FieldError id={errorId} errors={[fieldState.error]} />
+            )}
+          </Field>
+        );
+      }}
     />
   );
 }
@@ -131,7 +138,7 @@ interface CustomDialogProps extends Omit<
   className?: string;
   children: ReactNode;
   trigger?: ReactNode;
-  title?: ReactNode;
+  title: ReactNode;
   description?: ReactNode;
 }
 
@@ -148,11 +155,7 @@ export function CustomDialog({
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className={cn('flex h-full w-full flex-col', className)}>
         <DialogHeader>
-          {title ? (
-            <DialogTitle>{title}</DialogTitle>
-          ) : (
-            <DialogTitle className="sr-only">Dialog</DialogTitle>
-          )}
+          <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {children}
@@ -291,12 +294,13 @@ interface FloatingShapeProps {
 
 export function FloatingShape({
   src = '/image_assets/default-square.svg',
-  alt = 'default-square',
+  alt = '',
   imageClassName,
   className,
 }: FloatingShapeProps) {
   return (
     <div
+      aria-hidden="true"
       className={cn(
         className,
         'pointer-events-none absolute hidden opacity-80 xl:block animate-float'
@@ -427,32 +431,22 @@ export function LinkList({ links, className }: LinkListProps) {
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
+// Icon visibility is driven by the `dark:` variant, not by `resolvedTheme`: the theme is
+// unknown during SSR, so state-derived styles would mismatch on hydration.
 export function ThemeToggleButton() {
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === 'dark';
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="relative overflow-hidden rounded-full bg-muted p-5 transition-colors duration-100"
-      aria-label="Toggle theme"
+      type="button"
+      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+      className="bg-muted focus-visible:ring-ring/50 relative overflow-hidden rounded-full p-5 transition-colors outline-none focus-visible:ring-[3px]"
+      aria-label="Toggle dark mode"
     >
-      <span
-        className="flex-center absolute inset-0 transition-all duration-200"
-        style={{
-          opacity: isDark ? 1 : 0,
-          transform: isDark ? 'translateY(0)' : 'translateY(-50%)',
-        }}
-      >
+      <span className="flex-center absolute inset-0 -translate-y-1/2 opacity-0 transition-all duration-200 dark:translate-y-0 dark:opacity-100">
         <Sun className="h-5 w-5" fill="currentColor" />
       </span>
-      <span
-        className="flex-center absolute inset-0 transition-all duration-200"
-        style={{
-          opacity: isDark ? 0 : 1,
-          transform: isDark ? 'translateY(50%)' : 'translateY(0)',
-        }}
-      >
+      <span className="flex-center absolute inset-0 transition-all duration-200 dark:translate-y-1/2 dark:opacity-0">
         <Moon className="h-5 w-5" fill="currentColor" />
       </span>
     </button>
@@ -974,7 +968,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className="no-scrollbar">
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={`${lato.variable} ${geistMono.variable} relative antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
           <Providers>{children}</Providers>
@@ -997,7 +991,7 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { logError } from '@/lib/errors/error-log-handler';
 
-export default function GlobalError({
+export default function RootError({
   error,
   reset,
 }: {
@@ -1009,13 +1003,16 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <h2 className="text-lg font-semibold">Something went wrong</h2>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+      <h1 className="text-2xl font-semibold">This page couldn&apos;t load</h1>
+      <p className="text-muted-foreground max-w-md">
+        Something went wrong on our side. Try again, or reload the page if it keeps happening.
+      </p>
       {error.digest && (
-        <p className="text-muted-foreground text-sm">Reference: {error.digest}</p>
+        <p className="text-muted-foreground text-sm">Error reference: {error.digest}</p>
       )}
       <Button onClick={reset}>Try again</Button>
-    </div>
+    </main>
   );
 }
 ```
@@ -1101,14 +1098,15 @@ import { logger } from '@/lib/logger';
 //   export const GET = withLogging<RouteContext<{ id: string }>>(async (req, { params }) => …)  // dynamic
 export type RouteContext<P = Record<string, string>> = { params: Promise<P> };
 
-type RouteHandler<C> = (req: NextRequest, ctx: C) => Promise<NextResponse>;
+// Plain `Response` (not NextResponse) so library handlers such as better-auth's wrap directly.
+type RouteHandler<C> = (req: NextRequest, ctx: C) => Promise<Response>;
 
 // The returned handler takes the context via a variadic tuple ([ctx] | []) so static routes
 // (and unit tests) can call it with just the request, while dynamic routes still receive
 // their typed params. Next.js passes the context for dynamic segments at runtime.
 export function withLogging<C = unknown>(
   handler: RouteHandler<C>
-): (req: NextRequest, ...rest: [ctx: C] | []) => Promise<NextResponse> {
+): (req: NextRequest, ...rest: [ctx: C] | []) => Promise<Response> {
   return async (req, ...rest) => {
     const start = Date.now();
     const { method } = req;
@@ -1148,12 +1146,11 @@ export function cn(...inputs: ClassValue[]) {
 ```ts
 import { type NextRequest } from 'next/server';
 
-// TRUST_PROXY: set to the number of trusted proxy hops in front of the app
-// (1 = ALB → App, 2 = ALB → Traefik → App); empty/unset = X-Forwarded-*
-// headers are not trusted. A hop count is truthy, so the checks below hold.
-// Callers MUST validate the resolved host against an ALLOWED_HOSTS set before using
-// this in any emitted URL (password reset links, OAuth callbacks, etc.) — this
-// function alone does not prevent Host header injection.
+// TRUST_PROXY is the number of trusted proxy hops in front of the app (1 = ALB → App,
+// 2 = ALB → Traefik → App); unset or empty means X-Forwarded-* headers are ignored.
+// Callers MUST validate the resolved host against an ALLOWED_HOSTS set before emitting
+// it in any URL (password reset links, OAuth callbacks) — this function alone does not
+// prevent Host header injection.
 export function getAppOrigin(request: NextRequest): string {
   const trustProxy = process.env.TRUST_PROXY;
   const proto = (trustProxy
@@ -1256,20 +1253,20 @@ import type { ExampleItem } from './types';
 export const EXAMPLE_ITEMS: ExampleItem[] = [
   {
     id: '1',
-    title: 'Feature Pattern',
+    title: 'Feature modules',
     description: 'Add features under src/features/<name>/ with api/, components/, hooks/, schemas/.',
     status: 'active',
   },
   {
     id: '2',
-    title: 'React Query',
-    description: 'Data-fetching hooks live in features/hooks/ and wrap TanStack Query.',
+    title: 'Data fetching',
+    description: 'Query hooks live in src/features/<name>/hooks/ and wrap TanStack Query.',
     status: 'active',
   },
   {
     id: '3',
     title: 'shadcn/ui',
-    description: 'Add UI primitives with: npx shadcn@latest add <component>',
+    description: 'Add UI primitives with npx shadcn@latest add <component>.',
     status: 'inactive',
   },
 ];
@@ -1317,8 +1314,14 @@ export { useExampleItems } from './use-example-items.query';
 
 ```tsx
 import { CustomCard } from '@/components/widgets';
+import { cn } from '@/lib/utils';
 
 import type { ExampleItem } from '../types';
+
+const STATUS_LABEL: Record<ExampleItem['status'], string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+};
 
 interface ExampleCardProps {
   item: ExampleItem;
@@ -1329,17 +1332,18 @@ export function ExampleCard({ item }: ExampleCardProps) {
     <CustomCard>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold">{item.title}</h3>
+          <h2 className="font-semibold">{item.title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
         </div>
         <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
             item.status === 'active'
               ? 'bg-secondary text-secondary-foreground'
               : 'bg-muted text-muted-foreground'
-          }`}
+          )}
         >
-          {item.status}
+          {STATUS_LABEL[item.status]}
         </span>
       </div>
     </CustomCard>
@@ -1352,14 +1356,43 @@ export function ExampleCard({ item }: ExampleCardProps) {
 ```tsx
 'use client';
 
+import { Button } from '@/components/ui/button';
+
 import { useExampleItems } from '../hooks/use-example-items.query';
 import { ExampleCard } from './example-card';
 
 export function ExampleList() {
-  const { data: items, isPending } = useExampleItems();
+  const { data: items, isPending, error, refetch } = useExampleItems();
 
-  if (isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!items?.length) return <p className="text-sm text-muted-foreground">No items found.</p>;
+  if (isPending) {
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        Loading items…
+      </p>
+    );
+  }
+
+  if (error) {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-3">
+        <p className="text-sm text-destructive">
+          Couldn&apos;t load items. Check your connection and try again.
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  if (!items?.length) {
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        No items yet. Add one to EXAMPLE_ITEMS in src/features/example/constants.ts to see it
+        here.
+      </p>
+    );
+  }
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1395,9 +1428,9 @@ export type { ExampleItem } from './types';
 ### `src/app/dashboard/layout.tsx`
 
 ```tsx
-import { Navbar } from '@/components/layout/navbar';
-import { SiteFooter } from '@/components/layout/site-footer';
 import type { ReactNode } from 'react';
+
+import { Navbar, SiteFooter } from '@/components/layout';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -1420,7 +1453,7 @@ export default function DashboardPage() {
     <div className="max-w-site mx-auto w-full px-6 py-12">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="mt-2 text-muted-foreground">
-        This page demonstrates the feature module pattern with TanStack Query.
+        These items come from the example feature module. Replace them with your own data.
       </p>
       <div className="mt-8">
         <ExampleList />
@@ -1577,6 +1610,15 @@ export default function DashboardPage() {
   50% { transform: translateY(-15px) rotate(5deg); }
 }
 .animate-float { animation: float 10s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 ```
 
 ### `src/app/(public)/layout.tsx`
@@ -1599,19 +1641,15 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
 
 ### `src/app/(public)/page.tsx`
 
-> Update brand text (`template`/`Central` spans and the description paragraph) in Step 2.
+> Replace the `templateCentral` heading with the project name in Step 2.
 
 ```tsx
 export default function Home() {
   return (
-    <div className="flex-center min-h-screen flex-col gap-6">
-      <h1 className="text-4xl font-bold tracking-tight lg:text-6xl">
-        <span className="text-brand-gradient">template</span>
-        <span>Central</span>
-      </h1>
-      <p className="text-muted-foreground max-w-md text-center text-lg">
-        A production-ready Next.js template with shadcn/ui, Tailwind CSS, and
-        everything you need to build modern web applications.
+    <div className="flex-center min-h-screen flex-col gap-6 px-6 text-center">
+      <h1 className="text-4xl font-bold tracking-tight lg:text-6xl">templateCentral</h1>
+      <p className="text-muted-foreground max-w-md text-lg">
+        Start building here. Edit src/app/(public)/page.tsx to replace this page.
       </p>
     </div>
   );
@@ -1620,7 +1658,7 @@ export default function Home() {
 
 ### `src/components/layout/navbar.tsx`
 
-> Update the two brand `<span>` elements and the Dashboard button text in Step 2.
+> The brand wordmark comes from `BrandText` — update that widget in Step 2, not this file.
 
 ```tsx
 'use client';
@@ -1629,11 +1667,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
-import { LinkList, type LinkItem } from '@/components/widgets';
+import { BrandText } from '@/components/widgets';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils';
-
-const defaultNavLinks: LinkItem[] = [];
 
 export function Navbar() {
   const pathname = usePathname();
@@ -1641,44 +1677,42 @@ export function Navbar() {
   const isDashboard = rootPath === PAGE_ROUTES.DASHBOARD;
 
   return (
-    <nav
+    <header
       className={cn(
         isDashboard
           ? 'sticky top-0 z-50 w-full'
-          : 'max-w-site fixed inset-x-0 top-0 z-50 mx-auto pt-10',
+          : 'max-w-site fixed inset-x-0 top-0 z-50 mx-auto px-4 pt-10',
       )}
     >
       <div
         className={cn(
-          'flex-between min-h-20 bg-card px-6 py-3 shadow-lg',
+          'flex-between min-h-20 gap-4 bg-card px-6 py-3 shadow-lg',
           isDashboard ? 'border-b' : 'rounded-2xl border',
         )}
       >
         <Link href={PAGE_ROUTES.HOME} className="text-xl font-bold tracking-tight">
-          <span className="text-brand-gradient">template</span>
-          <span>Central</span>
+          <BrandText />
         </Link>
 
-        <div className="flex items-center gap-4">
-          {defaultNavLinks.length > 0 && (
-            <LinkList links={defaultNavLinks} className="hover:text-primary transition-colors" />
-          )}
-          <Button
-            asChild
-            className="bg-primary hover:bg-primary-hover h-12 rounded-lg px-6 py-3 font-bold text-primary-foreground"
-          >
-            <Link href={PAGE_ROUTES.DASHBOARD}>Dashboard</Link>
+        <nav aria-label="Main">
+          <Button asChild size="lg">
+            <Link
+              href={PAGE_ROUTES.DASHBOARD}
+              aria-current={isDashboard ? 'page' : undefined}
+            >
+              Dashboard
+            </Link>
           </Button>
-        </div>
+        </nav>
       </div>
-    </nav>
+    </header>
   );
 }
 ```
 
 ### `src/components/layout/site-footer.tsx`
 
-> Update `creditText` default in Step 2.
+> Update `creditText` default in Step 2. Pass `links` once the project has real footer pages.
 
 ```tsx
 import { LinkList, type LinkItem } from '@/components/widgets';
@@ -1688,19 +1722,19 @@ interface SiteFooterProps {
   links?: LinkItem[];
 }
 
-const defaultLinks: LinkItem[] = [
-  { label: 'Contact Us', href: '#' },
-];
-
 export function SiteFooter({
   creditText = 'Built with templateCentral',
-  links = defaultLinks,
+  links = [],
 }: SiteFooterProps) {
   return (
     <footer className="w-full bg-foreground">
-      <div className="flex-between px-6 py-6">
+      <div className="flex flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-background">{creditText}</p>
-        <LinkList links={links} className="text-sm text-background" />
+        {links.length > 0 && (
+          <nav aria-label="Footer">
+            <LinkList links={links} className="text-sm text-background" />
+          </nav>
+        )}
       </div>
     </footer>
   );
@@ -1784,9 +1818,9 @@ Create the target directory. Write every file verbatim from `config-files.md` (D
 
 - In `package.json`: set `"name"` to kebab-case project name
 - In `src/app/layout.tsx`: update `metadata.title` and `metadata.description`
-- In `src/components/layout/navbar.tsx`: replace brand text with project name
+- In `src/app/(public)/page.tsx`: replace the `templateCentral` heading with the project name
 - In `src/components/layout/site-footer.tsx`: update credit text
-- In `src/components/widgets/brand-text.tsx`: update the text spans to reflect the project name
+- In `src/components/widgets/brand-text.tsx`: update the text spans to reflect the project name (the navbar renders this widget)
 - In `src/components/widgets/brand-logo.tsx`: logo path stays as `/image_assets/logo.svg` — user replaces the SVG file with their own logo
 
 ### 3. Initialise git and install dependencies
@@ -1807,6 +1841,8 @@ npx shadcn@latest add button card dialog field form input label select separator
 ```
 
 `field` is a registry component — the CLI owns it, never hand-write or hand-edit that file. `src/components/widgets/custom-form-field.tsx` imports from `@/components/ui/field`, so the `field` install must succeed before the verification gate.
+
+shadcn ≥4.21 emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
 
 ### 5. Copy `.env.example` to `.env.local`
 
@@ -1835,7 +1871,7 @@ If check fails, a generated file violates the eslint or prettier config.
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: nextjs@5.0.0 -->
+<!-- templateCentral: nextjs@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 > STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
@@ -1843,7 +1879,7 @@ Create `AGENTS.md` at the project root with this exact content (fill in `[Projec
 
 ## Stack
 Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
-React Hook Form · Zod v4 · Vitest · pnpm 11 · Node ≥24
+React Hook Form · Zod v4 · Vitest · pnpm 12 · Node ≥24
 
 ## Commands
 ```bash
@@ -1893,7 +1929,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -1905,6 +1941,9 @@ Load the shared harness kit using the **nextjs** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-ts.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
@@ -1974,6 +2013,8 @@ Create `CLAUDE.md` at the project root with exactly one line:
 ```
 
 This makes Claude Code automatically load `AGENTS.md` on every session without duplicating its content.
+
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
 
 ### 7b. Optional: Task management
 

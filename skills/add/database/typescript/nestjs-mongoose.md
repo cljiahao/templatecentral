@@ -3,6 +3,8 @@
      prereq: Stack = NestJS, ORM = Mongoose (MongoDB). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Mongoose (MongoDB)
 
+AWS IAM auth and auth-stub completion live in sibling add-ons (`nestjs-mongoose-iam.md`, `nestjs-mongoose-auth.md`) that the router loads alongside this guide only when needed.
+
 #### C1. Install Dependencies
 
 ```bash
@@ -14,8 +16,9 @@ pnpm add @nestjs/mongoose mongoose
 **`src/database/database.module.ts`** (uses `serviceConfig` from `src/config/env.config.ts` — external service connections belong in `serviceConfig`, not `appConfig`):
 
 ```typescript
-import { Global, Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
+import { type Connection } from 'mongoose';
 import { serviceConfig } from '../config/env.config';
 
 @Global()
@@ -24,7 +27,17 @@ import { serviceConfig } from '../config/env.config';
     MongooseModule.forRoot(serviceConfig.MONGODB_URL),
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule implements OnModuleInit {
+  constructor(@InjectConnection() private readonly connection: Connection) {}
+
+  // Mongoose builds schema indexes in the background: on a fresh database, inserts
+  // made right after boot land before the unique index exists and duplicates get in.
+  // Awaiting init() holds the boot until every forFeature model's indexes are built
+  // (and fails it loudly if existing duplicates block a unique index).
+  async onModuleInit() {
+    await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
+  }
+}
 ```
 
 Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
@@ -44,67 +57,6 @@ export const serviceConfig = {
 ```
 
 > **Alternative**: If the project uses `@nestjs/config` (`pnpm add @nestjs/config`), use `forRootAsync` with `ConfigService` instead of direct `serviceConfig` imports.
-
-##### IAM Auth Variant
-
-If the user requires AWS IAM authentication (e.g., connecting to Amazon DocumentDB or MongoDB Atlas with AWS IAM), install the additional package:
-
-```bash
-pnpm add @aws-sdk/credential-providers
-```
-
-Replace the `DatabaseModule` with:
-
-```typescript
-import { Global, Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
-import { serviceConfig } from '../config/env.config';
-
-@Global()
-@Module({
-  imports: [
-    // For DocumentDB: mongodb://${HOST}:27017/${DB}?authSource=...&tls=true
-    // For Atlas:      mongodb+srv://${HOST}/${DB}?authSource=...
-    MongooseModule.forRoot(
-      `mongodb://${serviceConfig.MONGODB_HOST}:27017/${serviceConfig.MONGODB_DB_NAME}?authSource=%24external&authMechanism=MONGODB-AWS&tls=true`,
-      {
-        authMechanismProperties: {
-          AWS_CREDENTIAL_PROVIDER: fromNodeProviderChain(),
-        },
-      },
-    ),
-  ],
-})
-export class DatabaseModule {}
-```
-
-Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if a required field is missing instead of surfacing as a runtime `undefined`:
-
-```typescript
-const envSchema = z.object({
-  // ... existing fields ...
-  MONGODB_HOST: z.string().min(1),
-  MONGODB_DB_NAME: z.string().min(1),
-});
-```
-
-```typescript
-export const serviceConfig = {
-  // ... existing fields ...
-  MONGODB_HOST: env.MONGODB_HOST,
-  MONGODB_DB_NAME: env.MONGODB_DB_NAME,
-};
-```
-
-IAM environment variables (add to `.env` and `.env.example`):
-
-```env
-MONGODB_HOST=your-cluster.region.docdb.amazonaws.com
-MONGODB_DB_NAME=mydb
-```
-
-> The MongoDB driver's `AWS_CREDENTIAL_PROVIDER` delegates credential resolution to the driver itself, which handles automatic token rotation on reconnect. The `@aws-sdk/credential-providers` package resolves IAM credentials from the EC2/ECS instance role, environment variables, or SSO profile. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
 
 #### C3. Register in AppModule
 
@@ -204,13 +156,42 @@ Add to `.env` and `.env.example`:
 MONGODB_URL=mongodb://localhost:27017/mydb
 ```
 
-#### C8. Validate
+#### C8. Keep Tests Runnable Without a Database
 
-```bash
-pnpm build && pnpm test
+`env.config.ts` now throws at import without `MONGODB_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+
+```typescript
+    // `test.env` overwrites the shell/CI value, so fall back only when none is set.
+    env: { MONGODB_URL: process.env.MONGODB_URL ?? 'mongodb://127.0.0.1:1/test' },
 ```
 
-Confirm the build succeeds and all tests pass.
+`MongooseModule.forRoot` connects (and retries) during boot, so every e2e suite that boots `AppModule` without MongoDB swaps `DatabaseModule` for an empty module and stubs each `forFeature` model it would otherwise resolve:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { getModelToken } from '@nestjs/mongoose';
+import { DatabaseModule } from '../src/database/database.module';
+import { User } from '../src/modules/auth/schemas/user.schema';
+
+@Module({})
+class NoDatabaseModule {}
+
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideModule(DatabaseModule)
+      .useModule(NoDatabaseModule)
+      // One override per MongooseModule.forFeature model in the app.
+      .overrideProvider(getModelToken(User.name))
+      .useValue({})
+      .compile();
+```
+
+Suites that exercise real queries boot `AppModule` without these overrides against a disposable MongoDB (CI service container) whose `MONGODB_URL` is set in the job env — the `??` fallback above keeps it. Vitest runs files in parallel, so give each such file its own database name (or run them with `--no-file-parallelism`); one file's `dropDatabase()` also drops the unique index another file relies on.
+
+#### C9. Validate
+
+```bash
+pnpm check && pnpm build && pnpm test && pnpm test:e2e
+```
 
 ---
 
@@ -221,130 +202,8 @@ Confirm the build succeeds and all tests pass.
 - `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
 - Place `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use `MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties` — no schema or query code changes needed.
-
----
-
-## Completing Auth Integration
-
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the in-memory stubs with real database-backed implementations.
-
-**Step A — Create `src/modules/auth/schemas/user.schema.ts`**
-
-```typescript
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { type HydratedDocument } from 'mongoose';
-
-export type UserDocument = HydratedDocument<User>;
-
-@Schema({ timestamps: true })
-export class User {
-  @Prop({ required: true, unique: true })
-  email: string;
-
-  @Prop({ required: true })
-  name: string;
-
-  // `select: false` keeps the hash out of every query result by default — without it
-  // any `findOne`/`find` that serializes a user document leaks the password hash.
-  // Opt back in explicitly with `.select('+hashedPassword')` where it is actually needed.
-  @Prop({ required: true, select: false })
-  hashedPassword: string;
-}
-
-export const UserSchema = SchemaFactory.createForClass(User);
-```
-
-**Step B — Replace `src/modules/auth/auth.service.ts`**
-
-```typescript
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { InjectModel } from '@nestjs/mongoose';
-import * as argon2 from 'argon2';
-import { Model } from 'mongoose';
-
-import { User, type UserDocument } from './schemas/user.schema';
-import type { LoginDto, RegisterDto } from './auth.dto';
-
-// Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist.
-const DUMMY_HASH =
-  '$argon2id$v=19$m=65536,t=3,p=1$c29tZXNhbHRzb21lc2E$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo';
-
-@Injectable()
-export class AuthService {
-  constructor(
-    private readonly jwtService: JwtService,
-    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
-  ) {}
-
-  async register(dto: RegisterDto) {
-    const existing = await this.userModel.findOne({ email: dto.email }).exec();
-    if (existing) throw new ConflictException('Email already registered.');
-
-    // argon2id by default
-    const hashedPassword = await argon2.hash(dto.password);
-    const user = await this.userModel.create({
-      email: dto.email,
-      name: dto.name,
-      hashedPassword,
-    });
-    return { id: user._id.toString(), email: user.email, name: user.name };
-  }
-
-  async login(dto: LoginDto) {
-    // `hashedPassword` is `select: false` on the schema — opt in only here.
-    const user = await this.userModel
-      .findOne({ email: dto.email })
-      .select('+hashedPassword')
-      .exec();
-    const passwordOk = await argon2.verify(
-      user?.hashedPassword ?? DUMMY_HASH,
-      dto.password,
-    );
-    if (!user || !passwordOk) {
-      throw new UnauthorizedException('Invalid credentials.');
-    }
-    return {
-      accessToken: this.jwtService.sign({ sub: user._id.toString(), email: user.email }),
-      tokenType: 'bearer' as const,
-    };
-  }
-}
-```
-
-**Step C — Update `src/modules/auth/auth.module.ts`**
-
-Add `MongooseModule.forFeature` to `imports` and register the `User` schema:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { MongooseModule } from '@nestjs/mongoose';
-import { PassportModule } from '@nestjs/passport';
-
-import { appConfig } from '../../config/env.config';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { JwtStrategy } from './jwt.strategy';
-import { User, UserSchema } from './schemas/user.schema';
-
-@Module({
-  imports: [
-    PassportModule,
-    JwtModule.register({
-      secret: appConfig.JWT_SECRET,
-      signOptions: { expiresIn: appConfig.JWT_EXPIRES_IN },
-    }),
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
-  ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
-})
-export class AuthModule {}
-```
+- **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use the IAM `DatabaseModule` from `nestjs-mongoose-iam.md` (`MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties`) — no schema or query code changes needed.
+- **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-mongoose-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 
 ---
 

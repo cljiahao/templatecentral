@@ -55,11 +55,9 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route element={<RootLayout />}>
-          {/* Public routes */}
           <Route index element={<HomePage />} />
           <Route path="login" element={<LoginPage />} />
 
-          {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<DashboardPage />} />
           </Route>
@@ -231,6 +229,17 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 ```
 
 ### `src/test/setup.ts`
@@ -266,6 +275,7 @@ export { NotFoundPage } from './not-found';
 Update `"Vite + React Template"` to the project name during scaffolding.
 
 ```tsx
+import { Button } from '@/components/ui/button';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
 import { Link } from 'react-router';
 
@@ -275,15 +285,11 @@ export function HomePage() {
       <div className="flex flex-col items-center gap-6 text-center">
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Vite + React Template</h1>
         <p className="text-muted-foreground max-w-xl text-lg">
-          A production-ready starter with React Router, TanStack Query, Tailwind CSS, and a
-          feature-driven folder structure.
+          Start building here. Edit src/pages/home.tsx to replace this page.
         </p>
-        <Link
-          to={PAGE_ROUTES.DASHBOARD}
-          className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg px-6 py-3 font-semibold transition-colors"
-        >
-          Go to Dashboard
-        </Link>
+        <Button asChild size="lg">
+          <Link to={PAGE_ROUTES.DASHBOARD}>Open dashboard</Link>
+        </Button>
       </div>
     </div>
   );
@@ -297,7 +303,7 @@ import { LoginCard } from '@/features/auth';
 
 export function LoginPage() {
   return (
-    <div className="flex-center min-h-screen">
+    <div className="flex-center px-6 py-16">
       <LoginCard />
     </div>
   );
@@ -314,7 +320,7 @@ export function DashboardPage() {
     <div className="max-w-site mx-auto w-full px-6 py-12">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <p className="text-muted-foreground mt-2">
-        This page demonstrates the feature module pattern with TanStack Query.
+        These items come from the example feature module. Replace them with your own data.
       </p>
 
       <div className="mt-8">
@@ -333,14 +339,16 @@ import { Link } from 'react-router';
 
 export function NotFoundPage() {
   return (
-    <div className="flex-center min-h-[60vh] flex-col gap-4">
-      <h1 className="text-6xl font-bold">404</h1>
-      <p className="text-muted-foreground text-lg">Page not found</p>
+    <div className="flex-center min-h-[60vh] flex-col gap-4 px-6 text-center">
+      <h1 className="text-3xl font-bold tracking-tight">Page not found</h1>
+      <p className="text-muted-foreground max-w-md">
+        This page doesn&apos;t exist or has moved. Check the address, or go to the home page.
+      </p>
       <Link
         to={PAGE_ROUTES.HOME}
         className="text-primary hover:text-primary-hover mt-2 text-sm font-medium underline underline-offset-4"
       >
-        Go back home
+        Go to the home page
       </Link>
     </div>
   );
@@ -440,6 +448,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 ### `src/features/auth/components/login-card.tsx`
 
 ```tsx
+import { Button } from '@/components/ui/button';
 import { CustomCard } from '@/components/widgets';
 import { ENV } from '@/lib/constants/env';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
@@ -458,20 +467,17 @@ export function LoginCard() {
 
   return (
     <CustomCard
-      header="Sign In"
-      description="Choose a sign-in method to continue."
+      header="Sign in"
+      headingLevel="h1"
+      description="Choose how you want to sign in."
       className="w-full max-w-md shadow-lg"
     >
       <div className="flex flex-col gap-4">
-        {/* Add your SSO / OAuth login button here */}
+        {/* TODO: add your SSO / OAuth sign-in button here. */}
         {ENV.IS_DEV && (
-          <button
-            type="button"
-            className="bg-card text-muted-foreground hover:bg-muted rounded-md border-2 px-4 py-3 text-sm"
-            onClick={handleDevLogin}
-          >
-            Dev login (bypass auth)
-          </button>
+          <Button type="button" variant="outline" onClick={handleDevLogin}>
+            Sign in as dev user
+          </Button>
         )}
       </div>
     </CustomCard>
@@ -491,8 +497,10 @@ export function ProtectedRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex-center min-h-screen">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="flex-center py-16">
+        <p role="status" className="text-muted-foreground">
+          Checking your session…
+        </p>
       </div>
     );
   }
@@ -549,9 +557,9 @@ export interface ExampleItem {
 
 ```ts
 export const EXAMPLE_ITEMS = [
-  { id: 'item-1', title: 'First Item', description: 'Description for the first item' },
-  { id: 'item-2', title: 'Second Item', description: 'Description for the second item' },
-  { id: 'item-3', title: 'Third Item', description: 'Description for the third item' },
+  { id: 'item-1', title: 'First item', description: 'Description for the first item' },
+  { id: 'item-2', title: 'Second item', description: 'Description for the second item' },
+  { id: 'item-3', title: 'Third item', description: 'Description for the third item' },
 ] as const;
 ```
 
@@ -602,7 +610,7 @@ describe('ExampleService', () => {
   it('finds an item by id', () => {
     const item = ExampleService.getById('item-1');
     expect(item).toBeDefined();
-    expect(item?.title).toBe('First Item');
+    expect(item?.title).toBe('First item');
   });
 
   it('returns undefined for unknown id', () => {
@@ -659,32 +667,39 @@ describe('ExampleCard', () => {
 ### `src/features/example/components/example-list.tsx`
 
 ```tsx
+import { Button } from '@/components/ui/button';
 import { useExampleItems } from '../hooks';
 import { ExampleCard } from './example-card';
 
 export function ExampleList() {
-  const { data: items, isPending, error } = useExampleItems();
+  const { data: items, isPending, error, refetch } = useExampleItems();
 
   if (isPending) {
     return (
       <p role="status" className="text-muted-foreground">
-        Loading...
+        Loading items…
       </p>
     );
   }
 
   if (error) {
     return (
-      <p role="alert" className="text-destructive">
-        Failed to load items.
-      </p>
+      <div role="alert" className="flex flex-col items-start gap-3">
+        <p className="text-destructive">
+          Couldn&apos;t load items. Check your connection and try again.
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>
+          Try again
+        </Button>
+      </div>
     );
   }
 
   if (!items?.length) {
     return (
       <p role="status" className="text-muted-foreground">
-        No items found.
+        No items yet. Add one to EXAMPLE_ITEMS in src/features/example/constants.ts to see it
+        here.
       </p>
     );
   }
@@ -736,7 +751,9 @@ export { SiteFooter } from './site-footer';
 ### `src/components/layout/error-boundary.tsx`
 
 ```tsx
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { ENV } from '@/lib/constants/env';
+import { logError } from '@/lib/errors';
+import { Component, type ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -758,10 +775,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    if (import.meta.env.DEV) {
-      console.error('ErrorBoundary caught an error:', error, errorInfo);
-    }
+  componentDidCatch(error: Error) {
+    logError('react.error-boundary', error);
   }
 
   handleRetry = () => {
@@ -775,21 +790,21 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-          <h1 className="text-2xl font-bold">Something went wrong</h1>
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+          <h1 className="text-2xl font-bold">This page couldn&apos;t load</h1>
           <p className="text-muted-foreground max-w-md text-sm">
-            {import.meta.env.DEV
-              ? (this.state.error?.message ?? 'An unexpected error occurred.')
-              : 'An unexpected error occurred.'}
+            {ENV.IS_DEV && this.state.error
+              ? this.state.error.message
+              : 'Try again, or reload the page if it keeps happening.'}
           </p>
           <button
             type="button"
             onClick={this.handleRetry}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring/50 rounded-md px-4 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-[3px]"
           >
             Try again
           </button>
-        </div>
+        </main>
       );
     }
 
@@ -816,31 +831,34 @@ export function Navbar() {
   const { pathname } = useLocation();
 
   return (
-    <nav aria-label="Main" className="bg-card sticky top-0 z-50 w-full border-b">
-      <div className="max-w-site flex-between mx-auto px-6 py-4">
+    <header className="bg-card sticky top-0 z-50 w-full border-b">
+      <div className="max-w-site flex-between mx-auto gap-4 px-6 py-4">
         <Link to={PAGE_ROUTES.HOME} className="text-xl font-bold tracking-tight">
           templateCentral
         </Link>
 
-        <div className="flex gap-6">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              // Colour alone cannot convey the active link — aria-current is what
-              // reaches assistive tech and users who can't distinguish the hue.
-              aria-current={pathname === link.href ? 'page' : undefined}
-              className={cn(
-                'hover:text-primary text-sm font-medium transition-colors',
-                pathname === link.href ? 'text-primary' : 'text-muted-foreground'
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
+        <nav aria-label="Main" className="flex gap-6">
+          {NAV_LINKS.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                to={link.href}
+                // Colour alone cannot convey the active link — aria-current is what
+                // reaches assistive tech and users who can't distinguish the hue.
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'hover:text-primary text-sm font-medium transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
-    </nav>
+    </header>
   );
 }
 ```
@@ -960,15 +978,23 @@ import type { ReactNode } from 'react';
 
 interface CustomCardProps {
   header: string;
+  /** Heading element for `header` — pick the level that fits the page outline. @default "h2" */
+  headingLevel?: 'h1' | 'h2' | 'h3';
   description?: string;
   children?: ReactNode;
   className?: string;
 }
 
-export function CustomCard({ header, description, children, className }: CustomCardProps) {
+export function CustomCard({
+  header,
+  headingLevel: Heading = 'h2',
+  description,
+  children,
+  className,
+}: CustomCardProps) {
   return (
     <div className={cn('bg-card rounded-lg border p-6 shadow-xs', className)}>
-      <h3 className="text-lg font-semibold">{header}</h3>
+      <Heading className="text-lg font-semibold">{header}</Heading>
       {description && <p className="text-muted-foreground mt-1 text-sm">{description}</p>}
       {children && <div className="mt-4">{children}</div>}
     </div>
@@ -994,7 +1020,7 @@ interface CustomDialogProps extends Omit<ComponentProps<typeof Dialog>, 'childre
   className?: string;
   children: ReactNode;
   trigger?: ReactNode;
-  title?: ReactNode;
+  title: ReactNode;
   description?: ReactNode;
 }
 
@@ -1011,11 +1037,7 @@ export function CustomDialog({
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className={cn('flex h-full w-full flex-col', className)}>
         <DialogHeader>
-          {title ? (
-            <DialogTitle>{title}</DialogTitle>
-          ) : (
-            <DialogTitle className="sr-only">Dialog</DialogTitle>
-          )}
+          <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {children}
@@ -1047,24 +1069,26 @@ export function CustomFormField({ name, label, description, children }: CustomFo
     <Controller
       name={name}
       control={control}
-      render={({ field: { ref, ...field }, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel
-            htmlFor={name}
-            className="text-foreground text-lg leading-tight font-semibold tracking-tight"
-          >
-            {label}
-          </FieldLabel>
-          {cloneElement(children, {
-            id: name,
-            ref,
-            'aria-invalid': fieldState.invalid,
-            ...field,
-          })}
-          {description && <FieldDescription>{description}</FieldDescription>}
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )}
+      render={({ field: { ref, ...field }, fieldState }) => {
+        const descriptionId = description ? `${name}-description` : undefined;
+        const errorId = fieldState.invalid ? `${name}-error` : undefined;
+        const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
+
+        return (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={name}>{label}</FieldLabel>
+            {cloneElement(children, {
+              id: name,
+              ref,
+              'aria-invalid': fieldState.invalid,
+              'aria-describedby': describedBy,
+              ...field,
+            })}
+            {description && <FieldDescription id={descriptionId}>{description}</FieldDescription>}
+            {fieldState.invalid && <FieldError id={errorId} errors={[fieldState.error]} />}
+          </Field>
+        );
+      }}
     />
   );
 }
@@ -1209,7 +1233,9 @@ export function Pill({ children, variant = 'outline' }: PillProps) {
 ### `src/lib/clients/fetch-client.ts`
 
 ```ts
-import { APIError } from '@/lib/errors';
+// Not the '@/lib/errors' barrel: it loads error-log-handler, which add (logging) wires to an
+// ApiClient subclass — importing through it makes a cycle that breaks `extends`.
+import { APIError } from '@/lib/errors/api-error';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -1228,18 +1254,26 @@ const TEXT_CONTENT_TYPES = ['text/plain', 'text/html', 'text/csv', 'text/xml', '
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export abstract class FetchClient {
+  // Subclass knobs: cookie auth (add auth) sends 'include'; unload-time senders need keepalive.
+  protected credentials: RequestCredentials = 'same-origin';
+  protected keepalive = false;
+
   constructor(
     protected baseUrl: string,
     protected headers: Record<string, string>
   ) {}
 
-  // ── Core Request ──────────────────────────────────────────────────
+  /** Per-request headers (e.g. a CSRF token) — the base client has no auth knowledge. */
+  protected requestHeaders(_method: HttpMethod): Record<string, string> {
+    return {};
+  }
 
   protected async request<T>(
     path: string,
     method: HttpMethod = 'GET',
     body?: unknown,
-    query: Record<string, string | number | boolean | undefined> = {}
+    query: Record<string, string | number | boolean | undefined> = {},
+    signal?: AbortSignal
   ): Promise<T> {
     const url = new URL(
       `${this.baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`,
@@ -1250,18 +1284,26 @@ export abstract class FetchClient {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
 
-    const headers: Record<string, string> = { ...this.headers };
-    if (body !== undefined) {
+    const headers: Record<string, string> = { ...this.headers, ...this.requestHeaders(method) };
+    let payload: BodyInit | undefined;
+    if (body instanceof FormData) {
+      // No Content-Type — the browser must add its own multipart boundary.
+      payload = body;
+    } else if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
     }
 
+    // fetch has no default timeout — an unresponsive upstream would leave the
+    // calling React Query hook pending indefinitely without this.
+    const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const res = await fetch(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      // fetch has no default timeout — an unresponsive upstream would leave the
-      // calling React Query hook pending indefinitely without this.
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      body: payload,
+      credentials: this.credentials,
+      keepalive: this.keepalive,
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
 
     if (!res.ok) {
@@ -1273,8 +1315,6 @@ export abstract class FetchClient {
 
     return this.parseResponse<T>(res);
   }
-
-  // ── Response Parsing ──────────────────────────────────────────────
 
   private async parseResponse<T>(res: Response): Promise<T> {
     if (res.status === 204) return undefined as T;
@@ -1324,8 +1364,6 @@ export abstract class FetchClient {
       return (await res.text()) as T;
     }
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────
 
   private matchesContentType(contentType: string, patterns: string[]): boolean {
     return patterns.some((p) => contentType.includes(p));
@@ -1574,6 +1612,8 @@ npx shadcn@latest add accordion avatar button button-group card checkbox dialog 
 
 `button-group`, `field`, and `input-group` are registry components — the CLI owns them, so never hand-write or hand-edit those files. `src/components/widgets/custom-form-field.tsx` imports from `@/components/ui/field`, so the `field` install must succeed before the verification gate.
 
+shadcn ≥4.21 emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
+
 ### 6. Verification gate
 
 Do NOT generate `AGENTS.md` until ALL of these pass:
@@ -1593,7 +1633,7 @@ If any check fails, diagnose and fix before proceeding.
 Only after the verification gate passes. Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ````markdown
-<!-- templateCentral: vite-react@5.0.0 -->
+<!-- templateCentral: vite-react@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack
@@ -1643,7 +1683,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -1655,6 +1695,9 @@ Load the shared harness kit using the **vite-react** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-ts.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 7c below to create the verify skill. After step 7c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -1707,11 +1750,19 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
-After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit.md Step E).
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
 
 ### 9. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append Option A or Option B from "Scaffold: optional Task Management" in repository root `AGENTS.md`. If no, skip.
+Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+
+```markdown
+## Task Management
+
+For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```
+
+If no, skip.
 
 ### 10. Optional: Remove example code
 

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # scripts/lint-skills.sh — mechanical pattern checks for templateCentral skills
 #
-# Run locally:  bash scripts/lint-skills.sh
-# Run in CI:    bash scripts/lint-skills.sh
+# Usage:  bash scripts/lint-skills.sh [SKILLS_DIR]   (run from the repo root; default: skills)
 #
 # HOW TO ADD A NEW CHECK
-# 1. Write a check_* function following the pattern below.
-# 2. Add a comment explaining WHY the pattern is banned and when to revisit it.
+# 1. Write a check_* function: header, collect offending lines (usually via scan), then report.
+# 2. Comment WHY the pattern is banned and when to revisit it.
 # 3. Call the function in the "Run all checks" section at the bottom.
-# 4. If it's ecosystem-era (tied to a specific stack version), mark it ECOSYSTEM-ERA
-#    so future maintainers know to revisit it when the stack upgrades.
+# 4. Mark ecosystem-era checks (tied to a specific stack version) ECOSYSTEM-ERA so future
+#    maintainers revisit them when the stack upgrades.
 #
 # TIMELESS checks: always wrong regardless of stack version.
 # ECOSYSTEM-ERA checks: correct for the current stack; review on major upgrades.
+#
+# This runs after every Edit/Write in this repo, so keep checks to one process per file set:
+# no per-file or per-line subshells.
 
 set -euo pipefail
 
@@ -27,15 +29,44 @@ FAILED=0
 # every existing project falsely report "needs migration". Contrast with `templatecentral_version`
 # in harness.json, which tracks plugin semver and is checked against plugin.json separately.
 #
-# v5.0.0 — seeded project skills moved from flat `.claude/skills/<name>.md` to directory form
-# `.claude/skills/<name>/SKILL.md`. Flat skill files are silently ignored by Claude Code
-# (flat files only work under `.claude/commands/`). Projects seeded before v5.0.0 must run
-# `templatecentral:migrate` to convert their flat skill files to the directory layout.
-HARNESS_SCHEMA_VERSION="5.0.0"
+# v5.0.0 — seeded project skills use directory form `.claude/skills/<name>/SKILL.md`. Flat skill
+# files are silently ignored by Claude Code (flat files only work under `.claude/commands/`).
+# Projects seeded below v5.0.0 must run `templatecentral:migrate` to convert them.
+#
+# v6.0.0 — settings.json hooks use the exec form `"command": "<bin>", "args": [...]` with
+# `${CLAUDE_PROJECT_DIR}`-anchored script paths; an array-valued `"command": [...]` is silently
+# ignored by Claude Code. Projects marked below v6.0.0 carry inert hooks and must re-sync
+# settings.json + hooks from the harness kit via `templatecentral:migrate`.
+HARNESS_SCHEMA_VERSION="6.0.0"
 
 fail() { echo "FAIL: $*"; FAILED=1; }
 pass() { echo "OK:   $*"; }
 header() { echo ""; echo "── $* ──"; }
+
+# report <offending-lines> <fail-msg> <pass-msg>
+report() {
+  if [[ -n "$1" ]]; then
+    echo "$1"
+    fail "$2"
+  else
+    pass "$3"
+  fi
+}
+
+# scan <grep-flags> <pattern> [exclude...] — `grep -rn` hits under SKILLS_DIR, minus lines
+# matching any exclude (basic regex). Pass "" for no extra flags.
+scan() {
+  local flags=$1 pattern=$2 hits ex
+  shift 2
+  hits=$(grep -rn ${flags:+"$flags"} -- "$pattern" "$SKILLS_DIR/" 2>/dev/null || true)
+  for ex in "$@"; do
+    [[ -n "$hits" ]] || break
+    hits=$(grep -v -- "$ex" <<<"$hits" || true)
+  done
+  printf '%s' "$hits"
+}
+
+have_python() { command -v python3 >/dev/null 2>&1; }
 
 # ── TIMELESS ──────────────────────────────────────────────────────────────────
 
@@ -43,42 +74,28 @@ check_no_cve_identifiers() {
   # CVE IDs drift — advisories get patched, re-scored, or superseded.
   # Skills must not reference CVE-XXXX-NNNNN. Use "security advisory" language instead.
   header "CVE identifiers"
-  local matches
-  matches=$(grep -rn 'CVE-[0-9]\{4\}-[0-9]\+' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "CVE identifiers found — replace with 'security advisory' language"
-  else
-    pass "No CVE identifiers"
-  fi
+  report "$(scan "" 'CVE-[0-9]\{4\}-[0-9]\+')" \
+    "CVE identifiers found — replace with 'security advisory' language" \
+    "No CVE identifiers"
 }
 
 check_no_jurisdiction_specific() {
-  # templateCentral is industry- and country-neutral.
-  # Known jurisdiction-specific framework names must not appear in skills.
-  # ADD TO THIS LIST when a new jurisdiction-specific term is discovered.
-  # Remove from this list only if the project explicitly targets that jurisdiction.
-  # audit/implementation.md is excluded — it names these patterns in its C6 check and changelog.
-  # Added: GDPR, CCPA, FISMA (previously only audited in CI). MAS TRM, FedRAMP, NIST SP 800-63
-  # were already present. TIMELESS.
+  # templateCentral is industry- and country-neutral, so known jurisdiction-specific framework
+  # names must not appear in skills. Extend the list when a new term is discovered; remove one
+  # only if the project explicitly targets that jurisdiction.
+  # audit/implementation.md is excluded — it names these patterns in its C6 check. TIMELESS.
   header "Jurisdiction-specific content"
   local pattern='GDPR|CCPA|FISMA|IM8|MAS TRM|GCC2\.0|NRIC|SingPass|MyInfo|PDPA|HIPAA|PCI.DSS|SOC 2|FedRAMP|DISA STIG|NIST SP 800-63'
-  local matches
-  matches=$(grep -rEn "$pattern" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' | grep -v 'CONVENTIONS.md' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Jurisdiction-specific content found — skills must be country/industry neutral"
-  else
-    pass "No jurisdiction-specific content"
-  fi
+  report "$(scan -E "$pattern" 'audit/implementation' 'CONVENTIONS.md')" \
+    "Jurisdiction-specific content found — skills must be country/industry neutral" \
+    "No jurisdiction-specific content"
 }
 
 check_no_hardcoded_secrets() {
   # Real secret values must never appear in skill code examples.
   # Safe: placeholders (<your-secret>), change-me strings, env refs (${VAR}), comments (#).
-  # grep -E replaces grep -P: PCRE silently no-ops on stock macOS BSD grep; POSIX ERE is portable.
-  # Negative lookaheads emulated via grep -v pipes. TIMELESS.
-  # Keywords extended: added better_auth_secret, private_key, access_token (previously only in CI job).
+  # POSIX ERE (not grep -P, which silently no-ops on stock macOS BSD grep); the negative
+  # lookaheads a PCRE pattern would use are emulated by the grep -v chain. TIMELESS.
   header "Hardcoded secrets"
   local matches
   matches=$(grep -rniE '(secret|api_key|password|database_url|better_auth_secret|private_key|access_token)[[:space:]]*=[[:space:]]*.{8,}' "$SKILLS_DIR/" 2>/dev/null \
@@ -89,115 +106,76 @@ check_no_hardcoded_secrets() {
     | grep -vE '=[[:space:]]*[A-Z_]{4,}' \
     | grep -v 'postgresql://\|mysql://\|mongodb://\|https://\|http://' \
     || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Potential hardcoded secrets — use placeholder syntax (e.g. <your-secret>)"
-  else
-    pass "No hardcoded secrets"
-  fi
+  report "$matches" \
+    "Potential hardcoded secrets — use placeholder syntax (e.g. <your-secret>)" \
+    "No hardcoded secrets"
 }
 
 check_no_comment_narration() {
   # Change-narration comments rot once the change is no longer recent — same doctrine as
   # comments.md, applied here to scripts/*.sh and bash fences in skill markdown.
   header "Change-narration comments"
-  local patterns="skills/scaffold/shared/comment-hygiene-patterns.txt"
+  local patterns="$SKILLS_DIR/scaffold/shared/comment-hygiene-patterns.txt"
   if [[ ! -f "$patterns" ]]; then
     fail "Missing $patterns"
     return
   fi
+  local tmp matches
+  tmp=$(mktemp -d)
   # This check blocks CI (lint-patterns has no bypass label), so — like the CI gate seeded into
   # scaffolded projects — it reads only the first 10 (anchored keyword) lines, never the last 3
   # (date/ticket/issue-ref), which false-positive on legitimate terms like UTF-8/SHA-256/RFC-7231.
-  local strict_patterns
-  strict_patterns=$(mktemp)
-  head -n 10 "$patterns" > "$strict_patterns"
-  local matches="" f line stripped md_file in_bash
-
-  for f in scripts/*.sh; do
-    [[ -f "$f" ]] || continue
-    while IFS= read -r line; do
-      if [[ "$line" =~ ^[[:space:]]*# ]]; then
-        stripped=$(printf '%s' "$line" | sed -E 's@^[[:space:]]*#[[:space:]]?@@')
-        if [[ -n "$stripped" ]] && grep -qEf "$strict_patterns" <<< "$stripped"; then
-          matches="$matches
-$f: $stripped"
-        fi
-      fi
-    done < "$f"
-  done
-
-  while IFS= read -r -d '' md_file; do
-    in_bash=0
-    while IFS= read -r line; do
-      case "$line" in
-        '```bash') in_bash=1; continue ;;
-        '```') in_bash=0; continue ;;
-      esac
-      [[ "$in_bash" -eq 1 ]] || continue
-      if [[ "$line" =~ ^[[:space:]]*# ]]; then
-        stripped=$(printf '%s' "$line" | sed -E 's@^[[:space:]]*#[[:space:]]?@@')
-        if [[ -n "$stripped" ]] && grep -qEf "$strict_patterns" <<< "$stripped"; then
-          matches="$matches
-$md_file: $stripped"
-        fi
-      fi
-    done < "$md_file"
-  done < <(find "$SKILLS_DIR" -name '*.md' -print0)
-  rm -f "$strict_patterns"
-
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Change-narration comments found — state WHAT the code does now, not what changed"
-  else
-    pass "No change-narration comments"
-  fi
+  head -n 10 "$patterns" > "$tmp/patterns"
+  # Comment bodies go to stdout and their source file to the line-aligned "src" file, so the
+  # patterns (anchored with ^) only ever see the comment text, never the path prefix.
+  # shellcheck disable=SC2016  # awk program: $0 is awk's, not the shell's.
+  local extract='
+    FNR == 1 { in_bash = 0 }
+    FILENAME !~ /\.sh$/ {
+      if ($0 == "```bash") { in_bash = 1; next }
+      if ($0 == "```") { in_bash = 0; next }
+      if (!in_bash) next
+    }
+    /^[[:space:]]*#/ {
+      body = $0
+      sub(/^[[:space:]]*#[[:space:]]?/, "", body)
+      if (body != "") { print body; print FILENAME >> src }
+    }'
+  : > "$tmp/src"
+  awk -v src="$tmp/src" "$extract" scripts/*.sh > "$tmp/text" 2>/dev/null || true
+  find "$SKILLS_DIR" -name '*.md' -exec awk -v src="$tmp/src" "$extract" {} + >> "$tmp/text"
+  matches=$(grep -nEf "$tmp/patterns" "$tmp/text" \
+    | awk 'NR == FNR { file[NR] = $0; next }
+           { n = $0; sub(/:.*/, "", n); sub(/^[0-9]+:/, ""); print file[n] ": " $0 }' "$tmp/src" - \
+    || true)
+  rm -rf "$tmp"
+  report "$matches" \
+    "Change-narration comments found — state WHAT the code does now, not what changed" \
+    "No change-narration comments"
 }
 
 check_no_ghost_agent_names() {
-  # Ghost agent / skill names that must never appear as invocations in skill files.
-  #
-  # OLD shared-*-agent names (pre-v4.0):
-  #   shared-(build|review|test|update|cleanup)-agent → de-registered; use cat-path contract
-  #   fastapi-scaffold / nestjs-scaffold / nextjs-scaffold / vite-react-scaffold → templatecentral:scaffold
-  #   templatecentral:shared-migrate → templatecentral:migrate
-  #   shared-migrate-database → templatecentral:migrate
-  #   templatecentral:shared-audit → templatecentral:audit
+  # Ghost agent / skill names that must never appear as invocations in skill files:
+  #   shared-(build|review|test|update|cleanup)-agent → de-registered; use the cat-path contract
+  #   <stack>-scaffold → templatecentral:scaffold
+  #   templatecentral:shared-migrate, shared-migrate-database → templatecentral:migrate
+  #   templatecentral:shared-audit → /tc-audit
   #   shared-code-standards / <stack>-code-standards → templatecentral:standards
   #   nextjs-add-auth → templatecentral:add (auth)
-  #
-  # DE-REGISTERED utility names (v5.0 cat-path sweep):
-  #   templatecentral:build / templatecentral:test / templatecentral:review / templatecentral:cleanup
-  #   are NOT registered skills — their SKILL.md files have no `name:` frontmatter and cannot be
-  #   invoked as skills. The correct form is: cat "$HOME/.claude/plugins/marketplaces/templatecentral/skills/<name>/SKILL.md"
-  #   Use compact table form: `<name> utility (cat skills/<name>/SKILL.md via plugin root)`
-  #
-  # Repo-internal project skills (not shipped to installed projects, live in .claude/skills/):
-  #   templatecentral:audit and templatecentral:write-skill are not valid references from
-  #   shipped skills/ — the correct forms are /tc-audit and /tc-write-skill.
-  #
-  # Still LEGITIMATE (shipped registered skills): templatecentral:scaffold, :add, :migrate, :standards
-  # (these are registered skills with `name:` frontmatter and resolve correctly).
-  #
-  # Exclusions:
-  #   audit/implementation.md — documents forbidden names in its own checklist items
-  #   CONVENTIONS.md — may explain naming history
-  #   This script itself (lint-skills.sh) — names appear only as banned-pattern strings
+  #   templatecentral:(build|test|review|cleanup) — utilities with no `name:` frontmatter, so they
+  #     cannot be invoked as skills; reference them as
+  #     `<name> utility (cat skills/<name>/SKILL.md via plugin root)`
+  #   templatecentral:(audit|write-skill) — repo-internal project skills (.claude/skills/), not
+  #     shipped; use /tc-audit and /tc-write-skill
+  # Legitimate shipped registered skills: templatecentral:scaffold, :add, :migrate, :standards.
+  # audit/implementation.md and CONVENTIONS.md are excluded — they document the banned names.
   header "Ghost agent / skill names"
-  local matches
   # shellcheck disable=SC2016  # literal backticks/colons are regex content, not shell expansions
-  matches=$(grep -rEn \
+  report "$(scan -E \
     '`shared-(build|review|test|update|cleanup)-agent`|templatecentral:(fastapi|nestjs|nextjs|vite-react)-scaffold|templatecentral:shared-migrate|`shared-migrate-database`|templatecentral:shared-audit|`shared-code-standards`|`(fastapi|nestjs|nextjs|vite-react)-code-standards`|`nextjs-add-auth`|templatecentral:(build|test|review|cleanup|audit|write-skill)' \
-    "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    | grep -v 'CONVENTIONS\.md' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Ghost agent/skill name — templatecentral:(build|test|review|cleanup) are de-registered utilities (load via cat-path). templatecentral:audit / :write-skill moved to repo-internal project skills /tc-audit / /tc-write-skill (.claude/skills/) and must not be referenced from shipped skills/. Registered shipped skills (invoke normally): templatecentral:scaffold, :add, :migrate, :standards"
-  else
-    pass "No ghost agent/skill names"
-  fi
+    'audit/implementation' 'CONVENTIONS\.md')" \
+    "Ghost agent/skill name — templatecentral:(build|test|review|cleanup) are de-registered utilities (load via cat-path). templatecentral:audit / :write-skill moved to repo-internal project skills /tc-audit / /tc-write-skill (.claude/skills/) and must not be referenced from shipped skills/. Registered shipped skills (invoke normally): templatecentral:scaffold, :add, :migrate, :standards" \
+    "No ghost agent/skill names"
 }
 
 check_skillmd_description_length() {
@@ -205,20 +183,16 @@ check_skillmd_description_length() {
   # causing the skill's purpose to be invisible to the user. Registered SKILL.md (has name:) only —
   # utility SKILL.md files without name: are loading stubs, not displayed. TIMELESS.
   header "SKILL.md description length (<=150 chars)"
-  local bad=""
+  # Measured in bash, not awk: ${#desc} counts characters, while BSD awk length() counts bytes.
+  local bad="" f desc
   for f in "$SKILLS_DIR"/*/SKILL.md; do
     grep -q '^name:' "$f" || continue
-    local desc len
-    desc=$(grep '^description:' "$f" | head -1 | sed 's/^description:[[:space:]]*//')
-    len=${#desc}
-    [ "$len" -gt 150 ] && bad+="$f ($len chars)"$'\n'
+    desc=$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//')
+    [[ ${#desc} -gt 150 ]] && bad+="$f (${#desc} chars)"$'\n'
   done
-  if [[ -n "$bad" ]]; then
-    printf "%s" "$bad"
-    fail "SKILL.md description exceeds 150 chars — shorten it so it displays fully in the skill picker"
-  else
-    pass "All registered SKILL.md descriptions <=150 chars"
-  fi
+  report "${bad%$'\n'}" \
+    "SKILL.md description exceeds 150 chars — shorten it so it displays fully in the skill picker" \
+    "All registered SKILL.md descriptions <=150 chars"
 }
 
 check_ref_file_headers() {
@@ -226,18 +200,15 @@ check_ref_file_headers() {
   # a <!-- ref: --> comment so agents know the file's load path and purpose without reading the body.
   # Missing headers cause agents to silently skip context about how to load the file. TIMELESS.
   header "Ref file <!-- ref: --> headers"
-  local bad=""
+  local bad="" f firstline
   while IFS= read -r f; do
-    local firstline
-    firstline=$(head -1 "$f")
+    firstline=""
+    IFS= read -r firstline < "$f" || true
     [[ "$firstline" == "<!-- ref:"* ]] || bad+="$f"$'\n'
   done < <(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' 2>/dev/null)
-  if [[ -n "$bad" ]]; then
-    printf "%s" "$bad"
-    fail "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2"
-  else
-    pass "All ref files have <!-- ref: --> headers"
-  fi
+  report "${bad%$'\n'}" \
+    "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2" \
+    "All ref files have <!-- ref: --> headers"
 }
 
 check_skillmd_body_length() {
@@ -245,21 +216,17 @@ check_skillmd_body_length() {
   # A long body bloats the skill picker tooltip and forces agents to read unnecessary prose
   # before they can delegate to the appropriate ref file.
   header "SKILL.md body length (<=30 lines)"
-  local bad=""
-  for f in "$SKILLS_DIR"/*/SKILL.md; do
-    grep -q '^name:' "$f" || continue
-    local total body fm_end
-    fm_end=$(awk '/^---$/{c++; if(c==2){print NR; exit}}' "$f")
-    total=$(wc -l < "$f")
-    body=$((total - fm_end))
-    [ "$body" -gt 30 ] && bad+="$f ($body lines)"$'\n'
-  done
-  if [[ -n "$bad" ]]; then
-    printf "%s" "$bad"
-    fail "SKILL.md body exceeds 30 lines — move prose into an implementation.md ref file"
-  else
-    pass "All registered SKILL.md bodies <=30 lines"
-  fi
+  local bad
+  bad=$(awk '
+    function flush() { if (f != "" && registered && NR_f - fm_end > 30) print f " (" NR_f - fm_end " lines)" }
+    FNR == 1 { flush(); f = FILENAME; registered = 0; dashes = 0; fm_end = 0 }
+    { NR_f = FNR }
+    /^name:/ { registered = 1 }
+    /^---$/ && ++dashes == 2 { fm_end = FNR }
+    END { flush() }' "$SKILLS_DIR"/*/SKILL.md)
+  report "$bad" \
+    "SKILL.md body exceeds 30 lines — move prose into an implementation.md ref file" \
+    "All registered SKILL.md bodies <=30 lines"
 }
 
 check_nesting_depth() {
@@ -267,415 +234,12 @@ check_nesting_depth() {
   # ref-file loader and indicate a structure drift from CONVENTIONS.md §1. TIMELESS.
   # With default SKILLS_DIR="skills": NF>5 catches skills/a/b/c/d/file.md (4+ dirs deep).
   header "Nesting depth (<=3 levels under skills/)"
-  local bad
-  bad=$(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' \
-    | awk -F'/' -v base="$(echo "$SKILLS_DIR" | awk -F'/' '{print NF}')" 'NF > base + 4' \
-    2>/dev/null || true)
-  if [[ -n "$bad" ]]; then
-    printf "%s\n" "$bad"
-    fail "File nested >3 levels under skills/ — restructure to match CONVENTIONS.md §1"
-  else
-    pass "No files nested >3 levels under skills/"
-  fi
-}
-
-# ── ECOSYSTEM-ERA ──────────────────────────────────────────────────────────────
-
-check_no_version_pins() {
-  # SSOT policy: version pins belong only in .claude/rules/*.md, not in SKILL.md files.
-  # EXCEPTION: shadcn@latest is the official shadcn CLI invocation, not a version pin.
-  # Catches: scoped npm pins (@org/pkg@version), unscoped npm pins (pkg@X.Y.Z),
-  # and Python exact pins (pkg==X.Y). Exclusions:
-  #   templateCentral: schema markers (<!-- templateCentral: stack@X.Y.Z -->)
-  #   "packageManager" field: corepack requires an exact version in this field by design
-  #   ":<space>stack@version" prose (drift-check example output, schema version references)
-  # REVISIT: if the SSOT policy changes, remove this check.
-  header "Version pins in skills (SSOT)"
-  local found=0
-  while IFS= read -r match; do
-    # Skip shadcn@latest — CLI tool invocation, not a dependency pin
-    [[ "$match" =~ shadcn@latest ]] && continue
-    echo "$match"
-    found=1
-  done < <(
-    {
-      grep -rn '@[a-zA-Z][a-zA-Z0-9_/@-]*@[0-9^~><]' "$SKILLS_DIR/" 2>/dev/null || true
-      grep -rEn '[a-zA-Z0-9_-]+@[0-9]+\.[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null \
-        | grep -v 'templateCentral:' \
-        | grep -v '"packageManager"' \
-        | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' \
-        || true
-      grep -rEn '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null || true
-    } | sort -u
-  )
-  if [[ $found -eq 1 ]]; then
-    fail "Version pins found — move floors/pins to .claude/rules/*.md"
-    FAILED=1
-  else
-    pass "No version pins in skills"
-  fi
-}
-
-check_no_bcrypt() {
-  # Project standard is argon2id (OWASP/NIST SP 800-63B recommendation).
-  # REVISIT: if the project standard changes, update this check.
-  # audit/implementation.md is excluded — it references bcrypt in its own checklist items.
-  header "bcrypt references"
-  local matches
-  matches=$(grep -rn '\bbcrypt\b' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "bcrypt found — project standard is argon2id"
-  else
-    pass "No bcrypt references"
-  fi
-}
-
-check_no_deprecated_zod_flatten() {
-  # Zod v4 deprecated error.flatten() — use z.flattenError(error) instead.
-  # REVISIT: if the project ever drops to Zod v3, remove this check.
-  # audit/implementation.md is excluded — it references .flatten() in its own checklist items.
-  header "Deprecated Zod .flatten()"
-  local matches
-  matches=$(grep -rn '\.flatten()' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail ".flatten() is deprecated in Zod v4 — use z.flattenError()"
-  else
-    pass "No deprecated .flatten() calls"
-  fi
-}
-
-check_no_middleware_ts() {
-  # Next.js 16 replaced middleware.ts with proxy.ts for auth/proxy patterns.
-  # REVISIT: if Next.js reintroduces middleware.ts, remove or adjust this check.
-  # Excluded files are meta-documents (audit checklist, migration guides, scaffold templates)
-  # that legitimately reference middleware.ts to explain the deprecation.
-  header "middleware.ts references"
-  local matches
-  matches=$(grep -rn 'middleware\.ts' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    | grep -v 'migrate/general/implementation' \
-    | grep -v 'scaffold/nextjs/source-files' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "middleware.ts found — Next.js 16 uses proxy.ts"
-  else
-    pass "No middleware.ts references"
-  fi
-}
-
-check_no_pragma_or_expires_headers() {
-  # Pragma: no-cache and Expires: 0 are HTTP/1.0 relics — deprecated in HTTP/1.1+.
-  # Cache-Control is sufficient. These headers add noise without benefit.
-  # REVISIT: if a target environment requires HTTP/1.0 compat, reconsider.
-  header "Deprecated HTTP/1.0 cache headers"
-  local matches
-  matches=$(grep -rEn "Pragma: no-cache|Expires: 0" "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Deprecated HTTP/1.0 headers found — Cache-Control is sufficient"
-  else
-    pass "No deprecated HTTP/1.0 cache headers"
-  fi
-}
-
-check_no_zod_string_format_methods() {
-  # Zod v4 deprecated chained string-format methods: .string().url(), .string().datetime(),
-  # .string().email(), .string().uuid(). Use top-level z.url(), z.iso.datetime(), z.email(), z.uuid() instead.
-  # ECOSYSTEM-ERA: correct for Zod v4+. Revisit if the project downgrades to Zod v3.
-  # audit/implementation.md is excluded — it may reference these in checklist items.
-  header "Deprecated Zod v4 string format methods"
-  local matches
-  matches=$(grep -rEn 'z\.string\(\)\.(url|datetime|email|uuid)\(' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Deprecated Zod string-chained format method — use top-level z.url(), z.iso.datetime(), z.email(), z.uuid()"
-  else
-    pass "No deprecated Zod string format methods"
-  fi
-}
-
-check_no_jest_apis_in_skills() {
-  # All Node scaffold stacks (NestJS, Next.js, Vite+React) use Vitest — not Jest.
-  # jest.fn(), jest.spyOn(), and jest-e2e.json must not appear in skill code examples.
-  # ECOSYSTEM-ERA: correct for NestJS 11+ (Vitest default). Revisit if the project adopts Jest.
-  # audit/implementation.md is excluded — it may reference these patterns in checklist items.
-  header "Jest APIs in skill code examples"
-  local matches
-  matches=$(grep -rEn 'jest\.(fn|spyOn|mock|clearAllMocks|resetAllMocks|restoreAllMocks)\(|jest-e2e\.json' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Jest API found in skill code example — all Node stacks use Vitest (vi.fn(), vi.spyOn())"
-  else
-    pass "No Jest APIs in skill code examples"
-  fi
-}
-
-check_no_globals_jest_in_vitest_projects() {
-  # All Node scaffold stacks use Vitest with globals: false — eslint-globals-jest is not needed.
-  # Adding ...globals.jest to an ESLint config in a Vitest project is misleading and unused.
-  # ECOSYSTEM-ERA: correct for NestJS 11+ / Vite+React (Vitest default). Revisit if Jest is re-adopted.
-  # audit/implementation.md is excluded — it may reference this in checklist items.
-  header "globals.jest in ESLint config templates"
-  local matches
-  matches=$(grep -rn 'globals\.jest' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "globals.jest found in ESLint template — Node stacks use Vitest with globals: false; remove globals.jest"
-  else
-    pass "No globals.jest in ESLint config templates"
-  fi
-}
-
-check_no_zod_deprecated_message_key() {
-  # Zod v4 custom error params use { error: '...' }, not { message: '...' }.
-  # { message: '...' } is the Zod v3 form — still accepted but deprecated in v4 and will be removed.
-  # Broadened from specific method list to any z.<method>({ message: — catches z.string(), z.number(),
-  # z.object(), etc. that were missed by the narrower pattern. ECOSYSTEM-ERA: correct for Zod v4.
-  # audit/implementation.md is excluded — it may reference this pattern in checklist items.
-  header "Deprecated Zod v3 message key in validators"
-  local matches
-  matches=$(grep -rEn "z\.[a-z]+\([[:space:]]*\{[[:space:]]*message:" "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Zod validator uses deprecated { message: '...' } — use { error: '...' } for custom error messages in Zod v4"
-  else
-    pass "No deprecated Zod v3 message key in validators"
-  fi
-}
-
-check_no_sync_secret_comparison() {
-  # Comparing stored secrets (hashes, tokens) with == or === is not timing-safe.
-  # Use a constant-time function (e.g. crypto.timingSafeEqual, argon2.verify).
-  # NOTE: password === confirmPassword in Zod refine() is safe — both are user inputs,
-  #       there is no stored value and no timing oracle. This check targets stored values.
-  # REVISIT: if a safe wrapper is introduced, refine the pattern.
-  header "Unsafe stored-secret comparison"
-  local matches
-  matches=$(grep -rEn '\b(storedHash|passwordHash|hashedPassword|sessionToken|accessToken|refreshToken)\s*(===|==)\s*' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Timing-unsafe comparison of stored secret — use a constant-time compare function"
-  else
-    pass "No unsafe stored-secret comparisons"
-  fi
-}
-
-check_no_mypy_in_postToolUse() {
-  # pyright is 2-5x faster than mypy with near-complete spec conformance.
-  # mypy in PostToolUse adds 45+ seconds per edit on real projects.
-  # REVISIT: if mypy regains a speed advantage or pyright has correctness regressions, update.
-  header "mypy in PostToolUse hook"
-  local postToolUse_files
-  postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  local mypy_in_postToolUse=""
-  while IFS= read -r file; do
-    [[ -z "$file" ]] && continue
-    if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -q 'mypy'; then
-      mypy_in_postToolUse="$mypy_in_postToolUse\n$file"
-    fi
-  done <<< "$postToolUse_files"
-  if [[ -n "$mypy_in_postToolUse" ]]; then
-    printf '%b\n' "$mypy_in_postToolUse"
-    fail "mypy in PostToolUse — use pyright instead (2-5x faster, community standard as of May 2026)"
-  else
-    pass "No mypy in PostToolUse hook"
-  fi
-}
-
-check_no_tanstack_isLoading() {
-  # TanStack Query v5 renamed isLoading to isPending on useQuery()/useMutation() destructuring.
-  # isLoading still exists as a derived bool on the query object but has different semantics
-  # (true when fetching WITH existing data; isPending is true when there is no data yet).
-  # Using isLoading instead of isPending causes the loading state to not show on first render.
-  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Revisit if the project pins to TQ v4.
-  header "TanStack Query v5 isLoading usage"
-  local hits
-  hits=$(grep -rn '{ .*isLoading.*} = use\(Query\|Mutation\)\|isPending\s*:\s*isLoading\b' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "TanStack Query v5: use isPending (not isLoading) from useQuery/useMutation destructuring"
-  else
-    pass "No TanStack Query isLoading usage"
-  fi
-}
-
-check_no_tanstack_isInitialLoading() {
-  # TanStack Query v5 deprecated isInitialLoading (alias for isLoading && isLoading) and removed
-  # it in v6. Using it causes a runtime error once projects upgrade to v6.
-  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Retire when v6 is the project baseline.
-  header "TanStack Query v5 isInitialLoading usage"
-  local hits
-  hits=$(grep -rn '\bisInitialLoading\b' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "TanStack Query v5: isInitialLoading is deprecated (removed in v6); use isPending instead"
-  else
-    pass "No TanStack Query isInitialLoading usage"
-  fi
-}
-
-check_no_starlette_startup_events() {
-  # Starlette 1.0.0 removed on_startup/on_shutdown event handlers and add_event_handler().
-  # FastAPI 0.136.x requires lifespan= context manager exclusively.
-  # ECOSYSTEM-ERA: correct for Starlette ≥1.0.0 / FastAPI ≥0.128.0.
-  header "Starlette 1.0 deprecated startup events"
-  local hits
-  hits=$(grep -rn '@app\.on_event\|add_event_handler\|on_startup=\|on_shutdown=' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    | grep -v 'standards/code-standards' \
-    || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "Starlette 1.0: use lifespan= context manager — on_startup/on_shutdown/add_event_handler removed"
-  else
-    pass "No Starlette deprecated startup events"
-  fi
-}
-
-check_no_bare_pytest_invocation() {
-  # A bare `pytest ...` invocation resolves via PATH — if the caller's shell doesn't have the
-  # project .venv activated (a documented, real failure mode: the same class of bug fixed in the
-  # scaffold's lefthook commands), it silently runs a different/system pytest or fails
-  # with "command not found." `python -m pytest` always resolves via the active Python, matching
-  # the `python -m pyright` convention already used everywhere else in the FastAPI skills.
-  # TIMELESS: tied to the venv-based invocation convention (skills/test/implementation.md).
-  header "Bare pytest invocation (must use python -m pytest)"
-  local matches
-  matches=$(grep -rEn '(^|[^-.a-zA-Z])pytest[[:space:]]+(test/|-[a-zA-Z])' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'python -m pytest' \
-    | grep -v 'audit/implementation' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Bare 'pytest ...' invocation — use 'python -m pytest' so it resolves via the active venv (see skills/test/implementation.md)"
-  else
-    pass "No bare pytest invocation"
-  fi
-}
-
-check_no_fastapi_orjson_response() {
-  # ORJSONResponse and UJSONResponse deprecated in FastAPI 0.130+.
-  # Native JSON serialization now uses Pydantic's Rust-based serializer.
-  # ECOSYSTEM-ERA: correct for FastAPI ≥0.130.0.
-  header "Deprecated FastAPI ORJSONResponse/UJSONResponse"
-  local hits
-  hits=$(grep -rn 'ORJSONResponse\|UJSONResponse' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "FastAPI 0.130+: ORJSONResponse/UJSONResponse deprecated — use standard JSONResponse"
-  else
-    pass "No deprecated FastAPI ORJSONResponse/UJSONResponse"
-  fi
-}
-
-check_no_env_api_base_url_fallback() {
-  # Vite+React code-standards rule: NEVER use `ENV.API_BASE_URL ?? ''` — use `getApiBaseUrl()`.
-  # The fallback '' silently returns empty string when the env var is missing, hiding config errors.
-  # getApiBaseUrl() throws at startup so misconfiguration is caught immediately.
-  # ECOSYSTEM-ERA: Vite 8 / React 19 stack. Revisit if ENV helper API changes.
-  header "ENV.API_BASE_URL ?? '' anti-pattern in Vite skills"
-  local matches
-  matches=$(grep -rn "API_BASE_URL ?? ''" "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    | grep -v 'code-standards' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Use getApiBaseUrl() not ENV.API_BASE_URL ?? '' — see code-standards/vite-react.md"
-  else
-    pass "No ENV.API_BASE_URL ?? '' anti-pattern"
-  fi
-}
-
-check_no_postToolUse_full_test_suite() {
-  # PostToolUse hooks are feedback-only and cannot block execution.
-  # Full test suites (pnpm test, pytest, etc.) belong in Stop hooks, not PostToolUse.
-  # Running tests on every file edit is slow and masks real TypeScript feedback.
-  # TIMELESS: PostToolUse semantic is feedback-only by design in Claude Code.
-  header "Full test suite in PostToolUse hook"
-  local matches
-  matches=$(grep -rn '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'audit/implementation' \
-    || true)
-  # Check if any PostToolUse block is followed by a test command within 15 lines
-  local postToolUse_files
-  postToolUse_files=$(grep -rln '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
-  local test_in_postToolUse=""
-  while IFS= read -r file; do
-    [[ -z "$file" ]] && continue
-    # Find lines with pnpm test or pytest inside a PostToolUse context
-    if grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -qE '"(pnpm test|pytest|npm test|yarn test)'; then
-      test_in_postToolUse="$test_in_postToolUse\n$file"
-    fi
-  done <<< "$postToolUse_files"
-  if [[ -n "$test_in_postToolUse" ]]; then
-    printf '%b\n' "$test_in_postToolUse"
-    fail "Full test suite in PostToolUse — use Stop hook for tests; PostToolUse should run tsc --noEmit only"
-  else
-    pass "No full test suite in PostToolUse hook"
-  fi
-}
-
-check_harness_version_matches_plugin() {
-  # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
-  # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
-  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; revisit if versioning strategy changes.
-  header "harness.json templatecentral_version matches plugin.json"
-  local plugin_json=".claude-plugin/plugin.json"
-  if [[ ! -f "$plugin_json" ]]; then
-    pass "No plugin.json found — skipping harness version check"
-    return
-  fi
-  local plugin_version
-  plugin_version=$(grep '"version"' "$plugin_json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | head -1)
-  local mismatches
-  mismatches=$(grep -rn '"templatecentral_version"' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v "\"$plugin_version\"" \
-    || true)
-  if [[ -n "$mismatches" ]]; then
-    echo "$mismatches"
-    fail "templatecentral_version in harness.json template does not match plugin.json ($plugin_version) — update scaffold and migrate source-files.md"
-  else
-    pass "templatecentral_version matches plugin.json ($plugin_version)"
-  fi
-}
-
-check_agents_marker_not_drifted_to_semver() {
-  # The AGENTS.md line-1 marker (`<!-- templateCentral: <stack>@X.Y.Z -->`) is a migration schema
-  # floor, NOT plugin semver. Legitimate values: @1.0.0 (migrate light-adoption / legacy examples)
-  # and @HARNESS_SCHEMA_VERSION (full current harness). The failure mode this guards against is a
-  # well-meaning "version bump" pushing a marker UP to the plugin semver (e.g. 4.5.0), which would
-  # break migrate Phase 0's floor logic. Rule: every marker version must be <= HARNESS_SCHEMA_VERSION.
-  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; the floor marker and schema version concept may evolve.
-  header "AGENTS.md schema marker not drifted above HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION)"
-  local drifted=""
-  local line ver
-  # Match only the marker comment; ignore prose mentions of "@4.0.0 through @4.x" etc.
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    ver=$(echo "$line" | grep -oE '@[0-9]+\.[0-9]+\.[0-9]+' | head -1 | tr -d '@')
-    [[ -z "$ver" ]] && continue
-    # If sorting {ver, floor} by version puts ver last AND they differ, ver > floor → drift.
-    if [[ "$(printf '%s\n%s\n' "$ver" "$HARNESS_SCHEMA_VERSION" | sort -V | tail -1)" == "$ver" \
-       && "$ver" != "$HARNESS_SCHEMA_VERSION" ]]; then
-      drifted+="$line"$'\n'
-    fi
-  done < <(grep -rnoE '<!-- templateCentral: [a-z<>-]+@[0-9]+\.[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$drifted" ]]; then
-    echo "$drifted"
-    fail "AGENTS.md schema marker exceeds HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION) — the marker is a migration floor, not plugin semver; revert it, or bump HARNESS_SCHEMA_VERSION deliberately if the harness structure changed"
-  else
-    pass "All AGENTS.md schema markers <= @$HARNESS_SCHEMA_VERSION"
-  fi
+  local base
+  base=$(awk -F'/' '{print NF}' <<<"$SKILLS_DIR")
+  report "$(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' \
+    | awk -F'/' -v base="$base" 'NF > base + 4')" \
+    "File nested >3 levels under skills/ — restructure to match CONVENTIONS.md §1" \
+    "No files nested >3 levels under skills/"
 }
 
 check_seeded_skills_scope_tools() {
@@ -685,14 +249,14 @@ check_seeded_skills_scope_tools() {
   # "Read, Edit, Write, Bash(pnpm *), Grep, Glob" are accepted; bare "Bash" (not followed by '(')
   # is rejected. TIMELESS: least-agency (OWASP Agentic ASI02) — seeded skills scope their tools.
   header "Seeded project skills declare scoped allowed-tools"
-  local files bad
+  local files
   files=$(grep -rlE '^name: [a-z][a-z-]*-(verify|migrate)$' "$SKILLS_DIR/" 2>/dev/null || true)
   if [[ -z "$files" ]]; then
     pass "No seeded *-verify/*-migrate skills found"
     return
   fi
   # shellcheck disable=SC2086  # word-splitting is intentional: $files is newline-separated paths
-  bad=$(awk '
+  report "$(awk '
     /^name: [a-z][a-z-]*-(verify|migrate)$/ { inblock=1; nm=$2; has_tools=0; bare_bash=0; ln=FNR; next }
     inblock && /^allowed-tools:/ {
       has_tools=1
@@ -704,13 +268,9 @@ check_seeded_skills_scope_tools() {
       else if (bare_bash) print FILENAME":"ln": "nm" - bare Bash in allowed-tools (must be scoped, e.g. Bash(pnpm *))"
       inblock=0
     }
-  ' $files 2>/dev/null || true)
-  if [[ -n "$bad" ]]; then
-    echo "$bad"
-    fail "Seeded skill missing scoped allowed-tools — add e.g. 'allowed-tools: Bash(pnpm *)' to its frontmatter"
-  else
-    pass "All seeded project skills declare scoped allowed-tools"
-  fi
+  ' $files 2>/dev/null || true)" \
+    "Seeded skill missing scoped allowed-tools — add e.g. 'allowed-tools: Bash(pnpm *)' to its frontmatter" \
+    "All seeded project skills declare scoped allowed-tools"
 }
 
 check_no_unscoped_bash_grant() {
@@ -718,15 +278,9 @@ check_no_unscoped_bash_grant() {
   # shell access — the opposite of least-agency. Every Bash grant must be scoped to a command prefix.
   # TIMELESS: OWASP Agentic ASI02 (Tool Misuse) — never grant unscoped Bash.
   header "No unscoped Bash in allowed-tools grants"
-  local hits
-  # Match allowed-tools lines mentioning Bash where Bash is NOT immediately followed by '('.
-  hits=$(grep -rnE '^allowed-tools:.*\bBash\b' "$SKILLS_DIR/" 2>/dev/null | grep -vE 'Bash\(' || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "Unscoped 'Bash' in allowed-tools — scope it (e.g. Bash(pnpm *), Bash(git *))"
-  else
-    pass "No unscoped Bash grants"
-  fi
+  report "$(scan -E '^allowed-tools:.*\bBash\b' 'Bash(')" \
+    "Unscoped 'Bash' in allowed-tools — scope it (e.g. Bash(pnpm *), Bash(git *))" \
+    "No unscoped Bash grants"
 }
 
 check_seeded_skill_paths_are_directories() {
@@ -738,112 +292,181 @@ check_seeded_skill_paths_are_directories() {
   # explanatory prose is allowed — it documents the anti-pattern.
   # ECOSYSTEM-ERA: skill-discovery rule per current Claude Code docs (directory + SKILL.md entrypoint).
   header "Seeded project skills use directory form (.claude/skills/<name>/SKILL.md)"
-  local hits
-  hits=$(grep -rnE '\.claude/skills/[a-zA-Z<][a-zA-Z<>-]*-(verify|migrate)\.md' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$hits" ]]; then
-    echo "$hits"
-    fail "Flat .claude/skills/<name>.md seeding path found — skills are directories; use .claude/skills/<name>/SKILL.md (flat files only work under .claude/commands/)"
-  else
-    pass "No flat .claude/skills/<name>.md seeding paths"
-  fi
+  report "$(scan -E '\.claude/skills/[a-zA-Z<][a-zA-Z<>-]*-(verify|migrate)\.md')" \
+    "Flat .claude/skills/<name>.md seeding path found — skills are directories; use .claude/skills/<name>/SKILL.md (flat files only work under .claude/commands/)" \
+    "No flat .claude/skills/<name>.md seeding paths"
+}
+
+check_no_toplevel_command_in_hooks() {
+  # Hook commands that read the bash command from top-level `d.command` (or Python d.get('command'))
+  # instead of `d.tool_input.command` will silently get an empty string — the check never fires.
+  # For Bash tool events, the command lives at tool_input.command, not at the top level.
+  # TIMELESS: Claude Code hook stdin schema places tool input under tool_input; this is by design.
+  header "Top-level d.command access in hook commands (should be d.tool_input.command)"
+  report "$(scan "" 'd\.command\|d\[.command.\]\|d\.get(.command.' 'tool_input' 'audit/implementation')" \
+    "Hook reads bash command from top-level d.command — use d.tool_input.command (or d.get('tool_input',{}).get('command','') in Python)" \
+    "No top-level d.command access in hook commands"
+}
+
+check_hook_command_uses_args_array() {
+  # Hook definitions must use Claude Code's exec form: a STRING "command" naming the binary plus
+  # an "args" array — "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh"].
+  # Three failure modes, each silent at runtime:
+  #   (1) "command": [ ... ] — an array-valued command is not a valid hook; Claude Code skips the
+  #       hook without any error, so the guard simply never runs.
+  #   (2) A .claude/hooks/ path without the ${CLAUDE_PROJECT_DIR} prefix — hooks execute in
+  #       Claude's current working directory, so a relative path breaks as soon as Claude cd's
+  #       into a subdirectory. Claude Code substitutes ${CLAUDE_PROJECT_DIR} in command and args.
+  #   (3) A shell-string command ("command": "bash .claude/hooks/x.sh") — runs through a shell,
+  #       so the path is subject to word-splitting/interpolation; the exec form passes argv
+  #       directly with no shell in between.
+  # Every "command"/"args" key in skills/ that mentions .claude/hooks/ is a hook definition.
+  # TIMELESS: string command + args[] is the documented exec form.
+  header "Hook commands use exec form (string command + args[]) with \${CLAUDE_PROJECT_DIR} paths"
+  local bad="" m
+  m=$(scan -E '"command"[[:space:]]*:[[:space:]]*\[')
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ array-valued \"command\" is silently ignored by Claude Code — use \"command\": \"bash\", \"args\": [...]"$'\n'
+  # shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is a literal pattern, not an expansion.
+  m=$(scan -E '"(command|args)"[[:space:]]*:.*\.claude/hooks/' \
+      | sed 's#\${CLAUDE_PROJECT_DIR}/\.claude/hooks/#__OK__#g' | grep -F '.claude/hooks/' || true)
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ hook script path must be \${CLAUDE_PROJECT_DIR}/.claude/hooks/... (hooks run in Claude's current dir)"$'\n'
+  m=$(scan -E '"command"[[:space:]]*:[[:space:]]*"[^"]*[[:space:]][^"]*\.claude/hooks/')
+  [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ shell-string hook command — use exec form: \"command\": \"bash\", \"args\": [\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/x.sh\"]"$'\n'
+  # shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is literal message text
+  report "$bad" \
+    'Hook command form invalid — use "command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]' \
+    "All hook commands use exec form with \${CLAUDE_PROJECT_DIR}-anchored script paths"
 }
 
 check_scaffold_seeds_complete_harness() {
-  # The shared harness kit (skills/scaffold/shared/harness-kit.md) is the single source of truth
-  # for the complete harness: all 7 hook events, the permissions.deny secret-Read block,
-  # skillListingBudgetFraction, the 8 .claude/hooks/ script bodies, stop_hook_active guard,
+  # The shared harness kit (skills/scaffold/shared/harness-kit*.md — an index plus ts/fastapi
+  # variant files and the shared enforcement/finalize files) is the single source of truth for the
+  # complete harness: all 6 hook events, the permissions.deny secret-Read block,
+  # skillListingBudgetFraction, the .claude/hooks/ script bodies, stop_hook_active guard,
   # CONSTITUTION.md, FUTURE.md, harness.json step, .agents symlink, and the shared AGENTS.md tail.
-  # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must reference
-  # the kit (contain 'scaffold/shared/harness-kit.md'). The kit itself must contain every universal
-  # harness element. This structure keeps the harness enforceable from one file rather than 5.
+  # Each of the 4 scaffold source-files.md and migrate/general/implementation.md must load the
+  # index, the two shared files, and exactly the right variant, and each variant must carry the
+  # full per-stack hook set — this keeps the harness enforceable from one kit rather than 5 copies,
+  # while a run loads only its own stack's bodies.
   # TIMELESS: these are the load-bearing enforcement hooks; their presence is non-negotiable.
   header "Scaffold/migrate templates seed the complete harness"
 
-  local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md"
+  local kit_dir="$SKILLS_DIR/scaffold/shared"
+  local kit_files=(
+    "$kit_dir/harness-kit.md" "$kit_dir/harness-kit-ts.md" "$kit_dir/harness-kit-fastapi.md"
+    "$kit_dir/harness-kit-enforcement.md" "$kit_dir/harness-kit-finalize.md"
+  )
+  # migrate loads the kit from its router (keeps chains at 2 cat hops); Phase 4 seeds the skill.
+  local migrate="$SKILLS_DIR/migrate/general/implementation.md"
+  local migrate_phase4="$SKILLS_DIR/migrate/general/phase-4-upgrade.md"
   local scaffolds=(
     "$SKILLS_DIR/scaffold/fastapi/source-files.md"
     "$SKILLS_DIR/scaffold/nestjs/source-files.md"
     "$SKILLS_DIR/scaffold/nextjs/source-files.md"
     "$SKILLS_DIR/scaffold/vite-react/source-files.md"
   )
-  local migrate="$SKILLS_DIR/migrate/general/implementation.md"
-
-  # (a) The kit must contain all universal harness tokens:
   local kit_tokens=(
-    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"' '"PostToolUseFailure"'
+    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"'
     '"Stop"' '"SubagentStop"' '"SessionStart"'
     'skillListingBudgetFraction' '"Read(.env)"' '"Read(**/.env)"'
     'protect-files.sh' 'block-no-verify.sh' 'user-prompt-guard'
-    'post-edit-typecheck.sh' 'post-tool-failure.sh' 'stop-checks.sh'
+    'post-edit-typecheck.sh' 'stop-checks.sh'
     'subagent-stop.sh' 'session-context.sh'
     'stop_hook_active' '--no-verify' 'AKIA'
     'node' 'python3'
-    # Content-authoring token, not just a path reference: catches the class of bug where a
-    # seeded file's path is wired into settings.json/harness.json/protect-files.sh everywhere
-    # but the kit never actually authors its content — a scaffolded project ends up with every
-    # consumer pointing at a file that's never created, and verify-harness.sh then hard-fails
-    # on MISSING for every fresh scaffold. This exact gap shipped once in comment-hygiene-patterns.txt.
+    # Content-authoring token, not just a path reference: every consumer (settings.json,
+    # harness.json, protect-files.sh) can point at comment-hygiene-patterns.txt while the kit never
+    # authors it, and verify-harness.sh then hard-fails on MISSING for every fresh scaffold.
     '[Ww][Aa][Ss][[:space:]]'
   )
-  local missing="" tok
-  if [[ ! -f "$kit" ]]; then
-    missing+="$kit — file not found"$'\n'
-  else
+  # Every per-stack variant file must author the full stack-specific set on its own — a run
+  # loads exactly one variant, so a token present only in the other variant never reaches it.
+  local variant_tokens=(
+    '"PreToolUse"' '"UserPromptSubmit"' '"PostToolUse"'
+    '"Stop"' '"SubagentStop"' '"SessionStart"'
+    'skillListingBudgetFraction' '"Read(.env)"'
+    '.claude/hooks/protect-files.sh' '.claude/hooks/block-no-verify.sh' '.claude/hooks/user-prompt-guard.'
+    '.claude/hooks/post-edit-typecheck.sh' '.claude/hooks/post-edit-comment-check.sh'
+    '.claude/hooks/stop-checks.sh' '.claude/hooks/subagent-stop.sh'
+    'stop_hook_active' '--no-verify' 'AKIA' 'lefthook.yml'
+  )
+  local missing="" tok f kf all_kit="" v other
+  for kf in "${kit_files[@]}"; do
+    [[ -f "$kf" ]] || missing+="$kf — file not found"$'\n'
+  done
+  if [[ -z "$missing" ]]; then
+    all_kit=$(cat "${kit_files[@]}")
     for tok in "${kit_tokens[@]}"; do
-      grep -qF -- "$tok" "$kit" || missing+="$kit — missing harness element: $tok"$'\n'
+      grep -qF -- "$tok" <<<"$all_kit" || missing+="$kit_dir/harness-kit*.md — missing harness element: $tok"$'\n'
+    done
+    for v in ts fastapi; do
+      for tok in "${variant_tokens[@]}"; do
+        grep -qF -- "$tok" "$kit_dir/harness-kit-$v.md" || \
+          missing+="$kit_dir/harness-kit-$v.md — variant missing harness element: $tok"$'\n'
+      done
     done
   fi
 
-  # (b) Each scaffold source-files.md and migrate must reference the shared kit:
-  local f
   for f in "${scaffolds[@]}" "$migrate"; do
     [[ -f "$f" ]] || { missing+="$f — file not found"$'\n'; continue; }
-    # Form-agnostic: matches the legacy absolute path and the <skill-dir>-relative form.
-    grep -qF 'shared/harness-kit.md' "$f" || \
-      missing+="$f — does not reference shared/harness-kit.md"$'\n'
-    # Each scaffold also seeds a *-verify skill:
-    grep -qF -- '-verify/SKILL.md' "$f" || \
-      missing+="$f — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
+    # Form-agnostic: matches the absolute path and the <skill-dir>-relative form.
+    for kf in harness-kit.md harness-kit-enforcement.md harness-kit-finalize.md; do
+      grep -qF "shared/$kf" "$f" || missing+="$f — does not load shared/$kf"$'\n'
+    done
+    case "$f" in
+      */scaffold/fastapi/*) v=fastapi; other=ts ;;
+      */scaffold/*) v=ts; other=fastapi ;;
+      *) v='' ; other='' ;;
+    esac
+    if [[ -n "$v" ]]; then
+      grep -qF "shared/harness-kit-$v.md" "$f" || missing+="$f — does not load its variant shared/harness-kit-$v.md"$'\n'
+      grep -qF "shared/harness-kit-$other.md" "$f" && \
+        missing+="$f — loads the other stack's variant shared/harness-kit-$other.md"$'\n'
+    else
+      # migrate detects the stack at runtime: one <variant-file> cat, with both names spelled out.
+      for kf in 'shared/<variant-file>' harness-kit-ts.md harness-kit-fastapi.md; do
+        grep -qF -- "$kf" "$f" || missing+="$f — variant loading must name $kf"$'\n'
+      done
+    fi
+    local seeder="$f"
+    [[ "$f" == "$migrate" ]] && seeder="$migrate_phase4"
+    grep -qF -- '-verify/SKILL.md' "$seeder" || \
+      missing+="$seeder — missing stack verify-skill seeding (-verify/SKILL.md)"$'\n'
   done
 
-  if [[ -n "$missing" ]]; then
-    echo "$missing"
-    fail "Harness check failed — kit must contain all universal tokens; all 4 scaffolds + migrate must reference scaffold/shared/harness-kit.md; each scaffold must seed a *-verify/SKILL.md"
-  else
-    pass "Shared harness kit contains all universal tokens; all scaffold/migrate files reference it"
-  fi
+  report "$missing" \
+    "Harness check failed — kit (scaffold/shared/harness-kit*.md) must contain all universal tokens and each variant the full per-stack set; all 4 scaffolds + the migrate router must load the index, both shared files, and their own variant; each must seed a *-verify/SKILL.md" \
+    "Shared harness kit contains all universal tokens; every scaffold/migrate loader loads its own variant"
 }
 
 check_migrate_hook_inventory_matches_kit() {
-  # migrate/general/implementation.md enumerates the kit's hooks by name in prose (Step 4d),
+  # migrate/general/phase-4-upgrade.md enumerates the kit's hooks by name in prose (Step 4d),
   # separate from the kit's own authoring blocks — a hook added to the kit without updating
   # that list leaves every migrated project short a hook.
-  header "migrate hook inventory matches harness-kit.md"
-  local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md"
-  local migrate="$SKILLS_DIR/migrate/general/implementation.md"
-  if [[ ! -f "$kit" || ! -f "$migrate" ]]; then
-    fail "Missing $kit or $migrate"
+  header "migrate hook inventory matches the harness kit"
+  local kit_dir="$SKILLS_DIR/scaffold/shared"
+  local migrate="$SKILLS_DIR/migrate/general/phase-4-upgrade.md"
+  local kit_files=("$kit_dir"/harness-kit*.md)
+  if [[ ! -f "${kit_files[0]}" || ! -f "$migrate" ]]; then
+    fail "Missing $kit_dir/harness-kit*.md or $migrate"
     return
   fi
   local hooks missing="" h
-  hooks=$(grep -oE '^\*\*`\.claude/hooks/[a-zA-Z0-9_-]+' "$kit" | sed -E 's#.*/##' | sort -u)
+  hooks=$(cat "${kit_files[@]}" | grep -oE '^\*\*`\.claude/hooks/[a-zA-Z0-9_-]+' | sed -E 's#.*/##' | sort -u)
   for h in $hooks; do
     grep -qF -- "$h" "$migrate" || missing+="migrate is missing hook: $h"$'\n'
   done
   grep -qF -- '.claude/comment-hygiene-patterns.txt' "$migrate" || \
     missing+="migrate does not mention .claude/comment-hygiene-patterns.txt"$'\n'
-  if [[ -n "$missing" ]]; then
-    echo "$missing"
-    fail "migrate's hook/file inventory has drifted from harness-kit.md — update skills/migrate/general/implementation.md Step 4d"
-  else
-    pass "migrate's hook inventory covers every hook + file authored in harness-kit.md"
-  fi
+  report "$missing" \
+    "migrate's hook/file inventory has drifted from the harness kit — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
+    "migrate's hook inventory covers every hook + file authored in the harness kit"
 }
 
 check_duplicated_iam_blocks_match() {
   # The AWS IAM session/config modules exist in two independently-loaded flows: the add-database
   # leaf that installs them and the migrate-database leaf that retrofits them.
-  # Deduplicating by cross-catting is the wrong trade here — the add leaves are 232/517-line
+  # Deduplicating by cross-catting is the wrong trade here — the add leaves are long
   # from-scratch install guides, so a migrate flow would pay their full token cost to reuse ~70
   # lines, and risks re-running the install steps. Duplicating the block costs nothing at runtime
   # (each flow loads exactly one copy) and only risks silent drift — which this check removes.
@@ -852,7 +475,7 @@ check_duplicated_iam_blocks_match() {
   # one-sided edit silently downgrades TLS on the migrate path only.
   # TIMELESS: enforces the invariant, not any particular stack version.
   header "Duplicated IAM session/config blocks match their canonical source"
-  if ! command -v python3 >/dev/null 2>&1; then
+  if ! have_python; then
     pass "skipped (python3 not available)"
     return
   fi
@@ -870,13 +493,13 @@ PAIRS = [
      "add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`",
      "migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python"),
     ("NestJS IAM KyselyService",
-     "add/database/typescript/nestjs-kysely.md", "Replace the entire contents of `kysely.service.ts` with:",
+     "add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:",
      "migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript"),
     ("NestJS IAM envSchema fields",
-     "add/database/typescript/nestjs-kysely.md", "Add IAM fields to `envSchema`",
+     "add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`",
      "migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript"),
     ("NestJS IAM serviceConfig mapping",
-     "add/database/typescript/nestjs-kysely.md", "Then map the validated fields into `serviceConfig`",
+     "add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`",
      "migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript"),
 ]
 
@@ -888,36 +511,28 @@ def fence_after(path, anchor, lang):
     start = next((i for i, l in enumerate(lines) if anchor in l), None)
     if start is None:
         return None
-    i = start + 1
-    while i < len(lines):
+    for i in range(start + 1, len(lines)):
         if lines[i].strip() == '```' + lang:
             j = i + 1
             while j < len(lines) and not lines[j].startswith('```'):
                 j += 1
             return "\n".join(lines[i + 1:j])
-        i += 1
     return None
 
-bad = []
 for label, ca_f, ca_a, cp_f, cp_a, lang in PAIRS:
-    ca_p, cp_p = root + "/" + ca_f, root + "/" + cp_f
-    a, b = fence_after(ca_p, ca_a, lang), fence_after(cp_p, cp_a, lang)
+    a = fence_after(root + "/" + ca_f, ca_a, lang)
+    b = fence_after(root + "/" + cp_f, cp_a, lang)
     if a is None:
-        bad.append("%s: canonical anchor/fence not found in %s (%r)" % (label, ca_f, ca_a))
+        print("%s: canonical anchor/fence not found in %s (%r)" % (label, ca_f, ca_a))
     elif b is None:
-        bad.append("%s: copy anchor/fence not found in %s (%r)" % (label, cp_f, cp_a))
+        print("%s: copy anchor/fence not found in %s (%r)" % (label, cp_f, cp_a))
     elif a != b:
-        bad.append("%s: %s has drifted from canonical %s" % (label, cp_f, ca_f))
-for x in bad:
-    print(x)
+        print("%s: %s has drifted from canonical %s" % (label, cp_f, ca_f))
 PY
 )
-  if [[ -n "$out" ]]; then
-    echo "$out"
-    fail "Duplicated IAM block drifted — the add/ leaf is canonical; re-copy it into the migrate/ leaf"
-  else
-    pass "All duplicated IAM blocks match their canonical source"
-  fi
+  report "$out" \
+    "Duplicated IAM block drifted — the add/ leaf is canonical; re-copy it into the migrate/ leaf" \
+    "All duplicated IAM blocks match their canonical source"
 }
 
 check_yaml_fences_parse() {
@@ -927,7 +542,7 @@ check_yaml_fences_parse() {
   # without any syntax error in the shell itself, so this must parse the fence content, not
   # just lint the shell inside it. TIMELESS: catches this bug class regardless of cause.
   header "Seeded \`\`\`yaml fences parse as valid YAML"
-  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+  if ! have_python || ! python3 -c 'import yaml' >/dev/null 2>&1; then
     pass "skipped (python3/PyYAML not available)"
     return
   fi
@@ -935,7 +550,6 @@ check_yaml_fences_parse() {
   out=$(python3 - "$SKILLS_DIR" <<'PY'
 import os, sys, yaml
 root = sys.argv[1]
-bad = []
 for dp, _, fs in os.walk(root):
     for f in fs:
         if not f.endswith('.md'): continue
@@ -943,27 +557,22 @@ for dp, _, fs in os.walk(root):
         lines = open(p, encoding='utf-8').read().split('\n')
         i = 0
         while i < len(lines):
-            if lines[i].strip() == '```yaml':
-                start = i + 1
-                j = start
-                while j < len(lines) and lines[j].strip() != '```':
-                    j += 1
-                try:
-                    list(yaml.safe_load_all('\n'.join(lines[start:j])))
-                except Exception as e:
-                    bad.append(f"{p}:{start+1}-{j}: {str(e).splitlines()[0]}")
-                i = j + 1
-            else:
+            if lines[i].strip() != '```yaml':
                 i += 1
-for b in bad: print(b)
+                continue
+            start = j = i + 1
+            while j < len(lines) and lines[j].strip() != '```':
+                j += 1
+            try:
+                list(yaml.safe_load_all('\n'.join(lines[start:j])))
+            except Exception as e:
+                print(f"{p}:{start+1}-{j}: {str(e).splitlines()[0]}")
+            i = j + 1
 PY
 )
-  if [[ -n "$out" ]]; then
-    echo "$out"
-    fail "Seeded yaml fence(s) fail to parse — check block-scalar (run: |) indentation"
-  else
-    pass "All seeded yaml fences parse"
-  fi
+  report "$out" \
+    "Seeded yaml fence(s) fail to parse — check block-scalar (run: |) indentation" \
+    "All seeded yaml fences parse"
 }
 
 check_no_absolute_plugin_path() {
@@ -972,75 +581,9 @@ check_no_absolute_plugin_path() {
   # populated for CC !-injection, not the agent-run cat blocks used here). See CONVENTIONS.md §1.
   # TIMELESS: skills must be portable across Agent-Skills tools; the install path is never hardcoded.
   header "No absolute plugin-path or \${CLAUDE_SKILL_DIR} references"
-  local matches
-  matches=$(grep -rnE 'plugins/marketplaces/templatecentral|CLAUDE_SKILL_DIR' "$SKILLS_DIR/" 2>/dev/null | grep -v 'CONVENTIONS.md' || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Use the <skill-dir> placeholder (CONVENTIONS.md §1), not an absolute plugin path or \${CLAUDE_SKILL_DIR}."
-  else
-    pass "No absolute plugin-path / \${CLAUDE_SKILL_DIR} references (all use <skill-dir>)"
-  fi
-}
-
-check_no_toplevel_command_in_hooks() {
-  # Hook commands that read the bash command from top-level `d.command` (or Python d.get('command'))
-  # instead of `d.tool_input.command` will silently get an empty string — the check never fires.
-  # For Bash tool events, the command lives at tool_input.command, not at the top level.
-  # TIMELESS: Claude Code hook stdin schema places tool input under tool_input; this is by design.
-  header "Top-level d.command access in hook commands (should be d.tool_input.command)"
-  local matches
-  matches=$(grep -rn 'd\.command\|d\[.command.\]\|d\.get(.command.' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'tool_input' \
-    | grep -v 'audit/implementation' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Hook reads bash command from top-level d.command — use d.tool_input.command (or d.get('tool_input',{}).get('command','') in Python)"
-  else
-    pass "No top-level d.command access in hook commands"
-  fi
-}
-
-check_hook_command_uses_args_array() {
-  # Simple hook commands (single interpreter + script path, no shell metacharacters) should use
-  # the args[] exec form ("command": ["bash", ".claude/hooks/x.sh"]) instead of a shell string
-  # ("command": "bash .claude/hooks/x.sh") — array form invokes via execve() with no shell
-  # interpolation, so it can't be hijacked by injection. Scoped to .claude/hooks/ references only;
-  # every "command": key in skills/ is a hook definition (verified — no unrelated JSON matches).
-  # TIMELESS: args[] exec form has been supported since v2.1.139; this is a security best practice,
-  # not a version-gated feature.
-  header "Hook commands use args[] exec form, not shell strings"
-  local matches
-  matches=$(grep -rn '"command": "[^"]*\.claude/hooks/' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail 'Hook command uses a shell string — use array exec form: "command": ["bash", ".claude/hooks/x.sh"]'
-  else
-    pass "All hook commands use args[] exec form"
-  fi
-}
-
-check_owasp_llm_sections_complete() {
-  # add/ai-security/implementation.md must cover all 10 OWASP LLM Top 10 v2.0 sections.
-  # A missing section leaves a gap in AI security guidance — agents won't know to guard against it.
-  # TIMELESS: LLM01-LLM10 are stable section names; the guidance may evolve but the structure is fixed.
-  header "OWASP LLM Top 10 v2.0 completeness in ai-security skill"
-  local ai_sec="$SKILLS_DIR/add/ai-security/implementation.md"
-  local missing=""
-  if [[ ! -f "$ai_sec" ]]; then
-    fail "add/ai-security/implementation.md not found"
-    return
-  fi
-  for n in 01 02 03 04 05 06 07 08 09 10; do
-    if ! grep -q "### LLM${n}" "$ai_sec" 2>/dev/null; then
-      missing="$missing LLM${n}"
-    fi
-  done
-  if [[ -n "$missing" ]]; then
-    fail "add/ai-security/implementation.md is missing OWASP LLM Top 10 sections:$missing"
-  else
-    pass "All LLM01-LLM10 sections present"
-  fi
+  report "$(scan -E 'plugins/marketplaces/templatecentral|CLAUDE_SKILL_DIR' 'CONVENTIONS.md')" \
+    "Use the <skill-dir> placeholder (CONVENTIONS.md §1), not an absolute plugin path or \${CLAUDE_SKILL_DIR}." \
+    "No absolute plugin-path / \${CLAUDE_SKILL_DIR} references (all use <skill-dir>)"
 }
 
 check_skilldir_refs_resolve() {
@@ -1049,7 +592,7 @@ check_skilldir_refs_resolve() {
   # cannot silently break when a ref file is moved or renamed. Placeholder refs (containing <, >, or |
   # — e.g. <skill-dir>/<stack>/config-files.md) are skipped. TIMELESS: this is the core load mechanism.
   header "<skill-dir> references resolve to real files"
-  if ! command -v python3 >/dev/null 2>&1; then
+  if ! have_python; then
     pass "skipped (python3 not available)"
     return
   fi
@@ -1068,74 +611,80 @@ def owning(p):
 # Tight char class: matches a concrete path and stops cleanly at backtick/quote/paren/space and
 # at placeholder markers (<stack>, <path>, |), so doc placeholders are skipped without a filter.
 tok = re.compile(r'<skill-dir>(/[A-Za-z0-9._/*{}-]+)')
-bad = []
 for dp, _, fs in os.walk(root):
     for f in fs:
         if not f.endswith('.md'): continue
         p = os.path.join(dp, f)
         try: t = open(p, encoding='utf-8').read()
         except Exception: continue
+        base = owning(p)
+        if not base: continue
         for m in tok.finditer(t):
             rel = m.group(1).lstrip('/')
-            base = owning(p)
-            if base and not os.path.exists(os.path.join(base, rel)):
-                bad.append(p + ': <skill-dir>/' + rel)
-for b in bad: print(b)
+            if not os.path.exists(os.path.join(base, rel)):
+                print(p + ': <skill-dir>/' + rel)
 PY
 )
-  if [[ -n "$out" ]]; then
-    echo "$out"
-    fail "Broken <skill-dir> reference(s) — target file does not exist (CONVENTIONS §8)"
-  else
-    pass "All concrete <skill-dir> references resolve"
-  fi
+  report "$out" \
+    "Broken <skill-dir> reference(s) — target file does not exist (CONVENTIONS §8)" \
+    "All concrete <skill-dir> references resolve"
 }
 
 check_ref_header_prereq_suffix() {
   # CONVENTIONS §4: a ref file's prereq must state how it is loaded — ending with
   # "— it is loaded at runtime by the templatecentral:<skill> skill" (or noting it is a
-  # de-registered agent utility). The bare "Do not invoke this file directly." form drifted
-  # across 12 files; this locks the full form so routing intent stays self-documenting. TIMELESS.
+  # de-registered agent utility). The bare "Do not invoke this file directly." form tends to
+  # drift back in; this locks the full form so routing intent stays self-documenting. TIMELESS.
   header "Ref-header prereq carries the §4 'loaded at runtime by' clause"
-  local bad=""
-  while IFS= read -r f; do
-    local head6
-    head6=$(head -6 "$f")
-    [[ "$head6" == *"<!-- ref:"* ]] || continue
-    [[ "$head6" == *"prereq:"* ]] || continue
-    if ! grep -qF 'loaded at runtime by the templatecentral:' <<<"$head6" \
-       && ! grep -qiE 'de-registered|agent utilit|catted directly' <<<"$head6"; then
-      bad+="$f"$'\n'
-    fi
-  done < <(find "$SKILLS_DIR" -name '*.md' 2>/dev/null)
-  if [[ -n "$bad" ]]; then
-    printf "%s" "$bad"
-    fail "Ref-header prereq missing the §4 'loaded at runtime by the templatecentral:<skill> skill' clause"
+  local bad
+  # shellcheck disable=SC2016  # awk program passed through find -exec.
+  bad=$(find "$SKILLS_DIR" -name '*.md' -exec awk '
+    function flush() { if (f != "" && ref && prereq && !ok) print f }
+    FNR == 1 { flush(); f = FILENAME; ref = prereq = ok = 0 }
+    FNR <= 6 {
+      if (index($0, "<!-- ref:")) ref = 1
+      if (index($0, "prereq:")) prereq = 1
+      if (index($0, "loaded at runtime by the templatecentral:") \
+          || tolower($0) ~ /de-registered|agent utilit|catted directly/) ok = 1
+    }
+    END { flush() }' {} + 2>/dev/null)
+  report "$bad" \
+    "Ref-header prereq missing the §4 'loaded at runtime by the templatecentral:<skill> skill' clause" \
+    "All ref-header prereqs carry the §4 'loaded at runtime by' clause"
+}
+
+check_owasp_llm_sections_complete() {
+  # add/ai-security/implementation.md must cover all 10 OWASP LLM Top 10 v2.0 sections.
+  # A missing section leaves a gap in AI security guidance — agents won't know to guard against it.
+  # TIMELESS: LLM01-LLM10 are stable section names; the guidance may evolve but the structure is fixed.
+  header "OWASP LLM Top 10 v2.0 completeness in ai-security skill"
+  local ai_sec="$SKILLS_DIR/add/ai-security/implementation.md"
+  if [[ ! -f "$ai_sec" ]]; then
+    fail "add/ai-security/implementation.md not found"
+    return
+  fi
+  local present missing="" n
+  present=$(grep -o '### LLM[0-9][0-9]' "$ai_sec" || true)
+  for n in 01 02 03 04 05 06 07 08 09 10; do
+    [[ "$present" == *"### LLM${n}"* ]] || missing+=" LLM${n}"
+  done
+  if [[ -n "$missing" ]]; then
+    fail "add/ai-security/implementation.md is missing OWASP LLM Top 10 sections:$missing"
   else
-    pass "All ref-header prereqs carry the §4 'loaded at runtime by' clause"
+    pass "All LLM01-LLM10 sections present"
   fi
 }
 
 check_no_bare_nextjs_route_handlers() {
   # Next.js scaffold wires check-route-logging.mjs into `pnpm check`, which fails the build
   # on any bare `export async function GET/POST/...` App Router handler — every skill example
-  # must wrap handlers in withLogging() instead. Catches examples that regress to the bare form
-  # (found in four files during the 2026-07 audit: the database + auth-logging skills had drifted
-  # from the pattern add/endpoint/nextjs.md documents).
+  # must wrap handlers in withLogging() (the pattern add/endpoint/nextjs.md documents).
   # TIMELESS: tied to the scaffold's own enforced convention (scripts/check-route-logging.mjs).
   header "Bare Next.js route handler exports (must be wrapped in withLogging)"
-  local matches
-  matches=$(grep -rEn 'export[[:space:]]+(async[[:space:]]+)?function[[:space:]]+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[[:space:]]*\(' "$SKILLS_DIR/" 2>/dev/null \
-    | grep -v 'check-route-logging' \
-    | grep -v 'audit/implementation' \
-    | grep -v 'nextjs-backend-extraction' \
-    || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "Bare Next.js route handler export — wrap it in withLogging() (see add/endpoint/nextjs.md); pnpm check's check-route-logging.mjs fails the build on this pattern"
-  else
-    pass "No bare Next.js route handler exports"
-  fi
+  report "$(scan -E 'export[[:space:]]+(async[[:space:]]+)?function[[:space:]]+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[[:space:]]*\(' \
+    'check-route-logging' 'audit/implementation' 'nextjs-backend-extraction')" \
+    "Bare Next.js route handler export — wrap it in withLogging() (see add/endpoint/nextjs.md); pnpm check's check-route-logging.mjs fails the build on this pattern" \
+    "No bare Next.js route handler exports"
 }
 
 check_no_husky() {
@@ -1144,14 +693,9 @@ check_no_husky() {
   # A stray husky reference means a scaffold drifted back to a contradictory dual-hook setup.
   # TIMELESS: lefthook is the harness design SSOT.
   header "No husky references (lefthook is the git-hook SSOT)"
-  local matches
-  matches=$(grep -rn 'husky' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "husky reference found — the git-hook layer is lefthook (harness-kit Step B2). Remove husky."
-  else
-    pass "No husky references (lefthook only)"
-  fi
+  report "$(scan "" 'husky')" \
+    "husky reference found — the git-hook layer is lefthook (harness-kit Step B2). Remove husky." \
+    "No husky references (lefthook only)"
 }
 
 check_lefthook_prepare_has_fallback() {
@@ -1163,14 +707,268 @@ check_lefthook_prepare_has_fallback() {
   # every Docker build derived from it.
   # TIMELESS: lefthook's install-command behavior is a fixed property of the tool, not ecosystem drift.
   header "lefthook prepare script has Docker-safe fallback"
-  local matches
-  matches=$(grep -rn '"prepare":[[:space:]]*"lefthook install"' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "prepare script runs bare 'lefthook install' with no fallback — breaks Docker builds (.git absent in build context). Use \"lefthook install || true\"."
-  else
-    pass "All lefthook prepare scripts tolerate a missing .git"
+  report "$(scan "" '"prepare":[[:space:]]*"lefthook install"')" \
+    "prepare script runs bare 'lefthook install' with no fallback — breaks Docker builds (.git absent in build context). Use \"lefthook install || true\"." \
+    "All lefthook prepare scripts tolerate a missing .git"
+}
+
+# posttooluse_files_running <ERE> — files whose "PostToolUse" block (next 15 lines) matches ERE.
+posttooluse_files_running() {
+  local file
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    grep -A15 '"PostToolUse"' "$file" 2>/dev/null | grep -qE -- "$1" && echo "$file"
+  done < <(grep -rl '"PostToolUse"' "$SKILLS_DIR/" 2>/dev/null | grep -v 'audit/implementation' || true)
+  return 0
+}
+
+check_no_postToolUse_full_test_suite() {
+  # PostToolUse hooks are feedback-only and cannot block execution.
+  # Full test suites (pnpm test, pytest, etc.) belong in Stop hooks, not PostToolUse.
+  # Running tests on every file edit is slow and masks real TypeScript feedback.
+  # TIMELESS: PostToolUse semantic is feedback-only by design in Claude Code.
+  header "Full test suite in PostToolUse hook"
+  report "$(posttooluse_files_running '"(pnpm test|pytest|npm test|yarn test)')" \
+    "Full test suite in PostToolUse — use Stop hook for tests; PostToolUse should run tsc --noEmit only" \
+    "No full test suite in PostToolUse hook"
+}
+
+check_no_bare_pytest_invocation() {
+  # A bare `pytest ...` invocation resolves via PATH — if the caller's shell doesn't have the
+  # project .venv activated, it silently runs a different/system pytest or fails with
+  # "command not found." `python -m pytest` always resolves via the active Python, matching
+  # the `python -m pyright` convention used everywhere else in the FastAPI skills.
+  # TIMELESS: tied to the venv-based invocation convention (skills/test/implementation.md).
+  header "Bare pytest invocation (must use python -m pytest)"
+  report "$(scan -E '(^|[^-.a-zA-Z])pytest[[:space:]]+(test/|-[a-zA-Z])' 'python -m pytest' 'audit/implementation')" \
+    "Bare 'pytest ...' invocation — use 'python -m pytest' so it resolves via the active venv (see skills/test/implementation.md)" \
+    "No bare pytest invocation"
+}
+
+# ── ECOSYSTEM-ERA ──────────────────────────────────────────────────────────────
+
+check_no_version_pins() {
+  # SSOT policy: version pins belong only in .claude/rules/*.md, not in SKILL.md files.
+  # Catches: scoped npm pins (@org/pkg@version), unscoped npm pins (pkg@X.Y.Z),
+  # and Python exact pins (pkg==X.Y). Exclusions:
+  #   shadcn@latest: the official shadcn CLI invocation, not a dependency pin
+  #   templateCentral: schema markers (<!-- templateCentral: stack@X.Y.Z -->)
+  #   "packageManager" field: corepack requires an exact version in this field by design
+  #   ":<space>stack@version" prose (drift-check example output, schema version references)
+  # REVISIT: if the SSOT policy changes, remove this check.
+  header "Version pins in skills (SSOT)"
+  report "$( {
+      scan "" '@[a-zA-Z][a-zA-Z0-9_/@-]*@[0-9^~><]'
+      echo
+      scan -E '[a-zA-Z0-9_-]+@[0-9]+\.[0-9]+\.[0-9]+' 'templateCentral:' '"packageManager"' \
+        | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' || true
+      echo
+      scan -E '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+'
+    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' || true)" \
+    "Version pins found — move floors/pins to .claude/rules/*.md" \
+    "No version pins in skills"
+}
+
+check_no_bcrypt() {
+  # Project standard is argon2id (OWASP/NIST SP 800-63B recommendation).
+  # REVISIT: if the project standard changes, update this check.
+  # audit/implementation.md is excluded — it references bcrypt in its own checklist items.
+  header "bcrypt references"
+  report "$(scan "" '\bbcrypt\b' 'audit/implementation')" \
+    "bcrypt found — project standard is argon2id" \
+    "No bcrypt references"
+}
+
+check_no_deprecated_zod_flatten() {
+  # Zod v4 deprecated error.flatten() — use z.flattenError(error) instead.
+  # REVISIT: if the project ever drops to Zod v3, remove this check.
+  # audit/implementation.md is excluded — it references .flatten() in its own checklist items.
+  header "Deprecated Zod .flatten()"
+  report "$(scan "" '\.flatten()' 'audit/implementation')" \
+    ".flatten() is deprecated in Zod v4 — use z.flattenError()" \
+    "No deprecated .flatten() calls"
+}
+
+check_no_middleware_ts() {
+  # Next.js 16 replaced middleware.ts with proxy.ts for auth/proxy patterns.
+  # REVISIT: if Next.js reintroduces middleware.ts, remove or adjust this check.
+  # Excluded files are meta-documents (audit checklist, migration guides, scaffold templates)
+  # that legitimately reference middleware.ts to explain the deprecation.
+  header "middleware.ts references"
+  report "$(scan "" 'middleware\.ts' 'audit/implementation' 'migrate/general/phase-4-upgrade' 'scaffold/nextjs/source-files')" \
+    "middleware.ts found — Next.js 16 uses proxy.ts" \
+    "No middleware.ts references"
+}
+
+check_no_pragma_or_expires_headers() {
+  # Pragma: no-cache and Expires: 0 are HTTP/1.0 relics — deprecated in HTTP/1.1+.
+  # Cache-Control is sufficient. These headers add noise without benefit.
+  # REVISIT: if a target environment requires HTTP/1.0 compat, reconsider.
+  header "Deprecated HTTP/1.0 cache headers"
+  report "$(scan -E 'Pragma: no-cache|Expires: 0')" \
+    "Deprecated HTTP/1.0 headers found — Cache-Control is sufficient" \
+    "No deprecated HTTP/1.0 cache headers"
+}
+
+check_no_jest_apis_in_skills() {
+  # All Node scaffold stacks (NestJS, Next.js, Vite+React) use Vitest — not Jest.
+  # jest.fn(), jest.spyOn(), and jest-e2e.json must not appear in skill code examples.
+  # ECOSYSTEM-ERA: correct for NestJS 11+ (Vitest default). Revisit if the project adopts Jest.
+  # audit/implementation.md is excluded — it may reference these patterns in checklist items.
+  header "Jest APIs in skill code examples"
+  report "$(scan -E 'jest\.(fn|spyOn|mock|clearAllMocks|resetAllMocks|restoreAllMocks)\(|jest-e2e\.json' 'audit/implementation')" \
+    "Jest API found in skill code example — all Node stacks use Vitest (vi.fn(), vi.spyOn())" \
+    "No Jest APIs in skill code examples"
+}
+
+check_no_globals_jest_in_vitest_projects() {
+  # All Node scaffold stacks use Vitest with globals: false — eslint-globals-jest is not needed.
+  # Adding ...globals.jest to an ESLint config in a Vitest project is misleading and unused.
+  # ECOSYSTEM-ERA: correct for NestJS 11+ / Vite+React (Vitest default). Revisit if Jest is re-adopted.
+  # audit/implementation.md is excluded — it may reference this in checklist items.
+  header "globals.jest in ESLint config templates"
+  report "$(scan "" 'globals\.jest' 'audit/implementation')" \
+    "globals.jest found in ESLint template — Node stacks use Vitest with globals: false; remove globals.jest" \
+    "No globals.jest in ESLint config templates"
+}
+
+check_no_sync_secret_comparison() {
+  # Comparing stored secrets (hashes, tokens) with == or === is not timing-safe.
+  # Use a constant-time function (e.g. crypto.timingSafeEqual, argon2.verify).
+  # NOTE: password === confirmPassword in Zod refine() is safe — both are user inputs,
+  #       there is no stored value and no timing oracle. This check targets stored values.
+  # REVISIT: if a safe wrapper is introduced, refine the pattern.
+  header "Unsafe stored-secret comparison"
+  report "$(scan -E '\b(storedHash|passwordHash|hashedPassword|sessionToken|accessToken|refreshToken)\s*(===|==)\s*')" \
+    "Timing-unsafe comparison of stored secret — use a constant-time compare function" \
+    "No unsafe stored-secret comparisons"
+}
+
+check_no_zod_string_format_methods() {
+  # Zod v4 deprecated chained string-format methods: .string().url(), .string().datetime(),
+  # .string().email(), .string().uuid(). Use top-level z.url(), z.iso.datetime(), z.email(), z.uuid() instead.
+  # ECOSYSTEM-ERA: correct for Zod v4+. Revisit if the project downgrades to Zod v3.
+  # audit/implementation.md is excluded — it may reference these in checklist items.
+  header "Deprecated Zod v4 string format methods"
+  report "$(scan -E 'z\.string\(\)\.(url|datetime|email|uuid)\(' 'audit/implementation')" \
+    "Deprecated Zod string-chained format method — use top-level z.url(), z.iso.datetime(), z.email(), z.uuid()" \
+    "No deprecated Zod string format methods"
+}
+
+check_no_zod_deprecated_message_key() {
+  # Zod v4 custom error params use { error: '...' }, not { message: '...' }.
+  # { message: '...' } is the Zod v3 form — still accepted but deprecated in v4 and will be removed.
+  # Matches any z.<method>({ message: so z.string(), z.number(), z.object(), ... are all covered.
+  # ECOSYSTEM-ERA: correct for Zod v4.
+  # audit/implementation.md is excluded — it may reference this pattern in checklist items.
+  header "Deprecated Zod v3 message key in validators"
+  report "$(scan -E 'z\.[a-z]+\([[:space:]]*\{[[:space:]]*message:' 'audit/implementation')" \
+    "Zod validator uses deprecated { message: '...' } — use { error: '...' } for custom error messages in Zod v4" \
+    "No deprecated Zod v3 message key in validators"
+}
+
+check_no_mypy_in_postToolUse() {
+  # pyright is 2-5x faster than mypy with near-complete spec conformance.
+  # mypy in PostToolUse adds 45+ seconds per edit on real projects.
+  # REVISIT: if mypy regains a speed advantage or pyright has correctness regressions, update.
+  header "mypy in PostToolUse hook"
+  report "$(posttooluse_files_running 'mypy')" \
+    "mypy in PostToolUse — use pyright instead (2-5x faster, community standard as of May 2026)" \
+    "No mypy in PostToolUse hook"
+}
+
+check_no_env_api_base_url_fallback() {
+  # Vite+React code-standards rule: NEVER use `ENV.API_BASE_URL ?? ''` — use `getApiBaseUrl()`.
+  # The fallback '' silently returns empty string when the env var is missing, hiding config errors.
+  # getApiBaseUrl() throws at startup so misconfiguration is caught immediately.
+  # ECOSYSTEM-ERA: Vite 8 / React 19 stack. Revisit if ENV helper API changes.
+  header "ENV.API_BASE_URL ?? '' anti-pattern in Vite skills"
+  report "$(scan "" "API_BASE_URL ?? ''" 'audit/implementation' 'code-standards')" \
+    "Use getApiBaseUrl() not ENV.API_BASE_URL ?? '' — see code-standards/vite-react.md" \
+    "No ENV.API_BASE_URL ?? '' anti-pattern"
+}
+
+check_no_tanstack_isLoading() {
+  # TanStack Query v5 renamed isLoading to isPending on useQuery()/useMutation() destructuring.
+  # isLoading still exists as a derived bool on the query object but has different semantics
+  # (true when fetching WITH existing data; isPending is true when there is no data yet).
+  # Using isLoading instead of isPending causes the loading state to not show on first render.
+  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Revisit if the project pins to TQ v4.
+  header "TanStack Query v5 isLoading usage"
+  report "$(scan "" '{ .*isLoading.*} = use\(Query\|Mutation\)\|isPending\s*:\s*isLoading\b' 'audit/implementation')" \
+    "TanStack Query v5: use isPending (not isLoading) from useQuery/useMutation destructuring" \
+    "No TanStack Query isLoading usage"
+}
+
+check_no_tanstack_isInitialLoading() {
+  # TanStack Query v5 deprecated isInitialLoading (alias for isLoading && isLoading) and removed
+  # it in v6. Using it causes a runtime error once projects upgrade to v6.
+  # ECOSYSTEM-ERA: correct for TanStack Query v5+. Retire when v6 is the project baseline.
+  header "TanStack Query v5 isInitialLoading usage"
+  report "$(scan "" '\bisInitialLoading\b' 'audit/implementation')" \
+    "TanStack Query v5: isInitialLoading is deprecated (removed in v6); use isPending instead" \
+    "No TanStack Query isInitialLoading usage"
+}
+
+check_no_starlette_startup_events() {
+  # Starlette 1.0.0 removed on_startup/on_shutdown event handlers and add_event_handler().
+  # FastAPI 0.136.x requires lifespan= context manager exclusively.
+  # ECOSYSTEM-ERA: correct for Starlette ≥1.0.0 / FastAPI ≥0.128.0.
+  header "Starlette 1.0 deprecated startup events"
+  report "$(scan "" '@app\.on_event\|add_event_handler\|on_startup=\|on_shutdown=' 'audit/implementation' 'standards/code-standards')" \
+    "Starlette 1.0: use lifespan= context manager — on_startup/on_shutdown/add_event_handler removed" \
+    "No Starlette deprecated startup events"
+}
+
+check_no_fastapi_orjson_response() {
+  # ORJSONResponse and UJSONResponse deprecated in FastAPI 0.130+.
+  # Native JSON serialization now uses Pydantic's Rust-based serializer.
+  # ECOSYSTEM-ERA: correct for FastAPI ≥0.130.0.
+  header "Deprecated FastAPI ORJSONResponse/UJSONResponse"
+  report "$(scan "" 'ORJSONResponse\|UJSONResponse' 'audit/implementation')" \
+    "FastAPI 0.130+: ORJSONResponse/UJSONResponse deprecated — use standard JSONResponse" \
+    "No deprecated FastAPI ORJSONResponse/UJSONResponse"
+}
+
+check_harness_version_matches_plugin() {
+  # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
+  # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
+  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; revisit if versioning strategy changes.
+  header "harness.json templatecentral_version matches plugin.json"
+  local plugin_json=".claude-plugin/plugin.json"
+  if [[ ! -f "$plugin_json" ]]; then
+    pass "No plugin.json found — skipping harness version check"
+    return
   fi
+  local plugin_version
+  plugin_version=$(grep '"version"' "$plugin_json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | head -1)
+  report "$(scan "" '"templatecentral_version"' "\"$plugin_version\"")" \
+    "templatecentral_version in harness.json template does not match plugin.json ($plugin_version) — update scaffold and migrate source-files.md" \
+    "templatecentral_version matches plugin.json ($plugin_version)"
+}
+
+check_agents_marker_not_drifted_to_semver() {
+  # The AGENTS.md line-1 marker (`<!-- templateCentral: <stack>@X.Y.Z -->`) is a migration schema
+  # floor, NOT plugin semver. Legitimate values: @1.0.0 (migrate light-adoption / legacy examples)
+  # and @HARNESS_SCHEMA_VERSION (full current harness). The failure mode this guards against is a
+  # well-meaning "version bump" pushing a marker UP to the plugin semver (e.g. 4.5.0), which would
+  # break migrate Phase 0's floor logic. Rule: every marker version must be <= HARNESS_SCHEMA_VERSION.
+  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; the floor marker and schema version concept may evolve.
+  header "AGENTS.md schema marker not drifted above HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION)"
+  # Only the marker comment counts; prose mentions like "@4.0.0 through @4.x" are ignored.
+  # Numeric per-component compare in awk instead of a sort -V subshell per marker.
+  report "$(grep -rnoE '<!-- templateCentral: [a-z<>-]+@[0-9]+\.[0-9]+\.[0-9]+' "$SKILLS_DIR/" 2>/dev/null \
+    | awk -v floor="$HARNESS_SCHEMA_VERSION" '
+        BEGIN { split(floor, f, ".") }
+        {
+          v = $0; sub(/.*@/, "", v); split(v, p, ".")
+          for (i = 1; i <= 3; i++) {
+            if (p[i] + 0 > f[i] + 0) { print; next }
+            if (p[i] + 0 < f[i] + 0) next
+          }
+        }' || true)" \
+    "AGENTS.md schema marker exceeds HARNESS_SCHEMA_VERSION ($HARNESS_SCHEMA_VERSION) — the marker is a migration floor, not plugin semver; revert it, or bump HARNESS_SCHEMA_VERSION deliberately if the harness structure changed" \
+    "All AGENTS.md schema markers <= @$HARNESS_SCHEMA_VERSION"
 }
 
 # ── RUN ALL CHECKS ─────────────────────────────────────────────────────────────

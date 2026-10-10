@@ -19,7 +19,7 @@ body:
     id: skill
     attributes:
       label: Skill
-      placeholder: "e.g. scaffold, add-auth, add-database"
+      placeholder: "e.g. templatecentral:scaffold, templatecentral:add (auth)"
     validations:
       required: true
   - type: textarea
@@ -43,7 +43,7 @@ body:
       value: |
         1. Prompt used:
         2. Claude model / version:
-        3. templatecentral version (`claude plugin list`):
+        3. templatecentral version (`version` in the plugin's `.claude-plugin/plugin.json`):
     validations:
       required: true
   - type: textarea

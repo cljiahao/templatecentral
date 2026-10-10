@@ -1,12 +1,12 @@
 <!-- ref: scaffold/shared/documentation-kit.md
-     loaded-by: scaffold/shared/harness-kit.md (all stacks) + migrate/general/implementation.md + add/documentation/implementation.md → scaffold/SKILL.md | migrate/SKILL.md | add/SKILL.md
+     loaded-by: scaffold/shared/harness-kit-finalize.md Step E3 (all stacks) + migrate/general/phase-4-upgrade.md + migrate/general/phase-5-health-check.md + add/documentation/implementation.md → scaffold/SKILL.md | migrate/SKILL.md | add/SKILL.md
      prereq: A project with (or receiving) a .claude/ harness — templatecentral:scaffold has written it, templatecentral:migrate is retrofitting it, or templatecentral:add (documentation) is invoked standalone on an already-harnessed project. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold, templatecentral:migrate, and templatecentral:add skills. -->
 
 # Shared Documentation Kit
 
 This file is the single source of truth for the per-folder `README.md` structure and its generation algorithm, plus the optional per-folder `.order` file that makes an Azure DevOps Code Wiki render correctly. It is stack-agnostic — the same five steps run unmodified whether the caller is `templatecentral:scaffold`, `templatecentral:migrate`, or `templatecentral:add (documentation)`.
 
-**Scope:** content generation only. Enforcement (the `readme-coupling` lefthook check and the `readme-freshness` CI job) lives in `scaffold/shared/harness-kit.md`, not here.
+**Scope:** content generation only. Enforcement (the `readme-coupling` lefthook check and the `readme-freshness` CI job) lives in the harness kit (`scaffold/shared/harness-kit*.md`, Steps B2/B3), not here.
 
 Execute all five numbered steps below, in order.
 

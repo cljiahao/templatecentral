@@ -36,8 +36,6 @@ the marker.
 
 #### 1. Create Zod Schemas
 
-Define schemas first — the client and service will import types from here:
-
 ```ts
 // src/integrations/schemas/github-schemas.ts
 import { z } from 'zod';
@@ -54,21 +52,15 @@ export type GithubRepo = z.infer<typeof githubRepoSchema>;
 
 #### 2. Create the Client
 
-Extend the base `FetchClient` (at `src/lib/clients/fetch-client.ts`) which handles response parsing, error mapping, and content-type negotiation:
-
-The client returns `unknown`, not the schema type. Nothing has been validated at this layer — a `request<GithubRepo[]>` annotation would be a type assertion over untrusted network data, and any caller reaching for the client directly would get a compile-time guarantee the runtime does not back. `unknown` makes the trust boundary explicit: the value is unusable until the service `parse()`s it.
+Extend `FetchClient` (`src/lib/clients/fetch-client.ts` — response parsing, `APIError` mapping, 30 s timeout). Return `unknown`, not the schema type: `request<GithubRepo[]>` would be a type assertion over untrusted network data. The service `parse()`s it. The example calls an unauthenticated public endpoint — see the Security note in Step 4.
 
 ```ts
 // src/integrations/clients/github-client.ts
 import { FetchClient } from '@/lib/clients/fetch-client';
 
 export class GithubClient extends FetchClient {
-  async getRepos(): Promise<unknown> {
-    return this.request<unknown>('user/repos');
-  }
-
-  async getRepo(owner: string, repo: string): Promise<unknown> {
-    return this.request<unknown>(`repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+  async getUserRepos(username: string): Promise<unknown> {
+    return this.request<unknown>(`users/${encodeURIComponent(username)}/repos`);
   }
 }
 ```
@@ -83,16 +75,14 @@ import { githubRepoSchema, type GithubRepo } from '../schemas/github-schemas';
 export class GithubService {
   constructor(private readonly client: GithubClient) {}
 
-  async getRepos(): Promise<GithubRepo[]> {
-    const data = await this.client.getRepos();
+  async getUserRepos(username: string): Promise<GithubRepo[]> {
+    const data = await this.client.getUserRepos(username);
     return githubRepoSchema.array().parse(data);
   }
 }
 ```
 
 #### 4. Create a Configured Instance
-
-Create the instance at the integrations root:
 
 ```ts
 // src/integrations/github.ts
@@ -128,10 +118,11 @@ Create the consumer feature first using the `templatecentral:add (feature)` skil
 import { useQuery } from '@tanstack/react-query';
 import { Github } from '@/integrations/github';
 
-export const useRepos = () => {
+export const useRepos = (username: string) => {
   return useQuery({
-    queryKey: ['github', 'repos'],
-    queryFn: () => Github.getRepos(),
+    queryKey: ['github', 'repos', username],
+    queryFn: () => Github.getUserRepos(username),
+    enabled: username.length > 0,
   });
 };
 ```
@@ -148,10 +139,8 @@ Confirm the build succeeds with no type errors and all tests pass. Verify the in
 
 ### Rules
 
-- Clients are thin — they only make HTTP requests; NEVER put business logic in clients
-- Client methods return `unknown` — the schema type is earned by `parse()` in the service, never asserted in the client
-- Schemas validate external responses with Zod — external data is untrusted; NEVER skip Zod validation on external API responses
-- Services contain business logic and call clients
+- NEVER put business logic in clients; client methods return `unknown`
+- NEVER skip Zod validation of external responses
 - NEVER hardcode API URLs or secrets — centralize in `src/lib/constants/env.ts`
 - Throw `APIError` for HTTP failures — NEVER throw generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
 - NEVER consume integrations directly in components — go through React Query hooks in features

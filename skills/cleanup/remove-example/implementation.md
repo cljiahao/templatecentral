@@ -4,13 +4,7 @@
 
 # Remove Example Code
 
-Per-stack cleanup steps for removing the example/demo code from a templateCentral-scaffolded project.
-
-## Prerequisites
-
-Requires a project scaffolded with any templateCentral scaffold skill. See Step 0.
-
-## Steps
+Remove the example/demo code from a templateCentral-scaffolded project.
 
 ### Step 0 — Verify context
 
@@ -40,93 +34,37 @@ If found → proceed to the section for your detected stack below.
 
 ## Next.js
 
-### Files to Delete
-
-- `src/features/example/` (entire directory)
-
-### Imports to Remove
-
-- `src/app/dashboard/(overview)/page.tsx` — remove `ExampleList` import and usage; replace with your own content
-
-### Routes
-
-The dashboard page (`/dashboard`) remains — just replace its content.
-
-### Cleanup Checklist
-
 1. Delete `src/features/example/`
-2. Edit `src/app/dashboard/(overview)/page.tsx` — remove `ExampleList` import and usage, replace with placeholder content
+2. Edit `src/app/dashboard/(overview)/page.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
 3. Verify no remaining imports reference `@/features/example`
 
-> **Note:** `src/features/auth/` is intentional scaffold code (auth hooks, `AuthProvider`) — do **not** delete it. Run `templatecentral:add (auth)` to replace the dev stub with a real backend implementation.
+> `src/features/auth/` is intentional scaffold code (auth hooks, `AuthProvider`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
 
 ## Vite + React
 
-### Files to Delete
-
-- `src/features/example/` (entire directory)
-
-### Imports to Remove
-
-- `src/pages/dashboard.tsx` — remove example imports and usage
-
-### Routes
-
-The dashboard page (`/dashboard`) remains — just replace its content.
-
-### Cleanup Checklist
-
 1. Delete `src/features/example/`
-2. Edit `src/pages/dashboard.tsx` — remove example imports, replace with placeholder
+2. Edit `src/pages/dashboard.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
 3. Verify no remaining imports reference `@/features/example`
 
-> **Note:** `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. If you have run `templatecentral:add` (auth) you may replace the dev stub with the real backend implementation; otherwise leave it as-is.
+> `src/features/auth/` is intentional scaffold code (auth context, `AuthProvider`, `ProtectedRoute`, `LoginCard`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
 
 ## FastAPI
 
-### Files to Delete
-
-- `src/api/routers/example.py`
-- `src/api/schemas/request/example.py`
-- `src/api/schemas/response/example.py`
-- `src/api/services/example.py`
-- `test/test_api/test_example.py`
-
-### Imports to Remove
-
-- `src/api/routes.py` — remove `from api.routers import example` and `router.include_router(example.router)`
-
-### Cleanup Checklist
-
-1. Delete the files listed above
-2. Edit `src/api/routes.py` — remove example router registration
-3. Edit `src/api/tags.py` — remove the `EXAMPLE` entry from `APITags` (keep `MISC` and `INFRASTRUCTURE`)
+1. Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
+2. Edit `src/api/routes.py` — remove `from api.routers import example` and its `include_router(example.router, ...)` line
+3. Edit `src/api/tags.py` — remove `EXAMPLE` from `APITags` (keep `MISC` and `INFRASTRUCTURE`)
 4. Verify no remaining imports reference example modules
 
 ## NestJS
 
-### Files to Delete
-
-- `src/modules/example/` (entire directory)
-- `test/modules/example.controller.spec.ts`
-
-### Imports to Remove
-
-- `src/modules/index.ts` — remove `export * from './example/example.module'`
-- `src/app.module.ts` — remove `ExampleModule` from both the `import` statement at the top of the file and the `@Module({ imports: [...] })` array
-
-### Cleanup Checklist
-
 1. Delete `src/modules/example/` and `test/modules/example.controller.spec.ts`
-2. Edit `src/modules/index.ts` — remove export
-3. Edit `src/app.module.ts` — remove `ExampleModule` from both the `import` statement and the `@Module({ imports })` array
-4. Verify no remaining imports reference example module
-5. Run `pnpm test` to confirm no broken test imports
+2. Edit `src/modules/index.ts` — remove `export * from './example/example.module'`
+3. Edit `src/app.module.ts` — remove `ExampleModule` from both the top-level `import` and the `@Module({ imports: [...] })` array
+4. Verify no remaining imports reference the example module
 
 ## Rules
 
 - Always verify with a search (grep for `example` or `Example`) after cleanup — stale imports cause build failures.
-- The example code is intentionally simple — it exists to demonstrate the architecture patterns, not as production code.
 - After cleanup, run that stack's **tests and production build** — `pnpm test` + `pnpm build` for the TypeScript stacks, `python -m pytest` + a container build for FastAPI — the app must still compile and run with no errors.
 - Deleting the example directory removes its own `README.md` too, but the **parent** folder's `README.md` (e.g. `src/features/README.md`) still lists `example/` in its `Contents` section — refresh it:
   ```bash

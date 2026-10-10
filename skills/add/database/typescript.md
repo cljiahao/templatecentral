@@ -8,7 +8,7 @@ Detect intent and ask for database type. If migration intent detected ("migrate/
 
 Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL) or MongoDB?"* — skip if user named a library.
 
-For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. The Drizzle and Kysely leaf guides are PostgreSQL-only — if the user needs MySQL or SQLite, say so and adapt the guide's driver/dialect and schema imports manually.
+For SQL and MongoDB, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. The Drizzle and Kysely leaf guides are PostgreSQL-only — if the user needs MySQL or SQLite, say so and adapt the guide's driver/dialect and schema imports manually.
 
 > `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
 
@@ -21,4 +21,18 @@ For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit
 | Next.js | Kysely | `cat "<skill-dir>/database/typescript/nextjs-kysely.md"` |
 | Next.js | Mongoose | `cat "<skill-dir>/database/typescript/nextjs-mongoose.md"` |
 
-Run the chosen command and follow the loaded guide exactly.
+**NestJS + Kysely add-ons** — load alongside `nestjs-kysely.md` only when they apply (each is a sibling leaf; never skip the base guide):
+
+| Condition | Also load |
+|-----------|-----------|
+| AWS IAM auth required (high-security signal above) | `cat "<skill-dir>/database/typescript/nestjs-kysely-iam.md"` |
+| `src/modules/auth/auth.service.ts` exists (auth stubs from `templatecentral:add` auth) | `cat "<skill-dir>/database/typescript/nestjs-kysely-auth.md"` |
+
+**NestJS + Mongoose add-ons** — load alongside `nestjs-mongoose.md` only when they apply (same rule):
+
+| Condition | Also load |
+|-----------|-----------|
+| AWS IAM auth required (high-security signal above — DocumentDB / Atlas with AWS IAM) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-iam.md"` |
+| `src/modules/auth/auth.service.ts` exists (auth stubs from `templatecentral:add` auth) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-auth.md"` |
+
+Run the chosen command(s) and follow the loaded guide(s) exactly.

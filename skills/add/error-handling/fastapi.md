@@ -29,15 +29,18 @@ The template includes `src/error_handler.py`. Enhance it to return consistent fi
 from collections.abc import Sequence
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette import status
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
+from core.security_headers import SECURITY_HEADERS
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
+_NO_BODY_STATUSES = frozenset({204, 205, 304})
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:
@@ -48,23 +51,12 @@ def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:
     """
     field_errors: dict[str, list[str]] = {}
     for err in errors:
-        loc = err.get('loc', [])
-        msg = err.get('msg', 'Invalid value')
-
-        # loc is a tuple like ('body', 'email') or ('body', 'user', 'email').
-        # Skip the first segment ('body', 'query', 'path') and join the rest with '.'
-        # so nested schemas produce 'user.email' rather than just 'email'.
-        if len(loc) > 1:
-            field_name = '.'.join(str(x) for x in loc[1:])
-        elif len(loc) == 1:
-            field_name = str(loc[0])
-        else:
-            field_name = 'unknown'
-
-        if field_name not in field_errors:
-            field_errors[field_name] = []
-        field_errors[field_name].append(msg)
-
+        loc = err.get("loc", ())
+        # Drop the leading 'body'/'query'/'path' segment so nested fields read 'user.email'.
+        parts = loc[1:] if len(loc) > 1 else loc
+        field_name = ".".join(str(x) for x in parts) or "unknown"
+        # Only `msg` is forwarded — Pydantic's `input`/`ctx` echo user data back to the client.
+        field_errors.setdefault(field_name, []).append(err.get("msg", "Invalid value"))
     return field_errors
 
 
@@ -77,10 +69,11 @@ def configure_exceptions(app: FastAPI) -> None:
     ) -> JSONResponse:
         logger.warning(
             "Invalid input",
-            path=request.url.path, detail=str(exc), code="INVALID_INPUT",
+            path=request.url.path,
+            detail=str(exc),
+            code="INVALID_INPUT",
         )
-        # Allow services to attach field-level errors to the exception
-        field_errors = getattr(exc, 'field_errors', {})
+        field_errors = getattr(exc, "field_errors", {})
         details: dict[str, Any] = {"code": "INVALID_INPUT"}
         if field_errors:
             details["fieldErrors"] = field_errors
@@ -91,26 +84,33 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(NoResultsFound)
-    async def no_results_handler(
-        request: Request, exc: NoResultsFound
-    ) -> JSONResponse:
+    async def no_results_handler(request: Request, exc: NoResultsFound) -> JSONResponse:
         logger.warning(
             "No results found",
-            path=request.url.path, detail=str(exc), code="NOT_FOUND",
+            path=request.url.path,
+            detail=str(exc),
+            code="NOT_FOUND",
         )
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": str(exc), "details": {"code": "NOT_FOUND"}},
         )
 
-    @app.exception_handler(HTTPException)
+    # Starlette's base class also covers router-level 404/405 raised outside FastAPI routes.
+    # Replacing FastAPI's default handler means re-implementing its no-body rule:
+    # 1xx/204/205/304 must go out without a body, or uvicorn errors mid-response
+    # and resets the connection.
+    @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
-        request: Request, exc: HTTPException
-    ) -> JSONResponse:
+        request: Request, exc: StarletteHTTPException
+    ) -> Response:
+        headers = dict(exc.headers) if exc.headers else None
+        if exc.status_code < 200 or exc.status_code in _NO_BODY_STATUSES:
+            return Response(status_code=exc.status_code, headers=headers)
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": exc.detail},
-            headers=dict(exc.headers) if exc.headers else None,
+            headers=headers,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -120,7 +120,8 @@ def configure_exceptions(app: FastAPI) -> None:
         field_errors = _sanitize_errors(exc.errors())
         logger.warning(
             "Request validation error",
-            path=request.url.path, code="VALIDATION_ERROR",
+            path=request.url.path,
+            code="VALIDATION_ERROR",
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -131,16 +132,17 @@ def configure_exceptions(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(
             "Unhandled exception",
-            path=request.url.path, code="INTERNAL_ERROR",
+            path=request.url.path,
+            code="INTERNAL_ERROR",
         )
+        # Runs in ServerErrorMiddleware, outside SecurityHeadersMiddleware: add them here.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": INTERNAL_SERVER_ERROR_DETAIL},
+            headers={k.decode(): v.decode() for k, v in SECURITY_HEADERS},
         )
 ```
 
@@ -156,8 +158,8 @@ from api.schemas.base import BaseRequestSchema
 
 
 class CreateProjectRequest(BaseRequestSchema):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: str | None = Field(None, max_length=500)
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
 ```
 
 ```python
@@ -180,7 +182,7 @@ from fastapi import APIRouter, status
 from api.schemas.request.project import CreateProjectRequest
 from api.schemas.response.project import ProjectResponse
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(prefix="/projects")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
@@ -192,37 +194,22 @@ async def create_project(req: CreateProjectRequest) -> ProjectResponse:
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(project_id: str) -> ProjectResponse:
     """Get a project by ID."""
-    raise NotImplementedError("Call the project service; raise NoResultsFound when the lookup returns nothing.")
+    raise NotImplementedError(
+        "Call the project service; raise NoResultsFound when the lookup returns nothing."
+    )
 ```
 
-Replace each `raise NotImplementedError` with a call into the service layer. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
+Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
 
-**2b. Wiring (Already Present — No Changes Needed)**
-
-The scaffold's `src/app.py` already imports `configure_exceptions` and calls it inside `start_application()`. This skill only replaces the handler bodies in `src/error_handler.py` (Section 1) — do NOT create a new `app = FastAPI(...)` instance or add a duplicate `configure_exceptions(app)` call. Verify the existing wiring looks like this:
-
-```python
-# src/app.py — already present in the scaffold; no edits required
-def start_application() -> FastAPI:
-    app = FastAPI(...)
-    configure_security_headers(app)
-    configure_cors(app)
-    configure_proxy_headers(app)
-    configure_exceptions(app)   # ← already wired
-    app.include_router(router)
-    return app
-```
+**2b. Wiring** — already present: the scaffold's `start_application()` in `src/app.py` calls `configure_exceptions(app)`. Only replace the handler bodies; do NOT add a second `FastAPI(...)` or `configure_exceptions` call.
 
 ## Validate
 
 ```bash
-# Test endpoint with validation error
+# Expect 422 with details.fieldErrors.name
 curl -X POST http://localhost:8000/projects \
   -H "Content-Type: application/json" \
   -d '{"name": ""}'
-
-# Expected 422 response includes fieldErrors mapping
-
 python -m pytest test/ -v
 ```
 

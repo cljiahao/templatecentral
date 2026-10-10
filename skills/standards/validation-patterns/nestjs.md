@@ -3,7 +3,9 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### NestJS (TypeScript + Zod via nestjs-zod)
 
-**1. DTO with Validation**
+The scaffold registers `ZodValidationPipe` globally (`APP_PIPE`), so any `createZodDto` class used as a `@Body()`/`@Query()` type is validated automatically. Plain-typed params (`@Param('id') id: string`) are NOT — give them an explicit pipe.
+
+**1. DTOs**
 
 ```ts
 // src/modules/projects/dto/create-project.dto.ts
@@ -22,18 +24,29 @@ const createProjectSchema = z.object({
 });
 
 export class CreateProjectDto extends createZodDto(createProjectSchema) {}
-
-export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 ```
 
-**2. Controller with Validation**
+```ts
+// src/modules/projects/dto/list-projects-query.dto.ts
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-> **File uploads with Fastify**: The NestJS template uses Fastify — `FileInterceptor` from `@nestjs/platform-express` is incompatible. File uploads require `@fastify/multipart` (`pnpm add @fastify/multipart`) and registering it inside `bootstrap()` before `app.listen()` — `register` returns a promise, so await it:
+const listProjectsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+
+export class ListProjectsQueryDto extends createZodDto(listProjectsQuerySchema) {}
+```
+
+**2. Controller — validate at the boundary, delegate everything else**
+
+> **File uploads with Fastify**: `FileInterceptor` from `@nestjs/platform-express` is incompatible with the Fastify adapter. Use `@fastify/multipart` (`pnpm add @fastify/multipart`), registered inside `bootstrap()` before `app.listen()` — `register` returns a promise, so await it:
 > ```ts
-> // src/main.ts — add inside bootstrap(), before app.listen()
+> // src/main.ts — inside bootstrap(), before app.listen()
 > const fastify = app.getHttpAdapter().getInstance();
 > await fastify.register(import('@fastify/multipart'), {
->   limits: { fileSize: 10 * 1024 * 1024 },
+>   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
 > });
 > ```
 
@@ -44,25 +57,20 @@ import {
   Body,
   Controller,
   Get,
-  Post,
-  Param,
-  PayloadTooLargeException,
-  Query,
-  Req,
   HttpCode,
   HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { ApiTags, ApiOperation, ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { z } from 'zod';
-import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
-
-const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-});
+import { ListProjectsQueryDto } from './dto/list-projects-query.dto';
+import { ProjectsService } from './projects.service';
 
 @ApiTags('projects')
 @Controller('projects')
@@ -78,17 +86,13 @@ export class ProjectsController {
 
   @Get()
   @ApiOperation({ summary: 'List projects with pagination' })
-  async list(
-    // z.infer is correct here — ZodValidationPipe applies defaults; this is the post-parse output type
-    @Query(new ZodValidationPipe(paginationSchema))
-    query: z.infer<typeof paginationSchema>,
-  ) {
+  async list(@Query() query: ListProjectsQueryDto) {
     return await this.service.listProjects(query.page, query.limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get project by ID' })
-  async getById(@Param('id') id: string) {
+  async getById(@Param('id', new ZodValidationPipe(z.uuid())) id: string) {
     return await this.service.getProject(id);
   }
 
@@ -104,47 +108,49 @@ export class ProjectsController {
     },
   })
   async uploadFile(@Req() req: FastifyRequest) {
-    if (!req.isMultipart()) {
+    const file = req.isMultipart() ? await req.file() : undefined;
+    if (!file) {
       throw new BadRequestException('File is required');
     }
+    return await this.service.storeUpload(file);
+  }
+}
+```
 
-    const data = await req.file();
-    if (!data) {
-      throw new BadRequestException('File is required');
-    }
+**3. Service — upload checks live here, not in the controller**
 
-    // Note: data.mimetype is client-supplied — for high assurance, verify magic bytes
-    // (e.g. with the file-type package) instead of trusting the declared type.
-    const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!allowed.includes(data.mimetype)) {
+```ts
+// src/modules/projects/projects.service.ts (upload excerpt)
+import { randomUUID } from 'node:crypto';
+import type { MultipartFile } from '@fastify/multipart';
+import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
+
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+
+@Injectable()
+export class ProjectsService {
+  async storeUpload(file: MultipartFile) {
+    // mimetype is client-supplied — for high assurance, also verify magic bytes
+    // (e.g. with the file-type package) against the buffer below.
+    if (!ALLOWED_TYPES.includes(file.mimetype)) {
       throw new BadRequestException('File type not allowed');
     }
 
-    // toBuffer() throws once the stream exceeds limits.fileSize (set at registration).
-    // That's a plain Error, not an HttpException — it bypasses HttpExceptionFilter and
-    // falls through as an unformatted 500 unless converted at this boundary.
+    // toBuffer() throws a plain Error once the stream exceeds limits.fileSize. Unconverted,
+    // it bypasses HttpExceptionFilter and surfaces as an unformatted 500.
     let buffer: Buffer;
     try {
-      buffer = await data.toBuffer();
+      buffer = await file.toBuffer();
     } catch {
       throw new PayloadTooLargeException('File exceeds the maximum allowed size');
     }
 
-    // data.filename is attacker-controlled: it can contain `../`, absolute paths, or
-    // NUL bytes, so it must NEVER become part of a storage path. The storage key is
-    // generated server-side; the client-supplied name is sanitized display metadata only.
-    const storageKey = crypto.randomUUID();
-    const displayName = data.filename
-      .replace(/[^\w.\- ]/g, '_')
-      .slice(0, 255);
+    // file.filename is attacker-controlled (`../`, absolute paths, NUL bytes) — it must
+    // NEVER become part of a storage path. It survives only as sanitized display metadata.
+    const storageKey = randomUUID();
+    const displayName = file.filename.replace(/[^\w.\- ]/g, '_').slice(0, 255);
 
-    // Safe to use: buffer, storageKey. Never: data.filename in a path.
-    return {
-      message: 'File uploaded',
-      storageKey,
-      displayName,
-      size: buffer.byteLength,
-    };
+    return { storageKey, displayName, size: buffer.byteLength };
   }
 }
 ```
@@ -154,10 +160,13 @@ export class ProjectsController {
 ```bash
 pnpm start:dev
 
-# Test Swagger docs with validation schemas
+# Invalid body → 400 from the global ZodValidationPipe
 curl -X POST http://localhost:3000/projects \
   -H "Content-Type: application/json" \
-  -d '{"name": ""}'  # Should return 400
+  -d '{"name": ""}'
+
+# Non-UUID path param → 400
+curl http://localhost:3000/projects/not-a-uuid
 
 pnpm test
 ```

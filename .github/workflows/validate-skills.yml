@@ -43,7 +43,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Validate SKILL.md frontmatter
         run: |
@@ -102,7 +102,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
@@ -113,7 +113,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Validate manifest files
         env:
@@ -122,18 +122,20 @@ jobs:
 
   shell-lint:
     name: Shellcheck repo scripts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
+      - name: Seeded harness-kit hook regression tests
+        run: bash scripts/test-harness-kit.sh
 
   opencode-adapter-tests:
     name: OpenCode adapter hook tests
@@ -142,6 +144,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Run hooks.test.mjs
         run: node adapters/opencode/hooks.test.mjs

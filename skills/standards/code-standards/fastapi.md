@@ -57,11 +57,11 @@
 
 - Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
 - Docstrings: one-line for simple functions, short paragraph for complex ones; describe the contract (args, returns, behavior), not the implementation.
-- Ruff `ERA` flags commented-out code — keep it enabled in `pyproject.toml`.
+- Ruff enforces the mechanical tenets — `ERA` (commented-out code), `PGH003`/`PGH004` (blanket `# type: ignore` / `# noqa`), `RUF100` (unused `noqa`), `TD005` (bare `TODO` with no description). Keep them in `pyproject.toml`; see `comments.md` → Enforcement.
 
 ### Static Analysis (`ruff`)
 
-`pyproject.toml` pins `[tool.ruff.lint] select` (not `extend-select` — an empty `[tool.ruff]` table already turns on ~400 rules across ~38 categories by default) to a deliberate, per-tier list: bugs (`B`), security (`S` — hardcoded secrets, weak crypto, unsafe eval/exec), FastAPI-specific (`FAST` — e.g. redundant `response_model`), code smells (`SIM`/`C4`/`RET`), test style (`PT`), misc bug-prone patterns (`PIE`), and modernization (`UP`), alongside the existing `E4`/`E7`/`E9`/`F`/`I`/`ERA` baseline. A per-file-ignore turns off `S101`/`S105` (assert-use, "hardcoded password") under `test/**` — pytest's own idioms and fixture literals trip both without being real findings. `PL`, `ANN`, `ARG`, `TRY`, `EM`, and `DTZ` are deliberately not enabled — see the comment above `select` in `pyproject.toml` for why each was deferred.
+`pyproject.toml` pins `[tool.ruff.lint] select` (not `extend-select` — ruff ≥0.16 enables ~413 rules by default) to a deliberate, per-tier list: `E4`/`E7`/`E9`/`F` (ruff's pre-0.16 default set), `I` (isort), bugs (`B`), security (`S` — hardcoded secrets, weak crypto, unsafe eval/exec), FastAPI-specific (`FAST` — e.g. redundant `response_model`), code smells (`SIM`/`C4`/`RET`), test style (`PT`), misc bug-prone patterns (`PIE`), modernization (`UP`), and comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`). A per-file-ignore turns off `S101`/`S105` (assert-use, "hardcoded password") under `test/**` — pytest's own idioms and fixture literals trip both without being real findings. Deliberately not enabled: `PL` (mixes real findings with stylistic import-placement opinions), `ANN` (project-wide annotation retrofit), `ARG` (false-positives on framework-mandated callback signatures like exception handlers), `TRY`/`EM` (opinionated exception-message formatting), `DTZ` (single-rule tier); `FIX` and `TD001`–`TD004`/`TD006`/`TD007` (ban or over-format TODO/FIXME, which the comment doctrine allows with context).
 
 ### Constants
 

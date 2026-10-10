@@ -4,122 +4,75 @@
 
 # Drift Check
 
-Read the project's templateCentral version marker, compare to the current plugin version, detect drift, and optionally trigger dependency updates.
+Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, and optionally run dependency and security checks.
 
-## Step 1 — Read Version Marker
+## Step 1 — Confirm a templateCentral project
 
-Look for this comment in the project's `AGENTS.md`:
+Line 1 of the project's `AGENTS.md` must be the harness marker:
 
 ```
-<!-- templateCentral: <stack>@<version> -->
+<!-- templateCentral: <stack>@<schema-version> -->
 ```
 
-Examples:
-- `<!-- templateCentral: nextjs@1.0.0 -->`
-- `<!-- templateCentral: fastapi@1.0.0 -->`
+e.g. `<!-- templateCentral: nextjs@6.0.0 -->`. The `@X.Y.Z` here is the harness *schema floor*, not the install version — never compare it to the plugin semver. It only identifies `<stack>`.
 
-If no marker found: this project was not scaffolded by templateCentral. Exit silently — do not report anything.
+No marker → not a templateCentral project. Exit silently.
 
-## Step 2 — Read Current Plugin Version
+## Step 2 — Read both versions
 
-At the plugin root (`<skill-dir>/../../`):
+- **Project version**: `templatecentral_version` in the project's `.claude/harness.json`.
+- **Plugin version**: `version` in `<skill-dir>/../../.claude-plugin/plugin.json` (the version SSOT).
 
-- `.claude-plugin/plugin.json` — the version SSOT: the `version` field is the current templateCentral version
-- `.claude/rules/<stack>.md` — the stack-conventions reference: the `Stack:` line describes the current stack conventions for the detected stack
-
-Current version = the `version` field value from `.claude-plugin/plugin.json`.
-
-## Step 3 — Compare
-
-The AGENTS.md line-1 marker (`@X.Y.Z`) is the harness *schema floor*, not the install version — never compare it to the plugin semver.
-
-The install version is recorded in the project's `.claude/harness.json` → `templatecentral_version` field. Read that file now.
-
-**If `.claude/harness.json` is missing**: the project was not installed via templateCentral (it was adopted or hand-crafted). Do not report drift. Instead, inform the user:
+**`.claude/harness.json` missing** → the project was adopted or hand-crafted, so there is no recorded install version. Do not report drift; tell the user:
 
 > "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
 
 Then exit.
 
-Parse both versions as semver (`major.minor.patch`):
-- **Project version**: `templatecentral_version` from `.claude/harness.json`
-- **Plugin version**: `version` from `<skill-dir>/../../.claude-plugin/plugin.json` (already read in Step 2)
+## Step 3 — Compare (semver `major.minor.patch`)
 
-**If project version == current plugin version**: conventions are current. Exit silently.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently.
+- Project version < plugin version → drift. Continue.
 
-**If project version < current plugin version**: drift detected. Proceed to Step 4.
+## Step 4 — Convention drift report
 
-## Step 4 — Convention Drift Report
+Read `<skill-dir>/../../CHANGELOG.md`. Extract every entry newer than the project version that touches the detected stack, the shared harness, or skills the project uses. Also compare the project's pinned versions against the `Stack:` line in `<skill-dir>/../../.claude/rules/<stack>.md`.
 
-Read `CHANGELOG.md` at the plugin root. Extract all entries with versions newer than the project version, focusing on changes relevant to the detected stack. Also diff the project's conventions against the `Stack:` line in `.claude/rules/<stack>.md`.
-
-Show the user:
+Report in this shape (content comes from the changelog — never invent entries):
 
 ```
 templateCentral convention drift detected
 
-Your project: nextjs@1.0.0
-Current:      nextjs@1.2.0
+Project install version: <project version>
+Current plugin version:  <plugin version>
 
-What changed since your project was scaffolded:
-### 1.2.0
-- Updated proxy.ts to use better-auth session check (auth.api.getSession)
-- Added error-boundary pattern to layout.tsx
+Changes since your install (<stack>-relevant):
+### <version>
+- <changelog line>
 
-### 1.1.0
-- Replaced manual HTTPS agent with native fetch in axios-client.ts
-- Added `output: "standalone"` to next.config.ts
+Stack floors not met:
+- <package>: project <x>, floor <y>
 
-Convention updates are manual — review changelog above and apply relevant changes to your project.
+Convention updates are manual — review the above and apply what is relevant.
 ```
 
-## Step 5 — Dependency Drift Check
+## Step 5 — Dependency drift (optional)
 
-After showing the convention report, ask the user:
+Ask:
 
-> "Dependency drift check is available. This fetches current versions from npm for all packages in your package.json. Run it? (y/n)"
+> "Dependency drift check is available — it compares your declared dependencies against the latest registry versions. Run it? (y/n)"
 
-If user declines: skip to Step 6.
+If the user accepts, or the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, dispatch the review utility's `update` operation (`cat "<skill-dir>/../review/SKILL.md"`). The marker skips the question and runs this step even when Step 3 found no convention drift.
 
-If user accepts or project AGENTS.md contains `<!-- templateCentral-check-deps -->` escape hatch: dispatch the review utility (update operation — `cat "<skill-dir>/../review/SKILL.md"`).
+## Step 6 — Security audit (optional)
 
-## Step 6 — Security Audit
+Ask:
 
-After Step 5 (or after Step 4 if user declined Step 5), ask:
+> "Security audit available — checks installed packages against advisory databases. Run it? (y/n)"
 
-> "Security audit available — checks installed packages against the package ecosystems' advisory databases. Run it? (y/n)"
+If accepted:
 
-**If user accepts:**
+- **Node stacks**: `pnpm audit --audit-level=high`. Also list every `audit.ignore` entry in `pnpm-workspace.yaml` and flag any whose advisory now has a fixed release or whose documented reason no longer holds.
+- **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped".
 
-- **Node projects**: run `pnpm audit --audit-level=high` (or `npm audit --audit-level=high`). Report any high/critical findings. If vulnerabilities found, recommend running the review utility (update operation — `cat "<skill-dir>/../review/SKILL.md"`) to patch.
-- **Python projects**: if `pip-audit` is available (`pip-audit --version` returns without error), run `pip-audit --requirement requirements.txt` and report findings; if not installed, add "pip-audit not installed — security advisory check skipped" to report.
-
-If zero vulnerabilities: report "No known vulnerabilities found."
-If findings: list package name, severity, advisory identifier, and whether a fix is available. Do not auto-upgrade — let the user decide.
-
-If user declines: done.
-
-## Escape Hatch
-
-Users can trigger dependency drift check at any time without convention drift by adding this line to their project AGENTS.md:
-
-```
-<!-- templateCentral-check-deps -->
-```
-
-When this marker is present, run Step 5 regardless of convention drift status.
-
-## Invocation
-
-This skill is invoked automatically at session start for projects that contain the templateCentral version marker in AGENTS.md. The project AGENTS.md should contain:
-
-```
-At session start, invoke the drift-check skill.
-```
-
-## Changelog
-### 1.1.0
-- Fix: Step 3 now reads `templatecentral_version` from `.claude/harness.json` instead of the AGENTS.md line-1 marker. The marker is the harness schema floor (lint-enforced, deliberately pinned) and must never be compared to the plugin semver. Missing `harness.json` routes to `templatecentral:migrate` instead of reporting false drift.
-
-### 1.0.0
-- Initial plugin release
+Zero findings → "No known vulnerabilities found." Otherwise list package, severity, advisory ID, and whether a fixed version exists, and recommend the review utility's `update` operation. Never auto-upgrade.

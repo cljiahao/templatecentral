@@ -8,18 +8,17 @@ Write tests for newly added code using the stack's `templatecentral:add (test)` 
 
 ## Stack Detection
 
-Same as the build utility (`skills/build/implementation.md`): check for `next.config.ts`, `next.config.js`, or `next.config.mjs` → Next.js; `vite.config.ts` or `vite.config.js` → Vite-React; `nest-cli.json` → NestJS; `requirements.txt` containing `fastapi` → FastAPI.
+Use the build utility's Stack Detection table (`<skill-dir>/../build/implementation.md`).
 
 ## Steps
 
 1. Detect stack
-2. Load `templatecentral:add` (test) — it contains test conventions for all four stacks with a stack-detection section at the top.
-3. Identify newly added code (files written in this session)
-4. Write tests following the `templatecentral:add (test)` skill conventions
-5. Run the full test suite:
+2. Load the stack's test conventions via `templatecentral:add (test)`
+3. Identify code added in this session and write tests for it following those conventions
+4. Run the full test suite:
    - Next.js / Vite-React / NestJS: `pnpm test`
    - FastAPI: `python -m pytest test/ -q`
-6. Report results (see Reporting below)
+5. Report results (see Reporting below)
 
 ## Reporting
 
@@ -56,8 +55,4 @@ Rules:
 
 ## Callers
 
-Dispatched by: `templatecentral:add` (feature), `templatecentral:add` (api-route), `templatecentral:add` (endpoint), `templatecentral:add` (module).
-
-## Changelog
-### 1.0.0
-- Initial plugin release
+Dispatched by `templatecentral:add` (`feature`, `endpoint`, and their aliases).

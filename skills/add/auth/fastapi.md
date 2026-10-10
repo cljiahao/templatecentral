@@ -46,7 +46,14 @@ class RegisterRequest(BaseRequestSchema):
     """Registration request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(min_length=12, max_length=128, description="User password — 12-128 characters (OWASP minimum; the upper bound caps argon2 hashing cost on this unauthenticated endpoint).")
+    password: str = Field(
+        min_length=12,
+        max_length=128,
+        description=(
+            "User password — 12-128 characters (OWASP minimum; the upper bound"
+            " caps argon2 hashing cost on this unauthenticated endpoint)."
+        ),
+    )
     name: str = Field(description="User display name.")
 
 
@@ -54,7 +61,7 @@ class LoginRequest(BaseRequestSchema):
     """Login request."""
 
     email: EmailStr = Field(description="User email address.")
-    password: str = Field(description="User password.")
+    password: str = Field(max_length=128, description="User password.")
 ```
 
 **`src/api/schemas/response/auth.py`**:
@@ -86,9 +93,13 @@ Add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `APISettings` in **`src/co
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    SECRET_KEY: str = Field(description="JWT signing key — generate with: openssl rand -hex 32")
+    SECRET_KEY: str = Field(
+        description="JWT signing key — generate with: openssl rand -hex 32"
+    )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
 ```
+
+Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
 
 > `TRUST_PROXY` already exists in the scaffold's `APISettings` (`src/core/config.py`) and `src/.env.default` — do not re-add it.
 
@@ -113,19 +124,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 **`src/core/security.py`** — JWT token creation/verification and password hashing:
 
 ```python
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError
 
 from core.config import api_settings
 
 ALGORITHM = "HS256"
 
-# argon2id with OWASP-recommended parameters — t=3, m=64 MiB, p=1.
-# Set explicitly: argon2-cffi's library defaults differ from these.
+# argon2id, t=3 / m=64 MiB / p=1 — above OWASP's minimums. Set explicitly because
+# argon2-cffi's defaults (RFC 9106 low-memory profile) use p=4.
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
+# A named tuple, not `except A, B:` — that unparenthesized form (PEP 758) is a
+# SyntaxError before 3.14, and the Beanie path pins projects to 3.13.
+_VERIFY_ERRORS = (VerificationError, InvalidHashError)
 
 
 def hash_password(password: str) -> str:
@@ -135,22 +149,33 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return _ph.verify(hashed_password, plain_password)
-    except (VerifyMismatchError, VerificationError, InvalidHashError):
+    except _VERIFY_ERRORS:
         return False
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode = {"sub": subject, "exp": expire}
-    return jwt.encode(to_encode, api_settings.SECRET_KEY, algorithm=ALGORITHM)
+    now = datetime.now(UTC)
+    expire = now + (
+        expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return jwt.encode(
+        {"sub": subject, "iat": now, "exp": expire},
+        api_settings.SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
 
 
 def decode_access_token(token: str) -> str | None:
     """Decode and validate a JWT token. Returns the subject or None."""
     try:
-        # algorithms is a security whitelist — never omit or use ["none"]; omitting allows algorithm confusion attacks
-        payload = jwt.decode(token, api_settings.SECRET_KEY, algorithms=[ALGORITHM])
+        # Pinned algorithm list blocks alg-confusion / "none"; require rejects tokens missing exp/sub.
+        payload = jwt.decode(
+            token,
+            api_settings.SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub"]},
+        )
         return payload.get("sub")
     except jwt.PyJWTError:
         return None
@@ -161,6 +186,8 @@ def decode_access_token(token: str) -> str | None:
 Create **`src/api/dependencies/`** directory (does not exist in base template), then add both **`src/api/dependencies/__init__.py`** (empty, marks the directory as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
 ```python
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -170,7 +197,7 @@ bearer_scheme = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> str:
     """Extract and validate the current user from the JWT token."""
     user_id = decode_access_token(credentials.credentials)
@@ -231,15 +258,17 @@ from api.services.auth_service import login_user, register_user
 router = APIRouter(prefix="/auth")
 
 
+# Plain `def`: argon2 hashing is ~100 ms of CPU, and FastAPI runs sync handlers in its
+# threadpool instead of blocking the event loop.
 @router.post("/register", response_model=UserResponse)
-async def register(body: RegisterRequest) -> UserResponse:
+def register(body: RegisterRequest) -> UserResponse:
     """Register a new user account."""
     user = register_user(email=body.email, password=body.password, name=body.name)
     return UserResponse(id=user["id"], email=user["email"], name=user["name"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest) -> TokenResponse:
+def login(body: LoginRequest) -> TokenResponse:
     """Authenticate and receive a JWT token."""
     token = login_user(email=body.email, password=body.password)
     return TokenResponse(access_token=token)
@@ -258,15 +287,19 @@ router.include_router(auth.router, tags=[APITags.AUTH])
 
 #### 9. Protect Routes
 
-Use the `get_current_user` dependency on any endpoint that requires auth:
+Use the `get_current_user` dependency on any endpoint that requires auth — starting with this `/me` stub in `src/api/routers/auth.py` (merge the imports into that file's block):
 
 ```python
-from fastapi import HTTPException, status
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, status
 
 from api.dependencies.auth import get_current_user
+from api.schemas.response.auth import UserResponse
+
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
+async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResponse:
     """Get the current authenticated user. Implement DB lookup after running `templatecentral:add` (database)."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -274,45 +307,426 @@ async def get_me(user_id: str = Depends(get_current_user)) -> UserResponse:
     )
 ```
 
-### Rate Limiting (Required for Production)
+#### 10. Tests
 
-Industry best practice: max 3 failed auth attempts per 15 minutes. Add `slowapi` to `requirements.txt`, then:
+Settings load at import and CI has no `src/.env`, so seed a throwaway key before the app is imported — replace **`test/conftest.py`** (the import moves into the fixture for the same reason):
 
 ```python
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from fastapi import Request
+"""Root conftest — shared fixtures available to all tests."""
 
-# WARNING: TRUST_PROXY must be set in your environment — otherwise
-# get_remote_address returns the proxy IP and all users behind a load
-# balancer share one rate limit bucket (making limiting completely ineffective).
-#
-# In your .env file, set to a trusted CIDR or '*' for all proxies:
-# TRUST_PROXY=10.0.0.0/8   # single-hop (ALB → App): trust your VPC CIDR
-# TRUST_PROXY=*            # or trust all proxies (dev/internal only)
+import os
+import secrets
+from collections.abc import Generator
+
+import pytest
+from fastapi.testclient import TestClient
+
+os.environ.setdefault("SECRET_KEY", secrets.token_hex(32))
+
+
+@pytest.fixture
+def client() -> Generator[TestClient]:
+    """FastAPI test client."""
+    from app import app
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def auth_headers() -> dict[str, str]:
+    """Bearer header for a synthetic user — for routes behind get_current_user."""
+    from core.security import create_access_token
+
+    return {"Authorization": f"Bearer {create_access_token('test-user')}"}
+```
+
+**`test/test_api/test_auth.py`** — covers the parts that stay unchanged when `templatecentral:add` (database) completes the stubs:
+
+```python
+"""Tests for the JWT/password helpers and the bearer guard."""
+
+from datetime import timedelta
+
+import jwt
+import pytest
+from fastapi.testclient import TestClient
+
+from core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+
+
+@pytest.mark.unit
+def test_token_round_trips_subject() -> None:
+    """A freshly issued token decodes back to its subject."""
+    assert decode_access_token(create_access_token("user-1")) == "user-1"
+
+
+@pytest.mark.unit
+def test_expired_token_is_rejected() -> None:
+    """A token past its exp claim decodes to None."""
+    token = create_access_token("user-1", expires_delta=timedelta(seconds=-1))
+    assert decode_access_token(token) is None
+
+
+@pytest.mark.unit
+def test_unsigned_token_is_rejected() -> None:
+    """An alg=none token is rejected by the pinned algorithm list."""
+    token = jwt.encode({"sub": "user-1", "exp": 4102444800}, "", algorithm="none")
+    assert decode_access_token(token) is None
+
+
+@pytest.mark.unit
+def test_password_hash_verifies_only_the_original() -> None:
+    """verify_password accepts the hashed password and nothing else."""
+    hashed = hash_password("correct-horse-battery")
+    assert verify_password("correct-horse-battery", hashed)
+    assert not verify_password("wrong-horse-battery", hashed)
+
+
+@pytest.mark.unit
+def test_me_requires_bearer_token(client: TestClient) -> None:
+    """GET /auth/me without a token is 401."""
+    assert client.get("/auth/me").status_code == 401
+```
+
+### Browser Client (Cookie Mode)
+
+**Apply when a browser SPA calls this API** — a Vite + React frontend (`templatecentral:add (auth)` on Vite sends `credentials: 'include'` + `X-CSRF-Token`, never a Bearer header), or Next.js client components calling the backend. `templatecentral:standards (full-stack-pairing)` points here. Without it every guarded route answers that SPA with 401.
+
+**Same-origin only:** the SPA must reach this API through a reverse proxy on its own origin (Vite `server.proxy` in dev, nginx `location /api/` in production, or a Next.js `rewrites()` path — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is a host-only cookie, so an SPA on another host cannot read it and every non-GET would 403.
+
+Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the server recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or lifted from another session fails. Bearer requests skip the check (browsers never attach `Authorization` on their own), so API clients keep working unchanged.
+
+**1. `src/core/security.py`** — add `import hashlib`, `import hmac`, `import secrets` to the imports, change the config import to `from core.config import api_settings, common_settings`, and append:
+
+```python
+# --- Browser client (cookie mode) -------------------------------------------------
+# Secure is dropped only in dev (plain-http localhost); the __Host- prefix requires
+# Secure, so the session cookie takes its hardened name everywhere else.
+COOKIE_SECURE = common_settings.ENVIRONMENT != "dev"
+SESSION_COOKIE = "__Host-session" if COOKIE_SECURE else "session"
+CSRF_COOKIE = "XSRF-TOKEN"  # readable by the SPA, which echoes it in CSRF_HEADER
+CSRF_HEADER = "X-CSRF-Token"
+# Sub-key so the CSRF HMAC never shares raw key material with JWT signing.
+_CSRF_KEY = hmac.new(
+    api_settings.SECRET_KEY.encode(), b"csrf-v1", hashlib.sha256
+).digest()
+
+
+def _csrf_signature(session: str, nonce: str) -> str:
+    # Length-prefixed message (OWASP signed double-submit) binds the token to the session.
+    message = f"{len(session)}!{session}!{len(nonce)}!{nonce}".encode()
+    return hmac.new(_CSRF_KEY, message, hashlib.sha256).hexdigest()
+
+
+def create_csrf_token(session: str) -> str:
+    """Issue a CSRF token bound to this session value (signed double-submit)."""
+    nonce = secrets.token_urlsafe(32)
+    return f"{nonce}.{_csrf_signature(session, nonce)}"
+
+
+def verify_csrf_token(token: str, session: str) -> bool:
+    nonce, _, signature = token.partition(".")
+    return bool(nonce) and hmac.compare_digest(
+        signature, _csrf_signature(session, nonce)
+    )
+```
+
+**2. `src/api/dependencies/auth.py`** — replace the file. `get_current_user` keeps its name and return value, so every guarded route gains cookie support with no edits; keep any line `templatecentral:add (logging)` added (e.g. `request.state.user_id = user_id` before the return):
+
+```python
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
+
+from core.config import api_settings
+from core.security import (
+    COOKIE_SECURE,
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    SESSION_COOKIE,
+    create_csrf_token,
+    decode_access_token,
+    verify_csrf_token,
+)
+
+# auto_error=False on both: either credential may be absent; get_current_user decides.
+bearer_scheme = HTTPBearer(auto_error=False)
+session_cookie = APIKeyCookie(name=SESSION_COOKIE, auto_error=False)
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def get_current_user(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[str | None, Depends(session_cookie)],
+) -> str:
+    """Resolve the user from a Bearer header (API clients) or the session cookie (browsers)."""
+    if credentials is not None:
+        # Browsers never attach Authorization on their own — no CSRF exposure.
+        token = credentials.credentials
+    elif session is not None:
+        if request.method not in SAFE_METHODS:
+            header = request.headers.get(CSRF_HEADER, "")
+            if header != request.cookies.get(CSRF_COOKIE) or not verify_csrf_token(
+                header, session
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="CSRF token missing or invalid.",
+                )
+        token = session
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user_id = decode_access_token(token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        )
+    return user_id
+
+
+def require_json(request: Request) -> None:
+    """415 unless the body is declared JSON — FastAPI parses a body with no Content-Type
+    as JSON too, so this keeps /auth/session out of reach of CORS-simple requests."""
+    media_type = request.headers.get("content-type", "").partition(";")[0].strip()
+    if media_type.lower() != "application/json":
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Content-Type must be application/json.",
+        )
+
+
+def set_session_cookies(response: Response, token: str) -> None:
+    """Set the HttpOnly session cookie plus a fresh CSRF token bound to it."""
+    max_age = api_settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    for name, value, httponly in (
+        (SESSION_COOKIE, token, True),
+        # Readable on purpose: the SPA echoes it back in the X-CSRF-Token header.
+        (CSRF_COOKIE, create_csrf_token(token), False),
+    ):
+        response.set_cookie(
+            name,
+            value,
+            max_age=max_age,
+            path="/",
+            secure=COOKIE_SECURE,
+            httponly=httponly,
+            samesite="strict",
+        )
+
+
+def clear_session_cookies(response: Response) -> None:
+    """Expire both cookies (attributes must match, or __Host- deletion is ignored)."""
+    for name, httponly in ((SESSION_COOKIE, True), (CSRF_COOKIE, False)):
+        response.delete_cookie(
+            name, path="/", secure=COOKIE_SECURE, httponly=httponly, samesite="strict"
+        )
+```
+
+**3. `src/api/routers/auth.py`** — add the browser login and logout (merge `Response`, `status`, `require_json` and the two cookie helpers into the imports). `/auth/login` keeps returning the token for API clients; `/auth/session` returns 204 so the JWT never reaches JavaScript, and minting a fresh session + CSRF pair on every login also defeats session fixation:
+
+```python
+@router.post(
+    "/session",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_json)],
+)
+def create_session(body: LoginRequest, response: Response) -> None:
+    """Browser login: set the HttpOnly session cookie (no token in the body)."""
+    # Call login_user exactly as /login does — the database guide adds a `db` argument.
+    token = login_user(email=body.email, password=body.password)
+    set_session_cookies(response, token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+def logout(response: Response) -> None:
+    """Clear the session and CSRF cookies."""
+    clear_session_cookies(response)
+```
+
+`/session` needs no CSRF token: `require_json` answers 415 to anything but `Content-Type: application/json` (FastAPI would otherwise parse a body with *no* Content-Type as JSON — a CORS-simple request that skips preflight), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects — the custom-request-header defense OWASP lists for API endpoints. Rate-limit it like `/login` (see Rate Limiting).
+
+No CORS change: the SPA's proxied requests are same-origin and never preflight.
+
+**4. `test/test_api/test_auth_cookie.py`** — a probe app isolates the cookie machinery from the login stub and from whichever database variant completes it:
+
+```python
+"""Cookie mode: session cookie attributes, CSRF on unsafe methods, Bearer fallback."""
+
+from typing import Annotated
+
+import pytest
+from fastapi import Depends, FastAPI, Response
+from fastapi.testclient import TestClient
+
+from api.dependencies.auth import get_current_user, set_session_cookies
+from core.security import (
+    COOKIE_SECURE,
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    SESSION_COOKIE,
+    create_access_token,
+)
+
+probe = FastAPI()
+User = Annotated[str, Depends(get_current_user)]
+
+
+@probe.post("/login", status_code=204)
+def _login(response: Response, sub: str = "user-1") -> None:
+    set_session_cookies(response, create_access_token(sub))
+
+
+@probe.get("/me")
+def _me(user_id: User) -> dict[str, str]:
+    return {"id": user_id}
+
+
+@probe.post("/write")
+def _write(user_id: User) -> dict[str, str]:
+    return {"id": user_id}
+
+
+@pytest.fixture
+def browser() -> TestClient:
+    # https so the cookie jar returns Secure cookies when COOKIE_SECURE is on (non-dev).
+    client = TestClient(probe, base_url="https://testserver")
+    assert client.post("/login").status_code == 204
+    return client
+
+
+@pytest.mark.unit
+def test_login_sets_hardened_cookies() -> None:
+    res = TestClient(probe, base_url="https://testserver").post("/login")
+    headers = res.headers.get_list("set-cookie")
+    session = next(h for h in headers if h.startswith(f"{SESSION_COOKIE}="))
+    csrf = next(h for h in headers if h.startswith(f"{CSRF_COOKIE}="))
+    assert "HttpOnly" in session
+    assert "HttpOnly" not in csrf
+    for cookie in (session, csrf):
+        assert "SameSite=strict" in cookie
+        assert "Path=/" in cookie
+        assert ("Secure" in cookie) == COOKIE_SECURE
+
+
+@pytest.mark.unit
+def test_cookie_authenticates_safe_requests(browser: TestClient) -> None:
+    assert browser.get("/me").json() == {"id": "user-1"}
+
+
+@pytest.mark.unit
+def test_unsafe_request_needs_csrf_header(browser: TestClient) -> None:
+    assert browser.post("/write").status_code == 403
+    assert (
+        browser.post("/write", headers={CSRF_HEADER: "forged.token"}).status_code == 403
+    )
+    token = browser.cookies[CSRF_COOKIE]
+    assert browser.post("/write", headers={CSRF_HEADER: token}).status_code == 200
+
+
+@pytest.mark.unit
+def test_csrf_token_is_bound_to_its_session(browser: TestClient) -> None:
+    """A valid token from one session is rejected under another (cookie injection)."""
+    stolen = browser.cookies[CSRF_COOKIE]
+    other = TestClient(probe, base_url="https://testserver")
+    other.post("/login?sub=user-2")
+    other.cookies.set(CSRF_COOKIE, stolen)
+    assert other.post("/write", headers={CSRF_HEADER: stolen}).status_code == 403
+
+
+@pytest.mark.unit
+def test_bearer_needs_no_csrf() -> None:
+    headers = {"Authorization": f"Bearer {create_access_token('user-2')}"}
+    assert TestClient(probe).post("/write", headers=headers).json() == {"id": "user-2"}
+
+
+@pytest.mark.unit
+def test_no_credentials_is_401() -> None:
+    assert TestClient(probe).get("/me").status_code == 401
+
+
+@pytest.mark.unit
+def test_logout_clears_cookies(client: TestClient) -> None:
+    res = client.post("/auth/logout")
+    assert res.status_code == 204
+    cleared = res.headers.get_list("set-cookie")
+    assert any(h.startswith(f"{SESSION_COOKIE}=") and "Max-Age=0" in h for h in cleared)
+    assert any(h.startswith(f"{CSRF_COOKIE}=") and "Max-Age=0" in h for h in cleared)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("headers", [{}, {"Content-Type": "text/plain"}])
+def test_session_login_requires_json(
+    client: TestClient, headers: dict[str, str]
+) -> None:
+    """No Content-Type or text/plain (CORS-simple: no preflight) is refused before login."""
+    body = b'{"email": "a@example.com", "password": "correct-horse-battery"}'
+    res = client.post("/auth/session", content=body, headers=headers)
+    assert res.status_code == 415
+```
+
+### Rate Limiting (Required for Production)
+
+Target: max 3 auth attempts per 15 minutes per client IP. Add `slowapi` to `requirements.txt`, then:
+
+```python
+from fastapi import Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+# get_remote_address reads request.client.host — correct behind a proxy only when
+# TRUST_PROXY is set (see Rules), otherwise every user shares the proxy's bucket.
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
 # On auth endpoints — limit /register as well as /login (both are
-# unauthenticated and CPU-expensive via argon2 hashing):
+# unauthenticated and CPU-expensive via argon2 hashing), plus /session in cookie mode.
+# Keep each handler's current `def`/`async def` — only add the decorator and `request`.
 @router.post("/register", response_model=UserResponse)
 @limiter.limit("3/15minutes")
-async def register(request: Request, body: RegisterRequest) -> UserResponse: ...
+def register(request: Request, body: RegisterRequest) -> UserResponse: ...
+
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("3/15minutes")
-async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
+def login(request: Request, body: LoginRequest) -> TokenResponse: ...
+
+
+@router.post(
+    "/session",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_json)],
+)
+@limiter.limit("3/15minutes")
+def create_session(request: Request, body: LoginRequest, response: Response) -> None: ...
 ```
 
 ### Rules
 
 - **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
+- Browser SPA clients get cookie mode (above), never a token in `localStorage` — Bearer stays for non-browser clients.
 - Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
+- When completing `login_user`, return the same 401 for unknown email and wrong password, and run `verify_password` against a dummy hash when the user is missing — otherwise response timing reveals which emails are registered.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
 
@@ -320,7 +734,8 @@ async def login(request: Request, body: LoginRequest) -> TokenResponse: ...
 
 ```bash
 python -m pytest test/ -v     # auth tests pass
-ruff check src/     # zero lint errors
+ruff check src/ test/         # zero lint errors
+python -m pyright src/        # zero type errors
 ```
 
 ### After Writing Code

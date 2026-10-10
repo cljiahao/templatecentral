@@ -24,7 +24,7 @@ Examples of unacceptable behavior:
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported via [GitHub Security Advisories](https://github.com/cljiahao/templatecentral/security/advisories/new). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project maintainer, [@cljiahao](https://github.com/cljiahao), privately via their GitHub profile. Please do not report conduct issues in public issues, pull requests, or discussions. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

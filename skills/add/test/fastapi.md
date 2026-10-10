@@ -68,19 +68,25 @@ def client() -> Generator[TestClient]:
         yield client
 ```
 
+After `templatecentral:add` (auth) or (database), the conftest seeds placeholder settings with `os.environ.setdefault(...)` and imports `app` inside the fixture — keep that shape: anything importing `core.config` at module top runs before the seeding and fails in CI, where there is no `src/.env`.
+
 Extend it for database tests by overriding dependencies:
 
 ```python
-# test/conftest.py — add after the existing client fixture
+# test/conftest.py — merge these imports into the existing import block
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 
 @pytest.fixture
 def db_client() -> Generator[TestClient]:
     """TestClient with a clean in-memory database for each test."""
-    from database.session import get_db
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
+    # Imported here, after the env seeding; importing app also registers every
+    # model on Base.metadata, so create_all sees all tables.
+    from app import app
     from database.base import Base
+    from database.session import get_db
 
     # StaticPool + check_same_thread=False are mandatory here: SQLite's
     # in-memory database lives inside a single connection, and TestClient
@@ -101,6 +107,7 @@ def db_client() -> Generator[TestClient]:
 
     app.dependency_overrides.clear()
     session.close()
+    engine.dispose()
 ```
 
 ### Test File Layout
@@ -122,7 +129,7 @@ def test_example_rejects_invalid_payload(client: TestClient) -> None:
     response = client.post("/example", json={})
     assert response.status_code == 422
     errors = response.json()["detail"]
-    assert any("name" in str(e) for e in errors)
+    assert any(e["loc"][-1] == "name" for e in errors)
 ```
 
 ### Factories
@@ -166,11 +173,6 @@ def test_is_eligible(age: int, expected: bool) -> None:
     assert is_eligible(age) == expected
 ```
 
-### Mocking
-
-- **Prefer real objects** via factories.
-- Use `monkeypatch` over `unittest.mock.patch`.
-- Mock only for uncontrollable side effects (network, filesystem, time).
 
 ### Running Tests
 
@@ -181,16 +183,11 @@ python -m pytest test/ -m end_to_end      # E2E tests only
 python -m pytest test/test_api/           # API tests only
 ```
 
-### Independence
-
-- No shared mutable state; each test constructs its own data.
-- Tests should pass in any order or in isolation.
-
 ### Rules
 
 - NEVER share mutable state between tests — each test constructs its own data
 - NEVER use `unittest.mock.patch` when `monkeypatch` is available — prefer pytest idioms
-- NEVER mock what you own — use real objects via factories; mock only external side effects
+- NEVER mock what you own — use real objects via factories; mock only uncontrollable side effects (network, filesystem, time)
 - NEVER depend on test execution order — tests must pass in any order or in isolation
 
 ## After Writing Code

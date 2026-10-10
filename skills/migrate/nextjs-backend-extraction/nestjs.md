@@ -23,7 +23,7 @@ cat "<skill-dir>/../scaffold/nestjs/config-files.md"
 cat "<skill-dir>/../scaffold/nestjs/source-files.md"
 ```
 
-Set the project name to `[project-name]-api` in `package.json`. (See `common.md` Phase 3 for shared context.)
+Set the project name to `[project-name]-api` in `package.json`.
 
 ---
 
@@ -50,7 +50,7 @@ For each `route.ts` file identified in Phase 1c, create the corresponding NestJS
 ```typescript
 // src/modules/users/users.controller.ts
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -60,44 +60,27 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @ApiOperation({ summary: 'List users' })
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a user by ID' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Post()
   @HttpCode(201)
+  @ApiOperation({ summary: 'Create a user' })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 }
 ```
 
-**Service template** (move business logic from the route handler body here):
-
-```typescript
-// src/modules/users/users.service.ts
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class UsersService {
-  async findAll() {
-    return [];
-  }
-
-  async findOne(id: string) {
-    return null;
-  }
-
-  async create(dto: unknown) {
-    return dto;
-  }
-}
-```
+**Service** — `src/modules/users/users.service.ts`: an `@Injectable()` class whose methods (`findAll`, `findOne(id)`, `create(dto: CreateUserDto)`) take over each route handler's body verbatim, minus the `NextResponse`/`handleApiError` wrapping. Throw `NotFoundException` / `BadRequestException` where the handler returned 404/400.
 
 **Module template:**
 
@@ -154,13 +137,19 @@ For each integration file identified in Phase 1d (API-route-imported + base clie
 ```typescript
 // Example: src/integrations/services/github.service.ts in ../[project-name]-api
 import { Injectable } from '@nestjs/common';
+import { serviceConfig } from '../../config/env.config';
 import { FetchClient } from '../clients/base/fetch-client';
 
+// In src/config/env.config.ts: add both fields to `envSchema` (so a missing value fails at
+// boot, not as `Bearer undefined`), e.g. `GITHUB_API_URL: z.url(), GITHUB_TOKEN: z.string().min(1),`
+// AND expose them on the hand-written `serviceConfig` object:
+//   GITHUB_API_URL: env.GITHUB_API_URL,
+//   GITHUB_TOKEN: env.GITHUB_TOKEN,
 @Injectable()
 export class GithubService extends FetchClient {
   constructor() {
-    super(process.env.GITHUB_API_URL!, {
-      Authorization: `Bearer ${process.env.GITHUB_TOKEN!}`,
+    super(serviceConfig.GITHUB_API_URL, {
+      Authorization: `Bearer ${serviceConfig.GITHUB_TOKEN}`,
     });
   }
 
@@ -174,12 +163,7 @@ Copy base client files (`fetch-client.ts`, `axios-client.ts`, `https-agent.ts`) 
 
 Copy schemas alongside the service they belong to.
 
-Register each service as a provider in the relevant feature module (or in a shared `IntegrationsModule` if used by multiple modules).
-
-**Clean up Next.js `src/integrations/`:**
-- Delete each file that was moved.
-- If `src/integrations/` is empty after removal (no frontend-only entries remain), delete the directory.
-- If frontend-only entries remain, leave the directory intact.
+Register each service as a provider in the relevant feature module (or in a shared `IntegrationsModule` if used by multiple modules). Then apply the Phase 5 cleanup in `common.md`.
 
 ---
 
@@ -204,6 +188,23 @@ cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```
+   If the Next.js project uses AWS IAM auth for MongoDB (`@aws-sdk/credential-providers` in its `package.json`), also load the IAM add-on and apply it in place of the standard C2/C7 steps:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-iam.md"
+```
+3. Delete `src/integrations/database/` from the Next.js project.
+
+**NestJS + Kysely:**
+
+1. Copy `src/integrations/database/types.ts` and `migrations/` → `../[project-name]-api/src/database/`
+2. Load and follow the Kysely database skill for NestJS:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-kysely.md"
+```
+   If the Next.js project uses AWS IAM auth (`@aws-sdk/rds-signer` in its `package.json`), also load the IAM add-on and apply it in place of the standard B2/B7 steps:
+```bash
+cat "<skill-dir>/../add/database/typescript/nestjs-kysely-iam.md"
+```
 3. Delete `src/integrations/database/` from the Next.js project.
 
 ---
@@ -217,19 +218,23 @@ Load and follow the NestJS auth skill in `../[project-name]-api`:
 cat "<skill-dir>/../add/auth/nestjs.md"
 ```
 
-**Important:** `proxy.ts` remains in the Next.js project — it continues to protect frontend routes at the edge. After migration, update any hardcoded Next.js `/api/auth/...` paths in `proxy.ts` to use `process.env.BACKEND_URL` — `proxy.ts` runs server-side on the Node runtime, so it must read the unprefixed var. `NEXT_PUBLIC_*` values are embedded in the client bundle and must never carry the real backend address.
+If Phase 6 migrated a database, the auth skill's `AuthService` is a 501 stub. Phase 6 ran before these stubs existed, so its auth section was skipped — replace the stubs with the database-backed implementation now:
+
+| Phase 6 database | Follow |
+|---|---|
+| Kysely | `cat "<skill-dir>/../add/database/typescript/nestjs-kysely-auth.md"` |
+| Drizzle | "Completing Auth Integration" in `cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"` |
+| Mongoose | `cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-auth.md"` |
+
+Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ---
 
 ## Phases 8–10 — NestJS-specific details
 
-**Phase 8, step 0 CORS:** Enable CORS credentials on the backend (`credentials: true`) if using cookie-based sessions.
+**Phase 8, step 0 CORS:** none. Browser calls arrive same-origin through the Next.js `/api/external` rewrite, so cookie mode needs no CORS change. Do not set `credentials: true` for the frontend's origin.
 
-**Phase 9 — NestJS CORS config:** The NestJS scaffold already reads `CLIENT_URL` (via `serviceConfig.CLIENT_URL` from `src/config/env.config.ts`, used by `setupCors`) — no code change needed. Set it to the Next.js origin. Add to `../[project-name]-api/.env.example`:
-```
-# Frontend origin for CORS
-CLIENT_URL=http://localhost:3000
-```
+**Phase 9 — NestJS CORS config:** no change. The scaffold's `CLIENT_URL` (`serviceConfig.CLIENT_URL` → `setupCors`) only matters for other browser origins that call with Bearer tokens. The Next.js frontend is same-origin through its rewrite, so leave `CLIENT_URL` at its scaffold default.
 
 **Phase 10 — Verify commands:**
 ```bash

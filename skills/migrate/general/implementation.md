@@ -9,7 +9,25 @@ harness, a DB migration, or a framework upgrade), or when another skill's Step 0
 directs here. Detects the project stack, presents a choice to the user, and executes
 autonomously after the decision.
 
-**Do not invoke this skill directly unless directed to by another skill's Step 0.**
+**Phase files.** Phases 0–3 are below. Phases 4 and 5 are sibling files in this directory — load one only when Phase 0 routes to it. The shared kits are loaded **here**, alongside the phase file, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+
+**Phase 4** — full harness seed / v4–v6 upgrade:
+```bash
+cat "<skill-dir>/general/phase-4-upgrade.md"
+cat "<skill-dir>/../scaffold/shared/harness-kit.md"
+cat "<skill-dir>/../scaffold/shared/<variant-file>"
+cat "<skill-dir>/../scaffold/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/../scaffold/shared/harness-kit-finalize.md"
+cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+```
+
+**Phase 5** — harness health check (5a–5c), then the safe re-sync (5d) only if the user approves it:
+```bash
+cat "<skill-dir>/general/phase-5-health-check.md"
+```
+On an approved 5d re-sync, load the same five kit files as Phase 4 (everything after its first line).
+
+`<skill-dir>` is this skill's directory, as in `migrate/SKILL.md`. "The Step 4b marker update" (cited by the `@5.x` route below) means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
 
 ---
 
@@ -23,13 +41,13 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 **If no marker** → skip to Phase 1 (stack detection).
 
-**If marker present, version `@5.0.0` or later** → check whether `.claude/harness.json` exists:
+**If marker present, version `@6.0.0` or later** → check whether `.claude/harness.json` exists:
 
 - **`.claude/harness.json` exists** → print:
   ```
-  ✓ This project is at templateCentral v5.0.0 or later. No migration needed.
+  ✓ This project is at templateCentral v6.0.0 or later. No migration needed.
   ```
-  Exit (Phase 5's harness health check may still run — see Phase 5).
+  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
 
 - **`.claude/harness.json` does NOT exist** → the marker was written without the harness ever
   being seeded (a Phase 3 light adoption writes the marker and nothing else). Do **not** exit.
@@ -48,12 +66,36 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   User A → proceed to Phase 4.
   User B → print "No changes made." Exit.
 
+**If marker present, version `@5.0.0` through `@5.x`** → the project's hooks are inert. Harness
+schemas before 6.0.0 wrote every `settings.json` hook with an array-valued `command` (a JSON list, not a string), which
+Claude Code silently skips — none of those hooks (the `.env` guard, `--no-verify` block, Stop tests,
+…) ever ran. They must be re-seeded in the exec form (`"command": "<bin>", "args":
+["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`) from the harness kit. Skip Phases 1–3 and present:
+```
+⚠ This project was scaffolded with templateCentral <version>.
+
+Its .claude/settings.json hooks use an array-form "command", which Claude Code
+silently ignores — the harness guards have never actually run.
+
+v6.0 re-seeds the enforcement layer from the harness kit:
+- settings.json hooks rewritten to exec form ("command" + "args", ${CLAUDE_PROJECT_DIR} paths)
+- .claude/hooks/* reset to canonical (post-tool-failure.sh removed — Claude already sees tool errors)
+
+Re-sync? (A) Yes  (B) Skip
+```
+User A → first set the line-1 marker to `@6.0.0` (the Step 4b marker update) — before anything
+hashes `AGENTS.md`, or its `origin_hash` goes stale. Then, if `.claude/harness.json` exists, run
+Phase 5 (5a–5c report) then Step 5d re-sync — the settings.json rule there replaces inert
+array-form entries. If it does not exist, proceed to Phase 4 (full seed).
+User B → print "No changes made — hooks remain inert until re-synced." Exit.
+
 **If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:
 ```
 ℹ️ This project was scaffolded with templateCentral <version>.
 
 v5.0 converts seeded project skills to directory form:
 - .claude/skills/<name>/SKILL.md  — flat <name>.md files are silently ignored by Claude Code
+v6.0 re-seeds settings.json hooks in exec form — earlier array-form hooks never ran
 
 Upgrade? (A) Yes  (B) Skip
 ```
@@ -84,7 +126,7 @@ Scan the current directory for stack signals:
 | `next.config.ts` or `next.config.js` or `next.config.mjs` present | Next.js |
 | `vite.config.ts` or `vite.config.js` present AND no `next.config.*` | Vite + React |
 | `requirements.txt` contains `fastapi` | FastAPI |
-| `nest-cli.json` present | NestJS |
+| `nest-cli.json` present, or `@nestjs/core` in `package.json` | NestJS |
 
 If multiple signals found (likely a mono repo root) → ask the user: "Which project
 should be adopted first — frontend or backend? Please provide the subdirectory path."
@@ -132,9 +174,9 @@ Which would you prefer? (A / B)
 **Step A1: Write the marker**
 
 Check whether `AGENTS.md` exists at the current directory:
-- Exists → read its contents, then rewrite it with `<!-- templateCentral: <stack>@5.0.0 -->`
+- Exists → read its contents, then rewrite it with `<!-- templateCentral: <stack>@6.0.0 -->`
   as the first line, followed by the original content.
-- Does not exist → create `AGENTS.md` with `<!-- templateCentral: <stack>@5.0.0 -->`
+- Does not exist → create `AGENTS.md` with `<!-- templateCentral: <stack>@6.0.0 -->`
   as the only line.
 
 **Step A2: Scan for structural gaps**
@@ -167,7 +209,7 @@ Check for the following per detected stack. List any that are absent.
 Print:
 
 ```
-✓ Project adopted as <stack>@5.0.0.
+✓ Project adopted as <stack>@6.0.0.
 
 Structural gaps noted (review files generated by the invoking skill carefully
 where your project structure differs from templateCentral conventions):
@@ -186,352 +228,3 @@ Return control to the invoking skill. The invoking skill must exit without gener
 any files.
 
 ---
-
-## Phase 4 — v4.0/v5.0 Upgrade (agent, autonomous after Phase 0 gate)
-
-Run only when the user chose A in Phase 0. Do not invoke for unmarked projects.
-
-**Step 4a: Read AGENTS.md and detect stack**
-
-Read the full `AGENTS.md`. Extract `<stack>` from the existing marker on line 1.
-
-**Step 4b: Back up and replace AGENTS.md**
-
-Before replacing, save the original:
-```bash
-cp AGENTS.md AGENTS.md.bak
-```
-
-Replace `AGENTS.md` with the compressed template for the detected stack. If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. For `nextjs`, write exactly:
-
-~~~markdown
-<!-- templateCentral: nextjs@5.0.0 -->
-# AGENTS.md — [Project Name]
-
-> STOP — Next.js breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
-> ALL async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
-
-## Stack
-Next.js · App Router · TypeScript strict · shadcn/ui · TanStack Query
-React Hook Form · Zod · Vitest · pnpm · Node
-Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md` (`<skill-dir>/../../`)
-
-## Commands
-```bash
-pnpm dev          # dev server — http://localhost:3000
-pnpm build        # production build
-pnpm test         # run test suite
-pnpm check        # format + lint + typecheck
-```
-
-## File Layout
-src/app/                — app router (pages, layouts, route handlers)
-src/app/api/            — API route handlers
-src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
-src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
-src/components/widgets/ — reusable composed components (project-owned)
-proxy.ts + src/lib/auth.ts — auth layer
-src/lib/db/             — database layer
-src/config/env.ts       — environment validation (Zod)
-
-## Skills
-
-### Project skills — check here first
-Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
-
-| Skill | What it does |
-|-------|-------------|
-| `/next-verify` | typecheck + lint + test in one pass |
-| `/next-migrate` | Drizzle push/migrate with safety gate |
-
-### templateCentral plugin skills — framework-level operations
-| Skill | When to use |
-|-------|-------------|
-| `templatecentral:add (auth)` | JWT/OAuth/session auth |
-| `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
-| `templatecentral:add (feature)` | full feature: page + API route + hooks; also the route for a reusable UI component |
-| `templatecentral:add (endpoint)` | API route with auth guard |
-| `templatecentral:migrate` | DB migrations or framework upgrades |
-| `templatecentral:standards` | drift check, validation patterns |
-
-## Rules (always)
-- TypeScript strict — no `any`, no `@ts-ignore`
-- All user input validated with Zod at every boundary
-- DB writes via repository layer only
-- `z.input<typeof Schema>` for form types; `z.infer` for post-parse output
-- No secrets in `NEXT_PUBLIC_*` variables
-- Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
-
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
-
-## Skill capture
-- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
-- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
-
-## Project-Specific Notes
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
-~~~
-
-For other stacks (fastapi, nestjs, vite-react): preserve all existing content in `AGENTS.md`. The `## AI Harness` tail is appended by harness-kit.md Step G (unconditionally, for every stack) — nothing to hand-append here.
-
-For every stack, ensure the project's rules/conventions section carries the comment doctrine — if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; instead recommend the same hard gate a fresh scaffold ships — `no-inline-comments: 'error'` (with an `ignorePattern` for tooling directives) plus `sonarjs/no-commented-code: 'error'` in the TS `eslint.config.*`, or Ruff `ERA` (`pyproject.toml`) for FastAPI — so the enforcement matches a freshly scaffolded project (`code-standards/comments.md`).
-
-**Step 4c: Create `CLAUDE.md`**
-
-If `CLAUDE.md` does not exist, create it at the project root with exactly one line:
-
-```
-@AGENTS.md
-```
-
-If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
-
-**Step 4d: Seed the agent harness (shared kit)**
-
-Load the shared harness kit and execute it **in full** — a migrated project must receive the **same** enforcement layer as a scaffolded one:
-
-```bash
-cat "<skill-dir>/../scaffold/shared/harness-kit.md"
-```
-
-Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; FastAPI: `python3`), execute kit Steps **A through D**:
-- **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and wiring for the 7 hook events templateCentral seeds).
-- **Step B** — all **10** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `post-tool-failure`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), `.claude/comment-hygiene-patterns.txt` (the canonical pattern list the new hook, the `comment-hygiene` lefthook command, and the `comment-hygiene` CI job all read at runtime), then `chmod +x .claude/hooks/*.sh`.
-- **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
-- **Step B3** — CI quality gates (`.github/workflows/ci.yml`).
-- **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`) — Phase 5d's re-sync and the pre-push hook both call this, so it MUST be seeded here.
-- **Step B5** — the `/skill-audit` project skill (consumes `skill-usage-log.sh`).
-- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md`.
-
-The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
-
-**Adoption (merge, never clobber):** if `.claude/settings.json`, `lefthook.yml`, `.github/workflows/ci.yml`, or `.gitleaks.toml` already exists, merge the kit's entries into the existing file instead of overwriting; warn on any conflict.
-
-**Step 4e: Seed project skills**
-
-Create the stack-specific verify skill in `.claude/skills/` only if it does not already exist. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`). Run `mkdir -p .claude/skills/<stack>-verify` first, then write the skill file:
-
-| Stack | Skill file | Command |
-|-------|-----------|---------|
-| nextjs | `.claude/skills/next-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
-| nestjs | `.claude/skills/nest-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
-| vite-react | `.claude/skills/vite-verify/SKILL.md` | `pnpm exec tsc --noEmit --incremental && pnpm check && pnpm test` |
-| fastapi | `.claude/skills/api-verify/SKILL.md` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` |
-
-Template for TypeScript stacks (replace `<stack>` and `<command>`):
-
-`<stack>-verify` is **not** a literal substitution of the detected stack id — take the
-name from the table above (`next-verify`, `nest-verify`, `vite-verify`, `api-verify`),
-not `nextjs-verify`/`fastapi-verify`. The `name:` frontmatter field must match the
-directory name exactly.
-
-~~~markdown
----
-name: <stack>-verify
-description: Run typecheck, lint, and tests for this project in one pass
-allowed-tools: Bash(pnpm *)
----
-
-Run all quality checks in sequence:
-
-```bash
-<command>
-```
-
-Report failures with the exact error output. Fix before proceeding.
-~~~
-
-For nextjs only, also create `.claude/skills/next-migrate/SKILL.md` (`mkdir -p .claude/skills/next-migrate` first) if not present:
-```markdown
----
-name: next-migrate
-description: Run Drizzle push/migrate for this project with a safety gate.
-allowed-tools: Bash(pnpm *)
----
-
-Check that `src/integrations/database/` exists before running — database must be wired up first (`templatecentral:add (database)`).
-
-- `pnpm db:push` — dev only, no migration files generated (schema overwrite)
-- `pnpm db:migrate` — production-safe, generates migration files
-
-Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
-```
-
-**Step 4f: Create `.claude/harness.json`**
-
-Execute kit **Step E** — it hashes **every** seeded file (all 10 hooks, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, the `<stack>-verify` and `skill-audit` skills, plus `next-migrate` for nextjs) and writes the complete manifest. Include only files that were actually created or merged. The kit is the single source for this manifest — do not maintain a separate copy here.
-
-**Step 4f-1b: Seed the base snapshot**
-
-Execute kit **Step E2** — it snapshots every seeded file into `.claude/.harness-base/`, the 3-way-merge base Phase 5d uses to re-sync harness updates without clobbering edits. Commit `.claude/.harness-base/`; `protect-files.sh` guards it.
-
-**Step 4f-1c: Generate per-folder documentation**
-
-Execute kit **Step E3** — it loads `documentation-kit.md`, determines the Azure DevOps Code Wiki and rich-content opt-ins, enumerates every folder in the adopted project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in):
-
-```bash
-cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
-```
-
-Follow it exactly over the full adopted project tree.
-
-**Step 4f-2: Create `.agents` symlink**
-
-If `.agents` does not already exist, create the cross-vendor symlink:
-
-```bash
-ln -s .claude .agents
-```
-
-This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by any agent framework that resolves from `.agents/` — one source of truth, zero duplication.
-
-**Never commit the symlink** — add `.agents` to the project's `.gitignore` (with a note that it is recreated per machine). A git-tracked symlink breaks Windows CI build agents (e.g. Azure DevOps hosted runners).
-
-**Step 4g: Convert seeded skills to directory form**
-
-For each flat file `.claude/skills/<name>.md` found in the project, convert it to directory form:
-
-```bash
-# For each flat .claude/skills/<name>.md:
-mkdir -p .claude/skills/<name>
-cp .claude/skills/<name>.md .claude/skills/<name>/SKILL.md
-rm .claude/skills/<name>.md
-```
-
-Flat skill files (`.claude/skills/<name>.md`) are silently ignored by Claude Code — skills must be directories with a `SKILL.md` entrypoint (flat files work only under `.claude/commands/`). After moving each file, recompute the SHA-256 hash of the new path and update the corresponding entry in `.claude/harness.json`: change the `path` key from `.claude/skills/<name>.md` to `.claude/skills/<name>/SKILL.md` and update the `origin_hash` to match the moved file.
-
-No documentation refresh is needed for this step: the directories it creates live under `.claude/`, which the documentation kit prunes as harness-internal (documentation-kit.md Step 2 — the same prune that keeps the kit from writing into paths `protect-files.sh` blocks).
-
-**Step 4h: Update the version marker**
-
-Confirm line 1 of `AGENTS.md` reads `<!-- templateCentral: <stack>@5.0.0 -->`.
-
-**Step 4i: Print summary**
-
-```
-✓ Upgraded to templateCentral v5.0.
-
-Changes made:
-  AGENTS.md                      — Compressed to indexed format; marker updated to @5.0.0
-  CLAUDE.md                      — Created (@AGENTS.md one-liner)
-  .claude/settings.json          — Created/merged: permissions.deny secret-read block,
-                                   skillListingBudgetFraction, 7 hook events
-  .claude/hooks/*.sh             — 10 scripts: protect-files, block-no-verify,
-                                   user-prompt-guard, post-edit-typecheck,
-                                   post-edit-comment-check, post-tool-failure,
-                                   stop-checks, subagent-stop, session-context,
-                                   skill-usage-log
-  .claude/comment-hygiene-patterns.txt — canonical pattern list (hook + lefthook + CI)
-  lefthook.yml                   — git-hook layer
-  .lefthook/commit-msg.sh        — Conventional Commits gate
-  .gitleaks.toml                 — secret-scan config
-  .github/workflows/ci.yml       — CI quality gates
-  .claude/verify-harness.sh      — harness integrity verifier
-  .claude/regen-harness.sh       — canonical re-seed helper
-  .claude/skills/skill-audit/    — repeat-workflow surfacing skill
-  .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
-  (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
-  .claude/harness.json           — Created with origin hashes for every file above
-  .claude/.harness-base/         — as-seeded snapshot (3-way-merge base for Phase 5d)
-  FUTURE.md                      — deferred-work log
-  docs/CONSTITUTION.md           — project invariants
-  README.md (per folder)         — created/refreshed via documentation-kit.md
-
-Commit these files together — the harness only enforces as a complete set.
-```
-
----
-
-## Phase 5 — Harness Health Check
-
-Run when `templatecentral:migrate` is invoked on a project that already has `<!-- templateCentral: <stack>@5.0.0 -->` on line 1 (i.e., Phase 0 reports "no migration needed") **and** `.claude/harness.json` exists.
-
-This phase checks whether seeded files have drifted from their recorded origin hashes. It never auto-repairs — it reports only.
-
-**Step 5a: Read `.claude/harness.json`**
-
-Read the `seeded_files` map.
-
-**Step 5b: Check each seeded file**
-
-For each entry in `seeded_files`:
-
-```bash
-current_hash=$(shasum -a 256 <path> 2>/dev/null | cut -d' ' -f1)
-```
-
-Compare `current_hash` to `origin_hash`. Classify each file:
-
-- `UNCHANGED` — hashes match
-- `MODIFIED` — hashes differ (user or agent edited it)
-- `MISSING` — file does not exist
-
-**Step 5c: Report**
-
-```
-Harness health check — templateCentral v5.0.0 / <stack>
-Seeded: <seeded_at>
-
-  AGENTS.md              UNCHANGED
-  CLAUDE.md              MODIFIED   ← you customized this
-  .claude/settings.json  UNCHANGED
-
-MODIFIED files are intentional edits. To pull the latest templateCentral defaults
-into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way-merges,
-it does not clobber.
-```
-
-If all files are `UNCHANGED` **and** `templatecentral_version` equals the current plugin version, print:
-```
-✓ All harness files match their templateCentral origin and are up to date. No action needed.
-```
-
-If any file is `MISSING`, print a warning:
-```
-⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.
-  Re-seed it via the re-sync below (Step 5d).
-```
-
-**Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
-
-Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
-
-- **Enforcement layer** (`.claude/hooks/*`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical content from this skill / `scaffold/shared/harness-kit.md`. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. Warn if one was `MODIFIED` — and before overwriting, check whether the difference came from a `templatecentral:add` capability that extends a canonical hook (e.g. `add (redaction)` splices a companion block into `user-prompt-guard`); if so, tell the user which capability to re-apply afterwards.
-- **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`):
-  - `UNCHANGED` → overwrite with the new canonical.
-  - `MODIFIED` → **3-way merge** against the base snapshot:
-    ```bash
-    PLUGIN_VER="<current plugin.json version>"
-    base=".claude/.harness-base/$path"      # the as-seeded content
-    new="$(mktemp)"                          # write the CURRENT canonical content for $path here
-    # → generate $path's new canonical content from this skill / harness-kit into $new
-    if [ -f "$base" ]; then
-      cp "$path" "$path.merging"
-      git merge-file -L "your version" -L "seeded base" -L "templateCentral $PLUGIN_VER" \
-        "$path.merging" "$base" "$new"
-      rc=$?; mv "$path.merging" "$path"
-      [ $rc -ne 0 ] && echo "⚠ $path: merge conflicts — resolve the <<<<<<< markers, then re-run verify."
-    else
-      echo "No base snapshot for $path (project predates .harness-base). Showing a diff for MANUAL merge — not overwriting:"
-      diff -u "$path" "$new" || true
-    fi
-    ```
-    `git merge-file` cleanly combines edits separated by unchanged context and leaves conflict markers only where your edit and the upstream change overlap (standard `git merge` behaviour). Resolve any markers by hand.
-- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Instead merge structurally — add any new seeded `hooks`/`permissions.deny` entries into the existing object without removing the user's, exactly as Phase 4 Step 4 (settings.json) describes.
-- `MISSING` → reseed (write the current canonical content).
-
-**After applying** (only the files actually written):
-```bash
-# refresh the base snapshot to the new canonical content
-for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; cp "$p" ".claude/.harness-base/$p"; done
-# recompute origin_hash for each in harness.json, and bump templatecentral_version to "$PLUGIN_VER"
-bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
-```
-
-If any `MISSING` file reseeded above required creating a directory that did not previously exist **outside** the paths documentation-kit.md Step 2 prunes (so `.lefthook/` or `docs/` count; anything under `.claude/`, `.github/`, or a secrets directory does not), re-run the documentation kit so that new folder gets a `README.md` too:
-```bash
-cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
-```
-Skip this re-run if nothing reseeded created a new directory.
-
-Then re-run Step 5b/5c and confirm everything is `UNCHANGED` and up to date.

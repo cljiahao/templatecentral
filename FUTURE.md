@@ -37,7 +37,7 @@ Promote the post-harness seams in scaffolded projects from documentation stubs t
 
 ### 1. Scaffold source-files phase-splits
 
-Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. Tracked in memory as `project_skills_compaction_budget`.
+Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. (The shared harness kit has been split into per-concern `scaffold/shared/harness-kit-*.md` files; the per-stack `source-files.md` files have not.)
 
 ### 2. New `templatecentral:add` capabilities under evaluation
 
@@ -51,9 +51,11 @@ Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. 
 
 The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can be significantly shorter. Evaluate a fast-path that skips Phase 3–4 for projects that only need harness seeding.
 
-### 4. NestJS tsconfig `strict: true` — enabled, pending verification
+### 4. NestJS tsconfig `strict: true` — enabled, verified
 
 Enabled as `strict: true` with `strictPropertyInitialization: false` (the NestJS-idiomatic config — DTO/entity classes use declaration-only properties that full `strict` would reject). Pending a `scaffold-verify` (or manual scaffold) build confirming the generated project compiles clean under strict; if it doesn't, fix the seeded source or narrow the strict flags.
+
+> **Status (2026-10-09):** verified — the seeded NestJS sources pass `tsc --noEmit` under `strict: true`, and the unit and e2e suites pass. The one failure found was unrelated to strict: fastify 5.12.1 dropped numeric `trustProxy` from its types (X-Forwarded-* spoofing security advisory), fixed in `main.ts`'s `resolveTrustProxy`.
 
 ### 5. New frameworks under evaluation
 
@@ -85,7 +87,7 @@ templateCentral is three layers with different portability:
 **Design principle: push enforcement DOWN to git-hooks / CI / `AGENTS.md` (universal), keep in-agent hooks as a per-tool layer.** The more the harness lives in lefthook + CI, the more "the full thing" is automatically cross-tool.
 
 **Phased plan (demand-gated):**
-1. **Skill path-portability.** Resolve the skill base dynamically instead of hardcoding the CC plugin path, so a clone/copy loads in OpenCode (`.agents/skills/`) without edits. ⚠️ **Open design question:** a markdown skill can't easily know its own location — needs a tool-provided plugin-root variable (e.g. `${CLAUDE_PLUGIN_ROOT}` in CC, OpenCode's equivalent) or a relative-load mechanism. Must keep resolving correctly for the CC plugin. Deserves its own design pass before any router edits.
+1. **Skill path-portability.** *(Done — see "Phase 1 RESOLVED" below; the open question here is closed.)* Resolve the skill base dynamically instead of hardcoding the CC plugin path, so a clone/copy loads in OpenCode (`.agents/skills/`) without edits. ⚠️ **Open design question:** a markdown skill can't easily know its own location — needs a tool-provided plugin-root variable (e.g. `${CLAUDE_PLUGIN_ROOT}` in CC, OpenCode's equivalent) or a relative-load mechanism. Must keep resolving correctly for the CC plugin. Deserves its own design pass before any router edits.
 2. **Cross-tool distribution.** Publish skills to tool-agnostic registries (`agents.toml`/skills-supply, open Agent-Skills marketplaces) so they're discoverable beyond the Claude marketplace.
 3. **OpenCode-native in-agent harness adapter.** Port the live guards (typecheck-on-edit, Stop test-gate, secret/prompt-injection guards, session recovery) to OpenCode's plugin/hook API. The *logic* is portable; the *wiring* (event names, config) is per-tool — a standing per-tool maintenance cost (the "breadth tax", now for tools). Build per tool that has real demand.
 
@@ -143,7 +145,7 @@ Closed the OpenCode question from source and grounded the rest in official docs 
 
 **Phase-2 lever (#16) — compile step:** if true multi-tool *emission* becomes a goal (vs. relying on each tool reading `.claude/skills/` directly), `rulesync` (github.com/dyoshikawa/rulesync) compiles a single source into per-tool configs (Cursor, Claude Code, Copilot, Gemini/Antigravity, Zed) and already treats skills as a transformable feature. Community converter `acplugin` (CC plugin → Codex/Cursor) covers most of the harness delta but only warns on hooks. Evaluate when demand is real — premature for a solo maintainer now.
 
-**Revised stance:** the swap trades CC's *working* loader for a *model-dependent* one to gain portability that can't yet be validated on OpenCode — backwards from "CC is primary." So Phase 1 is **not** a simple find-replace. Recommended re-scope: (a) leave CC's loader working; optionally fix the version-drift separately; (b) treat OpenCode portability as its own effort that **starts with hands-on OpenCode testing** of how it resolves bundled files, then chooses a mechanism (relative-read, base-dir, or a build-step variant) proven against *both* tools before any mass conversion.
+**Revised stance** *(superseded by "Phase 1 RESOLVED" above — kept as the historical record of the spike)*: the swap trades CC's *working* loader for a *model-dependent* one to gain portability that can't yet be validated on OpenCode — backwards from "CC is primary." So Phase 1 is **not** a simple find-replace. Recommended re-scope: (a) leave CC's loader working; optionally fix the version-drift separately; (b) treat OpenCode portability as its own effort that **starts with hands-on OpenCode testing** of how it resolves bundled files, then chooses a mechanism (relative-read, base-dir, or a build-step variant) proven against *both* tools before any mass conversion.
 
 #### Per-tool in-agent harness adapters — status & roadmap (2026-06-30)
 
@@ -151,8 +153,8 @@ The skills + `AGENTS.md` + git-hook/CI harness already run on every target tool 
 
 | Tool | In-agent harness adapter | Status |
 |---|---|---|
-| **Claude Code** | `.claude/hooks/` (7-event kit) | ✅ primary, complete |
-| **OpenCode / OpenChamber** | `adapters/opencode/templatecentral.plugin.js` | ✅ **shipped & validated live** — plugin loads in a real OpenChamber container and the `git --no-verify` guard blocks end-to-end; 25-case `hooks.test.mjs`. (Was "Phase 3 / #17".) |
+| **Claude Code** | `.claude/hooks/` (6-event kit) | ✅ primary, complete |
+| **OpenCode / OpenChamber** | `adapters/opencode/templatecentral.plugin.js` | ✅ **shipped & validated live** — plugin loads in a real OpenChamber container and the `git --no-verify` guard blocks end-to-end; `hooks.test.mjs` block/allow matrix (81 cases as of 2026-10-09). (Was "Phase 3 / #17".) |
 | **Codex** | — | ⏳ **planned** (demand-gated) |
 | **Antigravity** | — | ⏳ **planned** (demand-gated) |
 

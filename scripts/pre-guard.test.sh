@@ -101,6 +101,100 @@ else
   echo "  FAIL Tier3 allow — expected empty output, got: $out"
 fi
 
+echo "== (f) path normalisation and case =="
+run_guard '{"tool_input":{"file_path":".ENV"}}'
+expect_exit "Tier1 upper-case .ENV" 2 "$code"
+run_guard '{"tool_input":{"file_path":"./src/../.env.local"}}'
+expect_exit "Tier1 ./ and .. folded" 2 "$code"
+run_guard "{\"tool_input\":{\"file_path\":\"$REPO_ROOT/.env\"}}"
+expect_exit "Tier1 absolute path" 2 "$code"
+run_guard '{"tool_input":{"file_path":"docs/.Env.Example"}}'
+expect_exit "Tier1 exemption is case-insensitive" 0 "$code"
+
+echo "== (g) Tier 2 instruction files =="
+for f in CONSTITUTION.md docs/constitution.md Claude.md GEMINI.md .claude/rules/nextjs.md .claude/skills/tc-audit/SKILL.md .claude-plugin/plugin.json scripts/bash-guard.sh; do
+  run_guard "{\"tool_input\":{\"file_path\":\"$f\"}}"
+  expect_contains "Tier2 $f ask" "\"permissionDecision\":\"ask\"" "$out"
+done
+run_guard '{"tool_input":{"notebook_path":"AGENTS.md"}}'
+expect_contains "Tier2 NotebookEdit path" "\"permissionDecision\":\"ask\"" "$out"
+run_guard '{"tool_input":{"file_path":"x/\"q\"/AGENTS.md"}}'
+if printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
+  pass=$((pass + 1)); echo "  OK   ask JSON stays valid with quotes in path"
+else
+  fail=$((fail + 1)); echo "  FAIL ask JSON invalid: $out"
+fi
+run_guard '{"tool_input":{"file_path":"skills/add/SKILL.md"}}'
+expect_exit "Tier3 skills/ allowed" 0 "$code"
+
+echo "== (h) Read/Grep: secrets blocked, instruction files readable =="
+run_guard '{"tool_name":"Read","tool_input":{"file_path":".env.uat"}}'
+expect_exit "Read .env.uat blocked" 2 "$code"
+run_guard '{"tool_name":"Grep","tool_input":{"path":"config/credentials.json"}}'
+expect_exit "Grep credentials.json blocked" 2 "$code"
+run_guard '{"tool_name":"Grep","tool_input":{"path":"secrets"}}'
+expect_exit "Grep secrets/ dir blocked" 2 "$code"
+run_guard '{"tool_name":"Read","tool_input":{"file_path":"docs/secrets.md"}}'
+expect_exit "Read docs/secrets.md (name contains secrets) allowed" 0 "$code"
+run_guard '{"tool_name":"Read","tool_input":{"file_path":"AGENTS.md"}}'
+expect_exit "Read AGENTS.md allowed without ask" 0 "$code"
+if [[ -z "$out" ]]; then
+  pass=$((pass + 1)); echo "  OK   Read AGENTS.md emits no ask"
+else
+  fail=$((fail + 1)); echo "  FAIL Read AGENTS.md emitted: $out"
+fi
+run_guard "{\"tool_input\":{\"file_path\":\"$HOME/.claude/settings.json\"}}"
+expect_contains "absolute ~/.claude/settings.json asks" "\"permissionDecision\":\"ask\"" "$out"
+
+echo "== (i) bash-guard.sh =="
+BG="$REPO_ROOT/scripts/bash-guard.sh"
+E=.env
+SANDBOX=$(mktemp -d)
+mkdir -p "$SANDBOX/backend" "$SANDBOX/secrets" "$SANDBOX/upper"
+# Separate dir: on case-insensitive filesystems .ENV and .env are the same file.
+touch "$SANDBOX/$E" "$SANDBOX/$E.example" "$SANDBOX/secrets/a" "$SANDBOX/upper/.ENV"
+NESTED=$(mktemp -d)
+mkdir -p "$NESTED/backend"
+touch "$NESTED/backend/$E"
+# run_bash WANT_EXIT PROJECT_DIR CWD COMMAND
+run_bash() {
+  out=$(jq -cn --arg c "$4" --arg w "$3" '{tool_input:{command:$c},cwd:$w}' | CLAUDE_PROJECT_DIR="$2" bash "$BG" 2>&1)
+  expect_exit "bash: $4" "$1" "$?"
+}
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .env'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat ./upper/.ENV'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .en?'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat .[e]nv'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat secrets/*'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'python3 -c "print(open(\".env\").read())"'
+# shellcheck disable=SC2016  # literal $PWD: the guard must expand it itself.
+run_bash 2 "$SANDBOX" "$SANDBOX" 'cat "$PWD/.env"'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'source .env && x'
+run_bash 2 "$NESTED" "$NESTED/backend" 'cat .env'
+run_bash 2 "$NESTED" "$NESTED" 'cd backend && cat .env'
+run_bash 2 "$SANDBOX" "$SANDBOX" 'tar czf x.tgz secrets'
+run_bash 2 "$NESTED" "$NESTED" 'cd "backend" && cat .env'
+run_bash 2 "$NESTED" "$NESTED/backend" 'cd .. && cd backend; cat .env'
+run_bash 2 "$NESTED" "$NESTED" 'echo A > .env.local'
+run_bash 2 "$NESTED" "$NESTED" 'cp .env.example .env'
+run_bash 2 "$NESTED" "$NESTED" 'echo x | tee .env.prod'
+run_bash 2 "$NESTED" "$NESTED" "cat > .env <<'EOF'
+A=1
+EOF"
+run_bash 0 "$NESTED" "$NESTED" 'grep -rn ".env" skills 2>&1'
+run_bash 0 "$SANDBOX" "$SANDBOX" 'cat .env.example'
+run_bash 0 "$SANDBOX" "$SANDBOX" 'ls *.md'
+run_bash 0 "$NESTED" "$NESTED" 'echo ".env" > notes.txt'
+run_bash 0 "$NESTED" "$NESTED" 'git status'
+run_bash 0 "$NESTED" "$NESTED" 'grep -rn secrets docs'
+run_bash 0 "$NESTED" "$NESTED" 'cd backend && cat .env.example'
+run_bash 0 "$NESTED" "$NESTED" 'cd nowhere && cat .env'
+run_bash 0 "$NESTED" "$NESTED" 'sed -n 1p .env.example > out.txt'
+run_bash 0 "$NESTED" "$NESTED" "cat > t.sh <<'EOF'
+cp .env.example .env
+EOF"
+rm -rf "$SANDBOX" "$NESTED"
+
 echo ""
 echo "pre-guard.sh matrix: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

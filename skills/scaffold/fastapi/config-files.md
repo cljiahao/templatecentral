@@ -13,7 +13,7 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-ARG PYTHON=python:3.13.14-slim
+ARG PYTHON=python:3.14.8-slim
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -23,8 +23,7 @@ ARG PORT=8000
 
 # ---- Base ----
 # Shared Debian-slim + Python foundation. Installs OS-level packages once.
-# The non-root user is created here so all downstream stages inherit it,
-# matching the hardening pattern used in the Next.js and Vite Dockerfiles.
+# The non-root user is created here so all downstream stages inherit it.
 FROM ${PYTHON} AS base
 ARG APP_DIR
 ARG APP_UID
@@ -51,14 +50,15 @@ RUN apt-get update \
 
 # ---- Dependencies (dev) ----
 # Installs ALL Python packages (including dev deps like pytest, ruff, etc.)
-# into a virtual environment. Used by the dev stage.
+# into a virtual environment. Used by the dev stage. requirements-dev.txt lists
+# dev tools only, so it is installed alongside requirements.txt, never instead of it.
 FROM base AS deps
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
   if [ -f uv.lock ]; then pip install uv && uv sync --frozen; \
-  elif [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
+  elif [ -f requirements-dev.txt ]; then pip install -r requirements.txt -r requirements-dev.txt; \
   elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install .; \
   elif [ -f setup.py ]; then pip install .; \
@@ -70,8 +70,8 @@ RUN \
 # exists it is preferred; otherwise falls back to the same file as deps.
 # This venv is what ships in the final prod image.
 FROM base AS prod-deps
-# `requirements.txt` must contain runtime deps ONLY — it is frozen before
-# requirements-dev.txt is installed (see source-files.md Step 4; freeze order matters).
+# `requirements.txt` must contain runtime deps ONLY — freeze it before installing
+# requirements-dev.txt, or dev tools leak into the prod image.
 COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
@@ -143,12 +143,12 @@ WORKERS="${WORKERS:-2}"
 case "$MODE" in
   dev)
     echo "Starting FastAPI dev server (uvicorn --reload)..."
-    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --reload --log-config src/core/uvicorn_log_config.json
+    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --reload --no-server-header --log-config src/core/uvicorn_log_config.json
     ;;
 
   prod)
     echo "Starting FastAPI production server (uvicorn, $WORKERS workers)..."
-    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --workers "$WORKERS" --log-config src/core/uvicorn_log_config.json
+    exec uvicorn app:app --app-dir src --host 0.0.0.0 --port "$PORT" --workers "$WORKERS" --no-server-header --log-config src/core/uvicorn_log_config.json
     ;;
 
   *)
@@ -398,7 +398,8 @@ API_PORT=8000
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 
-# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+# Reverse proxy trust — comma-separated IPs/CIDRs (no hop count). One-hop ALB → App: ALB VPC CIDR (e.g. 10.0.0.0/8).
+# Two-hop ALB → Traefik → App: Traefik's AND the ALB's CIDRs. * only in closed networks. Empty for local dev.
 TRUST_PROXY=
 ```
 
@@ -407,28 +408,16 @@ TRUST_PROXY=
 ```toml
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
-# Pinned explicitly via `select` (not `extend-select`) because merely having a [tool.ruff] table
-# present makes ruff enable ~400 rules across ~38 categories by default as of ruff 0.15+ —
-# `extend-select` would layer onto that much larger set instead of this deliberate list.
-# Each category below was verified clean (or fixed to be clean) against the actual generated
-# scaffold source before being added — see templatecentral:standards code-standards for the
-# per-tier rationale. Tiers: E4/E7/E9/F = ruff's historical default set; I = isort; ERA = flag
-# commented-out code (comment hygiene, see code-standards/comments.md); S = flake8-bandit
-# (security — hardcoded secrets, weak crypto, unsafe eval/exec); B = flake8-bugbear (likely
-# bugs); FAST = FastAPI-specific rules (e.g. redundant `response_model`); SIM/C4/RET = code
-# smells (simplifiable branches, comprehensions, redundant returns); PT = pytest style; PIE =
-# misc bug-prone patterns (e.g. dead `pass` after a docstring); UP = pyupgrade (modern syntax).
-# Deliberately deferred (need per-repo tuning or are highly opinionated, not zero-noise): PL
-# (mixes real findings like magic-value-in-assert with stylistic import-placement opinions),
-# ANN (would require retrofitting type annotations project-wide), ARG (false-positives on
-# framework-mandated callback signatures like FastAPI exception handlers), TRY/EM (opinionated
-# exception-message formatting), DTZ (single-rule category, not worth its own tier here).
+# `select`, not `extend-select`: ruff >=0.16 enables ~413 rules by default, and this is the
+# deliberate scaffold-verified set. Per-tier and deferral rationale: templatecentral:standards
+# code-standards (fastapi.md, comments.md).
 select = [
-  "E4", "E7", "E9", "F", "I", "ERA",
+  "E4", "E7", "E9", "F", "I",
   "S", "B", "FAST", "SIM", "C4", "RET", "PT", "PIE", "UP",
+  "ERA", "PGH003", "PGH004", "RUF100", "TD005",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -437,7 +426,8 @@ select = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "test"]
-asyncio_mode = "auto"  # pytest-asyncio: treat `async def test_*` as coroutine tests without per-test markers
+# Run `async def test_*` as coroutine tests without per-test markers.
+asyncio_mode = "auto"
 
 markers = [
     "unit: unit tests",
@@ -457,7 +447,7 @@ addopts = [
 {
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.13",
+  "pythonVersion": "3.14",
   "pythonPlatform": "Linux"
 }
 ```

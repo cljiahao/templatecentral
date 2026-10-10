@@ -1,7 +1,7 @@
 <!-- ref: add/pagination/vite-react.md
      loaded-by: add/SKILL.md
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-### Vite + React (TypeScript + React Query)
+### Vite + React (React Query)
 
 ### Step 0 — Verify context
 
@@ -19,7 +19,12 @@ the marker.
 ```ts
 // src/hooks/use-pagination.ts
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
+
+export interface Paginated<T> {
+  items: T[];
+  pagination: { page: number; limit: number; total: number; hasMore: boolean };
+}
 
 interface UsePaginationOptions {
   initialPage?: number;
@@ -28,85 +33,132 @@ interface UsePaginationOptions {
 }
 
 export function usePagination<T>(
-  queryKey: string[],
-  fetchFn: (page: number, limit: number) => Promise<{
-    items: T[];
-    pagination: { page: number; limit: number; total: number; hasMore: boolean };
-  }>,
-  options: UsePaginationOptions = {}
+  queryKey: readonly unknown[],
+  fetchFn: (page: number, limit: number, signal: AbortSignal) => Promise<Paginated<T>>,
+  { initialPage = 1, pageSize = 10, enabled = true }: UsePaginationOptions = {}
 ) {
-  const { initialPage = 1, pageSize = 10, enabled = true } = options;
   const [page, setPage] = useState(initialPage);
 
-  const { data, isPending, error, isFetching } = useQuery({
-    queryKey: [...queryKey, page],
-    queryFn: () => fetchFn(page, pageSize),
+  const { data, isPending, isFetching, error } = useQuery({
+    // pageSize is in the key so two lists with different sizes never share a cache entry.
+    queryKey: [...queryKey, { page, pageSize }],
+    queryFn: ({ signal }) => fetchFn(page, pageSize, signal),
     enabled,
-    // The page number is part of the queryKey, so every Next/Previous click is a
-    // cache miss. Without this, isPending flips true and the whole list unmounts
-    // and re-mounts on each click. keepPreviousData holds the previous page's rows
-    // on screen (with isFetching true) until the new page resolves.
+    // Keeps the previous page on screen (isFetching) instead of unmounting to isPending.
     placeholderData: keepPreviousData,
   });
 
-  const goToPage = useCallback((newPage: number) => {
-    setPage(Math.max(1, newPage));
-  }, []);
-
-  const nextPage = useCallback(() => {
-    if (data?.pagination?.hasMore) {
-      setPage((p) => p + 1);
-    }
-  }, [data]);
-
-  const prevPage = useCallback(() => {
-    setPage((p) => Math.max(1, p - 1));
-  }, []);
-
   return {
-    data: data?.items || [],
+    items: data?.items ?? [],
     pagination: data?.pagination,
     page,
-    pageSize,
     isPending,
     isFetching,
     error,
-    goToPage,
-    nextPage,
-    prevPage,
+    nextPage: () => {
+      if (data?.pagination.hasMore) setPage((p) => p + 1);
+    },
+    prevPage: () => setPage((p) => Math.max(1, p - 1)),
   };
 }
 ```
 
 **2. Export from the hooks barrel**
 
-Add to `src/hooks/index.ts` — shared hooks are always re-exported from the barrel:
-
 ```ts
-export { usePagination } from './use-pagination';
+// src/hooks/index.ts
+export { usePagination, type Paginated } from './use-pagination';
 ```
 
-**3. Projects List Component**
+**3. Schema + API Service**
+
+The FastAPI and NestJS pagination endpoints (`templatecentral:add (pagination)` on the backend) both return `{ data: { items, pagination: { page, limit, total, hasMore } } }` — the one wrapped shape; their non-list endpoints return bare bodies. Validate it as-is.
+
+**Update, don't overwrite**: if `templatecentral:add (feature)` already created `project.schema.ts`, keep its `projectItemSchema` and add only `paginatedProjectsSchema`; if `types.ts` already declares `ProjectItem`, skip the `ProjectItem` export below and import the type from `../types`. Create the file as shown only when it is absent.
+
+```ts
+// src/features/project/schemas/project.schema.ts
+import { z } from 'zod';
+
+// Canonical project schema (same as add (feature)). nullish: FastAPI emits `null`, a NestJS
+// DTO may omit the key; extra fields (createdAt, updatedAt) are stripped.
+export const projectItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+
+export type ProjectItem = z.infer<typeof projectItemSchema>;
+
+export const paginatedProjectsSchema = z.object({
+  data: z.object({
+    items: z.array(projectItemSchema),
+    pagination: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      hasMore: z.boolean(),
+    }),
+  }),
+});
+```
+
+The service calls the backend through `ApiClient` (`src/lib/clients/api-client.ts`, defined in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client; create it from there if missing), which carries the session cookie and CSRF header once `templatecentral:add (auth)` is applied. The list endpoint's shape changes from a bare array to the paginated envelope, so if `api/project-service.ts` already exists (from add (feature)), replace `ProjectClient.list` with the one below, add `fetchProjects`, and remove `ProjectService.getAll` (update its callers to `fetchProjects`) — do not overwrite the file's other methods.
+
+```ts
+// src/features/project/api/project-service.ts
+import type { Paginated } from '@/hooks';
+import { ApiClient } from '@/lib/clients/api-client';
+import { APIError, logError } from '@/lib/errors';
+import { paginatedProjectsSchema, type ProjectItem } from '../schemas/project.schema';
+
+class ProjectClient extends ApiClient {
+  // unknown: fetchProjects parses, so network data is never type-asserted.
+  list(page: number, limit: number, signal?: AbortSignal): Promise<unknown> {
+    return this.request('projects', 'GET', undefined, { page, limit }, signal);
+  }
+}
+
+// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset — at module scope
+// that kills bundle evaluation before createRoot().
+let client: ProjectClient | undefined;
+const projects = (): ProjectClient => (client ??= new ProjectClient());
+
+export async function fetchProjects(
+  page: number,
+  limit: number,
+  signal?: AbortSignal
+): Promise<Paginated<ProjectItem>> {
+  const parsed = paginatedProjectsSchema.safeParse(await projects().list(page, limit, signal));
+  if (!parsed.success) {
+    // Log the issue paths for debugging; the user sees only the generic APIError.
+    logError('fetchProjects: response failed schema validation', parsed.error);
+    throw new APIError({ statusCode: 502, data: { message: 'Unexpected response from the server.' } });
+  }
+  return parsed.data.data;
+}
+```
+
+**4. Projects List Component**
 
 ```tsx
-// src/features/projects/components/projects-list.tsx
+// src/features/project/components/projects-list.tsx
 import { Button } from '@/components/ui/button';
-import { fetchProjects, type ProjectItem } from '@/features/projects/api/projects';
 import { usePagination } from '@/hooks';
+import { fetchProjects } from '../api/project-service';
+import type { ProjectItem } from '../schemas/project.schema';
 
 export function ProjectsList() {
-  const { data, pagination, page, isPending, isFetching, error, nextPage, prevPage } =
+  const { items, pagination, page, isPending, isFetching, error, nextPage, prevPage } =
     usePagination<ProjectItem>(['projects'], fetchProjects);
 
-  // isPending is true only for the very first load — with keepPreviousData a page
-  // change keeps the previous rows mounted and surfaces as isFetching instead.
   if (isPending) return <div>Loading...</div>;
-  if (error) return <div>Failed to load projects.</div>;
+  if (error) return <div role="alert">Failed to load projects.</div>;
 
   return (
     <div className="space-y-4">
       <ul className={isFetching ? 'space-y-2 opacity-60 transition-opacity' : 'space-y-2'}>
-        {data.map((project: ProjectItem) => (
+        {items.map((project) => (
           <li key={project.id} className="rounded border p-2">
             <h3 className="font-bold">{project.name}</h3>
             {project.description && (
@@ -117,118 +169,33 @@ export function ProjectsList() {
       </ul>
 
       {pagination && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Button onClick={prevPage} disabled={page === 1 || isFetching}>
-              Previous
-            </Button>
-
-            <span>
-              Page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}
-            </span>
-
-            <Button onClick={nextPage} disabled={!pagination.hasMore || isFetching}>
-              Next
-            </Button>
-          </div>
-
-          <div className="text-muted-foreground text-sm">
-            Showing {(page - 1) * pagination.limit + 1} to{' '}
-            {Math.min(page * pagination.limit, pagination.total)} of {pagination.total} results
-          </div>
-        </div>
+        <nav aria-label="Pagination" className="flex items-center justify-between gap-2">
+          <Button variant="outline" onClick={prevPage} disabled={page === 1 || isFetching}>
+            Previous
+          </Button>
+          <span aria-live="polite">
+            Page {pagination.page} of {Math.max(1, Math.ceil(pagination.total / pagination.limit))} (
+            {pagination.total} results)
+          </span>
+          <Button variant="outline" onClick={nextPage} disabled={!pagination.hasMore || isFetching}>
+            Next
+          </Button>
+        </nav>
       )}
     </div>
   );
 }
 ```
 
-**4. API Client**
-
-```ts
-// src/features/projects/api/projects.ts
-import { getApiBaseUrl } from '@/lib/constants/env';
-import { APIError, logError } from '@/lib/errors';
-import { z } from 'zod';
-
-const projectItemSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
-});
-
-export type ProjectItem = z.infer<typeof projectItemSchema>;
-
-const paginatedProjectSchema = z.object({
-  items: z.array(projectItemSchema),
-  pagination: z.object({
-    page: z.number(),
-    limit: z.number(),
-    total: z.number(),
-    hasMore: z.boolean(),
-  }),
-});
-
-export async function fetchProjects(
-  page: number = 1,
-  limit: number = 10
-): Promise<z.infer<typeof paginatedProjectSchema>> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects?page=${page}&limit=${limit}`
-  );
-
-  if (!response.ok) {
-    throw new APIError({ statusCode: response.status, data: await response.json().catch(() => ({ message: 'Failed to fetch projects' })) });
-  }
-
-  const json: unknown = await response.json();
-
-  // ADJUST TO YOUR BACKEND. This assumes list responses are wrapped in an envelope —
-  // { data: { items: [...], pagination: {...} } } — which is a convention, not a
-  // universal shape. If your API returns { items, pagination } directly, delete the
-  // unwrap and validate `json` itself; the schema is the contract either way.
-  const payload = unwrapEnvelope(json);
-
-  const parsed = paginatedProjectSchema.safeParse(payload);
-  if (!parsed.success) {
-    // Field errors are a debugging aid, not a user-facing message — log them, and
-    // throw the generic APIError the rest of the app already knows how to render.
-    logError(
-      'fetchProjects: response failed schema validation',
-      new Error(JSON.stringify(z.flattenError(parsed.error).fieldErrors))
-    );
-    throw new APIError({
-      statusCode: 502,
-      data: { message: 'Received an unexpected response from the server.' },
-    });
-  }
-
-  return parsed.data;
-}
-
-function unwrapEnvelope(json: unknown): unknown {
-  return json && typeof json === 'object' && 'data' in json ? json.data : json;
-}
-```
-
 ## Validate
 
-```bash
-pnpm dev
-
-# Component renders paginated list with prev/next controls
-# Clicking next fetches page 2
-# Previous button disabled on page 1
-# hasMore correctly controls Next button state
-
-pnpm test
-```
+Run `pnpm test`, then `pnpm dev` and confirm: Previous is disabled on page 1, Next fetches page 2 without blanking the list, and `hasMore` drives Next.
 
 ## Rules
 
 - Always set `placeholderData: keepPreviousData` on a paginated query — without it every page click blanks the list
 - Drive loading/disabled UI off `isFetching` for page changes; `isPending` covers only the first load
-- Always throw `APIError`, never a generic `Error` — and never embed validation field errors in the thrown message; log them separately
+- Always throw `APIError`, never a generic `Error` — never put validation details in the thrown message
 - Always add the hook to the `src/hooks/index.ts` barrel
 - Use the shadcn `Button` for pagination controls — never a raw `<button>`
 

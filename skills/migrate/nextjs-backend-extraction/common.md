@@ -42,7 +42,13 @@ List all files under `src/integrations/` that were NOT collected in 1d.
 
 **1f. Detect database**
 
-Check for `drizzle.config.ts` (Drizzle) or `src/integrations/database/` containing `.schema.ts` files (Mongoose schemas). Record which ORM if found.
+Record the first match (these are the files `templatecentral:add (database)` creates):
+
+| Signal | DB layer |
+|---|---|
+| `drizzle.config.ts` | Drizzle |
+| `src/integrations/database/kysely-client.ts` | Kysely |
+| `src/integrations/database/mongoose-client.ts` | Mongoose |
 
 **1g. Detect auth**
 
@@ -67,8 +73,8 @@ Integrations staying in Next.js:
 Database:         [see leaf for ORM variants]
 Auth:             [✓ proxy.ts detected / None detected]
 
-Next.js after migration: pure frontend, calls NEXT_PUBLIC_API_URL
-New backend URL:  http://localhost:[DEV_PORT] (dev) / NEXT_PUBLIC_API_URL (prod)
+Next.js after migration: pure frontend — browser → /api/external (Next rewrite), server → BACKEND_URL
+New backend URL:  BACKEND_URL (server-only; http://localhost:[DEV_PORT] in dev)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -80,13 +86,10 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` ([BACKEND]), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
-If yes → before making any changes, ensure a clean tree. If uncommitted changes exist, commit them on the **current** branch (or stash them) — do not switch branches with work in flight:
+If yes → require a clean tree before making any changes. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (NEVER commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
 ```bash
-git add -A
-git diff --cached --quiet || git commit -m "chore: pre-extraction snapshot"
-snapshot_commit=$(git rev-parse HEAD)
+git rev-parse HEAD
 ```
-Print the snapshot commit (`$snapshot_commit`) to the user so they can restore it if needed.
 
 If no → print "No changes made." and exit.
 
@@ -102,53 +105,62 @@ Load and follow the [BACKEND] scaffold steps — see the leaf file for the exact
 
 ---
 
+## Shared rules for leaf Phases 5 and 7
+
+- **Phase 5 cleanup** — in the Next.js project, delete each integration file that moved. Delete `src/integrations/` only if nothing frontend-only remains in it.
+- **Phase 7 `proxy.ts`** — it stays in the Next.js project and keeps protecting frontend routes. Point any hardcoded `/api/auth/...` calls in it at `process.env.BACKEND_URL` (server-only). Phase 8 step 0 swaps its session check.
+
+---
+
 ## Phase 8 — Rewire Next.js Frontend (autonomous)
 
-0. **Rewire auth before deleting routes** (only if auth was detected in Phase 1g) — `src/app/api/` includes the better-auth handler (`src/app/api/auth/[...all]/route.ts`). The Phase 7 backend uses JWT auth, which does not speak the better-auth protocol — re-pointing the better-auth client at it will not work. Before deleting the handler:
-   - **Replace** `lib/auth-client.ts` (better-auth client) with a small client that calls the new backend's JWT endpoints (`/auth/login`, `/auth/me`) and update `features/auth/` consumers accordingly
-   - Enable CORS credentials on the backend (see leaf file for the stack-specific setting) if using cookie-based sessions
-   - If sessions are cookie-based, set auth cookies to `SameSite=None; Secure` for cross-origin (same-site localhost dev may use `Lax`); JWT bearer tokens in the `Authorization` header need no cookie attributes
-   - Verify the login flow end-to-end before proceeding
-
-1. **Delete `src/app/api/`** — all route handlers have moved to [BACKEND].
-
-2. **Update `src/lib/constants/env.ts`** — add `API_BASE`:
-
-```typescript
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:[DEV_PORT]';
+The browser never calls [BACKEND] directly. Client components call the same-origin path `/api/external/*`, which a Next.js `rewrites()` entry forwards to `BACKEND_URL`. Server components, layouts and `proxy.ts` call `BACKEND_URL` directly. That variable is server-only, and the frontend has **no** `NEXT_PUBLIC_*` backend variable. Cookie mode depends on this same-origin layout. The rewrite, the browser/server clients and the caveats live in one place, and this phase applies them rather than restating them:
+```bash
+cat "<skill-dir>/../standards/full-stack-pairing/implementation.md"
 ```
 
-> Direct client→backend calls require the CORS setup above; alternatively keep the Next.js rewrites proxy model from `templatecentral:standards` (full-stack-pairing).
+0. **Rewire auth before deleting routes** (only if Phase 1g detected auth). `src/app/api/` contains the better-auth handler (`src/app/api/auth/[...all]/route.ts`). The Phase 7 backend issues its own JWT and does not speak the better-auth protocol, so pointing the better-auth client at it will not work. Before deleting the handler:
+   - **Enable the backend's cookie mode**: the "Browser Client (Cookie Mode)" section of the [BACKEND] auth skill. The browser logs in with `POST /api/external/auth/session` and never holds a token. Never go cross-origin with `SameSite=None` or credentialed CORS
+   - **Replace** `lib/auth-client.ts` (the better-auth client) with calls through full-stack-pairing's `backendFetch` (Step 4) to `auth/session`, `auth/me` and `auth/logout`, then update the `features/auth/` consumers
+   - **`proxy.ts`**: drop `getSessionCookie` (it looks for better-auth's cookie name) and use `const hasSession = req.cookies.has('__Host-session') || req.cookies.has('session');`. Add `/api/external/auth/session` and `/api/external/health` as **exact** public paths (full-stack-pairing Step 2 explains why prefixes are unsafe)
+   - **Protected layouts**: replace `auth.api.getSession(...)` with full-stack-pairing's `getCurrentUser()`, which calls `BACKEND_URL/auth/me` and forwards the cookies, and `redirect(PAGE_ROUTES.LOGIN)` when it returns `null`. Then remove `lib/auth.ts` and the `better-auth` dependency
+   - Verify the flow end-to-end before proceeding: login → 204 + `Set-Cookie`, `/dashboard` renders, a non-GET without `X-CSRF-Token` → 403
 
-3. **Update feature service files** — for each file under `src/features/` that calls `fetch('/api/...')`, replace with `API_BASE`:
+1. **Delete `src/app/api/`, except `src/app/api/health/route.ts`**: every other route handler has moved to [BACKEND]. The health route is the Next container's own liveness probe. The Dockerfile `HEALTHCHECK` and `test/api/health.test.ts` hit it, and `proxy.ts` lists it as public.
+
+2. **Add the rewrite and the browser path**: the `rewrites()` entry in full-stack-pairing Step 2 goes into `next.config.ts`, next to the existing `headers()` with a destination of `${BACKEND_URL}/:path*`. Add `API_ROUTES.BACKEND` (`/api/external`) to `src/lib/constants/routes.ts`, next to the existing `HEALTH` entry.
+
+3. **Update the callers**. Every `fetch('/api/...')` under `src/features/` changes:
 
 ```typescript
 // Before
 const res = await fetch('/api/users');
 
-// After
-import { API_BASE } from '@/lib/constants/env';
-const res = await fetch(`${API_BASE}/users`);
+// After: client component / hook (same-origin, sends X-CSRF-Token on non-GET)
+import { backendFetch } from '@/lib/clients/backend-browser';
+const res = await backendFetch('users');
+
+// After: server component / route handler, via getBackendClient() from
+// src/integrations/clients/backend-client.ts (full-stack-pairing Step 4; reads BACKEND_URL)
 ```
 
-4. **Update `.env.example`** — add:
+4. **Update `.env.example`** with:
 
 ```
-# Backend API ([BACKEND])
-# Dev default: http://localhost:[DEV_PORT]
-NEXT_PUBLIC_API_URL=http://localhost:[DEV_PORT]
+# Backend API ([BACKEND]) — server-only, never NEXT_PUBLIC_. Needed at BUILD time too:
+# the /api/external rewrite is baked into the build output.
+BACKEND_URL=http://localhost:[DEV_PORT]
 ```
 
-5. **Update `.env.local`** — add the same line.
+5. **`.env.local`**: ask the user to add the same line (agent edits to `.env*` files are hook-blocked by design).
 
-6. **Clean up `src/integrations/`** — after Phase 5 cleanup, scan for any remaining entries that are now unused (no imports anywhere in the Next.js codebase). Delete unused files. If the directory is empty, delete it.
+6. **Clean up `src/integrations/`**: after the Phase 5 cleanup, delete any remaining entry that nothing in the Next.js codebase imports any more, then delete the directory if it is empty. `backend-client.ts` imports `clients/base/`, so that stays whenever server code uses it.
 
 ---
 
 ## Phase 9 — Update Config & Docs (autonomous)
 
-**[BACKEND] project (`../[project-name]-api`):** See the leaf file for the CORS config step — FastAPI uses `CORS_ORIGINS` in `src/.env.default`; NestJS reads `CLIENT_URL` from `src/config/env.config.ts`.
+**[BACKEND] project (`../[project-name]-api`):** apply the leaf file's CORS config step.
 
 Phases 4–7 created new module/router/service folders after the Phase 3 scaffold's one-time README pass, so those folders have no `README.md` yet. Re-run the documentation kit over `../[project-name]-api` now, before Phase 10 verification:
 ```bash
@@ -159,7 +171,7 @@ cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 ```
 - Extracted from `[project-name]` (Next.js frontend) — see `../[project-name]`
-- Frontend calls this API; set [CORS_VAR] to the Next.js origin in production
+- The Next.js frontend reaches this API through its `/api/external` rewrite (same-origin), so it needs no [CORS_VAR] entry
 ```
 
 **Next.js project:**
@@ -167,7 +179,7 @@ Update `../[project-name]-api/AGENTS.md` — prepend to Project-Specific Notes:
 Update `AGENTS.md` Architecture Decisions — replace the BFF note with:
 ```
 - API routes removed — backend extracted to `../[project-name]-api` ([BACKEND])
-- This project is a pure frontend; all data fetching uses `NEXT_PUBLIC_API_URL`
+- This project is a pure frontend: the browser calls `/api/external/*` (a rewrite to `BACKEND_URL`), and server code calls `BACKEND_URL` directly. There is no `NEXT_PUBLIC_*` backend URL
 ```
 
 ---
@@ -176,7 +188,7 @@ Update `AGENTS.md` Architecture Decisions — replace the BFF note with:
 
 Run in sequence. Stop and report the exact error on first failure.
 
-See the leaf file for the exact verify commands (pip+pytest for FastAPI; pnpm for NestJS).
+Use the leaf file's verify commands.
 
 **If all pass**, print:
 
@@ -184,13 +196,13 @@ See the leaf file for the exact verify commands (pip+pytest for FastAPI; pnpm fo
 ✓ Migration complete.
 
 Next.js frontend: [original-project-path]
-  → Pure frontend. Set NEXT_PUBLIC_API_URL in your deployment environment.
+  → Pure frontend. Set BACKEND_URL in the build AND runtime environment (rewrites are baked at build).
 
 [BACKEND] backend:  ../[project-name]-api
-  → Set [CORS_VAR] to the Next.js origin in your deployment environment.
+  → Reached same-origin via the Next.js rewrite. No CORS entry is needed for the frontend.
 
 Next steps:
-- Review proxy.ts — update any hardcoded /api paths to use NEXT_PUBLIC_API_URL
+- Review proxy.ts: it gates /api/external/* before the rewrite forwards it, so keep the backend's public endpoints as exact paths
 - Set up Docker Compose if you want both services running locally with one command
 - Configure CI/CD pipelines for each repo independently
 ```

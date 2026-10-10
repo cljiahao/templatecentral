@@ -9,7 +9,7 @@ Write these files exactly as shown.
 
 > Set `"name"` to the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
 >
-> **ESLint pinned at `^9`** — `eslint-plugin-react-hooks` 7.x peer-supports only `^9`; bumping to ESLint 10 breaks `pnpm install` under strict peer enforcement until the plugin ships ESLint 10 support. Do not upgrade eslint past `^9` without verifying `eslint-plugin-react-hooks` peer compatibility.
+> **ESLint 10** (`^10.12.0`; engines `^20.19 || ^22.13 || >=24`, so Node ≥24 is fine). Direct plugins all peer-support `^10` (`eslint-config-next` `>=9`, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs`, `@eslint-community/eslint-plugin-eslint-comments`, `typescript-eslint` 8.x). `eslint-config-next` 16.4's transitive `eslint-plugin-react` 7.37 / `eslint-plugin-import` 2.32 / `eslint-plugin-jsx-a11y` 6.10 still declare peers only up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning — non-fatal (pnpm does not enforce strict peers by default), and their rules (`react/jsx-key`, `jsx-a11y/alt-text`, `import/no-anonymous-default-export`, `@next/next/no-img-element`) were verified to fire normally under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it; the warning clears once those plugins ship `^10` peers.
 
 ```json
 {
@@ -17,7 +17,7 @@ Write these files exactly as shown.
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
     "node": ">=24"
   },
@@ -41,7 +41,7 @@ Write these files exactly as shown.
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
-    "next": "^16.2.12",
+    "next": "^16.3.8",
     "next-themes": "^0.4.6",
     "pino": "^10.3.1",
     "react": "^19.2.7",
@@ -53,16 +53,17 @@ Write these files exactly as shown.
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^24",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.0.0",
-    "eslint-config-next": "^16.2.12",
+    "eslint": "^10.12.0",
+    "eslint-config-next": "^16.3.8",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-sonarjs": "4.1.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "lefthook": "^2.1.9",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.8.3",
@@ -96,6 +97,9 @@ const ROUTE_FILE = /^route\.m?[jt]sx?$/;
 const bareFn = new RegExp(`export\\s+(?:async\\s+)?function\\s+(?:${METHODS})\\b`, 'g');
 // Whitespace lives INSIDE the lookahead so it can't backtrack to zero and false-pass `= withLogging`.
 const unwrapped = new RegExp(`export\\s+const\\s+(?:${METHODS})\\b\\s*=(?!\\s*withLogging\\b)`, 'g');
+// Destructured (`export const { GET } = …`) and re-exported (`export { GET } from …`) handlers
+// can never be wrapped in place, so either form is a violation.
+const indirect = new RegExp(`export\\s+(?:const\\s+)?\\{[^}]*\\b(?:${METHODS})\\b[^}]*\\}`, 'g');
 
 function walk(dir) {
   const out = [];
@@ -126,6 +130,9 @@ for (const file of files) {
   for (const m of src.matchAll(unwrapped)) {
     violations.push(`${file}:${lineOf(src, m.index)} — handler not wrapped in withLogging()`);
   }
+  for (const m of src.matchAll(indirect)) {
+    violations.push(`${file}:${lineOf(src, m.index)} — destructured/re-exported handler; export each one as withLogging(...)`);
+  }
 }
 
 if (violations.length > 0) {
@@ -140,9 +147,10 @@ console.log(`Route logging check passed (${files.length} route file(s)).`);
 
 > Next.js 16 ships `eslint-config-next` as native flat configs — `FlatCompat` causes circular JSON crashes. Import the flat config objects directly and spread them. `pnpm check` runs `eslint .`, so this file must exist.
 
-> `sonarjs.configs.recommended` enables ~206 of the plugin's 268 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.1.0`, no caret) below — `configs.recommended`'s enabled-rule set is not stable across minor versions (4.2.0 enables ~217 of 280 rules, a different set); bump deliberately and re-verify, don't let `pnpm install` silently resolve a newer minor.
+> `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides below. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret; peer `eslint ^8 || ^9 || ^10`) and kept identical across the nextjs, nestjs, and vite-react scaffolds — `configs.recommended`'s enabled-rule set and rule heuristics change across minor versions (4.1.0 enabled ~206 of 268; 4.2.x also skips low-entropy literals in `no-hardcoded-passwords`, which can turn an existing `eslint-disable` for it into an unused-directive error); bump all three together, deliberately, and re-verify — don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
 ```javascript
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -153,6 +161,13 @@ const config = [
   ...coreWebVitals,
   ...typescript,
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+      reportUnusedInlineConfigs: 'error',
+    },
+  },
+  eslintComments.recommended,
+  {
     ...sonarjs.configs.recommended,
     rules: {
       ...sonarjs.configs.recommended.rules,
@@ -161,13 +176,23 @@ const config = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      // Comment hygiene: own-line comments only, no commented-out code. See templatecentral:standards code-standards/comments.md.
+      // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
       'no-inline-comments': [
         'error',
-        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName' },
+        { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul |webpackChunkName|@__PURE__' },
       ],
-      // recommended leaves this off; templateCentral's comment-hygiene gate requires it.
       'sonarjs/no-commented-code': 'error',
+      // Task tags with context are allowed; keep them visible without failing lint.
+      'sonarjs/todo-tag': 'warn',
+      'sonarjs/fixme-tag': 'warn',
+      '@eslint-community/eslint-comments/require-description': [
+        'error',
+        { ignore: ['eslint-enable'] },
+      ],
+      '@eslint-community/eslint-comments/disable-enable-pair': [
+        'error',
+        { allowWholeFile: true },
+      ],
     },
   },
   {
@@ -234,10 +259,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 
-  // Uncomment and add domains when using next/image with external URLs:
-  // images: {
-  //   remotePatterns: [{ protocol: 'https', hostname: 'example.com' }],
-  // },
+  // next/image refuses external hosts until they are allowlisted in `images.remotePatterns`.
 
   async headers() {
     // Anti-clickjacking headers (X-Frame-Options, CSP frame-ancestors) are omitted in dev —
@@ -431,13 +453,10 @@ CMD ["node", "server.js"]
 ```sh
 #!/bin/sh
 
-# Check for Yarn lock file
 if [ -f "yarn.lock" ]; then
   exec yarn "$@"
-# Check for pnpm lock file
 elif [ -f "pnpm-lock.yaml" ]; then
   exec sh -c 'corepack enable pnpm && exec pnpm "$@"' -- "$@"
-# Default to npm
 else
   exec npm "$@"
 fi
@@ -606,19 +625,21 @@ next-env.d.ts
 ### `pnpm-workspace.yaml`
 
 ```yaml
-# pnpm-workspace.yaml — project-level pnpm 11 settings.
+# pnpm-workspace.yaml — project-level pnpm 12 settings.
 # Auth/registry settings belong in .npmrc; all other settings belong here.
+# pnpm 12 errors with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on any key it does not
+# recognize (e.g. a typo) — use only documented setting names (pnpm.io/settings).
 
 # Block git-URL, tarball, and local-path dependencies.
 # Primary mitigation against dependency confusion and supply-chain attacks.
 blockExoticSubdeps: true
 
 # Explicitly allowlist packages permitted to run install-time build scripts.
-# pnpm 11 blocks all install scripts by default; add native packages here as needed.
+# pnpm (≥11) blocks all install scripts by default; add native packages here as needed.
 allowBuilds:
   sharp: true          # Next.js image optimisation
   unrs-resolver: true  # required by eslint-config-next resolver
-  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm 11 still requires an explicit decision or it blocks `pnpm <script>` runs
+  lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
 ```
 
 ### `vitest.config.ts`

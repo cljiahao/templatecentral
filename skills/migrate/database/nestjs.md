@@ -3,7 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## NestJS Database Migration
 
-**Read `drizzle-to-kysely.md` first** — shared steps (1, 5, 8 up-body, 9 translation table, 10 env block, After Writing Code) live there.
+**Read `drizzle-to-kysely.md` first** — shared steps (1, 5 types, 8 migration body, 9 translation table, 10 env block, After Writing Code) live there.
 
 ```bash
 cat "<skill-dir>/database/drizzle-to-kysely.md"
@@ -38,8 +38,8 @@ rm -rf drizzle/
 ### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)
 
 > **Canonical source**: the `KyselyService` block below and the `serviceConfig` block in
-> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely.md` (its
-> "IAM Auth Variant" section) — treat that file as canonical. `scripts/lint-skills.sh`
+> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely-iam.md`
+> (the IAM Auth Variant add-on leaf) — treat that file as canonical. `scripts/lint-skills.sh`
 > fails the build if the two copies drift, so re-copy rather than hand-editing here.
 
 **Download the AWS RDS CA bundle first.** RDS server certificates chain to the Amazon RDS
@@ -54,8 +54,7 @@ curl -fsSL -o certs/rds-global-bundle.pem \
 ```
 
 Commit `certs/rds-global-bundle.pem` (it is a public certificate, not a secret) or bake it
-into the Docker image, and add `RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem` to `.env`
-and `.env.example`. In a container, `NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem`
+into the Docker image; `RDS_CA_BUNDLE_PATH` is set in Step 10. In a container, `NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem`
 is an equivalent process-wide alternative to the explicit `ca` option below.
 
 ```typescript
@@ -137,9 +136,13 @@ export class DatabaseModule {}
 ### Step 7 — Create `src/database/migrate.ts`
 
 ```typescript
+// Runs outside main.ts, so it must load .env itself before env.config validates.
+import 'dotenv/config';
 import path from 'node:path';
 import { promises as fs, readFileSync } from 'node:fs';
-import { FileMigrationProvider, Migrator, Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect } from 'kysely';
+// kysely ≥0.29 types the root-export Migrator/FileMigrationProvider as errors pointing here.
+import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { Signer } from '@aws-sdk/rds-signer';
 import { Pool } from 'pg';
 
@@ -203,16 +206,7 @@ migrate().catch((e) => {
 
 ### Step 8 — Write first Kysely migration
 
-Create `src/database/migrations/001_initial.ts`. Use the `up` body from `drizzle-to-kysely.md` Step 8.
-
-NestJS `down` is a no-op (table pre-existed under Drizzle):
-
-```typescript
-export async function down(_db: Kysely<unknown>): Promise<void> {
-  // No-op by design: the users table pre-existed this adoption migration.
-  // Dropping it on rollback would destroy production data.
-}
-```
+Create `src/database/migrations/001_initial.ts` with the `up`/`down` pair from `drizzle-to-kysely.md` Step 8.
 
 ### Step 9 — Update query code in feature services
 
@@ -248,7 +242,7 @@ export const serviceConfig = {
 };
 ```
 
-Update `.env` and `.env.example` — use the env block from `drizzle-to-kysely.md` Step 10.
+Env files: use the block and the ask-the-user rule from `drizzle-to-kysely.md` Step 10.
 
 ### Step 11 — Validate
 

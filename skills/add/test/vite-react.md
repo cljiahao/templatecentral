@@ -78,7 +78,7 @@ describe('ProjectCard', () => {
   const mockProject = {
     id: '1',
     name: 'Alpha',
-    status: 'active' as const,
+    description: 'First project',
   };
 
   it('renders the project name', () => {
@@ -86,22 +86,20 @@ describe('ProjectCard', () => {
     expect(screen.getByText('Alpha')).toBeInTheDocument();
   });
 
-  it('renders the project status', () => {
+  it('renders the project description', () => {
     render(<ProjectCard project={mockProject} />);
-    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('First project')).toBeInTheDocument();
   });
 });
 ```
 
 ### Component Tests with User Interaction
 
-Install `@testing-library/user-event` first — the scaffold ships `@testing-library/jest-dom` and `@testing-library/react`, but not this package:
+Use `@testing-library/user-event` for interactions. The scaffold does not ship it:
 
 ```bash
 pnpm add -D @testing-library/user-event
 ```
-
-Use `@testing-library/user-event` for clicks, typing, and other interactions:
 
 ```tsx
 // src/features/project/components/project-form.test.tsx
@@ -129,36 +127,7 @@ describe('ProjectForm', () => {
 
 ### Service Tests
 
-Test services by calling their methods directly. The first example below is for **synchronous/in-memory services** (like the template's `ExampleService`). For **async services** that call `fetch` or an external API, see the second example with `mockFetch`:
-
-```ts
-// src/features/project/api/project-service.test.ts
-import { describe, expect, it } from 'vitest';
-import { ProjectService } from './project-service';
-
-describe('ProjectService', () => {
-  it('getAll returns all items', () => {
-    const result = ProjectService.getAll();
-
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-    expect(result[0]).toHaveProperty('id');
-  });
-
-  it('getById returns matching item', () => {
-    const result = ProjectService.getById('1');
-
-    expect(result).toBeDefined();
-    expect(result?.id).toBe('1');
-  });
-
-  it('getById returns undefined for unknown id', () => {
-    expect(ProjectService.getById('nonexistent')).toBeUndefined();
-  });
-});
-```
-
-For services that call `fetch` or an external API, stub `fetch` at the boundary:
+In-memory services (like the scaffold's `ExampleService`) are tested by calling them directly — `src/features/example/api/example-service.test.ts` is the model. For services that call `fetch`, stub `fetch` at the boundary (`vite.config.ts` pins `VITE_API_BASE_URL` for tests, so `getApiBaseUrl()` resolves in CI):
 
 ```ts
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
@@ -171,10 +140,13 @@ describe('ProjectService (API-backed)', () => {
   afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
   it('fetches projects from API', async () => {
-    // Every field projectItemSchema requires must be present — ProjectService.getAll()
-    // runs the response through .parse(), so a short fixture throws before the assertion.
-    const projects = [{ id: '1', name: 'Alpha', status: 'active' }];
-    mockFetch.mockResolvedValue(new Response(JSON.stringify(projects)));
+    // FastAPI/NestJS return a bare body (no `{ data }` envelope), so the fixture is the array
+    // itself. It must carry every required projectItemSchema field — ProjectService.getAll()
+    // runs it through .parse(), so a short fixture throws first.
+    const projects = [{ id: '1', name: 'Alpha', description: null }];
+    // Response.json sets application/json — FetchClient parses by content-type, so a bare
+    // `new Response(JSON.stringify(...))` (text/plain) comes back as a string and fails .parse().
+    mockFetch.mockResolvedValue(Response.json(projects));
 
     const result = await ProjectService.getAll();
     expect(result).toEqual(projects);
@@ -220,9 +192,7 @@ describe('useProjects', () => {
   });
 
   it('returns projects on success', async () => {
-    // `as const` is required: without it TS widens status to `string`, which is not
-    // assignable to ProjectItem['status'] ('active' | 'archived') and fails `tsc -b`.
-    const projects = [{ id: '1', name: 'Alpha', status: 'active' as const }];
+    const projects = [{ id: '1', name: 'Alpha', description: null }];
     vi.mocked(ProjectService.getAll).mockResolvedValue(projects);
 
     const { result } = renderHook(() => useProjects(), {
@@ -286,12 +256,6 @@ pnpm build && pnpm test
 ```
 
 Confirm the build succeeds and all tests pass.
-
-### Helper Patterns
-
-#### React Query Wrapper
-
-Reuse the `createWrapper` factory shown in the hook-test example above — a fresh `QueryClient` (with `retry: false`) wrapped in `QueryClientProvider`. Define it once per test file (or a shared `test/utils.tsx`) and pass it as the `wrapper` option to `renderHook`.
 
 ### Rules
 

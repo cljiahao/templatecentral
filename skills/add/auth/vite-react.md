@@ -53,20 +53,46 @@ The `AuthProvider` is provider-agnostic — it manages local state. You wire it 
 
 **Cookie sessions need CSRF protection.** The moment the browser attaches the session cookie automatically (which is exactly what `credentials: 'include'` buys you), any other origin can trigger an authenticated state-changing request. Cookies are still the right choice — they keep the token out of JS reach — but they must be paired with all three of:
 
-- **`SameSite=Lax`** on the session cookie as the baseline (backend-set, alongside `HttpOnly` and `Secure`). Use `SameSite=None` only when the SPA and API are on genuinely different sites, and then a token is mandatory, not optional.
-- **A CSRF token** on every non-GET request — the backend issues it (commonly as a readable `XSRF-TOKEN` cookie), the SPA echoes it back in an `X-CSRF-Token` header, and the backend rejects any mismatch. This double-submit pairing is what makes a cross-origin forgery fail: the attacker's page can send the session cookie but cannot read the token to echo it.
+- **`SameSite=Strict`** (`Lax` at minimum) on the session cookie, backend-set alongside `HttpOnly` and `Secure`.
+- **A CSRF token** on every non-GET request — the backend issues it as a readable `XSRF-TOKEN` cookie, the SPA echoes it back in an `X-CSRF-Token` header, and the backend rejects any mismatch. The attacker's page can make the browser send the session cookie but cannot read the token to echo it. The templateCentral backends sign the token with an HMAC bound to the session (OWASP signed double-submit), so an injected or stale token fails too.
 - **A strict CORS allowlist** on the backend — never `Access-Control-Allow-Origin: *` together with credentials.
+
+**Same-origin only:** cookie mode requires the SPA to reach the API through a reverse proxy on its own origin (`VITE_API_BASE_URL=/api` → Vite `server.proxy` in dev, nginx `location /api/` in production — snippets in `templatecentral:standards (full-stack-pairing)`); the backend's `XSRF-TOKEN` cookie is host-only, so a direct call to an API on another host leaves `csrfHeader()` empty and every non-GET 403s.
+
+**Backend contract.** The FastAPI and NestJS auth skills implement all three in their **Browser Client (Cookie Mode)** section — enable it on the backend (`templatecentral:add (auth)` there; `templatecentral:standards (full-stack-pairing)` says when). Their stock auth reads only `Authorization: Bearer`, so without cookie mode every guarded call from this SPA is a 401. The service below targets exactly these endpoints (under `VITE_API_BASE_URL`):
+
+| Call | Endpoint | Notes |
+|------|----------|-------|
+| Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body. It is separate from `/auth/login`, which still returns the JWT for API clients, so the token never reaches browser JavaScript |
+| Current user | `GET /auth/me` | cookie-authenticated; FastAPI returns `{ id, email, name }`, NestJS `{ id, email }` |
+| Logout | `POST /auth/logout` | 204, clears both cookies |
+| Any other non-GET | — | must send `X-CSRF-Token` (`csrfHeader()`, sent for you by `ApiClient` — Step 3) or the backend answers 403 |
 
 Token-based (JWT in an `Authorization` header) auth is not cookie-borne and therefore not CSRF-exposed — but it forfeits `HttpOnly`, so the token must live in memory only (see the `localStorage` rule below).
 
-#### 2. Create an Auth Service
+#### 2. Create the CSRF Helper and Auth Service
+
+`csrfHeader()` is the single source for the CSRF header. It lives in `src/lib/clients/` (not the auth feature) because `ApiClient` (Step 3) needs it and `lib/` never imports from `features/`:
+
+```typescript
+// src/lib/clients/csrf.ts
+/** Echoes the backend-issued XSRF-TOKEN cookie as X-CSRF-Token (signed double-submit); `{}` when absent. */
+export function csrfHeader(): Record<string, string> {
+  const token = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('XSRF-TOKEN='))
+    ?.slice('XSRF-TOKEN='.length);
+  return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
+}
+```
 
 Create `src/features/auth/api/auth-service.ts` to handle backend communication:
 
 ```typescript
-import { z } from 'zod';
+import { csrfHeader } from '@/lib/clients/csrf';
 import { getApiBaseUrl } from '@/lib/constants/env';
 import { APIError } from '@/lib/errors';
+import { z } from 'zod';
 import type { AuthUser } from '../types';
 
 // Resolved per-request, never at module scope: getApiBaseUrl() throws when
@@ -75,19 +101,21 @@ import type { AuthUser } from '../types';
 const authBase = () => `${getApiBaseUrl()}/auth`;
 
 // Validate API response shapes at the boundary — mirrors the AuthUser type.
-const authUserSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.email(),
-  // AuthUser has it — without this, parse() silently strips it
-  image: z.string().nullable().optional(),
-});
+const authUserSchema = z
+  .object({
+    id: z.string(),
+    // NestJS's /auth/me returns only the token claims (id, email) — fall back to email.
+    name: z.string().optional(),
+    email: z.email(),
+    // AuthUser has it — without this, parse() silently strips it
+    image: z.string().nullable().optional(),
+  })
+  .transform((u): AuthUser => ({ ...u, name: u.name ?? u.email }));
 
-export async function loginWithCredentials(
-  email: string,
-  password: string
-): Promise<AuthUser> {
-  const res = await fetch(`${authBase()}/login`, {
+// POST /auth/session is the backend's browser login (cookie mode): it sets the HttpOnly
+// session cookie plus XSRF-TOKEN and returns 204 — the JWT never reaches JavaScript.
+export async function loginWithCredentials(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${authBase()}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -95,10 +123,15 @@ export async function loginWithCredentials(
   });
 
   if (!res.ok) {
-    throw new APIError({ statusCode: res.status, data: await res.json().catch(() => ({ message: 'Login failed' })) });
+    throw new APIError({
+      statusCode: res.status,
+      data: await res.json().catch(() => ({ message: 'Login failed' })),
+    });
   }
 
-  return authUserSchema.parse(await res.json());
+  const user = await fetchCurrentUser();
+  if (!user) throw new APIError({ statusCode: 401 });
+  return user;
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
@@ -108,14 +141,35 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
 }
 
 export async function logoutUser(): Promise<void> {
-  await fetch(`${authBase()}/logout`, {
+  const res = await fetch(`${authBase()}/logout`, {
     method: 'POST',
+    headers: csrfHeader(),
     credentials: 'include',
   });
+  if (!res.ok) throw new APIError({ statusCode: res.status });
 }
 ```
 
-#### 3. Wire AuthProvider to the Backend
+#### 3. Send the Session and CSRF Token from `ApiClient`
+
+Every other backend call goes through `ApiClient` (`src/lib/clients/api-client.ts`, defined once in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client — create it from there first if it is missing). Add these two members to that class — do not redefine it; every feature client that extends it inherits them:
+
+```typescript
+// src/lib/clients/api-client.ts — add to the existing ApiClient class
+import { csrfHeader } from './csrf';
+import { FetchClient, type HttpMethod } from './fetch-client';
+
+  // Sends the session cookie on every call (same-origin via the /api proxy).
+  protected override credentials: RequestCredentials = 'include';
+
+  protected override requestHeaders(method: HttpMethod): Record<string, string> {
+    return method === 'GET' ? {} : csrfHeader();
+  }
+```
+
+The auth service above keeps raw `fetch` on purpose: login runs before any session exists, and `fetchCurrentUser` maps any non-2xx to "signed out" instead of throwing.
+
+#### 4. Wire AuthProvider to the Backend
 
 Update `src/features/auth/components/auth-provider.tsx` to check for an existing session on mount and call the backend for login/logout:
 
@@ -167,8 +221,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
-    await logoutUser();
-    setUser(null);
+    try {
+      await logoutUser();
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo(
@@ -186,7 +243,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 ```
 
-#### 4. Add a Login Form
+#### 5. Add a Login Form
 
 Update `src/features/auth/components/login-card.tsx`. Use the project's canonical form pattern (React Hook Form + Zod + `CustomFormField`):
 
@@ -240,7 +297,7 @@ export function LoginCard() {
   };
 
   return (
-    <CustomCard header="Sign In" description="Enter your credentials to continue.">
+    <CustomCard header="Sign in" headingLevel="h1" description="Enter your credentials to continue.">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <CustomFormField name="email" label="Email">
@@ -251,7 +308,11 @@ export function LoginCard() {
             <Input type="password" placeholder="Password" />
           </CustomFormField>
 
-          {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+          {serverError && (
+            <p role="alert" className="text-sm text-destructive">
+              {serverError}
+            </p>
+          )}
 
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
@@ -259,18 +320,16 @@ export function LoginCard() {
         </form>
       </Form>
       {ENV.IS_DEV && (
-        <button type="button"
-          className="mt-4 w-full rounded-md border-2 bg-card px-4 py-3 text-sm text-muted-foreground hover:bg-accent"
-          onClick={handleDevLogin}>
+        <Button type="button" variant="outline" className="mt-4 w-full" onClick={handleDevLogin}>
           Dev login (bypass auth)
-        </button>
+        </Button>
       )}
     </CustomCard>
   );
 }
 ```
 
-#### 5. Add Protected Routes
+#### 6. Add Protected Routes
 
 In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`. The template already has `<BrowserRouter>` wrapping the route tree — edit only inside the existing `<Routes>`:
 
@@ -295,31 +354,32 @@ import { ProtectedRoute } from '@/features/auth';
 
 Do NOT replace the entire `router.tsx` — only modify the route definitions inside the existing `<BrowserRouter>` and `<Routes>` wrappers.
 
-#### 6. Add a Sign-Out Button
+#### 7. Add a Sign-Out Button
 
 Use the `useAuth()` hook to access `logout`:
 
 ```tsx
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth';
 
 export function SignOutButton() {
   const { logout } = useAuth();
 
   return (
-    <button type="button" onClick={logout}>
+    <Button type="button" variant="outline" onClick={logout}>
       Log out
-    </button>
+    </Button>
   );
 }
 ```
 
-#### 7. Validate
+#### 8. Validate
 
 1. Start the dev server (`pnpm dev`) — confirm no import errors
 2. In dev mode, the `AuthProvider` auto-authenticates (dev bypass) — confirm `/dashboard` loads without redirect
 3. On `/login`, confirm the dev login card renders and "Dev login" button works
 4. To test the real redirect flow, temporarily disable the dev bypass in `auth-provider.tsx` — visiting `/dashboard` while unauthenticated should redirect to `/login`
-5. If a backend is configured, test the full login/logout flow
+5. If a backend is configured (with cookie mode enabled), test the full login/logout flow — DevTools should show the session cookie as `HttpOnly` and every POST carrying `X-CSRF-Token`
 6. Run tests (`pnpm test`) — confirm no regressions
 
 ### Dev Bypass Behavior
@@ -345,6 +405,9 @@ src/
 │   └── index.ts                      # Feature barrel
 ├── pages/login.tsx                    # Login page
 ├── router.tsx                         # ProtectedRoute wrapping auth'd routes
+├── lib/clients/
+│   ├── csrf.ts                        # csrfHeader() — single source of X-CSRF-Token
+│   └── api-client.ts                  # ApiClient: credentials + CSRF on non-GET
 └── components/layout/
     └── providers.tsx                  # AuthProvider wrapping the app
 ```
@@ -354,7 +417,7 @@ src/
 - NEVER store tokens in `localStorage` — use HttpOnly cookies (set by the backend) or in-memory state
 - NEVER remove the `ENV.IS_DEV` guard on the dev bypass — it must only exist in development
 - NEVER put auth logic directly in page components — use the `useAuth()` hook
-- Always use `credentials: 'include'` in fetch calls to send cookies to the backend — and never without the CSRF pairing from Step 1 (`SameSite` + CSRF token on every non-GET request)
+- Call the backend through `ApiClient` subclasses (Step 3), never a raw `fetch` — it is the one place that sends `credentials: 'include'` and, on every non-GET, `X-CSRF-Token`. The auth service's own three calls are the only exception
 - Always redirect to `/login` on 401 responses — the `ProtectedRoute` handles this for navigation, but API calls should also handle 401s gracefully
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 

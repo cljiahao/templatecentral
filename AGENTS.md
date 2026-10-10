@@ -1,4 +1,4 @@
-<!-- templateCentral: plugin@5.0.0 -->
+<!-- templateCentral: plugin@6.0.0 -->
 # AGENTS.md — templateCentral
 
 templateCentral is a Claude Code plugin — a skill library for scaffolding production-ready apps. This is NOT an application itself.
@@ -61,7 +61,7 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 `CLAUDE.md` = `@AGENTS.md` — Claude Code expands this fully at session start for the main agent.
 
-**Subagent blind spot (v2.1.84+):** Built-in subagents (`/explore`, `/plan`) have `omitClaudeMd: true` — they do not receive CLAUDE.md or its `@AGENTS.md` import. AGENTS.md must therefore be self-contained and not rely on CLAUDE.md being loaded. All routing instructions belong in AGENTS.md, not CLAUDE.md.
+**Subagent blind spot:** The built-in `Explore` and `Plan` subagents skip CLAUDE.md (and its `@AGENTS.md` import) by built-in behavior. Custom subagents receive it by default, but any custom subagent can opt out with `omitClaudeMd: true` in its definition (CC v2.1.271+). AGENTS.md must therefore be self-contained and not rely on CLAUDE.md being loaded — and a custom agent that sets `omitClaudeMd` must restate any constraints it needs in its own prompt. All routing instructions belong in AGENTS.md, not CLAUDE.md.
 
 ## Cross-tool portability
 
@@ -76,7 +76,7 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 - All skill files: `skills/` — read `skills/CONVENTIONS.md` before editing any skill
 - Lint gate: `bash scripts/lint-skills.sh skills/` — must pass before any commit
 - Write new skills: `/tc-write-skill` (repo-internal project skill in `.claude/skills/`)
-- PostToolUse hook: `bash scripts/lint-skills.sh skills/ 2>&1 | tail -10` runs after every Edit/Write — feedback only
+- Repo harness (`.claude/settings.json`): `scripts/pre-guard.sh` blocks secret/`.env` reads and writes (`.env.example` stays editable) and asks before editing instruction, harness or CI files; `scripts/bash-guard.sh` blocks shell access to secret files; `scripts/post-edit-lint.sh` returns lint failures after skill edits — feedback only
 
 ## Rules
 

@@ -10,9 +10,7 @@
 - `src/lib/errors/global-handlers.ts` — `registerGlobalErrorHandlers()` wiring `window.onerror` + `unhandledrejection`, registered in `main.tsx`. Together with the ErrorBoundary this is full client-side error coverage: render-phase (boundary) + async/event/promise (global handlers).
 - `src/lib/errors/index.ts` — barrel re-exporting `logError` and `registerGlobalErrorHandlers`
 
-> **Coverage rule (the client analogue of "wrap every route"):** every uncaught error must reach `logError`, and every API call should flow through one logged client (`src/lib/clients/`) rather than a raw `fetch`. The ErrorBoundary + global handlers cover the first; routing data-fetching through the shared client covers the second.
->
-> **Known gap.** The `templatecentral:add` service examples (`auth`, `feature`, `pagination`) and `standards (validation-patterns)` still show raw `fetch` with an explicit `APIError` throw — those services do reach `logError` via React Query's cache handlers and the global handlers, but they bypass the client's logging. `FetchClient` currently has no `credentials` or per-request-header hook, so cookie-session calls cannot move over as-is. Treat "one logged client" as the target state: new integrations extend `FetchClient` (see `templatecentral:add (integration)`); existing raw-`fetch` services migrate when `FetchClient` grows the missing options.
+> **Coverage rule (the client analogue of "wrap every route"):** every uncaught error must reach `logError`, and every API call should flow through one logged client (`src/lib/clients/`) rather than a raw `fetch`. The ErrorBoundary + global handlers cover the first; the second is `FetchClient`: backend calls go through `ApiClient` subclasses (`templatecentral:add (feature)`, `(pagination)`, `standards (validation-patterns)`, the batcher below) and external APIs through `FetchClient` subclasses (`templatecentral:add (integration)`). The one deliberate raw-`fetch` exception is the auth service's three session calls (`templatecentral:add (auth)`).
 
 > **Production upgrade path:** the homegrown console-JSON + batcher below is vendor-free and right for a scaffold default. For production error tracking, the community standard is **Sentry** (`@sentry/react`) — it auto-installs the ErrorBoundary wrapper + `window.onerror` + `unhandledrejection`, and adds source-map symbolication, breadcrumbs, release tracking, and PII scrubbing (`beforeSend`). Adopt it when you have a DSN; it supersedes the manual handlers above. OpenTelemetry's browser SDK is still experimental — not a client error-tracking replacement yet.
 
@@ -101,11 +99,13 @@ console.error(`${label}:`, {
 
 ### 3. Create `src/lib/logging/log-batcher.ts`
 
-Batched delivery to a backend `/logs` endpoint with console-JSON fallback in dev. Cross-references the `/api` prefix proxy convention: if your project pairs a backend via `VITE_API_BASE_URL`, POST to `${getApiBaseUrl()}/logs`; otherwise logs stay local.
+Batched delivery to a backend `/logs` endpoint with console-JSON fallback in dev. The POST goes through `ApiClient` (`src/lib/clients/api-client.ts`, from `templatecentral:standards (full-stack-pairing)`), so it carries the session cookie and `X-CSRF-Token` once `templatecentral:add (auth)` is applied. **No paired backend** (no `api-client.ts`): drop `LogClient` and the `try` block in `flush()` and keep only the console line — logs stay local.
+
+The backend `/logs` endpoint receives attacker-controllable input: validate it with a strict schema (bounded array length and string sizes), rate-limit it, and log entries as structured fields — never interpolate them into a message string, or a crafted `label` with newlines forges log lines.
 
 ```ts
 // src/lib/logging/log-batcher.ts
-import { getApiBaseUrl } from '@/lib/constants/env';
+import { ApiClient } from '@/lib/clients/api-client';
 
 // Omit<LogEntry, 'timestamp'> would NOT work here: a `[k: string]: unknown` index signature
 // collapses `keyof LogEntry` to `string`, so Omit silently drops the requirement that
@@ -119,6 +119,19 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const BATCH_MS = 5_000;
 const MAX_BATCH = 50;
 
+// FetchClient reports failures with console.error, never logError — so a failing /logs
+// POST cannot re-enqueue itself into a loop.
+class LogClient extends ApiClient {
+  // keepalive lets the request complete even if the tab closes
+  protected override keepalive = true;
+
+  send(batch: LogEntry[]): Promise<void> {
+    return this.request('logs', 'POST', batch);
+  }
+}
+
+let client: LogClient | undefined;
+
 function flush(): void {
   if (queue.length === 0) return;
   const batch = queue.splice(0, MAX_BATCH);
@@ -130,18 +143,12 @@ function flush(): void {
   }
 
   try {
-    const base = getApiBaseUrl();
-    void fetch(`${base}/logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // keepalive lets the request complete even if the tab closes
-      keepalive: true,
-      body: JSON.stringify(batch),
-    }).catch(() => {
+    client ??= new LogClient();
+    client.send(batch).catch(() => {
       // Silently discard — logging must never throw
     });
   } catch {
-    // getApiBaseUrl() throws if VITE_API_BASE_URL is absent; fall back silently
+    // ApiClient's constructor throws if VITE_API_BASE_URL is absent; fall back silently
     console.info('[log-batcher]', JSON.stringify(batch));
   }
   // Trade-off: if queue.length > MAX_BATCH after splice, remainder entries flush on
@@ -255,14 +262,14 @@ NEVER log passwords, tokens, email addresses, or other personal data.
 grep -rn "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" src/lib/logging/ src/lib/errors/
 ```
 
-Any match must be removed or redacted before the code ships.
+Review every match: hits in comments and in `redactLabel` are expected; a hit in a value passed to `logEvent` / `enqueueLog` must be removed before the code ships.
 
 **The grep is necessary but not sufficient.** It scans source text for literal keywords; it cannot see what a value actually holds at runtime. The two payloads that carry PII in this design contain no such keyword anywhere in the source:
 
 | Runtime payload | Why grep misses it | Required control |
 |-----------------|--------------------|------------------|
 | `APIError.data` | An opaque `unknown` — the backend decides what is in it (echoed form fields, session ids, stack traces) | Never forward it to `enqueueLog`; keep it behind `import.meta.env.DEV` for the console only (Step 2) |
-| Breadcrumb labels | `location.pathname` is a plain string — `/reset-password/<token>` matches nothing | `redactLabel()` at `addBreadcrumb()` entry (Step 1) collapses non-word segments |
+| Breadcrumb labels | `location.pathname` is a plain string — `/reset-password/<token>` matches nothing | `redactLabel()` at `addBreadcrumb()` entry (Step 1) collapses non-word segments. Word-shaped values (`/users/alice`) still pass — avoid usernames/emails in paths, or tighten `SAFE_SEGMENT` to an allowlist of known route words |
 
 Before shipping, confirm both by inspection, not by grep:
 

@@ -20,7 +20,8 @@ API_PORT=8000
 # CORS (comma-separated origins for production; in dev, localhost ports are allowed by default)
 CORS_ORIGINS=http://localhost:3000
 
-# Reverse proxy trust — set to VPC CIDR (e.g. 10.0.0.0/8) or * when behind ALB → Traefik; leave empty for local dev
+# Reverse proxy trust — comma-separated IPs/CIDRs (no hop count). One-hop ALB → App: ALB VPC CIDR (e.g. 10.0.0.0/8).
+# Two-hop ALB → Traefik → App: Traefik's AND the ALB's CIDRs. * only in closed networks. Empty for local dev.
 TRUST_PROXY=
 ```
 
@@ -55,7 +56,14 @@ def run_api() -> None:
     # the uvicorn/uvicorn.access loggers with propagate=False, which bypasses the root
     # handler setup_logging() configures. Without this, uvicorn's own startup/access logs
     # never go through structlog's JSON formatting in prod, only app-level logger calls do.
-    uvicorn.run("app:app", host=host, port=port, reload=reload, log_config=None)
+    uvicorn.run(
+        "app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_config=None,
+        server_header=False,
+    )
 
 
 if __name__ == "__main__":
@@ -75,38 +83,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from api.routes import router
 from core.config import api_settings, common_settings
+from core.security_headers import SECURITY_HEADERS
 from error_handler import configure_exceptions
-
-
-def _build_security_headers() -> list[tuple[bytes, bytes]]:
-    # Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is skipped in dev — the
-    # built-in docs UI at /docs is otherwise blocked from rendering in IDE-embedded preview
-    # panes (most render via <iframe>, and browsers enforce these headers even for localhost).
-    # Full protection still applies in every deployed environment (prod, uat).
-    is_dev = common_settings.ENVIRONMENT == "dev"
-    headers = [
-        (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
-        (b"x-content-type-options", b"nosniff"),
-        (b"referrer-policy", b"strict-origin-when-cross-origin"),
-        (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-        (
-            b"x-xss-protection",
-            b"0",
-        ),  # Disable legacy XSS auditor (exploitable in older browsers)
-        # CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
-        (
-            b"content-security-policy",
-            b"base-uri 'self'; object-src 'none'"
-            if is_dev
-            else b"frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
-        ),
-    ]
-    if not is_dev:
-        headers.append((b"x-frame-options", b"DENY"))
-    return headers
-
-
-_SECURITY_HEADERS = _build_security_headers()
 
 
 class SecurityHeadersMiddleware:
@@ -121,7 +99,7 @@ class SecurityHeadersMiddleware:
         async def _send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend(_SECURITY_HEADERS)
+                headers.extend(SECURITY_HEADERS)
                 message = {**message, "headers": headers}
             await send(message)
 
@@ -129,10 +107,11 @@ class SecurityHeadersMiddleware:
 
 
 class ForwardedHostMiddleware:
-    """Patches scope['server'] from X-Forwarded-Host so request.base_url reflects the public hostname.
+    """Rewrites the Host header from X-Forwarded-Host so request.base_url reflects the public hostname.
 
     uvicorn's ProxyHeadersMiddleware handles X-Forwarded-Proto and X-Forwarded-For but not
-    X-Forwarded-Host, leaving request.base_url with the internal container hostname.
+    X-Forwarded-Host. Starlette builds request.url/base_url from the Host header (scope['server']
+    is only a fallback when Host is absent), so the Host header itself is what must change.
 
     Trust model: only mounted when TRUST_PROXY is set (see configure_proxy_headers), and added
     AFTER ProxyHeadersMiddleware so it runs outermost — scope['client'] is still the direct peer
@@ -167,13 +146,13 @@ class ForwardedHostMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket") and self._peer_is_trusted(scope):
-            headers = dict(scope["headers"])
-            if b"x-forwarded-host" in headers:
-                host = (
-                    headers[b"x-forwarded-host"].decode("latin-1").split(",")[0].strip()
-                )
-                port = scope.get("server", (host, 80))[1]
-                scope["server"] = (host, port)
+            forwarded = next(
+                (v for k, v in scope["headers"] if k == b"x-forwarded-host"), None
+            )
+            host = forwarded.split(b",")[0].strip() if forwarded else b""
+            if host:
+                headers = [(k, v) for k, v in scope["headers"] if k != b"host"]
+                scope = {**scope, "headers": [*headers, (b"host", host)]}
         await self.app(scope, receive, send)
 
 
@@ -201,10 +180,15 @@ def configure_security_headers(app: FastAPI) -> None:
 def configure_proxy_headers(app: FastAPI) -> None:
     """Enables reverse-proxy header trust when TRUST_PROXY is set.
 
-    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments.
+    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments. uvicorn takes
+    comma-separated IPs/CIDRs, not a hop count: it walks X-Forwarded-For right-to-left and
+    returns the first address NOT in TRUST_PROXY as the client.
     One-hop (ALB → App): set TRUST_PROXY to the ALB's VPC CIDR (e.g. 10.0.0.0/8).
-    Two-hop (ALB → Traefik → App): set TRUST_PROXY to Traefik's container CIDR or use *.
-    Use * only in closed networks — it trusts any forwarded IP.
+    Two-hop (ALB → Traefik → App): TRUST_PROXY must cover BOTH Traefik's container CIDR and
+    the ALB's CIDR (comma-separated, or one VPC CIDR spanning both) — trusting Traefik alone
+    resolves every client to the ALB's IP. Traefik must also keep the ALB's X-Forwarded-For
+    (entryPoints forwardedHeaders.trustedIPs = ALB CIDR).
+    Use * only in closed networks — it takes the leftmost, client-supplied X-Forwarded-For entry.
     """
     if not api_settings.TRUST_PROXY:
         return
@@ -235,13 +219,14 @@ def start_application() -> FastAPI:
         redoc_url="/redoc" if is_dev else None,
         openapi_url="/openapi.json" if is_dev else None,
         swagger_ui_parameters={
-            "defaultModelsExpandDepth": -1,  # Hide models section by default
-            "docExpansion": "none",  # Collapse all sections by default
+            "defaultModelsExpandDepth": -1,
+            "docExpansion": "none",
         },
     )
 
-    configure_security_headers(app)
+    # Last added runs outermost: security headers wrap CORS so preflight responses get them too.
     configure_cors(app)
+    configure_security_headers(app)
     configure_proxy_headers(app)
     configure_exceptions(app)
     app.include_router(router)
@@ -249,7 +234,6 @@ def start_application() -> FastAPI:
     return app
 
 
-# Initialize the FastAPI application
 app = start_application()
 ```
 
@@ -259,13 +243,14 @@ app = start_application()
 from collections.abc import Sequence
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette import status
 
 from core.exceptions import InvalidInputError, NoResultsFound
 from core.logging import logger
+from core.security_headers import SECURITY_HEADERS
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
@@ -315,15 +300,9 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(
-        request: Request, exc: HTTPException
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers=dict(exc.headers) if exc.headers else None,
-        )
+    # HTTPException deliberately has no handler here: FastAPI's built-in one already
+    # returns this {"detail": ...} envelope with exc.headers, covers router-level 404/405,
+    # and sends an empty body for no-body statuses (1xx/204/205/304).
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(
@@ -346,6 +325,7 @@ def configure_exceptions(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": INTERNAL_SERVER_ERROR_DETAIL},
+            headers={k.decode(): v.decode() for k, v in SECURITY_HEADERS},
         )
 ```
 
@@ -356,10 +336,50 @@ def configure_exceptions(app: FastAPI) -> None:
 
 *(empty file)*
 
+### `src/core/security_headers.py`
+
+```python
+from core.config import common_settings
+
+
+def _build() -> list[tuple[bytes, bytes]]:
+    # Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is skipped in dev — the
+    # built-in docs UI at /docs is otherwise blocked from rendering in IDE-embedded preview
+    # panes (most render via <iframe>, and browsers enforce these headers even for localhost).
+    # Full protection still applies in every deployed environment (prod, uat).
+    is_dev = common_settings.ENVIRONMENT == "dev"
+    headers = [
+        (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+        (b"x-content-type-options", b"nosniff"),
+        (b"referrer-policy", b"strict-origin-when-cross-origin"),
+        (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+        # "0" disables the legacy XSS auditor, itself exploitable in older browsers.
+        (b"x-xss-protection", b"0"),
+        # API responses carry per-user data; never let shared caches store them.
+        (b"cache-control", b"no-store"),
+        # JSON-only API outside dev (docs are dev-only), so nothing may load: OWASP REST
+        # baseline. Dev stays loose enough for the /docs UI.
+        (
+            b"content-security-policy",
+            b"base-uri 'self'; object-src 'none'"
+            if is_dev
+            else b"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        ),
+    ]
+    if not is_dev:
+        headers.append((b"x-frame-options", b"DENY"))
+    return headers
+
+
+# Shared by SecurityHeadersMiddleware and the unhandled-exception handler: Starlette runs
+# that handler in ServerErrorMiddleware, outside every user middleware.
+SECURITY_HEADERS = _build()
+```
+
 ### `src/core/config.py`
 
 ```python
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -383,7 +403,9 @@ class CommonSettings(BaseSettings):
         - [Issues](https://www.github.com/issues)
         """
     )
-    ENVIRONMENT: str = Field(default="dev")
+    # Closed set (parity with NestJS's z.enum): an unknown value such as "production" must
+    # fail at boot, not slip past main.py's prod/uat check and run with auto-reload on.
+    ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
 
 
 class APISettings(BaseSettings):
@@ -422,7 +444,9 @@ class APISettings(BaseSettings):
 
 
 common_settings = CommonSettings()
-api_settings = APISettings()
+# Fields without a default (e.g. added by templatecentral:add) are filled from the
+# environment at runtime; pyright only sees the constructor signature and flags them.
+api_settings = APISettings()  # pyright: ignore[reportCallIssue]
 ```
 
 ### `src/core/exceptions.py`
@@ -497,11 +521,9 @@ class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         file_path = Path(default_name)
         tail = file_path.name
 
-        # Ensure log directory and subdirectories exist
         mth_fol = dm.log_dir / dt.now().strftime("%b%Y")
         dm.create_directory(mth_fol)
 
-        # Construct new filename with the month-year prefix
         arr = tail.split(".")
         ext = arr.pop()
         fname = "_".join(arr) + f".{ext}"
@@ -627,7 +649,6 @@ class DirectoryManager:
         """Initialize directory paths and ensure required folders exist."""
         self.base_dir = Path(__file__).resolve().parent.parent
 
-        # Log folder
         self.log_dir = self.base_dir / "log"
 
         self._initialize_base_folders()
@@ -1127,8 +1148,9 @@ Create `<target-directory>/` and write, verbatim:
 
 - From Part B (`config-files.md`): `Dockerfile`, `docker-entrypoint.sh`, `.dockerignore`, `.gitignore`, `.env.example`, `pyproject.toml`, `pyrightconfig.json`, `requirements-dev.txt`.
 - From Part C (this file): every `###`-headed source file above, at the path given in its heading.
+- `README.md` — brief project intro (name + the one-sentence description from Step 2) and a Quickstart listing the commands from Step 4 (venv + install) and the run/test/lint commands from the AGENTS.md `## Commands` block in Step 6. The documentation kit (harness-kit Step E3) never overwrites this prose — it only appends the root `## Structure` section.
 
-Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4. Do NOT create `README.md` here — the documentation kit generates it later (Step E3).
+Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4.
 
 ### 2. Update project settings
 
@@ -1149,10 +1171,10 @@ cp src/.env.default src/.env
 
 ```bash
 git init
-python -m venv .venv
+python3.14 -m venv .venv    # Python 3.14 — matches the Dockerfile image, ruff target-version and pyright pythonVersion
 source .venv/bin/activate   # Linux/Mac
 
-pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.9.0" pydantic-settings python-dotenv python-multipart "structlog>=25.1" "starlette>=1.0.1"
+pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.12" pydantic-settings python-dotenv "python-multipart>=0.0.31" "structlog>=25.1" "starlette>=1.3.1"
 
 # Freeze BEFORE dev deps are installed — requirements.txt is what the Dockerfile's
 # prod-deps stage installs, so it must contain runtime packages only.
@@ -1182,11 +1204,11 @@ python -m pyright src/     # zero type errors
 Create `AGENTS.md` at the project root with this exact content (fill in `[Project Name]`):
 
 ```markdown
-<!-- templateCentral: fastapi@5.0.0 -->
+<!-- templateCentral: fastapi@6.0.0 -->
 # AGENTS.md — [Project Name]
 
 ## Stack
-FastAPI 0.136+ · Python 3.13 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
+FastAPI 0.136+ · Python 3.14 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
 
 ## Commands
 ```bash
@@ -1218,7 +1240,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 | Skill | When to use |
 |-------|-------------|
 | `templatecentral:add (auth)` | JWT/OAuth/session auth |
-| `templatecentral:add (database)` | connect SQLAlchemy/Beanie |
+| `templatecentral:add (database)` | connect SQLAlchemy/MongoDB |
 | `templatecentral:add (endpoint)` | new route + schema + service method |
 | `templatecentral:migrate` | DB migrations or framework upgrades |
 | `templatecentral:standards` | drift check, validation patterns |
@@ -1230,7 +1252,7 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 - Comments explain *why*, not *what* — no commented-out code (Ruff `ERA`), no change-narration (`# was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit.md Step G; not embedded here to avoid duplication.)
+(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
@@ -1242,6 +1264,9 @@ Load the shared harness kit using the **fastapi** row of its delta table:
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
+cat "<skill-dir>/shared/harness-kit-fastapi.md"
+cat "<skill-dir>/shared/harness-kit-enforcement.md"
+cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
 Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
@@ -1291,6 +1316,8 @@ Create `CLAUDE.md` at the project root with exactly one line:
 ```
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
+
+After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
 
 ### 8. Task management (optional)
 
