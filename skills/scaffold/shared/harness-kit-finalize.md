@@ -137,7 +137,7 @@ sha256_comment_patterns=$(sha256 .claude/comment-hygiene-patterns.txt)
 # CI (Step B3) — the one file seeded for this host, plus the shared gate script:
 [ -f .github/workflows/ci.yml ] && sha256_ci=$(sha256 .github/workflows/ci.yml)
 [ -f azure-pipelines/templatecentral-gates.yml ] && sha256_ci=$(sha256 azure-pipelines/templatecentral-gates.yml)
-sha256_cigates=$(sha256 .claude/ci-gates.sh)
+[ -f .claude/ci-gates.sh ] && sha256_cigates=$(sha256 .claude/ci-gates.sh)
 sha256_verifyh=$(sha256 .claude/verify-harness.sh)
 sha256_regenh=$(sha256 .claude/regen-harness.sh)
 ```
@@ -145,7 +145,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "6.0.2",
+  "templatecentral_version": "6.0.3",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -179,7 +179,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 > The `AGENTS.md` (and `CLAUDE.md`) hashes written here are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`.
 > Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step G (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
-> On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml`. Add one entry per `.claude/hooks/local/*` script the loop above prints.
+> On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml` — or omit both CI entries and the `ci-gates.sh` entry when Step B3 seeded neither because the project's pipelines already cover them. Add one entry per `.claude/hooks/local/*` script the loop above prints.
 
 ---
 
@@ -295,7 +295,7 @@ PostToolUse: incremental type-check (see delta table for stack command) and a co
 Stop hook: runs the full test suite when there are uncommitted changes; exit 2 feeds failures to Claude via stderr; exit 0 on pass (Claude Code caps consecutive Stop continuations — 8 by default). SubagentStop: type-gates a subagent's uncommitted changes (read-only Explore/Plan agents skipped).
 Hook wiring: every `settings.json` hook is `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]` — an array-valued `command` is silently ignored by Claude Code.
 Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files, plus a readme-coupling staleness warning and a comment-hygiene warning; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line/comment-hygiene gates run in CI.
-CI (GitHub Actions `.github/workflows/ci.yml`, or on Azure DevOps the `azure-pipelines/templatecentral-gates.yml` steps template included from the PR pipeline): the harness integrity check plus `.claude/ci-gates.sh` gates — a gitleaks secret scan (the PR's commits; full history off-PR) via the checksum-verified MIT CLI, a changelog-touched check, a readme-freshness check, and a comment-hygiene check on added lines (bypass labels `skip-changelog` / `skip-readme-check` / `skip-comment-check`; on Azure, queue with variable `LABELS`). GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sync (`--frozen-lockfile`); on Azure the project pipeline owns those steps.
+CI (GitHub Actions `.github/workflows/ci.yml`, or on Azure DevOps either the project's own pipelines — when they already run gitleaks and the harness check — or the `azure-pipelines/templatecentral-gates.yml` steps template included from the PR pipeline): the harness integrity check plus `.claude/ci-gates.sh` gates — a gitleaks secret scan (the PR's commits; full history off-PR) via the checksum-verified MIT CLI, a changelog-touched check, a readme-freshness check, and a comment-hygiene check on added lines (bypass labels `skip-changelog` / `skip-readme-check` / `skip-comment-check`; on Azure, queue with variable `LABELS`). GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sync (`--frozen-lockfile`); on Azure the project pipeline owns those steps.
 Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
 Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
