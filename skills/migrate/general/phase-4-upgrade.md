@@ -115,14 +115,14 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and wiring for the 6 hook events templateCentral seeds).
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), `.claude/comment-hygiene-patterns.txt` (the canonical pattern list the new hook, the `comment-hygiene` lefthook command, and the `comment-hygiene` CI job all read at runtime), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
-- **Step B3** — CI quality gates (`.github/workflows/ci.yml`).
+- **Step B3** — CI quality gates: `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both).
 - **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`) — Phase 5d's re-sync and the pre-push hook both call this, so it MUST be seeded here.
 - **Step B5** — the `/skill-audit` project skill (consumes `skill-usage-log.sh`).
 - **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md`.
 
 The scripts are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing after adoption even if the plugin is removed.
 
-**Adoption (merge, never clobber):** if `.claude/settings.json`, `lefthook.yml`, `.github/workflows/ci.yml`, or `.gitleaks.toml` already exists, merge the kit's entries into the existing file instead of overwriting; warn on any conflict. In `settings.json`, an existing hook entry that points at a `.claude/hooks/` script with an array-valued `command` (pre-6.0.0 form — Claude Code never ran it) or without the `${CLAUDE_PROJECT_DIR}` prefix is **replaced** by the kit's exec-form entry, not kept alongside it; a leftover `PostToolUseFailure` → `post-tool-failure.sh` entry is removed **and** `.claude/hooks/post-tool-failure.sh` itself is deleted (with its `harness.json` entry, if any) — the script is no longer seeded, and a stale copy would otherwise linger as an un-wired, un-hashed file.
+**Adoption (merge, never clobber):** if the project already runs another git-hook manager, wire the Step B2 commands (secret scan, commit-msg, pre-push verify) into it instead of adding lefthook, and record the choice in AGENTS.md; existing pipelines include the Step B3 gates template rather than gaining a second pipeline. Move any project-specific guard into `.claude/hooks/local/` (kit Step A, "Project-local guards") instead of editing a canonical hook. If `.claude/settings.json`, `lefthook.yml`, `.github/workflows/ci.yml`, or `.gitleaks.toml` already exists, merge the kit's entries into the existing file instead of overwriting; warn on any conflict. In `settings.json`, an existing hook entry that points at a `.claude/hooks/` script with an array-valued `command` (pre-6.0.0 form — Claude Code never ran it) or without the `${CLAUDE_PROJECT_DIR}` prefix is **replaced** by the kit's exec-form entry, not kept alongside it; a leftover `PostToolUseFailure` → `post-tool-failure.sh` entry is removed **and** `.claude/hooks/post-tool-failure.sh` itself is deleted (with its `harness.json` entry, if any) — the script is no longer seeded, and a stale copy would otherwise linger as an un-wired, un-hashed file.
 
 **Step 4d-1: Convert seeded skills to directory form**
 
@@ -191,7 +191,7 @@ Before running against production: verify `DATABASE_URL` in `.env.local` points 
 
 **Step 4f: Create `.claude/harness.json`**
 
-Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, the `<stack>-verify` and `skill-audit` skills, plus `next-migrate` for nextjs) and writes the complete manifest. Include only files that were actually created or merged. The kit is the single source for this manifest — do not maintain a separate copy here.
+Execute kit **Step E** — it hashes **every** seeded file (all 9 hooks, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, the host's CI file, `.claude/ci-gates.sh`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, any `.claude/hooks/local/*` scripts, the `<stack>-verify` and `skill-audit` skills, plus `next-migrate` for nextjs) and writes the complete manifest. Include only files that were actually created or merged. The kit is the single source for this manifest — do not maintain a separate copy here.
 
 **Step 4f-1b: Seed the base snapshot**
 
@@ -242,7 +242,9 @@ Changes made:
   lefthook.yml                   — git-hook layer
   .lefthook/commit-msg.sh        — Conventional Commits gate
   .gitleaks.toml                 — secret-scan config
-  .github/workflows/ci.yml       — CI quality gates
+  .claude/ci-gates.sh            — PR merge gates (secrets, changelog, readme, comments)
+  .github/workflows/ci.yml       — CI quality gates (GitHub) — or
+  azure-pipelines/templatecentral-gates.yml — steps template (Azure DevOps)
   .claude/verify-harness.sh      — harness integrity verifier
   .claude/regen-harness.sh       — human-run baseline re-bless (never agent-run)
   .claude/skills/skill-audit/    — repeat-workflow surfacing skill

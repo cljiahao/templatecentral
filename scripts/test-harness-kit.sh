@@ -67,7 +67,7 @@ EXPECTED="protect-files.ts.sh protect-files.py.sh block-no-verify.ts.sh block-no
 user-prompt-guard.cjs user-prompt-guard.py post-edit-typecheck.ts.sh post-edit-typecheck.py.sh
 post-edit-comment-check.ts.sh post-edit-comment-check.py.sh stop-checks.ts.sh stop-checks.py.sh
 subagent-stop.ts.sh subagent-stop.py.sh session-context.sh skill-usage-log.sh commit-msg.sh
-verify-harness.sh"
+verify-harness.sh ci-gates.sh"
 missing=""
 for f in $EXPECTED; do [[ -s "$KIT/$f" ]] || missing+=" $f"; done
 if [[ -n "$missing" ]]; then
@@ -140,16 +140,19 @@ expect_edit() {
 }
 
 for p in .env .ENV ./.env.local "$PF/.env.production" "$ALIAS/.Env" \
-  .github/workflows/ci.yml ./.GitHub/Workflows/ci.yml "$PF/azure-pipelines.prod.yaml" \
-  secrets/a.txt certs/server.PEM "$PF/src/../.github/actions/x/action.yml" \
-  'src/../.github/workflows/x.yml' 'a/b/../../.github/workflows/x.yml' './src/./../secrets/k.txt' \
-  'nope/../.github/actions/a/action.yml' 'zz/../real/../.github/workflows/c.yml'; do
+  secrets/a.txt certs/server.PEM './src/./../secrets/k.txt'; do
   expect_edit 2 "$p"
+done
+for p in .github/workflows/ci.yml ./.GitHub/Workflows/ci.yml "$PF/azure-pipelines.prod.yaml" \
+  azure-pipelines/ci.dev.yaml ./Azure-Pipelines/PR.AGENT.md "$PF/src/../azure-pipelines/stages/x.yml" \
+  "$PF/src/../.github/actions/x/action.yml" 'src/../.github/workflows/x.yml' 'a/b/../../.github/workflows/x.yml' \
+  'nope/../.github/actions/a/action.yml' 'zz/../real/../.github/workflows/c.yml' .gitlab-ci.yml Jenkinsfile; do
+  expect_edit ask "$p"
 done
 for p in "$PF/AGENTS.md" agents.md ./CLAUDE.md "$ALIAS/.claude/settings.json" \
   "$PF/src/../.claude/hooks/x.sh" 'docs/weird"name/../../Dockerfile' 'sub/we"ird\dir/AGENTS.md' dockerfile \
   'src/../.claude/settings.json' "$PF/x/y/../../.claude/hooks/h.sh" 'src/../AGENTS.md' 'no/../lefthook.yml' \
-  'q/../w/../.claude/agents/a.md'; do
+  'q/../w/../.claude/agents/a.md' .claude/ci-gates.sh; do
   expect_edit ask "$p"
 done
 for p in .env.example ./.env.default src/app.ts "$PF/src/app.ts" "$PF/src/new/deep/dir/x.ts" "" \
@@ -509,6 +512,12 @@ expect_verify 2 '{"seeded_files":{}}' "empty seeded_files"
 expect_verify 2 '{"seeded_files":{"a":{"path":"AGENTS.md","origin_hash":"abc"}}}' "no guarded hook files"
 expect_verify 2 "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$V/.claude/hooks/a.sh")\"},\"b\":{\"path\":\".claude/hooks/b.sh\",\"origin_hash\":\"<sha256_hook_2>\"}}}" "unfilled hash placeholder"
 expect_verify 2 '{"nothing":1}' "missing seeded_files"
+for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
+  mkdir -p "$V/$(dirname "$gp")"; echo x > "$V/$gp"
+  CG="{\"seeded_files\":{\"g\":{\"path\":\"$gp\",\"origin_hash\":\"$(sha "$V/$gp")\"}}}"
+  echo y >> "$V/$gp"
+  expect_verify 1 "$CG" "flags a modified $gp"
+done
 
 # ── commit-msg.sh ─────────────────────────────────────────────────────────────
 
@@ -549,20 +558,38 @@ for kit_md in "${KIT_MDS[@]}"; do
   check 0 "$?" "$k secret-scan skips when gitleaks is absent"
 done
 for kit_md in "${KIT_MDS[@]}"; do
-  grep -q 'Install gitleaks' "$kit_md" || continue
   k=$(basename "$kit_md")
-  check 0 "$(grep -cE 'uses: gitleaks/|secrets\.GITLEAKS_LICENSE|gitleaks protect --' "$kit_md")" "$k uses no gitleaks-action / licence / protect"
-  check 1 "$(grep -c '^          GITLEAKS_SHA256: ' "$kit_md")" "$k CI pins the gitleaks SHA-256 once"
-  grep -q '| sha256sum -c -$' "$kit_md"
-  check 0 "$?" "$k CI verifies the gitleaks checksum"
+  check 0 "$(grep -cE 'uses: gitleaks/|secrets\.GITLEAKS_LICENSE|gitleaks protect --|Install gitleaks' "$kit_md")" "$k uses no gitleaks-action / licence / protect / inline install"
   check 0 "$(grep -c 'log-opts=.*first-parent' "$kit_md")" "$k CI PR range has no --first-parent"
 done
+check 1 "$(grep -c '^    GITLEAKS_SHA256="' "$KIT/ci-gates.sh")" "ci-gates pins the gitleaks SHA-256 once"
+grep -q '| sha256sum -c - ||' "$KIT/ci-gates.sh"
+check 0 "$?" "ci-gates verifies the gitleaks checksum"
+rm -f "$GLS/argv"
+(cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=0 bash "$KIT/ci-gates.sh" secrets refs/heads/main >/dev/null 2>&1)
+check "0:git --redact --no-banner --log-opts=origin/main..HEAD" "$?:$(cat "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans only the PR range"
+(cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=0 bash "$KIT/ci-gates.sh" secrets >/dev/null 2>&1)
+check "0:git --redact --no-banner" "$?:$(cat "$GLS/argv" 2>/dev/null)" "ci-gates secrets scans full history off-PR"
+(cd "$FEAT" && PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-gates.sh" secrets main >/dev/null 2>&1)
+check 1 "$?" "ci-gates secrets fails on a finding"
+out=$(cd "$FEAT" && TF_BUILD=True PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-gates.sh" secrets main 2>&1)
+check 1 "$(grep -c '^##vso\[task.logissue type=error\]' <<<"$out")" "ci-gates reports errors in Azure Pipelines format"
+bash "$KIT/ci-gates.sh" nope >/dev/null 2>&1
+check 2 "$?" "ci-gates rejects an unknown gate"
+for g in changelog readme comments; do
+  (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
+  check 0 "$?" "ci-gates $g skips off-PR"
+done
+for g in changelog readme comments; do
+  (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" no-such-branch) >/dev/null 2>&1
+  check 1 "$?" "ci-gates $g fails closed when the base ref is missing"
+done
 
-# ── README gates (lefthook readme-coupling + CI readme-freshness) ─────────────
+# ── README gates (lefthook readme-coupling) + CI gates (ci-gates.sh) ──────────
 
 # extract_run <kit_md> <anchor-regex> — the dedented `run: |` body after the anchor line.
 extract_run() {
-  python3 - "$1" "$2" <<'PY'
+  python3 - "$1" "$2" <<'PY2'
 import re, sys
 lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
 for i, l in enumerate(lines):
@@ -577,40 +604,64 @@ for i, l in enumerate(lines):
         if b.strip() and len(b) - len(b.lstrip()) < ind:
             break
         body.append(b[ind:])
-    print("\n".join(body).replace("${{ github.base_ref }}", "main"))
+    print("\n".join(body))
     sys.exit()
-PY
+PY2
+}
+# gate_repo — a repo whose origin/main has src/a.ts + its README and harness/CI files.
+gate_repo() {
+  local r
+  r=$(new_repo main)
+  mkdir -p "$r/src" "$r/.claude/hooks" "$r/.github/workflows" "$r/azure-pipelines"
+  touch "$r/src/a.ts" "$r/src/README.md" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml" "$r/azure-pipelines/ci.yml"
+  cp "$REPO_ROOT/skills/scaffold/shared/comment-hygiene-patterns.txt" "$r/.claude/comment-hygiene-patterns.txt"
+  git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm base
+  git -C "$r" update-ref refs/remotes/origin/main HEAD
+  echo "$r"
+}
+# expect_gate <want-exit> <gate> <repo> <description> [LABELS]
+expect_gate() {
+  (cd "$3" && LABELS="${5:-}" bash "$KIT/ci-gates.sh" "$2" main) >/dev/null 2>&1
+  check "$1" "$?" "ci-gates $2 $4"
 }
 # Harness-internal folders never get a README (documentation-kit prunes them), so a change
 # there must not trip either gate; an ordinary folder without its README still must.
 for kit_md in "${KIT_MDS[@]}"; do
   k=$(basename "$kit_md")
-  for gate in '^    readme-coupling:' '^  readme-freshness:'; do
-    body=$(extract_run "$kit_md" "$gate")
-    [[ -n "$body" ]] || continue
-    r=$(new_repo main)
-    mkdir -p "$r/src" "$r/.claude/hooks" "$r/.github/workflows"
-    touch "$r/src/a.ts" "$r/src/README.md" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml"
-    git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm base
-    git -C "$r" update-ref refs/remotes/origin/main HEAD
-    echo 1 >> "$r/.claude/hooks/x.sh"; echo 1 >> "$r/.github/workflows/ci.yml"
-    git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm harness
-    if [[ "$gate" == *coupling* ]]; then
-      echo 2 >> "$r/.claude/hooks/x.sh"; git -C "$r" add -A
-      out=$(cd "$r" && sh -c "$body" 2>&1)
-      check 0 "$(printf '%s' "$out" | grep -c '\.claude\|\.github')" "$k readme-coupling skips harness folders"
-      echo 1 >> "$r/src/a.ts"; git -C "$r" add -A
-      out=$(cd "$r" && sh -c "$body" 2>&1)
-      check 1 "$(printf '%s' "$out" | grep -c '  - src/')" "$k readme-coupling warns on src/ without README"
-    else
-      (cd "$r" && LABELS="" bash -c "$body") >/dev/null 2>&1
-      check 0 "$?" "$k readme-freshness passes a harness-only PR"
-      echo 1 >> "$r/src/a.ts"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm src
-      (cd "$r" && LABELS="" bash -c "$body") >/dev/null 2>&1
-      check 1 "$?" "$k readme-freshness fails src/ without README"
-    fi
-  done
+  body=$(extract_run "$kit_md" '^    readme-coupling:')
+  [[ -n "$body" ]] || continue
+  r=$(gate_repo)
+  echo 2 >> "$r/.claude/hooks/x.sh"; git -C "$r" add -A
+  out=$(cd "$r" && sh -c "$body" 2>&1)
+  check 0 "$(printf '%s' "$out" | grep -c '\.claude\|\.github')" "$k readme-coupling skips harness folders"
+  echo 1 >> "$r/src/a.ts"; git -C "$r" add -A
+  out=$(cd "$r" && sh -c "$body" 2>&1)
+  check 1 "$(printf '%s' "$out" | grep -c '  - src/')" "$k readme-coupling warns on src/ without README"
 done
+
+r=$(gate_repo)
+echo 1 >> "$r/.claude/hooks/x.sh"; echo 1 >> "$r/.github/workflows/ci.yml"; echo 1 >> "$r/azure-pipelines/ci.yml"
+git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm harness
+expect_gate 0 readme "$r" "passes a harness-only PR"
+expect_gate 0 changelog "$r" "passes a PR without src/ changes"
+echo 1 >> "$r/src/a.ts"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm src
+expect_gate 1 readme "$r" "fails src/ without README"
+expect_gate 0 readme "$r" "honours skip-readme-check" "x skip-readme-check"
+expect_gate 1 changelog "$r" "fails src/ without CHANGELOG"
+big=$(gate_repo)
+for i in $(seq 1 3000); do echo "src/f$i.ts"; done | (cd "$big" && xargs touch)
+git -C "$big" add -A && git -C "$big" "${GIT_ID[@]}" commit -qm many
+expect_gate 1 changelog "$big" "fails a large src/ change without CHANGELOG"
+expect_gate 0 changelog "$r" "honours skip-changelog" "skip-changelog"
+echo 1 >> "$r/CHANGELOG.md"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm log
+expect_gate 0 changelog "$r" "passes src/ with CHANGELOG"
+printf '// Retries because the upstream drops idle sockets\nconst b = 1\n' > "$r/src/b.ts"
+git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm why
+expect_gate 0 comments "$r" "passes a WHY comment"
+printf '// Added retry on timeout\nconst c = 1\n' > "$r/src/c.ts"
+git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm narr
+expect_gate 1 comments "$r" "fails a change-narration comment"
+expect_gate 0 comments "$r" "honours skip-comment-check" "skip-comment-check"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 

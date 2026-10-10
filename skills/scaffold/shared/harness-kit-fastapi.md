@@ -86,12 +86,12 @@ Per-stack bodies for kit Steps A, B, B2, and B3 (FastAPI). Write each where `har
 
 ## Step B — hook scripts (FastAPI)
 
-**`.claude/hooks/protect-files.sh`** (canonical — strongest variant, adopted from NestJS; blocks `secrets/*` and `.secrets/*` hard):
+**`.claude/hooks/protect-files.sh`** (canonical — hard-blocks secrets, `secrets/*`, `.secrets/*` and certs; asks before CI and governance edits):
 
 **For FastAPI — uses `python3` for JSON parsing:**
 ```bash
 #!/usr/bin/env bash
-# PreToolUse(Edit|Write|NotebookEdit) — protect secrets, CI, cert, and governance files.
+# PreToolUse(Edit|Write|NotebookEdit) — block secrets and certs; ask before CI and governance edits.
 # Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
 # Fail closed: a guard that cannot locate the project root blocks rather than guessing.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: protect-files.sh cannot cd to the project root — refusing the write." >&2; exit 2; }
@@ -133,12 +133,7 @@ canon() {
 abs=$(canon "$abs"); abs=$(canon "$abs")   # 2nd pass: the folded path may now cross an existing (symlinked) dir
 rel="${abs#"$root"/}"
 
-if [[ "$rel" == .github/workflows/* || "$rel" == .github/actions/* || "$rel" == .azuredevops/* \
-   || "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
-   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ]]; then
-  echo "BLOCKED: $rel is a CI/CD pipeline definition (GitHub / Azure DevOps / GitLab / Jenkins) — requires human review." >&2
-  exit 2
-elif [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
+if [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
   echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
   exit 2
 elif [[ "$base" =~ \.(pem|key|p12|pfx|secret)$ ]] || [[ "$base" == "credentials.json" || "$base" == ".netrc" || "$base" == ".secrets" ]]; then
@@ -154,13 +149,18 @@ case "$rel" in
   .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
   .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
-  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh) reason="harness integrity baseline/verifier — editing it can defeat drift detection" ;;
+  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh) reason="harness integrity baseline/verifier or CI gate script — editing it can defeat drift detection or a merge gate" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
   lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
   .claude/comment-hygiene-patterns.txt|*/.claude/comment-hygiene-patterns.txt) reason="comment-hygiene enforcement pattern list — editing it can silently weaken the CI hard gate" ;;
   .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
+  .github/workflows/*|.github/actions/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) reason="CI/CD pipeline definition — changes skip or weaken the merge gates" ;;
 esac
+if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
+   || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ) ]]; then
+  reason="CI/CD pipeline definition — changes skip or weaken the merge gates"
+fi
 if [ -n "$reason" ]; then
   # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
   # (`exit 1` + stderr is NON-blocking on PreToolUse — the edit goes through and the warning
@@ -332,7 +332,9 @@ exit 0
 ```python
 #!/usr/bin/env python3
 # UserPromptSubmit — OWASP LLM01 injection guard + LLM02 credential-leak detection. Exit 2 = block.
-import json, re, sys
+import json
+import re
+import sys
 
 try:
     prompt = json.load(sys.stdin).get('prompt', '') or ''
@@ -377,7 +379,7 @@ for pat, label in credentials:
         sys.stderr.write(f'Blocked: prompt may contain a real credential — {label} (OWASP LLM02). Do not paste secrets; use env vars.\n')
         sys.exit(2)
 # DB/broker URL with embedded user:password — loopback hosts (local dev defaults) are exempt.
-db_url = re.compile(r'(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^:/\s@]*:[^@\s/]+@(\[[^\]\s]*\]|[^/:\s?#,]+)', re.I)
+db_url = re.compile(r'(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^:/\s@]*:[^@\s/]+@(\[[^\]\s]*\]|[^/:\s?#,]+)', re.IGNORECASE)
 loopback = {'localhost', '127.0.0.1', '[::1]'}
 for m in db_url.finditer(prompt):
     if m.group(4).lower() not in loopback:
@@ -560,7 +562,7 @@ pre-commit:
         while IFS= read -r f; do
           case "$f" in */README.md|README.md) continue ;; esac
           # documentation-kit.md never writes a README into these folders, so never demand one
-          case "$f" in .github/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
+          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
           d=$(dirname "$f")
           rm_path="README.md"
           [ "$d" != "." ] && rm_path="$d/README.md"
@@ -638,7 +640,7 @@ pre-push:
 
 ## Step B3 — `.github/workflows/ci.yml` `quality` job (FastAPI)
 
-**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical):
+**`.github/workflows/ci.yml`** — FastAPI (swap the `quality` job; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs and the Azure Pipelines template are identical):
 ```yaml
   quality:
     runs-on: ubuntu-latest
@@ -661,22 +663,11 @@ pre-push:
       - run: python -m pyright src/
       - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
       - name: Changed-line coverage (>= 80%)
-        run: pipx run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref || 'main' }} --fail-under=80
-      - name: Install gitleaks (MIT CLI, checksum-verified)
-        env:
-          GITLEAKS_VERSION: "8.30.1"   # bump VERSION and SHA256 together, from the release's gitleaks_<version>_checksums.txt
-          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"   # gitleaks_<version>_linux_x64.tar.gz
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
-          sudo tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C /usr/local/bin gitleaks
-      - name: Secret scan (gitleaks)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            gitleaks git --redact --no-banner --log-opts="origin/${BASE_REF}..HEAD"
-          else
-            gitleaks git --redact --no-banner
-          fi
+        run: pipx run diff-cover coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
+      - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh secrets "$BASE_REF"
 ```
