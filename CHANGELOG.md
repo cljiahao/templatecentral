@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.0.3] — 2026-10-10
+
+### Fixed
+
+- Azure DevOps: Step B3 no longer seeds `azure-pipelines/templatecentral-gates.yml` and `.claude/ci-gates.sh`
+  when the project's pipelines (including shared templates they extend) already run gitleaks and the
+  harness check. A template no pipeline runs was dead weight, and reviewers flagged it as blocking.
+  When the checks are missing, the template is seeded and wired into the PR pipeline in the same change.
+- Migrate: the Phase 5 re-sync removes an unwired gates template and its gate script.
+
+---
+
 ## [6.0.2] — 2026-10-10
 
 ### Changed
