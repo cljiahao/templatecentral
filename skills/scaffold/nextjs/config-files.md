@@ -255,7 +255,8 @@ lefthook.yml
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  // Standalone only for the Docker image (builder sets NEXT_OUTPUT); `next start` rejects it locally.
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   reactStrictMode: true,
   poweredByHeader: false,
 
@@ -392,7 +393,8 @@ RUN \
   fi
 
 FROM deps AS builder
-ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV NODE_OPTIONS=--max-old-space-size=4096 \
+    NEXT_OUTPUT=standalone
 COPY ./ ./
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \

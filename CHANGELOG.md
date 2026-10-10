@@ -10,6 +10,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.0.1] — 2026-10-10
+
+### Fixed
+
+- Next.js: `output: 'standalone'` is now set only when `NEXT_OUTPUT=standalone` (the Docker builder
+  stage sets it), so local `pnpm start` (`next start`) no longer warns; the image still runs
+  `.next/standalone/server.js`.
+- Next.js auth: `next build` no longer logs better-auth's missing/weak-secret messages — the build phase
+  gets a throwaway random secret; at runtime a missing `BETTER_AUTH_SECRET` still refuses to start auth.
+- The two `Known` Next.js items in 6.0.0 are resolved.
+
+---
+
 ## [6.0.0] — 2026-10-10
 
 One release for PR #32. **Breaking:** the harness schema floor moves to 6.0.0 — projects seeded
