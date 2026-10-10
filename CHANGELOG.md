@@ -36,6 +36,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `user-prompt-guard.py` imports pass ruff (I001/E401).
 - `verify-harness.sh` hash-checks `.claude/ci-gates.sh` and `azure-pipelines/templatecentral-gates.yml`, so a
   tampered gate fails the harness check.
+- The `ci-gates.sh` secrets gate installs gitleaks into a temp dir (no `sudo`), so it runs on self-hosted agents.
 - The documentation kit and the readme gates skip `azure-pipelines/` and `.azuredevops/`, like `.github/`.
 
 ---
