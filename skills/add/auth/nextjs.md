@@ -78,20 +78,27 @@ pnpm add "better-auth@^1.7.7"
 Security-critical file. Write exactly as shown.
 
 ```ts
+import { randomBytes } from 'node:crypto';
+
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 // `next build` evaluates this module while collecting page data, and build environments
 // (CI, the Docker builder stage) carry no runtime secrets — so enforce it at runtime only.
-if (!process.env.BETTER_AUTH_SECRET && process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD) {
-  throw new Error('BETTER_AUTH_SECRET environment variable is required — generate with: openssl rand -base64 32');
+const isBuild = process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
+if (!process.env.BETTER_AUTH_SECRET && !isBuild) {
+  throw new Error(
+    'BETTER_AUTH_SECRET environment variable is required — generate with: openssl rand -base64 32'
+  );
 }
 
 export const auth = betterAuth({
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'My App',
   baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  // Throwaway random secret for `next build` only (silences better-auth's warnings); runtime requires the real one.
+  secret:
+    process.env.BETTER_AUTH_SECRET ?? (isBuild ? randomBytes(32).toString('base64') : undefined),
 
   emailAndPassword: {
     enabled: true,
