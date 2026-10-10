@@ -10,6 +10,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.0.2] — 2026-10-10
+
+### Changed
+
+- Harness: `protect-files.sh` now asks for human approval before CI/CD pipeline edits instead of
+  hard-blocking them. Secrets, `.env*` (except `.env.example`/`.env.default`) and cert files stay
+  hard-blocked. The re-sync drops `Edit`/`Write` denies on CI and governance paths, because a deny
+  outranks the hook's ask and blocks the approved edit too.
+- CI: the secret-scan, changelog, readme-freshness and comment-hygiene gates live once in a seeded
+  `.claude/ci-gates.sh`, which GitHub Actions and Azure Pipelines both call. Job names are unchanged,
+  so branch-protection required checks keep working.
+
+### Added
+
+- Azure DevOps: Step B3 seeds `azure-pipelines/templatecentral-gates.yml` (a steps template) instead of
+  a GitHub workflow that never runs on Azure Repos. Gate errors use `##vso[task.logissue]` there.
+- Project-local guards: rules a project adds go in `.claude/hooks/local/` with their own
+  `settings.json` entries. A re-sync never touches them, so local rules survive harness updates.
+
+### Fixed
+
+- `protect-files.sh` now guards a whole `azure-pipelines/` folder. 6.0.1 matched only root files named
+  `azure-pipelines*.yaml`, which left folder-based pipelines unguarded.
+- `user-prompt-guard.py` imports pass ruff (I001/E401).
+- The documentation kit and the readme gates skip `azure-pipelines/` and `.azuredevops/`, like `.github/`.
+
+---
+
 ## [6.0.1] — 2026-10-10
 
 ### Fixed

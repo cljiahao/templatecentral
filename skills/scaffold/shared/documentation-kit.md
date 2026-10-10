@@ -177,6 +177,8 @@ find . \( \
     -name .stryker-tmp -o \
     -name .mutmut-cache -o \
     -name .github -o \
+    -name .azuredevops -o \
+    -path './azure-pipelines' -o \
     -name secrets -o \
     -name .secrets -o \
     -name .claude -o \
@@ -184,7 +186,7 @@ find . \( \
   \) -prune -o -type d -print
 ```
 
-**Why `.github`, `secrets`, `.secrets`, and `.claude` are pruned:** `protect-files.sh` hard-blocks (exit 2) any write under `.github/workflows/`, `.github/actions/`, `secrets/`, and `.secrets/`, and gates most of `.claude/` behind human approval. Without these prunes the kit would try to create e.g. `.github/workflows/README.md`, be blocked, and leave the seeded `readme-freshness` CI gate permanently unsatisfiable for any PR that touches a workflow file — the gate demands a README the harness forbids anyone from creating.
+**Why CI, secrets, and `.claude` folders are pruned:** `protect-files.sh` hard-blocks (exit 2) any write under `secrets/` and `.secrets/`, and asks for human approval before any write to CI definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines/`) or most of `.claude/`. A README there would need that approval on every scaffold, so the kit skips those folders and the `readme-freshness` gate never demands one.
 
 **Respect the project's own `.gitignore` too.** The prune list above only covers well-known dependency/build directories common across templateCentral's own scaffolds — it cannot anticipate every project-specific ignore pattern (e.g. a custom `log/` directory). After the `find` above, drop any remaining entry that the project itself ignores, so this kit never writes a `README.md` that's invisible to git, CI, and teammates. If no git repository exists yet (very early in a fresh scaffold, before `git init` has run), skip this filter entirely and rely on the hardcoded prune list alone — the check below degrades to a no-op filter (keeps everything) in that case, which is safe:
 
@@ -195,7 +197,8 @@ find . \( \
     -name coverage -o -name .turbo -o -name .venv -o -name __pycache__ -o \
     -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .pyright -o \
     -name htmlcov -o -name .stryker-tmp -o -name .mutmut-cache -o \
-    -name .github -o -name secrets -o -name .secrets -o -name .claude -o \
+    -name .github -o -name .azuredevops -o -path './azure-pipelines' -o \
+    -name secrets -o -name .secrets -o -name .claude -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print > "$tmp"
 

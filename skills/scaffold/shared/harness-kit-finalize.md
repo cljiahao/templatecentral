@@ -120,7 +120,7 @@ sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else s
 sha256_agents=$(sha256 AGENTS.md)   # provisional — Step G appends the tail + formats, then re-hashes
 # Every enforcement hook script is a high-value tamper target — hash each for drift detection.
 # Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
-for h in .claude/hooks/*; do printf '%s  %s\n' "$(sha256 "$h")" "$h"; done
+for h in .claude/hooks/* .claude/hooks/local/*; do [ -f "$h" ] && printf '%s  %s\n' "$(sha256 "$h")" "$h"; done
 # CLAUDE.md is optional (Step G) — hash it only if it already exists
 [ -f CLAUDE.md ] && sha256_claude=$(sha256 CLAUDE.md)
 sha256_settings=$(sha256 .claude/settings.json)
@@ -134,7 +134,10 @@ sha256_lefthook=$(sha256 lefthook.yml)
 sha256_commitmsg=$(sha256 .lefthook/commit-msg.sh)
 sha256_gitleaks=$(sha256 .gitleaks.toml)
 sha256_comment_patterns=$(sha256 .claude/comment-hygiene-patterns.txt)
-sha256_ci=$(sha256 .github/workflows/ci.yml)
+# CI (Step B3) — the one file seeded for this host, plus the shared gate script:
+[ -f .github/workflows/ci.yml ] && sha256_ci=$(sha256 .github/workflows/ci.yml)
+[ -f azure-pipelines/templatecentral-gates.yml ] && sha256_ci=$(sha256 azure-pipelines/templatecentral-gates.yml)
+sha256_cigates=$(sha256 .claude/ci-gates.sh)
 sha256_verifyh=$(sha256 .claude/verify-harness.sh)
 sha256_regenh=$(sha256 .claude/regen-harness.sh)
 ```
@@ -142,7 +145,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 **`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
 ```json
 {
-  "templatecentral_version": "6.0.1",
+  "templatecentral_version": "6.0.2",
   "stack": "<stack>",
   "seeded_at": "<ISO-date>",
   "seeded_files": {
@@ -165,6 +168,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
     ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
     ".claude/comment-hygiene-patterns.txt": { "origin_hash": "<sha256_comment_patterns>", "path": ".claude/comment-hygiene-patterns.txt" },
     ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" },
+    ".claude/ci-gates.sh": { "origin_hash": "<sha256_cigates>", "path": ".claude/ci-gates.sh" },
     ".claude/verify-harness.sh": { "origin_hash": "<sha256_verifyh>", "path": ".claude/verify-harness.sh" },
     ".claude/regen-harness.sh": { "origin_hash": "<sha256_regenh>", "path": ".claude/regen-harness.sh" }
   }
@@ -175,6 +179,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 > The `AGENTS.md` (and `CLAUDE.md`) hashes written here are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`.
 > Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step G (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
+> On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml`. Add one entry per `.claude/hooks/local/*` script the loop above prints.
 
 ---
 
@@ -284,7 +289,7 @@ claude plugin install superpowers
 
 ```markdown
 ## AI Harness
-PreToolUse (Edit/Write/NotebookEdit): blocks secrets and CI pipeline files only (exit 2): `.env*` (except `.env.example`), CI/CD definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`), cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; a second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`, `git config core.hooksPath`), commits to protected branches, and force-pushes to them (incl. `--force-with-lease`, `HEAD:main`). Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact stdout is also injected as context and fires after compaction, but SessionStart additionally covers resume/startup, so it's the seeded mechanism here).
+PreToolUse (Edit/Write/NotebookEdit): blocks secrets only (exit 2): `.env*` (except `.env.example`), `secrets/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; asks for human approval before editing CI/CD definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (AGENTS.md, CLAUDE.md, `.claude/settings.json`, `.claude/hooks/`); project-specific guards live in `.claude/hooks/local/`, which re-sync never overwrites; a second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`, `git config core.hooksPath`), commits to protected branches, and force-pushes to them (incl. `--force-with-lease`, `HEAD:main`). Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects AGENTS.md routing context + universal invariants so they survive compaction (PostCompact stdout is also injected as context and fires after compaction, but SessionStart additionally covers resume/startup, so it's the seeded mechanism here).
 UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 PostToolUse: incremental type-check (see delta table for stack command) and a comment-hygiene scan (change-narration comments, oversized comment blocks — patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both feedback-only — findings reach Claude as `additionalContext`, never a block.
 Stop hook: runs the full test suite when there are uncommitted changes; exit 2 feeds failures to Claude via stderr; exit 0 on pass (Claude Code caps consecutive Stop continuations — 8 by default). SubagentStop: type-gates a subagent's uncommitted changes (read-only Explore/Plan agents skipped).

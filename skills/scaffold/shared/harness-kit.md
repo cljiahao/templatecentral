@@ -16,7 +16,7 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 |---|---|---|
 | `harness-kit-ts.md` | TS bodies for Steps A, B, B2: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.cjs`), `lefthook.yml` | nestjs · nextjs · vite-react |
 | `harness-kit-fastapi.md` | FastAPI bodies for Steps A, B, B2, B3: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.py`), `lefthook.yml`, the CI `quality` job | fastapi |
-| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`); Steps B3, B4, B5 | every stack |
+| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`); Steps B3 (`ci-gates.sh`, Azure template), B4, B5 | every stack |
 | `harness-kit-finalize.md` | Steps C, D, E, E2, E3, F, G, H + the shared AGENTS.md tail fragment | every stack |
 
 ## Step order
@@ -26,7 +26,7 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 | A | `.claude/settings.json` | variant (JSON body) + enforcement (merge rules, deny lists, hook inventory) |
 | B | `.claude/hooks/` scripts | variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
 | B2 | git-hook layer | variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
-| B3 | CI quality gates (`.github/workflows/ci.yml`) | enforcement (workflow + TS `quality` job) + fastapi variant (FastAPI `quality` job) |
+| B3 | CI quality gates (`.claude/ci-gates.sh` + `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (gate script, workflow + TS `quality` job, Azure template) + fastapi variant (FastAPI `quality` job) |
 | B4 | harness integrity verifier | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md` | finalize |
