@@ -296,6 +296,95 @@ expect_bash 2 "cat <<-EOF${NL}${TAB}hi${NL}${TAB}EOF${NL}git commit -n -m y"
 expect_bash 2 "git commit -m x <<< 'y'${NL}git commit --no-verify"
 expect_bash 2 "cat <<EOF${NL}body${NL} EOF${NL}EOF${NL}git push -f origin main"
 
+# The branch comes from the command's own directory. Claude Code may start a hook from the session's
+# original root, so in a worktree the project dir can sit on a protected branch while the command runs
+# on a feature branch, or the reverse. Candidates are the hook input's `cwd` plus each literal cd-like
+# target resolved against every candidate so far; any protected one blocks. Anything the hook cannot
+# resolve exactly (a variable, $(…), ~, cd -, popd, eval, CDPATH, GIT_DIR, --git-dir) also judges the
+# project root, as before.
+# expect_bash_cwd <want-exit> <cwd> <command> <project-dir>
+expect_bash_cwd() {
+  local want=$1 cwd=$2 cmd=$3 dir=$4 v json
+  json=$(python3 -c 'import json, sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1], "tool_input": {"command": sys.argv[2]}}))' "$cwd" "$cmd")
+  for v in ts py; do
+    run_hook "$KIT/block-no-verify.$v.sh" "$dir" "$json"
+    check "$want" "$EC" "block-no-verify.$v [cwd=${cwd##*/} root=${dir##*/}] $cmd" "$(cat "$T/err")"
+  done
+}
+mkdir -p "$FEAT/docs"
+# the reported bug: cwd on a feature branch, project root on main
+expect_bash_cwd 0 "$FEAT" 'git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'git push -f origin HEAD' "$MAIN"
+expect_bash_cwd 0 "$FEAT" "git -C $FEAT commit -m x" "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'cd docs && git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$FEAT" "cd $FEAT && git commit -m x" "$MAIN"
+expect_bash_cwd 0 "$FEAT" "cd /tmp; cd $FEAT && git commit -m x" "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'git add * && git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'git commit -m cd' "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'env FOO=1 git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$T" "cd ${FEAT##*/} && git commit -m x" "$MAIN"
+expect_bash 0 "cd $FEAT && git commit -m x" "$MAIN"
+expect_bash 0 "cd -P \"$FEAT\" && git commit -m x" "$MAIN"
+# protected cwd or target
+expect_bash_cwd 2 "$MAIN" 'git commit -m x' "$FEAT"
+expect_bash_cwd 2 "$MAIN" 'git push -f origin HEAD' "$FEAT"
+expect_bash_cwd 2 "$FEAT" "cd $MAIN && git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$T" "cd ${MAIN##*/} && git commit -m x" "$FEAT"
+expect_bash 2 "cd $MAIN; git push --force-with-lease origin HEAD" "$FEAT"
+expect_bash 2 "pushd $MAIN && git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "git -C $MAIN commit -m x" "$FEAT"
+expect_bash 2 "cd $FEAT && git push -f origin main" "$MAIN"
+# undone or failed cd must not hide a protected cwd
+expect_bash_cwd 2 "$MAIN" "(cd $FEAT && true); git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT; cd -; git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$MAIN" "pushd $FEAT; popd; git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT & git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT | git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$MAIN" 'cd nosuch; git commit -m x' "$FEAT"
+expect_bash_cwd 2 "$MAIN" 'cd ~nouser; git commit -m x' "$FEAT"
+expect_bash_cwd 2 "$MAIN" "(cd $FEAT && true); git push -f origin HEAD" "$FEAT"
+# cd-like words anywhere before git
+expect_bash_cwd 2 "$FEAT" "if cd $MAIN; then git commit -m x; fi" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "while cd $MAIN; do git commit -m x; break; done" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "\\cd $MAIN && git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "eval cd $MAIN && git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "command cd $MAIN && git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "env -C $MAIN git commit -m x" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "sudo -D $MAIN git commit -m x" "$FEAT"
+# anything not resolvable exactly judges the project root
+expect_bash_cwd 2 "$FEAT" "CDPATH=$T cd ${MAIN##*/} && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "GIT_DIR=$MAIN/.git git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "export GIT_WORK_TREE=$MAIN; git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "git --git-dir=$MAIN/.git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "X=$FEAT; cd \$X && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "X=$FEAT; cd \"\$X\" && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "X=$FEAT; printf -vX %s $MAIN; cd \$X && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "git -C \$UNSET commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "cd \$(git rev-parse --show-toplevel) && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "cd \"\$(git rev-parse --show-toplevel)\" && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" "cd \`pwd\` && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'cd && git commit -m x' "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'cd - && git commit -m x' "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'cd ~ && git commit -m x' "$MAIN"
+# quote pairing must still catch flags
+expect_bash_cwd 2 "$FEAT" "echo \"root: \$(git rev-parse --show-toplevel)\"; git commit --no-verify -m \"x y\"" "$FEAT"
+expect_bash_cwd 2 "$FEAT" "echo \"root: \$(git rev-parse --show-toplevel)\" && git push --force origin main -o \"a b\"" "$FEAT"
+# a cd after git (loop, function), chained -C, sourcing
+expect_bash_cwd 2 "$FEAT" "for i in 1 2; do git commit -m x; cd ../${MAIN##*/}; done" "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'f(){ git commit -m x; }; cd /tmp; f' "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'function f { git commit -m x; }; f' "$MAIN"
+expect_bash_cwd 2 "$FEAT" "git -C $MAIN -C . commit -m x" "$FEAT"
+expect_bash_cwd 0 "$FEAT" "git -C $FEAT -C docs commit -m x" "$MAIN"
+expect_bash_cwd 2 "$FEAT" 'source ./go.sh; git commit -m x' "$MAIN"
+expect_bash_cwd 2 "$FEAT" '. ./go.sh; git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'ls . && git commit -m x' "$MAIN"
+expect_bash_cwd 0 "$FEAT" 'cd . && git commit -m x' "$MAIN"
+# an empty -C must not swallow the subcommand
+expect_bash_cwd 2 "$MAIN" "git -C '' commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" 'git -C "" commit -m x' "$MAIN"
+# conservative by design: a protected cwd stays a candidate after a cd
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && git commit -m x" "$MAIN"
+
 # ── user-prompt-guard ─────────────────────────────────────────────────────────
 
 # expect_prompt <want-exit> <prompt>
