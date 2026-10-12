@@ -183,12 +183,18 @@ exit 0
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
 # Best-effort tripwire, not a security boundary: a determined shell can always obfuscate.
 # The lefthook + CI layers are the backstop.
-orig_dir=$PWD   # Claude's current directory — used to resolve the branch a bare `git commit` targets
+orig_dir=$PWD   # fallback only — Claude Code may spawn hooks from the session's original root, not a worktree
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
 input=$(cat)
 cmd=$(printf '%s' "$input" | python3 -c "import json,sys
 try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
 except Exception: print('')" 2>/dev/null)
+# The hook input's `cwd` is the directory the command actually runs in, so a bare `git commit` from a
+# worktree resolves that worktree's branch rather than the main checkout's.
+in_cwd=$(printf '%s' "$input" | python3 -c "import json,sys
+try: print(json.load(sys.stdin).get('cwd') or '')
+except Exception: print('')" 2>/dev/null)
+[ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
 # Drop heredoc bodies (a commit message saying "git push --force origin main" is text, not a command):
 # from a line opening `<<WORD` / `<<-'WORD'` / `<<"WORD"` (not the `<<<` here-string) through the
@@ -199,7 +205,7 @@ cmd=$(printf '%s\n' "$cmd" | awk '
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
 block() { echo "BLOCKED: $1" >&2; exit 2; }
-# Branch a bare commit/push targets: Claude's cwd first, else the project root.
+# Branch a bare commit/push targets: the command's working directory (after any `cd`), else the project root.
 cur_branch() { git -C "$orig_dir" ${cdir:+-C "$cdir"} rev-parse --abbrev-ref HEAD 2>/dev/null || git ${cdir:+-C "$cdir"} rev-parse --abbrev-ref HEAD 2>/dev/null; }
 protected='main|uat|develop'
 
@@ -232,6 +238,22 @@ fi
 segments=$(printf '%s\n' "$scan" | tr ';|&()`' '\n\n\n\n\n\n')
 while IFS= read -r seg; do
   read -ra t <<< "$seg"
+  # `cd X && git commit` commits on X's branch. Follow cd/pushd so the branch check sees it.
+  # A target that cannot be resolved here (`cd -`, a quoted path with spaces) leaves the directory unchanged.
+  if [[ "${t[0]:-}" == cd || "${t[0]:-}" == pushd ]]; then
+    d=""
+    for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
+    case "$d" in
+      ""|"~") d=$HOME ;;
+      "~/"*) d="$HOME/${d#\~/}" ;;
+      -|Q) d="" ;;
+    esac
+    if [ -n "$d" ]; then
+      [[ "$d" == /* ]] || d="$orig_dir/$d"
+      orig_dir=$d
+    fi
+    continue
+  fi
   n=${#t[@]}; i=0
   while [ "$i" -lt "$n" ]; do              # locate the git executable (git, /usr/bin/git, \git)
     w="${t[$i]#\\}"

@@ -10,6 +10,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.0.4] — 2026-10-12
+
+### Fixed
+
+- `block-no-verify.sh` resolves the branch for a bare `git commit` / `git push` from the command's own
+  directory. It now reads the hook input's `cwd` and follows `cd`/`pushd` before `git`. Claude Code may
+  start hooks from the session's original root, so in a git worktree `$PWD` named the main checkout's
+  branch: every worktree commit was blocked when that checkout sat on `main`, and `cd <protected checkout>
+  && git commit` from a feature-branch worktree was not blocked. Both kit variants (TS, FastAPI) changed.
+  The OpenCode adapter's port still reads the branch from the project root.
+
+---
+
 ## [6.0.3] — 2026-10-10
 
 ### Fixed

@@ -296,6 +296,33 @@ expect_bash 2 "cat <<-EOF${NL}${TAB}hi${NL}${TAB}EOF${NL}git commit -n -m y"
 expect_bash 2 "git commit -m x <<< 'y'${NL}git commit --no-verify"
 expect_bash 2 "cat <<EOF${NL}body${NL} EOF${NL}EOF${NL}git push -f origin main"
 
+# The branch comes from the command's own directory: the hook input's `cwd`, then any cd/pushd.
+# Claude Code may start a hook from the session's original root, so in a worktree the project
+# dir can sit on a protected branch while the command runs on a feature branch, or the reverse.
+# expect_bash_cwd <want-exit> <cwd> <command> <project-dir>
+expect_bash_cwd() {
+  local want=$1 cwd=$2 cmd=$3 dir=$4 v json
+  json=$(python3 -c 'import json, sys; print(json.dumps({"tool_name": "Bash", "cwd": sys.argv[1], "tool_input": {"command": sys.argv[2]}}))' "$cwd" "$cmd")
+  for v in ts py; do
+    run_hook "$KIT/block-no-verify.$v.sh" "$dir" "$json"
+    check "$want" "$EC" "block-no-verify.$v [cwd=${cwd##*/} root=${dir##*/}] $cmd" "$(cat "$T/err")"
+  done
+}
+expect_bash_cwd 0 "$FEAT" 'git commit -m x' "$MAIN"
+expect_bash_cwd 2 "$MAIN" 'git commit -m x' "$FEAT"
+expect_bash_cwd 0 "$FEAT" 'git push -f origin HEAD' "$MAIN"
+expect_bash_cwd 2 "$MAIN" 'git push -f origin HEAD' "$FEAT"
+expect_bash_cwd 0 "$FEAT" 'cd - && git commit -m x' "$MAIN"
+expect_bash_cwd 2 "$T" "cd ${MAIN##*/} && git commit -m x" "$FEAT"
+expect_bash_cwd 0 "$T" "cd ${FEAT##*/} && git commit -m x" "$MAIN"
+expect_bash 2 "cd $MAIN && git commit -m x" "$FEAT"
+expect_bash 2 "cd $MAIN; git push --force-with-lease origin HEAD" "$FEAT"
+expect_bash 2 "pushd $MAIN && git commit -m x" "$FEAT"
+expect_bash 0 "cd $FEAT && git commit -m x" "$MAIN"
+expect_bash 0 "cd -P \"$FEAT\" && git commit -m x" "$MAIN"
+expect_bash 0 "cd $FEAT && git push -f origin HEAD" "$MAIN"
+expect_bash 2 "cd $FEAT && git push -f origin main" "$MAIN"
+
 # ── user-prompt-guard ─────────────────────────────────────────────────────────
 
 # expect_prompt <want-exit> <prompt>
