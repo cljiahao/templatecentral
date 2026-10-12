@@ -205,22 +205,68 @@ cmd=$(printf '%s\n' "$cmd" | awk '
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
 block() { echo "BLOCKED: $1" >&2; exit 2; }
-# Branch a bare commit/push targets: the command's working directory (after any `cd`), else the project root.
-cur_branch() { git -C "$orig_dir" ${cdir:+-C "$cdir"} rev-parse --abbrev-ref HEAD 2>/dev/null || git ${cdir:+-C "$cdir"} rev-parse --abbrev-ref HEAD 2>/dev/null; }
 protected='main|uat|develop'
+root=$PWD
+# Directories a bare commit/push in this command may land on: the command's cwd, plus each literal
+# cd/pushd/env -C/sudo -D target resolved against every candidate so far. The real directory is always a
+# candidate or one literal step from one, so a cd the shell undoes (subshell, `&`, `|`) or that fails
+# cannot hide it, and ANY protected candidate blocks. Anything this check cannot resolve exactly sets
+# redir, which adds the project root, the directory it judged before it knew the cwd. A construct the
+# parser misses therefore never leaves it weaker than that.
+cand=("$orig_dir")
+redir=0
+unresolved() { [[ -z "$1" || "$1" == - || "$1" == Q || "$1" == *[\$\`~]* ]]; }
+add_target() {
+  local d=$1 c n=0
+  local -a new=()
+  # With CDPATH set, a bare relative name may resolve through it rather than through a candidate.
+  if unresolved "$d" || { [ -n "${CDPATH:-}" ] && [[ "$d" != /* && "$d" != . && "$d" != .. && "$d" != ./* && "$d" != ../* ]]; }; then
+    redir=1; return
+  fi
+  for c in "${cand[@]}"; do
+    if [[ "$d" == /* ]]; then c=$d; else c="$c/$d"; fi
+    [ -d "$c" ] || continue
+    n=1
+    c=$(cd "$c" 2>/dev/null && pwd -P) || continue
+    # Already a candidate: nothing new, so the repeat passes settle.
+    [[ " ${cand[*]} ${new[*]} " == *" $c "* ]] || new+=("$c")
+  done
+  if [ "$n" -eq 1 ]; then cand+=("${new[@]}"); else redir=1; fi
+}
+# Prints the first protected branch a bare commit/push may land on, or nothing.
+protected_branch() {
+  local d b found=0 cd_ok=0
+  local -a dirs=("${cand[@]}")
+  [ "$redir" -eq 1 ] && dirs+=("$root")
+  if [ -n "$cdir" ]; then
+    if unresolved "$cdir"; then dirs+=("$root"); else cd_ok=1; fi
+  fi
+  for d in "${dirs[@]}"; do
+    if [ "$cd_ok" -eq 1 ]; then
+      if [[ "$cdir" == /* ]]; then d=$cdir; else d="$d/$cdir"; fi
+    fi
+    b=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
+    found=1
+    [[ "$b" =~ ^($protected)$ ]] && { echo "$b"; return; }
+  done
+  [ "$found" -eq 1 ] && return
+  # No candidate is inside a git repo: judge the project root, as before.
+  if [ "$cd_ok" -eq 1 ]; then b=$(git -C "$cdir" rev-parse --abbrev-ref HEAD 2>/dev/null); else b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); fi
+  [[ "$b" =~ ^($protected)$ ]] && echo "$b"
+}
 
 # Normalise before flag-matching:
 #  1. unwrap `bash|sh|zsh -c "…"` / `eval "…"` so a wrapped command is scanned, not scrubbed away;
 #  2. unquote quoted single words ("--no-verify", "main") — the shell strips those quotes too;
-#  3. replace remaining (multi-word) quoted strings with a placeholder (Q) so text inside
+#  3. replace remaining (multi-word or empty) quoted strings with a placeholder (Q) so text inside
 #     -m "…" can't false-trigger. Double quotes are handled before single quotes so an
 #     apostrophe inside "it's done" can't pair with a later ' and swallow real flags.
 sq="'"
 scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+${sq}([^${sq}]*)${sq}/\1 \4 /g" \
-  -e "s/\"([^\"${sq}[:space:]]*)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
-  -e "s/${sq}([^${sq}[:space:]]*)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
+  -e "s/\"([^\"${sq}[:space:]]+)\"/\1/g" -e "s/\"[^\"]*\"/ Q /g" \
+  -e "s/${sq}([^${sq}[:space:]]+)${sq}/\1/g" -e "s/${sq}[^${sq}]*${sq}/ Q /g")
 
 # Hook-layer bypass via environment or a persisted alias/config (whole-command checks).
 lower_cmd=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
@@ -236,25 +282,55 @@ fi
 
 # Evaluate each simple command separately: split on && || ; | & ( ) ` and newlines.
 segments=$(printf '%s\n' "$scan" | tr ';|&()`' '\n\n\n\n\n\n')
+# Collect directory changes before judging any git invocation: a loop or a function can run a cd that
+# appears after the git word. Words before each segment's git executable (all words, when there is none)
+# are scanned wherever they sit — `if cd x`, `\cd x`, `env -C x git …` — not only at the segment start.
+# Passes repeat until the candidate set stops growing, so a relative target is resolved against every
+# directory the command can reach.
+collect_dirs() {
+  local seg p q w d n i
+  local -a t
+  while IFS= read -r seg; do
+    read -ra t <<< "$seg"
+    n=${#t[@]}; i=0
+    while [ "$i" -lt "$n" ]; do
+      w="${t[$i]#\\}"
+      [[ "$w" == git || "$w" == */git ]] && break
+      i=$((i + 1))
+    done
+    for ((p = 0; p < i; p++)); do
+      w="${t[$p]#\\}"
+      case "$w" in
+        cd|pushd)
+          d=""
+          for ((q = p + 1; q < i; q++)); do [[ "${t[$q]}" == -?* ]] && continue; d=${t[$q]}; break; done
+          add_target "$d" ;;
+        popd|eval|source|function|CDPATH=*|GIT_DIR=*|GIT_WORK_TREE=*) redir=1 ;;
+        # `.` sources a script only in command position; elsewhere it is an ordinary argument (`ls .`).
+        .) [[ "$p" -eq 0 || "${t[$((p - 1))]}" =~ ^(then|do|else|if|while|until|!|[{]|time|command|builtin|exec)$ ]] && redir=1 ;;
+        env|sudo)
+          for ((q = p + 1; q < i; q++)); do
+            case "${t[$q]}" in
+              -C|-D|--chdir) add_target "${t[$((q + 1))]:-}" ;;
+              --chdir=*) add_target "${t[$q]#--chdir=}" ;;
+              -C?*|-D?*) add_target "${t[$q]:2}" ;;
+            esac
+          done ;;
+      esac
+    done
+  done <<< "$segments"
+}
+# `name() { … }` defines a function whose body may cd where this check cannot follow.
+printf '%s' "$scan" | grep -qE '(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)' && redir=1
+settled=0
+for _ in 1 2 3 4; do
+  before=${#cand[@]}
+  collect_dirs
+  [ "${#cand[@]}" -eq "$before" ] && { settled=1; break; }
+done
+[ "$settled" -eq 1 ] || redir=1   # still growing at the cap: judge the project root too
 while IFS= read -r seg; do
   read -ra t <<< "$seg"
-  # `cd X && git commit` commits on X's branch. Follow cd/pushd so the branch check sees it.
-  # A target that cannot be resolved here (`cd -`, a bare `cd`, a quoted path with spaces, an unexpanded
-  # `$VAR` or command substitution) leaves the directory unchanged, so the command's own cwd still decides.
-  if [[ "${t[0]:-}" == cd || "${t[0]:-}" == pushd ]]; then
-    d=""
-    for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
-    case "$d" in
-      "~") d=$HOME ;;
-      "~/"*) d="$HOME/${d#\~/}" ;;
-      ""|-|Q|*[\$\`]*) d="" ;;
-    esac
-    if [ -n "$d" ]; then
-      [[ "$d" == /* ]] || d="$orig_dir/$d"
-      orig_dir=$d
-    fi
-    continue
-  fi
   n=${#t[@]}; i=0
   while [ "$i" -lt "$n" ]; do              # locate the git executable (git, /usr/bin/git, \git)
     w="${t[$i]#\\}"
@@ -266,11 +342,17 @@ while IFS= read -r seg; do
   while [ "$i" -lt "$n" ] && [[ "${t[$i]}" == -* ]]; do   # git global options precede the subcommand
     o="${t[$i]}"
     case "$o" in
-      -C) cdir="${t[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
+      -C)
+        # git applies every -C in turn, each relative to the one before.
+        x="${t[$((i + 1))]:-}"
+        if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
+        i=$((i + 2)); continue ;;
       -c|--config-env)
         printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer — the same bypass as --no-verify. Fix the failure instead."
         i=$((i + 2)); continue ;;
-      --git-dir|--work-tree|--namespace|--exec-path|--super-prefix) i=$((i + 2)); continue ;;
+      --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
+      --git-dir=*|--work-tree=*) redir=1 ;;
+      --namespace|--exec-path|--super-prefix) i=$((i + 2)); continue ;;
     esac
     printf '%s' "$o" | grep -qi 'core\.hookspath' && block "overriding core.hooksPath disables the git-hook layer. Fix the failure instead."
     i=$((i + 1))
@@ -305,8 +387,8 @@ while IFS= read -r seg; do
             done ;;
         esac
       done
-      branch=$(cur_branch)
-      [[ "$branch" =~ ^($protected)$ ]] && block "direct commit to protected branch '$branch'. Create a feature branch first."
+      branch=$(protected_branch)
+      [ -n "$branch" ] && block "direct commit to protected branch '$branch'. Create a feature branch first."
       ;;
     push)
       force=0; target=0; explicit=0; pos=0
@@ -323,12 +405,11 @@ while IFS= read -r seg; do
             [[ "$a" == +* || "$a" == :* ]] && force=1   # +refspec forces; :branch deletes
             [[ "$a" =~ ^\+?((refs/heads/)?($protected)|[^:]*:(refs/heads/)?($protected))$ ]] && target=1
             # `HEAD` / `@` (no `:dst`) pushes the current branch to its same-named remote branch
-            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then branch=$(cur_branch); [[ "$branch" =~ ^($protected)$ ]] && target=1; fi ;;
+            if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then [ -n "$(protected_branch)" ] && target=1; fi ;;
         esac
       done
       if [ "$explicit" -eq 0 ]; then
-        branch=$(cur_branch)
-        [[ "$branch" =~ ^($protected)$ ]] && target=1
+        [ -n "$(protected_branch)" ] && target=1
       fi
       [ "$force" -eq 1 ] && [ "$target" -eq 1 ] && block "force-push/delete on a protected branch (--force, --force-with-lease, -f, +refspec, HEAD:main). Open a PR instead."
       ;;

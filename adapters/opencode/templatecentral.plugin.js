@@ -87,8 +87,8 @@ function normalise(cmd) {
   return cmd
     .replace(/(^|[\s;&|(])(bash|sh|zsh|eval)(\s+-[a-z]*c)?\s+"([^"]*)"/g, "$1 $4 ")
     .replace(/(^|[\s;&|(])(bash|sh|zsh|eval)(\s+-[a-z]*c)?\s+'([^']*)'/g, "$1 $4 ")
-    .replace(/"([^"'\s]*)"/g, "$1").replace(/"[^"]*"/g, " Q ")
-    .replace(/'([^'\s]*)'/g, "$1").replace(/'[^']*'/g, " Q ");
+    .replace(/"([^"'\s]+)"/g, "$1").replace(/"[^"]*"/g, " Q ")
+    .replace(/'([^'\s]+)'/g, "$1").replace(/'[^']*'/g, " Q ");
 }
 
 function commitShortFlagReason(args) {
@@ -127,21 +127,37 @@ function pushTargetsProtectedWithForce(args, branch) {
   return force && target;
 }
 
-// Directory a `cd`/`pushd` segment moves to, or null when it cannot be resolved here (`cd -`, a bare
-// `cd`, a quoted path with spaces, an unexpanded `$VAR` or command substitution). Null leaves the
-// directory unchanged, so the command's own cwd still decides.
-function cdTarget(t, cwd) {
-  let d = t.slice(1).find((w) => !/^-./.test(w)) ?? "";
-  if (d === "" || d === "-" || d === "Q" || /[$`]/.test(d)) return null;
-  if (d === "~") d = process.env.HOME || "";
-  else if (d.startsWith("~/")) d = `${process.env.HOME || ""}/${d.slice(2)}`;
-  return d ? path.posix.resolve(cwd, d) : null;
+const unresolved = (d) => !d || d === "-" || d === "Q" || /[$`~]/.test(d);
+
+// The first protected branch a bare commit/push may land on, or "". `st.cands` holds the command's cwd
+// plus each literal cd-like target resolved against every candidate so far: the real directory is always
+// one of them, so a cd the shell undoes (subshell, `&`, `|`) or that fails cannot hide it, and ANY
+// protected candidate counts. `st.redir` (anything this check cannot resolve exactly) adds the project
+// root, the directory it judged before it knew the cwd, so a construct the parser misses never leaves it
+// weaker than that.
+async function protectedBranch(st, cdir) {
+  const isProtected = (b) => typeof b === "string" && PROTECTED_RE.test(b);
+  const dirs = [...st.cands];
+  if (st.redir) dirs.push(st.root);
+  const cdOk = Boolean(cdir) && !unresolved(cdir);
+  if (cdir && !cdOk) dirs.push(st.root);
+  let found = false;
+  for (const d of dirs) {
+    const b = await st.branchAt(cdOk ? path.posix.resolve(d, cdir) : d);
+    if (b == null) continue;
+    found = true;
+    if (isProtected(b)) return b;
+  }
+  if (found) return "";
+  // No candidate is inside a git repo: judge the project root, as before.
+  const b = await st.branchAt(cdOk ? path.posix.resolve(st.root, cdir) : st.root);
+  return isProtected(b) ? b : "";
 }
 
 // Port of block-no-verify.sh: evaluates each simple command's git invocation separately.
-// `branchOf(dir, cdir)` resolves the branch a git invocation in `dir` (with `git -C cdir`) works on,
-// so a worktree or a `cd` is judged by its own branch. A best-effort tripwire, not a boundary.
-async function bashCommandReason(rawCmd, cwd, branchOf) {
+// `env` = { root, branchAt(dir) → branch or null, isDir(dir) → boolean }, so a worktree or a `cd` is
+// judged by the branch it actually commits on. A best-effort tripwire, not a boundary.
+async function bashCommandReason(rawCmd, cwd, env) {
   if (!rawCmd) return null;
   const cmd = stripHeredocBodies(rawCmd);
   const scan = normalise(cmd);
@@ -157,13 +173,57 @@ async function bashCommandReason(rawCmd, cwd, branchOf) {
     return "a git alias wrapping --no-verify is the same bypass as --no-verify. Fix the failure instead.";
   }
 
-  for (const seg of scan.split(/[;|&()`\n]/)) {
-    const t = seg.trim().split(/\s+/).filter(Boolean);
-    if (t[0] === "cd" || t[0] === "pushd") {
-      cwd = cdTarget(t, cwd) ?? cwd;
-      continue;
+  const st = { ...env, cands: [cwd], redir: false };
+  const addTarget = async (d) => {
+    // With CDPATH set, a bare relative name may resolve through it rather than through a candidate.
+    if (unresolved(d) || (process.env.CDPATH && !/^(\/|\.\.?(\/|$))/.test(d))) { st.redir = true; return; }
+    let any = false;
+    for (const c of [...st.cands]) {
+      const dir = path.posix.resolve(c, d);
+      if (!(await env.isDir(dir))) continue;
+      any = true;
+      // Already a candidate: nothing new, so the repeat passes settle.
+      if (!st.cands.includes(dir)) st.cands.push(dir);
     }
-    let i = t.findIndex((w) => { const x = w.replace(/^\\/, ""); return x === "git" || x.endsWith("/git"); });
+    if (!any) st.redir = true;
+  };
+  const segments = scan.split(/[;|&()`\n]/).map((seg) => seg.trim().split(/\s+/).filter(Boolean));
+  const gitIndex = (t) => t.findIndex((w) => { const x = w.replace(/^\\/, ""); return x === "git" || x.endsWith("/git"); });
+  // Collect directory changes before judging any git invocation: a loop or a function can run a cd that
+  // appears after the git word. Words before each segment's git executable (all words, when there is
+  // none) are scanned wherever they sit — `if cd x`, `\cd x`, `env -C x git …`. Passes repeat until the
+  // candidate set stops growing, so a relative target is resolved against every reachable directory.
+  const POSITION = new Set(["then", "do", "else", "if", "while", "until", "!", "{", "time", "command", "builtin", "exec"]);
+  // `name() { … }` defines a function whose body may cd where this check cannot follow.
+  if (/(^|[^A-Za-z0-9_])[A-Za-z_][\w-]*\s*\(\)/.test(scan)) st.redir = true;
+  let settled = false;
+  for (let pass = 0; pass < 4 && !settled; pass++) {
+    const before = st.cands.length;
+    for (const t of segments) {
+      const g = gitIndex(t);
+      const end = g < 0 ? t.length : g;
+      for (let p = 0; p < end; p++) {
+        const w = t[p].replace(/^\\/, "");
+        const rest = t.slice(p + 1, end);
+        if (w === "cd" || w === "pushd") await addTarget(rest.find((x) => !/^-./.test(x)) ?? "");
+        else if (["popd", "eval", "source", "function"].includes(w) || /^(CDPATH|GIT_DIR|GIT_WORK_TREE)=/.test(w)) st.redir = true;
+        // `.` sources a script only in command position; elsewhere it is an ordinary argument (`ls .`).
+        else if (w === "." && (p === 0 || POSITION.has(t[p - 1]))) st.redir = true;
+        else if (w === "env" || w === "sudo") {
+          for (let q = 0; q < rest.length; q++) {
+            const a = rest[q];
+            if (a === "-C" || a === "-D" || a === "--chdir") await addTarget(rest[q + 1] ?? "");
+            else if (a.startsWith("--chdir=")) await addTarget(a.slice(8));
+            else if (/^-[CD]./.test(a)) await addTarget(a.slice(2));
+          }
+        }
+      }
+    }
+    settled = st.cands.length === before;
+  }
+  if (!settled) st.redir = true; // still growing at the cap: judge the project root too
+  for (const t of segments) {
+    let i = gitIndex(t);
     if (i < 0) continue;
     i++;
     let cdir = "";
@@ -173,14 +233,21 @@ async function bashCommandReason(rawCmd, cwd, branchOf) {
         if (/core\.hookspath/i.test(t[i + 1] || "")) return "'git -c core.hooksPath=…' disables the git-hook layer — the same bypass as --no-verify. Fix the failure instead.";
         i += 2; continue;
       }
-      if (o === "-C") { cdir = t[i + 1] || ""; i += 2; continue; }
-      if (["--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"].includes(o)) { i += 2; continue; }
+      if (o === "-C") {
+        // git applies every -C in turn, each relative to the one before.
+        const x = t[i + 1] || "";
+        cdir = !cdir || x.startsWith("/") ? x : `${cdir}/${x}`;
+        i += 2; continue;
+      }
+      if (o === "--git-dir" || o === "--work-tree") { st.redir = true; i += 2; continue; }
+      if (o.startsWith("--git-dir=") || o.startsWith("--work-tree=")) { st.redir = true; i++; continue; }
+      if (["--namespace", "--exec-path", "--super-prefix"].includes(o)) { i += 2; continue; }
       if (/core\.hookspath/i.test(o)) return "overriding core.hooksPath disables the git-hook layer. Fix the failure instead.";
       i++;
     }
     const sub = t[i] || "";
     const args = t.slice(i + 1);
-    const branch = sub === "commit" || sub === "push" ? await branchOf(cwd, cdir) : "";
+    const branch = sub === "commit" || sub === "push" ? await protectedBranch(st, cdir) : "";
     const beforeDashDash = args.includes("--") ? args.slice(0, args.indexOf("--")) : args;
 
     if (GIT_HOOK_SUBCOMMANDS.has(sub) && beforeDashDash.some((a) => a.startsWith("--no-veri"))) {
@@ -240,15 +307,14 @@ export default async ({ directory, $ }) => {
       if (typeof command === "string" && command) {
         const workdir = args.workdir || args.cwd;
         const cwd = typeof workdir === "string" && workdir ? path.posix.resolve(root, workdir) : root;
-        const revParse = async (dir) => (await $`git -C ${dir} rev-parse --abbrev-ref HEAD`.text()).trim();
-        // The command's own directory first, then the project root — as the CC hook falls back.
-        const branchOf = async (dir, cdir) => {
-          for (const base of [dir, root]) {
-            try { return await revParse(cdir ? path.posix.resolve(base, cdir) : base); } catch { /* not a git repo */ }
-          }
-          return "";
+        const env = {
+          root,
+          branchAt: async (dir) => {
+            try { return (await $`git -C ${dir} rev-parse --abbrev-ref HEAD`.text()).trim(); } catch { return null; }
+          },
+          isDir: async (dir) => $`test -d ${dir}`.then(() => true).catch(() => false),
         };
-        const reason = await bashCommandReason(command, cwd, branchOf);
+        const reason = await bashCommandReason(command, cwd, env);
         if (reason) throw new Error(`[templatecentral] BLOCKED: ${reason}`);
       }
       const file = fileArg(args);

@@ -72,43 +72,103 @@ await allows("force-push branch named fix-main", beforeFeature, { command: "git 
 await allows("plain push main",        beforeFeature, { command: "git push origin main" });
 
 // ── bash-command guard: branch of the command's own directory ──
-// A worktree or a `cd`/`git -C` target can sit on a different branch from the project root; the
-// guard must judge the branch the command actually commits on. `branches` maps a directory to the
-// branch `git -C <dir> rev-parse` reports; an unlisted directory is not a git repo.
-const mkDirShell = (branches) => (strings, ...values) => {
+// A worktree or a `cd`/`git -C` target can sit on a different branch from the project root. Candidates are
+// the cwd plus each literal cd-like target, resolved against every candidate so far; any protected one
+// blocks. Anything the guard cannot resolve exactly (a variable, $(…), ~, cd -, popd, eval, CDPATH,
+// GIT_DIR, --git-dir) also judges the project root, as before.
+// `branches` maps a git directory to its branch; `dirs` are the other directories that exist.
+const mkDirShell = (branches, dirs = []) => (strings, ...values) => {
   const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? [].concat(values[i]).join(" ") : ""), "");
-  const m = text.match(/^git -C (\S+) rev-parse/);
-  const p = m && !(m[1] in branches) ? Promise.reject(new Error("not a git repo")) : Promise.resolve("");
+  const rev = text.match(/^git -C (\S+) rev-parse/);
+  const dir = text.match(/^test -d (\S+)$/);
+  const ok = rev ? rev[1] in branches : dir ? dir[1] in branches || dirs.includes(dir[1]) : true;
+  // Real `$` rejects a failing command from `.text()` too, not only from the promise itself.
+  const p = ok ? Promise.resolve("") : Promise.reject(new Error(`exit 128: ${text}`));
   p.catch(() => {});
-  p.text = async () => (m ? branches[m[1]] : "");
+  p.text = async () => { if (!ok) throw new Error(`exit 128: ${text}`); return rev ? branches[rev[1]] : ""; };
   p.cwd = () => p;
   p.quiet = () => p;
   return p;
 };
-const dirs = { "/proj": "main", "/wt/feat": "feat/x", "/wt/dev": "develop" };
-const beforeRootMain = (await plugin({ directory: "/proj", $: mkDirShell(dirs) }))["tool.execute.before"];
-const beforeRootFeat = (await plugin({ directory: "/wt/feat", $: mkDirShell(dirs) }))["tool.execute.before"];
-await allows("commit in feature workdir, root on main", beforeRootMain, { command: "git commit -m x", workdir: "/wt/feat" });
-await blocks("commit in protected workdir, root on feature", beforeRootFeat, { command: "git commit -m x", workdir: "/proj" });
-await allows("commit via args.cwd on feature", beforeRootMain, { command: "git commit -m x", cwd: "/wt/feat" });
-await allows("relative workdir resolves against root", beforeRootMain, { command: "git commit -m x", workdir: "../wt/feat" });
-await allows("cd feature && commit, root on main", beforeRootMain, { command: "cd /wt/feat && git commit -m x" });
-await blocks("cd protected && commit, root on feature", beforeRootFeat, { command: "cd /wt/dev && git commit -m x" });
-await blocks("cd protected; commit", beforeRootFeat, { command: "cd /proj; git commit -m x" });
-await blocks("pushd protected && commit", beforeRootFeat, { command: "pushd /proj && git commit -m x" });
-await allows("cd -P feature && commit", beforeRootMain, { command: 'cd -P "/wt/feat" && git commit -m x' });
-await allows("cd - leaves dir unchanged", beforeRootFeat, { command: "cd - && git commit -m x" });
-await blocks("relative cd into protected", beforeRootFeat, { command: "cd ../dev && git commit -m x" });
-await allows("git -C feature commit, root on main", beforeRootMain, { command: "git -C /wt/feat commit -m x" });
-await blocks("git -C protected commit, root on feature", beforeRootFeat, { command: "git -C /proj commit -m x" });
-await allows("cd feature && force-push HEAD", beforeRootMain, { command: "cd /wt/feat && git push -f origin HEAD" });
-await blocks("cd protected && force-push HEAD", beforeRootFeat, { command: "cd /proj && git push -f origin HEAD" });
-await blocks("cd feature && force-push main", beforeRootMain, { command: "cd /wt/feat && git push -f origin main" });
-await allows("cd \"$VAR\" keeps the workdir's branch", beforeRootMain, { command: 'cd "$WT" && git commit -m x', workdir: "/wt/feat" });
-await allows("cd $(…) keeps the workdir's branch", beforeRootMain, { command: "cd $(git rev-parse --show-toplevel) && git commit -m x", workdir: "/wt/feat" });
-await allows("bare cd keeps the workdir's branch", beforeRootMain, { command: "cd && git commit -m x", workdir: "/wt/feat" });
-await blocks("cd $VAR from a protected workdir still blocks", beforeRootFeat, { command: "cd $WT && git commit -m x", workdir: "/proj" });
-await blocks("non-repo workdir falls back to root branch", beforeRootMain, { command: "git commit -m x", workdir: "/tmp" });
+const repos = { "/proj": "main", "/wt/feat": "feat/x", "/wt/feat/docs": "feat/x", "/wt/dev": "develop" };
+const rootMain = (await plugin({ directory: "/proj", $: mkDirShell(repos, ["/tmp", "/wt"]) }))["tool.execute.before"];
+const rootFeat = (await plugin({ directory: "/wt/feat", $: mkDirShell(repos, ["/tmp", "/wt"]) }))["tool.execute.before"];
+const wf = { workdir: "/wt/feat" };
+// the reported bug: a worktree session whose project root sits on a protected branch
+await allows("bare commit in feature workdir", rootMain, { command: "git commit -m x", ...wf });
+await allows("via args.cwd", rootMain, { command: "git commit -m x", cwd: "/wt/feat" });
+await allows("relative workdir resolves against root", rootMain, { command: "git commit -m x", workdir: "../wt/feat" });
+await allows("force-push HEAD in feature workdir", rootMain, { command: "git push -f origin HEAD", ...wf });
+await allows("git -C feature", rootMain, { command: "git -C /wt/feat commit -m x", ...wf });
+await allows("relative cd within the worktree", rootMain, { command: "cd docs && git commit -m x", ...wf });
+await allows("cd to the worktree itself", rootMain, { command: "cd /wt/feat && git commit -m x", ...wf });
+await allows("non-repo cd then feature cd", rootMain, { command: "cd /tmp; cd /wt/feat && git commit -m x", ...wf });
+await allows("glob word", rootMain, { command: "git add * && git commit -m x", ...wf });
+await allows("cd as a commit message word", rootMain, { command: "git commit -m cd", ...wf });
+await allows("env without -C", rootMain, { command: "env FOO=1 git commit -m x", ...wf });
+await allows("env -C feature", rootMain, { command: "env -C /wt/feat git commit -m x", ...wf });
+// protected cwd or target
+await blocks("protected workdir", rootFeat, { command: "git commit -m x", workdir: "/proj" });
+await blocks("cd protected &&", rootFeat, { command: "cd /wt/dev && git commit -m x" });
+await blocks("cd protected ;", rootFeat, { command: "cd /proj; git commit -m x" });
+await blocks("relative cd into protected", rootFeat, { command: "cd ../dev && git commit -m x" });
+await blocks("pushd protected", rootFeat, { command: "pushd /proj && git commit -m x" });
+await blocks("git -C protected", rootFeat, { command: "git -C /proj commit -m x" });
+await blocks("cd protected && force-push HEAD", rootFeat, { command: "cd /proj && git push -f origin HEAD" });
+await blocks("force-push main from feature", rootMain, { command: "cd /wt/feat && git push -f origin main", ...wf });
+// undone or failed cd must not hide a protected cwd
+await blocks("subshell cd", rootFeat, { command: "(cd /wt/feat && true); git commit -m x", workdir: "/proj" });
+await blocks("cd -", rootFeat, { command: "cd /wt/feat; cd -; git commit -m x", workdir: "/proj" });
+await blocks("pushd/popd", rootFeat, { command: "pushd /wt/feat; popd; git commit -m x", workdir: "/proj" });
+await blocks("backgrounded cd", rootFeat, { command: "cd /wt/feat & git commit -m x", workdir: "/proj" });
+await blocks("piped cd", rootFeat, { command: "cd /wt/feat | git commit -m x", workdir: "/proj" });
+await blocks("failed cd", rootFeat, { command: "cd nosuch; git commit -m x", workdir: "/proj" });
+await blocks("subshell cd then force-push HEAD", rootFeat, { command: "(cd /wt/feat && true); git push -f origin HEAD", workdir: "/proj" });
+// cd-like words anywhere before git
+await blocks("if cd", rootFeat, { command: "if cd /proj; then git commit -m x; fi" });
+await blocks("while cd", rootFeat, { command: "while cd /proj; do git commit -m x; break; done" });
+await blocks("\\cd", rootFeat, { command: "\\cd /proj && git commit -m x" });
+await blocks("eval cd", rootFeat, { command: "eval cd /proj && git commit -m x" });
+await blocks("command cd", rootFeat, { command: "command cd /proj && git commit -m x" });
+await blocks("then cd", rootFeat, { command: "if true; then cd /proj; fi; git commit -m x" });
+await blocks("env -C protected", rootFeat, { command: "env -C /proj git commit -m x" });
+await blocks("sudo -D protected", rootFeat, { command: "sudo -D /proj git commit -m x" });
+await blocks("bash -c wrapped cd", rootFeat, { command: 'bash -c "cd /proj && git commit -m x"' });
+// anything not resolvable exactly judges the project root
+await blocks("CDPATH", rootMain, { command: "CDPATH=/ cd proj && git commit -m x", ...wf });
+await blocks("GIT_DIR prefix", rootMain, { command: "GIT_DIR=/proj/.git git commit -m x", ...wf });
+await blocks("exported GIT_WORK_TREE", rootMain, { command: "export GIT_WORK_TREE=/proj; git commit -m x", ...wf });
+await blocks("--git-dir=", rootMain, { command: "git --git-dir=/proj/.git commit -m x", ...wf });
+await blocks("--work-tree", rootMain, { command: "git --work-tree /proj commit -m x", ...wf });
+await blocks("variable cd target", rootMain, { command: "X=/wt/feat; cd $X && git commit -m x", ...wf });
+await blocks("quoted variable cd target", rootMain, { command: 'X=/wt/feat; cd "$X" && git commit -m x', ...wf });
+await blocks("printf -v", rootMain, { command: "X=/wt/feat; printf -vX %s /proj; cd $X && git commit -m x", ...wf });
+await blocks("git -C variable", rootMain, { command: "git -C $X commit -m x", ...wf });
+await blocks("cd $(…)", rootMain, { command: "cd $(git rev-parse --show-toplevel) && git commit -m x", ...wf });
+await blocks('cd "$(…)"', rootMain, { command: 'cd "$(git rev-parse --show-toplevel)" && git commit -m x', ...wf });
+await blocks("cd backtick", rootMain, { command: "cd `pwd` && git commit -m x", ...wf });
+await blocks("bare cd", rootMain, { command: "cd && git commit -m x", ...wf });
+await blocks("cd - with unknown OLDPWD", rootMain, { command: "cd - && git commit -m x", ...wf });
+await blocks("cd ~", rootMain, { command: "cd ~ && git commit -m x", ...wf });
+await blocks("non-repo workdir falls back to root", rootMain, { command: "git commit -m x", workdir: "/tmp" });
+// quote pairing must still catch flags
+await blocks("--no-verify after a quoted $(…)", rootFeat, { command: 'echo "root: $(git rev-parse --show-toplevel)"; git commit --no-verify -m "x y"' });
+await blocks("force-push main after a quoted $(…)", rootFeat, { command: 'echo "root: $(git rev-parse --show-toplevel)" && git push --force origin main -o "a b"' });
+// a cd after git (loop, function), chained -C, sourcing
+await blocks("cd after git in a loop", rootMain, { command: "for i in 1 2; do git commit -m x; cd ../../proj; done", ...wf });
+await blocks("function body after cd", rootMain, { command: "f(){ git commit -m x; }; cd /tmp; f", ...wf });
+await blocks("function keyword", rootMain, { command: "function f { git commit -m x; }; f", ...wf });
+await blocks("chained -C into protected", rootFeat, { command: "git -C /proj -C . commit -m x" });
+await allows("chained -C within the worktree", rootMain, { command: "git -C /wt/feat -C docs commit -m x", ...wf });
+await blocks("source", rootMain, { command: "source ./go.sh; git commit -m x", ...wf });
+await blocks(". in command position", rootMain, { command: ". ./go.sh; git commit -m x", ...wf });
+await allows(". as an argument", rootMain, { command: "ls . && git commit -m x", ...wf });
+await allows("cd .", rootMain, { command: "cd . && git commit -m x", ...wf });
+// an empty -C must not swallow the subcommand
+await blocks("git -C '' commit", rootFeat, { command: "git -C '' commit -m x", workdir: "/proj" });
+await blocks('git -C "" commit', rootFeat, { command: 'git -C "" commit -m x', workdir: "/proj" });
+// conservative by design: a protected cwd stays a candidate after a cd
+await blocks("cd out of a protected cwd still blocks", rootMain, { command: "cd /wt/feat && git commit -m x" });
 
 // ── bash-command guard: guard-layer + destructive ──
 await blocks("git checkout AGENTS.md", beforeFeature, { command: "git checkout AGENTS.md" });

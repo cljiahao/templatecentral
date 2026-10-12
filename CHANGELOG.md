@@ -14,17 +14,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- `block-no-verify.sh` resolves the branch for a bare `git commit` / `git push` from the command's own
-  directory. It now reads the hook input's `cwd` and follows `cd`/`pushd` before `git`. Claude Code may
-  start hooks from the session's original root, so in a git worktree `$PWD` named the main checkout's
-  branch: every worktree commit was blocked when that checkout sat on `main`, and `cd <protected checkout>
-  && git commit` from a feature-branch worktree was not blocked. A `cd` target the hook cannot resolve
-  (an unexpanded `$VAR`, command substitution, `cd -`, a bare `cd`) keeps the command's own directory, so
-  the common agent form `cd "$WT" && git commit` is judged by the worktree's branch. Both kit variants
-  (TS, FastAPI) changed.
-- OpenCode adapter: the bash-command guard resolves the branch per git invocation from the tool's
-  `workdir`/`cwd` arg, then any `cd`/`pushd` and `git -C`, falling back to the project root. It read one
-  branch from the project root before, so it had the same worktree mis-resolution and also ignored `git -C`.
+- `block-no-verify.sh` judges a bare `git commit` / `git push` by the branch it can actually land on.
+  Claude Code may start hooks from the session's original root, so in a git worktree `$PWD` named the
+  main checkout's branch: every worktree commit was blocked when that checkout sat on `main`, and the
+  check never looked at the worktree's own branch. The hook now reads the hook input's `cwd`.
+- Candidates are that `cwd` plus each literal `cd`/`pushd`/`env -C`/`sudo -D` target found anywhere
+  before `git` (`if cd x`, `\cd x`, …), resolved against every candidate so far. Any protected
+  candidate blocks, so a `cd` the shell undoes (subshell, `&`, `|`) or that fails cannot hide the real
+  directory. Anything the hook cannot resolve exactly also judges the project root, the directory it
+  judged before: a variable, `$(…)`, a backtick, `~`, `cd -`, a bare `cd`, `popd`, `eval`, `CDPATH`,
+  `GIT_DIR`/`GIT_WORK_TREE`, `--git-dir`/`--work-tree`, or an unresolvable `git -C`. A construct the
+  parser misses therefore never leaves the check weaker than before. Checked against the previous hook
+  over 248 command × directory combinations: no command it blocked is now allowed.
+- Directory changes are collected in a first pass, so a `cd` that runs after `git` in a loop or a
+  function still counts. Several `git -C` options chain the way git applies them. `source`, `.` in
+  command position, and a function defined in the command also judge the project root. Residual gap:
+  a shell function or alias the agent's shell already has (from its snapshot) can change directory
+  where no check can see it; only Setup A (project root protected, cwd a feature worktree) is exposed.
+- Conservative by design: in a worktree session, `cd "$W" && git commit` still blocks when the project
+  root is on a protected branch. A bare `git commit`, or `git -C <literal path>`, works. From a
+  protected `cwd`, `cd <feature dir> && git commit` still blocks. Both kit variants (TS, FastAPI).
+- OpenCode adapter: the bash-command guard ports the same model, taking the cwd from the tool's
+  `workdir`/`cwd` arg. It read one branch from the project root before, so it had the same worktree
+  mis-resolution and also ignored `git -C`.
 
 ---
 
