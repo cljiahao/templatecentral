@@ -127,9 +127,21 @@ function pushTargetsProtectedWithForce(args, branch) {
   return force && target;
 }
 
+// Directory a `cd`/`pushd` segment moves to, or null when it cannot be resolved here (`cd -`, a bare
+// `cd`, a quoted path with spaces, an unexpanded `$VAR` or command substitution). Null leaves the
+// directory unchanged, so the command's own cwd still decides.
+function cdTarget(t, cwd) {
+  let d = t.slice(1).find((w) => !/^-./.test(w)) ?? "";
+  if (d === "" || d === "-" || d === "Q" || /[$`]/.test(d)) return null;
+  if (d === "~") d = process.env.HOME || "";
+  else if (d.startsWith("~/")) d = `${process.env.HOME || ""}/${d.slice(2)}`;
+  return d ? path.posix.resolve(cwd, d) : null;
+}
+
 // Port of block-no-verify.sh: evaluates each simple command's git invocation separately.
-// `branch` is the project's current git branch (or ""). A best-effort tripwire, not a boundary.
-function bashCommandReason(rawCmd, branch) {
+// `branchOf(dir, cdir)` resolves the branch a git invocation in `dir` (with `git -C cdir`) works on,
+// so a worktree or a `cd` is judged by its own branch. A best-effort tripwire, not a boundary.
+async function bashCommandReason(rawCmd, cwd, branchOf) {
   if (!rawCmd) return null;
   const cmd = stripHeredocBodies(rawCmd);
   const scan = normalise(cmd);
@@ -147,21 +159,28 @@ function bashCommandReason(rawCmd, branch) {
 
   for (const seg of scan.split(/[;|&()`\n]/)) {
     const t = seg.trim().split(/\s+/).filter(Boolean);
+    if (t[0] === "cd" || t[0] === "pushd") {
+      cwd = cdTarget(t, cwd) ?? cwd;
+      continue;
+    }
     let i = t.findIndex((w) => { const x = w.replace(/^\\/, ""); return x === "git" || x.endsWith("/git"); });
     if (i < 0) continue;
     i++;
+    let cdir = "";
     while (i < t.length && t[i].startsWith("-")) {
       const o = t[i];
       if (o === "-c" || o === "--config-env") {
         if (/core\.hookspath/i.test(t[i + 1] || "")) return "'git -c core.hooksPath=…' disables the git-hook layer — the same bypass as --no-verify. Fix the failure instead.";
         i += 2; continue;
       }
-      if (["-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"].includes(o)) { i += 2; continue; }
+      if (o === "-C") { cdir = t[i + 1] || ""; i += 2; continue; }
+      if (["--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"].includes(o)) { i += 2; continue; }
       if (/core\.hookspath/i.test(o)) return "overriding core.hooksPath disables the git-hook layer. Fix the failure instead.";
       i++;
     }
     const sub = t[i] || "";
     const args = t.slice(i + 1);
+    const branch = sub === "commit" || sub === "push" ? await branchOf(cwd, cdir) : "";
     const beforeDashDash = args.includes("--") ? args.slice(0, args.indexOf("--")) : args;
 
     if (GIT_HOOK_SUBCOMMANDS.has(sub) && beforeDashDash.some((a) => a.startsWith("--no-veri"))) {
@@ -219,9 +238,17 @@ export default async ({ directory, $ }) => {
       const args = argsOf(input, output);
       const command = args.command || args.cmd;
       if (typeof command === "string" && command) {
-        let branch = "";
-        try { branch = (await $`git -C ${root} rev-parse --abbrev-ref HEAD`.text()).trim(); } catch { /* not a git repo */ }
-        const reason = bashCommandReason(command, branch);
+        const workdir = args.workdir || args.cwd;
+        const cwd = typeof workdir === "string" && workdir ? path.posix.resolve(root, workdir) : root;
+        const revParse = async (dir) => (await $`git -C ${dir} rev-parse --abbrev-ref HEAD`.text()).trim();
+        // The command's own directory first, then the project root — as the CC hook falls back.
+        const branchOf = async (dir, cdir) => {
+          for (const base of [dir, root]) {
+            try { return await revParse(cdir ? path.posix.resolve(base, cdir) : base); } catch { /* not a git repo */ }
+          }
+          return "";
+        };
+        const reason = await bashCommandReason(command, cwd, branchOf);
         if (reason) throw new Error(`[templatecentral] BLOCKED: ${reason}`);
       }
       const file = fileArg(args);

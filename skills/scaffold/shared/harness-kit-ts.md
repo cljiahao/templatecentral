@@ -230,14 +230,15 @@ segments=$(printf '%s\n' "$scan" | tr ';|&()`' '\n\n\n\n\n\n')
 while IFS= read -r seg; do
   read -ra t <<< "$seg"
   # `cd X && git commit` commits on X's branch. Follow cd/pushd so the branch check sees it.
-  # A target that cannot be resolved here (`cd -`, a quoted path with spaces) leaves the directory unchanged.
+  # A target that cannot be resolved here (`cd -`, a bare `cd`, a quoted path with spaces, an unexpanded
+  # `$VAR` or command substitution) leaves the directory unchanged, so the command's own cwd still decides.
   if [[ "${t[0]:-}" == cd || "${t[0]:-}" == pushd ]]; then
     d=""
     for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
     case "$d" in
-      ""|"~") d=$HOME ;;
+      "~") d=$HOME ;;
       "~/"*) d="$HOME/${d#\~/}" ;;
-      -|Q) d="" ;;
+      ""|-|Q|*[\$\`]*) d="" ;;
     esac
     if [ -n "$d" ]; then
       [[ "$d" == /* ]] || d="$orig_dir/$d"

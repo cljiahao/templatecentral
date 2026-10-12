@@ -71,6 +71,45 @@ await allows("force-push feature",     beforeFeature, { command: "git push --for
 await allows("force-push branch named fix-main", beforeFeature, { command: "git push -f origin fix-main" });
 await allows("plain push main",        beforeFeature, { command: "git push origin main" });
 
+// ── bash-command guard: branch of the command's own directory ──
+// A worktree or a `cd`/`git -C` target can sit on a different branch from the project root; the
+// guard must judge the branch the command actually commits on. `branches` maps a directory to the
+// branch `git -C <dir> rev-parse` reports; an unlisted directory is not a git repo.
+const mkDirShell = (branches) => (strings, ...values) => {
+  const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? [].concat(values[i]).join(" ") : ""), "");
+  const m = text.match(/^git -C (\S+) rev-parse/);
+  const p = m && !(m[1] in branches) ? Promise.reject(new Error("not a git repo")) : Promise.resolve("");
+  p.catch(() => {});
+  p.text = async () => (m ? branches[m[1]] : "");
+  p.cwd = () => p;
+  p.quiet = () => p;
+  return p;
+};
+const dirs = { "/proj": "main", "/wt/feat": "feat/x", "/wt/dev": "develop" };
+const beforeRootMain = (await plugin({ directory: "/proj", $: mkDirShell(dirs) }))["tool.execute.before"];
+const beforeRootFeat = (await plugin({ directory: "/wt/feat", $: mkDirShell(dirs) }))["tool.execute.before"];
+await allows("commit in feature workdir, root on main", beforeRootMain, { command: "git commit -m x", workdir: "/wt/feat" });
+await blocks("commit in protected workdir, root on feature", beforeRootFeat, { command: "git commit -m x", workdir: "/proj" });
+await allows("commit via args.cwd on feature", beforeRootMain, { command: "git commit -m x", cwd: "/wt/feat" });
+await allows("relative workdir resolves against root", beforeRootMain, { command: "git commit -m x", workdir: "../wt/feat" });
+await allows("cd feature && commit, root on main", beforeRootMain, { command: "cd /wt/feat && git commit -m x" });
+await blocks("cd protected && commit, root on feature", beforeRootFeat, { command: "cd /wt/dev && git commit -m x" });
+await blocks("cd protected; commit", beforeRootFeat, { command: "cd /proj; git commit -m x" });
+await blocks("pushd protected && commit", beforeRootFeat, { command: "pushd /proj && git commit -m x" });
+await allows("cd -P feature && commit", beforeRootMain, { command: 'cd -P "/wt/feat" && git commit -m x' });
+await allows("cd - leaves dir unchanged", beforeRootFeat, { command: "cd - && git commit -m x" });
+await blocks("relative cd into protected", beforeRootFeat, { command: "cd ../dev && git commit -m x" });
+await allows("git -C feature commit, root on main", beforeRootMain, { command: "git -C /wt/feat commit -m x" });
+await blocks("git -C protected commit, root on feature", beforeRootFeat, { command: "git -C /proj commit -m x" });
+await allows("cd feature && force-push HEAD", beforeRootMain, { command: "cd /wt/feat && git push -f origin HEAD" });
+await blocks("cd protected && force-push HEAD", beforeRootFeat, { command: "cd /proj && git push -f origin HEAD" });
+await blocks("cd feature && force-push main", beforeRootMain, { command: "cd /wt/feat && git push -f origin main" });
+await allows("cd \"$VAR\" keeps the workdir's branch", beforeRootMain, { command: 'cd "$WT" && git commit -m x', workdir: "/wt/feat" });
+await allows("cd $(…) keeps the workdir's branch", beforeRootMain, { command: "cd $(git rev-parse --show-toplevel) && git commit -m x", workdir: "/wt/feat" });
+await allows("bare cd keeps the workdir's branch", beforeRootMain, { command: "cd && git commit -m x", workdir: "/wt/feat" });
+await blocks("cd $VAR from a protected workdir still blocks", beforeRootFeat, { command: "cd $WT && git commit -m x", workdir: "/proj" });
+await blocks("non-repo workdir falls back to root branch", beforeRootMain, { command: "git commit -m x", workdir: "/tmp" });
+
 // ── bash-command guard: guard-layer + destructive ──
 await blocks("git checkout AGENTS.md", beforeFeature, { command: "git checkout AGENTS.md" });
 await blocks("git restore ./.claude",  beforeFeature, { command: "git restore ./.claude/settings.json" });

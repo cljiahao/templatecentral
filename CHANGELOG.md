@@ -18,8 +18,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   directory. It now reads the hook input's `cwd` and follows `cd`/`pushd` before `git`. Claude Code may
   start hooks from the session's original root, so in a git worktree `$PWD` named the main checkout's
   branch: every worktree commit was blocked when that checkout sat on `main`, and `cd <protected checkout>
-  && git commit` from a feature-branch worktree was not blocked. Both kit variants (TS, FastAPI) changed.
-  The OpenCode adapter's port still reads the branch from the project root.
+  && git commit` from a feature-branch worktree was not blocked. A `cd` target the hook cannot resolve
+  (an unexpanded `$VAR`, command substitution, `cd -`, a bare `cd`) keeps the command's own directory, so
+  the common agent form `cd "$WT" && git commit` is judged by the worktree's branch. Both kit variants
+  (TS, FastAPI) changed.
+- OpenCode adapter: the bash-command guard resolves the branch per git invocation from the tool's
+  `workdir`/`cwd` arg, then any `cd`/`pushd` and `git -C`, falling back to the project root. It read one
+  branch from the project root before, so it had the same worktree mis-resolution and also ignored `git -C`.
 
 ---
 
