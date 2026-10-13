@@ -382,8 +382,20 @@ expect_bash_cwd 0 "$FEAT" 'cd . && git commit -m x' "$MAIN"
 # an empty -C must not swallow the subcommand
 expect_bash_cwd 2 "$MAIN" "git -C '' commit -m x" "$MAIN"
 expect_bash_cwd 2 "$MAIN" 'git -C "" commit -m x' "$MAIN"
-# conservative by design: a protected cwd stays a candidate after a cd
-expect_bash_cwd 2 "$MAIN" "cd $FEAT && git commit -m x" "$MAIN"
+# A strict && chain only reaches git after every cd before it succeeded, so a protected cwd drops out.
+expect_bash_cwd 0 "$MAIN" "cd $FEAT && git commit -m x" "$MAIN"
+expect_bash_cwd 0 "$MAIN" "cd \"$FEAT\" && git add -A && git commit -m x 2>&1" "$MAIN"
+expect_bash_cwd 0 "$MAIN" "true && cd $FEAT && git push -f origin HEAD" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && cd $MAIN && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && git -C $MAIN commit -m x" "$MAIN"
+# Anything short of a strict chain of literal cds keeps the protected cwd a candidate.
+expect_bash_cwd 2 "$MAIN" "cd $FEAT || git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "(cd $FEAT && git commit -m x)" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && command cd $MAIN && git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && env -C $MAIN git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && x=1 git commit -m x" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd $FEAT && git commit -m x${NL}git commit -m y" "$MAIN"
+expect_bash_cwd 2 "$MAIN" "cd nosuch && git commit -m x" "$MAIN"
 
 # ── user-prompt-guard ─────────────────────────────────────────────────────────
 
