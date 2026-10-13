@@ -129,6 +129,39 @@ function pushTargetsProtectedWithForce(args, branch) {
 
 const unresolved = (d) => !d || d === "-" || d === "Q" || /[$`~]/.test(d);
 
+// A strict `&&` chain (no ; || | lone & ( ) ` or newline once N>&M redirections are set aside) reaches
+// each git only after every cd before it succeeded, so the directories its git words run in are known
+// exactly: those, or null when the command is anything short of that. A cd that is not a plain literal
+// at the start of a segment, or a git that is not the first word of its segment, gives null.
+async function strictChainDirs(scan, cwd, env) {
+  const chk = scan.replace(/[0-9]*>&[0-9-]*/g, "").replace(/&>>?/g, "").replace(/&&/g, " ");
+  if (/[;|&()`\n]/.test(chk)) return null;
+  const bare = (w) => w.replace(/^\\/, "");
+  const isGit = (w) => bare(w) === "git" || bare(w).endsWith("/git");
+  const DIR_WORDS = new Set(["cd", "pushd", "popd", "env", "sudo", "command", "builtin", "exec"]);
+  let cur = cwd, sawGit = false;
+  const out = [];
+  for (const seg of scan.split("&&")) {
+    const t = seg.trim().split(/\s+/).filter(Boolean);
+    if (t.length === 0) continue;
+    const first = bare(t[0]);
+    if (first === "cd" || first === "pushd") {
+      const d = t.slice(1).find((x) => !/^-./.test(x)) ?? "";
+      if (unresolved(d)) return null;
+      const dir = path.posix.resolve(cur, d);
+      if (!(await env.isDir(dir))) return null;
+      cur = dir;
+      continue;
+    }
+    if (t.some((w) => DIR_WORDS.has(bare(w)))) return null;
+    if (isGit(t[0])) {
+      sawGit = true;
+      if (!out.includes(cur)) out.push(cur);
+    } else if (t.some(isGit)) return null;
+  }
+  return sawGit ? out : null;
+}
+
 // The first protected branch a bare commit/push may land on, or "". `st.cands` holds the command's cwd
 // plus each literal cd-like target resolved against every candidate so far: the real directory is always
 // one of them, so a cd the shell undoes (subshell, `&`, `|`) or that fails cannot hide it, and ANY
@@ -222,6 +255,11 @@ async function bashCommandReason(rawCmd, cwd, env) {
     settled = st.cands.length === before;
   }
   if (!settled) st.redir = true; // still growing at the cap: judge the project root too
+  // In a strict && chain the real directories are known, so a protected cwd the chain cds out of drops out.
+  if (!st.redir) {
+    const chainDirs = await strictChainDirs(scan, cwd, env);
+    if (chainDirs) st.cands = chainDirs;
+  }
   for (const t of segments) {
     let i = gitIndex(t);
     if (i < 0) continue;

@@ -329,6 +329,46 @@ for _ in 1 2 3 4; do
   [ "${#cand[@]}" -eq "$before" ] && { settled=1; break; }
 done
 [ "$settled" -eq 1 ] || redir=1   # still growing at the cap: judge the project root too
+# A strict `&&` chain (no ; || | lone & ( ) ` or newline once N>&M redirections are set aside) reaches
+# each git only after every cd before it succeeded, so the directories its git words run in are known
+# exactly: judge those instead of the whole candidate set. That is what lets `cd repo && git commit`
+# through from a protected checkout. A cd that is not a plain literal at the start of a segment, a git
+# that is not the first word of its segment, or any redir leaves the candidate set as it is.
+chain_dirs() {
+  local chk seg w d cur first sawgit=0
+  local -a t out=()
+  chk=$(printf '%s' "$scan" | sed -E 's/[0-9]*>&[0-9-]*//g; s/&>>?//g; s/&&/ /g')
+  [[ "$chk" == *[\;\|\&\(\)\`]* || "$chk" == *$'\n'* ]] && return 1
+  cur=$orig_dir
+  while IFS= read -r seg; do
+    read -ra t <<< "$seg"
+    [ "${#t[@]}" -eq 0 ] && continue
+    first="${t[0]#\\}"
+    if [[ "$first" == cd || "$first" == pushd ]]; then
+      d=""
+      for w in "${t[@]:1}"; do [[ "$w" == -?* ]] && continue; d=$w; break; done
+      unresolved "$d" && return 1
+      [[ "$d" == /* ]] || d="$cur/$d"
+      cur=$(cd "$d" 2>/dev/null && pwd -P) || return 1
+      continue
+    fi
+    for w in "${t[@]}"; do
+      case "${w#\\}" in cd|pushd|popd|env|sudo|command|builtin|exec) return 1 ;; esac
+    done
+    if [[ "$first" == git || "$first" == */git ]]; then
+      sawgit=1
+      [[ " ${out[*]} " == *" $cur "* ]] || out+=("$cur")
+    else
+      for w in "${t[@]}"; do [[ "${w#\\}" == git || "${w#\\}" == */git ]] && return 1; done
+    fi
+  done <<< "${scan//&&/$'\n'}"
+  [ "$sawgit" -eq 1 ] || return 1
+  printf '%s\n' "${out[@]}"
+}
+if [ "$redir" -eq 0 ] && chain_out=$(chain_dirs); then
+  cand=()
+  while IFS= read -r d; do cand+=("$d"); done <<< "$chain_out"
+fi
 while IFS= read -r seg; do
   read -ra t <<< "$seg"
   n=${#t[@]}; i=0
