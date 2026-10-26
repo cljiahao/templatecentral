@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Security
+- `ecosystem-refresh.yml` no longer gives the research agent write access. The agent reads web pages, so a
+  prompt injection there could previously reach `Write`, `git` and `gh` under a `contents: write` token. It
+  now runs in a `research` job with `contents: read`, no shell, and file writes limited to
+  `.claude/audit-ecosystem-research.md` and `pr-body.md`. A separate `publish` job, with no LLM, validates
+  the uploaded artifact (exactly two regular files, size limits, one changed path) and opens the PR.
+
 ---
 
 ## [6.0.5] — 2026-10-13
