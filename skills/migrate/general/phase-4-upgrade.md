@@ -115,7 +115,7 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step A** — `settings.json` (the `permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, and wiring for the 6 hook events templateCentral seeds).
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`), `.claude/comment-hygiene-patterns.txt` (the canonical pattern list the new hook, the `comment-hygiene` lefthook command, and the `comment-hygiene` CI job all read at runtime), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
-- **Step B3** — CI quality gates: `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). On Azure DevOps, skip both when the existing pipelines already run gitleaks and the harness check (kit Step B3).
+- **Step B3** — CI quality gates: `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). On Azure DevOps, skip both only when the existing pipelines already run gitleaks, the harness check **and** a dependency audit that fails on high/critical advisories; when they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline (kit Step B3).
 - **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`) — Phase 5d's re-sync and the pre-push hook both call this, so it MUST be seeded here.
 - **Step B5** — the `/skill-audit` project skill (consumes `skill-usage-log.sh`).
 - **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md`.
@@ -242,7 +242,7 @@ Changes made:
   lefthook.yml                   — git-hook layer
   .lefthook/commit-msg.sh        — Conventional Commits gate
   .gitleaks.toml                 — secret-scan config
-  .claude/ci-gates.sh            — PR merge gates (secrets, changelog, readme, comments)
+  .claude/ci-gates.sh            — PR merge gates (secrets, changelog, readme, comments, deps)
   .github/workflows/ci.yml       — CI quality gates (GitHub) — or
   azure-pipelines/templatecentral-gates.yml — steps template (Azure DevOps)
   .claude/verify-harness.sh      — harness integrity verifier
