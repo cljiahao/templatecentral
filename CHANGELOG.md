@@ -30,9 +30,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Re-sync adds the `deps` gate as a blocking check with no label bypass. A project with no
   `pnpm-lock.yaml`, `uv.lock` or `requirements*.txt` fails with "no lockfile found". Azure projects that
   took the "seed neither" path need the `deps` step added by hand, or by migrate's new health check.
-- The `deps` gate audits every Python source present (`uv.lock` and each `requirements*.txt`) and fails
-  when an audit covers no packages. Unaudited Python packages fail and cannot be allowlisted. Blocked
-  lines read `<package>: <ids> (<severity>)`.
+- The `deps` gate audits every ecosystem present (`pnpm-lock.yaml`, `uv.lock` and each
+  `requirements*.txt`) and fails when an audit covers no packages. Unaudited Python packages fail and
+  cannot be allowlisted. Blocked lines read `<package>: <ids> (<severity>)`.
 - Native pnpm suppressions (`auditConfig`, `ignoreGhsas`, `ignoreCves`, `audit.ignore`) are rejected in
   favour of `.claude/dep-audit-allow.txt`, and an allowlist expiry more than 180 days out is malformed.
   The NestJS scaffold no longer seeds an inert `audit.ignore`.

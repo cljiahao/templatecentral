@@ -486,7 +486,9 @@ PY
     }
     reqs=()
     for f in requirements*.txt; do if [ -f "$f" ]; then reqs+=("$f"); fi; done
+    audited=0
     if [ -f pnpm-lock.yaml ]; then
+      audited=1
       need pnpm
       pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
       node - "$tmp/report.json" >> "$tmp/found" <<'JS'
@@ -507,7 +509,9 @@ JS
       rc=$?
       [ "$rc" -ne 4 ] || fail "dependency audit covered no packages (pnpm audit)"
       [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
-    elif [ -f uv.lock ] || [ "${#reqs[@]}" -gt 0 ]; then
+    fi
+    if [ -f uv.lock ] || [ "${#reqs[@]}" -gt 0 ]; then
+      audited=1
       need pipx
       if [ -f uv.lock ]; then
         need uv
@@ -517,9 +521,8 @@ JS
         py_audit "$tmp/req.txt" uv.lock --no-deps --disable-pip
       fi
       for f in ${reqs[@]+"${reqs[@]}"}; do py_audit "$f" "$f"; done
-    else
-      fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements*.txt) — nothing to audit"
     fi
+    [ "$audited" -eq 1 ] || fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements*.txt) — nothing to audit"
     blocked=""
     while IFS= read -r line; do
       [ -n "$line" ] || continue
@@ -559,7 +562,7 @@ exit 0
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
 - **gitleaks runs as the CLI, not `gitleaks/gitleaks-action`:** the action needs a paid `GITLEAKS_LICENSE` secret on organization-owned repos; the CLI is MIT, needs no key or token, and is the same current scanner (upstream calls gitleaks feature-complete; its maintainer's successor is Betterleaks — note only). The version and SHA-256 live once, in `ci-gates.sh` (`secrets` gate) — bump both together from the release's `gitleaks_<version>_checksums.txt`; `sha256sum -c` fails the job on any mismatch. A PR scans only its own commits (`origin/<base>..HEAD` — correct on the synthetic merge checkout GitHub and Azure DevOps PR builds both use; do NOT add `--first-parent`, which follows the base side of that merge and scans nothing); a push to `main` scans full history. Both need `fetch-depth: 0`. Exit code 1 on any finding fails the job; `--redact` keeps secrets out of the log.
 - **Push protection is the third secret layer** (after the pre-commit hook and this CI scan): the host rejects a push containing a recognised secret before it lands. Enable it in repo settings — free on public GitHub repos; private repos need GitHub Secret Protection, and Azure Repos need GitHub Advanced Security for Azure DevOps. It is a setting, not a seeded file.
-- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; otherwise every Python source present is audited: a `uv.lock` is exported with `uv export --frozen --no-dev --no-emit-project --no-emit-workspace` (the hash-pinned export is then audited by pip-audit with `--no-deps --disable-pip`) and each `requirements*.txt` is audited by pip-audit directly, so an empty lock cannot mask a vulnerable requirements file. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate needs the project's package manager (`pnpm` or `uv`) and, for Python, `pipx` on PATH, so on Azure include the template after the pipeline's install steps; the FastAPI `quality` job installs `uv` when `uv.lock` exists. An audit that covered no packages fails ("dependency audit covered no packages"), and so does a pip-audit dependency it skips (not on PyPI, private index, editable install): it was not audited and cannot be allowlisted. The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. Each blocked line reads `<package>: <ids> (<severity>)`, with severity `n/a` for pip-audit. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids; pnpm's JSON carries only the GHSA id (no CVE field), so a pnpm advisory is allowlisted by its GHSA id, while a pip-audit advisory matches its PYSEC, GHSA or CVE id. An entry fails the gate on or after its expiry date and is malformed when the expiry is more than 180 days out, so a suppression has to be renewed on purpose. pnpm's own suppression settings (`auditConfig`, `ignoreGhsas`, `ignoreCves`, an `audit.ignore` list in `pnpm-workspace.yaml`, `package.json` or `.npmrc`) bypass that expiry, so the gate rejects them and points at the allowlist. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
+- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; every Python source present is audited as well, so one ecosystem never masks another: a `uv.lock` is exported with `uv export --frozen --no-dev --no-emit-project --no-emit-workspace` (the hash-pinned export is then audited by pip-audit with `--no-deps --disable-pip`) and each `requirements*.txt` is audited by pip-audit directly, so an empty lock cannot mask a vulnerable requirements file. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate needs the project's package manager (`pnpm` or `uv`) and, for Python, `pipx` on PATH, so on Azure include the template after the pipeline's install steps; the FastAPI `quality` job installs `uv` when `uv.lock` exists. An audit that covered no packages fails ("dependency audit covered no packages"), and so does a pip-audit dependency it skips (not on PyPI, private index, editable install): it was not audited and cannot be allowlisted. The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. Each blocked line reads `<package>: <ids> (<severity>)`, with severity `n/a` for pip-audit. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids; pnpm's JSON carries only the GHSA id (no CVE field), so a pnpm advisory is allowlisted by its GHSA id, while a pip-audit advisory matches its PYSEC, GHSA or CVE id. An entry fails the gate on or after its expiry date and is malformed when the expiry is more than 180 days out, so a suppression has to be renewed on purpose. pnpm's own suppression settings (`auditConfig`, `ignoreGhsas`, `ignoreCves`, an `audit.ignore` list in `pnpm-workspace.yaml`, `package.json` or `.npmrc`) bypass that expiry, so the gate rejects them and points at the allowlist. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - CI config (`.github/workflows/`, `azure-pipelines/`) needs human approval before any agent edit (`protect-files.sh` asks) — CI is human-reviewed by design.
 

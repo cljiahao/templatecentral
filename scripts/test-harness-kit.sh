@@ -926,7 +926,13 @@ unset SEED_FILE SEED_BODY
 expect_deps 0 "allowlist expiry 180 days out is accepted" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc $(days_from_now 180) reason\n" ""
 expect_deps 1 "allowlist expiry 181 days out is rejected" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc $(days_from_now 181) reason\n" "expiry more than 180 days out"
 rm -f "$DB/argv"
-expect_deps 0 "pnpm lockfile wins over requirements.txt" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+FIXTURE_REQ="$T/deps-fixture-req"
+printf '%s' "$PIP_VULN" > "$FIXTURE_REQ"
+export FIXTURE_REQ
+expect_deps 1 "pnpm clean plus a vulnerable requirements.txt fails naming the Python advisory" "pnpm-lock.yaml requirements.txt" "$PNPM_CLEAN" "" "requests: PYSEC-2099-1"
+printf '%s' "$PIP_CLEAN" > "$FIXTURE_REQ"
+expect_deps 0 "pnpm clean plus a clean requirements.txt passes" "pnpm-lock.yaml requirements.txt" "$PNPM_CLEAN" "" ""
+unset FIXTURE_REQ
 check 1 "$(grep -c '^[[:space:]]*PIP_AUDIT_VERSION="' "$KIT/ci-gates.sh")" "ci-gates pins pip-audit once"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
