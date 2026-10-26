@@ -17,7 +17,8 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 src/
 ├── lib/
 │   ├── auth.ts                                        ← better-auth server config (verbatim — do not generate)
-│   └── auth-client.ts                                 ← better-auth client config (verbatim — do not generate)
+│   ├── auth-client.ts                                 ← better-auth client config (verbatim — do not generate)
+│   └── authz.ts                                       ← hasRole / isOwner checks
 ├── proxy.ts                                           ← route protection middleware (verbatim — do not generate)
 └── app/
     ├── api/
@@ -31,6 +32,7 @@ src/
         ├── layout.tsx
         └── (overview)/
             └── page.tsx
+test/lib/authz.test.ts
 src/features/
 └── auth/
     ├── components/
@@ -109,8 +111,16 @@ export const auth = betterAuth({
     autoSignIn: true,
   },
 
-  // SSO providers go here — see Step 14 for the per-provider config blocks.
+  // SSO providers go here — see Step 15 for the per-provider config blocks.
   socialProviders: {},
+
+  user: {
+    additionalFields: {
+      // input: false keeps `role` out of sign-up and update-user bodies, so no user can grant
+      // themselves a role. Change it only from trusted server code.
+      role: { type: 'string', defaultValue: 'user', input: false },
+    },
+  },
 
   session: {
     // Standard tier. Elevated: 12h + 30-min inactivity; high-assurance: 8h + 15-min inactivity (add `freshAge`, see note below).
@@ -133,6 +143,8 @@ export const auth = betterAuth({
   // nextCookies() must stay the last plugin so Server Actions can set cookies.
   plugins: [nextCookies()],
 });
+
+export type Session = typeof auth.$Infer.Session;
 ```
 
 > `freshAge` (add under `session` for high-assurance flows) is measured from session `createdAt`, not last activity. With a short `freshAge` (e.g. `43200`), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
@@ -555,7 +567,85 @@ export function UserAvatar() {
 }
 ```
 
-#### 14. Adding an SSO provider
+#### 14. Authorization helpers
+
+A session says who the caller is; these decide what the caller may touch. Both deny by default. The role comes from `user.role` (Step 2), which better-auth stores server-side and never accepts from the client. With a database adapter, regenerate the auth schema so the user table gains the `role` column.
+
+**`src/lib/authz.ts`**:
+
+```ts
+import type { Session } from '@/lib/auth';
+
+/** True only when a signed-in user holds `role`. */
+export function hasRole(session: Session | null, role: string): boolean {
+  return session?.user.role === role;
+}
+
+/** True only when the record exists and belongs to `userId`. */
+export function isOwner(ownerId: string | null | undefined, userId: string): boolean {
+  return ownerId != null && ownerId === userId;
+}
+```
+
+Check ownership after loading a record by id, before returning or changing it. A record owned by someone else gets the same 404 as one that does not exist, so a caller cannot probe which ids belong to other users:
+
+```tsx
+// Server Component page
+const item = await getItem(id);
+if (!isOwner(item?.ownerId, session.user.id)) notFound();
+```
+
+```ts
+// Route handler
+if (!hasRole(session, 'admin')) return new Response(null, { status: 403 });
+
+const item = await getItem(id);
+if (!isOwner(item?.ownerId, session.user.id)) return new Response(null, { status: 404 });
+```
+
+**`test/lib/authz.test.ts`**:
+
+```ts
+import { describe, expect, it } from 'vitest';
+
+import type { Session } from '@/lib/auth';
+import { hasRole, isOwner } from '@/lib/authz';
+
+// Only `user.role` matters to hasRole; the cast skips building a full better-auth session.
+function sessionWithRole(role: string): Session {
+  return { user: { role } } as unknown as Session;
+}
+
+describe('hasRole', () => {
+  it('hasRole is false without a session', () => {
+    expect(hasRole(null, 'admin')).toBe(false);
+  });
+
+  it('hasRole is false for another role', () => {
+    expect(hasRole(sessionWithRole('user'), 'admin')).toBe(false);
+  });
+
+  it('hasRole is true for the held role', () => {
+    expect(hasRole(sessionWithRole('admin'), 'admin')).toBe(true);
+  });
+});
+
+describe('isOwner', () => {
+  it('isOwner is false for a missing owner', () => {
+    expect(isOwner(undefined, 'u1')).toBe(false);
+  });
+
+  it('isOwner is false for another owner', () => {
+    expect(isOwner('u2', 'u1')).toBe(false);
+  });
+
+  it('isOwner is true for the owner', () => {
+    expect(isOwner('u1', 'u1')).toBe(true);
+  });
+});
+```
+
+#### 15. Adding an SSO provider
 
 Add the provider to `socialProviders` in `src/lib/auth.ts`, put its credentials in `.env.local`, then render a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`:
 
@@ -658,6 +748,8 @@ Single-instance deployments can rely on better-auth's built-in limiter instead: 
 - NEVER remove the `isDev` guard on the dev login button — it must only render in development.
 - NEVER hardcode secrets — always environment variables.
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
+- Every page, Server Action and route handler that reads or writes a record by id checks `isOwner` (or filters the query by owner) first. Another user's record gets the same 404 as a missing one.
+- NEVER accept `role` from client input — keep `input: false` on the `role` field and change roles only from trusted server code.
 - Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
 - **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
 - **Password hashing**: better-auth's default hasher is scrypt, not argon2id — override `emailAndPassword.password.hash`/`.verify` with `@node-rs/argon2` (see Step 2) to match this project's argon2id-everywhere standard.

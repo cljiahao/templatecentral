@@ -62,6 +62,7 @@ If the project has no commits yet, skip writing the baseline.
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
 - **Overly broad responses**: full DB records or internal fields returned when a subset is sufficient
 - **Hardcoded secrets**: tokens, passwords, connection strings, or API keys anywhere in code
+- **Missing authorization**: every by-id read or write checks the caller owns the record or holds the required role; denial of another user's record returns 404
 
 **Layer 2 — Stack style (from code-standards skill):**
 - File naming, export conventions, function vs const patterns

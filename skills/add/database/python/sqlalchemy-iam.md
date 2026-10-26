@@ -132,7 +132,7 @@ AWS_REGION=us-east-1
 RDS_CA_BUNDLE_PATH=/path/to/global-bundle.pem
 ```
 
-CI has no `src/.env` and `session.py` builds the engine at import, so seed placeholders in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (see `templatecentral:add` (auth) Step 10 for the conftest shape). Tests override `get_db`, so nothing connects:
+CI has no `src/.env` and `session.py` builds the engine at import, so seed placeholders in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (see `templatecentral:add` (auth) Step 11 for the conftest shape). Tests override `get_db`, so nothing connects:
 
 ```python
 for key in ("DATABASE_HOST", "DATABASE_USER", "DATABASE_NAME", "RDS_CA_BUNDLE_PATH"):
