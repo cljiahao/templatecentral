@@ -17,6 +17,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   deny until the project loads roles from its database. Ownership failures return 404, so ids of other users' records cannot be probed. Each stack
   ships unit tests; the Vite rules and the review checklist gain matching lines. FastAPI auth steps
   5-10 and NestJS steps 6-12 are renumbered by one; the Next.js SSO step is now Step 15.
+- Seeded CI gains a `deps` gate in `ci-gates.sh`, run by the GitHub `quality` jobs (TS and FastAPI) and the
+  Azure Pipelines template. It audits `pnpm-lock.yaml` (high and critical advisories), `uv.lock` or
+  `requirements.txt` (pip-audit, pinned) and fails closed on a missing tool, a network failure or unparseable
+  output. There is no label bypass: `.claude/dep-audit-allow.txt` holds `<id> <YYYY-MM-DD> <reason>` entries that
+  expire, and `protect-files.sh` asks before editing it.
 
 ### Security
 - `ecosystem-refresh.yml` no longer gives the research agent write access. The agent reads web pages, so a

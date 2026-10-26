@@ -26,7 +26,7 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 | A | `.claude/settings.json` | variant (JSON body) + enforcement (merge rules, deny lists, hook inventory) |
 | B | `.claude/hooks/` scripts | variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
 | B2 | git-hook layer | variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
-| B3 | CI quality gates (`.claude/ci-gates.sh` + `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (gate script, workflow + TS `quality` job, Azure template) + fastapi variant (FastAPI `quality` job) |
+| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` + `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (gate script with the `deps` dependency-audit gate, workflow + TS `quality` job, Azure template) + fastapi variant (FastAPI `quality` job) |
 | B4 | harness integrity verifier | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md` | finalize |

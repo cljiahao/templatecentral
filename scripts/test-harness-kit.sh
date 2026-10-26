@@ -152,7 +152,7 @@ done
 for p in "$PF/AGENTS.md" agents.md ./CLAUDE.md "$ALIAS/.claude/settings.json" \
   "$PF/src/../.claude/hooks/x.sh" 'docs/weird"name/../../Dockerfile' 'sub/we"ird\dir/AGENTS.md' dockerfile \
   'src/../.claude/settings.json' "$PF/x/y/../../.claude/hooks/h.sh" 'src/../AGENTS.md' 'no/../lefthook.yml' \
-  'q/../w/../.claude/agents/a.md' .claude/ci-gates.sh; do
+  'q/../w/../.claude/agents/a.md' .claude/ci-gates.sh .claude/dep-audit-allow.txt 'src/../.claude/dep-audit-allow.txt'; do
   expect_edit ask "$p"
 done
 for p in .env.example ./.env.default src/app.ts "$PF/src/app.ts" "$PF/src/new/deep/dir/x.ts" "" \
@@ -763,6 +763,77 @@ printf '// Added retry on timeout\nconst c = 1\n' > "$r/src/c.ts"
 git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm narr
 expect_gate 1 comments "$r" "fails a change-narration comment"
 expect_gate 0 comments "$r" "honours skip-comment-check" "skip-comment-check"
+
+# ── deps gate (ci-gates.sh deps) ──────────────────────────────────────────────
+
+# pnpm, pipx and uv stubs print $FIXTURE (or write a requirements file for `uv export -o`) and
+# record their argv, so the gate's parsing, allowlist and fail-closed paths run offline.
+DB="$T/deps-bin"
+mkdir -p "$DB"
+# shellcheck disable=SC2016  # literal $FIXTURE / $* belong to the generated stub scripts.
+printf '#!/bin/sh\necho "$*" >> "%s/argv"\ncat "$FIXTURE"\nexit 1\n' "$DB" > "$DB/pnpm"
+# shellcheck disable=SC2016
+cp "$DB/pnpm" "$DB/pipx"
+# shellcheck disable=SC2016
+printf '#!/bin/sh\necho "$*" >> "%s/argv"\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo "x==1" > "$2"; shift; done\n' "$DB" > "$DB/uv"
+chmod +x "$DB/pnpm" "$DB/pipx" "$DB/uv"
+
+PNPM_CLEAN='{"advisories":{},"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0}}}'
+PNPM_HIGH='{"advisories":{"1":{"id":1,"severity":"high","github_advisory_id":"GHSA-aaaa-bbbb-cccc","cves":["CVE-2099-0001"]}}}'
+PNPM_MOD='{"advisories":{"2":{"id":2,"severity":"moderate","github_advisory_id":"GHSA-dddd-eeee-ffff"}}}'
+PIP_VULN='{"dependencies":[{"name":"requests","version":"2.19.0","vulns":[{"id":"PYSEC-2099-1","fix_versions":["2.20.0"],"aliases":["GHSA-gggg-hhhh-iiii","CVE-2099-0002"]}]}],"fixes":[]}'
+PIP_CLEAN='{"dependencies":[{"name":"requests","version":"2.33.0","vulns":[]}],"fixes":[]}'
+
+# expect_deps <want-exit> <description> <lockfile> <fixture> <allowlist-or-""> <stderr+stdout-pattern-or-""> [PATH-prefix]
+expect_deps() {
+  local d out ec
+  d=$(mktemp -d "$T/deps.XXXX")
+  mkdir -p "$d/.claude"
+  [[ -n "$3" ]] && touch "$d/$3"
+  [[ -n "$5" ]] && printf '%b' "$5" > "$d/.claude/dep-audit-allow.txt"
+  printf '%s' "$4" > "$T/deps-fixture"
+  out=$(cd "$d" && FIXTURE="$T/deps-fixture" PATH="${7:-$DB:$PATH}" bash "$KIT/ci-gates.sh" deps 2>&1)
+  ec=$?
+  check "$1" "$ec" "deps: $2" "$out"
+  if [[ -n "$6" ]]; then
+    grep -q -- "$6" <<<"$out"
+    check 0 "$?" "deps: $2 reports '$6'" "$out"
+  fi
+}
+FUT=2999-01-01
+expect_deps 0 "pnpm, no advisories passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+expect_deps 1 "pnpm, one high advisory fails" pnpm-lock.yaml "$PNPM_HIGH" "" "GHSA-aaaa-bbbb-cccc"
+expect_deps 0 "pnpm, moderate only passes" pnpm-lock.yaml "$PNPM_MOD" "" ""
+expect_deps 0 "pnpm, high advisory allowlisted until future" pnpm-lock.yaml "$PNPM_HIGH" "# why\nGHSA-aaaa-bbbb-cccc $FUT no fix released yet\n" ""
+expect_deps 1 "allowlist entry expired fails" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2000-01-01 old\n" "expired"
+expect_deps 1 "allowlist expired entry fails even with no advisory" pnpm-lock.yaml "$PNPM_CLEAN" "GHSA-aaaa-bbbb-cccc 2000-01-01 old\n" "expired"
+expect_deps 1 "allowlist malformed line fails" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc soon whenever\n" "malformed"
+expect_deps 1 "allowlist entry without a reason fails" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc $FUT\n" "malformed"
+expect_deps 0 "allowlist with CRLF parses" pnpm-lock.yaml "$PNPM_HIGH" "# why\r\nGHSA-aaaa-bbbb-cccc $FUT reason\r\n" ""
+expect_deps 0 "allowlist matches a CVE alias" pnpm-lock.yaml "$PNPM_HIGH" "CVE-2099-0001 $FUT reason\n" ""
+expect_deps 0 "allowlist ids match case-insensitively" pnpm-lock.yaml "$PNPM_HIGH" "ghsa-aaaa-bbbb-cccc $FUT reason\n" ""
+expect_deps 1 "unparseable audit output fails" pnpm-lock.yaml "not json" "" "returned no report"
+expect_deps 1 "audit error object without advisories fails" pnpm-lock.yaml '{"error":{"code":"ERR_PNPM_AUDIT_BAD_RESPONSE"}}' "" "returned no report"
+expect_deps 1 "pip-audit, vulnerable requirement fails" requirements.txt "$PIP_VULN" "" "PYSEC-2099-1"
+expect_deps 0 "pip-audit, clean passes" requirements.txt "$PIP_CLEAN" "" ""
+expect_deps 0 "pip-audit, allowlist matches a GHSA alias" requirements.txt "$PIP_VULN" "GHSA-gggg-hhhh-iiii $FUT reason\n" ""
+expect_deps 1 "pip-audit, unparseable output fails" requirements.txt "Traceback" "" "returned no report"
+expect_deps 1 "no lockfile fails" "" "$PNPM_CLEAN" "" "no lockfile found"
+NOTOOLS=$(mktemp -d "$T/bin.XXXX")
+for b in bash node python3 date grep tr mktemp rm cat sort sed dirname touch uniq; do
+  p=$(command -v "$b") && ln -sf "$p" "$NOTOOLS/$b"
+done
+expect_deps 1 "pnpm missing fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "returned no report" "$NOTOOLS"
+expect_deps 1 "pipx missing fails closed" requirements.txt "$PIP_CLEAN" "" "returned no report" "$NOTOOLS"
+rm -f "$DB/argv"
+expect_deps 1 "uv.lock audits the exported requirements" uv.lock "$PIP_VULN" "" "PYSEC-2099-1"
+grep -q '^export --frozen --no-dev --format requirements-txt -o ' "$DB/argv"
+check 0 "$?" "deps: uv.lock exports prod requirements from the lockfile"
+grep -qE '^run pip-audit==[0-9.]+ -r .*req\.txt --format json --progress-spinner off$' "$DB/argv"
+check 0 "$?" "deps: uv.lock audit runs the pinned pip-audit on the export"
+rm -f "$DB/argv"
+expect_deps 0 "pnpm lockfile wins over requirements.txt" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+check 1 "$(grep -c '^    PIP_AUDIT_VERSION="' "$KIT/ci-gates.sh")" "ci-gates pins pip-audit once"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 

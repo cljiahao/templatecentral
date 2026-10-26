@@ -30,7 +30,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 
 Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
-- `protect-files.sh` (PreToolUse Edit|Write|NotebookEdit) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, and cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, any `azure-pipelines/` folder, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/settings.local.json`, `.claude/hooks/*`, `.claude/agents/*`, `.mcp.json`, `Dockerfile`, the harness verifier and `ci-gates.sh`). Matching is case-insensitive (`.ENV`, `dockerfile`) and runs on a canonicalised project-relative path (leading `./` stripped, symlinked parents such as macOS `/tmp` → `/private/tmp` resolved). Fails closed (exit 2) if it cannot reach the project root. Paired with `permissions.deny` above, which blocks *reading* secrets.
+- `protect-files.sh` (PreToolUse Edit|Write|NotebookEdit) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, and cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, any `azure-pipelines/` folder, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/settings.local.json`, `.claude/hooks/*`, `.claude/agents/*`, `.mcp.json`, `Dockerfile`, the harness verifier, `ci-gates.sh` and the dependency-audit allowlist `.claude/dep-audit-allow.txt`). Matching is case-insensitive (`.ENV`, `dockerfile`) and runs on a canonicalised project-relative path (leading `./` stripped, symlinked parents such as macOS `/tmp` → `/private/tmp` resolved). Fails closed (exit 2) if it cannot reach the project root. Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — splits the command on `&&` `||` `;` `|` and evaluates each git invocation (including `git -C <dir> …`, `/usr/bin/git`, `bash -c "…"`): blocks `--no-verify` on `commit`/`push`/`merge`/`am`/`rebase`/`cherry-pick`, `-n` only as a `git commit` short flag (`git log -n`, `grep -n` pass), the equivalent hook-layer bypasses (`LEFTHOOK=0`/`LEFTHOOK_EXCLUDE`, `git -c core.hooksPath=…`, `git config core.hooksPath …`, `--no-verify` aliases), direct commits to protected branches (`main`/`uat`/`develop`), force-push or delete of a protected branch (`--force`, `--force-with-lease`, `--force-if-includes`, `-f`, `+refspec`, `HEAD:main`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs. A best-effort tripwire — shell obfuscation can evade any pattern guard; lefthook + CI are the backstop.
 - `user-prompt-guard` (UserPromptSubmit) — blocks prompt-injection phrases (OWASP LLM01) and inline credentials (LLM02: AWS/GitHub/Anthropic keys, PEM blocks, DB URLs with embedded credentials — loopback hosts `localhost`/`127.0.0.1`/`[::1]` exempt as local-dev defaults). FastAPI: `.py` / TS stacks: `.cjs`.
 - `post-edit-typecheck.sh` (PostToolUse) — incremental type feedback, filtered to source-file edits in-script. Type errors are returned as `hookSpecificOutput.additionalContext` JSON (plain stdout on a PostToolUse hook only reaches the debug log). Never blocks; exit 0 always. See delta table for typecheck command.
@@ -197,13 +197,13 @@ chmod +x .lefthook/commit-msg.sh
 
 ## Step B3. Seed the CI quality gates (GitHub Actions or Azure Pipelines)
 
-The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed the gate script plus one CI file for the host, enforcing what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, a **changelog-touched** gate, and a **readme-freshness** gate. (GitHub Actions and Azure Pipelines are seeded; for GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
+The git hooks above are the **warn-local** layer; CI is the **hard gate** that can't be skipped before merge. Seed the gate script plus one CI file for the host, enforcing what the hooks only warn about: **changed-line coverage**, **lockfile-in-sync**, a **changelog-touched** gate, and a **readme-freshness** gate, plus a **dependency-audit** gate that no hook covers. (GitHub Actions and Azure Pipelines are seeded; for GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
 
 **Coverage reporter (so `diff-cover` has input):** `diff-cover` reads a Cobertura XML, which both runners emit — one gate works for every stack.
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
 - **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
 
-**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan and the harness check (`verify-harness`), seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
+**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
 **`.github/workflows/ci.yml`** — TS stacks (nestjs / nextjs / vite-react):
 ```yaml
@@ -226,6 +226,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
+      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
+        run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: pnpm run check                      # format:check + lint + typecheck
@@ -288,6 +290,8 @@ steps:
     displayName: Harness integrity
   - bash: bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Secret scan (gitleaks CLI, checksum-verified)
+  - bash: bash .claude/ci-gates.sh deps
+    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
     env: { LABELS: $(LABELS) }
@@ -305,9 +309,10 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 ```bash
 #!/usr/bin/env bash
 # CI merge gates shared by GitHub Actions and Azure Pipelines.
-# Usage: ci-gates.sh <secrets|changelog|readme|comments> [base-branch]
-# An empty base-branch scans full history (secrets) or skips the PR-only gates.
+# Usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]
+# An empty base-branch scans full history (secrets) or skips the PR-only gates; deps takes no base branch.
 # LABELS: space-separated PR labels; skip-changelog / skip-readme-check / skip-comment-check bypass a gate.
+# deps has no label bypass: only .claude/dep-audit-allow.txt, whose entries expire, suppresses an advisory.
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -400,8 +405,85 @@ case "$gate" in
       fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
     fi
     ;;
+  deps)
+    PIP_AUDIT_VERSION="2.10.1"   # pip-audit release run through pipx; bump deliberately, it decides what fails the build
+    allow=".claude/dep-audit-allow.txt"
+    tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/deps.XXXXXX")
+    # Allowlist lines: <ADVISORY-ID> <YYYY-MM-DD expiry> <reason>. An entry stops suppressing on its expiry date.
+    today=$(date -u +%Y-%m-%d)
+    : > "$tmp/allowed"
+    if [ -f "$allow" ]; then
+      while IFS= read -r line || [ -n "$line" ]; do
+        line=${line%$'\r'}
+        case "$line" in ''|'#'*) continue ;; esac
+        if ! printf '%s\n' "$line" | grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
+          echo "malformed allowlist line: $line" >&2
+          fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
+        fi
+        read -r id expiry _ <<< "$line"
+        if [[ ! "$today" < "$expiry" ]]; then
+          echo "expired allowlist entry: $id (expired $expiry)" >&2
+          fail "$allow entry for $id expired on $expiry. Fix the dependency or renew the entry with a new date and reason."
+        fi
+        printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' >> "$tmp/allowed"
+      done < "$allow"
+    fi
+    if [ -f pnpm-lock.yaml ]; then
+      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
+      node - "$tmp/report.json" > "$tmp/found" <<'JS' || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
+const fs = require("fs");
+let report;
+try { report = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch { process.exit(3); }
+if (!report || typeof report.advisories !== "object" || report.advisories === null) process.exit(3);
+for (const a of Object.values(report.advisories)) {
+  if (a.severity !== "high" && a.severity !== "critical") continue;
+  const ids = [a.github_advisory_id, ...(Array.isArray(a.cves) ? a.cves : [])].filter(Boolean);
+  console.log((ids.length ? ids : ["advisory-" + a.id]).join(" "));
+}
+JS
+    elif [ -f uv.lock ] || [ -f requirements.txt ]; then
+      req=requirements.txt
+      if [ -f uv.lock ]; then
+        req="$tmp/req.txt"
+        uv export --frozen --no-dev --format requirements-txt -o "$req" 2> "$tmp/err.txt" || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (uv export)"; }
+      fi
+      # pip-audit reports no severity, so every known vulnerability counts.
+      pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$req" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
+      python3 - "$tmp/report.json" > "$tmp/found" <<'PY' || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit)"; }
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        report = json.load(fh)
+except (OSError, ValueError):
+    sys.exit(3)
+deps = report.get("dependencies") if isinstance(report, dict) else None
+if not isinstance(deps, list):
+    sys.exit(3)
+for dep in deps:
+    for vuln in dep.get("vulns") or []:
+        ids = [vuln.get("id")] + list(vuln.get("aliases") or [])
+        print(" ".join(i for i in ids if i) or "unnamed-" + str(dep.get("name")))
+PY
+    else
+      fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements.txt) — nothing to audit"
+    fi
+    blocked=""
+    while IFS= read -r ids; do
+      [ -n "$ids" ] || continue
+      covered=0
+      for id in $ids; do
+        if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
+      done
+      [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $ids"
+    done < <(sort -u "$tmp/found")
+    rm -rf "$tmp"
+    if [ -n "$blocked" ]; then
+      printf '%s\n' "$blocked" >&2
+      fail "High/critical dependency advisories (listed above). Upgrade the dependency, or allowlist an advisory in $allow with an expiry date and a reason."
+    fi
+    ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|readme|comments> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]" >&2
     exit 2
     ;;
 esac
@@ -423,6 +505,7 @@ exit 0
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
 - **gitleaks runs as the CLI, not `gitleaks/gitleaks-action`:** the action needs a paid `GITLEAKS_LICENSE` secret on organization-owned repos; the CLI is MIT, needs no key or token, and is the same current scanner (upstream calls gitleaks feature-complete; its maintainer's successor is Betterleaks — note only). The version and SHA-256 live once, in `ci-gates.sh` (`secrets` gate) — bump both together from the release's `gitleaks_<version>_checksums.txt`; `sha256sum -c` fails the job on any mismatch. A PR scans only its own commits (`origin/<base>..HEAD` — correct on the synthetic merge checkout GitHub and Azure DevOps PR builds both use; do NOT add `--first-parent`, which follows the base side of that merge and scans nothing); a push to `main` scans full history. Both need `fetch-depth: 0`. Exit code 1 on any finding fails the job; `--redact` keeps secrets out of the log.
 - **Push protection is the third secret layer** (after the pre-commit hook and this CI scan): the host rejects a push containing a recognised secret before it lands. Enable it in repo settings — free on public GitHub repos; private repos need GitHub Secret Protection, and Azure Repos need GitHub Advanced Security for Azure DevOps. It is a setting, not a seeded file.
+- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; a `uv.lock` is exported with `uv export --frozen --no-dev` and audited by pip-audit; a bare `requirements.txt` is audited by pip-audit directly. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids (GHSA, CVE or PYSEC), and an entry fails the gate on or after its expiry date, so a suppression has to be renewed on purpose. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - CI config (`.github/workflows/`, `azure-pipelines/`) needs human approval before any agent edit (`protect-files.sh` asks) — CI is human-reviewed by design.
 
