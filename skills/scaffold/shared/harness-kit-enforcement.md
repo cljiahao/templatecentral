@@ -495,7 +495,7 @@ PY
     done < <(sort -u "$tmp/found")
     if [ -n "$blocked" ]; then
       printf '%s\n' "$blocked" >&2
-      fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an advisory in $allow with an expiry date and a reason."
+      fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an advisory in $allow with an expiry date and a reason; unaudited packages must be made auditable or removed."
     fi
     ;;
   *)
