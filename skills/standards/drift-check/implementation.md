@@ -73,6 +73,6 @@ Ask:
 If accepted:
 
 - **Node stacks**: `pnpm audit --audit-level=high`. Also list every entry in `.claude/dep-audit-allow.txt` and flag any whose advisory now has a fixed release or whose documented reason no longer holds; flag any `audit.ignore` / `auditConfig` in `pnpm-workspace.yaml` or `package.json` as a bypass the deps gate rejects.
-- **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped".
+- **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped". Also list every entry in `.claude/dep-audit-allow.txt` and flag any whose advisory now has a fixed release or whose documented reason no longer holds.
 
 Zero findings → "No known vulnerabilities found." Otherwise list package, severity, advisory ID, and whether a fixed version exists, and recommend the review utility's `update` operation. Never auto-upgrade.
