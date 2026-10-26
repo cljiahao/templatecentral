@@ -167,8 +167,19 @@ await allows("cd .", rootMain, { command: "cd . && git commit -m x", ...wf });
 // an empty -C must not swallow the subcommand
 await blocks("git -C '' commit", rootFeat, { command: "git -C '' commit -m x", workdir: "/proj" });
 await blocks('git -C "" commit', rootFeat, { command: 'git -C "" commit -m x', workdir: "/proj" });
-// conservative by design: a protected cwd stays a candidate after a cd
-await blocks("cd out of a protected cwd still blocks", rootMain, { command: "cd /wt/feat && git commit -m x" });
+// A strict && chain only reaches git after every cd before it succeeded, so a protected cwd drops out.
+await allows("&& chain out of a protected cwd", rootMain, { command: "cd /wt/feat && git commit -m x" });
+await allows("&& chain with add and 2>&1", rootMain, { command: 'cd "/wt/feat" && git add -A && git commit -m x 2>&1' });
+await blocks("&& chain back into a protected dir", rootMain, { command: "cd /wt/feat && cd /proj && git commit -m x" });
+await blocks("&& chain then git -C protected", rootMain, { command: "cd /wt/feat && git -C /proj commit -m x" });
+// Anything short of a strict chain of literal cds keeps the protected cwd a candidate.
+await blocks("|| after a cd", rootMain, { command: "cd /wt/feat || git commit -m x" });
+await blocks("chain inside a subshell", rootMain, { command: "(cd /wt/feat && git commit -m x)" });
+await blocks("command cd in a chain", rootMain, { command: "cd /wt/feat && command cd /proj && git commit -m x" });
+await blocks("env -C in a chain", rootMain, { command: "cd /wt/feat && env -C /proj git commit -m x" });
+await blocks("assignment before git in a chain", rootMain, { command: "cd /wt/feat && x=1 git commit -m x" });
+await blocks("newline after a chain", rootMain, { command: "cd /wt/feat && git commit -m x\ngit commit -m y" });
+await blocks("chain into a missing dir", rootMain, { command: "cd nosuch && git commit -m x" });
 
 // ── bash-command guard: guard-layer + destructive ──
 await blocks("git checkout AGENTS.md", beforeFeature, { command: "git checkout AGENTS.md" });

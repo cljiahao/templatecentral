@@ -10,6 +10,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.0.5] — 2026-10-13
+
+### Fixed
+- `block-no-verify.sh` no longer blocks `cd <repo> && git commit` from a checkout on a protected branch.
+  6.0.4 kept the command's starting directory as a candidate after any `cd`, in case the `cd` failed, so
+  committing into a feature-branch repo from a session rooted on `main`/`develop` was blocked. In a
+  strict `&&` chain git only runs after every `cd` before it succeeded, so the hook now judges exactly
+  the directories its git words run in. A strict chain has no `;`, `||`, `|`, lone `&`, `(`, `)`,
+  backtick or newline once `N>&M` redirections are set aside, and every directory change in it is a
+  plain literal `cd`/`pushd` at the start of a segment. Anything else (a `cd` inside a subshell,
+  `command cd`, `env -C`, an assignment before `git`, a second line) keeps the 6.0.4 candidate set.
+  Ported to the OpenCode adapter. `test-harness-kit.sh` 615 passed; adapter hook matrix 157 passed.
+
+---
+
 ## [6.0.4] — 2026-10-12
 
 ### Fixed
