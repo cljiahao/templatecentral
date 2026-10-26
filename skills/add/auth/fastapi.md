@@ -226,6 +226,8 @@ def get_current_roles(
     user_id: Annotated[str, Depends(get_current_user)],
 ) -> frozenset[str]:
     """Roles the current user holds. Grants none until a database lookup replaces it."""
+    # `user_id` is unused here but must stay: the dependency forces authentication, and the
+    # database lookup that replaces this body needs it.
     # Roles are loaded per request, never read from the token, so revoking a role
     # takes effect on the caller's next request rather than when the token expires.
     return frozenset()
@@ -518,7 +520,7 @@ def test_require_roles_allows_user_with_role(
 
 @pytest.mark.unit
 def test_require_roles_without_roles_is_a_programming_error() -> None:
-    """An empty role list would admit nobody or everybody, so it fails at import."""
+    """An empty role list would admit nobody or everybody, so it fails at definition time."""
     with pytest.raises(ValueError, match="at least one role"):
         require_roles()
 
