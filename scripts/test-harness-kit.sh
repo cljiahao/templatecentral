@@ -766,21 +766,48 @@ expect_gate 0 comments "$r" "honours skip-comment-check" "skip-comment-check"
 
 # ── deps gate (ci-gates.sh deps) ──────────────────────────────────────────────
 
-# pnpm, pipx and uv stubs print $FIXTURE (or write a requirements file for `uv export -o`) and
-# record their argv, so the gate's parsing, allowlist and fail-closed paths run offline.
+# pnpm, pipx and uv stubs print $FIXTURE (uv writes a real-shape export for `-o`) and record
+# their argv, so the gate's parsing, allowlist and fail-closed paths run offline.
 DB="$T/deps-bin"
 mkdir -p "$DB"
 # shellcheck disable=SC2016  # literal $FIXTURE / $* belong to the generated stub scripts.
 printf '#!/bin/sh\necho "$*" >> "%s/argv"\ncat "$FIXTURE"\nexit 1\n' "$DB" > "$DB/pnpm"
-# shellcheck disable=SC2016
-cp "$DB/pnpm" "$DB/pipx"
-# shellcheck disable=SC2016
-printf '#!/bin/sh\necho "$*" >> "%s/argv"\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo "x==1" > "$2"; shift; done\n' "$DB" > "$DB/uv"
+# pipx stub: the uv export (…/req.txt) gets $FIXTURE, a project requirements file gets $FIXTURE_REQ
+# when set. A file holding an editable `-e .` line reports it as skipped, as pip-audit does.
+cat > "$DB/pipx" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$(dirname "$0")/argv"
+f=""
+while [ $# -gt 0 ]; do [ "$1" = -r ] && f=$2; shift; done
+if grep -q '^-e ' "$f" 2>/dev/null; then
+  echo '{"dependencies":[{"name":"myproj","skip_reason":"Dependency not found on PyPI and could not be audited: myproj (0.1.0)"}],"fixes":[]}'
+  exit 1
+fi
+case "$f" in */req.txt) cat "$FIXTURE" ;; *) cat "${FIXTURE_REQ:-$FIXTURE}" ;; esac
+exit 1
+STUB
+# uv stub: a packaged project exports itself as `-e .` unless --no-emit-project is passed.
+cat > "$DB/uv" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$(dirname "$0")/argv"
+emit=1; out=""
+for a in "$@"; do [ "$a" = --no-emit-project ] && emit=0; done
+while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
+{
+  [ "$emit" -eq 1 ] && echo "-e ."
+  echo "requests==2.33.0 \\"
+  echo "    --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000"
+} > "$out"
+
+STUB
 chmod +x "$DB/pnpm" "$DB/pipx" "$DB/uv"
 
-PNPM_CLEAN='{"advisories":{},"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0}}}'
-PNPM_HIGH='{"advisories":{"1":{"id":1,"severity":"high","github_advisory_id":"GHSA-aaaa-bbbb-cccc","cves":["CVE-2099-0001"]}}}'
-PNPM_MOD='{"advisories":{"2":{"id":2,"severity":"moderate","github_advisory_id":"GHSA-dddd-eeee-ffff"}}}'
+PNPM_META='"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0},"dependencies":12,"devDependencies":0,"optionalDependencies":0,"totalDependencies":12}'
+PNPM_CLEAN="{\"advisories\":{},$PNPM_META}"
+# The CVE ids here are synthetic: real pnpm audit JSON carries only the GHSA id (no `cves` field),
+# so a pnpm advisory is matched by GHSA alone; the gate still honours a `cves` array if one appears.
+PNPM_HIGH="{\"advisories\":{\"1\":{\"id\":1,\"module_name\":\"lodash\",\"severity\":\"high\",\"github_advisory_id\":\"GHSA-aaaa-bbbb-cccc\",\"cves\":[\"CVE-2099-0001\"]}},$PNPM_META}"
+PNPM_MOD="{\"advisories\":{\"2\":{\"id\":2,\"module_name\":\"minimist\",\"severity\":\"moderate\",\"github_advisory_id\":\"GHSA-dddd-eeee-ffff\"}},$PNPM_META}"
 PIP_VULN='{"dependencies":[{"name":"requests","version":"2.19.0","vulns":[{"id":"PYSEC-2099-1","fix_versions":["2.20.0"],"aliases":["GHSA-gggg-hhhh-iiii","CVE-2099-0002"]}]}],"fixes":[]}'
 PIP_CLEAN='{"dependencies":[{"name":"requests","version":"2.33.0","vulns":[]}],"fixes":[]}'
 
@@ -789,7 +816,9 @@ expect_deps() {
   local d out ec
   d=$(mktemp -d "$T/deps.XXXX")
   mkdir -p "$d/.claude"
-  [[ -n "$3" ]] && touch "$d/$3"
+  # shellcheck disable=SC2086  # $3 is a space-separated list of files to create.
+  for f in $3; do touch "$d/$f"; done
+  [[ -n "${SEED_FILE:-}" ]] && printf '%b' "$SEED_BODY" > "$d/$SEED_FILE"
   [[ -n "$5" ]] && printf '%b' "$5" > "$d/.claude/dep-audit-allow.txt"
   printf '%s' "$4" > "$T/deps-fixture"
   out=$(cd "$d" && FIXTURE="$T/deps-fixture" PATH="${7:-$DB:$PATH}" bash "$KIT/ci-gates.sh" deps 2>&1)
@@ -800,7 +829,9 @@ expect_deps() {
     check 0 "$?" "deps: $2 reports '$6'" "$out"
   fi
 }
-FUT=2999-01-01
+# days_from_now <n> — a UTC calendar date n days ahead (GNU date, else BSD date).
+days_from_now() { date -u -d "+$1 days" +%Y-%m-%d 2>/dev/null || date -u -v"+${1}d" +%Y-%m-%d; }
+FUT=$(days_from_now 90)
 expect_deps 0 "pnpm, no advisories passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
 expect_deps 1 "pnpm, one high advisory fails" pnpm-lock.yaml "$PNPM_HIGH" "" "GHSA-aaaa-bbbb-cccc"
 expect_deps 0 "pnpm, moderate only passes" pnpm-lock.yaml "$PNPM_MOD" "" ""
@@ -832,7 +863,7 @@ expect_deps 1 "uv missing fails closed" uv.lock "$PIP_CLEAN" "" "uv not found �
 PIP_SKIP='{"dependencies":[{"name":"internal-lib","skip_reason":"Dependency not found on PyPI and could not be audited: internal-lib (1.0)"},{"name":"requests","version":"2.33.0","vulns":[]}],"fixes":[]}'
 expect_deps 1 "pip-audit, skipped dependency fails as unaudited" requirements.txt "$PIP_SKIP" "" "internal-lib: not audited (Dependency not found"
 expect_deps 1 "pip-audit, skipped dependency cannot be allowlisted away" requirements.txt "$PIP_SKIP" "GHSA-zzzz-zzzz-zzzz $FUT x\n" "not audited"
-PNPM_CRIT='{"advisories":{"3":{"id":3,"severity":"critical","github_advisory_id":"GHSA-jjjj-kkkk-llll"}}}'
+PNPM_CRIT="{\"advisories\":{\"3\":{\"id\":3,\"module_name\":\"handlebars\",\"severity\":\"critical\",\"github_advisory_id\":\"GHSA-jjjj-kkkk-llll\"}},$PNPM_META}"
 expect_deps 1 "pnpm, critical advisory fails" pnpm-lock.yaml "$PNPM_CRIT" "" "GHSA-jjjj-kkkk-llll"
 expect_deps 1 "allowlist id with regex metacharacters is rejected, not matched" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa.bbbb-cccc $FUT reason\n" "malformed"
 expect_deps 1 "allowlist id matches whole ids only" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-ccc $FUT reason\n" "GHSA-aaaa-bbbb-cccc"
@@ -841,13 +872,59 @@ expect_deps 1 "allowlist month 13 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHS
 expect_deps 1 "allowlist 2999-02-30 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-02-30 reason\n" "not a calendar date"
 expect_deps 1 "allowlist day 00 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-01-00 reason\n" "not a calendar date"
 expect_deps 1 "allowlist 2999-02-29 is malformed (not a leap year)" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-02-29 reason\n" "not a calendar date"
-expect_deps 0 "allowlist accepts a leap day" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2996-02-29 reason\n" ""
+expect_deps 1 "allowlist leap day is a real date (rejected only for being too far out)" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2996-02-29 reason\n" "more than 180 days out"
 rm -f "$DB/argv"
 expect_deps 1 "uv.lock audits the exported requirements" uv.lock "$PIP_VULN" "" "PYSEC-2099-1"
-grep -q '^export --frozen --no-dev --format requirements-txt -o ' "$DB/argv"
-check 0 "$?" "deps: uv.lock exports prod requirements from the lockfile"
-grep -qE '^run pip-audit==[0-9.]+ -r .*req\.txt --format json --progress-spinner off$' "$DB/argv"
-check 0 "$?" "deps: uv.lock audit runs the pinned pip-audit on the export"
+grep -q '^export --frozen --no-dev --no-emit-project --no-emit-workspace --quiet --format requirements-txt -o ' "$DB/argv"
+check 0 "$?" "deps: uv.lock exports prod requirements without the project itself, quietly"
+grep -qE '^run pip-audit==[0-9.]+ -r .*req\.txt --no-deps --disable-pip --format json --progress-spinner off$' "$DB/argv"
+check 0 "$?" "deps: uv.lock audit runs the pinned pip-audit on the hash-pinned export without resolving"
+# A packaged project: the uv stub exports `-e .` unless told not to, and pip-audit skips it.
+expect_deps 0 "uv.lock on a packaged project passes (the project itself is not exported)" uv.lock "$PIP_CLEAN" "" ""
+expect_deps 1 "uv export with no packages fails" uv.lock '{"dependencies":[],"fixes":[]}' "" "dependency audit covered no packages"
+expect_deps 1 "pip-audit, empty requirements.txt fails" requirements.txt '{"dependencies":[],"fixes":[]}' "" "dependency audit covered no packages"
+PNPM_EMPTY='{"advisories":{},"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0},"dependencies":0,"devDependencies":0,"optionalDependencies":0,"totalDependencies":0}}'
+expect_deps 1 "pnpm, zero audited packages fails" pnpm-lock.yaml "$PNPM_EMPTY" "" "dependency audit covered no packages"
+expect_deps 1 "pnpm, report without metadata fails" pnpm-lock.yaml '{"advisories":{}}' "" "dependency audit covered no packages"
+# uv.lock and requirements.txt together: both are audited, the clean lock cannot mask the vulnerable file.
+FIXTURE_REQ="$T/deps-fixture-req"
+printf '%s' "$PIP_VULN" > "$FIXTURE_REQ"
+export FIXTURE_REQ
+expect_deps 1 "uv.lock plus a vulnerable requirements.txt fails naming the requirements advisory" "uv.lock requirements.txt" "$PIP_CLEAN" "" "requests: PYSEC-2099-1"
+expect_deps 1 "two requirements files are both audited" "requirements.txt requirements-dev.txt" "$PIP_CLEAN" "" "PYSEC-2099-1"
+printf '%s' "$PIP_CLEAN" > "$FIXTURE_REQ"
+expect_deps 0 "uv.lock plus a clean requirements.txt passes" "uv.lock requirements.txt" "$PIP_CLEAN" "" ""
+unset FIXTURE_REQ
+
+# Output names the package, the ids and the severity.
+expect_deps 1 "pnpm advisory line shows package, id and severity" pnpm-lock.yaml "$PNPM_HIGH" "" "lodash: GHSA-aaaa-bbbb-cccc CVE-2099-0001 (high)"
+expect_deps 1 "pip-audit advisory line shows package, ids and n/a severity" requirements.txt "$PIP_VULN" "" "requests: PYSEC-2099-1 GHSA-gggg-hhhh-iiii CVE-2099-0002 (n/a)"
+PIP_SKIP_NL='{"dependencies":[{"name":"internal-lib","skip_reason":"Dependency not found.\nCould not be audited: internal-lib (1.0)"}],"fixes":[]}'
+expect_deps 1 "pip-audit, multi-line skip_reason stays on one line" requirements.txt "$PIP_SKIP_NL" "" "internal-lib: not audited (Dependency not found. Could not be audited: internal-lib (1.0))"
+
+# Package-manager-native suppressions bypass the expiring allowlist and are rejected.
+for native in 'pnpm-workspace.yaml|audit:\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|auditConfig:\n  ignoreGhsas:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|auditConfig:\n  ignoreCves:\n    - CVE-2099-0001\n' \
+  'package.json|{"pnpm":{"auditConfig":{"ignoreGhsas":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
+  'package.json|{"pnpm":{"auditConfig":{"ignoreCves":["CVE-2099-0001"]}}}\n' \
+  'package.json|{"pnpm":{"audit":{"ignore":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
+  '.npmrc|auditConfig.ignoreGhsas=GHSA-aaaa-bbbb-cccc\n'; do
+  SEED_FILE=${native%%|*}
+  SEED_BODY=${native#*|}
+  expect_deps 1 "native suppression in $SEED_FILE is rejected" pnpm-lock.yaml "$PNPM_CLEAN" "" "advisory suppressions belong in .claude/dep-audit-allow.txt, not $SEED_FILE"
+done
+SEED_FILE=package.json
+SEED_BODY='{"scripts":{"audit":"pnpm audit"},"name":"x"}\n'
+expect_deps 0 "a package.json audit script is not a suppression" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+SEED_FILE=pnpm-workspace.yaml
+SEED_BODY='allowBuilds:\n  lefthook: false\n'
+expect_deps 0 "a workspace file without suppressions passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+unset SEED_FILE SEED_BODY
+
+# Expiry horizon: at most 180 days ahead of today (UTC).
+expect_deps 0 "allowlist expiry 180 days out is accepted" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc $(days_from_now 180) reason\n" ""
+expect_deps 1 "allowlist expiry 181 days out is rejected" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc $(days_from_now 181) reason\n" "expiry more than 180 days out"
 rm -f "$DB/argv"
 expect_deps 0 "pnpm lockfile wins over requirements.txt" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
 check 1 "$(grep -c '^[[:space:]]*PIP_AUDIT_VERSION="' "$KIT/ci-gates.sh")" "ci-gates pins pip-audit once"

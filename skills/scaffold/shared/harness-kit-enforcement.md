@@ -408,12 +408,22 @@ case "$gate" in
     ;;
   deps)
     PIP_AUDIT_VERSION="2.10.1"   # pip-audit release run through pipx; bump deliberately, it decides what fails the build
+    MAX_EXPIRY_DAYS=180          # an allowlist entry may not silence an advisory for longer than this
     allow=".claude/dep-audit-allow.txt"
     tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/deps.XXXXXX")
     trap 'rm -rf "$tmp"' EXIT   # fail() exits, so this also covers every failure path
     need() { command -v "$1" >/dev/null 2>&1 || fail "$1 not found — install it before the deps gate"; }
+    # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected outright.
+    for f in pnpm-workspace.yaml package.json .npmrc; do
+      [ -f "$f" ] || continue
+      if grep -qE 'auditConfig|ignoreGhsas|ignoreCves|"audit"[[:space:]]*:[[:space:]]*\{' "$f" \
+        || awk '/^audit:/ { inblock = 1; next } /^[^[:space:]#]/ { inblock = 0 } inblock && /^[[:space:]]+ignore/ { found = 1 } END { exit !found }' "$f"; then
+        fail "advisory suppressions belong in $allow, not $f"
+      fi
+    done
     # Allowlist lines: <ADVISORY-ID> <YYYY-MM-DD expiry> <reason>. An entry stops suppressing on its expiry date.
     today=$(date -u +%Y-%m-%d)
+    latest=$(date -u -d "+$MAX_EXPIRY_DAYS days" +%Y-%m-%d 2>/dev/null || date -u -v"+${MAX_EXPIRY_DAYS}d" +%Y-%m-%d) || fail "cannot compute the expiry horizon"
     : > "$tmp/allowed"
     if [ -f "$allow" ]; then
       while IFS= read -r line || [ -n "$line" ]; do
@@ -436,35 +446,16 @@ case "$gate" in
           echo "expired allowlist entry: $id (expired $expiry)" >&2
           fail "$allow entry for $id expired on $expiry. Fix the dependency or renew the entry with a new date and reason."
         fi
+        if [[ "$expiry" > "$latest" ]]; then
+          echo "allowlist entry too far out: $id ($expiry)" >&2
+          fail "$allow entry for $id has an expiry more than $MAX_EXPIRY_DAYS days out ($expiry). Use a date on or before $latest."
+        fi
         printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' >> "$tmp/allowed"
       done < "$allow"
     fi
-    if [ -f pnpm-lock.yaml ]; then
-      need pnpm
-      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
-      node - "$tmp/report.json" > "$tmp/found" <<'JS' || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
-const fs = require("fs");
-let report;
-try { report = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch { process.exit(3); }
-if (!report || typeof report.advisories !== "object" || report.advisories === null) process.exit(3);
-for (const a of Object.values(report.advisories)) {
-  if (a.severity !== "high" && a.severity !== "critical") continue;
-  const ids = [a.github_advisory_id, ...(Array.isArray(a.cves) ? a.cves : [])].filter(Boolean);
-  console.log((ids.length ? ids : ["advisory-" + a.id]).join(" "));
-}
-JS
-    elif [ -f uv.lock ] || [ -f requirements.txt ]; then
-      req=requirements.txt
-      need pipx
-      if [ -f uv.lock ]; then
-        need uv
-        req="$tmp/req.txt"
-        uv export --frozen --no-dev --format requirements-txt -o "$req" 2> "$tmp/err.txt" || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (uv export)"; }
-      fi
-      # pip-audit reports no severity, so every known vulnerability counts.
-      pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$req" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
-      python3 - "$tmp/report.json" > "$tmp/found" <<'PY' || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit)"; }
-import json, sys
+    : > "$tmp/found"   # one line per finding: <package>|<severity>|<ids>, or !<package>: not audited (...)
+    cat > "$tmp/pa.py" <<'PY'
+import json, re, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as fh:
         report = json.load(fh)
@@ -473,25 +464,72 @@ except (OSError, ValueError):
 deps = report.get("dependencies") if isinstance(report, dict) else None
 if not isinstance(deps, list):
     sys.exit(3)
+if not deps:
+    sys.exit(4)
 for dep in deps:
+    name = str(dep.get("name"))
     if dep.get("skip_reason"):
-        print("!" + str(dep.get("name")) + ": not audited (" + str(dep.get("skip_reason")) + ")")
+        print("!" + name + ": not audited (" + re.sub(r"\s+", " ", str(dep.get("skip_reason"))).strip() + ")")
     for vuln in dep.get("vulns") or []:
         ids = [vuln.get("id")] + list(vuln.get("aliases") or [])
-        print(" ".join(i for i in ids if i) or "unnamed-" + str(dep.get("name")))
+        print(name + "|n/a|" + (" ".join(i for i in ids if i) or "unnamed"))
 PY
+    # One pip-audit run: $1 requirements file, $2 label for messages, remaining arguments are extra pip-audit flags.
+    py_audit() {
+      local file=$1 label=$2 rc
+      shift 2
+      # pip-audit reports no severity, so every known vulnerability counts.
+      pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$file" "$@" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
+      python3 "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
+      [ "$rc" -ne 4 ] || fail "dependency audit covered no packages ($label)"
+      [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit, $label)"; }
+    }
+    reqs=()
+    for f in requirements*.txt; do if [ -f "$f" ]; then reqs+=("$f"); fi; done
+    if [ -f pnpm-lock.yaml ]; then
+      need pnpm
+      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
+      node - "$tmp/report.json" >> "$tmp/found" <<'JS'
+const fs = require("fs");
+let report;
+try { report = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch { process.exit(3); }
+if (!report || typeof report.advisories !== "object" || report.advisories === null) process.exit(3);
+const meta = report.metadata || {};
+const total = Number.isFinite(meta.totalDependencies) ? meta.totalDependencies
+  : ["dependencies", "devDependencies", "optionalDependencies"].reduce((n, k) => n + (Number.isFinite(meta[k]) ? meta[k] : 0), 0);
+if (!(total > 0)) process.exit(4);
+for (const a of Object.values(report.advisories)) {
+  if (a.severity !== "high" && a.severity !== "critical") continue;
+  const ids = [a.github_advisory_id, ...(Array.isArray(a.cves) ? a.cves : [])].filter(Boolean);
+  console.log((a.module_name || "unknown") + "|" + a.severity + "|" + (ids.length ? ids : ["advisory-" + a.id]).join(" "));
+}
+JS
+      rc=$?
+      [ "$rc" -ne 4 ] || fail "dependency audit covered no packages (pnpm audit)"
+      [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
+    elif [ -f uv.lock ] || [ "${#reqs[@]}" -gt 0 ]; then
+      need pipx
+      if [ -f uv.lock ]; then
+        need uv
+        # --no-emit-project: a packaged project exports itself as "-e .", which pip-audit can only skip.
+        uv export --frozen --no-dev --no-emit-project --no-emit-workspace --quiet --format requirements-txt -o "$tmp/req.txt" 2> "$tmp/err.txt" || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (uv export)"; }
+        # The export is hash-pinned, so pip-audit has nothing to resolve or build.
+        py_audit "$tmp/req.txt" uv.lock --no-deps --disable-pip
+      fi
+      for f in ${reqs[@]+"${reqs[@]}"}; do py_audit "$f" "$f"; done
     else
-      fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements.txt) — nothing to audit"
+      fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements*.txt) — nothing to audit"
     fi
     blocked=""
-    while IFS= read -r ids; do
-      [ -n "$ids" ] || continue
-      case "$ids" in "!"*) blocked="$blocked${blocked:+$'\n'}  - ${ids#!}"; continue ;; esac
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      case "$line" in "!"*) blocked="$blocked${blocked:+$'\n'}  - ${line#!}"; continue ;; esac
+      pkg=${line%%|*}; rest=${line#*|}; sev=${rest%%|*}; ids=${rest#*|}
       covered=0
       for id in $ids; do
         if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
       done
-      [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $ids"
+      [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $pkg: $ids ($sev)"
     done < <(sort -u "$tmp/found")
     if [ -n "$blocked" ]; then
       printf '%s\n' "$blocked" >&2
@@ -521,7 +559,7 @@ exit 0
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
 - **gitleaks runs as the CLI, not `gitleaks/gitleaks-action`:** the action needs a paid `GITLEAKS_LICENSE` secret on organization-owned repos; the CLI is MIT, needs no key or token, and is the same current scanner (upstream calls gitleaks feature-complete; its maintainer's successor is Betterleaks — note only). The version and SHA-256 live once, in `ci-gates.sh` (`secrets` gate) — bump both together from the release's `gitleaks_<version>_checksums.txt`; `sha256sum -c` fails the job on any mismatch. A PR scans only its own commits (`origin/<base>..HEAD` — correct on the synthetic merge checkout GitHub and Azure DevOps PR builds both use; do NOT add `--first-parent`, which follows the base side of that merge and scans nothing); a push to `main` scans full history. Both need `fetch-depth: 0`. Exit code 1 on any finding fails the job; `--redact` keeps secrets out of the log.
 - **Push protection is the third secret layer** (after the pre-commit hook and this CI scan): the host rejects a push containing a recognised secret before it lands. Enable it in repo settings — free on public GitHub repos; private repos need GitHub Secret Protection, and Azure Repos need GitHub Advanced Security for Azure DevOps. It is a setting, not a seeded file.
-- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; a `uv.lock` is exported with `uv export --frozen --no-dev` and audited by pip-audit; a bare `requirements.txt` is audited by pip-audit directly. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate needs the project's package manager (`pnpm` or `uv`) and, for Python, `pipx` on PATH, so on Azure include the template after the pipeline's install steps; the FastAPI `quality` job installs `uv` when `uv.lock` exists. A pip-audit dependency it skips (not on PyPI, private index, editable install) was not audited, so it fails the gate and cannot be allowlisted. The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids (GHSA, CVE or PYSEC), and an entry fails the gate on or after its expiry date, so a suppression has to be renewed on purpose. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
+- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; otherwise every Python source present is audited: a `uv.lock` is exported with `uv export --frozen --no-dev --no-emit-project --no-emit-workspace` (the hash-pinned export is then audited by pip-audit with `--no-deps --disable-pip`) and each `requirements*.txt` is audited by pip-audit directly, so an empty lock cannot mask a vulnerable requirements file. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate needs the project's package manager (`pnpm` or `uv`) and, for Python, `pipx` on PATH, so on Azure include the template after the pipeline's install steps; the FastAPI `quality` job installs `uv` when `uv.lock` exists. An audit that covered no packages fails ("dependency audit covered no packages"), and so does a pip-audit dependency it skips (not on PyPI, private index, editable install): it was not audited and cannot be allowlisted. The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. Each blocked line reads `<package>: <ids> (<severity>)`, with severity `n/a` for pip-audit. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids; pnpm's JSON carries only the GHSA id (no CVE field), so a pnpm advisory is allowlisted by its GHSA id, while a pip-audit advisory matches its PYSEC, GHSA or CVE id. An entry fails the gate on or after its expiry date and is malformed when the expiry is more than 180 days out, so a suppression has to be renewed on purpose. pnpm's own suppression settings (`auditConfig`, `ignoreGhsas`, `ignoreCves`, an `audit.ignore` list in `pnpm-workspace.yaml`, `package.json` or `.npmrc`) bypass that expiry, so the gate rejects them and points at the allowlist. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - CI config (`.github/workflows/`, `azure-pipelines/`) needs human approval before any agent edit (`protect-files.sh` asks) — CI is human-reviewed by design.
 
