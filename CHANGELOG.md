@@ -14,8 +14,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `@Roles`, `RolesGuard` and `assertOwner`, with `AuthUser.roles`; Next.js gets `src/lib/authz.ts`
   (`hasRole`, `isOwner`) and a server-only `user.role` field (`input: false`, default `user`). FastAPI
   and NestJS never read roles from the token and start every user with none, so role-gated routes
-  deny until the project loads roles from its database. Ownership failures return 404, so ids of
-  other users' records cannot be probed. Each stack ships unit tests; the Vite rules and the review checklist gain matching lines. FastAPI auth steps
+  deny until the project loads roles from its database. Ownership failures return 404, so ids of other users' records cannot be probed. Each stack
+  ships unit tests; the Vite rules and the review checklist gain matching lines. FastAPI auth steps
   5-10 and NestJS steps 6-12 are renumbered by one; the Next.js SSO step is now Step 15.
 
 ### Security
