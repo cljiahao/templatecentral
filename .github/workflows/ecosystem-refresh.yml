@@ -33,6 +33,9 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No Anthropic credentials configured - skipping this loop. Add the ANTHROPIC_API_KEY secret (API) or CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token', Claude subscription) to enable it."
           fi
+      - name: Compute scan date
+        id: scan
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b  # v1.0.247
         if: steps.creds.outputs.ok == 'true'
         with:
@@ -44,7 +47,7 @@ jobs:
             Execute Step 0b of .claude/skills/tc-audit/implementation.md (full web scan, ALL listed
             topics including harness community consensus and loop engineering). Overwrite
             .claude/audit-ecosystem-research.md in the documented format with last-scanned
-            set to today. Then write pr-body.md in the repository root: a summary of new
+            set to ${{ steps.scan.outputs.date }} (UTC). Then write pr-body.md in the repository root: a summary of new
             versions, new advisories, RECOMMENDED/CONSENSUS harness findings, and any finding
             that invalidates a current skill (flag those as audit candidates), at most 3500
             characters. Do not create a branch, commit or pull request, and do not modify any
@@ -103,8 +106,8 @@ jobs:
             echo "::error::audit-ecosystem-research.md exceeds 200 KB."
             exit 1
           fi
-          if [ "$(wc -c < "$dir/pr-body.md")" -gt 4000 ]; then
-            echo "::error::pr-body.md exceeds 4000 bytes."
+          if [ "$(wc -c < "$dir/pr-body.md")" -gt 16000 ]; then
+            echo "::error::pr-body.md exceeds 16000 bytes."
             exit 1
           fi
 
@@ -128,7 +131,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          branch="chore/ecosystem-refresh-$(date -u +%Y%m%d)"
+          branch="chore/ecosystem-refresh-$(date -u +%Y%m%d)-$GITHUB_RUN_ID"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"

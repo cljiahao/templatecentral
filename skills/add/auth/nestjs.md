@@ -215,7 +215,7 @@ export class RolesGuard implements CanActivate {
       .switchToHttp()
       .getRequest<FastifyRequest & { user?: Partial<AuthUser> }>();
     const roles = user?.roles;
-    if (!Array.isArray(roles) || !roles.some((role) => required.includes(role))) {
+    if (!Array.isArray(roles) || !roles.some((role) => typeof role === 'string' && required.includes(role))) {
       throw new ForbiddenException('Insufficient permissions.');
     }
     return true;
@@ -548,6 +548,12 @@ describe('RolesGuard', () => {
 
   it('denies a user without a roles list', () => {
     const user = { id: 'u1', email: 'a@example.com' };
+    const context = contextWithUser(AdminController, AdminController.prototype.remove, user);
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('ignores non-string role entries', () => {
+    const user = { id: 'u1', email: 'a@example.com', roles: [1, 'user'] };
     const context = contextWithUser(AdminController, AdminController.prototype.remove, user);
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
