@@ -210,8 +210,12 @@ export class RolesGuard implements CanActivate {
     if (!required?.length) {
       throw new ForbiddenException('Insufficient permissions.');
     }
-    const { user } = context.switchToHttp().getRequest<FastifyRequest & { user?: AuthUser }>();
-    if (!user?.roles.some((role) => required.includes(role))) {
+    // Partial: a customised validate() may omit roles, which must deny (403), not throw (500).
+    const { user } = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { user?: Partial<AuthUser> }>();
+    const roles = user?.roles;
+    if (!Array.isArray(roles) || !roles.some((role) => required.includes(role))) {
       throw new ForbiddenException('Insufficient permissions.');
     }
     return true;
@@ -492,19 +496,26 @@ class MixedController {
   }
 }
 
-/** The two things RolesGuard reads: route metadata, and the user JwtStrategy put on the request. */
+/** The two things RolesGuard reads: route metadata, and whatever user is on the request. */
+function contextWithUser(
+  controller: abstract new () => object,
+  handler: () => unknown,
+  user: object | undefined
+): ExecutionContext {
+  return {
+    getHandler: () => handler,
+    getClass: () => controller,
+    switchToHttp: () => ({ getRequest: () => ({ user }) }),
+  } as unknown as ExecutionContext;
+}
+
+/** A request carrying the user JwtStrategy.validate() returns. */
 function contextFor(
   controller: abstract new () => object,
   handler: () => unknown,
   roles: string[]
 ): ExecutionContext {
-  return {
-    getHandler: () => handler,
-    getClass: () => controller,
-    switchToHttp: () => ({
-      getRequest: () => ({ user: { id: 'u1', email: 'a@example.com', roles } }),
-    }),
-  } as unknown as ExecutionContext;
+  return contextWithUser(controller, handler, { id: 'u1', email: 'a@example.com', roles });
 }
 
 const guard = new RolesGuard(new Reflector());
@@ -528,6 +539,17 @@ describe('RolesGuard', () => {
   it('lets handler @Roles override class @Roles', () => {
     const context = contextFor(MixedController, MixedController.prototype.read, ['user']);
     expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it('denies a request with no user', () => {
+    const context = contextWithUser(AdminController, AdminController.prototype.remove, undefined);
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('denies a user without a roles list', () => {
+    const user = { id: 'u1', email: 'a@example.com' };
+    const context = contextWithUser(AdminController, AdminController.prototype.remove, user);
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 });
 

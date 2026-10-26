@@ -576,8 +576,8 @@ A session says who the caller is; these decide what the caller may touch. Both d
 ```ts
 import type { Session } from '@/lib/auth';
 
-/** True only when a signed-in user holds `role`. */
-export function hasRole(session: Session | null, role: string): boolean {
+/** True only when a signed-in user holds `role`; narrows `session` to non-null when true. */
+export function hasRole(session: Session | null, role: string): session is Session {
   return session?.user.role === role;
 }
 
@@ -597,6 +597,7 @@ if (!isOwner(item?.ownerId, session.user.id)) notFound();
 
 ```ts
 // Route handler
+if (!session) return new Response(null, { status: 401 });
 if (!hasRole(session, 'admin')) return new Response(null, { status: 403 });
 
 const item = await getItem(id);
