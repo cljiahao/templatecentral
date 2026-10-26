@@ -6,16 +6,22 @@ on:
 concurrency:
   group: ecosystem-refresh
   cancel-in-progress: false
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+permissions: {}
 jobs:
-  refresh:
+  # The agent reads untrusted web content, so it runs with a read-only token and
+  # no shell, git or gh. It can only write the two files the publish job accepts, and its
+  # file reads are scoped to the checkout so process or runner paths holding credentials stay out of reach.
+  research:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      ok: ${{ steps.creds.outputs.ok }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check Anthropic credentials
         id: creds
         env:
@@ -28,17 +34,121 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No Anthropic credentials configured - skipping this loop. Add the ANTHROPIC_API_KEY secret (API) or CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token', Claude subscription) to enable it."
           fi
+      - name: Compute scan date
+        id: scan
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b  # v1.0.247
         if: steps.creds.outputs.ok == 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--max-turns 60 --allowedTools WebSearch,WebFetch,Read,Glob,Grep,Write,Edit,Bash(git:*),Bash(gh:*)"
+          github_token: ${{ github.token }}
+          claude_args: "--max-turns 60 --allowedTools WebSearch,WebFetch,Read(./**),Glob(./**),Grep(./**),Write(.claude/audit-ecosystem-research.md),Edit(.claude/audit-ecosystem-research.md),Write(pr-body.md)"
           prompt: |
             Execute Step 0b of .claude/skills/tc-audit/implementation.md (full web scan, ALL listed
             topics including harness community consensus and loop engineering). Overwrite
             .claude/audit-ecosystem-research.md in the documented format with last-scanned
-            set to today. Then create a branch chore/ecosystem-refresh-<YYYYMMDD>, commit
-            ONLY that file, and open a PR summarising: new versions, new advisories,
-            RECOMMENDED/CONSENSUS harness findings, and any finding that invalidates a
-            current skill (flag those as audit candidates). Do not modify any other file.
+            set to ${{ steps.scan.outputs.date }} (UTC). Then write pr-body.md in the repository root: a summary of new
+            versions, new advisories, RECOMMENDED/CONSENSUS harness findings, and any finding
+            that invalidates a current skill (flag those as audit candidates), at most 3500
+            characters. Do not create a branch, commit or pull request, and do not modify any
+            other file; a separate job publishes these two files.
+      # Staging flattens the layout: upload-artifact keeps the common ancestor
+      # directory of multiple paths, and the publish job expects two top-level files.
+      - name: Stage research output
+        if: steps.creds.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/out"
+          cp -P .claude/audit-ecosystem-research.md pr-body.md "$RUNNER_TEMP/out/"
+      - name: Upload research output
+        if: steps.creds.outputs.ok == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ecosystem-research
+          path: |
+            ${{ runner.temp }}/out/audit-ecosystem-research.md
+            ${{ runner.temp }}/out/pr-body.md
+          if-no-files-found: error
+          retention-days: 3
+
+  # Deterministic: no LLM runs here. Whatever the agent produced is untrusted
+  # input and is checked before it reaches a commit.
+  publish:
+    needs: research
+    if: needs.research.outputs.ok == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: ecosystem-research
+          path: ${{ runner.temp }}/research
+      - name: Validate research output
+        id: guard
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/research"
+          target=.claude/audit-ecosystem-research.md
+
+          if [ "$(find "$dir" -mindepth 1 | wc -l)" -ne 2 ] \
+            || [ "$(find "$dir" -type f | wc -l)" -ne 2 ] \
+            || [ -n "$(find "$dir" -type l)" ] \
+            || [ ! -f "$dir/audit-ecosystem-research.md" ] \
+            || [ ! -f "$dir/pr-body.md" ]; then
+            echo "::error::Artifact must hold exactly audit-ecosystem-research.md and pr-body.md as regular files."
+            exit 1
+          fi
+          if [ "$(wc -c < "$dir/audit-ecosystem-research.md")" -gt 204800 ]; then
+            echo "::error::audit-ecosystem-research.md exceeds 200 KB."
+            exit 1
+          fi
+          if [ "$(wc -c < "$dir/pr-body.md")" -gt 16000 ]; then
+            echo "::error::pr-body.md exceeds 16000 bytes."
+            exit 1
+          fi
+
+          cp "$dir/audit-ecosystem-research.md" "$target"
+          status="$(git status --porcelain)"
+          if [ -z "$status" ]; then
+            echo "::notice::Research file is unchanged - no PR to open."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          unexpected="$(printf '%s\n' "$status" | awk -v t="$target" 'substr($0, 4) != t')"
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unexpected changes in the working tree:"
+            echo "$unexpected"
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Open pull request
+        if: steps.guard.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch="chore/ecosystem-refresh-$(date -u +%Y%m%d)-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add .claude/audit-ecosystem-research.md
+          git commit -m "chore: refresh ecosystem research"
+          {
+            cat "$RUNNER_TEMP/research/pr-body.md"
+            printf '\n\n---\nCI does not run automatically on PRs opened by GITHUB_TOKEN - close and reopen this PR to trigger checks.\n'
+          } > "$RUNNER_TEMP/pr-body-final.md"
+          git push origin "$branch"
+          if ! gh pr create \
+            --base "$GITHUB_REF_NAME" \
+            --head "$branch" \
+            --title "chore: refresh ecosystem research" \
+            --body-file "$RUNNER_TEMP/pr-body-final.md"; then
+            git push origin --delete "$branch" || true
+            echo "::error::could not open the PR — enable \"Allow GitHub Actions to create and approve pull requests\" in the repository's Actions settings"
+            exit 1
+          fi

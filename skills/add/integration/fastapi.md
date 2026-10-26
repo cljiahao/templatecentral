@@ -192,7 +192,7 @@ class APISettings(BaseSettings):
     GITHUB_TOKEN: SecretStr
 ```
 
-Seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (CI has no `src/.env`; see `templatecentral:add` (auth) Step 10 for the conftest shape):
+Seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (CI has no `src/.env`; see `templatecentral:add` (auth) Step 11 for the conftest shape):
 
 ```python
 os.environ.setdefault("GITHUB_TOKEN", "test-placeholder")

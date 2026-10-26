@@ -495,13 +495,6 @@ allowBuilds:
   '@scarf/scarf': false
   lefthook: false      # git-hook installer; binary ships via optional deps — no build needed, but pnpm still requires an explicit decision or `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS
   # argon2: true        # uncomment when running `templatecentral:add (auth)` — argon2 is a native Node addon
-
-# Scoped audit exception (re-check at every audit). deepmerge, nestjs-zod's only dependency, has a High
-# prototype-pollution advisory with no fixed release; nestjs-zod calls it only while generating OpenAPI docs
-# from your own schemas, never on request data. Remove once a nestjs-zod release drops deepmerge.
-audit:
-  ignore:
-    - GHSA-gcqx-w48m-w2h4
 ```
 
 > **Note:** if `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites `pnpm-workspace.yaml` with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` as appropriate and re-run `pnpm install`.

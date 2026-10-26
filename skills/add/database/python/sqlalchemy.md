@@ -48,7 +48,7 @@ Add to `src/.env` (local secrets — never commit) and document in `src/.env.def
 DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
 ```
 
-CI has no `src/.env` and `session.py` builds the engine at import, so seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (add `import os` and move `from app import app` into the fixture if they are not there yet — see `templatecentral:add` (auth) Step 10). Tests override `get_db`, so this URL is never queried:
+CI has no `src/.env` and `session.py` builds the engine at import, so seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (add `import os` and move `from app import app` into the fixture if they are not there yet — see `templatecentral:add` (auth) Step 11). Tests override `get_db`, so this URL is never queried:
 
 ```python
 os.environ.setdefault("DATABASE_URL", "sqlite://")

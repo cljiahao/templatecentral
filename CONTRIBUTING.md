@@ -68,7 +68,7 @@ Two monthly GitHub Actions workflows run automatically on the 1st of each month.
 
 | Workflow | Schedule | What it does |
 |---|---|---|
-| `ecosystem-refresh.yml` | 02:00 UTC on the 1st | Runs a full web scan (Step 0b of `.claude/skills/tc-audit/implementation.md`), overwrites `.claude/audit-ecosystem-research.md`, and opens a PR summarising new versions, advisories, harness-consensus findings, and any result that invalidates a current skill. |
+| `ecosystem-refresh.yml` | 02:00 UTC on the 1st | A read-only agent job runs a full web scan (Step 0b of `.claude/skills/tc-audit/implementation.md`) and writes `.claude/audit-ecosystem-research.md` plus a PR summary. A separate publish job with no LLM checks the output (two files, size limits, one changed path) and opens the PR. |
 | `scaffold-verify.yml` | 03:00 UTC on the 1st | Scaffolds each stack (`fastapi`, `nestjs`, `nextjs`, `vite-react`) into a clean directory, runs all quality gates exactly as documented, and fails if any template file is missing or any gate does not pass. |
 
 **Handling scaffold-verify failures:** when any matrix leg fails the workflow automatically opens a GitHub issue titled `scaffold-verify: <stack> failed <date>`. Triage: find the broken template section named in the agent output, then open a fix PR.

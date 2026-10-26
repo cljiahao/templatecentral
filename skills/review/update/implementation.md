@@ -32,7 +32,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
    - If the command fails for a non-advisory reason (network error, registry unreachable): add "pnpm audit failed — security advisory check skipped" to the report and continue to step 9
    - Report any high/critical advisories under "Security advisories" in the results summary
    - Do NOT auto-rollback — advisories are report-only; the user decides next steps
-   - Review every configured ignore (`audit.ignore` in `pnpm-workspace.yaml`): list each entry in the report and propose removing it once a fixed release exists or its documented reason no longer holds
+   - Review every entry in `.claude/dep-audit-allow.txt`: list each in the report and propose removing it once a fixed release exists or its documented reason no longer holds (pnpm's own `audit.ignore` / `auditConfig` settings are rejected by the deps gate)
 9. Report results (see Reporting below)
 
 ### FastAPI
@@ -50,6 +50,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 8. Run `pip-audit --requirement requirements.txt` if `pip-audit` is available
    - If `pip-audit` is not installed: add note "pip-audit not installed — security advisory check skipped" to report
    - Report any vulnerabilities under "Security advisories" in the results summary
+   - Also list every entry in `.claude/dep-audit-allow.txt` and propose removing it once a fixed release exists or its documented reason no longer holds
    - Do NOT auto-rollback — advisories are report-only; the user decides next steps
 9. Report results
 

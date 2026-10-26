@@ -209,7 +209,78 @@ def get_current_user(
     return user_id
 ```
 
-#### 5. Create Auth Service
+#### 5. Create Authorization Helpers
+
+**`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks. Authentication says who the caller is; these decide what the caller may touch:
+
+```python
+from collections.abc import Callable
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, status
+
+from api.dependencies.auth import get_current_user
+
+
+def get_current_roles(
+    user_id: Annotated[str, Depends(get_current_user)],
+) -> frozenset[str]:
+    """Roles the current user holds. Grants none until a database lookup replaces it."""
+    # `user_id` is unused here but must stay: the dependency forces authentication, and the
+    # database lookup that replaces this body needs it.
+    # Roles are loaded per request, never read from the token, so revoking a role
+    # takes effect on the caller's next request rather than when the token expires.
+    return frozenset()
+
+
+def require_roles(*roles: str) -> Callable[..., str]:
+    """Dependency that admits a user holding any of `roles` and yields their id."""
+    if not roles:
+        raise ValueError("require_roles() needs at least one role.")
+    required = frozenset(roles)
+
+    def dependency(
+        user_id: Annotated[str, Depends(get_current_user)],
+        held: Annotated[frozenset[str], Depends(get_current_roles)],
+    ) -> str:
+        if held.isdisjoint(required):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions.",
+            )
+        return user_id
+
+    return dependency
+
+
+def ensure_owner(owner_id: str | None, user_id: str) -> None:
+    """404 unless `user_id` owns the record; pass None when the record does not exist."""
+    # 404 rather than 403, so a caller cannot probe which ids belong to other users.
+    if owner_id is None or owner_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+```
+
+Use `require_roles` in place of `get_current_user` on role-gated routes, and call `ensure_owner` after loading a record by id, before returning or changing it:
+
+```python
+@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_item(
+    item_id: str, user_id: Annotated[str, Depends(require_roles("admin"))]
+) -> None: ...
+
+
+@router.get("/{item_id}", response_model=ItemResponse)
+def get_item(
+    item_id: str, user_id: Annotated[str, Depends(get_current_user)]
+) -> ItemResponse:
+    item = item_service.get(item_id)  # None when no such record
+    ensure_owner(item.owner_id if item else None, user_id)
+    return ItemResponse.model_validate(item)
+```
+
+Once `templatecentral:add` (database) adds a users store, make `get_current_roles` read the user's roles from it.
+
+#### 6. Create Auth Service
 
 **`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `templatecentral:add` (database).
 
@@ -234,7 +305,7 @@ def login_user(email: str, password: str) -> str:
     )
 ```
 
-#### 6. Add Auth Tag
+#### 7. Add Auth Tag
 
 Add `AUTH` to the `APITags` enum in **`src/api/tags.py`**:
 
@@ -244,7 +315,7 @@ class APITags(StrEnum):
     AUTH = "auth"
 ```
 
-#### 7. Create Auth Router
+#### 8. Create Auth Router
 
 **`src/api/routers/auth.py`**:
 
@@ -274,7 +345,7 @@ def login(body: LoginRequest) -> TokenResponse:
     return TokenResponse(access_token=token)
 ```
 
-#### 8. Register the Router
+#### 9. Register the Router
 
 Add the auth router to `src/api/routes.py`:
 
@@ -285,7 +356,7 @@ from api.tags import APITags
 router.include_router(auth.router, tags=[APITags.AUTH])
 ```
 
-#### 9. Protect Routes
+#### 10. Protect Routes
 
 Use the `get_current_user` dependency on any endpoint that requires auth — starting with this `/me` stub in `src/api/routers/auth.py` (merge the imports into that file's block):
 
@@ -307,7 +378,7 @@ async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResp
     )
 ```
 
-#### 10. Tests
+#### 11. Tests
 
 Settings load at import and CI has no `src/.env`, so seed a throwaway key before the app is imported — replace **`test/conftest.py`** (the import moves into the fixture for the same reason):
 
@@ -392,6 +463,85 @@ def test_password_hash_verifies_only_the_original() -> None:
 def test_me_requires_bearer_token(client: TestClient) -> None:
     """GET /auth/me without a token is 401."""
     assert client.get("/auth/me").status_code == 401
+```
+
+**`test/test_api/test_authz.py`** — a probe app guards one route with the real dependencies, so the checks are tested apart from any feature router:
+
+```python
+"""Deny-by-default role and ownership checks."""
+
+from collections.abc import Generator
+from typing import Annotated
+
+import pytest
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+from api.dependencies.authz import ensure_owner, get_current_roles, require_roles
+
+probe = FastAPI()
+
+
+@probe.get("/_authz-probe")
+def _admin_only(
+    user_id: Annotated[str, Depends(require_roles("admin"))],
+) -> dict[str, str]:
+    return {"id": user_id}
+
+
+@pytest.fixture
+def client() -> Generator[TestClient]:
+    """Probe client; shadows the root fixture so no feature route is involved."""
+    with TestClient(probe) as client:
+        yield client
+    probe.dependency_overrides.clear()
+
+
+@pytest.mark.unit
+def test_require_roles_rejects_user_without_role(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """The default role lookup grants nothing, so a guarded route is 403."""
+    res = client.get("/_authz-probe", headers=auth_headers)
+    assert res.status_code == 403
+    assert res.json() == {"detail": "Insufficient permissions."}
+
+
+@pytest.mark.unit
+def test_require_roles_allows_user_with_role(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A user holding the required role reaches the handler as themselves."""
+    probe.dependency_overrides[get_current_roles] = lambda: frozenset({"admin"})
+    res = client.get("/_authz-probe", headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json() == {"id": "test-user"}
+
+
+@pytest.mark.unit
+def test_require_roles_without_roles_is_a_programming_error() -> None:
+    """An empty role list would admit nobody or everybody, so it fails at definition time."""
+    with pytest.raises(ValueError, match="at least one role"):
+        require_roles()
+
+
+@pytest.mark.unit
+def test_ensure_owner_hides_other_users_record() -> None:
+    with pytest.raises(HTTPException) as exc:
+        ensure_owner("u2", "u1")
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.unit
+def test_ensure_owner_hides_missing_record() -> None:
+    with pytest.raises(HTTPException) as exc:
+        ensure_owner(None, "u1")
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.unit
+def test_ensure_owner_allows_owner() -> None:
+    ensure_owner("u1", "u1")
 ```
 
 ### Browser Client (Cookie Mode)
@@ -726,6 +876,8 @@ def create_session(request: Request, body: LoginRequest, response: Response) -> 
 - Browser SPA clients get cookie mode (above), never a token in `localStorage` — Bearer stays for non-browser clients.
 - Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation).
 - `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
+- Every handler that loads a record by id calls `ensure_owner` (or filters the query by owner) before returning or changing it.
+- Role-gated routes depend on `require_roles(...)`. Roles come from `get_current_roles`, never from the token, so a revoked role stops working on the next request.
 - When completing `login_user`, return the same 401 for unknown email and wrong password, and run `verify_password` against a dummy hash when the user is missing — otherwise response timing reveals which emails are registered.
 - **Rate limiting is mandatory for production** — add `slowapi` before going live.
 - **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
