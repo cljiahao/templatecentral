@@ -27,6 +27,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `requirements.txt` (pip-audit, pinned) and fails closed on a missing tool, a network failure or
   unparseable output. There is no label bypass: `.claude/dep-audit-allow.txt` holds
   `<id> <YYYY-MM-DD> <reason>` entries that expire, and `protect-files.sh` asks before editing it.
+- Re-sync adds the `deps` gate as a blocking check with no label bypass. A project with no
+  `pnpm-lock.yaml`, `uv.lock` or `requirements*.txt` fails with "no lockfile found". Azure projects that
+  took the "seed neither" path need the `deps` step added by hand, or by migrate's new health check.
+- The `deps` gate audits every Python source present (`uv.lock` and each `requirements*.txt`) and fails
+  when an audit covers no packages. Unaudited Python packages fail and cannot be allowlisted. Blocked
+  lines read `<package>: <ids> (<severity>)`.
+- Native pnpm suppressions (`auditConfig`, `ignoreGhsas`, `ignoreCves`, `audit.ignore`) are rejected in
+  favour of `.claude/dep-audit-allow.txt`, and an allowlist expiry more than 180 days out is malformed.
+  The NestJS scaffold no longer seeds an inert `audit.ignore`.
+- FastAPI CI installs `uv` when `uv.lock` exists, so the `deps` gate can export it.
 
 ### Security
 - `ecosystem-refresh.yml` no longer gives the research agent write access. The agent reads web pages, so
@@ -35,6 +45,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `.claude/audit-ecosystem-research.md` and `pr-body.md`. A separate `publish` job, with no LLM,
   validates the uploaded artifact (exactly two regular files, size limits, one changed path) and opens
   the PR.
+- `ecosystem-refresh.yml` limits the research agent's `Read`, `Glob` and `Grep` to the checkout (`./**`).
+  The publish job deletes its branch and fails with a clear message when the PR cannot be opened, and the
+  run attempt joins the branch name. It needs the repository's Actions setting "Allow GitHub Actions to
+  create and approve pull requests"; CI does not run on a PR opened by `GITHUB_TOKEN`, so close and
+  reopen it to trigger checks.
 
 ---
 

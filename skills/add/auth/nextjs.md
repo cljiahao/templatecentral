@@ -569,7 +569,7 @@ export function UserAvatar() {
 
 #### 14. Authorization helpers
 
-A session says who the caller is; these decide what the caller may touch. Both deny by default. The role comes from `user.role` (Step 2), which better-auth stores server-side and never accepts from the client. With a database adapter, regenerate the auth schema so the user table gains the `role` column.
+A session says who the caller is; these decide what the caller may touch. Both deny by default. The role comes from `user.role` (Step 2), which better-auth stores server-side and never accepts from the client. With a database adapter, regenerate the auth schema so the user table gains the `role` column. If the session cookie cache is enabled, a role revocation can take up to its max age to reach `hasRole`.
 
 **`src/lib/authz.ts`**:
 
