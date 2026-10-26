@@ -284,6 +284,7 @@ jobs:
 #   - checkout: self
 #     fetchDepth: 0
 #   - template: templatecentral-gates.yml   # path is relative to the including file
+# The deps step needs the project's package manager (pnpm or uv) and pipx on PATH: include the template after the pipeline's install steps.
 # Bypass a PR-only gate by queueing the run with variable LABELS=skip-changelog (or skip-readme-check / skip-comment-check).
 steps:
   - bash: bash .claude/verify-harness.sh
@@ -409,18 +410,28 @@ case "$gate" in
     PIP_AUDIT_VERSION="2.10.1"   # pip-audit release run through pipx; bump deliberately, it decides what fails the build
     allow=".claude/dep-audit-allow.txt"
     tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/deps.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT   # fail() exits, so this also covers every failure path
+    need() { command -v "$1" >/dev/null 2>&1 || fail "$1 not found — install it before the deps gate"; }
     # Allowlist lines: <ADVISORY-ID> <YYYY-MM-DD expiry> <reason>. An entry stops suppressing on its expiry date.
     today=$(date -u +%Y-%m-%d)
     : > "$tmp/allowed"
     if [ -f "$allow" ]; then
       while IFS= read -r line || [ -n "$line" ]; do
-        line=${line%$'\r'}
+        line=${line#"${line%%[![:space:]]*}"}
+        line=${line%"${line##*[![:space:]]}"}
         case "$line" in ''|'#'*) continue ;; esac
         if ! printf '%s\n' "$line" | grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
           echo "malformed allowlist line: $line" >&2
           fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
         fi
         read -r id expiry _ <<< "$line"
+        y=${expiry%%-*}; md=${expiry#*-}; m=$((10#${md%%-*})); d=$((10#${md#*-}))
+        case $m in 1|3|5|7|8|10|12) dim=31 ;; 4|6|9|11) dim=30 ;; 2) dim=28
+          if [ $((10#$y % 4)) -eq 0 ] && { [ $((10#$y % 100)) -ne 0 ] || [ $((10#$y % 400)) -eq 0 ]; }; then dim=29; fi ;; *) dim=0 ;; esac
+        if [ "$d" -lt 1 ] || [ "$d" -gt "$dim" ]; then
+          echo "malformed allowlist line (not a calendar date): $line" >&2
+          fail "$allow has an invalid expiry date: $expiry"
+        fi
         if [[ ! "$today" < "$expiry" ]]; then
           echo "expired allowlist entry: $id (expired $expiry)" >&2
           fail "$allow entry for $id expired on $expiry. Fix the dependency or renew the entry with a new date and reason."
@@ -429,6 +440,7 @@ case "$gate" in
       done < "$allow"
     fi
     if [ -f pnpm-lock.yaml ]; then
+      need pnpm
       pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
       node - "$tmp/report.json" > "$tmp/found" <<'JS' || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
 const fs = require("fs");
@@ -443,7 +455,9 @@ for (const a of Object.values(report.advisories)) {
 JS
     elif [ -f uv.lock ] || [ -f requirements.txt ]; then
       req=requirements.txt
+      need pipx
       if [ -f uv.lock ]; then
+        need uv
         req="$tmp/req.txt"
         uv export --frozen --no-dev --format requirements-txt -o "$req" 2> "$tmp/err.txt" || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (uv export)"; }
       fi
@@ -460,6 +474,8 @@ deps = report.get("dependencies") if isinstance(report, dict) else None
 if not isinstance(deps, list):
     sys.exit(3)
 for dep in deps:
+    if dep.get("skip_reason"):
+        print("!" + str(dep.get("name")) + ": not audited (" + str(dep.get("skip_reason")) + ")")
     for vuln in dep.get("vulns") or []:
         ids = [vuln.get("id")] + list(vuln.get("aliases") or [])
         print(" ".join(i for i in ids if i) or "unnamed-" + str(dep.get("name")))
@@ -470,16 +486,16 @@ PY
     blocked=""
     while IFS= read -r ids; do
       [ -n "$ids" ] || continue
+      case "$ids" in "!"*) blocked="$blocked${blocked:+$'\n'}  - ${ids#!}"; continue ;; esac
       covered=0
       for id in $ids; do
         if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
       done
       [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $ids"
     done < <(sort -u "$tmp/found")
-    rm -rf "$tmp"
     if [ -n "$blocked" ]; then
       printf '%s\n' "$blocked" >&2
-      fail "High/critical dependency advisories (listed above). Upgrade the dependency, or allowlist an advisory in $allow with an expiry date and a reason."
+      fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an advisory in $allow with an expiry date and a reason."
     fi
     ;;
   *)
@@ -505,7 +521,7 @@ exit 0
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
 - **gitleaks runs as the CLI, not `gitleaks/gitleaks-action`:** the action needs a paid `GITLEAKS_LICENSE` secret on organization-owned repos; the CLI is MIT, needs no key or token, and is the same current scanner (upstream calls gitleaks feature-complete; its maintainer's successor is Betterleaks — note only). The version and SHA-256 live once, in `ci-gates.sh` (`secrets` gate) — bump both together from the release's `gitleaks_<version>_checksums.txt`; `sha256sum -c` fails the job on any mismatch. A PR scans only its own commits (`origin/<base>..HEAD` — correct on the synthetic merge checkout GitHub and Azure DevOps PR builds both use; do NOT add `--first-parent`, which follows the base side of that merge and scans nothing); a push to `main` scans full history. Both need `fetch-depth: 0`. Exit code 1 on any finding fails the job; `--redact` keeps secrets out of the log.
 - **Push protection is the third secret layer** (after the pre-commit hook and this CI scan): the host rejects a push containing a recognised secret before it lands. Enable it in repo settings — free on public GitHub repos; private repos need GitHub Secret Protection, and Azure Repos need GitHub Advanced Security for Azure DevOps. It is a setting, not a seeded file.
-- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; a `uv.lock` is exported with `uv export --frozen --no-dev` and audited by pip-audit; a bare `requirements.txt` is audited by pip-audit directly. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids (GHSA, CVE or PYSEC), and an entry fails the gate on or after its expiry date, so a suppression has to be renewed on purpose. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
+- **Dependency audit (`deps` gate):** runs on every PR and every push to `main`, takes no base branch and has no label bypass. A `pnpm-lock.yaml` runs `pnpm audit --json --prod` and fails on any `high` or `critical` advisory; a `uv.lock` is exported with `uv export --frozen --no-dev` and audited by pip-audit; a bare `requirements.txt` is audited by pip-audit directly. pip-audit reports no severity, so every known vulnerability it finds fails the gate. The pip-audit version is pinned once, in `ci-gates.sh` (`PIP_AUDIT_VERSION`). The gate needs the project's package manager (`pnpm` or `uv`) and, for Python, `pipx` on PATH, so on Azure include the template after the pipeline's install steps; the FastAPI `quality` job installs `uv` when `uv.lock` exists. A pip-audit dependency it skips (not on PyPI, private index, editable install) was not audited, so it fails the gate and cannot be allowlisted. The gate fails closed: a missing tool, a network failure or output it cannot parse fails the job instead of passing. The only suppression is `.claude/dep-audit-allow.txt` (optional, human-approved like the gate script): one `<GHSA|CVE|PYSEC id> <YYYY-MM-DD> <reason>` entry per line, `#` for comments. An advisory matches on any of its ids (GHSA, CVE or PYSEC), and an entry fails the gate on or after its expiry date, so a suppression has to be renewed on purpose. The audit queries a live advisory database, so a PR can start failing without any change of its own; fix it by upgrading, or allowlist the advisory with a short expiry and the reason.
 - Every job sets `timeout-minutes` so a hung step can't hold a runner for the 6-hour default.
 - CI config (`.github/workflows/`, `azure-pipelines/`) needs human approval before any agent edit (`protect-files.sh` asks) — CI is human-reviewed by design.
 

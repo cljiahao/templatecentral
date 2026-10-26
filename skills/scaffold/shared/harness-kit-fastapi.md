@@ -798,6 +798,8 @@ pre-push:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements*.txt
+      - if: hashFiles('uv.lock') != ''
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install deps
         run: |
           pip install -r requirements.txt

@@ -823,8 +823,25 @@ NOTOOLS=$(mktemp -d "$T/bin.XXXX")
 for b in bash node python3 date grep tr mktemp rm cat sort sed dirname touch uniq; do
   p=$(command -v "$b") && ln -sf "$p" "$NOTOOLS/$b"
 done
-expect_deps 1 "pnpm missing fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "returned no report" "$NOTOOLS"
-expect_deps 1 "pipx missing fails closed" requirements.txt "$PIP_CLEAN" "" "returned no report" "$NOTOOLS"
+NOTOOLS_UV=$(mktemp -d "$T/bin.XXXX")
+cp -P "$NOTOOLS"/* "$NOTOOLS_UV"/
+ln -sf "$DB/pipx" "$NOTOOLS_UV/pipx"
+expect_deps 1 "pnpm missing fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "pnpm not found — install it before the deps gate" "$NOTOOLS"
+expect_deps 1 "pipx missing fails closed" requirements.txt "$PIP_CLEAN" "" "pipx not found — install it before the deps gate" "$NOTOOLS"
+expect_deps 1 "uv missing fails closed" uv.lock "$PIP_CLEAN" "" "uv not found — install it before the deps gate" "$NOTOOLS_UV"
+PIP_SKIP='{"dependencies":[{"name":"internal-lib","skip_reason":"Dependency not found on PyPI and could not be audited: internal-lib (1.0)"},{"name":"requests","version":"2.33.0","vulns":[]}],"fixes":[]}'
+expect_deps 1 "pip-audit, skipped dependency fails as unaudited" requirements.txt "$PIP_SKIP" "" "internal-lib: not audited (Dependency not found"
+expect_deps 1 "pip-audit, skipped dependency cannot be allowlisted away" requirements.txt "$PIP_SKIP" "GHSA-zzzz-zzzz-zzzz $FUT x\n" "not audited"
+PNPM_CRIT='{"advisories":{"3":{"id":3,"severity":"critical","github_advisory_id":"GHSA-jjjj-kkkk-llll"}}}'
+expect_deps 1 "pnpm, critical advisory fails" pnpm-lock.yaml "$PNPM_CRIT" "" "GHSA-jjjj-kkkk-llll"
+expect_deps 1 "allowlist id with regex metacharacters is rejected, not matched" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa.bbbb-cccc $FUT reason\n" "malformed"
+expect_deps 1 "allowlist id matches whole ids only" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-ccc $FUT reason\n" "GHSA-aaaa-bbbb-cccc"
+expect_deps 0 "allowlist skips whitespace-only and indented comment lines" pnpm-lock.yaml "$PNPM_HIGH" "   \n\t\n  # indented note\n  GHSA-aaaa-bbbb-cccc $FUT reason  \n" ""
+expect_deps 1 "allowlist month 13 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-13-01 reason\n" "not a calendar date"
+expect_deps 1 "allowlist 2999-02-30 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-02-30 reason\n" "not a calendar date"
+expect_deps 1 "allowlist day 00 is malformed" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-01-00 reason\n" "not a calendar date"
+expect_deps 1 "allowlist 2999-02-29 is malformed (not a leap year)" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2999-02-29 reason\n" "not a calendar date"
+expect_deps 0 "allowlist accepts a leap day" pnpm-lock.yaml "$PNPM_HIGH" "GHSA-aaaa-bbbb-cccc 2996-02-29 reason\n" ""
 rm -f "$DB/argv"
 expect_deps 1 "uv.lock audits the exported requirements" uv.lock "$PIP_VULN" "" "PYSEC-2099-1"
 grep -q '^export --frozen --no-dev --format requirements-txt -o ' "$DB/argv"
@@ -833,7 +850,7 @@ grep -qE '^run pip-audit==[0-9.]+ -r .*req\.txt --format json --progress-spinner
 check 0 "$?" "deps: uv.lock audit runs the pinned pip-audit on the export"
 rm -f "$DB/argv"
 expect_deps 0 "pnpm lockfile wins over requirements.txt" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
-check 1 "$(grep -c '^    PIP_AUDIT_VERSION="' "$KIT/ci-gates.sh")" "ci-gates pins pip-audit once"
+check 1 "$(grep -c '^[[:space:]]*PIP_AUDIT_VERSION="' "$KIT/ci-gates.sh")" "ci-gates pins pip-audit once"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
