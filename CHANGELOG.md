@@ -21,6 +21,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `scripts/test-harness-kit.sh` extracts hook scripts with `scripts/extract-fences.py`.
 - FUTURE.md roadmap §1 (phase-splitting) is marked superseded.
 
+### Fixed
+- AI PR Review fails loudly: it stops with a clear error when `CLAUDE_CODE_OAUTH_TOKEN` is
+  empty, and prints Claude's own error text when the review run fails, instead of only
+  `is_error: true`.
+
 ---
 
 ## [6.2.0] — 2026-10-27
