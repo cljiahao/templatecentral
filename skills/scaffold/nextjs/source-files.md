@@ -1163,6 +1163,65 @@ export function getAppOrigin(request: NextRequest): string {
 }
 ```
 
+### `src/lib/security/frame-protection.ts`
+
+> Anti-clickjacking headers, applied at runtime by `src/proxy.ts`. When the platform injects
+> `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://appcentral-uat.cpfnet.gov.sg`) and it passes the
+> origin check, only that portal may frame the app. Otherwise framing is denied outright.
+
+```ts
+// Exactly one https origin: lowercase host labels, no path, port, wildcard, quotes,
+// whitespace or semicolons. Anything else falls back to deny, so the value can never
+// inject extra CSP directives or headers.
+const PORTAL_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+// Keep in sync with the Content-Security-Policy in next.config.ts headers().
+const CSP_BASE = "base-uri 'self'; object-src 'none'; form-action 'self'";
+
+function portalOrigin(): string | null {
+  const origin = process.env.APPCENTRAL_PORTAL_ORIGIN;
+  return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
+}
+
+// Omitted in dev: browsers enforce these even for localhost, which blocks IDE-embedded
+// preview panes (most render via <iframe>). Every deployed environment gets them.
+export function applyFrameProtection<T extends Response>(res: T): T {
+  if (process.env.NODE_ENV === 'development') return res;
+  const origin = portalOrigin();
+  if (origin) {
+    // frame-ancestors supersedes X-Frame-Options, which cannot express a single
+    // allowed origin, so X-Frame-Options is not sent.
+    res.headers.set('Content-Security-Policy', `frame-ancestors ${origin}; ${CSP_BASE}`);
+    res.headers.delete('X-Frame-Options');
+  } else {
+    res.headers.set('Content-Security-Policy', `frame-ancestors 'none'; ${CSP_BASE}`);
+    res.headers.set('X-Frame-Options', 'DENY');
+  }
+  return res;
+}
+```
+
+### `src/proxy.ts`
+
+> Sets the anti-clickjacking headers on every page and route response. `templatecentral:add (auth)`
+> replaces this file with its route-protection proxy, which keeps the same `applyFrameProtection`
+> call on every response it returns.
+
+```ts
+import { NextResponse } from 'next/server';
+
+import { applyFrameProtection } from '@/lib/security/frame-protection';
+
+export function proxy() {
+  return applyFrameProtection(NextResponse.next());
+}
+
+// Build output and optimised images are not documents and are never framed.
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
 ### `src/lib/constants/env.ts`
 
 ```ts
@@ -1764,6 +1823,55 @@ describe('GET /api/health (Docker / probe path)', () => {
 });
 ```
 
+### `test/lib/frame-protection.test.ts`
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { applyFrameProtection } from '@/lib/security/frame-protection';
+
+function framed(): Response {
+  return applyFrameProtection(new Response(null));
+}
+
+describe('applyFrameProtection', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('denies all framing when APPCENTRAL_PORTAL_ORIGIN is unset', () => {
+    const res = framed();
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('Content-Security-Policy')).toMatch(/^frame-ancestors 'none'; /);
+  });
+
+  it('allows only the portal origin and drops X-Frame-Options', () => {
+    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://appcentral-uat.cpfnet.gov.sg');
+    const res = framed();
+    expect(res.headers.get('X-Frame-Options')).toBeNull();
+    expect(res.headers.get('Content-Security-Policy')).toBe(
+      "frame-ancestors https://appcentral-uat.cpfnet.gov.sg; base-uri 'self'; object-src 'none'; form-action 'self'",
+    );
+  });
+
+  it.each([
+    'http://appcentral.example.gov.sg',
+    'https://*.example.gov.sg',
+    'https://example.gov.sg:8443',
+    'https://example.gov.sg/path',
+    "https://example.gov.sg; script-src 'unsafe-inline'",
+    'https://example.gov.sg\nX-Injected: 1',
+    'https://localhost',
+    '*',
+  ])('falls back to deny for invalid origin %s', (origin) => {
+    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', origin);
+    const res = framed();
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('Content-Security-Policy')).toMatch(/^frame-ancestors 'none'; /);
+  });
+});
+```
+
 ### `test/api/with-logging.test.ts`
 
 ```ts
@@ -1895,7 +2003,8 @@ src/app/api/            — API route handlers
 src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
 src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
 src/components/widgets/ — reusable composed components (project-owned)
-proxy.ts + src/lib/auth.ts — auth layer
+src/proxy.ts            — frame protection (APPCENTRAL_PORTAL_ORIGIN); auth route protection after `templatecentral:add (auth)`
+src/lib/auth.ts         — auth layer (after `templatecentral:add (auth)`)
 src/integrations/database/ — database layer (after `templatecentral:add (database)`)
 src/lib/constants/env.ts — environment constants
 

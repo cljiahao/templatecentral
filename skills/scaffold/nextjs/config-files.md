@@ -263,28 +263,25 @@ const nextConfig: NextConfig = {
   // next/image refuses external hosts until they are allowlisted in `images.remotePatterns`.
 
   async headers() {
-    // Anti-clickjacking headers (X-Frame-Options, CSP frame-ancestors) are omitted in dev —
-    // they apply during `next dev` too (including under Turbopack), and browsers enforce them
-    // even for localhost, which blocks IDE-embedded preview panes (most render via <iframe>).
-    // Full protection still applies in every deployed environment (prod, uat, preview builds).
-    const isDev = process.env.NODE_ENV === 'development';
+    // Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is NOT set here: headers() is
+    // resolved at build time, but the allowed framing origin (APPCENTRAL_PORTAL_ORIGIN) is
+    // injected at runtime. src/proxy.ts sets it per request via src/lib/security/frame-protection.ts,
+    // and repeats the CSP directives below so the policy is complete whichever header wins.
     return [
       {
         source: '/(.*)',
         headers: [
-          ...(isDev ? [] : [{ key: 'X-Frame-Options', value: 'DENY' }]),
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'X-XSS-Protection', value: '0' },
           // HSTS — browsers ignore HSTS received over HTTP, so this is only effective over HTTPS.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
-          // CSP baseline — tighten after auth/analytics are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
+          // CSP baseline — tighten after auth/analytics are wired. Keep in sync with
+          // CSP_BASE in src/lib/security/frame-protection.ts.
           {
             key: 'Content-Security-Policy',
-            value: isDev
-              ? "base-uri 'self'; object-src 'none'; form-action 'self'"
-              : "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+            value: "base-uri 'self'; object-src 'none'; form-action 'self'",
           },
         ],
       },
@@ -558,6 +555,9 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
 # Reverse proxy trust — set to the number of trusted proxy hops (1 = ALB → App, 2 = ALB → Traefik → App); leave empty/unset when there is no proxy (headers not trusted), e.g. local dev
 TRUST_PROXY=
+
+# Injected by appCentral at runtime: the only origin allowed to frame this app (CSP frame-ancestors). Unset or invalid = framing denied.
+# APPCENTRAL_PORTAL_ORIGIN=https://appcentral-uat.cpfnet.gov.sg
 
 # Database (if using Drizzle — added by templatecentral:add (database))
 # DATABASE_URL=

@@ -23,6 +23,9 @@ CORS_ORIGINS=http://localhost:3000
 # Reverse proxy trust — comma-separated IPs/CIDRs (no hop count). One-hop ALB → App: ALB VPC CIDR (e.g. 10.0.0.0/8).
 # Two-hop ALB → Traefik → App: Traefik's AND the ALB's CIDRs. * only in closed networks. Empty for local dev.
 TRUST_PROXY=
+
+# Injected by appCentral at runtime: the only origin allowed to frame this app (CSP frame-ancestors). Unset or invalid = framing denied.
+# APPCENTRAL_PORTAL_ORIGIN=https://appcentral-uat.cpfnet.gov.sg
 ```
 
 ### `src/main.py`
@@ -339,7 +342,21 @@ def configure_exceptions(app: FastAPI) -> None:
 ### `src/core/security_headers.py`
 
 ```python
+import re
+
 from core.config import common_settings
+
+# Exactly one https origin: lowercase host labels, no path, port, wildcard, quotes,
+# whitespace or semicolons. Anything else falls back to deny, so the value can never
+# inject extra CSP directives or headers. fullmatch, not $, so a trailing newline fails.
+_PORTAL_ORIGIN_RE = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)+")
+
+
+def frame_ancestors(portal_origin: str) -> bytes | None:
+    """Return the validated APPCENTRAL_PORTAL_ORIGIN as a frame-ancestors source, else None."""
+    if _PORTAL_ORIGIN_RE.fullmatch(portal_origin):
+        return portal_origin.encode()
+    return None
 
 
 def _build() -> list[tuple[bytes, bytes]]:
@@ -348,6 +365,9 @@ def _build() -> list[tuple[bytes, bytes]]:
     # panes (most render via <iframe>, and browsers enforce these headers even for localhost).
     # Full protection still applies in every deployed environment (prod, uat).
     is_dev = common_settings.ENVIRONMENT == "dev"
+    # Only the appCentral portal (APPCENTRAL_PORTAL_ORIGIN, injected at runtime) may frame
+    # the app; unset or invalid denies all framing.
+    portal = frame_ancestors(common_settings.APPCENTRAL_PORTAL_ORIGIN)
     headers = [
         (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
         (b"x-content-type-options", b"nosniff"),
@@ -363,10 +383,14 @@ def _build() -> list[tuple[bytes, bytes]]:
             b"content-security-policy",
             b"base-uri 'self'; object-src 'none'"
             if is_dev
-            else b"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            else b"default-src 'none'; frame-ancestors "
+            + (portal or b"'none'")
+            + b"; base-uri 'none'; form-action 'none'",
         ),
     ]
-    if not is_dev:
+    # X-Frame-Options cannot express a single allowed origin; frame-ancestors supersedes
+    # it, so it is sent only when framing is denied outright.
+    if not is_dev and portal is None:
         headers.append((b"x-frame-options", b"DENY"))
     return headers
 
@@ -406,6 +430,9 @@ class CommonSettings(BaseSettings):
     # Closed set (parity with NestJS's z.enum): an unknown value such as "production" must
     # fail at boot, not slip past main.py's prod/uat check and run with auto-reload on.
     ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
+    # Injected by appCentral at runtime: the only origin allowed to frame this app.
+    # Validated in core/security_headers.py; unset or invalid denies all framing.
+    APPCENTRAL_PORTAL_ORIGIN: str = Field(default="")
 
 
 class APISettings(BaseSettings):
@@ -1097,6 +1124,39 @@ def test_health_returns_ok(client: TestClient) -> None:
 ```
 
 *(empty file)*
+
+### `test/test_utils/test_security_headers.py`
+
+```python
+import pytest
+
+from core.security_headers import frame_ancestors
+
+
+def test_frame_ancestors_accepts_portal_origin() -> None:
+    origin = "https://appcentral-uat.cpfnet.gov.sg"
+    assert frame_ancestors(origin) == origin.encode()
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "",
+        "*",
+        "http://appcentral.example.gov.sg",
+        "https://*.example.gov.sg",
+        "https://example.gov.sg:8443",
+        "https://example.gov.sg/path",
+        "https://Example.gov.sg",
+        "https://localhost",
+        "https://example.gov.sg; script-src 'unsafe-inline'",
+        "https://example.gov.sg\n",
+        "https://example.gov.sg\r\nX-Injected: 1",
+    ],
+)
+def test_frame_ancestors_rejects_invalid_origin(origin: str) -> None:
+    assert frame_ancestors(origin) is None
+```
 
 ### `test/test_utils/test_logging.py`
 

@@ -179,11 +179,12 @@ export const authClient = createAuthClient({
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
-Security-critical file. Write exactly as shown.
+Security-critical file. Write exactly as shown. It replaces the scaffold's `src/proxy.ts`; every response it returns still goes through `applyFrameProtection` (`src/lib/security/frame-protection.ts`, from the scaffold), so the anti-clickjacking headers stay on.
 
 ```ts
 import { getSessionCookie } from 'better-auth/cookies';
 import { API_ROUTES, PAGE_ROUTES } from '@/lib/constants/routes';
+import { applyFrameProtection } from '@/lib/security/frame-protection';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -202,6 +203,10 @@ function isPublicRoute(pathname: string): boolean {
 }
 
 export async function proxy(req: NextRequest) {
+  return applyFrameProtection(await route(req));
+}
+
+async function route(req: NextRequest): Promise<Response> {
   const { pathname } = req.nextUrl;
 
   // Short-circuit for public routes that are not the login page
@@ -688,7 +693,7 @@ Target: max 3 credential attempts per 15 minutes. better-auth's built-in limiter
 pnpm add @upstash/ratelimit @upstash/redis
 ```
 
-In `src/proxy.ts`, add a rate-limit check at the **top of `proxy()`**, before the public-route short-circuit. Placement matters: every `/api/auth/*` endpoint matches `PUBLIC_API_PREFIXES` (`/api/auth`), so the short-circuit returns `NextResponse.next()` before the auth call ever runs — a limiter placed after it would be unreachable.
+In `src/proxy.ts`, add a rate-limit check at the **top of `route()`**, before the public-route short-circuit. Placement matters: every `/api/auth/*` endpoint matches `PUBLIC_API_PREFIXES` (`/api/auth`), so the short-circuit returns `NextResponse.next()` before the auth call ever runs — a limiter placed after it would be unreachable.
 
 ```typescript
 import { Ratelimit } from '@upstash/ratelimit';
@@ -729,7 +734,7 @@ function getRateLimitKey(req: NextRequest): string | null {
   return entries[entries.length - hops] ?? null;
 }
 
-// At the top of proxy(), immediately after `const { pathname } = req.nextUrl;`
+// At the top of route(), immediately after `const { pathname } = req.nextUrl;`
 // and BEFORE the isPublicRoute() short-circuit (which would otherwise return
 // NextResponse.next() for /api/auth/* and skip this check entirely):
 if (RATE_LIMITED_AUTH_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {

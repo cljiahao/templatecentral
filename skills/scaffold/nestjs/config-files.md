@@ -467,6 +467,9 @@ CLIENT_URL=http://localhost:3000
 # trust all (closed networks only). Numeric hop counts (1/2) no longer work — fastify ≥5.12.1 treats a
 # number as trusting nothing (security advisory). Leave empty for local dev.
 TRUST_PROXY=
+
+# Injected by appCentral at runtime: the only origin allowed to frame this app (CSP frame-ancestors). Unset or invalid = framing denied.
+# APPCENTRAL_PORTAL_ORIGIN=https://appcentral-uat.cpfnet.gov.sg
 ```
 
 ### `.npmrc`

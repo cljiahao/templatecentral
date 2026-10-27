@@ -76,7 +76,7 @@ export const POST = withLogging(async (req) => {
 For access denied, log in `proxy.ts` (route protection middleware):
 
 ```ts
-// src/proxy.ts — inside proxy(), after session check
+// src/proxy.ts — inside route(), after session check
 if (!hasSession) {
   if (isApiRoute(pathname)) {
     logger.warn({ event: 'auth.access_denied', path: pathname }, 'Unauthenticated API request');
