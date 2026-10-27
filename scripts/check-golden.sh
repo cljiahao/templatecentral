@@ -19,6 +19,9 @@
 #   - a file listed in tests/golden/formatter-owned.txt is compared after running its formatter
 #     over both sides, and fails if the formatter is unavailable.
 #   Skipped as generated at runtime: see tests/golden/exceptions.txt.
+#   File modes are not compared: the golden records content hashes only, and a checkout can change
+#   modes (umask, a Windows working tree). The exec bits of the template scripts are checked against
+#   template.manifest by test-template-copy.sh and lint-skills.sh instead.
 # A path in tests/golden/exceptions.txt suppresses STALE-EXPECTED, MISSING, MISMATCH and EXTRA
 # for that path.
 # Prints MISMATCH|MISSING|EXTRA <combo> <path> per difference; exit 1 if any, else 0.
@@ -276,14 +279,19 @@ def golden_paths():
 
 
 bad = 0
-for rel, sha in sorted(golden_paths().items()):
+compared = 0
+golden = golden_paths()
+for rel, sha in sorted(golden.items()):
     if SKIP.search(rel):
         continue
+    compared += 1
     full = os.path.join(want, rel)
     other = os.path.join(got, rel)
     # The expected tree must still be what the golden records.
     if not os.path.isfile(full) or hashlib.sha256(open(full, "rb").read()).hexdigest() != sha:
         print(f"STALE-EXPECTED {combo} {rel}"); bad = 1
+    if os.path.islink(other):
+        print(f"SYMLINK {combo} {rel}"); bad = 1; continue
     if not os.path.isfile(other):
         print(f"MISSING {combo} {rel}"); bad = 1; continue
     if not os.path.isfile(full):
@@ -308,6 +316,16 @@ for rel, sha in sorted(golden_paths().items()):
         if re.fullmatch(placeholder_regex(text, rel in APPENDED), b.decode("utf-8", "replace"), re.S):
             continue
     print(f"MISMATCH {combo} {rel}"); bad = 1
+if compared == 0:
+    print(f"EMPTY {combo} no golden path was compared"); bad = 1
+# The enforcement-layer directories hold only seeded files: a hook or git-hook script that is not in the
+# golden was added from outside the scaffold. hooks/local/ is where a project keeps its own guards.
+for top in (".claude/hooks", ".lefthook"):
+    for dp, _, fs in os.walk(os.path.join(got, top)):
+        for f in fs:
+            rel = os.path.relpath(os.path.join(dp, f), got)
+            if rel not in golden and not rel.startswith(".claude/hooks/local/"):
+                print(f"EXTRA {combo} {rel}"); bad = 1
 sys.exit(bad)
 PY
 }
@@ -338,7 +356,7 @@ for combo in "${COMBOS[@]}"; do
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       case "$line" in
-        MISSING\ * | MISMATCH\ * | STALE-EXPECTED\ *) excepted "$combo" "${line##* }" || { echo "$line"; bad=1; } ;;
+        MISSING\ * | MISMATCH\ * | STALE-EXPECTED\ * | SYMLINK\ * | EXTRA\ *) excepted "$combo" "${line##* }" || { echo "$line"; bad=1; } ;;
         *) echo "$line"; bad=1 ;;
       esac
     done <<< "$report"

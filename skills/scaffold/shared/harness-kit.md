@@ -46,7 +46,7 @@ Run it once, before Step A and before the first `pnpm install`, with `<target>` 
 
 Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
-The script writes nothing when any check fails: the skill or target path is empty or not substituted, the target is not an existing directory, a template tree holds a symlink or an empty directory, the manifest is missing, empty or disagrees with the files in the trees (it names the files that differ, such as a stray `.DS_Store`), a file it would write already exists, or a directory it would write into is a symlink or not a directory. It then creates only the missing parent directories and copies each listed file with `cp`, giving the file the mode in the manifest. It never copies attributes onto the project root or an existing directory and never changes a mode it did not create. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user. After a failed copy the message lists the files already written. The script runs in `bash` through a quoted heredoc, so it behaves the same from bash or zsh and a refusal ends only that child process, never the caller's shell.
+The script writes nothing when any check fails: the skill or target path is empty or not substituted, the target is not an existing directory, a template tree holds a symlink or an empty directory, the manifest is missing, empty or disagrees with the files in the trees (it names the files that differ, such as a stray `.DS_Store`), a file it would write already exists, a directory it would write into is a symlink or not a directory, or an existing directory is not writable or a source file is not readable (checked for every file before the first write). It then creates only the missing parent directories and copies each listed file with `cp`, giving the file the mode in the manifest. It never copies attributes onto the project root or an existing directory and never changes a mode it did not create. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user. After a failed copy the message lists the files already written. The script runs in `bash` through a quoted heredoc, so it behaves the same from bash or zsh and a refusal ends only that child process, never the caller's shell.
 
 ```bash
 bash <<'TC_GUARD'
@@ -64,10 +64,13 @@ IFS= read -r -d '' TGT <<'TC_PATH'
 <target>
 TC_PATH
 TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
 case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
 case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
 case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
 case "$STACK" in
@@ -111,15 +114,26 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   done
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
-TAB=$(printf '\t')
+bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
+  [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
+  d=$p
+  if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
+    if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  done
+  if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
+  [ -w "$base" ] || echo "$base (not writable)"
+done | LC_ALL=C sort -u)
+[ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
 copied=""
 while IFS="$TAB" read -r mode t p; do
   d=${p%/*}
   if [ "$d" != "$p" ]; then
-    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; files may be partly written in $TGT.${NL}Files already written:$copied"
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
   fi
-  cp -- "$SK/$t/$p" "$TGT/$p" && chmod -- "$mode" "$TGT/$p" || stop "copy failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
   copied="$copied$NL$p"
+  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
 done <<TC_PLAN
 $plan
 TC_PLAN

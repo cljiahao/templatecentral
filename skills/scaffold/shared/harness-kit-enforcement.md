@@ -123,10 +123,13 @@ IFS= read -r -d '' TGT <<'TC_PATH'
 <target>
 TC_PATH
 TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
 case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
 case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
 case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
 case "$STACK" in
@@ -170,15 +173,26 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   done
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
-TAB=$(printf '\t')
+bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
+  [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
+  d=$p
+  if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
+    if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  done
+  if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
+  [ -w "$base" ] || echo "$base (not writable)"
+done | LC_ALL=C sort -u)
+[ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
 copied=""
 while IFS="$TAB" read -r mode t p; do
   d=${p%/*}
   if [ "$d" != "$p" ]; then
-    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; files may be partly written in $TGT.${NL}Files already written:$copied"
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
   fi
-  cp -- "$SK/$t/$p" "$TGT/$p" && chmod -- "$mode" "$TGT/$p" || stop "copy failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
   copied="$copied$NL$p"
+  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
 done <<TC_PLAN
 $plan
 TC_PLAN
@@ -200,16 +214,21 @@ IFS= read -r -d '' TGT <<'TC_PATH'
 <target>
 TC_PATH
 TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
 case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
 case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
 case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
 gate=.claude/ci-gates.sh
+if [ -L "$TGT/.claude" ] || [ -L "$TGT/$gate" ]; then stop "$TGT/.claude or $TGT/$gate is a symlink, so removing the file could delete something outside the project"; fi
 [ -e "$TGT/$gate" ] || { echo "Nothing to remove: $TGT/$gate does not exist."; exit 0; }
+[ -f "$TGT/$gate" ] || stop "$TGT/$gate is not a regular file"
 cmp -s -- "$SK/template/$gate" "$TGT/$gate" || stop "$TGT/$gate differs from the template, so it is not the file Step 0 placed"
-rm -f -- "$TGT/$gate"
+rm -f -- "$TGT/$gate" || stop "rm failed for $TGT/$gate"
 TC_RM
 ```
 

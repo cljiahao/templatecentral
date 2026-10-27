@@ -48,21 +48,24 @@ sys.exit(4)
 PY
 }
 
-# render_sc <snippet-text> <target> <stack> <ci> — substitute <skill-dir> and <target> byte for byte
+# render_sc <snippet-text> <target> <stack> <ci> [part] — substitute <skill-dir> and <target> byte for byte
 # (no sed, so any character in a path arrives untouched) and set the STACK and CI lines.
 render_sc() {
   printf '%s\n' "$1" | python3 -c '
 import sys
-sk, tgt, stack, ci = sys.argv[1:]
+sk, tgt, stack, ci = sys.argv[1:5]
+part = sys.argv[5] if len(sys.argv) > 5 else None
 out = []
 for line in sys.stdin.read().split("\n"):
     if line.startswith("STACK="):
         line = "STACK=" + stack
     elif line.startswith("CI="):
         line = "CI=" + ci
+    elif line.startswith("PART=") and part is not None:
+        line = "PART=" + part
     out.append(line)
 sys.stdout.write("\n".join(out).replace("<skill-dir>", sk).replace("<target>", tgt))
-' "$SK" "$2" "$3" "$4"
+' "$SK" "$2" "$3" "$4" ${5+"$5"}
 }
 
 # render <snippet-text> <target> <selector> — the older selector spelling, mapped onto STACK and CI:
@@ -315,13 +318,11 @@ refuses_raw guard_refuses_regular_file_target "$(render "$STEP0" "$T/regular-fil
 refuses_raw guard_refuses_missing_target "$(render "$STEP0" "$T/no/such/dir" "template template-ts")" "existing directory"
 refuses_raw guard_refuses_clash_with_stop_line "$(mkdir -p "$T/c1" && : > "$T/c1/.gitleaks.toml" && render "$STEP0" "$T/c1" "template template-ts")" ".gitleaks.toml"
 
-# a cp failure stops the step, says files may be partly written, and ends with the stop line
+# an unwritable project root is caught by the pre-check, before any write
 if [[ "$(id -u)" != 0 ]]; then
   tgt="$T/ro"; mkdir -p "$tgt"; chmod a-w "$tgt"
-  refuses_raw copy_failure_stops_with_partial_write_warning "$(render "$STEP0" "$tgt" "template template-ts")" "partly written"
+  refuses_raw readonly_root_refused_before_writing "$(render "$STEP0" "$tgt" "template template-ts")" "not writable"
   chmod u+w "$tgt"
-else
-  echo "SKIP: cp failure test (running as root)"
 fi
 
 # a symlink or an empty directory inside a template tree is refused, because find -type f misses both
@@ -420,17 +421,28 @@ check "" "$bad" "read_only_source_yields_manifest_modes"
 check 1 "$([[ -w "$tgt/.claude/hooks" ]] && echo 1 || echo 0)" "read_only_source_leaves_directories_writable"
 chmod -R u+w "$sk/shared"
 
-# the failure state is reported: files written before a cp failure are listed, and nothing else is written
-if [[ "$(id -u)" != 0 ]]; then
-  tgt="$T/partial"; mkdir -p "$tgt/.lefthook"; chmod a-w "$tgt/.lefthook"
-  out=$(run_step0 "$tgt" ts); ec=$?
-  chmod u+w "$tgt/.lefthook"
-  check 1 "$([[ $ec -ne 0 && "$out" == *"partly written"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "cp_failure_reports_state: nonzero, says partly written, ends with the stop line"
+# a failure after the pre-checks reports the state: cp and chmod are stubbed to fail on a chosen call
+mkdir -p "$T/stubs"
+# shellcheck disable=SC2016  # the stubs are scripts; their variables expand when they run
+printf '#!/usr/bin/env bash\nn=$(cat "$STUB_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STUB_COUNT"\nif [ "$n" -eq "$STUB_FAIL_AT" ]; then echo "stub cp failure" >&2; exit 1; fi\nexec /bin/cp "$@"\n' > "$T/stubs/cp"
+# shellcheck disable=SC2016
+printf '#!/usr/bin/env bash\nn=$(cat "$STUB_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STUB_COUNT"\nif [ "$n" -eq "$STUB_FAIL_AT" ]; then echo "stub chmod failure" >&2; exit 1; fi\nexec /bin/chmod "$@"\n' > "$T/stubs/chmod"
+chmod +x "$T/stubs/cp" "$T/stubs/chmod"
+for which in cp chmod; do
+  tgt="$T/stub-$which"; mkdir -p "$tgt"; rm -f "$T/stub-count"
+  out=$(PATH="$T/stubs:$PATH" STUB_COUNT="$T/stub-count" STUB_FAIL_AT=3 bash -c "$(render_sc "$STEP0" "$tgt" nextjs "")" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"partly written"* && "$out" == *"may also have written"* || "$out" == *"chmod failed"* ]] && echo 1 || echo 0)" "stub_${which}_failure_reports_state: nonzero and says so ($out)"
+  check 1 "$([[ "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stub_${which}_failure_reports_state: ends with the stop line"
   written=$(cd "$tgt" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
   listed_out=$(printf '%s\n' "$out" | sed -n '/^Files already written:/,/^STOP/p' | grep -v '^Files already\|^STOP' | grep . | LC_ALL=C sort)
-  check "$written" "$listed_out" "cp_failure_reports_state: the reported files are exactly the files on disk"
-  check 1 "$([[ ! -e "$tgt/.lefthook/commit-msg.sh" ]] && echo 1 || echo 0)" "cp_failure_reports_state: the read-only directory was not written"
-fi
+  if [[ $which == cp ]]; then
+    # the third cp is the failed one: two files are listed and two are on disk (cp wrote nothing for the third)
+    check "$written" "$listed_out" "stub_cp_failure_reports_state: the reported files are exactly the files on disk"
+  else
+    # the third chmod fails after its file was copied: the file is listed, so listed equals on disk
+    check "$written" "$listed_out" "stub_chmod_failure_reports_state: a file whose chmod failed is still listed"
+  fi
+done
 
 # hostile skill-dir paths
 # shellcheck disable=SC2016  # the dollar sign is part of the hostile directory name
@@ -468,6 +480,100 @@ check 1 "$([[ ! -e "$tgt/.claude/ci-gates.sh" && -e "$tgt/.claude/verify-harness
 sk=$(alt_skill dsstore); printf 'x\n' > "$sk/shared/template/.DS_Store"; mkdir -p "$T/ds"
 saved=$SK; SK=$sk; out=$(bash -c "$(render "$STEP0" "$T/ds" "template template-ts")" 2>&1); SK=$saved
 check 1 "$([[ "$out" == *".DS_Store"* ]] && echo 1 || echo 0)" "mismatch_refusal_names_the_file ($out)"
+
+# ── round 5: seed-neither symlinks, pre-checks, PART, hostile-name matrix ─────
+refuses_dir() { # refuses_dir <name> <snippet text> <message substring> <dir that must stay empty of new files>
+  refuses_raw "$1" "$2" "$3"
+}
+# the seed-neither fence follows no symlink
+tgt="$T/sl1"; mkdir -p "$tgt" "$T/sl1-real/.claude"; cp "$SHARED/template/.claude/ci-gates.sh" "$T/sl1-real/.claude/ci-gates.sh"
+ln -s "$T/sl1-real/.claude" "$tgt/.claude"
+refuses_raw seed_neither_refuses_symlinked_claude_dir "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+check 1 "$([[ -f "$T/sl1-real/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_symlinked_claude_dir: the link target is untouched"
+tgt="$T/sl2"; mkdir -p "$tgt/.claude"; cp "$SHARED/template/.claude/ci-gates.sh" "$T/sl2-real.sh"; ln -s "$T/sl2-real.sh" "$tgt/.claude/ci-gates.sh"
+refuses_raw seed_neither_refuses_symlinked_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+check 1 "$([[ -f "$T/sl2-real.sh" && -L "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_symlinked_gate: the link and its target are untouched"
+tgt="$T/sl3"; mkdir -p "$tgt/.claude"; ln -s "$T/does-not-exist" "$tgt/.claude/ci-gates.sh"
+refuses_raw seed_neither_refuses_dangling_symlink_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+check 1 "$([[ -L "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_dangling_symlink_gate: the link is still there"
+tgt="$T/sl4"; mkdir -p "$tgt/.claude/ci-gates.sh"
+refuses_raw seed_neither_refuses_a_directory_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "not a regular file"
+
+# an unwritable existing directory is caught before anything is written
+if [[ "$(id -u)" != 0 ]]; then
+  tgt="$T/prew"; mkdir -p "$tgt/.lefthook"; chmod 0555 "$tgt/.lefthook"
+  refuses_raw prewrite_check_refuses_unwritable_dir "$(render_sc "$STEP0" "$tgt" nextjs "")" "not writable"
+  check 0 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "prewrite_check_refuses_unwritable_dir: zero files written"
+  chmod u+w "$tgt/.lefthook"
+  sk=$(alt_skill unreadable); chmod 000 "$sk/shared/template/.gitleaks.toml"; mkdir -p "$T/prer"
+  saved=$SK; SK=$sk
+  refuses_raw prewrite_check_refuses_unreadable_source "$(render_sc "$STEP0" "$T/prer" nextjs "")" "unreadable"
+  SK=$saved
+  check 0 "$(find "$T/prer" -type f | wc -l | tr -d ' ')" "prewrite_check_refuses_unreadable_source: zero files written"
+  chmod 644 "$sk/shared/template/.gitleaks.toml"
+fi
+
+# PART and CI must agree with the fence they are in
+for combo in "STEP0|github|base|CI must stay empty" "STEP0||ci|unknown CI" "CI|github|base|CI must stay empty" "CI||ci|unknown CI" "STEP0||weird|unknown PART" "CI|github|weird|unknown PART"; do
+  IFS='|' read -r which ci part msg <<<"$combo"
+  snip=$STEP0; [[ $which == CI ]] && snip=$CI_SNIPPET
+  tgt="$T/part-$which-$part-$ci"; mkdir -p "$tgt"
+  refuses_raw "part_mismatch[$which ci=$ci part=$part]" "$(render_sc "$snip" "$tgt" nextjs "$ci" "$part")" "$msg"
+  check 0 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "part_mismatch[$which ci=$ci part=$part]: nothing written"
+done
+
+# a relative path that starts with a dash is not read as an option
+mkdir -p "$T/dsh/-sk"; cp -Rp "$SHARED" "$T/dsh/-sk/shared"; mkdir -p "$T/dsh/-tgt"
+saved=$SK; SK="-sk"
+out=$(cd "$T/dsh" && bash -c "$(render_sc "$STEP0" "-tgt" nextjs "")" 2>&1); ec=$?
+SK=$saved
+check 0 "$ec" "dash_skill_dir_and_target: exits 0 ($out)"
+check 1 "$([[ -f "$T/dsh/-tgt/.gitleaks.toml" ]] && echo 1 || echo 0)" "dash_skill_dir_and_target: copied"
+
+# hostile names for the skill dir and the target, both stacks, both fences
+NL_=$'\n'
+# shellcheck disable=SC2016  # the dollar signs and backticks are part of the hostile names
+HOSTILE=("sp ace" "q'uote" 'dollar$x$(touch PWN)' 'back`touch PWN`tick' 'dq"uote' $'ta\tb' "new${NL_}line" 'hash#tag' 'amp&semi;' 'ünï-日本' '*?[a]' '~' '{a,b}' 'bang!' '  lead and trail  ')
+run="$T/run"; mkdir -p "$run"
+for stack in nextjs fastapi; do
+  rm -rf "$T/ref0" "$T/refci"; mkdir -p "$T/ref0" "$T/refci"
+  bash -c "$(render_sc "$STEP0" "$T/ref0" "$stack" "")" >/dev/null 2>&1
+  bash -c "$(render_sc "$CI_SNIPPET" "$T/refci" "$stack" github)" >/dev/null 2>&1
+  n0=$(find "$T/ref0" -type f | wc -l | tr -d ' '); nci=$(find "$T/refci" -type f | wc -l | tr -d ' ')
+  for kind in TGT SK; do
+    for name in "${HOSTILE[@]}"; do
+      for fence in STEP0 CI; do
+        rm -rf "$T/hm"; mkdir -p "$T/hm"
+        if [[ $kind == TGT ]]; then
+          tgt="$T/hm/$name"; mkdir -p "$tgt"; sk=$SK
+        else
+          sk="$T/hm/$name"; mkdir -p "$sk"; cp -Rp "$SHARED" "$sk/shared"; tgt="$T/hm-tgt"; rm -rf "$tgt"; mkdir -p "$tgt"
+        fi
+        saved=$SK; SK=$sk
+        if [[ $fence == STEP0 ]]; then snip=$STEP0; ci=""; want=$n0; else snip=$CI_SNIPPET; ci=github; want=$nci; fi
+        out=$(cd "$run" && bash -c "$(render_sc "$snip" "$tgt" "$stack" "$ci")" 2>&1); ec=$?
+        SK=$saved
+        got=$(find "$tgt" -type f | wc -l | tr -d ' ')
+        label="hostile_${kind}[$stack/$fence/$(printf '%q' "$name")]"
+        if [[ "$name" == *$'\n'* ]]; then
+          check 1 "$([[ $ec -ne 0 && $got == 0 ]] && echo 1 || echo 0)" "$label: refused with nothing written"
+        else
+          check 1 "$([[ $ec -eq 0 && $got == "$want" ]] && echo 1 || echo 0)" "$label: copied $want files (exit $ec, got $got: $out)"
+        fi
+        check 0 "$([[ -e "$run/PWN" || -e "$T/PWN" || -e "$tgt/PWN" ]] && echo 1 || echo 0)" "$label: no command ran"
+      done
+    done
+  done
+done
+# relative names that need the ./ prefix or a literal tilde
+for name in '-dash' '~'; do
+  for fence in STEP0 CI; do
+    rm -rf "$run"; mkdir -p "$run/$name"
+    snip=$STEP0; ci=""; [[ $fence == CI ]] && { snip=$CI_SNIPPET; ci=github; }
+    out=$(cd "$run" && bash -c "$(render_sc "$snip" "$name" nextjs "$ci")" 2>&1); ec=$?
+    check 1 "$([[ $ec -eq 0 && -n "$(find "$run/$name" -type f | head -1)" ]] && echo 1 || echo 0)" "hostile_relative_target[$name/$fence]: copied ($out)"
+  done
+done
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')

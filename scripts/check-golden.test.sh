@@ -155,6 +155,39 @@ chmod 644 "$T/xtree/.gitleaks.toml"
 check 1 "$([[ $ec -ne 0 && "$out" != *"OK fastapi-github"* ]] && echo 1 || echo 0)" "tree_real_exception_after_excepted_line_fails ($ec)"
 case "$out" in *"crashed (exit 3)"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: tree_real_exception_is_reported_as_a_crash [$out]" ;; esac
 
+# a compare that exits 1 with no report is a failure, not an OK
+mkdir -p "$T/fakepy2"
+cat > "$T/fakepy2/python3" <<SH
+#!/usr/bin/env bash
+if [[ "\$1" == "-" ]]; then
+  src=\$(cat)
+  if grep -q 'def golden_paths' <<<"\$src"; then exit 1; fi
+  exec $(command -v python3) - "\${@:2}" <<<"\$src"
+fi
+exec $(command -v python3) "\$@"
+SH
+chmod +x "$T/fakepy2/python3"
+PATH="$T/fakepy2:$PATH" bash "$CHECK" --tree "$T/ctree" fastapi-github > /dev/null 2>&1; check 1 $? "tree_exit_1_without_a_report_fails"
+
+# a golden whose entries are all skipped compares nothing and must not be OK
+g=$(fresh_golden skipall); printf '# t\n%s  pnpm-lock.yaml\n' "$(printf x | shasum -a 256 | cut -d' ' -f1)" > "$g/fastapi-github.sha256"
+out=$(bash "$CHECK" --golden-dir "$g" --tree "$T/ctree" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_golden_with_nothing_to_compare_fails: exit"
+case "$out" in *"EMPTY fastapi-github"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: tree_golden_with_nothing_to_compare_fails: no EMPTY line [$out]" ;; esac
+
+# a symlink in place of a golden file is rejected, and an extra file among the hooks is reported
+scaffold_tree fastapi github "$T/ltree"
+mv "$T/ltree/.gitleaks.toml" "$T/real-gitleaks.toml"; ln -s "$T/real-gitleaks.toml" "$T/ltree/.gitleaks.toml"
+out=$(bash "$CHECK" --tree "$T/ltree" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_symlink_in_place_of_a_file_fails: exit"
+check "SYMLINK fastapi-github .gitleaks.toml" "$(grep '^SYMLINK' <<< "$out")" "tree_symlink_in_place_of_a_file_fails: SYMLINK line"
+scaffold_tree fastapi github "$T/etree"
+printf 'x\n' > "$T/etree/.claude/hooks/extra-hook.sh"; mkdir -p "$T/etree/.claude/hooks/local"; printf 'x\n' > "$T/etree/.claude/hooks/local/mine.sh"; printf 'x\n' > "$T/etree/.lefthook/extra.sh"
+out=$(bash "$CHECK" --tree "$T/etree" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_extra_hook_fails: exit"
+check "EXTRA fastapi-github .claude/hooks/extra-hook.sh
+EXTRA fastapi-github .lefthook/extra.sh" "$(grep '^EXTRA' <<< "$out")" "tree_extra_hook_fails: EXTRA lines (hooks/local is the project's own and is not reported)"
+
 # item 16: a placeholders.env line without = fails, and the test overrides only work with TC_TEST=1
 g=$(fresh_golden badph); printf 'NOEQUALS\n' > "$g/placeholders.env"
 bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 1 $? "placeholders_env_line_without_equals_fails"
