@@ -125,7 +125,7 @@ bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
     if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
   done
   if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
-  [ -w "$base" ] || echo "$base (not writable)"
+  if [ ! -w "$base" ] || [ ! -x "$base" ]; then echo "$base (not writable or not searchable)"; fi
 done | LC_ALL=C sort -u)
 [ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
 copied=""

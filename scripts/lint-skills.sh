@@ -574,6 +574,11 @@ check_migrate_hook_inventory_matches_kit() {
       grep -qF -- "$tok" "$doc" 2>/dev/null || missing+="$doc — missing template anchor $tok"$'\n'
     done
   done
+  # The Step B3 copy fence and the seed-neither fence assume Step 0 ran, so each doc that describes
+  # them states that they are scaffold-only and that a migration copies the CI file by hand.
+  for doc in "$migrate" "$SKILLS_DIR/migrate/general/phase-5-health-check.md" "$kit_dir/harness-kit-enforcement.md"; do
+    grep -qF -- 'scaffold-only' "$doc" 2>/dev/null || missing+="$doc — missing the scaffold-only note"$'\n'
+  done
   report "$missing" \
     "migrate's hook/file inventory has drifted from the template trees — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
     "migrate's phase-4 names every hook file in the template trees' .claude/hooks/ and the .claude/comment-hygiene-patterns.txt path"
@@ -1209,12 +1214,12 @@ check_step0_before_install() {
   # Step 0 copies lefthook.yml. A `pnpm install` (whose prepare script runs `lefthook install`) or a
   # `lefthook install` that runs first writes a stub lefthook.yml, and Step 0's guard then refuses the
   # scaffold. So in the TS stack files the first install must come after the Step 0 line. FastAPI has
-  # no install that writes a lefthook config (its `lefthook install` is a later Step B2 note), so for it
-  # the check only requires the Step 0 line. Every stack file must name its own STACK value, because
-  # the Step 0 and Step B3 fences derive the template trees from it. TIMELESS: the order is a property
-  # of the guard.
+  # no install that writes a lefthook config (its `lefthook install` is a later Step B2 note), so its
+  # Step 0 line is anchored to the step 6b section instead, and still ordered before any install it
+  # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
+  # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst st vals step0_line
+  local f bad="" step0 inst st vals step0_line h6b hnext
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1224,6 +1229,13 @@ check_step0_before_install() {
     [[ "$step0_line" == *"STACK=$st"* ]] || bad+="$f — must name STACK=$st on the Step 0 line"$'\n'
     step0=$(grep -nE 'Step \*\*0\*\*' "$f" | head -n 1 | cut -d: -f1 || true)
     inst=$(grep -nE 'pnpm install|lefthook install' "$f" | head -n 1 | cut -d: -f1 || true)
+    if [[ "$st" == fastapi && -n "$step0" ]]; then
+      h6b=$(grep -nE '^### 6b\.' "$f" | head -n 1 | cut -d: -f1 || true)
+      hnext=$(awk -v h="${h6b:-0}" 'NR > h && /^### / { print NR; exit }' "$f")
+      if [[ -z "$h6b" || "$step0" -le "$h6b" || ( -n "$hnext" && "$step0" -ge "$hnext" ) ]]; then
+        bad+="$f:$step0 — the Step 0 line must be in the step 6b section"$'\n'
+      fi
+    fi
     if [[ -z "$step0" ]]; then
       bad+="$f — no kit Step 0 instruction"$'\n'
     elif [[ -n "$inst" && "$inst" -lt "$step0" ]]; then

@@ -188,6 +188,16 @@ check 1 "$ec" "tree_extra_hook_fails: exit"
 check "EXTRA fastapi-github .claude/hooks/extra-hook.sh
 EXTRA fastapi-github .lefthook/extra.sh" "$(grep '^EXTRA' <<< "$out")" "tree_extra_hook_fails: EXTRA lines (hooks/local is the project's own and is not reported)"
 
+# a symlinked directory is as bad as a symlinked file
+scaffold_tree fastapi github "$T/dtree1"; mkdir -p "$T/outside"; ln -s "$T/outside" "$T/dtree1/.claude/hooks/evil"
+out=$(bash "$CHECK" --tree "$T/dtree1" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_symlinked_dir_inside_hooks_fails: exit"
+check "SYMLINK fastapi-github .claude/hooks/evil" "$(grep '^SYMLINK' <<< "$out")" "tree_symlinked_dir_inside_hooks_fails: SYMLINK line"
+scaffold_tree fastapi github "$T/dtree2"; cp -R "$T/dtree2/.claude/hooks" "$T/real-hooks"; rm -rf "$T/dtree2/.claude/hooks"; ln -s "$T/real-hooks" "$T/dtree2/.claude/hooks"
+out=$(bash "$CHECK" --tree "$T/dtree2" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_hooks_dir_replaced_by_symlink_fails: exit"
+check "SYMLINK fastapi-github .claude/hooks" "$(grep '^SYMLINK' <<< "$out" | sort -u)" "tree_hooks_dir_replaced_by_symlink_fails: SYMLINK .claude/hooks reported once"
+
 # item 16: a placeholders.env line without = fails, and the test overrides only work with TC_TEST=1
 g=$(fresh_golden badph); printf 'NOEQUALS\n' > "$g/placeholders.env"
 bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 1 $? "placeholders_env_line_without_equals_fails"

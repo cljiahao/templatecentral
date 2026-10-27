@@ -281,6 +281,26 @@ def golden_paths():
 bad = 0
 compared = 0
 golden = golden_paths()
+reported = set()
+
+
+def symlink_in_chain(rel):
+    """The first directory above rel (from the top) that is a symlink in the project, or None."""
+    parts = rel.split("/")[:-1]
+    for n in range(1, len(parts) + 1):
+        d = "/".join(parts[:n])
+        if os.path.islink(os.path.join(got, d)):
+            return d
+    return None
+
+
+def report_symlink(path):
+    global bad
+    if path not in reported:
+        reported.add(path)
+        print(f"SYMLINK {combo} {path}")
+        bad = 1
+
 for rel, sha in sorted(golden.items()):
     if SKIP.search(rel):
         continue
@@ -290,8 +310,11 @@ for rel, sha in sorted(golden.items()):
     # The expected tree must still be what the golden records.
     if not os.path.isfile(full) or hashlib.sha256(open(full, "rb").read()).hexdigest() != sha:
         print(f"STALE-EXPECTED {combo} {rel}"); bad = 1
+    link = symlink_in_chain(rel)
+    if link:
+        report_symlink(link); continue
     if os.path.islink(other):
-        print(f"SYMLINK {combo} {rel}"); bad = 1; continue
+        report_symlink(rel); continue
     if not os.path.isfile(other):
         print(f"MISSING {combo} {rel}"); bad = 1; continue
     if not os.path.isfile(full):
@@ -321,7 +344,12 @@ if compared == 0:
 # The enforcement-layer directories hold only seeded files: a hook or git-hook script that is not in the
 # golden was added from outside the scaffold. hooks/local/ is where a project keeps its own guards.
 for top in (".claude/hooks", ".lefthook"):
-    for dp, _, fs in os.walk(os.path.join(got, top)):
+    if os.path.islink(os.path.join(got, top)):
+        report_symlink(top)
+    for dp, ds, fs in os.walk(os.path.join(got, top)):
+        for d in ds:
+            if os.path.islink(os.path.join(dp, d)):
+                report_symlink(os.path.relpath(os.path.join(dp, d), got))
         for f in fs:
             rel = os.path.relpath(os.path.join(dp, f), got)
             if rel not in golden and not rel.startswith(".claude/hooks/local/"):

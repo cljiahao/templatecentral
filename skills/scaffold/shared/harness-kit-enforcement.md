@@ -105,7 +105,7 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 
 **Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Edit only the `STACK=` line (it ships empty; use the same value as in Step 0, and the script refuses when `lefthook.yml` in the project is not the one that value's Step 0 copied) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0.
+Copy the CI file for the picked host. Edit only the `STACK=` line (it ships empty; use the same value as in Step 0, and the script refuses when `lefthook.yml` in the project is not the one that value's Step 0 copied) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0. This fence and the seed-neither fence below are scaffold-only: the first refuses unless `lefthook.yml` is the copy Step 0 made, and the second assumes Step 0 placed `.claude/ci-gates.sh`. `migrate` copies the CI file by hand (see its Phase 4 Step 4d).
 
 ```bash
 bash <<'TC_GUARD'
@@ -184,7 +184,7 @@ bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
     if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
   done
   if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
-  [ -w "$base" ] || echo "$base (not writable)"
+  if [ ! -w "$base" ] || [ ! -x "$base" ]; then echo "$base (not writable or not searchable)"; fi
 done | LC_ALL=C sort -u)
 [ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
 copied=""

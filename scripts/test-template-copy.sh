@@ -607,6 +607,52 @@ mkdir -p "$T/mis2"
 refuses_raw ci_without_step0_refused "$(render_sc "$CI_SNIPPET" "$T/mis2" nextjs github)" "does not match"
 check 0 "$(find "$T/mis2" -type f | wc -l | tr -d ' ')" "ci_without_step0_refused: nothing written"
 
+# ── round 6: searchable directories, rm and mkdir failures, relative targets, manifest message ──
+if [[ "$(id -u)" != 0 ]]; then
+  # a directory that is writable but not searchable is refused before any write
+  for pair in ".lefthook:0666" ".claude:0600"; do
+    d=${pair%%:*}; m=${pair##*:}
+    tgt="$T/nosearch$d"; mkdir -p "$tgt/$d"; chmod "$m" "$tgt/$d"
+    refuses_raw "prewrite_check_refuses_unsearchable_dir[$d $m]" "$(render_sc "$STEP0" "$tgt" nextjs "")" "not writable"
+    chmod 0755 "$tgt/$d"
+    check 0 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "prewrite_check_refuses_unsearchable_dir[$d $m]: zero files written"
+  done
+  # the seed-neither fence reports a failed rm and leaves the gate in place
+  tgt="$T/rmfail"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null; chmod 0555 "$tgt/.claude"
+  refuses_raw seed_neither_reports_a_failed_rm "$(render_sc "$NEITHER" "$tgt" nextjs "")" "rm failed"
+  check 1 "$([[ -f "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_reports_a_failed_rm: the gate is still there"
+  chmod 0755 "$tgt/.claude"
+fi
+# a failing mkdir after the pre-checks stops with the state report (mkdir stubbed to fail)
+printf '#!/usr/bin/env bash\necho "stub mkdir failure" >&2\nexit 1\n' > "$T/stubs/mkdir"; chmod +x "$T/stubs/mkdir"
+for which in STEP0 CI; do
+  tgt="$T/mkfail-$which"; mkdir -p "$tgt"
+  snip=$STEP0; ci=""
+  if [[ $which == CI ]]; then snip=$CI_SNIPPET; ci=github; bash -c "$(render_sc "$STEP0" "$tgt" nextjs "")" >/dev/null 2>&1; fi
+  before=$(find "$tgt" -type f | wc -l | tr -d ' ')
+  out=$(PATH="$T/stubs:$PATH" bash -c "$(render_sc "$snip" "$tgt" nextjs "$ci")" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"mkdir failed"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "mkdir_failure_stops[$which]: nonzero, names mkdir, ends with the stop line ($out)"
+  check "$before" "$(find "$tgt" -type f | wc -l | tr -d ' ')" "mkdir_failure_stops[$which]: nothing was written"
+done
+# a relative target is prefixed with ./ (the refusal for a missing one shows it), and a copy into -proj lands in ./-proj
+for which in STEP0 CI; do
+  snip=$STEP0; ci=""; [[ $which == CI ]] && { snip=$CI_SNIPPET; ci=github; }
+  out=$(cd "$T" && bash -c "$(render_sc "$snip" "-nodir" nextjs "$ci")" 2>&1)
+  check 1 "$([[ "$out" == *"./-nodir is not an existing directory"* ]] && echo 1 || echo 0)" "relative_target_gets_dot_slash[$which] ($out)"
+done
+mkdir -p "$T/relp/-proj"
+(cd "$T/relp" && bash -c "$(render_sc "$STEP0" "-proj" nextjs "")" >/dev/null 2>&1 && bash -c "$(render_sc "$CI_SNIPPET" "-proj" nextjs github)" >/dev/null 2>&1)
+check 1 "$([[ -f "$T/relp/-proj/.gitleaks.toml" && -f "$T/relp/-proj/.github/workflows/ci.yml" ]] && echo 1 || echo 0)" "relative_target_dash_proj: both fences wrote into ./-proj"
+# the manifest check has its own message
+sk=$(alt_skill mfmissing); rm "$sk/shared/template.manifest"; mkdir -p "$T/mf1"
+saved=$SK; SK=$sk
+refuses_raw missing_manifest_message "$(render_sc "$STEP0" "$T/mf1" nextjs "")" "missing or empty"
+SK=$saved
+sk=$(alt_skill mfempty); : > "$sk/shared/template.manifest"; mkdir -p "$T/mf2"
+saved=$SK; SK=$sk
+refuses_raw empty_manifest_message "$(render_sc "$STEP0" "$T/mf2" nextjs "")" "missing or empty"
+SK=$saved
+
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')
 check "" "$bad" "template_sh_parses: bash -n over every template .sh"

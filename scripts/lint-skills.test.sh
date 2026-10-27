@@ -284,6 +284,24 @@ PY
 }
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
 
+# the B3 copy fence and the seed-neither fence are scaffold-only; the migrate docs and Step B3 say so
+for doc in "migrate/general/phase-4-upgrade.md" "migrate/general/phase-5-health-check.md" "scaffold/shared/harness-kit-enforcement.md"; do
+  fn="no_scaffold_only_$(echo "$doc" | tr -c 'a-z0-9\n' '_')"
+  eval "$fn() { strip_token 'scaffold-only' 'zz-gone' \"\$S/$doc\"; }"
+  fails "migrate_inventory_fails_when_scaffold_only_note_deleted[$doc]" "migrate hook inventory matches" "$fn" "$doc — missing the scaffold-only note"
+done
+fastapi_step0_outside_6b() { python3 - "$S/scaffold/fastapi/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+lines = open(p, encoding="utf-8").read().split("\n")
+i = next(n for n, l in enumerate(lines) if "Step **0**" in l)
+moved = lines.pop(i)
+lines += ["", moved, ""]
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+fails fastapi_step0_must_sit_in_step_6b "Scaffold runs kit Step 0 before the first install" fastapi_step0_outside_6b "Step 0 line must be in the step 6b section"
+
 # ── scan() rules cover template files ────────────────────────────────────────
 fails scan_bcrypt_includes_templates "bcrypt references" bcrypt_in_template "bcrypt"
 fails scan_version_pins_includes_templates "Version pins in skills" pin_in_template "left-pad@1.3.0"
