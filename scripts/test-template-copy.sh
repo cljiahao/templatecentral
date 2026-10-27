@@ -88,7 +88,7 @@ STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
 CI_SNIPPET=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 1) || CI_SNIPPET=""
 check 1 "$([[ -n "$STEP0" && -n "$CI_SNIPPET" ]] && echo 1 || echo 0)" "copy instructions found in the kit markdown (Step 0, Step B3 CI)"
 
-stack_of() { [[ "$1" == py ]] && echo fastapi || echo nextjs; }
+stack_of() { if [[ "$1" == py ]]; then echo fastapi; else echo nextjs; fi; }
 run_step0() { # run_step0 <target> <variant ts|py>
   bash -c "$(render_sc "$STEP0" "$1" "$(stack_of "$2")" "")" 2>&1
 }
@@ -148,7 +148,7 @@ check "" "$(cat "$T/manifest.diff")" "manifest_matches_tree"
 
 # ── template_sh_executable ───────────────────────────────────────────────────
 bad=$(cd "$REPO_ROOT" && git ls-files -s -- 'skills/scaffold/shared/template*' | awk '$4 ~ /\.sh$/ && $1 != "100755" { print $4 }')
-count=$(cd "$REPO_ROOT" && git ls-files -- 'skills/scaffold/shared/template*' | grep -c '\.sh$' || true)
+count=$(git -C "$REPO_ROOT" ls-files -- 'skills/scaffold/shared/template*' | grep -c '\.sh$' || true)
 check "" "$bad" "template_sh_executable: git mode 100755 for every template .sh"
 check 1 "$([[ "$count" -gt 0 ]] && echo 1 || echo 0)" "template_sh_executable: at least one template .sh is tracked"
 
