@@ -19,8 +19,8 @@ Seam: `skills/add/` directory structure supports new capability directories.
 
 ## Automated Ecosystem Refresh
 
-Scheduled scan of framework release notes → auto-PR to update skill content and bump `audit-ecosystem-research.md` cache.
-Seam: `.github/workflows/` directory; `scripts/lint-skills.sh` and `scripts/validate-manifest.sh` modular check system.
+Shipped, deliberately disabled. `.github/workflows/ecosystem-refresh.yml` scans framework release notes and opens a PR that updates the `audit-ecosystem-research.md` cache (a read-only research job, then a publish job with no LLM). The maintainer runs the refresh manually (Step 0b of `.claude/skills/tc-audit/implementation.md`) and keeps the workflow disabled.
+Seam: `.github/workflows/`; `scripts/lint-skills.sh` and `scripts/validate-manifest.sh` modular check system.
 
 ## Harness Promotion
 
@@ -51,11 +51,9 @@ Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. 
 
 The `@1.0.0` two-pass migrate flow for projects with minimal harness drift can be significantly shorter. Evaluate a fast-path that skips Phase 3–4 for projects that only need harness seeding.
 
-### 4. NestJS tsconfig `strict: true` — enabled, verified
+### 4. Done: NestJS `strict: true`
 
-Enabled as `strict: true` with `strictPropertyInitialization: false` (the NestJS-idiomatic config — DTO/entity classes use declaration-only properties that full `strict` would reject). Pending a `scaffold-verify` (or manual scaffold) build confirming the generated project compiles clean under strict; if it doesn't, fix the seeded source or narrow the strict flags.
-
-> **Status (2026-10-09):** verified — the seeded NestJS sources pass `tsc --noEmit` under `strict: true`, and the unit and e2e suites pass. The one failure found was unrelated to strict: fastify 5.12.1 dropped numeric `trustProxy` from its types (X-Forwarded-* spoofing security advisory), fixed in `main.ts`'s `resolveTrustProxy`.
+Enabled as `strict: true` with `strictPropertyInitialization: false` (the NestJS-idiomatic config: DTO/entity classes use declaration-only properties that full `strict` would reject). The seeded sources pass `tsc --noEmit` and the unit and e2e suites under it.
 
 ### 5. New frameworks under evaluation
 

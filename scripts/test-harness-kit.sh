@@ -904,11 +904,22 @@ expect_deps 1 "pip-audit, multi-line skip_reason stays on one line" requirements
 
 # Package-manager-native suppressions bypass the expiring allowlist and are rejected.
 for native in 'pnpm-workspace.yaml|audit:\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|audit: { ignore: [GHSA-aaaa-bbbb-cccc] }\n' \
+  'pnpm-workspace.yaml|audit:\n  { ignore: [GHSA-aaaa-bbbb-cccc] }\n' \
+  'pnpm-workspace.yaml|"audit":\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|\x27audit\x27:\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|"audit": { "ignore": ["GHSA-aaaa-bbbb-cccc"] }\n' \
+  'pnpm-workspace.yaml|{ audit: { ignore: [GHSA-aaaa-bbbb-cccc] } }\n' \
   'pnpm-workspace.yaml|auditConfig:\n  ignoreGhsas:\n    - GHSA-aaaa-bbbb-cccc\n' \
   'pnpm-workspace.yaml|auditConfig:\n  ignoreCves:\n    - CVE-2099-0001\n' \
   'package.json|{"pnpm":{"auditConfig":{"ignoreGhsas":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
   'package.json|{"pnpm":{"auditConfig":{"ignoreCves":["CVE-2099-0001"]}}}\n' \
   'package.json|{"pnpm":{"audit":{"ignore":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
+  'package.json|{"pnpm":{"audit":\n{"ignore":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
+  'package.json|{\n  "pnpm": {\n    "audit"\n    :\n    { "ignore": [] }\n  }\n}\n' \
+  'package.json|{"pnpm":{"auditConfig":{}}}\n' \
+  'package.json|{"a":{"b":{"ignoreCves":["CVE-2099-0001"]}}}\n' \
+  'package.json|{"pnpm":{"audit":"anything"}}\n' \
   '.npmrc|auditConfig.ignoreGhsas=GHSA-aaaa-bbbb-cccc\n'; do
   SEED_FILE=${native%%|*}
   SEED_BODY=${native#*|}
@@ -920,6 +931,20 @@ expect_deps 0 "a package.json audit script is not a suppression" pnpm-lock.yaml 
 SEED_FILE=pnpm-workspace.yaml
 SEED_BODY='allowBuilds:\n  lefthook: false\n'
 expect_deps 0 "a workspace file without suppressions passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+SEED_FILE=package.json
+SEED_BODY='{"name":"x",\n'
+expect_deps 1 "an unparseable package.json fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "package.json is not valid JSON"
+SEED_BODY='{"pnpm":{"overrides":{"audit":"1.0.0"}},"name":"x"}\n'
+expect_deps 0 "an unrelated pnpm key named audit-like text passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+SEED_BODY='\xef\xbb\xbf{"pnpm":{"auditConfig":{"ignoreGhsas":["GHSA-aaaa-bbbb-cccc"]}}}\n'
+expect_deps 1 "a BOM-prefixed package.json is still parsed and its suppression rejected" pnpm-lock.yaml "$PNPM_CLEAN" "" "advisory suppressions belong in .claude/dep-audit-allow.txt, not package.json"
+SEED_BODY='\xef\xbb\xbf{"name":"x"}\n'
+expect_deps 0 "a clean BOM-prefixed package.json passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+for manifest in package.json5 package.yaml; do
+  SEED_FILE=$manifest
+  SEED_BODY='name: x\n'
+  expect_deps 1 "$manifest fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "unsupported pnpm manifest format: $manifest"
+done
 unset SEED_FILE SEED_BODY
 
 # Expiry horizon: at most 180 days ahead of today (UTC).

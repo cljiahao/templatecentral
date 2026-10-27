@@ -215,7 +215,12 @@ export class RolesGuard implements CanActivate {
       .switchToHttp()
       .getRequest<FastifyRequest & { user?: Partial<AuthUser> }>();
     const roles = user?.roles;
-    if (!Array.isArray(roles) || !roles.some((role) => required.includes(role))) {
+    // A malformed roles list (any non-string entry) denies outright instead of being matched loosely.
+    if (
+      !Array.isArray(roles) ||
+      !roles.every((role) => typeof role === 'string') ||
+      !roles.some((role) => required.includes(role))
+    ) {
       throw new ForbiddenException('Insufficient permissions.');
     }
     return true;
@@ -237,7 +242,7 @@ export function assertOwner(ownerId: string | undefined, userId: string): void {
 }
 ```
 
-List `RolesGuard` after `JwtAuthGuard` so `req.user` is set before roles are checked. Call `assertOwner` after loading a record by id, before returning or changing it:
+List `RolesGuard` after `JwtAuthGuard` so `req.user` is set before roles are checked. Use `assertOwner` on record-by-id handlers (see Rules):
 
 ```typescript
 @Delete(':id')
@@ -543,6 +548,12 @@ describe('RolesGuard', () => {
 
   it('denies a request with no user', () => {
     const context = contextWithUser(AdminController, AdminController.prototype.remove, undefined);
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('denies a roles list containing a non-string entry', () => {
+    const user = { id: 'u1', email: 'a@example.com', roles: ['admin', 42] };
+    const context = contextWithUser(AdminController, AdminController.prototype.remove, user);
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 

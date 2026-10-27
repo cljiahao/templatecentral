@@ -10,6 +10,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.1.1] — 2026-10-27
+
+### Fixed
+- The seeded `deps` gate now rejects pnpm `audit` suppressions written in YAML flow style
+  (`audit: { ignore: [...] }`), with a quoted key (`"audit":`, `'audit':`) or inside a flow
+  mapping, and treats any `ignore` under an `audit` key as a suppression. Its final failure
+  message now says only audited advisories can be allowlisted and that unaudited packages need
+  the missing audit tool installed (or the package made auditable or removed).
+- The `deps` gate parses `package.json` instead of matching text, so `pnpm.audit`, `pnpm.auditConfig`
+  and any `ignoreGhsas` / `ignoreCves` key are rejected however the file is laid out; invalid JSON
+  fails the gate, a leading BOM is ignored, and a `package.json5` or `package.yaml` fails closed as an
+  unsupported pnpm manifest format. Only the root manifest is checked (workspace packages are not).
+  Known limitation: the YAML complex-key form (`? audit`) in `pnpm-workspace.yaml` is not detected.
+- NestJS `RolesGuard` denies a user whose `roles` list holds a non-string entry; a unit test covers it.
+- Next.js `hasRole` documents that callers check for a null session first, because the false branch
+  also covers a missing session. The seeded `AGENTS.md` notes and `.claude/rules/nextjs.md` list
+  `src/lib/authz.ts`.
+- The auth skills state the ownership-check rule once (in Rules) instead of twice.
+
+### Changed
+- The ecosystem-refresh publish job also checks the research file's content (workflow step: UTF-8 and the
+  `last-scanned` frontmatter; `scripts/check-research-content.py`, tests in
+  `scripts/check-research-content.test.sh` run in CI: everything below). The cache is plain prose and
+  bullet lists, so the guard bans whole constructs: any `<` followed by a letter, `/`, `!` or `?`;
+  `](` (links and images), `]:` (reference definitions, however nested or split), `![`; fence lines
+  (three backticks or `~~~`); lines indented four or more spaces or by a tab; and lines over 1,500
+  characters. It also rejects characters that do not render as visible text: categories Cc (so any
+  carriage return, CRLF included), Cf, Co, Zl, Zp; every space separator except U+0020; U+FFFC;
+  noncharacters; the whole U+E0000–U+E0FFF block (tag characters, variation selectors supplement and the
+  unassigned rest); the unassigned invisible U+2065 and U+FFF0–U+FFF8; variation selectors (U+FE0E and U+FE0F only after a symbol or keycap
+  base); Hangul fillers, U+034F, U+17B4/17B5, Mongolian free variation selectors, U+2800 and
+  interlinear annotation characters; and runs of three or more combining marks. Other unassigned
+  code points are allowed. Known over-blocking: ZWJ emoji, `]:` in prose or type hints, 4-space nested
+  lists and three or more combining marks fail. The guard does not judge plain-text instructions; human PR review does. A guard crash
+  fails the step instead of reading as clean. Research placeholders are written `{name}`, not
+  `<name>`. The workflow stays disabled; the maintainer refreshes manually.
+- `tc-audit` floors refreshed (Starlette current stable 1.10.0, floor of record stays in
+  `.claude/rules/fastapi.md`; `@nestjs/platform-fastify` checks follow the Nest 12 floor, current
+  stable 12.2.0), the 200-line reference-file check exempts the per-stack `source-files.md`
+  files (FUTURE.md roadmap item 1), and two checklist items cover the deps gate and the authz seeds.
+- `scripts/lint-skills.sh` gains `check_security_seeds_present`: the GitHub and Azure `deps` pipeline
+  steps and the deny-by-default authz definitions must stay in the shipped skill files.
+- `FUTURE.md` marks the NestJS `strict` item done and Automated Ecosystem Refresh as shipped and
+  disabled.
+
+---
+
 ## [6.1.0] — 2026-10-26
 
 ### Added

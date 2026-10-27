@@ -260,7 +260,7 @@ def ensure_owner(owner_id: str | None, user_id: str) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
 ```
 
-Use `require_roles` in place of `get_current_user` on role-gated routes, and call `ensure_owner` after loading a record by id, before returning or changing it:
+Use `require_roles` in place of `get_current_user` on role-gated routes, and `ensure_owner` on record-by-id handlers (see Rules):
 
 ```python
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

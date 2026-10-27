@@ -136,6 +136,8 @@ jobs:
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests
         run: bash scripts/test-harness-kit.sh
+      - name: Research content guard tests
+        run: bash scripts/check-research-content.test.sh
 
   opencode-adapter-tests:
     name: OpenCode adapter hook tests

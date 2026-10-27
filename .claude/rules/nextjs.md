@@ -21,7 +21,7 @@ Stack: Next.js ≥16.3.8 (current 16.4.x; 16.3.8 fixes critical unauthenticated 
 
 - App Router: `src/app/` (layouts, pages, API routes)
 - Features: `src/features/<name>/` (api/, components/, hooks/, schemas/, types.ts, constants.ts, index.ts)
-- Auth (optional, added via `templatecentral:add (auth)`): `lib/auth.ts` (server config) + `lib/auth-client.ts` (client config) + `proxy.ts` (route protection) + `features/auth/` (UI)
+- Auth (optional, added via `templatecentral:add (auth)`): `lib/auth.ts` (server config) + `lib/auth-client.ts` (client config) + `lib/authz.ts` (deny-by-default `hasRole` / `isOwner`) + `proxy.ts` (route protection) + `features/auth/` (UI)
 - Integrations: `src/integrations/` (clients/base/, schemas/, services/, factories.ts)
 - Shared: `src/lib/` (constants/, errors/, utils/) + `src/components/` (layout/, ui/, widgets/)
 

@@ -524,6 +524,7 @@ Add under `## Architecture Decisions`:
 ```markdown
 - Auth via better-auth with `proxy.ts` route protection (`export async function proxy`); dev bypass with email/password when `isDev`
 - `authClient` (src/lib/auth-client.ts) handles client-side session via `authClient.useSession()` — no SessionProvider needed
+- Authorization via `src/lib/authz.ts` (`hasRole` / `isOwner`, deny by default); roles come from `user.role`, never client input
 - Route groups: `(public)/` for public pages, `dashboard/` for authenticated pages
 - Sessions: in-memory (non-persistent, single-instance) by default; add database adapter (via templatecentral:add (database)) before anything beyond local prototyping
 ```
@@ -578,8 +579,8 @@ import type { Session } from '@/lib/auth';
 
 /**
  * True only when a signed-in user holds `role`; narrows `session` to `Session` when true.
- * Callers check for a null session first: the false branch also covers a missing session,
- * so it is not a reliable "authenticated without the role" signal.
+ * Check for a null session first: the false branch also covers a missing session, so it
+ * does not mean "signed in without the role" and must not be narrowed as if it did.
  */
 export function hasRole(session: Session | null, role: string): session is Session {
   return session?.user.role === role;
@@ -591,7 +592,7 @@ export function isOwner(ownerId: string | null | undefined, userId: string): boo
 }
 ```
 
-Check ownership after loading a record by id, before returning or changing it. A record owned by someone else gets the same 404 as one that does not exist, so a caller cannot probe which ids belong to other users:
+Use `isOwner` on record-by-id pages, actions and handlers (see Rules). A record owned by someone else gets the same 404 as one that does not exist, so a caller cannot probe which ids belong to other users:
 
 ```tsx
 // Server Component page

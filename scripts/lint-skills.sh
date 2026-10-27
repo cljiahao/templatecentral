@@ -930,6 +930,32 @@ check_no_fastapi_orjson_response() {
     "No deprecated FastAPI ORJSONResponse/UJSONResponse"
 }
 
+check_security_seeds_present() {
+  # The deps gate and the deny-by-default authz helpers are shipped security seeds: dropping one
+  # from a skill file silently removes the protection from every project scaffolded afterwards.
+  # Matches anchor on the pipeline step lines and the code definitions, not on prose mentions.
+  header "Deps gate and deny-by-default authz seeds present"
+  local missing="" spec file pattern
+  local kit="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
+  if [[ -f "$kit" ]]; then
+    grep -qE '^[[:space:]]+run: bash \.claude/ci-gates\.sh deps$' "$kit" || missing+=$'\n'"$kit: GitHub pipeline step 'run: bash .claude/ci-gates.sh deps' missing"
+    grep -qE '^[[:space:]]+- bash: bash \.claude/ci-gates\.sh deps$' "$kit" || missing+=$'\n'"$kit: Azure pipeline step '- bash: bash .claude/ci-gates.sh deps' missing"
+    grep -qE '^  deps\)$' "$kit" || missing+=$'\n'"$kit: ci-gates.sh has no deps case"
+  fi
+  for spec in \
+    "fastapi|^def require_roles\(" "fastapi|^def get_current_roles\(" "fastapi|^def ensure_owner\(" \
+    "nestjs|^export class RolesGuard " "nestjs|^export function assertOwner\(" \
+    "nextjs|^export function hasRole\(" "nextjs|^export function isOwner\("; do
+    file="$SKILLS_DIR/add/auth/${spec%%|*}.md"
+    pattern="${spec#*|}"
+    [[ -f "$file" ]] || continue
+    grep -qE "$pattern" "$file" || missing+=$'\n'"$file: authz definition /$pattern/ missing"
+  done
+  report "${missing#$'\n'}" \
+    "Deps gate or authz seed missing — restore it (see the harness engineering checks in .claude/skills/tc-audit/implementation.md)" \
+    "Deps gate and authz seeds present"
+}
+
 check_harness_version_matches_plugin() {
   # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
   # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
@@ -1022,6 +1048,7 @@ check_no_tanstack_isLoading
 check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
+check_security_seeds_present
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 echo ""

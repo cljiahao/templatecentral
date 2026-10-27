@@ -48,7 +48,9 @@ jobs:
             Execute Step 0b of .claude/skills/tc-audit/implementation.md (full web scan, ALL listed
             topics including harness community consensus and loop engineering). Overwrite
             .claude/audit-ecosystem-research.md in the documented format with last-scanned
-            set to ${{ steps.scan.outputs.date }} (UTC). Then write pr-body.md in the repository root: a summary of new
+            set to ${{ steps.scan.outputs.date }} (UTC). Write placeholders as {name}, never as <name>:
+            the publish job rejects any '<' followed by a letter, '/', '!' or '?'. Also avoid ']:', ZWJ emoji, 4-space
+            indents, links, images and code fences. Then write pr-body.md in the repository root: a summary of new
             versions, new advisories, RECOMMENDED/CONSENSUS harness findings, and any finding
             that invalidates a current skill (flag those as audit candidates), at most 3500
             characters. Do not create a branch, commit or pull request, and do not modify any
@@ -112,7 +114,25 @@ jobs:
             exit 1
           fi
 
-          cp "$dir/audit-ecosystem-research.md" "$target"
+          # The file is web-derived text that later agent runs read as instructions, so its content
+          # is checked too: valid UTF-8, the expected frontmatter, and no text hidden from reviewers.
+          research="$dir/audit-ecosystem-research.md"
+          if ! iconv -f UTF-8 -t UTF-8 "$research" >/dev/null 2>&1 \
+            || [ "$(head -n 1 "$research")" != "---" ] \
+            || ! head -n 5 "$research" | grep -q '^last-scanned: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}$'; then
+            echo "::error::audit-ecosystem-research.md must be UTF-8 and start with the last-scanned frontmatter."
+            exit 1
+          fi
+          # Exit 0 = clean, 1 = hidden text or markup found, anything else = the guard itself failed.
+          rc=0
+          python3 scripts/check-research-content.py "$research" || rc=$?
+          case "$rc" in
+            0) ;;
+            1) echo "::error::audit-ecosystem-research.md contains hidden-text markup or invisible characters."; exit 1 ;;
+            *) echo "::error::Research content guard failed to run (exit $rc)."; exit 1 ;;
+          esac
+
+          cp "$research" "$target"
           status="$(git status --porcelain)"
           if [ -z "$status" ]; then
             echo "::notice::Research file is unchanged - no PR to open."
