@@ -28,40 +28,14 @@ KIT="$T/kit"
 mkdir -p "$KIT"
 
 # ── Extraction ────────────────────────────────────────────────────────────────
-# A script is the first fence after its **`<path>`** heading; a "**For TS…" / "**For FastAPI…"
-# label before a fence marks a per-stack variant, written as <stem>.ts<ext> / <stem>.py<ext>.
-# Each kit file is parsed independently (heading/variant state never carries across files).
-python3 - "$KIT" "${KIT_MDS[@]}" <<'PY'
-import os, re, sys
-out, srcs = sys.argv[1], sys.argv[2:]
-heading = re.compile(r"^\*\*`([^`]+\.(?:sh|cjs|py))`\*\*")
-for src in srcs:
-    lines = open(src, encoding="utf-8").read().split("\n")
-    path = variant = None
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        m = heading.match(line)
-        if m:
-            path, variant = m.group(1), None
-        elif line.startswith("**For TS"):
-            variant = "ts"
-        elif line.startswith("**For FastAPI"):
-            variant = "py"
-        elif line.startswith("```") and len(line) > 3:
-            j = i + 1
-            while j < len(lines) and not lines[j].startswith("```"):
-                j += 1
-            body = lines[i + 1:j]
-            if path and body and (not path.endswith(".sh") or body[0].startswith("#!")):
-                stem, ext = os.path.splitext(os.path.basename(path))
-                name = stem + ("." + variant if variant else "") + ext
-                open(os.path.join(out, name), "w", encoding="utf-8").write("\n".join(body) + "\n")
-                if not variant:
-                    path = None
-            i = j
-        i += 1
-PY
+# scripts/extract-fences.py owns the fence rules: a script is the first fence after its
+# **`<path>`** heading; a "**For TS…" / "**For FastAPI…" label marks a per-stack variant,
+# written as <stem>.ts<ext> / <stem>.py<ext>. Each kit file is parsed independently.
+python3 "$REPO_ROOT/scripts/extract-fences.py" --flat --ext sh,cjs,py --out "$KIT" --src "${KIT_MDS[@]}" >/dev/null 2>"$T/extract.err" || {
+  echo "test-harness-kit: fence extraction failed:" >&2
+  cat "$T/extract.err" >&2
+  exit 1
+}
 
 EXPECTED="protect-files.ts.sh protect-files.py.sh block-no-verify.ts.sh block-no-verify.py.sh
 user-prompt-guard.cjs user-prompt-guard.py post-edit-typecheck.ts.sh post-edit-typecheck.py.sh
