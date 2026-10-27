@@ -578,8 +578,8 @@ import type { Session } from '@/lib/auth';
 
 /**
  * True only when a signed-in user holds `role`; narrows `session` to `Session` when true.
- * Callers check for a null session first: the false branch also covers a missing session,
- * so it is not a reliable "authenticated without the role" signal.
+ * Check for a null session first: the false branch also covers a missing session, so it
+ * does not mean "signed in without the role" and must not be narrowed as if it did.
  */
 export function hasRole(session: Session | null, role: string): session is Session {
   return session?.user.role === role;

@@ -904,6 +904,12 @@ expect_deps 1 "pip-audit, multi-line skip_reason stays on one line" requirements
 
 # Package-manager-native suppressions bypass the expiring allowlist and are rejected.
 for native in 'pnpm-workspace.yaml|audit:\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|audit: { ignore: [GHSA-aaaa-bbbb-cccc] }\n' \
+  'pnpm-workspace.yaml|audit:\n  { ignore: [GHSA-aaaa-bbbb-cccc] }\n' \
+  'pnpm-workspace.yaml|"audit":\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|\x27audit\x27:\n  ignore:\n    - GHSA-aaaa-bbbb-cccc\n' \
+  'pnpm-workspace.yaml|"audit": { "ignore": ["GHSA-aaaa-bbbb-cccc"] }\n' \
+  'pnpm-workspace.yaml|{ audit: { ignore: [GHSA-aaaa-bbbb-cccc] } }\n' \
   'pnpm-workspace.yaml|auditConfig:\n  ignoreGhsas:\n    - GHSA-aaaa-bbbb-cccc\n' \
   'pnpm-workspace.yaml|auditConfig:\n  ignoreCves:\n    - CVE-2099-0001\n' \
   'package.json|{"pnpm":{"auditConfig":{"ignoreGhsas":["GHSA-aaaa-bbbb-cccc"]}}}\n' \
