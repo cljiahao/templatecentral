@@ -92,7 +92,8 @@ stack_of() { [[ "$1" == py ]] && echo fastapi || echo nextjs; }
 run_step0() { # run_step0 <target> <variant ts|py>
   bash -c "$(render_sc "$STEP0" "$1" "$(stack_of "$2")" "")" 2>&1
 }
-run_ci() { # run_ci <target> <variant ts|py> <host github|azure>
+run_ci() { # run_ci <target> <variant ts|py> <host github|azure> — Step B3 requires Step 0's lefthook.yml, so run Step 0 first when it is absent
+  [[ -f "$1/lefthook.yml" ]] || bash -c "$(render_sc "$STEP0" "$1" "$(stack_of "$2")" "")" >/dev/null 2>&1
   bash -c "$(render_sc "$CI_SNIPPET" "$1" "$(stack_of "$2")" "$3")" 2>&1
 }
 run_copy() { # run_copy <target> <variant> <host> — Step 0, then the CI step; echoes output, returns the first failing exit code
@@ -248,6 +249,7 @@ if command -v zsh >/dev/null 2>&1; then
   out=$(zsh -c "$(render "$STEP0" "$tgt" "template template-ts")" 2>&1); ec=$?
   check 1 "$([[ $ec -ne 0 ]] && echo 1 || echo 0)" "zsh_step0_refusal_exits_nonzero"
   tgt="$T/z2"; mkdir -p "$tgt"
+  zsh -c "$(render "$STEP0" "$tgt" "template template-ts")" >/dev/null 2>&1
   out=$(zsh -c "$(render "$CI_SNIPPET" "$tgt" "template-ci/azure")" 2>&1); ec=$?
   check 0 "$ec" "zsh_ci_success_exits_0 ($out)"
   check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" ]] && echo 1 || echo 0)" "zsh_ci_success_copies"
@@ -538,8 +540,9 @@ run="$T/run"; mkdir -p "$run"
 for stack in nextjs fastapi; do
   rm -rf "$T/ref0" "$T/refci"; mkdir -p "$T/ref0" "$T/refci"
   bash -c "$(render_sc "$STEP0" "$T/ref0" "$stack" "")" >/dev/null 2>&1
+  bash -c "$(render_sc "$STEP0" "$T/refci" "$stack" "")" >/dev/null 2>&1
   bash -c "$(render_sc "$CI_SNIPPET" "$T/refci" "$stack" github)" >/dev/null 2>&1
-  n0=$(find "$T/ref0" -type f | wc -l | tr -d ' '); nci=$(find "$T/refci" -type f | wc -l | tr -d ' ')
+  n0=$(find "$T/ref0" -type f | wc -l | tr -d ' '); nci=$(( $(find "$T/refci" -type f | wc -l | tr -d ' ') - n0 ))
   for kind in TGT SK; do
     for name in "${HOSTILE[@]}"; do
       for fence in STEP0 CI; do
@@ -551,6 +554,10 @@ for stack in nextjs fastapi; do
         fi
         saved=$SK; SK=$sk
         if [[ $fence == STEP0 ]]; then snip=$STEP0; ci=""; want=$n0; else snip=$CI_SNIPPET; ci=github; want=$nci; fi
+        if [[ $fence == CI ]]; then
+          (cd "$run" && bash -c "$(render_sc "$STEP0" "$tgt" "$stack" "")" >/dev/null 2>&1)
+          want=$((n0 + nci))
+        fi
         out=$(cd "$run" && bash -c "$(render_sc "$snip" "$tgt" "$stack" "$ci")" 2>&1); ec=$?
         SK=$saved
         got=$(find "$tgt" -type f | wc -l | tr -d ' ')
@@ -569,11 +576,36 @@ done
 for name in '-dash' '~'; do
   for fence in STEP0 CI; do
     rm -rf "$run"; mkdir -p "$run/$name"
-    snip=$STEP0; ci=""; [[ $fence == CI ]] && { snip=$CI_SNIPPET; ci=github; }
+    snip=$STEP0; ci=""
+    if [[ $fence == CI ]]; then
+      snip=$CI_SNIPPET; ci=github
+      (cd "$run" && bash -c "$(render_sc "$STEP0" "$name" nextjs "")" >/dev/null 2>&1)
+    fi
     out=$(cd "$run" && bash -c "$(render_sc "$snip" "$name" nextjs "$ci")" 2>&1); ec=$?
     check 1 "$([[ $ec -eq 0 && -n "$(find "$run/$name" -type f | head -1)" ]] && echo 1 || echo 0)" "hostile_relative_target[$name/$fence]: copied ($out)"
   done
 done
+
+# ── round 5, part 2: the shipped STACK line is empty, and Step B3 must match Step 0 ──
+raw_render() { # raw_render <snippet text> <target> — substitute only <skill-dir> and <target>; STACK, CI and PART stay as shipped
+  printf '%s\n' "$1" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]).replace("<target>", sys.argv[2]))' "$SK" "$2"
+}
+mkdir -p "$T/ship0" "$T/ship1"
+refuses_raw shipped_step0_fence_refuses_until_stack_is_set "$(raw_render "$STEP0" "$T/ship0")" "unknown STACK"
+check 0 "$(find "$T/ship0" -type f | wc -l | tr -d ' ')" "shipped_step0_fence_refuses_until_stack_is_set: nothing written"
+run_step0 "$T/ship1" ts >/dev/null
+before=$(find "$T/ship1" -type f | wc -l | tr -d ' ')
+refuses_raw shipped_ci_fence_refuses_until_stack_is_set "$(raw_render "$CI_SNIPPET" "$T/ship1")" "unknown STACK"
+check "$before" "$(find "$T/ship1" -type f | wc -l | tr -d ' ')" "shipped_ci_fence_refuses_until_stack_is_set: nothing written"
+# a B3 STACK that differs from Step 0's is refused
+mkdir -p "$T/mis1"; run_step0 "$T/mis1" ts >/dev/null
+before=$(find "$T/mis1" -type f | wc -l | tr -d ' ')
+refuses_raw ci_stack_differs_from_step0 "$(render_sc "$CI_SNIPPET" "$T/mis1" fastapi github)" "does not match"
+check "$before" "$(find "$T/mis1" -type f | wc -l | tr -d ' ')" "ci_stack_differs_from_step0: nothing written"
+# B3 without Step 0's lefthook.yml is refused too
+mkdir -p "$T/mis2"
+refuses_raw ci_without_step0_refused "$(render_sc "$CI_SNIPPET" "$T/mis2" nextjs github)" "does not match"
+check 0 "$(find "$T/mis2" -type f | wc -l | tr -d ' ')" "ci_without_step0_refused: nothing written"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')

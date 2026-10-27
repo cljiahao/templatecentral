@@ -567,6 +567,13 @@ check_migrate_hook_inventory_matches_kit() {
   done
   grep -qF -- '.claude/comment-hygiene-patterns.txt' "$migrate" || \
     missing+="migrate does not mention .claude/comment-hygiene-patterns.txt"$'\n'
+  # Both migrate docs name the template trees and the manifest as the canonical source of a re-sync.
+  local doc tok
+  for doc in "$migrate" "$SKILLS_DIR/migrate/general/phase-5-health-check.md"; do
+    for tok in 'scaffold/shared/template.manifest' 'template-ts/' 'template-py/'; do
+      grep -qF -- "$tok" "$doc" 2>/dev/null || missing+="$doc — missing template anchor $tok"$'\n'
+    done
+  done
   report "$missing" \
     "migrate's hook/file inventory has drifted from the template trees — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
     "migrate's phase-4 names every hook file in the template trees' .claude/hooks/ and the .claude/comment-hygiene-patterns.txt path"
@@ -1207,12 +1214,14 @@ check_step0_before_install() {
   # the Step 0 and Step B3 fences derive the template trees from it. TIMELESS: the order is a property
   # of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst st vals
+  local f bad="" step0 inst st vals step0_line
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
     vals=$(grep -oE 'STACK=[a-z-]+' "$f" | sort -u || true)
     [[ "$vals" == "STACK=$st" ]] || bad+="$f — must name STACK=$st and no other STACK value (found: ${vals:-none})"$'\n'
+    step0_line=$(grep -m1 -E 'Step \*\*0\*\*' "$f" || true)
+    [[ "$step0_line" == *"STACK=$st"* ]] || bad+="$f — must name STACK=$st on the Step 0 line"$'\n'
     step0=$(grep -nE 'Step \*\*0\*\*' "$f" | head -n 1 | cut -d: -f1 || true)
     inst=$(grep -nE 'pnpm install|lefthook install' "$f" | head -n 1 | cut -d: -f1 || true)
     if [[ -z "$step0" ]]; then

@@ -118,4 +118,4 @@ Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-
 
 `lefthook.yml` TS stacks (nestjs / nextjs / vite-react). Step 0 copies it from `<skill-dir>/shared/template-ts/lefthook.yml`.
 
-> **Hook install:** the TS stacks run Step 0 before their first `pnpm install`, so the `"prepare": "lefthook install || true"` script finds `lefthook.yml` and wires `pre-commit`/`pre-push` during that install. Run `pnpm exec lefthook install` only if the install ran before Step 0 (it would then have left a stub config and refused Step 0).
+> **Hook install:** the TS stacks run Step 0 before their first `pnpm install`, so the `"prepare": "lefthook install || true"` script finds `lefthook.yml` and wires `pre-commit`/`pre-push` during that install. If an install ran before Step 0, it left a stub `lefthook.yml` and Step 0 refuses: report that to the user instead of working around it.

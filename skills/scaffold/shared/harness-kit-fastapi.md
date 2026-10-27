@@ -118,7 +118,7 @@ Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): the `settings.json` 
 
 `lefthook.yml` FastAPI (Python tools; no pnpm). Step 0 copies it from `<skill-dir>/shared/template-py/lefthook.yml`.
 
-> **Re-sync hooks after writing this file:** run `lefthook install` (inside the venv) now, after Step 0 has copied this file, — Step 4's `pip install -r requirements-dev.txt` does not auto-run it the way the TS `prepare` script does, so `.git/hooks` is empty until this runs at least once.
+> **Re-sync hooks after writing this file:** run `lefthook install` (inside the venv) now, after Step 0 has copied this file — Step 4's `pip install -r requirements-dev.txt` does not auto-run it the way the TS `prepare` script does, so `.git/hooks` is empty until this runs at least once.
 
 ---
 

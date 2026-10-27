@@ -42,7 +42,7 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-Run it once, before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. The file list is `<skill-dir>/shared/template.manifest`. Edit only the `STACK=` line, the first of the script: `nestjs`, `nextjs`, `vite-react` or `fastapi`. The script derives the template trees from it (`template` plus `template-ts` for the three TS stacks, `template-py` for fastapi) and refuses any other value, so a wrong stack cannot copy the other stack's hooks. Leave `CI=` empty and `PART=base` here; Step B3 sets them.
+Run it once, before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. The file list is `<skill-dir>/shared/template.manifest`. Edit only the `STACK=` line, the first line of the script: set it to `nestjs`, `nextjs`, `vite-react` or `fastapi`. It ships empty, and the script refuses until it is set. The script derives the template trees from it (`template` plus `template-ts` for the three TS stacks, `template-py` for fastapi) and refuses any other value, so a wrong stack cannot copy the other stack's hooks. Leave `CI=` empty and `PART=base` here; Step B3 sets them.
 
 Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
@@ -50,7 +50,7 @@ The script writes nothing when any check fails: the skill or target path is empt
 
 ```bash
 bash <<'TC_GUARD'
-STACK=nextjs
+STACK=
 CI=
 PART=base
 WHAT="scaffold"
@@ -114,6 +114,9 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   done
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+if [ "$PART" = ci ]; then
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
   d=$p

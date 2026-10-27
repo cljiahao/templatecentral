@@ -266,6 +266,24 @@ fails stack_value_fails_when_wrong_fastapi "Scaffold runs kit Step 0 before the 
 fails stack_value_fails_when_missing_vite "Scaffold runs kit Step 0 before the first install" no_stack_value_vite "must name STACK=vite-react"
 fails template_trees_fail_when_script_not_755 "Template trees are complete" sh_not_755 "must be mode 755"
 
+# anchors the migrate docs must carry for the template trees (the manifest and both overlays)
+for doc in phase-4-upgrade phase-5-health-check; do
+  for anchor in 'scaffold/shared/template.manifest' 'template-ts/' 'template-py/'; do
+    fn="strip_${doc//-/_}_$(echo "$anchor" | tr -c 'a-z0-9\n' '_')"
+    eval "$fn() { strip_token '$anchor' 'zz-gone/' \"\$S/migrate/general/$doc.md\"; }"
+    fails "migrate_inventory_fails_when_${doc}_anchor_deleted[$anchor]" "migrate hook inventory matches" "$fn" "$doc.md — missing template anchor $anchor"
+  done
+done
+step0_stack_on_other_line() { python3 - "$S/scaffold/nextjs/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert " with `STACK=nextjs` in its fence" in t
+open(p, "w", encoding="utf-8").write(t.replace(" with `STACK=nextjs` in its fence", "", 1) + "\nSTACK=nextjs\n")
+PY
+}
+fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
+
 # ── scan() rules cover template files ────────────────────────────────────────
 fails scan_bcrypt_includes_templates "bcrypt references" bcrypt_in_template "bcrypt"
 fails scan_version_pins_includes_templates "Version pins in skills" pin_in_template "left-pad@1.3.0"

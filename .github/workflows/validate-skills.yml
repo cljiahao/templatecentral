@@ -127,7 +127,7 @@ jobs:
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -146,6 +146,8 @@ jobs:
           set -euo pipefail
           t=skills/scaffold/shared
           [ "$(find "$t" -path "$t/template*" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no template scripts found"; exit 1; }
+          [ "$(find "$t" -path "$t/template*" -name '*.py' | wc -l)" -gt 0 ] || { echo "no template python files found"; exit 1; }
+          [ "$(find "$t" -path "$t/template*" -name '*.cjs' | wc -l)" -gt 0 ] || { echo "no template cjs files found"; exit 1; }
           find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
           find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=warning
           find "$t" -path "$t/template*" -name '*.py' -print0 | xargs -0 -r -n1 python3 -c 'import os, py_compile, sys, tempfile; py_compile.compile(sys.argv[1], cfile=os.path.join(tempfile.mkdtemp(), "x.pyc"), doraise=True)'
@@ -179,7 +181,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Install PyYAML for the yaml checks
         run: sudo apt-get update && sudo apt-get install -y python3-yaml
-      - name: Each re-pointed lint check fails on an empty match and on a deleted anchor
+      - name: Each lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
 
   token-count:

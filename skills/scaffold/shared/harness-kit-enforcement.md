@@ -105,11 +105,11 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 
 **Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Edit only the `STACK=` line (the stack's own value, as in Step 0) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0.
+Copy the CI file for the picked host. Edit only the `STACK=` line (it ships empty; use the same value as in Step 0, and the script refuses when `lefthook.yml` in the project is not the one that value's Step 0 copied) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0.
 
 ```bash
 bash <<'TC_GUARD'
-STACK=nextjs
+STACK=
 CI=github
 PART=ci
 WHAT="seed CI"
@@ -173,6 +173,9 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   done
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+if [ "$PART" = ci ]; then
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
   d=$p
