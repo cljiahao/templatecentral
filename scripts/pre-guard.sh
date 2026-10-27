@@ -9,7 +9,7 @@
 #           outside the repo root and inside /tmp or a $TMPDIR that sits in a system temp tree
 #           (never $HOME, the repo, or an ancestor of either); Tier 1 still applies there.
 #           A target that reaches the repo through a symlink is matched on its resolved path too.
-# The *shipped* guard (harness-kit-{ts,fastapi}.md -> protect-files.sh) hard-blocks CI instead: downstream
+# The *shipped* guard (scaffold/shared/template-{ts,py}/.claude/hooks/protect-files.sh) hard-blocks CI instead: downstream
 # projects have a different threat model.
 
 command -v jq >/dev/null 2>&1 || { echo "BLOCKED: jq required for pre-guard.sh" >&2; exit 2; }

@@ -149,8 +149,23 @@ jobs:
         run: bash scripts/check-golden.test.sh
       - name: Golden scaffold tree check
         run: bash scripts/check-golden.sh
+      - name: Golden scaffold tree check (template trees)
+        run: bash scripts/check-golden.sh --from-templates
+      - name: Template copy tests
+        run: bash scripts/test-template-copy.sh
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
+
+  lint-negative-tests:
+    name: Lint check negative tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Each re-pointed lint check fails on an empty match and on a deleted anchor
+        run: bash scripts/lint-skills.test.sh
 
   token-count:
     name: Scaffold load size

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# scripts/test-harness-kit.sh — behavioral regression tests for the hook scripts that the
-# harness kit (skills/scaffold/shared/harness-kit*.md: index, ts/fastapi variants, enforcement,
-# finalize) seeds into every project (TS and FastAPI variants).
-# The kit is prose, so nothing else executes these scripts before they reach a real project.
+# scripts/test-harness-kit.sh — behavioral regression tests for the hook scripts, gates and git-hook
+# config that the scaffold seeds into every project (TS and FastAPI variants). They are real files
+# under skills/scaffold/shared/template*/ (copied by harness-kit.md Step 0); the kit markdown
+# (harness-kit*.md: index, ts/fastapi variants, enforcement, finalize) describes them.
+# Nothing else executes these scripts before they reach a real project.
 #
 # Usage: bash scripts/test-harness-kit.sh [KIT_MD ...]   (needs git, node, python3; default: every kit file)
+# KIT_MD files only feed the prose checks; the scripts under test always come from the template trees.
 # No `set -e`: cases deliberately run commands that fail.
 set -uo pipefail
 
@@ -27,15 +29,23 @@ trap 'rm -rf "$T"' EXIT
 KIT="$T/kit"
 mkdir -p "$KIT"
 
-# ── Extraction ────────────────────────────────────────────────────────────────
-# scripts/extract-fences.py owns the fence rules: a script is the first fence after its
-# **`<path>`** heading; a "**For TS…" / "**For FastAPI…" label marks a per-stack variant,
-# written as <stem>.ts<ext> / <stem>.py<ext>. Each kit file is parsed independently.
-python3 "$REPO_ROOT/scripts/extract-fences.py" --flat --ext sh,cjs,py --out "$KIT" --src "${KIT_MDS[@]}" >/dev/null 2>"$T/extract.err" || {
-  echo "test-harness-kit: fence extraction failed:" >&2
-  cat "$T/extract.err" >&2
-  exit 1
-}
+# ── Template files ────────────────────────────────────────────────────────────
+# The scripts under test are read straight from the template trees and linked into $KIT under flat
+# names: <stem>.ts.sh / <stem>.py.sh for the per-stack hooks, <stem>.sh for the shared ones.
+TPL="$REPO_ROOT/skills/scaffold/shared"
+LEFTHOOKS=("$TPL/template-ts/lefthook.yml" "$TPL/template-py/lefthook.yml")
+CI_FILES=("$TPL/template-ci/github-ts/.github/workflows/ci.yml" "$TPL/template-ci/github-py/.github/workflows/ci.yml"
+  "$TPL/template-ci/azure/azure-pipelines/templatecentral-gates.yml")
+for v in ts py; do
+  for f in protect-files block-no-verify post-edit-typecheck post-edit-comment-check stop-checks subagent-stop; do
+    cp "$TPL/template-$v/.claude/hooks/$f.sh" "$KIT/$f.$v.sh" 2>/dev/null
+  done
+done
+cp "$TPL/template-ts/.claude/hooks/user-prompt-guard.cjs" "$KIT/user-prompt-guard.cjs" 2>/dev/null
+cp "$TPL/template-py/.claude/hooks/user-prompt-guard.py" "$KIT/user-prompt-guard.py" 2>/dev/null
+cp "$TPL/template/.claude/hooks/session-context.sh" "$TPL/template/.claude/hooks/skill-usage-log.sh" \
+  "$TPL/template/.claude/verify-harness.sh" "$TPL/template/.claude/ci-gates.sh" "$KIT/" 2>/dev/null
+cp "$TPL/template/.lefthook/commit-msg.sh" "$KIT/commit-msg.sh" 2>/dev/null
 
 EXPECTED="protect-files.ts.sh protect-files.py.sh block-no-verify.ts.sh block-no-verify.py.sh
 user-prompt-guard.cjs user-prompt-guard.py post-edit-typecheck.ts.sh post-edit-typecheck.py.sh
@@ -45,8 +55,8 @@ verify-harness.sh ci-gates.sh"
 missing=""
 for f in $EXPECTED; do [[ -s "$KIT/$f" ]] || missing+=" $f"; done
 if [[ -n "$missing" ]]; then
-  echo "test-harness-kit: could not extract from the kit files:$missing" >&2
-  echo "  (each script needs a **\`<path>\`** heading followed by its fence)" >&2
+  echo "test-harness-kit: could not find in the template trees:$missing" >&2
+  echo "  (each script must exist under skills/scaffold/shared/template*/)" >&2
   exit 1
 fi
 
@@ -502,7 +512,7 @@ export PATH=$ORIG_PATH
 
 CC=$(new_repo feat)
 mkdir -p "$CC/.claude"
-cp "$REPO_ROOT/skills/scaffold/shared/comment-hygiene-patterns.txt" "$CC/.claude/comment-hygiene-patterns.txt"
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$CC/.claude/comment-hygiene-patterns.txt"
 printf '// Added retry on timeout\nconst a = 1\n' > "$CC/narr.ts"
 printf '// Retries because the upstream drops idle sockets\nconst a = 1\n' > "$CC/clean.ts"
 printf '# Removed the legacy path\na = 1\n' > "$CC/narr.py"
@@ -626,10 +636,10 @@ mkdir -p "$GLS"
 # shellcheck disable=SC2016  # literal $* / $STUB_EXIT belong to the generated stub script.
 printf '#!/bin/sh\necho "$*" > "%s/argv"\nexit "${STUB_EXIT:-0}"\n' "$GLS" > "$GLS/gitleaks"
 chmod +x "$GLS/gitleaks"
-for kit_md in "${KIT_MDS[@]}"; do
-  line=$(grep -A3 '^    secret-scan:' "$kit_md" | grep -m1 '^      run: ' | sed 's/^      run: //')
-  [[ -n "$line" ]] || continue
-  k=$(basename "$kit_md")
+for kit_md in "${LEFTHOOKS[@]}"; do
+  line=$(grep -A3 '^    secret-scan:' "$kit_md" 2>/dev/null | grep -m1 '^      run: ' | sed 's/^      run: //')
+  k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")
+  if [[ -z "$line" ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $k has no secret-scan run line"; continue; fi
   rm -f "$GLS/argv"
   STUB_EXIT=1 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
   check 1 "$?" "$k secret-scan blocks on a finding"
@@ -639,8 +649,9 @@ for kit_md in "${KIT_MDS[@]}"; do
   PATH=/usr/bin:/bin bash -c "$line" >/dev/null 2>&1
   check 0 "$?" "$k secret-scan skips when gitleaks is absent"
 done
-for kit_md in "${KIT_MDS[@]}"; do
-  k=$(basename "$kit_md")
+for kit_md in "${KIT_MDS[@]}" "${LEFTHOOKS[@]}" "${CI_FILES[@]}" "$KIT/ci-gates.sh"; do
+  k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")
+  [[ -f "$kit_md" ]] || { FAIL=$((FAIL + 1)); echo "FAIL: $k not found"; continue; }
   check 0 "$(grep -cE 'uses: gitleaks/|secrets\.GITLEAKS_LICENSE|gitleaks protect --|Install gitleaks' "$kit_md")" "$k uses no gitleaks-action / licence / protect / inline install"
   check 0 "$(grep -c 'log-opts=.*first-parent' "$kit_md")" "$k CI PR range has no --first-parent"
 done
@@ -696,7 +707,7 @@ gate_repo() {
   r=$(new_repo main)
   mkdir -p "$r/src" "$r/.claude/hooks" "$r/.github/workflows" "$r/azure-pipelines"
   touch "$r/src/a.ts" "$r/src/README.md" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml" "$r/azure-pipelines/ci.yml"
-  cp "$REPO_ROOT/skills/scaffold/shared/comment-hygiene-patterns.txt" "$r/.claude/comment-hygiene-patterns.txt"
+  cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$r/.claude/comment-hygiene-patterns.txt"
   git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm base
   git -C "$r" update-ref refs/remotes/origin/main HEAD
   echo "$r"
@@ -708,10 +719,10 @@ expect_gate() {
 }
 # Harness-internal folders never get a README (documentation-kit prunes them), so a change
 # there must not trip either gate; an ordinary folder without its README still must.
-for kit_md in "${KIT_MDS[@]}"; do
-  k=$(basename "$kit_md")
+for kit_md in "${LEFTHOOKS[@]}"; do
+  k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")
   body=$(extract_run "$kit_md" '^    readme-coupling:')
-  [[ -n "$body" ]] || continue
+  if [[ -z "$body" ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $k has no readme-coupling run body"; continue; fi
   r=$(gate_repo)
   echo 2 >> "$r/.claude/hooks/x.sh"; git -C "$r" add -A
   out=$(cd "$r" && sh -c "$body" 2>&1)

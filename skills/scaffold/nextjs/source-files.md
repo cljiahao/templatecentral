@@ -2093,7 +2093,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
+Execute kit Step **0** now (copy the template trees into the project root), then Steps **A through D** (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
 
 
 

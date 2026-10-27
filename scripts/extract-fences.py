@@ -3,7 +3,9 @@
 
 A copy-verbatim fence is the first fence after a path heading, written
 **`<path>`** (kit files), ### `<path>` (stack files), or as a prose line that ends in
-a colon and says "Create `<path>`". A heading followed by "Empty file" is a 0-byte file.
+a colon and says "Create `<path>`". A heading followed by "Empty file" is a 0-byte file. A line that starts with a backticked path and
+names a `<skill-dir>/shared/template...` file points at a file that was moved out of the markdown:
+it closes the current heading, so the fences after it are not read as that heading's file.
 A "**For TS..." /
 "**For FastAPI..." label before a fence marks a per-stack variant. A shell
 script fence must open with a shebang; anything else after its heading is a
@@ -36,6 +38,7 @@ CI_FILE = {"github": ".github/workflows/ci.yml", "azure": "azure-pipelines/templ
 HEADING = re.compile(r"^(?:\*\*|#{2,4} )`([^`\s]+)`")
 TAG_EXT = {"bash": {"sh"}, "sh": {"sh"}, "shell": {"sh"}, "json": {"json"}, "python": {"py"}, "py": {"py"},
            "yaml": {"yaml", "yml"}, "yml": {"yaml", "yml"}, "toml": {"toml"}}
+POINTER = re.compile(r"^`[^`\s]+`.*`<skill-dir>/shared/template[^`]*`")
 CREATE = re.compile(r"[Cc]reate `([^`\s]+)`")
 OPENER = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 EXTENSIONLESS = {"Dockerfile", "Makefile", "CODEOWNERS", "LICENSE", "Procfile", "Jenkinsfile"}
@@ -102,6 +105,12 @@ def parse(src_path, label):
             if nxt.startswith("Empty file"):
                 yield "fence", path, None, i + 1, []
                 path, satisfied = None, True
+        elif POINTER.match(line):
+            ev = drop()
+            if ev:
+                yield ev
+            path = variant = None
+            seen_variant = satisfied = created_path = False
         elif line.startswith("**For TS"):
             variant = "ts"
         elif line.startswith("**For FastAPI"):

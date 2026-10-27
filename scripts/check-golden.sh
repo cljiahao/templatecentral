@@ -3,9 +3,14 @@
 #
 # Usage: bash scripts/check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]
 #   COMBO is <stack>-<ci> (default: all 8 stack x ci combinations).
-#   Default mode hashes the output of scripts/extract-fences.py.
-#   --from-templates builds each combo by copying the template/ trees, then substituting
-#   the placeholder values in tests/golden/placeholders.env, and hashes that tree.
+#   Default mode hashes the output of scripts/extract-fences.py plus the template trees:
+#   a path moved out of the markdown comes from the templates, every other path from the
+#   fences, and a path produced by both fails as DUPLICATE (its fence is still in the markdown).
+#   --from-templates builds each combo from the template trees alone (shared/template,
+#   shared/template-<ts|py>, shared/template-ci/<github-<ts|py>|azure>, <stack>/template),
+#   substitutes the placeholder values in tests/golden/placeholders.env, and compares only
+#   the golden paths those trees hold: a path no template holds yet is still a fence, and the
+#   default mode fails it as MISSING if neither source produces it.
 #   --tree DIR (one COMBO) compares a generated project against the expected tree instead:
 #   golden paths must exist in DIR (MISSING) and match (MISMATCH); extra files are ignored.
 #   Files must match byte for byte, apart from a trailing-newline difference, and:
@@ -21,6 +26,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCAFFOLD_DIR="${TC_SCAFFOLD_DIR:-$REPO_ROOT/skills/scaffold}"
 GOLDEN_DIR="$REPO_ROOT/tests/golden"
 FROM_TEMPLATES=0
 TREE=""
@@ -62,26 +68,46 @@ sha_of() { # sha_of <file> — portable sha256
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
+# template_dirs <stack> <ci> — the template trees one combo copies, in copy order.
+template_dirs() {
+  local stack="$1" ci="$2" ts=py ci_dir=azure
+  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
+  [[ "$ci" == github ]] && ci_dir="github-$ts"
+  printf '%s\n' "$SCAFFOLD_DIR/shared/template" "$SCAFFOLD_DIR/shared/template-$ts" \
+    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir" "$SCAFFOLD_DIR/$stack/template"
+}
+
+# overlay_templates <stack> <ci> <tree> — copy the combo's template trees into <tree>; prints
+# the relative path of every file copied; returns 1 when no template tree exists.
+overlay_templates() {
+  local d found=1
+  while IFS= read -r d; do
+    [[ -d "$d" ]] || continue
+    (cd "$d" && find . -type f | sed 's|^\./||') >> "$T/overlaid"
+    mkdir -p "$3" && cp -Rp "$d/." "$3/" && found=0
+  done < <(template_dirs "$1" "$2")
+  return $found
+}
+
 # actual_hashes <stack> <ci> <outfile> — "<sha>  <path>" lines, sorted by path.
 actual_hashes() {
   local stack="$1" ci="$2" out="$3" tree="$T/tree-$1-$2"
+  : > "$T/overlaid"
   if [[ $FROM_TEMPLATES -eq 0 ]]; then
-    python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2>/dev/null
-    return $?
+    python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2>/dev/null || return 1
+    mkdir -p "$tree"
+    local before="$T/fenced-$stack-$ci"
+    (cd "$tree" && find . -type f | sed 's|^\./||' | LC_ALL=C sort) > "$before"
+    overlay_templates "$stack" "$ci" "$tree" || true
+    LC_ALL=C sort -u "$T/overlaid" | comm -12 "$before" - | while IFS= read -r p; do echo "DUPLICATE $stack-$ci $p"; done > "$T/dups-$stack-$ci"
+  else
+    mkdir -p "$tree"
+    if ! overlay_templates "$stack" "$ci" "$tree"; then
+      echo "check-golden: no template trees for $stack-$ci; missing: $(template_dirs "$stack" "$ci" | tr '\n' ' ')" >&2
+      return 1
+    fi
+    rm -f "$T/dups-$stack-$ci"
   fi
-  local sk="$REPO_ROOT/skills/scaffold" ts=py
-  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
-  local dirs=("$sk/shared/template" "$sk/shared/template-$ts" "$sk/shared/template/ci/$ci" "$sk/$stack/template")
-  mkdir -p "$tree"
-  local found=0 d
-  for d in "${dirs[@]}"; do
-    [[ -d "$d" ]] && { cp -Rp "$d/." "$tree/" && found=1; }
-  done
-  if [[ $found -eq 0 ]]; then
-    echo "check-golden: no template trees for $stack-$ci; missing: ${dirs[*]}" >&2
-    return 1
-  fi
-  rm -rf "$tree/ci"
   if [[ -f "$GOLDEN_DIR/placeholders.env" ]]; then
     local name value
     while IFS='=' read -r name value; do
@@ -247,6 +273,9 @@ for combo in "${COMBOS[@]}"; do
   grep -v '^#' "$golden" | grep . > "$T/want-$combo" || true
   if [[ ! -s "$T/want-$combo" ]]; then echo "check-golden: golden $golden has no entries" >&2; fail=1; continue; fi
   if [[ ! -s "$T/actual-$combo" ]]; then echo "check-golden: no files produced for $combo" >&2; fail=1; continue; fi
+  if [[ -s "$T/dups-$stack-$ci" ]]; then
+    while IFS= read -r line; do excepted "$combo" "${line##* }" || { echo "$line"; fail=1; }; done < "$T/dups-$stack-$ci"
+  fi
   if [[ -n "$TREE" ]]; then
     bad=0
     report=$(compare_tree "$combo" "$T/tree-$stack-$ci" "$TREE")
@@ -261,13 +290,16 @@ for combo in "${COMBOS[@]}"; do
     continue
   fi
   bad=0
+  covered=0
   # Pass 1: every golden entry. Pass 2: entries only the tree has.
   while IFS= read -r line; do
     want_sha="${line%%  *}"
     path="${line#*  }"
     got=$(grep -F -- "  $path" "$T/actual-$combo" | awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) { print $1; exit } }')
     excepted "$combo" "$path" && continue
-    if [[ -z "$got" ]]; then echo "MISSING $combo $path"; bad=1
+    [[ -n "$got" ]] && covered=$((covered + 1))
+    if [[ -z "$got" && $FROM_TEMPLATES -eq 1 ]]; then continue
+    elif [[ -z "$got" ]]; then echo "MISSING $combo $path"; bad=1
     elif [[ "$got" != "$want_sha" ]]; then echo "MISMATCH $combo $path"; bad=1; fi
   done < "$T/want-$combo"
   while IFS= read -r line; do
@@ -276,7 +308,10 @@ for combo in "${COMBOS[@]}"; do
     excepted "$combo" "$path" && continue
     echo "EXTRA $combo $path"; bad=1
   done < "$T/actual-$combo"
-  if [[ $bad -eq 0 ]]; then ok=$((ok + 1)); echo "OK $combo"; else fail=1; fi
+  if [[ $bad -eq 0 ]]; then
+    ok=$((ok + 1))
+    if [[ $FROM_TEMPLATES -eq 1 ]]; then echo "OK $combo ($covered of $(wc -l < "$T/want-$combo" | tr -d ' ') golden paths templated)"; else echo "OK $combo"; fi
+  else fail=1; fi
 done
 
 echo "check-golden: $ok/${#COMBOS[@]} combos OK"

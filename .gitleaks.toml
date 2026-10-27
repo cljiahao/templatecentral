@@ -1,0 +1,11 @@
+# gitleaks config for this repository's own scans (gitleaks reads it from the repo root).
+# The scaffold template trees (skills/**/template*/) are files copied into scaffolded projects.
+# They hold credential-shaped patterns and test strings (the user-prompt-guard hooks match AWS,
+# GitHub and Anthropic key shapes), never live secrets, so the allowlist covers those trees only.
+# Everything else in the repository stays under the default ruleset.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "scaffold template trees carry credential-shaped patterns and test strings"
+paths = ['''^skills/(.*/)?template[^/]*/.*''']

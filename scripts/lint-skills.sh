@@ -55,6 +55,9 @@ report() {
 
 # scan <grep-flags> <pattern> [exclude...] — `grep -rn` hits under SKILLS_DIR, minus lines
 # matching any exclude (basic regex). Pass "" for no extra flags.
+# The scaffold template trees (skills/scaffold/shared/template*/) are shipped files that land in every
+# scaffolded project, so every rule scans them like any other skill file. A rule that must skip them
+# passes the exclude 'scaffold/shared/template'; each such exclusion states its reason where it is used.
 scan() {
   local flags=$1 pattern=$2 hits ex
   shift 2
@@ -115,7 +118,7 @@ check_no_comment_narration() {
   # Change-narration comments rot once the change is no longer recent — same doctrine as
   # comments.md, applied here to scripts/*.sh and bash fences in skill markdown.
   header "Change-narration comments"
-  local patterns="$SKILLS_DIR/scaffold/shared/comment-hygiene-patterns.txt"
+  local patterns="$SKILLS_DIR/scaffold/shared/template/.claude/comment-hygiene-patterns.txt"
   if [[ ! -f "$patterns" ]]; then
     fail "Missing $patterns"
     return
@@ -144,6 +147,16 @@ check_no_comment_narration() {
   : > "$tmp/src"
   awk -v src="$tmp/src" "$extract" scripts/*.sh > "$tmp/text" 2>/dev/null || true
   find "$SKILLS_DIR" -name '*.md' -exec awk -v src="$tmp/src" "$extract" {} + >> "$tmp/text"
+  # The seeded shell scripts are real files under the template trees; they must be scanned too.
+  local tpl_sh
+  tpl_sh=$(find "$SKILLS_DIR/scaffold/shared" -path '*/template*' -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
+  if [[ -z "$tpl_sh" ]]; then
+    rm -rf "$tmp"
+    fail "No template .sh files under $SKILLS_DIR/scaffold/shared/template*/ — nothing to scan for change-narration comments"
+    return
+  fi
+  # shellcheck disable=SC2086  # newline-separated paths without spaces
+  awk -v src="$tmp/src" "$extract" $tpl_sh >> "$tmp/text"
   matches=$(grep -nEf "$tmp/patterns" "$tmp/text" \
     | awk 'NR == FNR { file[NR] = $0; next }
            { n = $0; sub(/:.*/, "", n); sub(/^[0-9]+:/, ""); print file[n] ": " $0 }' "$tmp/src" - \
@@ -323,7 +336,13 @@ check_hook_command_uses_args_array() {
   # Every "command"/"args" key in skills/ that mentions .claude/hooks/ is a hook definition.
   # TIMELESS: string command + args[] is the documented exec form.
   header "Hook commands use exec form (string command + args[]) with \${CLAUDE_PROJECT_DIR} paths"
-  local bad="" m
+  local bad="" m v n
+  # The settings.json bodies stay in the variant kits; a kit with no hook definition left would let
+  # every pattern below pass on nothing.
+  for v in ts fastapi; do
+    n=$(grep -cE '"args"[[:space:]]*:.*\.claude/hooks/' "$SKILLS_DIR/scaffold/shared/harness-kit-$v.md" 2>/dev/null || true)
+    [[ "${n:-0}" -ge 1 ]] || bad+="$SKILLS_DIR/scaffold/shared/harness-kit-$v.md: no hook definition found to check"$'\n'
+  done
   m=$(scan -E '"command"[[:space:]]*:[[:space:]]*\[')
   [[ -n "$m" ]] && bad+="$m"$'\n'"  ^ array-valued \"command\" is silently ignored by Claude Code — use \"command\": \"bash\", \"args\": [...]"$'\n'
   # shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is a literal pattern, not an expansion.
@@ -348,6 +367,9 @@ check_scaffold_seeds_complete_harness() {
   # index, the two shared files, and exactly the right variant, and each variant must carry the
   # full per-stack hook set — this keeps the harness enforceable from one kit rather than 5 copies,
   # while a run loads only its own stack's bodies.
+  # The hook, lefthook, gitleaks and CI bodies are real files under shared/template*/ (copied by
+  # harness-kit.md Step 0 and the Step B3 CI copy), so the body tokens are read from those files and
+  # the check fails when an expected file, or the copy instruction itself, is missing.
   # TIMELESS: these are the load-bearing enforcement hooks; their presence is non-negotiable.
   header "Scaffold/migrate templates seed the complete harness"
 
@@ -390,19 +412,55 @@ check_scaffold_seeds_complete_harness() {
     '.claude/hooks/stop-checks.sh' '.claude/hooks/subagent-stop.sh'
     'stop_hook_active' '--no-verify' 'AKIA' 'lefthook.yml'
   )
-  local missing="" tok f kf all_kit="" v other
+  local missing="" tok f kf all_kit="" v other tdir hay p
   for kf in "${kit_files[@]}"; do
     [[ -f "$kf" ]] || missing+="$kf — file not found"$'\n'
   done
+  # Template files every scaffold copies, per tree; the variant trees must each hold the full hook set.
+  local shared_files=(
+    .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/ci-gates.sh
+    .claude/verify-harness.sh .claude/regen-harness.sh .claude/comment-hygiene-patterns.txt
+    .lefthook/commit-msg.sh .gitleaks.toml
+  )
+  local variant_files=(
+    .claude/hooks/protect-files.sh .claude/hooks/block-no-verify.sh .claude/hooks/post-edit-typecheck.sh
+    .claude/hooks/post-edit-comment-check.sh .claude/hooks/stop-checks.sh .claude/hooks/subagent-stop.sh lefthook.yml
+  )
+  for p in "${shared_files[@]}"; do
+    [[ -f "$kit_dir/template/$p" ]] || missing+="$kit_dir/template/$p — template file not found"$'\n'
+  done
+  for tdir in ts py; do
+    for p in "${variant_files[@]}"; do
+      [[ -f "$kit_dir/template-$tdir/$p" ]] || missing+="$kit_dir/template-$tdir/$p — template file not found"$'\n'
+    done
+  done
+  [[ -f "$kit_dir/template-ts/.claude/hooks/user-prompt-guard.cjs" ]] || missing+="$kit_dir/template-ts/.claude/hooks/user-prompt-guard.cjs — template file not found"$'\n'
+  [[ -f "$kit_dir/template-py/.claude/hooks/user-prompt-guard.py" ]] || missing+="$kit_dir/template-py/.claude/hooks/user-prompt-guard.py — template file not found"$'\n'
+  for p in github-ts/.github/workflows/ci.yml github-py/.github/workflows/ci.yml azure/azure-pipelines/templatecentral-gates.yml; do
+    [[ -f "$kit_dir/template-ci/$p" ]] || missing+="$kit_dir/template-ci/$p — template file not found"$'\n'
+  done
+  # The index must carry the copy instruction for every tree.
+  if [[ -f "$kit_dir/harness-kit.md" ]]; then
+    for tok in '<skill-dir>/shared/template/.' '<skill-dir>/shared/template-ts/.' '<skill-dir>/shared/template-py/.' '<skill-dir>/shared/template.manifest'; do
+      grep -qF -- "$tok" "$kit_dir/harness-kit.md" || missing+="$kit_dir/harness-kit.md — Step 0 copy instruction missing: $tok"$'\n'
+    done
+  fi
+  if [[ -f "$kit_dir/harness-kit-enforcement.md" ]]; then
+    for tok in '<skill-dir>/shared/template-ci/github-ts/.' '<skill-dir>/shared/template-ci/github-py/.' '<skill-dir>/shared/template-ci/azure/.'; do
+      grep -qF -- "$tok" "$kit_dir/harness-kit-enforcement.md" || missing+="$kit_dir/harness-kit-enforcement.md — Step B3 CI copy instruction missing: $tok"$'\n'
+    done
+  fi
   if [[ -z "$missing" ]]; then
-    all_kit=$(cat "${kit_files[@]}")
+    all_kit=$(cat "${kit_files[@]}"; find "$kit_dir" -path '*/template*' -type f ! -name template.manifest -exec cat {} +)
     for tok in "${kit_tokens[@]}"; do
-      grep -qF -- "$tok" <<<"$all_kit" || missing+="$kit_dir/harness-kit*.md — missing harness element: $tok"$'\n'
+      grep -qF -- "$tok" <<<"$all_kit" || missing+="$kit_dir/harness-kit*.md + template*/ — missing harness element: $tok"$'\n'
     done
     for v in ts fastapi; do
+      tdir=ts; [[ $v == fastapi ]] && tdir=py
+      hay=$(cat "$kit_dir/harness-kit-$v.md"; find "$kit_dir/template-$tdir" -type f -exec cat {} +)
       for tok in "${variant_tokens[@]}"; do
-        grep -qF -- "$tok" "$kit_dir/harness-kit-$v.md" || \
-          missing+="$kit_dir/harness-kit-$v.md — variant missing harness element: $tok"$'\n'
+        grep -qF -- "$tok" <<<"$hay" || \
+          missing+="$kit_dir/harness-kit-$v.md + template-$tdir/ — variant missing harness element: $tok"$'\n'
       done
     done
   fi
@@ -435,7 +493,7 @@ check_scaffold_seeds_complete_harness() {
   done
 
   report "$missing" \
-    "Harness check failed — kit (scaffold/shared/harness-kit*.md) must contain all universal tokens and each variant the full per-stack set; all 4 scaffolds + the migrate router must load the index, both shared files, and their own variant; each must seed a *-verify/SKILL.md" \
+    "Harness check failed — kit (scaffold/shared/harness-kit*.md + template*/ trees) must contain all universal tokens and each variant the full per-stack set; all 4 scaffolds + the migrate router must load the index, both shared files, and their own variant; each must seed a *-verify/SKILL.md" \
     "Shared harness kit contains all universal tokens; every scaffold/migrate loader loads its own variant"
 }
 
@@ -446,21 +504,25 @@ check_migrate_hook_inventory_matches_kit() {
   header "migrate hook inventory matches the harness kit"
   local kit_dir="$SKILLS_DIR/scaffold/shared"
   local migrate="$SKILLS_DIR/migrate/general/phase-4-upgrade.md"
-  local kit_files=("$kit_dir"/harness-kit*.md)
-  if [[ ! -f "${kit_files[0]}" || ! -f "$migrate" ]]; then
-    fail "Missing $kit_dir/harness-kit*.md or $migrate"
+  if [[ ! -d "$kit_dir" || ! -f "$migrate" ]]; then
+    fail "Missing $kit_dir or $migrate"
     return
   fi
   local hooks missing="" h
-  hooks=$(cat "${kit_files[@]}" | grep -oE '^\*\*`\.claude/hooks/[a-zA-Z0-9_-]+' | sed -E 's#.*/##' | sort -u)
+  # The hooks the kit seeds are the files in the template trees' .claude/hooks/ directories.
+  hooks=$(find "$kit_dir" -path '*/template*/.claude/hooks/*' -type f 2>/dev/null | sed -E 's#.*/##; s#\.[a-z]+$##' | sort -u)
+  if [[ -z "$hooks" ]]; then
+    fail "No hook files under $kit_dir/template*/.claude/hooks/ — nothing to compare against migrate's inventory"
+    return
+  fi
   for h in $hooks; do
     grep -qF -- "$h" "$migrate" || missing+="migrate is missing hook: $h"$'\n'
   done
   grep -qF -- '.claude/comment-hygiene-patterns.txt' "$migrate" || \
     missing+="migrate does not mention .claude/comment-hygiene-patterns.txt"$'\n'
   report "$missing" \
-    "migrate's hook/file inventory has drifted from the harness kit — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
-    "migrate's hook inventory covers every hook + file authored in the harness kit"
+    "migrate's hook/file inventory has drifted from the template trees — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
+    "migrate's hook inventory covers every hook + file in the harness kit template trees"
 }
 
 check_duplicated_iam_blocks_match() {
@@ -540,8 +602,10 @@ check_yaml_fences_parse() {
   # ever parses it before it reaches a real project. A shell variable assignment that spans
   # physical lines inside a `run: |` block scalar silently breaks YAML indentation rules
   # without any syntax error in the shell itself, so this must parse the fence content, not
-  # just lint the shell inside it. TIMELESS: catches this bug class regardless of cause.
-  header "Seeded \`\`\`yaml fences parse as valid YAML"
+  # just lint the shell inside it. The lefthook and CI files that moved out of the markdown are
+  # parsed as files; a tree with no yaml file at all fails rather than passing on nothing.
+  # TIMELESS: catches this bug class regardless of cause.
+  header "Seeded \`\`\`yaml fences and template yaml files parse as valid YAML"
   if ! have_python || ! python3 -c 'import yaml' >/dev/null 2>&1; then
     pass "skipped (python3/PyYAML not available)"
     return
@@ -550,7 +614,17 @@ check_yaml_fences_parse() {
   out=$(python3 - "$SKILLS_DIR" <<'PY'
 import os, sys, yaml
 root = sys.argv[1]
+tpl = 0
 for dp, _, fs in os.walk(root):
+    if '/template' in dp + '/':
+        for f in fs:
+            if f.endswith(('.yml', '.yaml')):
+                tpl += 1
+                p = os.path.join(dp, f)
+                try:
+                    list(yaml.safe_load_all(open(p, encoding='utf-8').read()))
+                except Exception as e:
+                    print(f"{p}: {str(e).splitlines()[0]}")
     for f in fs:
         if not f.endswith('.md'): continue
         p = os.path.join(dp, f)
@@ -568,11 +642,13 @@ for dp, _, fs in os.walk(root):
             except Exception as e:
                 print(f"{p}:{start+1}-{j}: {str(e).splitlines()[0]}")
             i = j + 1
+if tpl == 0:
+    print(f"{root}: no yaml files under any template*/ tree — nothing was parsed")
 PY
 )
   report "$out" \
-    "Seeded yaml fence(s) fail to parse — check block-scalar (run: |) indentation" \
-    "All seeded yaml fences parse"
+    "Seeded yaml fence(s) or template yaml file(s) fail to parse — check block-scalar (run: |) indentation" \
+    "All seeded yaml fences and template yaml files parse"
 }
 
 check_no_absolute_plugin_path() {
@@ -623,6 +699,18 @@ for dp, _, fs in os.walk(root):
             rel = m.group(1).lstrip('/')
             if not os.path.exists(os.path.join(base, rel)):
                 print(p + ': <skill-dir>/' + rel)
+# The copy instructions must exist and name every template tree, so a deleted instruction is not
+# mistaken for "no broken references".
+need = {
+    "scaffold/shared/harness-kit.md": ["<skill-dir>/shared/template/.", "<skill-dir>/shared/template-ts/.", "<skill-dir>/shared/template-py/.", "<skill-dir>/shared/template.manifest"],
+    "scaffold/shared/harness-kit-enforcement.md": ["<skill-dir>/shared/template-ci/github-ts/.", "<skill-dir>/shared/template-ci/github-py/.", "<skill-dir>/shared/template-ci/azure/."],
+}
+for rel, toks in need.items():
+    try: t = open(os.path.join(root, rel), encoding='utf-8').read()
+    except OSError:
+        print(rel + ': file not found'); continue
+    for tok in toks:
+        if tok not in t: print(rel + ': copy instruction ' + tok + ' missing')
 PY
 )
   report "$out" \
@@ -934,13 +1022,28 @@ check_security_seeds_present() {
   # The deps gate and the deny-by-default authz helpers are shipped security seeds: dropping one
   # from a skill file silently removes the protection from every project scaffolded afterwards.
   # Matches anchor on the pipeline step lines and the code definitions, not on prose mentions.
+  # The gate script and CI files are real files under shared/template*/; a missing file fails.
   header "Deps gate and deny-by-default authz seeds present"
   local missing="" spec file pattern
-  local kit="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
-  if [[ -f "$kit" ]]; then
-    grep -qE '^[[:space:]]+run: bash \.claude/ci-gates\.sh deps$' "$kit" || missing+=$'\n'"$kit: GitHub pipeline step 'run: bash .claude/ci-gates.sh deps' missing"
-    grep -qE '^[[:space:]]+- bash: bash \.claude/ci-gates\.sh deps$' "$kit" || missing+=$'\n'"$kit: Azure pipeline step '- bash: bash .claude/ci-gates.sh deps' missing"
-    grep -qE '^  deps\)$' "$kit" || missing+=$'\n'"$kit: ci-gates.sh has no deps case"
+  local shared="$SKILLS_DIR/scaffold/shared" gates f
+  gates="$shared/template/.claude/ci-gates.sh"
+  if [[ -f "$gates" ]]; then
+    grep -qE '^  deps\)$' "$gates" || missing+=$'\n'"$gates: ci-gates.sh has no deps case"
+  else
+    missing+=$'\n'"$gates: file not found"
+  fi
+  for f in "$shared/template-ci/github-ts/.github/workflows/ci.yml" "$shared/template-ci/github-py/.github/workflows/ci.yml"; do
+    if [[ -f "$f" ]]; then
+      grep -qE '^[[:space:]]+run: bash \.claude/ci-gates\.sh deps$' "$f" || missing+=$'\n'"$f: GitHub pipeline step 'run: bash .claude/ci-gates.sh deps' missing"
+    else
+      missing+=$'\n'"$f: file not found"
+    fi
+  done
+  f="$shared/template-ci/azure/azure-pipelines/templatecentral-gates.yml"
+  if [[ -f "$f" ]]; then
+    grep -qE '^[[:space:]]+- bash: bash \.claude/ci-gates\.sh deps$' "$f" || missing+=$'\n'"$f: Azure pipeline step '- bash: bash .claude/ci-gates.sh deps' missing"
+  else
+    missing+=$'\n'"$f: file not found"
   fi
   for spec in \
     "fastapi|^def require_roles\(" "fastapi|^def get_current_roles\(" "fastapi|^def ensure_owner\(" \
@@ -954,6 +1057,61 @@ check_security_seeds_present() {
   report "${missing#$'\n'}" \
     "Deps gate or authz seed missing — restore it (see the harness engineering checks in .claude/skills/tc-audit/implementation.md)" \
     "Deps gate and authz seeds present"
+}
+
+check_template_trees_complete() {
+  # The scaffold copies skills/scaffold/shared/template*/ verbatim, so the file set is the contract:
+  # template.manifest lists every file with its mode, and the tree holds exactly those files. A
+  # file added without a manifest line, a manifest line without a file, or a mode that differs from
+  # the manifest (a hook that lost its exec bit) fails here. An empty or missing tree fails too,
+  # so the checks that scan these trees cannot pass on nothing. TIMELESS.
+  header "Template trees are complete and listed in the manifest"
+  if ! have_python; then
+    pass "skipped (python3 not available)"
+    return
+  fi
+  local out
+  out=$(python3 - "$SKILLS_DIR/scaffold/shared" <<'PY'
+import os, sys
+shared = sys.argv[1]
+want_trees = ["template", "template-ts", "template-py", "template-ci"]
+actual = {}
+for tree in want_trees:
+    root = os.path.join(shared, tree)
+    n = 0
+    for dp, _, fs in os.walk(root):
+        for f in fs:
+            full = os.path.join(dp, f)
+            actual[os.path.relpath(full, shared)] = "%o" % (os.stat(full).st_mode & 0o777)
+            n += 1
+    if n == 0:
+        print(f"{root}: tree is missing or empty")
+manifest = os.path.join(shared, "template.manifest")
+listed = {}
+try:
+    for line in open(manifest, encoding="utf-8"):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            cols = line.split()
+            if len(cols) != 4:
+                print(f"{manifest}: malformed line: {line}")
+                continue
+            listed[cols[0]] = cols[1]
+except OSError:
+    print(f"{manifest}: file not found")
+for p in sorted(actual):
+    if p not in listed:
+        print(f"{manifest}: {p} is in the tree but not listed")
+    elif listed[p] != actual[p]:
+        print(f"{manifest}: {p} is mode {actual[p]} but listed as {listed[p]}")
+for p in sorted(listed):
+    if p not in actual:
+        print(f"{manifest}: lists {p}, which is not in the tree")
+PY
+)
+  report "$out" \
+    "Template tree and template.manifest disagree — list every file (path mode placeholders seams) and keep each .sh mode 755" \
+    "Template trees match template.manifest"
 }
 
 check_harness_version_matches_plugin() {
@@ -1019,6 +1177,7 @@ check_seeded_skill_paths_are_directories
 check_no_toplevel_command_in_hooks
 check_hook_command_uses_args_array
 check_scaffold_seeds_complete_harness
+check_template_trees_complete
 check_migrate_hook_inventory_matches_kit
 check_duplicated_iam_blocks_match
 check_yaml_fences_parse

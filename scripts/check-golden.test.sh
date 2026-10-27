@@ -15,6 +15,19 @@ check() { # check <want> <got> <description>
   if [[ "$1" == "$2" ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — expected [$1], got [$2]"; fi
 }
 
+# scaffold_tree <stack> <ci> <out> — a project as the scaffold writes it: the fences plus the template trees.
+scaffold_tree() {
+  local ts=py ci_dir=azure
+  case "$1" in nextjs | vite-react | nestjs) ts=ts ;; esac
+  [[ "$2" == github ]] && ci_dir="github-$ts"
+  python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$1" --ci "$2" --out "$3" > /dev/null 2>&1
+  local d
+  for d in "$REPO_ROOT/skills/scaffold/shared/template" "$REPO_ROOT/skills/scaffold/shared/template-$ts" \
+    "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template"; do
+    [[ -d "$d" ]] && cp -Rp "$d/." "$3/"
+  done
+}
+
 fresh_golden() { # fresh_golden <name> — a writable copy of the real goldens
   mkdir -p "$T/$1"
   cp "$REPO_ROOT"/tests/golden/*.sha256 "$REPO_ROOT"/tests/golden/exceptions.txt "$T/$1/"
@@ -71,12 +84,33 @@ check 0 "$ec" "all_combos: exit"
 check "check-golden: 8/8 combos OK" "$(tail -1 <<< "$out")" "all_combos: summary"
 
 # --from-templates fails loudly while a combo has no template trees
-bash "$CHECK" --from-templates "$COMBO" > /dev/null 2>&1; ec=$?
+mkdir -p "$T/emptysk"
+TC_SCAFFOLD_DIR="$T/emptysk" bash "$CHECK" --from-templates "$COMBO" > /dev/null 2>&1; ec=$?
 if [[ $ec -ne 0 ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: from_templates_without_trees should fail"; fi
+
+# --from-templates passes for every path the template trees hold, and says how many that is
+out=$(bash "$CHECK" --from-templates); ec=$?
+check 0 "$ec" "from_templates_passes_for_moved_paths: exit"
+check "check-golden: 8/8 combos OK" "$(tail -1 <<< "$out")" "from_templates_passes_for_moved_paths: summary"
+case "$(grep "^OK $COMBO" <<< "$out")" in *"golden paths templated"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates_reports_coverage [$out]" ;; esac
+
+# a changed template byte is MISMATCH, an unexpected template file is EXTRA, a path both fenced and templated is DUPLICATE
+mkdir -p "$T/sk-bad"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bad/shared"
+printf 'x\n' >> "$T/sk-bad/shared/template/.gitleaks.toml"
+out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" --from-templates "$COMBO"); ec=$?
+check 1 "$ec" "from_templates_changed_byte_fails: exit"
+check "MISMATCH $COMBO .gitleaks.toml" "$(grep '^MISMATCH' <<< "$out")" "from_templates_changed_byte_fails: MISMATCH line"
+printf 'x\n' > "$T/sk-bad/shared/template/stray.txt"
+out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" --from-templates "$COMBO"); check "EXTRA $COMBO stray.txt" "$(grep '^EXTRA' <<< "$out")" "from_templates_extra_file_fails"
+rm -rf "$T/sk-bad"; mkdir -p "$T/sk-bad/shared/template/docs"
+printf 'x\n' > "$T/sk-bad/shared/template/docs/CONSTITUTION.md"
+out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" "$COMBO"); ec=$?
+check 1 "$ec" "duplicate_fence_and_template_fails: exit"
+check "DUPLICATE $COMBO docs/CONSTITUTION.md" "$(grep '^DUPLICATE' <<< "$out")" "duplicate_fence_and_template_fails: DUPLICATE line"
 
 # --tree: a generated project is compared against the expected tree
 tree="$T/project"
-python3 "$REPO_ROOT/scripts/extract-fences.py" --stack fastapi --ci azure --out "$tree" > /dev/null 2>&1
+scaffold_tree fastapi azure "$tree"
 mkdir -p "$tree/node_modules/x" && echo junk > "$tree/node_modules/x/y" && echo more > "$tree/extra.txt"
 bash "$CHECK" --tree "$tree" "$COMBO" > /dev/null; check 0 $? "tree_clean_passes (extra files and node_modules ignored)"
 printf '\n\n' >> "$tree/pyproject.toml"
@@ -90,7 +124,7 @@ check "MISSING $COMBO pyproject.toml" "$(grep '^MISSING' <<< "$out")" "tree_miss
 
 # --- exact-byte probes: mutations the tree check must catch
 ptree="$T/probe"
-python3 "$REPO_ROOT/scripts/extract-fences.py" --stack fastapi --ci github --out "$ptree" > /dev/null 2>&1
+scaffold_tree fastapi github "$ptree"
 PCOMBO=fastapi-github
 # Relaxation tests run without a formatter, so formatter-owned.txt is empty for them.
 NOFMT=$(fresh_golden nofmt); : > "$NOFMT/formatter-owned.txt"
@@ -144,7 +178,7 @@ bash "$CHECK" --tree "$ptree" > /dev/null 2>&1; check 2 $? "tree_without_combo_r
 bash "$CHECK" --tree "$ptree" "$PCOMBO" nextjs-github > /dev/null 2>&1; check 2 $? "tree_with_two_combos_rejected"
 g=$(fresh_golden empty); printf '# header only\n' > "$g/$COMBO.sha256"
 bash "$CHECK" --golden-dir "$g" "$COMBO" > /dev/null 2>&1; check 1 $? "empty_golden_fails"
-msg=$(bash "$CHECK" --from-templates "$COMBO" 2>&1 >/dev/null)
+msg=$(TC_SCAFFOLD_DIR="$T/emptysk" bash "$CHECK" --from-templates "$COMBO" 2>&1 >/dev/null)
 case "$msg" in *"missing:"*"shared/template"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates names missing dirs [$msg]" ;; esac
 
 # tree_reports_missing_golden_path: a golden entry absent from DIR is MISSING, and one the expected tree cannot produce is STALE-EXPECTED
@@ -191,7 +225,7 @@ PATH="$T/fakebin:$PATH" bash "$CHECK" --golden-dir "$g" --tree "$T/pt" "$PCOMBO"
 
 # package_json: dependency additions pass; any other added key fails
 ntree="$T/ntree"
-python3 "$REPO_ROOT/scripts/extract-fences.py" --stack nextjs --ci github --out "$ntree" > /dev/null 2>&1
+scaffold_tree nextjs github "$ntree"
 pj() { # pj <python statements mutating dict d>
   rm -rf "$T/npt"; cp -R "$ntree" "$T/npt"
   python3 - "$T/npt/package.json" "$1" <<'PY'

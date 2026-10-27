@@ -14,26 +14,57 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 
 | File | Holds | Load for |
 |---|---|---|
-| `harness-kit-ts.md` | TS bodies for Steps A, B, B2: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.cjs`), `lefthook.yml` | nestjs · nextjs · vite-react |
-| `harness-kit-fastapi.md` | FastAPI bodies for Steps A, B, B2, B3: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.py`), `lefthook.yml`, the CI `quality` job | fastapi |
-| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`); Steps B3 (`ci-gates.sh`, Azure template), B4, B5 | every stack |
+| `harness-kit-ts.md` | TS body for Step A (`settings.json`) and the notes for Steps B, B2 (the 7 per-stack hooks incl. `user-prompt-guard.cjs`, and `lefthook.yml`, which live in `template-ts/`) | nestjs · nextjs · vite-react |
+| `harness-kit-fastapi.md` | FastAPI body for Step A (`settings.json`) and the notes for Steps B, B2, B3 (the 7 per-stack hooks incl. `user-prompt-guard.py`, `lefthook.yml` and the CI `quality` job, which live in `template-py/` and `template-ci/github-py/`) | fastapi |
+| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + notes on the stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, held in `template/`); Steps B3 (CI host pick, `ci-gates.sh`, Azure template), B4, B5 | every stack |
 | `harness-kit-finalize.md` | Steps C, D, E, E2, E3, F, G, H + the shared AGENTS.md tail fragment | every stack |
 
 ## Step order
 
 | Step | Seeds | Where |
 |---|---|---|
+| 0 | every template file below that is a real file: the 9 `.claude/hooks/` scripts, `.claude/ci-gates.sh`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml` | this file — scaffold only; migrate diffs and merges instead |
 | A | `.claude/settings.json` | variant (JSON body) + enforcement (merge rules, deny lists, hook inventory) |
-| B | `.claude/hooks/` scripts | variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
-| B2 | git-hook layer | variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
-| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` + `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (gate script with the `deps` dependency-audit gate, workflow + TS `quality` job, Azure template) + fastapi variant (FastAPI `quality` job) |
-| B4 | harness integrity verifier | enforcement |
+| B | `.claude/hooks/` scripts (copied in Step 0) | notes in the variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
+| B2 | git-hook layer (files copied in Step 0) | notes in the variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
+| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` from Step 0, plus the CI file copied here: `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (CI host pick and copy; the `deps` dependency-audit gate lives in `ci-gates.sh`) + fastapi variant (notes on the FastAPI `quality` job) |
+| B4 | harness integrity verifier (`verify-harness.sh`, `regen-harness.sh`, copied in Step 0) | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md` | finalize |
 | E, E2, E3 | `.claude/harness.json`, base snapshot, per-folder docs | finalize |
 | F, G, H | `.agents` symlink, post-scaffold workflow, plugins | finalize |
 
-For Steps A, B, B2 (and B3 on FastAPI) the enforcement file's section is the step: write the variant file's blocks for that step as part of it.
+For Step A the enforcement file's section is the step: write the variant file's `settings.json` body as part of it. Steps B and B2 only add rules and notes to the files Step 0 already copied.
+
+---
+
+## Step 0 — copy the template trees
+
+Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
+
+Run it once, before Step A, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. First refuse to scaffold over an existing file: the check lists every manifest path that already exists in `<target>` and stops without writing anything. Set `SEL` to `template template-ts` for nestjs, nextjs and vite-react, or `template template-py` for fastapi.
+
+```bash
+SEL="template template-ts"
+clash=$(awk -v sel="$SEL" '
+  BEGIN { n = split(sel, s, " ") }
+  /^#/ || NF == 0 { next }
+  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
+' "<skill-dir>/shared/template.manifest" | while IFS= read -r p; do
+  if [ -e "<target>/$p" ] || [ -L "<target>/$p" ]; then echo "$p"; fi
+done)
+if [ -n "$clash" ]; then printf 'Refusing to scaffold: these paths already exist in <target>:\n%s\n' "$clash"; exit 1; fi
+```
+
+Then copy. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit. Run the first line, then exactly one of the other two:
+
+```bash
+cp -Rp "<skill-dir>/shared/template/." "<target>/"
+cp -Rp "<skill-dir>/shared/template-ts/." "<target>/"
+cp -Rp "<skill-dir>/shared/template-py/." "<target>/"
+```
+
+Lines one and two are for nestjs, nextjs and vite-react; lines one and three are for fastapi. The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
 
 ---
 
