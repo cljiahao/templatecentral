@@ -54,10 +54,10 @@ If all files are `UNCHANGED` **and** `templatecentral_version` equals the curren
 ✓ All harness files match their templateCentral origin and are up to date. No action needed.
 ```
 
-If `CLAUDE.md` exists and no line is exactly `@AGENTS.md`, print a warning (report only; Step 5d may add the line on approval):
+If `CLAUDE.md` exists and the import is missing (the import-present rule in `phase-4-upgrade.md` Step 4c), print a warning; Step 5d offers the fix:
 ```
 ⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
-  Append `@AGENTS.md` to CLAUDE.md.
+  Step 5d can append it on approval.
 ```
 
 If any file is `MISSING`, print a warning:
@@ -99,6 +99,8 @@ Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, o
 - `MISSING` → reseed (write the current canonical content).
 - **Unwired Azure gates** — if `azure-pipelines/templatecentral-gates.yml` exists but no pipeline includes it (grep the repo's pipeline YAML for `templatecentral-gates`), and the pipelines already run gitleaks, the harness check **and** a dependency audit that fails on high/critical advisories: list it, `.claude/ci-gates.sh`, their `harness.json` entries and `.claude/.harness-base/` copies for deletion in the dry-run plan, and drop the CI line's template wording from AGENTS.md. Wire it in instead when the pipelines lack any of those three checks (kit Step B3). Never list `.claude/ci-gates.sh` for deletion while the pipelines lack a dependency audit.
 - **Azure pipelines without a dependency audit** — if the project is on Azure DevOps, the pipelines run gitleaks and the harness check but no dependency audit that fails on high/critical advisories, and `.claude/ci-gates.sh` is absent or has no `deps` gate: list seeding `.claude/ci-gates.sh` and adding a `bash .claude/ci-gates.sh deps` step to the existing pipeline in the dry-run plan (kit Step B3). The step needs `pnpm` or `uv` and `pipx` on the agent after the install steps. It is a pipeline edit, so `protect-files.sh` asks the human first.
+
+- **Missing `AGENTS.md` import** — if Step 5c flagged it, list the append in the dry-run plan regardless of `CLAUDE.md`'s classification (`UNCHANGED`, `MODIFIED` or untracked). On approval append `@AGENTS.md` exactly as `phase-4-upgrade.md` Step 4c does, leave every other line alone, and skip the 3-way merge for that line (a merge would keep a deleted import). Count `CLAUDE.md` as a written file below; if `harness.json` tracks it, its `origin_hash` and base copy are refreshed.
 
 **After applying** (only the files actually written):
 ```bash
