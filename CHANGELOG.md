@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.1.2] — 2026-10-27
+
+### Fixed
+- The repo's `scripts/pre-guard.sh` no longer asks before writing protected-name files (for example
+  a `Dockerfile`) whose target resolves, with symlinks and `..` followed, outside the repo root and
+  under `/tmp` or `$TMPDIR`, so the scaffold-verify workflow can write `/tmp/scaffold-e2e/Dockerfile`
+  (#26). Secret and `.env*` hard blocks still apply in those directories, and paths that cannot be
+  resolved, anything inside the repo and `~/.claude/**` keep asking.
+
+---
+
 ## [6.1.1] — 2026-10-27
 
 ### Fixed

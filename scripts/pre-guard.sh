@@ -5,6 +5,8 @@
 #   Tier 2 ASK (permissionDecision "ask"): agent-instruction, governance, enforcement and CI
 #           files — editable only with explicit per-edit human approval.
 #   Tier 3 ALLOW (exit 0): skills, docs, source — everything else.
+#   Scratch exemption: Tier 2 is skipped for targets that resolve (symlinks and `..` followed)
+#           outside the repo root and inside /tmp or $TMPDIR; Tier 1 still applies there.
 # The *shipped* guard (harness-kit-{ts,fastapi}.md -> protect-files.sh) hard-blocks CI instead: downstream
 # projects have a different threat model.
 
@@ -54,6 +56,50 @@ if [[ "$path" =~ (^|/)\.env(\.[^/]*)?$ ]] || \
   exit 2
 fi
 [[ "$TOOL" == "Read" || "$TOOL" == "Grep" ]] && exit 0
+
+# Physical absolute path of $1 with every symlink and `..` resolved, for a target that may not
+# exist yet. Fails (non-zero) when it cannot be resolved with certainty: a symlink leaf, a dangling
+# symlink, or `..` / `.` in the not-yet-existing tail.
+resolve_physical() {
+  local p="$1" tail="" seg dir
+  [[ "$p" == /* ]] || p="$ROOT_REAL/$p"
+  while [[ ! -e "$p" ]]; do
+    [[ -L "$p" ]] && return 1
+    seg="${p##*/}"
+    case "$seg" in ""|.|..) return 1 ;; esac
+    tail="/$seg$tail"
+    p="${p%/*}"
+    [[ -n "$p" ]] || p="/"
+  done
+  if [[ -d "$p" ]]; then
+    dir=$(cd -P "$p" 2>/dev/null && pwd -P) || return 1
+  else
+    [[ -L "$p" ]] && return 1
+    dir=$(cd -P "${p%/*}/" 2>/dev/null && pwd -P) || return 1
+    tail="/${p##*/}$tail"
+  fi
+  [[ "$dir" == "/" ]] && dir=""
+  printf '%s%s' "$dir" "$tail"
+}
+
+# True when the target resolves outside the repo root and under /tmp or $TMPDIR.
+in_scratch_dir() {
+  local resolved root tmp base
+  resolved=$(resolve_physical "$FILE") || return 1
+  resolved=$(printf '%s' "$resolved" | tr '[:upper:]' '[:lower:]')
+  root=$(printf '%s' "$ROOT_REAL" | tr '[:upper:]' '[:lower:]')
+  [[ "$resolved" == "$root" || "$resolved" == "$root"/* ]] && return 1
+  for base in /tmp "${TMPDIR:-}"; do
+    [[ -n "$base" && -d "$base" ]] || continue
+    tmp=$(cd -P "$base" 2>/dev/null && pwd -P) || continue
+    [[ "$tmp" == "/" ]] && continue
+    tmp=$(printf '%s' "$tmp" | tr '[:upper:]' '[:lower:]')
+    [[ "$resolved" == "$tmp"/* ]] && return 0
+  done
+  return 1
+}
+
+in_scratch_dir && exit 0
 
 # Tier 2 — ASK.
 reason=""

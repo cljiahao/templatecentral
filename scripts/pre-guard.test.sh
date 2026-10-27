@@ -146,6 +146,44 @@ fi
 run_guard "{\"tool_input\":{\"file_path\":\"$HOME/.claude/settings.json\"}}"
 expect_contains "absolute ~/.claude/settings.json asks" "\"permissionDecision\":\"ask\"" "$out"
 
+echo "== (h2) scratch dirs skip Tier 2 only =="
+SCRATCH=$(mktemp -d /tmp/pre-guard-scratch.XXXXXX)
+TMPD=$(mktemp -d)
+LINKDIR=$(mktemp -d /tmp/pre-guard-link.XXXXXX)
+ln -s "$REPO_ROOT" "$LINKDIR/repo"
+ask_json() { printf '%s' "$out" | grep -q '"permissionDecision":"ask"'; }
+expect_allowed() {
+  if [[ "$code" == 0 && -z "$out" ]]; then pass=$((pass + 1)); echo "  OK   $1 allowed"
+  else fail=$((fail + 1)); echo "  FAIL $1 — expected silent allow, got exit $code: $out"; fi
+}
+expect_asks() {
+  if [[ "$code" == 0 ]] && ask_json; then pass=$((pass + 1)); echo "  OK   $1 asks"
+  else fail=$((fail + 1)); echo "  FAIL $1 — expected ask, got exit $code: $out"; fi
+}
+run_guard '{"tool_input":{"file_path":"/tmp/scaffold-e2e/Dockerfile"}}'
+expect_allowed "/tmp/scaffold-e2e/Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"$SCRATCH/app/Dockerfile\"}}"
+expect_allowed "existing /tmp subdir Dockerfile"
+out=$(printf '%s' "{\"tool_input\":{\"file_path\":\"$TMPD/a/b/Dockerfile\"}}" | TMPDIR="$TMPD" bash "$GUARD" 2>&1); code=$?
+expect_allowed "\$TMPDIR/.../Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"$HOME/.claude/settings.json\"}}"
+expect_asks "\$HOME/.claude/settings.json"
+run_guard "{\"tool_input\":{\"file_path\":\"$REPO_ROOT/Dockerfile\"}}"
+expect_asks "in-repo Dockerfile"
+run_guard '{"tool_input":{"file_path":"Dockerfile"}}'
+expect_asks "relative in-repo Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"/tmp/../${REPO_ROOT#/}/Dockerfile\"}}"
+expect_asks "/tmp/.. path into repo"
+run_guard "{\"tool_input\":{\"file_path\":\"$LINKDIR/repo/Dockerfile\"}}"
+expect_asks "/tmp symlink into repo"
+run_guard '{"tool_input":{"file_path":"/tmp/nonexistent-dir/../Dockerfile"}}'
+expect_asks "/tmp unresolvable .. tail"
+run_guard '{"tool_input":{"file_path":"/tmp/x/.env"}}'
+expect_exit "/tmp/x/.env still blocked" 2 "$code"
+run_guard '{"tool_input":{"file_path":"/tmp/x/server.pem"}}'
+expect_exit "/tmp/x/server.pem still blocked" 2 "$code"
+rm -rf "$SCRATCH" "$TMPD" "$LINKDIR"
+
 echo "== (i) bash-guard.sh =="
 BG="$REPO_ROOT/scripts/bash-guard.sh"
 E=.env
