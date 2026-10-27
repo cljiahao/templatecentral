@@ -313,8 +313,8 @@ for combo in "${COMBOS[@]}"; do
     want_sha="${line%%  *}"
     path="${line#*  }"
     got=$(grep -F -- "  $path" "$T/actual-$combo" | awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) { print $1; exit } }')
-    excepted "$combo" "$path" && continue
     [[ -n "$got" ]] && covered=$((covered + 1))
+    excepted "$combo" "$path" && continue
     if [[ -z "$got" && $FROM_TEMPLATES -eq 1 ]]; then continue
     elif [[ -z "$got" ]]; then echo "MISSING $combo $path"; bad=1
     elif [[ "$got" != "$want_sha" ]]; then echo "MISMATCH $combo $path"; bad=1; fi

@@ -42,9 +42,10 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-Run it once, before Step A, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. Set `SEL` to `template template-ts` for nestjs, nextjs and vite-react, or `template template-py` for fastapi, and keep exactly one of the last two `cp` lines. The guard runs first and stops without writing anything when the manifest is missing, empty or disagrees with the files in the selected trees, when any file the copy writes already exists in `<target>`, or when a top-level directory the copy writes into (`.claude`, `.lefthook`, ...) is a symlink there. Every `cp` stops the step if it fails. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit.
+Run it once, before Step A, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. Set `SEL` to `template template-ts` for nestjs, nextjs and vite-react, or `template template-py` for fastapi, and keep exactly one of the last two `cp` lines. The guard runs first and stops without writing anything when the manifest is missing, empty or disagrees with the files in the selected trees, when any file the copy writes already exists in `<target>`, or when any directory the copy writes into (`.claude`, `.claude/hooks`, `.lefthook`, ...) is a symlink there. Every `cp` stops the step if it fails. The fence hands its script to `bash` through a quoted heredoc, so it behaves the same from bash or zsh (zsh does not split `$SEL`) and a refusal ends only that child process, never the caller's shell. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit.
 
 ```bash
+bash <<'TC_GUARD'
 SEL="template template-ts"
 SK="<skill-dir>/shared"
 TGT="<target>"
@@ -62,13 +63,18 @@ if [ -z "$listed" ] || [ "$listed" != "$found" ]; then echo "Refusing to scaffol
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
 done)
-links=$(printf '%s\n' "$found" | sed -n 's|/.*||p' | LC_ALL=C sort -u | while IFS= read -r d; do
-  if [ -L "$TGT/$d" ]; then echo "$d"; fi
-done)
+links=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  d=$p
+  while [ "${d%/*}" != "$d" ]; do
+    d=${d%/*}
+    if [ -L "$TGT/$d" ]; then echo "$d"; fi
+  done
+done | LC_ALL=C sort -u)
 if [ -n "$clash$links" ]; then printf 'Refusing to scaffold: these paths already exist or are symlinks in %s:\n%s\n%s\n' "$TGT" "$clash" "$links"; exit 1; fi
 cp -Rp "<skill-dir>/shared/template/." "<target>/" || exit 1
 cp -Rp "<skill-dir>/shared/template-ts/." "<target>/" || exit 1
 cp -Rp "<skill-dir>/shared/template-py/." "<target>/" || exit 1
+TC_GUARD
 ```
 
 Lines one and two are for nestjs, nextjs and vite-react; lines one and three are for fastapi. The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.

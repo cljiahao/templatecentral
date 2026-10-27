@@ -210,6 +210,37 @@ mkdir -p "$T/g8" "$T/elsewhere2"; ln -s "$T/elsewhere2" "$T/g8/.github"
 refuses ci_copy_refuses_symlinked_top_level_dir "$SK" "template-ci/github-ts" "$T/g8"
 mkdir -p "$T/g9" "$T/elsewhere3"; ln -s "$T/elsewhere3" "$T/g9/.lefthook"
 refuses copy_refuses_symlinked_lefthook_dir "$SK" "template template-ts" "$T/g9"
+# a symlink anywhere in the dirname chain is refused
+mkdir -p "$T/g11/.claude" "$T/elsewhere4"; ln -s "$T/elsewhere4" "$T/g11/.claude/hooks"
+refuses copy_refuses_nested_symlink_dir "$SK" "template template-ts" "$T/g11"
+check 0 "$(find "$T/elsewhere4" -type f | wc -l | tr -d ' ')" "copy_refuses_nested_symlink_dir: nothing written through the link"
+mkdir -p "$T/g12/.github" "$T/elsewhere5"; ln -s "$T/elsewhere5" "$T/g12/.github/workflows"
+refuses ci_copy_refuses_nested_symlink_dir "$SK" "template-ci/github-ts" "$T/g12"
+
+# the fences behave the same under zsh (which does not split $SEL), and a refusal never kills the caller's shell
+if command -v zsh >/dev/null 2>&1; then
+  tgt="$T/z1"; mkdir -p "$tgt"
+  out=$(zsh -c "$(render "$STEP0" "$tgt" "template template-ts")" 2>&1); ec=$?
+  check 0 "$ec" "zsh_step0_success_exits_0 ($out)"
+  check 1 "$([[ -x "$tgt/.claude/hooks/session-context.sh" && -f "$tgt/.gitleaks.toml" && -f "$tgt/lefthook.yml" ]] && echo 1 || echo 0)" "zsh_step0_success_copies"
+  out=$(zsh -c "$(render "$STEP0" "$tgt" "template template-ts")" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 ]] && echo 1 || echo 0)" "zsh_step0_refusal_exits_nonzero"
+  tgt="$T/z2"; mkdir -p "$tgt"
+  out=$(zsh -c "$(render "$CI_SNIPPET" "$tgt" "template-ci/azure")" 2>&1); ec=$?
+  check 0 "$ec" "zsh_ci_success_exits_0 ($out)"
+  check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" ]] && echo 1 || echo 0)" "zsh_ci_success_copies"
+  tgt="$T/z3"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/.gitleaks.toml"
+  out=$(zsh -c "$(render "$STEP0" "$tgt" "template template-ts")
+echo CALLER_SURVIVED" 2>&1)
+  check 1 "$([[ "$out" == *CALLER_SURVIVED* && "$out" == *Refusing* ]] && echo 1 || echo 0)" "zsh_refusal_leaves_caller_shell_alive"
+  check 1 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "zsh_refusal_copies_nothing"
+  out=$(bash -c "$(render "$STEP0" "$tgt" "template template-ts")
+echo CALLER_SURVIVED" 2>&1)
+  check 1 "$([[ "$out" == *CALLER_SURVIVED* ]] && echo 1 || echo 0)" "bash_refusal_leaves_caller_shell_alive"
+else
+  echo "SKIP: zsh tests (zsh not installed)"
+fi
+
 # a real top-level directory that already holds other files is fine
 mkdir -p "$T/g10/.claude"; printf 'mine\n' > "$T/g10/.claude/own.txt"
 out=$(run_step0 "$T/g10" ts); check 0 "$?" "copy_allows_existing_directory_with_other_files ($out)"

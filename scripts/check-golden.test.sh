@@ -103,6 +103,10 @@ case "$out" in *"COUNT $COMBO templated "*" expected "*) PASS=$((PASS + 1)) ;; *
 rm -rf "$T/sk-del/shared/template.manifest"
 TC_SCAFFOLD_DIR="$T/sk-del" bash "$CHECK" --from-templates "$COMBO" > /dev/null 2>&1; check 1 $? "from_templates_missing_manifest_fails"
 
+# a templated path that exceptions.txt lists still counts as templated (no false COUNT failure)
+g=$(fresh_golden excount); printf '* .gitleaks.toml # test\n' >> "$g/exceptions.txt"
+bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 0 $? "from_templates_excepted_templated_path_counts"
+
 # a changed template byte is MISMATCH, an unexpected template file is EXTRA, a path both fenced and templated is DUPLICATE
 mkdir -p "$T/sk-bad"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bad/shared"
 printf 'x\n' >> "$T/sk-bad/shared/template/.gitleaks.toml"

@@ -105,9 +105,10 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 
 **Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; delete it in this case) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Set `SEL` to `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack), run the guard (it refuses on a bad manifest, an existing file or a symlinked top-level directory), and keep only the one matching `cp` line. Seed nothing when the paragraph above says to seed neither.
+Copy the CI file for the picked host. Set `SEL` to `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack), run the guard (it refuses on a bad manifest, an existing file or a symlinked directory), and keep only the one matching `cp` line. Seed nothing when the paragraph above says to seed neither.
 
 ```bash
+bash <<'TC_GUARD'
 SEL="template-ci/github-ts"
 SK="<skill-dir>/shared"
 TGT="<target>"
@@ -125,13 +126,18 @@ if [ -z "$listed" ] || [ "$listed" != "$found" ]; then echo "Refusing to seed CI
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
 done)
-links=$(printf '%s\n' "$found" | sed -n 's|/.*||p' | LC_ALL=C sort -u | while IFS= read -r d; do
-  if [ -L "$TGT/$d" ]; then echo "$d"; fi
-done)
+links=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  d=$p
+  while [ "${d%/*}" != "$d" ]; do
+    d=${d%/*}
+    if [ -L "$TGT/$d" ]; then echo "$d"; fi
+  done
+done | LC_ALL=C sort -u)
 if [ -n "$clash$links" ]; then printf 'Refusing to seed CI: these paths already exist or are symlinks in %s:\n%s\n%s\n' "$TGT" "$clash" "$links"; exit 1; fi
 cp -Rp "<skill-dir>/shared/template-ci/github-ts/." "<target>/" || exit 1
 cp -Rp "<skill-dir>/shared/template-ci/github-py/." "<target>/" || exit 1
 cp -Rp "<skill-dir>/shared/template-ci/azure/." "<target>/" || exit 1
+TC_GUARD
 ```
 
 `.github/workflows/ci.yml` — TS stacks (nestjs / nextjs / vite-react). The copy above places it from `<skill-dir>/shared/template-ci/github-ts/.github/workflows/ci.yml`.

@@ -133,6 +133,8 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get install -y zsh
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
