@@ -42,26 +42,33 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-Run it once, before Step A, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. First refuse to scaffold over an existing file: the check lists every manifest path that already exists in `<target>` and stops without writing anything. Set `SEL` to `template template-ts` for nestjs, nextjs and vite-react, or `template template-py` for fastapi.
+Run it once, before Step A, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. Set `SEL` to `template template-ts` for nestjs, nextjs and vite-react, or `template template-py` for fastapi, and keep exactly one of the last two `cp` lines. The guard runs first and stops without writing anything when the manifest is missing, empty or disagrees with the files in the selected trees, when any file the copy writes already exists in `<target>`, or when a top-level directory the copy writes into (`.claude`, `.lefthook`, ...) is a symlink there. Every `cp` stops the step if it fails. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit.
 
 ```bash
 SEL="template template-ts"
-clash=$(awk -v sel="$SEL" '
+SK="<skill-dir>/shared"
+TGT="<target>"
+for t in $SEL; do
+  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || { echo "Refusing to scaffold: no files under $SK/$t"; exit 1; }
+done
+[ -s "$SK/template.manifest" ] || { echo "Refusing to scaffold: $SK/template.manifest is missing or empty"; exit 1; }
+listed=$(awk -v sel="$SEL" '
   BEGIN { n = split(sel, s, " ") }
   /^#/ || NF == 0 { next }
   { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
-' "<skill-dir>/shared/template.manifest" | while IFS= read -r p; do
-  if [ -e "<target>/$p" ] || [ -L "<target>/$p" ]; then echo "$p"; fi
+' "$SK/template.manifest" | LC_ALL=C sort)
+found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then echo "Refusing to scaffold: template.manifest and the template trees ($SEL) do not list the same files"; exit 1; fi
+clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
 done)
-if [ -n "$clash" ]; then printf 'Refusing to scaffold: these paths already exist in <target>:\n%s\n' "$clash"; exit 1; fi
-```
-
-Then copy. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit. Run the first line, then exactly one of the other two:
-
-```bash
-cp -Rp "<skill-dir>/shared/template/." "<target>/"
-cp -Rp "<skill-dir>/shared/template-ts/." "<target>/"
-cp -Rp "<skill-dir>/shared/template-py/." "<target>/"
+links=$(printf '%s\n' "$found" | sed -n 's|/.*||p' | LC_ALL=C sort -u | while IFS= read -r d; do
+  if [ -L "$TGT/$d" ]; then echo "$d"; fi
+done)
+if [ -n "$clash$links" ]; then printf 'Refusing to scaffold: these paths already exist or are symlinks in %s:\n%s\n%s\n' "$TGT" "$clash" "$links"; exit 1; fi
+cp -Rp "<skill-dir>/shared/template/." "<target>/" || exit 1
+cp -Rp "<skill-dir>/shared/template-ts/." "<target>/" || exit 1
+cp -Rp "<skill-dir>/shared/template-py/." "<target>/" || exit 1
 ```
 
 Lines one and two are for nestjs, nextjs and vite-react; lines one and three are for fastapi. The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.

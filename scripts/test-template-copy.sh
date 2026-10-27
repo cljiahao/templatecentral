@@ -61,15 +61,12 @@ render() {
         { print }'
 }
 
-STEP0_REFUSE=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0_REFUSE=""
-STEP0_COPY=$(snippet "$KIT_INDEX" '^## Step 0\b' 2) || STEP0_COPY=""
+STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
 CI_SNIPPET=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 1) || CI_SNIPPET=""
-check 1 "$([[ -n "$STEP0_REFUSE" && -n "$STEP0_COPY" && -n "$CI_SNIPPET" ]] && echo 1 || echo 0)" "copy instructions found in the kit markdown (Step 0 refuse, Step 0 copy, Step B3 CI)"
+check 1 "$([[ -n "$STEP0" && -n "$CI_SNIPPET" ]] && echo 1 || echo 0)" "copy instructions found in the kit markdown (Step 0, Step B3 CI)"
 
 run_step0() { # run_step0 <target> <variant ts|py>
-  local sel="template template-$2" out
-  out=$(bash -c "$(render "$STEP0_REFUSE" "$1" "$sel")" 2>&1) || { printf '%s\n' "$out"; return 1; }
-  bash -c "$(render "$STEP0_COPY" "$1" "$sel")" 2>&1
+  bash -c "$(render "$STEP0" "$1" "template template-$2")" 2>&1
 }
 run_ci() { # run_ci <target> <variant ts|py> <host github|azure>
   local sel=template-ci/azure
@@ -177,6 +174,49 @@ run_ci "$T/refuse-ci-gh" ts github >/dev/null; check 0 $? "copy_refuses_existing
 # a clash on the other variant's hook does not block (only the chosen variant is seeded)
 tgt="$T/refuse-variant"; mkdir -p "$tgt/.claude/hooks"; printf 'mine\n' > "$tgt/.claude/hooks/user-prompt-guard.py"
 run_copy "$tgt" ts github >/dev/null; check 0 $? "copy_refuses_existing_path: other variant's file does not block"
+
+# ── the guard fails closed ───────────────────────────────────────────────────
+# alt_skill <name> — a writable copy of the shared trees; echoes its skill dir.
+alt_skill() { rm -rf "$T/alt-$1"; mkdir -p "$T/alt-$1/scaffold"; cp -Rp "$SHARED" "$T/alt-$1/scaffold/shared"; echo "$T/alt-$1/scaffold"; }
+# refuses <name> <skill-dir> <selector> <target> — Step 0 or CI snippet must exit nonzero and write nothing.
+refuses() {
+  local name=$1 sk=$2 sel=$3 tgt=$4 snip=$STEP0 out ec saved=$SK
+  [[ "$sel" == template-ci/* ]] && snip=$CI_SNIPPET
+  SK=$sk
+  out=$(bash -c "$(render "$snip" "$tgt" "$sel")" 2>&1); ec=$?
+  SK=$saved
+  check 1 "$([[ $ec -ne 0 ]] && echo 1 || echo 0)" "$name: nonzero exit ($out)"
+  check 0 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "$name: nothing copied"
+}
+sk=$(alt_skill nomanifest); rm "$sk/shared/template.manifest"; mkdir -p "$T/g1"
+refuses copy_refuses_missing_manifest "$sk" "template template-ts" "$T/g1"
+sk=$(alt_skill emptymanifest); : > "$sk/shared/template.manifest"; mkdir -p "$T/g2"
+refuses copy_refuses_empty_manifest "$sk" "template template-ts" "$T/g2"
+mkdir -p "$T/g3"
+refuses copy_refuses_unmatched_selector "$SK" "template template-bogus" "$T/g3"
+mkdir -p "$T/g3b"
+refuses ci_copy_refuses_unmatched_selector "$SK" "template-ci/nope" "$T/g3b"
+sk=$(alt_skill unlisted); printf 'x\n' > "$sk/shared/template/.claude/unlisted.txt"; mkdir -p "$T/g4"
+refuses copy_refuses_file_missing_from_manifest "$sk" "template template-ts" "$T/g4"
+sk=$(alt_skill ghost); printf 'template/.claude/ghost.sh 755 - -\n' >> "$sk/shared/template.manifest"; mkdir -p "$T/g5"
+refuses copy_refuses_manifest_line_without_file "$sk" "template template-ts" "$T/g5"
+sk=$(alt_skill ci-nomanifest); rm "$sk/shared/template.manifest"; mkdir -p "$T/g6"
+refuses ci_copy_refuses_missing_manifest "$sk" "template-ci/github-ts" "$T/g6"
+# a symlinked top-level directory is refused, and nothing is written through it
+mkdir -p "$T/g7" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/g7/.claude"
+refuses copy_refuses_symlinked_top_level_dir "$SK" "template template-ts" "$T/g7"
+check 0 "$(find "$T/elsewhere" -type f | wc -l | tr -d ' ')" "copy_refuses_symlinked_top_level_dir: nothing written through the link"
+mkdir -p "$T/g8" "$T/elsewhere2"; ln -s "$T/elsewhere2" "$T/g8/.github"
+refuses ci_copy_refuses_symlinked_top_level_dir "$SK" "template-ci/github-ts" "$T/g8"
+mkdir -p "$T/g9" "$T/elsewhere3"; ln -s "$T/elsewhere3" "$T/g9/.lefthook"
+refuses copy_refuses_symlinked_lefthook_dir "$SK" "template template-ts" "$T/g9"
+# a real top-level directory that already holds other files is fine
+mkdir -p "$T/g10/.claude"; printf 'mine\n' > "$T/g10/.claude/own.txt"
+out=$(run_step0 "$T/g10" ts); check 0 "$?" "copy_allows_existing_directory_with_other_files ($out)"
+check mine "$(cat "$T/g10/.claude/own.txt")" "copy_allows_existing_directory_with_other_files: own file kept"
+# every template .sh parses
+bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')
+check "" "$bad" "template_sh_parses: bash -n over every template .sh"
 
 # ── dist_keeps_templates ─────────────────────────────────────────────────────
 dist="$T/dist/agents-skills"

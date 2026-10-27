@@ -89,6 +89,23 @@ overlay_templates() {
   return $found
 }
 
+# expected_template_count <stack> <ci> — files the manifests list for one combo: the shared manifest
+# rows for its trees (template, template-<ts|py>, template-ci/<host>) plus every row of
+# <stack>/template.manifest when that exists.
+expected_template_count() {
+  local stack="$1" ci="$2" ts=py ci_dir=azure n=0 m
+  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
+  [[ "$ci" == github ]] && ci_dir="github-$ts"
+  m="$SCAFFOLD_DIR/shared/template.manifest"
+  if [[ -f "$m" ]]; then
+    n=$(awk -v a="template/" -v b="template-$ts/" -v c="template-ci/$ci_dir/" \
+      '!/^#/ && NF && (index($1, a) == 1 || index($1, b) == 1 || index($1, c) == 1) { n++ } END { print n + 0 }' "$m")
+  fi
+  m="$SCAFFOLD_DIR/$stack/template.manifest"
+  if [[ -f "$m" ]]; then n=$((n + $(awk '!/^#/ && NF { n++ } END { print n + 0 }' "$m"))); fi
+  echo "$n"
+}
+
 # actual_hashes <stack> <ci> <outfile> — "<sha>  <path>" lines, sorted by path.
 actual_hashes() {
   local stack="$1" ci="$2" out="$3" tree="$T/tree-$1-$2"
@@ -308,6 +325,14 @@ for combo in "${COMBOS[@]}"; do
     excepted "$combo" "$path" && continue
     echo "EXTRA $combo $path"; bad=1
   done < "$T/actual-$combo"
+  if [[ $FROM_TEMPLATES -eq 1 ]]; then
+    # The trees must hold every file the manifests list, so deleting a template file fails here
+    # even though a path no template holds yet is skipped above.
+    expected=$(expected_template_count "$stack" "$ci")
+    if [[ "$expected" -eq 0 || "$covered" -ne "$expected" ]]; then
+      echo "COUNT $combo templated $covered expected $expected"; bad=1
+    fi
+  fi
   if [[ $bad -eq 0 ]]; then
     ok=$((ok + 1))
     if [[ $FROM_TEMPLATES -eq 1 ]]; then echo "OK $combo ($covered of $(wc -l < "$T/want-$combo" | tr -d ' ') golden paths templated)"; else echo "OK $combo"; fi

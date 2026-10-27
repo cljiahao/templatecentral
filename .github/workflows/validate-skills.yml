@@ -137,6 +137,8 @@ jobs:
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
+      - name: bash -n over the scaffold template scripts
+        run: find skills -path '*/template*' -name '*.sh' -print0 | xargs -0 -n1 bash -n
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests

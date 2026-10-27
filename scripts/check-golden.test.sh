@@ -94,6 +94,15 @@ check 0 "$ec" "from_templates_passes_for_moved_paths: exit"
 check "check-golden: 8/8 combos OK" "$(tail -1 <<< "$out")" "from_templates_passes_for_moved_paths: summary"
 case "$(grep "^OK $COMBO" <<< "$out")" in *"golden paths templated"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates_reports_coverage [$out]" ;; esac
 
+# deleting a template file fails --from-templates on its own (COUNT), and so does an emptied manifest
+rm -rf "$T/sk-del"; mkdir -p "$T/sk-del"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-del/shared"
+rm "$T/sk-del/shared/template/.claude/regen-harness.sh"
+out=$(TC_SCAFFOLD_DIR="$T/sk-del" bash "$CHECK" --from-templates "$COMBO"); ec=$?
+check 1 "$ec" "from_templates_deleted_template_fails: exit"
+case "$out" in *"COUNT $COMBO templated "*" expected "*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates_deleted_template_fails: no COUNT line [$out]" ;; esac
+rm -rf "$T/sk-del/shared/template.manifest"
+TC_SCAFFOLD_DIR="$T/sk-del" bash "$CHECK" --from-templates "$COMBO" > /dev/null 2>&1; check 1 $? "from_templates_missing_manifest_fails"
+
 # a changed template byte is MISMATCH, an unexpected template file is EXTRA, a path both fenced and templated is DUPLICATE
 mkdir -p "$T/sk-bad"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bad/shared"
 printf 'x\n' >> "$T/sk-bad/shared/template/.gitleaks.toml"

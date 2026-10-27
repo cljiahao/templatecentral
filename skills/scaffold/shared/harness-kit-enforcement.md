@@ -105,21 +105,33 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 
 **Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; delete it in this case) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Set `SEL` to `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack), run the refuse check, then run the one matching `cp` line. Seed nothing when the paragraph above says to seed neither.
+Copy the CI file for the picked host. Set `SEL` to `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack), run the guard (it refuses on a bad manifest, an existing file or a symlinked top-level directory), and keep only the one matching `cp` line. Seed nothing when the paragraph above says to seed neither.
 
 ```bash
 SEL="template-ci/github-ts"
-clash=$(awk -v sel="$SEL" '
+SK="<skill-dir>/shared"
+TGT="<target>"
+for t in $SEL; do
+  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || { echo "Refusing to seed CI: no files under $SK/$t"; exit 1; }
+done
+[ -s "$SK/template.manifest" ] || { echo "Refusing to seed CI: $SK/template.manifest is missing or empty"; exit 1; }
+listed=$(awk -v sel="$SEL" '
   BEGIN { n = split(sel, s, " ") }
   /^#/ || NF == 0 { next }
   { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
-' "<skill-dir>/shared/template.manifest" | while IFS= read -r p; do
-  if [ -e "<target>/$p" ] || [ -L "<target>/$p" ]; then echo "$p"; fi
+' "$SK/template.manifest" | LC_ALL=C sort)
+found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then echo "Refusing to seed CI: template.manifest and the template trees ($SEL) do not list the same files"; exit 1; fi
+clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
 done)
-if [ -n "$clash" ]; then printf 'Refusing to seed CI: these paths already exist in <target>:\n%s\n' "$clash"; exit 1; fi
-cp -Rp "<skill-dir>/shared/template-ci/github-ts/." "<target>/"
-cp -Rp "<skill-dir>/shared/template-ci/github-py/." "<target>/"
-cp -Rp "<skill-dir>/shared/template-ci/azure/." "<target>/"
+links=$(printf '%s\n' "$found" | sed -n 's|/.*||p' | LC_ALL=C sort -u | while IFS= read -r d; do
+  if [ -L "$TGT/$d" ]; then echo "$d"; fi
+done)
+if [ -n "$clash$links" ]; then printf 'Refusing to seed CI: these paths already exist or are symlinks in %s:\n%s\n%s\n' "$TGT" "$clash" "$links"; exit 1; fi
+cp -Rp "<skill-dir>/shared/template-ci/github-ts/." "<target>/" || exit 1
+cp -Rp "<skill-dir>/shared/template-ci/github-py/." "<target>/" || exit 1
+cp -Rp "<skill-dir>/shared/template-ci/azure/." "<target>/" || exit 1
 ```
 
 `.github/workflows/ci.yml` — TS stacks (nestjs / nextjs / vite-react). The copy above places it from `<skill-dir>/shared/template-ci/github-ts/.github/workflows/ci.yml`.
