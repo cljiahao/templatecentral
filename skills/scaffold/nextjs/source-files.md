@@ -1165,9 +1165,11 @@ export function getAppOrigin(request: NextRequest): string {
 
 ### `src/lib/security/frame-protection.ts`
 
-> Anti-clickjacking headers, applied at runtime by `src/proxy.ts`. When the platform injects
-> `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://appcentral-uat.cpfnet.gov.sg`) and it passes the
-> origin check, only that portal may frame the app. Otherwise framing is denied outright.
+> The app's Content-Security-Policy and anti-clickjacking headers, applied at runtime by
+> `src/proxy.ts`. When the platform injects `APPCENTRAL_PORTAL_ORIGIN` (e.g.
+> `https://appcentral-uat.cpfnet.gov.sg`) and it passes the origin check, only that portal may
+> frame the app. Otherwise framing is denied outright. This is the only place the CSP is set —
+> `next.config.ts` `headers()` does not send one.
 
 ```ts
 // Exactly one https origin: lowercase host labels, no path, port, wildcard, quotes,
@@ -1175,18 +1177,33 @@ export function getAppOrigin(request: NextRequest): string {
 // inject extra CSP directives or headers.
 const PORTAL_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 
-// Keep in sync with the Content-Security-Policy in next.config.ts headers().
+// CSP baseline — tighten after auth/analytics are wired. The single source of the app's CSP:
+// add new directives here, not in next.config.ts headers() (this header replaces any CSP set
+// earlier on the response).
 const CSP_BASE = "base-uri 'self'; object-src 'none'; form-action 'self'";
+
+// Responses rewritten to the backend (standards full-stack-pairing: /api/external/* →
+// BACKEND_URL) keep the backend's own, stricter security headers untouched.
+const BACKEND_PROXY_PATH = '/api/external';
+
+function isBackendProxyPath(pathname: string): boolean {
+  return pathname === BACKEND_PROXY_PATH || pathname.startsWith(`${BACKEND_PROXY_PATH}/`);
+}
 
 function portalOrigin(): string | null {
   const origin = process.env.APPCENTRAL_PORTAL_ORIGIN;
   return origin && PORTAL_ORIGIN_RE.test(origin) ? origin : null;
 }
 
-// Omitted in dev: browsers enforce these even for localhost, which blocks IDE-embedded
-// preview panes (most render via <iframe>). Every deployed environment gets them.
-export function applyFrameProtection<T extends Response>(res: T): T {
-  if (process.env.NODE_ENV === 'development') return res;
+export function applyFrameProtection<T extends Response>(pathname: string, res: T): T {
+  if (isBackendProxyPath(pathname)) return res;
+  // Anti-clickjacking is omitted in dev: browsers enforce it even for localhost, which
+  // blocks IDE-embedded preview panes (most render via <iframe>). Every deployed
+  // environment gets it.
+  if (process.env.NODE_ENV === 'development') {
+    res.headers.set('Content-Security-Policy', CSP_BASE);
+    return res;
+  }
   const origin = portalOrigin();
   if (origin) {
     // frame-ancestors supersedes X-Frame-Options, which cannot express a single
@@ -1203,20 +1220,22 @@ export function applyFrameProtection<T extends Response>(res: T): T {
 
 ### `src/proxy.ts`
 
-> Sets the anti-clickjacking headers on every page and route response. `templatecentral:add (auth)`
-> replaces this file with its route-protection proxy, which keeps the same `applyFrameProtection`
-> call on every response it returns.
+> Sets the CSP and anti-clickjacking headers on every page and route response.
+> `templatecentral:add (auth)` replaces this file with its route-protection proxy, which keeps the
+> same `applyFrameProtection` call on every response it returns.
 
 ```ts
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { applyFrameProtection } from '@/lib/security/frame-protection';
 
-export function proxy() {
-  return applyFrameProtection(NextResponse.next());
+export function proxy(req: NextRequest) {
+  return applyFrameProtection(req.nextUrl.pathname, NextResponse.next());
 }
 
-// Build output and optimised images are not documents and are never framed.
+// Build output and optimised images are not documents and are never framed, so they get no
+// CSP or X-Frame-Options.
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
@@ -1830,8 +1849,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { applyFrameProtection } from '@/lib/security/frame-protection';
 
-function framed(): Response {
-  return applyFrameProtection(new Response(null));
+const CSP_BASE = "base-uri 'self'; object-src 'none'; form-action 'self'";
+
+function framed(pathname = '/'): Response {
+  return applyFrameProtection(pathname, new Response(null));
 }
 
 describe('applyFrameProtection', () => {
@@ -1842,7 +1863,7 @@ describe('applyFrameProtection', () => {
   it('denies all framing when APPCENTRAL_PORTAL_ORIGIN is unset', () => {
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
-    expect(res.headers.get('Content-Security-Policy')).toMatch(/^frame-ancestors 'none'; /);
+    expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors 'none'; ${CSP_BASE}`);
   });
 
   it('allows only the portal origin and drops X-Frame-Options', () => {
@@ -1850,7 +1871,7 @@ describe('applyFrameProtection', () => {
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBeNull();
     expect(res.headers.get('Content-Security-Policy')).toBe(
-      "frame-ancestors https://appcentral-uat.cpfnet.gov.sg; base-uri 'self'; object-src 'none'; form-action 'self'",
+      `frame-ancestors https://appcentral-uat.cpfnet.gov.sg; ${CSP_BASE}`,
     );
   });
 
@@ -1867,7 +1888,24 @@ describe('applyFrameProtection', () => {
     vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', origin);
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
-    expect(res.headers.get('Content-Security-Policy')).toMatch(/^frame-ancestors 'none'; /);
+    expect(res.headers.get('Content-Security-Policy')).toBe(`frame-ancestors 'none'; ${CSP_BASE}`);
+  });
+
+  it.each(['/api/external', '/api/external/items'])(
+    'leaves backend-proxied responses (%s) untouched',
+    (pathname) => {
+      vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://appcentral-uat.cpfnet.gov.sg');
+      const backend = new Response(null, {
+        headers: { 'Content-Security-Policy': "default-src 'none'", 'X-Frame-Options': 'DENY' },
+      });
+      const res = applyFrameProtection(pathname, backend);
+      expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'none'");
+      expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    },
+  );
+
+  it('still protects paths that only share the prefix', () => {
+    expect(framed('/api/externalx').headers.get('X-Frame-Options')).toBe('DENY');
   });
 });
 ```

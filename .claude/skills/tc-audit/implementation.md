@@ -353,7 +353,7 @@ Read each file in full, apply checklist above:
 **Next.js-specific additional checks**:
 - [ ] `proxy.ts` used for auth proxy — not `middleware.ts` (deprecated in Next.js 16)
 - [ ] Route Handlers use `async` APIs for `cookies()`, `headers()`, `params`, `searchParams`
-- [ ] `next.config.ts` security headers include HSTS, CSP, Referrer-Policy, Permissions-Policy, X-XSS-Protection; X-Frame-Options and `frame-ancestors` come from `applyFrameProtection` (`src/lib/security/frame-protection.ts`), which the scaffold's `src/proxy.ts` and the auth proxy apply to every response
+- [ ] `next.config.ts` security headers include HSTS, Referrer-Policy, Permissions-Policy, X-XSS-Protection and NO CSP; the whole CSP (`CSP_BASE` + `frame-ancestors`) and X-Frame-Options come only from `applyFrameProtection` (`src/lib/security/frame-protection.ts`), which the scaffold's `src/proxy.ts` and the auth proxy apply to every response except `/api/external/*` (backend rewrite keeps the backend's headers)
 - [ ] `TRUST_PROXY` env var gates `getAppOrigin()` utility (`X-Forwarded-Proto` / `X-Forwarded-Host`)
 - [ ] `better-auth` session config documented — `expiresIn`, `updateAge`, `cookieCache`
 - [ ] `allowBuilds` in `pnpm-workspace.yaml` (not `.npmrc` or `package.json#pnpm`)

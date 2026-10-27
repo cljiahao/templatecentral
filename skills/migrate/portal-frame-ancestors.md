@@ -33,17 +33,29 @@ cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # nextjs, fastapi, nestj
 cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # nextjs, vite-react, nestjs
 ```
 
-**Next.js** — `next.config.ts` `headers()` is resolved at build time, so the frame headers move to
-the runtime proxy.
+**Next.js** — `next.config.ts` `headers()` is resolved at build time, so the CSP and frame headers
+move to the runtime proxy, which becomes the only place the CSP is set.
 1. Add `src/lib/security/frame-protection.ts` and `test/lib/frame-protection.test.ts` (source-files.md).
-2. In `next.config.ts` `headers()` (config-files.md): remove the `X-Frame-Options` entry and set the
-   `Content-Security-Policy` value to `"base-uri 'self'; object-src 'none'; form-action 'self'"`.
-   Leave every other header unchanged.
-3. If `src/proxy.ts` does not exist, add the scaffold's `src/proxy.ts` (source-files.md). If it
-   exists (auth installed), rename its `proxy` function body to `async function route(req)
-   : Promise<Response>`, import `applyFrameProtection`, and add
-   `export async function proxy(req: NextRequest) { return applyFrameProtection(await route(req)); }`
-   — the shape in `templatecentral:add (auth)` (`add/auth/nextjs.md` step 4). Keep its matcher.
+   If the project's `next.config.ts` CSP has directives beyond the 6.1 baseline
+   (`frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`), move them into
+   `CSP_BASE` in that file — never leave them in `headers()`, where the proxy's header replaces them.
+   If the backend rewrite path is not `/api/external`, set `BACKEND_PROXY_PATH` to it.
+2. In `next.config.ts` `headers()` (config-files.md): remove the `X-Frame-Options` and
+   `Content-Security-Policy` entries. Leave every other header unchanged.
+3. Find the proxy: `src/proxy.ts`, or `proxy.ts` at the project root. Next.js runs it only from
+   the same level as the `app/` directory: `src/proxy.ts` for `src/app/`, root `proxy.ts` for a
+   root `app/`. A root `proxy.ts` next to `src/app/` never runs — report it to the user instead of
+   relying on it. Edit the file Next.js runs, in place. Put `frame-protection.ts` (and its test
+   import) where that project's `@/*` path alias points — `src/lib/…` for `@/*` → `./src/*`,
+   `lib/…` for `@/*` → `./*`.
+   - **Neither exists:** add the scaffold's `src/proxy.ts` (source-files.md), at the `app/` level.
+   - **It exists without auth** (no `better-auth` import): make every response it returns go through
+     `applyFrameProtection(req.nextUrl.pathname, res)`, and make sure its `matcher` covers every
+     page and route (excluding at most `_next/static`, `_next/image` and `favicon.ico`).
+   - **It exists with auth** (`templatecentral:add (auth)`): rename its `proxy` function to
+     `async function route(req: NextRequest): Promise<Response>`, import `applyFrameProtection`, and add
+     `export async function proxy(req: NextRequest) { return applyFrameProtection(req.nextUrl.pathname, await route(req)); }`
+     — the shape in `add/auth/nextjs.md` step 4. Keep its matcher.
 
 **Vite + React** — nginx `envsubst` leaves an undefined `${VAR}` in place, and nginx then refuses
 to start, so a sourced entrypoint script always exports both values.

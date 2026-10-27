@@ -179,7 +179,7 @@ export const authClient = createAuthClient({
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
-Security-critical file. Write exactly as shown. It replaces the scaffold's `src/proxy.ts`; every response it returns still goes through `applyFrameProtection` (`src/lib/security/frame-protection.ts`, from the scaffold), so the anti-clickjacking headers stay on.
+Security-critical file. Write exactly as shown. It replaces the scaffold's `src/proxy.ts`; every response it returns still goes through `applyFrameProtection` (`src/lib/security/frame-protection.ts`, from the scaffold), so the CSP and anti-clickjacking headers stay on. Responses on `/api/external/*` (the backend rewrite) keep the backend's own headers.
 
 ```ts
 import { getSessionCookie } from 'better-auth/cookies';
@@ -203,7 +203,7 @@ function isPublicRoute(pathname: string): boolean {
 }
 
 export async function proxy(req: NextRequest) {
-  return applyFrameProtection(await route(req));
+  return applyFrameProtection(req.nextUrl.pathname, await route(req));
 }
 
 async function route(req: NextRequest): Promise<Response> {

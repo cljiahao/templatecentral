@@ -263,10 +263,10 @@ const nextConfig: NextConfig = {
   // next/image refuses external hosts until they are allowlisted in `images.remotePatterns`.
 
   async headers() {
-    // Anti-clickjacking (X-Frame-Options, CSP frame-ancestors) is NOT set here: headers() is
-    // resolved at build time, but the allowed framing origin (APPCENTRAL_PORTAL_ORIGIN) is
-    // injected at runtime. src/proxy.ts sets it per request via src/lib/security/frame-protection.ts,
-    // and repeats the CSP directives below so the policy is complete whichever header wins.
+    // Content-Security-Policy and X-Frame-Options are NOT set here. headers() is resolved at
+    // build time, but the allowed framing origin (APPCENTRAL_PORTAL_ORIGIN) is injected at
+    // runtime, so src/proxy.ts sets both per request via src/lib/security/frame-protection.ts.
+    // That file is the only place the CSP is defined: add new CSP directives there, never here.
     return [
       {
         source: '/(.*)',
@@ -277,12 +277,6 @@ const nextConfig: NextConfig = {
           { key: 'X-XSS-Protection', value: '0' },
           // HSTS — browsers ignore HSTS received over HTTP, so this is only effective over HTTPS.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
-          // CSP baseline — tighten after auth/analytics are wired. Keep in sync with
-          // CSP_BASE in src/lib/security/frame-protection.ts.
-          {
-            key: 'Content-Security-Policy',
-            value: "base-uri 'self'; object-src 'none'; form-action 'self'",
-          },
         ],
       },
     ];
