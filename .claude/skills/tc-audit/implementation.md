@@ -225,6 +225,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] If the code reads `request.ip` or `X-Forwarded-For`, is `TRUST_PROXY` documented for both one-hop (ALB → App) and two-hop (ALB → Traefik → App) topologies?
 - [ ] Are error responses free of stack traces, internal paths, or DB query text?
 - [ ] Are security headers complete for scaffold skills (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection)?
+- [ ] Anti-clickjacking defaults to `X-Frame-Options: DENY` + `frame-ancestors 'none'`; only a valid `APPCENTRAL_PORTAL_ORIGIN` (one origin matching `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`, never `*`) replaces it with `frame-ancestors <origin>` and no `X-Frame-Options`. Same rule in all four stacks.
 - [ ] Is the content jurisdiction- and industry-neutral — no country-specific regulations, government schemes, or compliance frameworks?
 - [ ] Are version numbers absent from the skill body (SSOT: versions belong in `.claude/rules/*.md` only)?
 - [ ] Is there any CVE identifier present? Replace with "security advisory" language.
@@ -273,7 +274,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/standards/validation-patterns/fastapi.md`
 
 **FastAPI-specific additional checks** (apply to the above):
-- [ ] `SecurityHeadersMiddleware` includes HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and X-XSS-Protection
+- [ ] `SecurityHeadersMiddleware` includes HSTS, X-Content-Type-Options, X-Frame-Options (`DENY` unless a valid `APPCENTRAL_PORTAL_ORIGIN` is set — `frame_ancestors()` uses `re.fullmatch`), Referrer-Policy, Permissions-Policy, and X-XSS-Protection
 - [ ] `TRUST_PROXY` env var gates `ProxyHeadersMiddleware` and `ForwardedHostMiddleware`
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
@@ -352,7 +353,7 @@ Read each file in full, apply checklist above:
 **Next.js-specific additional checks**:
 - [ ] `proxy.ts` used for auth proxy — not `middleware.ts` (deprecated in Next.js 16)
 - [ ] Route Handlers use `async` APIs for `cookies()`, `headers()`, `params`, `searchParams`
-- [ ] `next.config.ts` security headers include HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection
+- [ ] `next.config.ts` security headers include HSTS, Referrer-Policy, Permissions-Policy, X-XSS-Protection and NO CSP; the whole CSP (`CSP_BASE` + `frame-ancestors`) and X-Frame-Options come only from `applyFrameProtection` (`src/lib/security/frame-protection.ts`), which the scaffold's `src/proxy.ts` and the auth proxy apply to every response except `/api/external/*` (backend rewrite keeps the backend's headers)
 - [ ] `TRUST_PROXY` env var gates `getAppOrigin()` utility (`X-Forwarded-Proto` / `X-Forwarded-Host`)
 - [ ] `better-auth` session config documented — `expiresIn`, `updateAge`, `cookieCache`
 - [ ] `allowBuilds` in `pnpm-workspace.yaml` (not `.npmrc` or `package.json#pnpm`)
@@ -384,8 +385,8 @@ Read each file in full, apply checklist above:
 - [ ] Dockerfile `COPY` includes `pnpm-workspace.yaml*`
 - [ ] `@vitejs/plugin-react` v6 Oxc-based — no `@babel/core` required
 - [ ] `z.flattenError()` used — not deprecated `.flatten()`
-- [ ] nginx.conf.template includes `Content-Security-Policy` with at least `frame-ancestors 'none'` baseline
-- [ ] nginx.conf.template uses `X-Frame-Options "DENY"` (not `SAMEORIGIN`)
+- [ ] nginx.conf.template includes `Content-Security-Policy` with `frame-ancestors ${TC_FRAME_ANCESTORS}`, and `docker/15-frame-protection.envsh` defaults it to `'none'`
+- [ ] nginx.conf.template uses `X-Frame-Options "${TC_X_FRAME_OPTIONS}"`, which the envsh defaults to `DENY` (never `SAMEORIGIN`) and empties only for a valid `APPCENTRAL_PORTAL_ORIGIN`
 
 ---
 

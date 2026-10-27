@@ -15,7 +15,7 @@ Stack: Next.js ≥16.3.8 (current 16.4.x; 16.3.8 fixes critical unauthenticated 
 - Server components by default — add `'use client'` only for interactivity
 - Use `npx shadcn@latest add` for UI primitives — NEVER install manually
 - Pages compose from features — NEVER put data-fetching in page components
-- `proxy.ts` (route protection, exists only after `templatecentral:add (auth)`): NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
+- `src/proxy.ts` applies `applyFrameProtection` (frame headers from `APPCENTRAL_PORTAL_ORIGIN`) to every response; `templatecentral:add (auth)` extends it with route protection, which must NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
 
 ## Architecture
 

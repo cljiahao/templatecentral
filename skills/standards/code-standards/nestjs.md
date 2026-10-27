@@ -131,6 +131,7 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 
 **Security Headers**
 - `helmet` in `security.setup.ts` — NEVER remove or weaken CSP, HSTS, or frame-ancestors
+- `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); NEVER loosen its regex
 
 **CORS**
 - Origins restricted to `CLIENT_URL` — NEVER use `origin: '*'` in production

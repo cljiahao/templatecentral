@@ -52,7 +52,7 @@ Record the first match (these are the files `templatecentral:add (database)` cre
 
 **1g. Detect auth**
 
-Check whether `proxy.ts` or `src/proxy.ts` exists. Record presence.
+Check whether `proxy.ts` or `src/proxy.ts` exists **and** imports from `better-auth` (`getSessionCookie`). Record presence. A proxy that only calls `applyFrameProtection` (the scaffold default, before `templatecentral:add (auth)`) is not auth.
 
 **Print the assessment:**
 

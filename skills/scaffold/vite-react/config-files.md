@@ -204,6 +204,8 @@ RUN apk upgrade --no-cache \
 
 COPY --chown=${APP_UID}:${APP_GID} --from=builder ${APP_DIR}/dist /usr/share/nginx/html
 COPY --chown=${APP_UID}:${APP_GID} ./nginx.conf.template /etc/nginx/templates/nginx.conf.template
+# Sourced by the nginx entrypoint before envsubst: derives the frame headers from APPCENTRAL_PORTAL_ORIGIN.
+COPY --chown=${APP_UID}:${APP_GID} --chmod=755 ./docker/15-frame-protection.envsh /docker-entrypoint.d/15-frame-protection.envsh
 
 EXPOSE ${PORT}
 USER ${APP_UID}
@@ -488,12 +490,15 @@ server {
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
+    # Anti-clickjacking — values come from docker/15-frame-protection.envsh at container start:
+    # 'none' + DENY by default, or only the appCentral portal origin (X-Frame-Options then empty,
+    # which nginx does not send). frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
+    add_header X-Frame-Options "${TC_X_FRAME_OPTIONS}" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header X-XSS-Protection "0" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-    # CSP baseline — tighten after analytics/auth are wired. frame-ancestors replaces X-Frame-Options for CSP2+ browsers.
-    add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+    # CSP baseline — tighten after analytics/auth are wired.
+    add_header Content-Security-Policy "frame-ancestors ${TC_FRAME_ANCESTORS}; base-uri 'self'; object-src 'none'" always;
 
     # Backend API: templatecentral:standards (full-stack-pairing) adds `location /api/` here —
     # a same-origin proxy, required by cookie auth.
@@ -510,6 +515,40 @@ server {
     gzip_disable "MSIE [1-6]\.";
     gzip_vary on;
 }
+```
+
+### `docker/15-frame-protection.envsh`
+
+The nginx image's entrypoint sources `/docker-entrypoint.d/*.envsh` (executable) before it renders
+`/etc/nginx/templates/` with envsubst, so the variables exported here reach `nginx.conf.template`.
+envsubst leaves an undefined `${VAR}` in place and nginx then refuses to start, so this script always
+exports both variables. It is sourced — never `exit` from it.
+
+```sh
+#!/bin/sh
+# APPCENTRAL_PORTAL_ORIGIN (injected by appCentral at runtime) is the only origin allowed to
+# frame this app. It must be exactly one https origin — ^https://[a-z0-9-]+(\.[a-z0-9-]+)+$ —
+# with no path, port, wildcard, quotes, whitespace, semicolons or newlines, so it can never
+# inject extra CSP directives or headers. Unset or invalid denies all framing.
+tc_portal_host=
+case "${APPCENTRAL_PORTAL_ORIGIN:-}" in
+  https://*) tc_portal_host=${APPCENTRAL_PORTAL_ORIGIN#https://} ;;
+esac
+case "$tc_portal_host" in
+  "" | *[!abcdefghijklmnopqrstuvwxyz0123456789.-]* | .* | *. | *..*) tc_portal_host= ;;
+  *.*) ;;
+  *) tc_portal_host= ;;
+esac
+
+if [ -n "$tc_portal_host" ]; then
+  export TC_FRAME_ANCESTORS="https://$tc_portal_host"
+  # Empty: nginx skips an add_header whose value is empty, so X-Frame-Options is not sent.
+  export TC_X_FRAME_OPTIONS=""
+else
+  export TC_FRAME_ANCESTORS="'none'"
+  export TC_X_FRAME_OPTIONS="DENY"
+fi
+unset tc_portal_host
 ```
 
 ### `index.html`

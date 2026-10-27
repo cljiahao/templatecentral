@@ -10,6 +10,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.2.0] — 2026-10-27
+
+### Added
+- Scaffolded apps can be framed by their appCentral portal, and only by it. When the platform
+  injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://appcentral-uat.cpfnet.gov.sg`) and it matches
+  `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`, the app sends `Content-Security-Policy: frame-ancestors
+  <origin>` with its other CSP directives and no `X-Frame-Options`. Unset or invalid keeps
+  `X-Frame-Options: DENY` + `frame-ancestors 'none'`. Exactly one origin, never `*`; dev behaviour
+  is unchanged. A unit test per backend/Next.js stack covers the origin check.
+  - Next.js: `headers()` is build-time, so the CSP and `X-Frame-Options` move to the runtime proxy.
+    The scaffold seeds `src/lib/security/frame-protection.ts` (`applyFrameProtection`, the only place
+    the CSP is defined) and a minimal `src/proxy.ts`; `templatecentral:add (auth)` keeps the call by
+    wrapping its routing in `route()`. `next.config.ts` no longer sends a CSP or `X-Frame-Options`.
+    Responses on `/api/external/*` (the full-stack-pairing backend rewrite) are left untouched, so
+    they keep the backend's stricter headers. Build output, optimised images and `favicon.ico` get no
+    CSP (not documents).
+  - Vite + React: `docker/15-frame-protection.envsh` (sourced by the nginx entrypoint before
+    envsubst) always exports `TC_FRAME_ANCESTORS` / `TC_X_FRAME_OPTIONS`, so nginx never sees an
+    undefined variable; `nginx.conf.template` reads them.
+  - FastAPI: `CommonSettings.APPCENTRAL_PORTAL_ORIGIN`, validated by `frame_ancestors()` in
+    `core/security_headers.py` (`re.fullmatch`).
+  - NestJS: `appConfig.APPCENTRAL_PORTAL_ORIGIN`, validated by `portalFrameAncestor()` in
+    `security.setup.ts`; `frameguard` is off only when a valid origin is set.
+- `templatecentral:migrate` gains a "Portal framing" recipe (`migrate/portal-frame-ancestors.md`)
+  for projects scaffolded before this change.
+
+### Changed
+- `nextjs-backend-extraction` detects auth from a `better-auth` import in `proxy.ts`, not from the
+  file's presence, because every scaffold now ships `src/proxy.ts`.
+- `tc-audit`, `standards/code-standards/nestjs.md`, `standards/full-stack-pairing` and
+  `.claude/rules/nextjs.md` describe the new default-deny / portal-origin rule.
+
+---
+
 ## [6.1.2] — 2026-10-27
 
 ### Fixed
