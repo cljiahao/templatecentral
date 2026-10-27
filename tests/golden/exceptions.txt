@@ -1,0 +1,3 @@
+# Paths allowed to differ from the golden hashes.
+# Format: <combo|*> <path> # <reason>
+# <combo> is <stack>-<ci>, for example nextjs-github.
