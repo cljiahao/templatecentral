@@ -113,7 +113,7 @@ jobs:
           fi
 
           # The file is web-derived text that later agent runs read as instructions, so its content
-          # is checked too: valid UTF-8, the expected frontmatter, and no markup that hides text from reviewers.
+          # is checked too: valid UTF-8, the expected frontmatter, and no text hidden from reviewers.
           research="$dir/audit-ecosystem-research.md"
           if ! iconv -f UTF-8 -t UTF-8 "$research" >/dev/null 2>&1 \
             || [ "$(head -n 1 "$research")" != "---" ] \
@@ -121,11 +121,14 @@ jobs:
             echo "::error::audit-ecosystem-research.md must be UTF-8 and start with the last-scanned frontmatter."
             exit 1
           fi
-          if grep -qiE '<!--|<script|<iframe|<style|<img|javascript:' "$research" \
-            || python3 -c 'import re, sys; sys.exit(0 if re.search("[\u200b-\u200f\u202a-\u202e\u2060-\u2064]", open(sys.argv[1], encoding="utf-8").read()) else 1)' "$research"; then
-            echo "::error::audit-ecosystem-research.md contains hidden-text markup or invisible characters."
-            exit 1
-          fi
+          # Exit 0 = clean, 1 = hidden text or markup found, anything else = the guard itself failed.
+          rc=0
+          python3 scripts/check-research-content.py "$research" || rc=$?
+          case "$rc" in
+            0) ;;
+            1) echo "::error::audit-ecosystem-research.md contains hidden-text markup or invisible characters."; exit 1 ;;
+            *) echo "::error::Research content guard failed to run (exit $rc)."; exit 1 ;;
+          esac
 
           cp "$research" "$target"
           status="$(git status --porcelain)"
