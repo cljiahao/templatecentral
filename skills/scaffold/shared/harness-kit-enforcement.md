@@ -266,7 +266,6 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 
 `.claude/regen-harness.sh` (HUMAN-RUN ONLY — re-blesses the baseline). Step 0 copies it from `<skill-dir>/shared/template/.claude/regen-harness.sh`.
 
-
 **Wiring (already present in the copied files; verify, do not add):**
 - **CI** — the `quality` job of `.github/workflows/ci.yml` and the Azure steps template each run `bash .claude/verify-harness.sh` (the hard gate — drift fails the PR).
 - **pre-push** — `lefthook.yml` has a `harness-integrity` pre-push command that runs `bash .claude/verify-harness.sh`.
