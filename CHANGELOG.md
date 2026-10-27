@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- AI PR Review fails loudly: it stops with a clear error when `CLAUDE_CODE_OAUTH_TOKEN` is
+  empty, and prints Claude's own error text when the review run fails, instead of only
+  `is_error: true`.
+
 ---
 
 ## [6.2.0] — 2026-10-27
