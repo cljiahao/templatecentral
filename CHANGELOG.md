@@ -38,10 +38,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (three backticks or `~~~`); lines indented four or more spaces or by a tab; and lines over 1,500
   characters. It also rejects characters that do not render as visible text: categories Cc (so any
   carriage return, CRLF included), Cf, Co, Zl, Zp; every space separator except U+0020; U+FFFC;
-  noncharacters; the tag block; variation selectors (U+FE0E and U+FE0F only after a symbol or keycap
+  noncharacters; the whole U+E0000–U+E0FFF block (tag characters, variation selectors supplement and the
+  unassigned rest); the unassigned invisible U+2065 and U+FFF0–U+FFF8; variation selectors (U+FE0E and U+FE0F only after a symbol or keycap
   base); Hangul fillers, U+034F, U+17B4/17B5, Mongolian free variation selectors, U+2800 and
-  interlinear annotation characters; and runs of three or more combining marks. Unassigned code points
-  are allowed. The guard does not judge plain-text instructions; human PR review does. A guard crash
+  interlinear annotation characters; and runs of three or more combining marks. Other unassigned
+  code points are allowed. Known over-blocking: ZWJ emoji, `]:` in prose or type hints, 4-space nested
+  lists and three or more combining marks fail. The guard does not judge plain-text instructions; human PR review does. A guard crash
   fails the step instead of reading as clean. Research placeholders are written `{name}`, not
   `<name>`. The workflow stays disabled; the maintainer refreshes manually.
 - `tc-audit` floors refreshed (Starlette current stable 1.10.0, floor of record stays in

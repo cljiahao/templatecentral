@@ -27,8 +27,9 @@ DENIED_RANGES = (
     (0xFE00, 0xFE0D),    # variation selectors (FE0E/FE0F are handled separately)
     (0xFDD0, 0xFDEF),    # noncharacters
     (0xFFF9, 0xFFFB),    # interlinear annotation
-    (0xE0000, 0xE007F),  # tag characters, including the unassigned code points around them
-    (0xE0100, 0xE01EF),  # variation selectors supplement
+    (0x2065, 0x2065),    # unassigned, default-ignorable (invisible)
+    (0xFFF0, 0xFFF8),    # unassigned, default-ignorable (invisible)
+    (0xE0000, 0xE0FFF),  # tag characters, variation selectors supplement and the unassigned rest of the block
 )
 # `<` followed by a letter, `/`, `!` or `?` (tags, comments, doctype, CDATA, processing
 # instructions); `](` (inline link or image); `]:` (a reference definition, nested or split

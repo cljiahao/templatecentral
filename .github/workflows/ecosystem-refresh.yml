@@ -49,7 +49,8 @@ jobs:
             topics including harness community consensus and loop engineering). Overwrite
             .claude/audit-ecosystem-research.md in the documented format with last-scanned
             set to ${{ steps.scan.outputs.date }} (UTC). Write placeholders as {name}, never as <name>:
-            the publish job rejects any '<' followed by a letter, '/', '!' or '?'. Then write pr-body.md in the repository root: a summary of new
+            the publish job rejects any '<' followed by a letter, '/', '!' or '?'. Also avoid ']:', ZWJ emoji, 4-space
+            indents, links, images and code fences. Then write pr-body.md in the repository root: a summary of new
             versions, new advisories, RECOMMENDED/CONSENSUS harness findings, and any finding
             that invalidates a current skill (flag those as audit candidates), at most 3500
             characters. Do not create a branch, commit or pull request, and do not modify any
