@@ -4,7 +4,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EXTRACT="$REPO_ROOT/scripts/extract-fences.py"
+EXTRACT="${EXTRACT_FENCES:-$REPO_ROOT/scripts/extract-fences.py}"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 
@@ -111,6 +111,146 @@ ok_if "fastapi gets the py hook" test -f "$T/st-fastapi:github/.claude/hooks/use
 ok_if "fastapi does not get the cjs hook" test ! -e "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.cjs"
 ok_if "nextjs gets the cjs hook" test -f "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.cjs"
 ok_if "nextjs does not get the py hook" test ! -e "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.py"
+
+# bare_opener_extracted: an untagged fence is a fence
+cat > "$T/bare.md" <<MD
+**\`.gitignore\`**
+${fence}
+node_modules
+.env
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o5" --src "$T/bare.md" > /dev/null 2>&1
+check "node_modules" "$(sed -n 1p "$T/o5/.gitignore" 2>/dev/null)" "bare_opener_extracted"
+
+# stale_path_not_attached: a skipped command fence consumes the heading; a later bare fence is unheaded
+cat > "$T/stale.md" <<MD
+**\`.claude/hooks/h.sh\`**
+${fence}bash
+chmod +x .claude/hooks/h.sh
+${fence}
+
+Unrelated output:
+${fence}
+README: 1 created
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o6" --src "$T/stale.md" > "$T/o6.out" 2> /dev/null
+check "" "$(cat "$T/o6.out")" "stale_path_not_attached"
+
+# tilde_fence_not_closed_by_backticks
+cat > "$T/tilde.md" <<MD
+**\`a/SKILL.md\`**:
+~~~markdown
+# Title
+${fence}bash
+echo inner
+${fence}
+tail line
+~~~
+MD
+python3 "$EXTRACT" --flat --out "$T/o7" --src "$T/tilde.md" > /dev/null 2>&1
+check "tail line" "$(tail -1 "$T/o7/SKILL.md" 2>/dev/null)" "tilde_fence_not_closed_by_backticks"
+
+# longer_fence_not_closed_by_shorter
+cat > "$T/long.md" <<MD
+### \`AGENTS.md\`
+
+\`\`\`\`markdown
+# Agents
+${fence}bash
+echo inner
+${fence}
+last line
+\`\`\`\`
+MD
+python3 "$EXTRACT" --flat --out "$T/o8" --src "$T/long.md" > /dev/null 2>&1
+check "last line" "$(tail -1 "$T/o8/AGENTS.md" 2>/dev/null)" "longer_fence_not_closed_by_shorter"
+
+# nested_snippet_stays_in_outer_fence: a tagged ${fence} block inside a ${fence} block does not end it
+cat > "$T/nest.md" <<MD
+Create \`.claude/skills/x/SKILL.md\`:
+
+${fence}markdown
+# Skill
+${fence}bash
+pnpm check
+${fence}
+Report failures.
+${fence}
+
+Create \`CLAUDE.md\` with one line:
+
+${fence}
+@AGENTS.md
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o12" --src "$T/nest.md" > /dev/null 2>&1
+check "Report failures." "$(tail -1 "$T/o12/SKILL.md" 2>/dev/null)" "nested_snippet_stays_in_outer_fence"
+check "@AGENTS.md" "$(cat "$T/o12/CLAUDE.md" 2>/dev/null)" "nested_snippet_does_not_swallow_next_fence"
+
+# extensionless names and directory paths
+cat > "$T/noext.md" <<MD
+### \`Makefile\`
+
+${fence}make
+all:
+${fence}
+
+### \`.husky/pre-commit\`
+
+${fence}sh
+echo hi
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o9" --src "$T/noext.md" > /dev/null 2>&1
+check "all:" "$(cat "$T/o9/Makefile" 2>/dev/null)" "extensionless_makefile"
+check "echo hi" "$(cat "$T/o9/pre-commit" 2>/dev/null)" "extensionless_path_with_dir"
+
+# empty_file_heading: a heading described as an empty file is a 0-byte file
+cat > "$T/empty.md" <<MD
+### \`src/schemas/index.ts\`
+
+Empty file — placeholder.
+
+### \`src/other.ts\`
+
+${fence}ts
+export {};
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o10" --src "$T/empty.md" > /dev/null 2>&1
+check "0" "$(wc -c < "$T/o10/index.ts" 2>/dev/null | tr -d ' ')" "empty_file_heading"
+
+# prose_create: "Create \`path\` ...:" before a fence
+cat > "$T/prose.md" <<MD
+### 6. Write project AGENTS.md
+
+Create \`AGENTS.md\` at the project root with this exact content (fill in \`[Project Name]\`):
+
+${fence}markdown
+# AGENTS.md — [Project Name]
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o11" --src "$T/prose.md" > /dev/null 2>&1
+check "# AGENTS.md — [Project Name]" "$(cat "$T/o11/AGENTS.md" 2>/dev/null)" "prose_create"
+
+# coverage: every path heading yields a file, except the entries in tests/golden/unfenced.txt
+want_unfenced=$(grep -v '^#' "$REPO_ROOT/tests/golden/unfenced.txt" | sed 's/ *#.*//' | grep . | LC_ALL=C sort)
+for combo in nextjs:github nextjs:azure vite-react:github vite-react:azure fastapi:github fastapi:azure nestjs:github nestjs:azure; do
+  stack=${combo%%:*}; ci=${combo##*:}
+  python3 "$EXTRACT" --stack "$stack" --ci "$ci" --out "$T/cov-$combo" > /dev/null 2> "$T/cov-$combo.err"
+  got=$(grep '^unfenced ' "$T/cov-$combo.err" | sed -E 's/^unfenced ([^:]+):[0-9]+ (.*)$/\1 \2/' | LC_ALL=C sort)
+  check "$want_unfenced" "$got" "coverage $combo: path headings without a file match tests/golden/unfenced.txt"
+done
+
+# pinned_inline_variants: the Step A / Step B2 bodies in the variant kits are the golden settings.json and lefthook.yml
+python3 "$EXTRACT" --flat --out "$T/flat-ts" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-ts.md" > /dev/null 2>&1
+python3 "$EXTRACT" --flat --out "$T/flat-py" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-fastapi.md" > /dev/null 2>&1
+check "" "$(diff "$T/flat-ts/settings.ts.json" "$T/cov-nextjs:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: ts settings.json"
+check "" "$(diff "$T/flat-py/settings.py.json" "$T/cov-fastapi:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: fastapi settings.json"
+check "" "$(diff "$T/flat-ts/lefthook.yml" "$T/cov-nextjs:github/lefthook.yml" 2>&1)" "pinned_inline_variants: ts lefthook.yml"
+check "" "$(diff "$T/flat-py/lefthook.yml" "$T/cov-fastapi:github/lefthook.yml" 2>&1)" "pinned_inline_variants: fastapi lefthook.yml"
 
 # same_as_test_harness_kit: hook bytes match the original hook-only extractor
 cat > "$T/legacy.py" <<'PY'
