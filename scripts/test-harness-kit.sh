@@ -518,7 +518,14 @@ done
 
 printf '# Project AGENTS\nrouting line\n' > "$CC/AGENTS.md"
 run_hook "$KIT/session-context.sh" "$CC" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'routing line' <<<"$OUT")" "session-context.sh re-injects AGENTS.md"
+check "0 yes" "$EC $(ok_if grep -q 'Always-on invariants' <<<"$OUT")" "session-context.sh prints the invariants block"
+check "0 yes" "$EC $(ok_if test -z "$(grep -n 'routing line' <<<"$OUT")")" "session_context_no_agents_head: AGENTS.md is not printed (the @AGENTS.md import loads it)"
+check 0 "$(grep -c 'AGENTS.md 2>' "$KIT/session-context.sh")" "session-context.sh does not head AGENTS.md"
+printf '# Constitution\nbinding rule\n' > "$CC/docs-constitution.tmp"
+mkdir -p "$CC/docs" && mv "$CC/docs-constitution.tmp" "$CC/docs/CONSTITUTION.md"
+run_hook "$KIT/session-context.sh" "$CC" '{}'
+check "0 yes" "$EC $(ok_if grep -q 'binding rule' <<<"$OUT")" "session-context.sh re-injects docs/CONSTITUTION.md"
+rm -rf "$CC/docs"
 
 # ── skill-usage-log.sh (node, then python3-only PATH) ─────────────────────────
 

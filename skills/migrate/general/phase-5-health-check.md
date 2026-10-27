@@ -49,9 +49,15 @@ into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way
 it does not clobber.
 ```
 
-If all files are `UNCHANGED` **and** `templatecentral_version` equals the current plugin version, print:
+If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version **and** the `AGENTS.md` import is present, print:
 ```
 ✓ All harness files match their templateCentral origin and are up to date. No action needed.
+```
+
+If `CLAUDE.md` exists and the import is missing (the import-present rule in `phase-4-upgrade.md` Step 4c), print a warning; Step 5d offers the fix:
+```
+⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
+  Step 5d can append it on approval.
 ```
 
 If any file is `MISSING`, print a warning:
@@ -66,7 +72,7 @@ Canonical content for the re-sync comes from the harness kit — load it for the
 
 These four files (`harness-kit.md`, the variant file, `harness-kit-enforcement.md`, `harness-kit-finalize.md`) are loaded by the phase table in `implementation.md` — if they are not in context, load them from there.
 
-Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
+Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, a missing `AGENTS.md` import (Step 5c), or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
 
 - **Enforcement layer** (`.claude/hooks/*` except `.claude/hooks/local/`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.claude/ci-gates.sh`, the host's CI file — `.github/workflows/ci.yml` or `azure-pipelines/templatecentral-gates.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical content from this skill / `scaffold/shared/harness-kit.md`. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. CI files and hooks need human approval per write (`protect-files.sh` asks), so show their diffs in the dry-run plan. Warn if one was `MODIFIED` — and before overwriting, check whether the difference came from a `templatecentral:add` capability that extends a canonical hook (e.g. `add (redaction)` splices a companion block into `user-prompt-guard`); if so, tell the user which capability to re-apply afterwards. Any other local edit to a canonical hook (an extra protected branch, credential pattern or approval prompt) moves into a `.claude/hooks/local/` script with its own `settings.json` entry (kit Step A, "Project-local guards") in the same re-sync, so the rule survives the overwrite.
 - **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`, `.claude/skills/skill-audit/SKILL.md`, nextjs `next-migrate`):
@@ -93,6 +99,8 @@ Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, o
 - `MISSING` → reseed (write the current canonical content).
 - **Unwired Azure gates** — if `azure-pipelines/templatecentral-gates.yml` exists but no pipeline includes it (grep the repo's pipeline YAML for `templatecentral-gates`), and the pipelines already run gitleaks, the harness check **and** a dependency audit that fails on high/critical advisories: list it, `.claude/ci-gates.sh`, their `harness.json` entries and `.claude/.harness-base/` copies for deletion in the dry-run plan, and drop the CI line's template wording from AGENTS.md. Wire it in instead when the pipelines lack any of those three checks (kit Step B3). Never list `.claude/ci-gates.sh` for deletion while the pipelines lack a dependency audit.
 - **Azure pipelines without a dependency audit** — if the project is on Azure DevOps, the pipelines run gitleaks and the harness check but no dependency audit that fails on high/critical advisories, and `.claude/ci-gates.sh` is absent or has no `deps` gate: list seeding `.claude/ci-gates.sh` and adding a `bash .claude/ci-gates.sh deps` step to the existing pipeline in the dry-run plan (kit Step B3). The step needs `pnpm` or `uv` and `pipx` on the agent after the install steps. It is a pipeline edit, so `protect-files.sh` asks the human first.
+
+- **Missing `AGENTS.md` import** — if Step 5c flagged it, list the append in the dry-run plan regardless of `CLAUDE.md`'s classification (`UNCHANGED`, `MODIFIED` or untracked). On approval append `@AGENTS.md` exactly as `phase-4-upgrade.md` Step 4c does, leave every other line alone, and skip the 3-way merge for that line (a merge would keep a deleted import). If `harness.json` tracks `CLAUDE.md`, count it as a written file below so its `origin_hash` and `.harness-base/CLAUDE.md` copy are refreshed; if it does not track it, make neither.
 
 **After applying** (only the files actually written):
 ```bash

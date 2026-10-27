@@ -101,7 +101,11 @@ If `CLAUDE.md` does not exist, create it at the project root with exactly one li
 @AGENTS.md
 ```
 
-If it already exists and contains more than `@AGENTS.md`, leave it unchanged.
+If it already exists, leave its content unchanged except for one case: when the import is missing, append `@AGENTS.md` at the end (after a newline if the file does not end with one) and tell the user. Claude Code reads `AGENTS.md` only through this import, and the SessionStart hook no longer prints it. Never rewrite any other line.
+
+**Import-present rule (defined here; Phase 5 uses it unchanged):** the import is present when some line outside a code fence, with `\r` and surrounding spaces trimmed, equals `@AGENTS.md` or `@./AGENTS.md`.
+
+This append runs before Step 4f hashes `CLAUDE.md` and before Step 4f-1b snapshots it, so the recorded `origin_hash` and base copy include the line.
 
 **Step 4d: Seed the agent harness (shared kit)**
 

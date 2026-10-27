@@ -38,7 +38,7 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 - `skill-usage-log.sh` (PostToolUse `Skill`) — silently logs each skill invocation (`tool_input.skill`) to `.claude/skill-usage.log` (gitignored, per-developer). Feeds `/skill-audit`, which surfaces repeated workflows worth capturing as a committed project skill. Never blocks (exit 0 always).
 - `stop-checks.sh` (Stop) — runs the test suite when the working tree has uncommitted changes; exit 2 forces a fix before the turn ends. See delta table for test command. Claude Code caps consecutive Stop-hook continuations (8 by default, configurable via the `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` env var), and the script's `stop_hook_active` guard exits early on a re-run, so a persistently failing suite cannot loop forever.
 - `subagent-stop.sh` (SubagentStop) — type-gates a subagent's uncommitted changes so it can't hand back broken code; skips re-runs (`stop_hook_active`) and the read-only `Explore`/`Plan` agents.
-- `session-context.sh` (SessionStart: startup/resume/clear/compact) — re-injects AGENTS.md routing context + universal invariants. PostCompact fires after compaction and its stdout is injected as context too — both PostCompact and SessionStart(source: compact) are valid re-injection mechanisms, but SessionStart also covers session resume and startup, so it stays the single seeded path here.
+- `session-context.sh` (SessionStart: startup/resume/clear/compact) — re-injects the constitution + universal invariants (AGENTS.md comes from the `@AGENTS.md` import). PostCompact fires after compaction and its stdout is injected as context too — both PostCompact and SessionStart(source: compact) are valid re-injection mechanisms, but SessionStart also covers session resume and startup, so it stays the single seeded path here.
 - `skillListingBudgetFraction` — caps skill-listing context overhead at 2 % of the budget.
 
 **Project-local guards — extra hooks, never edits to canonical ones.** A re-sync overwrites the seeded hook scripts, so a project rule (a protected `sit` branch, an extra credential pattern, an approval prompt for `src/auth.ts`) goes in its own script under `.claude/hooks/local/` with its own `settings.json` entry on the same event and matcher. Claude Code runs every matching hook, and any one blocking (exit 2) or asking wins, so a local hook can only tighten the canonical guards. Re-sync never touches `.claude/hooks/local/` or the `settings.json` entries pointing at it, `protect-files.sh` still asks before edits there, and Step E hashes those scripts like any other hook — so a human blesses each local-guard change with `regen-harness.sh`, exactly as for canonical hooks.
@@ -76,12 +76,9 @@ The first 10 lines are the anchored change-narration keyword patterns (each spel
 **`.claude/hooks/session-context.sh`** (identical across all stacks — canonical):
 ```bash
 #!/usr/bin/env bash
-# SessionStart(startup|resume|clear|compact) — re-inject routing context + universal invariants.
+# SessionStart(startup|resume|clear|compact) — re-inject the constitution + universal invariants.
 # Plain stdout is added to Claude's context (per Claude Code hooks docs); this is what survives compaction.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-echo "=== templateCentral routing context ==="
-head -30 AGENTS.md 2>/dev/null
-
 # If a CONSTITUTION.md exists, re-inject it (project binding invariants survive compaction)
 if [ -f docs/CONSTITUTION.md ]; then
   echo ""
