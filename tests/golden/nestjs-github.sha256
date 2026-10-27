@@ -1,5 +1,6 @@
 # Golden scaffold output hashes for nestjs on github CI.
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
+# Exception to the source commit: .claude/hooks/session-context.sh no longer prints head -30 AGENTS.md (the @AGENTS.md import loads it).
 # Format: <sha256>  <path>
 c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gates.sh
 61e448dd1b798c211ec37f4efc9667275a0eaea0ba3be2217d4d187d15cbf078  .claude/comment-hygiene-patterns.txt
@@ -8,7 +9,7 @@ c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gat
 506aa92359903beb7bf7c8d35636f0150d4f4939c25b680821ae662ab5324275  .claude/hooks/post-edit-comment-check.sh
 c69f6097a629aa85f321c8c08b61d6dee62d75b82f8647e7034fd0cc08a8172e  .claude/hooks/post-edit-typecheck.sh
 4e36c16bdd08e435a53c087e72f9406074e7c8bff9bd315eb7855c02ff08a417  .claude/hooks/protect-files.sh
-f8223ed5503c82b2dbc3fea2a87e855674f4a228d94decb4299a5ffc87b444d3  .claude/hooks/session-context.sh
+34fcb9461d6073077028aaaf583cd8e4e35223f2d0f1af6df731aebe6bbb2a3e  .claude/hooks/session-context.sh
 b4c2f0331bf7455428225a3768971d4f5f7b8d82e1653bc3aa38522fdf0a12d6  .claude/hooks/skill-usage-log.sh
 f45ed1afb1581f5af473003f2b249d480b6c574dd488afc44d1676a64c627b08  .claude/hooks/stop-checks.sh
 48d0784d1cca1174cb9877d7b9d8579f3585ca53dc927d3e463ca1fdde24922d  .claude/hooks/subagent-stop.sh

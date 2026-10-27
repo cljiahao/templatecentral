@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   project, so its pass signal no longer rests on the agent's own report.
 
 ### Changed
+- `session-context.sh` no longer prints `head -30 AGENTS.md`; the `@AGENTS.md` import already loads it. The CONSTITUTION and invariants output is unchanged, and `session_context_no_agents_head` pins it. The golden hash for that one path is regenerated.
 - `scripts/test-harness-kit.sh` extracts hook scripts with `scripts/extract-fences.py`.
 - FUTURE.md roadmap §1 (phase-splitting) is marked superseded.
 

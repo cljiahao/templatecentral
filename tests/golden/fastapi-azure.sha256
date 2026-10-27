@@ -1,5 +1,6 @@
 # Golden scaffold output hashes for fastapi on azure CI.
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
+# Exception to the source commit: .claude/hooks/session-context.sh no longer prints head -30 AGENTS.md (the @AGENTS.md import loads it).
 # Format: <sha256>  <path>
 c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gates.sh
 61e448dd1b798c211ec37f4efc9667275a0eaea0ba3be2217d4d187d15cbf078  .claude/comment-hygiene-patterns.txt
@@ -8,7 +9,7 @@ c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gat
 7dd91cd041f864190e5493200e457b47cfb682f41231fffadaef226132c16b29  .claude/hooks/post-edit-comment-check.sh
 16acefc36f812e098ac9a3f17821ba0978a06491092653abeda1740bfa08aafc  .claude/hooks/post-edit-typecheck.sh
 d6db19a54527fde99c548323bd279458c33a521cdb045e63a23b61beb15469c6  .claude/hooks/protect-files.sh
-f8223ed5503c82b2dbc3fea2a87e855674f4a228d94decb4299a5ffc87b444d3  .claude/hooks/session-context.sh
+34fcb9461d6073077028aaaf583cd8e4e35223f2d0f1af6df731aebe6bbb2a3e  .claude/hooks/session-context.sh
 b4c2f0331bf7455428225a3768971d4f5f7b8d82e1653bc3aa38522fdf0a12d6  .claude/hooks/skill-usage-log.sh
 bfff96de3b5b6045a9f0c8d8704f67bd5602afcd4b5e3fe7859fbde913d629c2  .claude/hooks/stop-checks.sh
 5d78b8182662883b34d6cf1384b60443aa6577f2236e217d42ea0a8a3ea6d2cd  .claude/hooks/subagent-stop.sh
