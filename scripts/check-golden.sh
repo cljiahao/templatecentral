@@ -26,8 +26,13 @@ COMBOS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-templates) FROM_TEMPLATES=1 ;;
-    --golden-dir) GOLDEN_DIR="$2"; shift ;;
-    --tree) TREE="$2"; shift ;;
+    --golden-dir | --tree)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
+        exit 2
+      fi
+      if [[ "$1" == "--tree" ]]; then TREE="$2"; else GOLDEN_DIR="$2"; fi
+      shift ;;
     -*) echo "check-golden: unknown option $1" >&2; exit 2 ;;
     *) COMBOS+=("$1") ;;
   esac
@@ -109,10 +114,10 @@ excepted() {
 
 # compare_tree <combo> <expected-tree> <generated-tree> — prints MISSING/MISMATCH lines.
 compare_tree() {
-  python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" <<'PY'
-import fnmatch, json, os, re, subprocess, sys
+  python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" "$GOLDEN_DIR/$1.sha256" <<'PY'
+import hashlib, json, os, re, subprocess, sys
 
-combo, want, got, owned_file = sys.argv[1:]
+combo, want, got, owned_file, golden_file = sys.argv[1:]
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
 PLACEHOLDER = re.compile(r"PROJECT_NAME_PLACEHOLDER|\[Project Name\]|__TC_[A-Z0-9_]+__")
 APPENDED = {"AGENTS.md"}
@@ -167,42 +172,64 @@ def subset(a, b):
     return a == b
 
 
+def package_json_ok(expect_text, actual_text):
+    """The expected package.json, placeholder aside, with dependencies added and nothing else."""
+    try:
+        expect = json.loads(PLACEHOLDER.sub("x", expect_text))
+        actual = json.loads(actual_text)
+    except ValueError:
+        return False
+    actual["name"] = "x"
+    if set(actual) != set(expect):
+        return False
+    return all(
+        subset(v, actual[k]) if k in ("dependencies", "devDependencies") else v == actual[k]
+        for k, v in expect.items()
+    )
+
+
+def golden_paths():
+    paths = {}
+    for line in open(golden_file, encoding="utf-8"):
+        if line.strip() and not line.startswith("#"):
+            sha, path = line.rstrip("\n").split("  ", 1)
+            paths[path] = sha
+    return paths
+
+
 bad = 0
-for dirpath, _, names in os.walk(want):
-    for name in sorted(names):
-        full = os.path.join(dirpath, name)
-        rel = os.path.relpath(full, want)
-        if SKIP.search(rel):
-            continue
-        other = os.path.join(got, rel)
-        if not os.path.isfile(other):
-            print(f"MISSING {combo} {rel}"); bad = 1; continue
-        a, b = open(full, "rb").read(), open(other, "rb").read()
+for rel, sha in sorted(golden_paths().items()):
+    if SKIP.search(rel):
+        continue
+    full = os.path.join(want, rel)
+    other = os.path.join(got, rel)
+    # The expected tree must still be what the golden records.
+    if not os.path.isfile(full) or hashlib.sha256(open(full, "rb").read()).hexdigest() != sha:
+        print(f"STALE-EXPECTED {combo} {rel}"); bad = 1
+    if not os.path.isfile(other):
+        print(f"MISSING {combo} {rel}"); bad = 1; continue
+    if not os.path.isfile(full):
+        continue
+    a, b = open(full, "rb").read(), open(other, "rb").read()
+    if a.rstrip(b"\n") == b.rstrip(b"\n"):
+        continue
+    tool = formatter_for(rel)
+    if tool:
+        fa, fb = run_formatter(tool, rel, a), run_formatter(tool, rel, b)
+        if fa is None or fb is None:
+            print(f"MISMATCH {combo} {rel}"); print(f"formatter {tool} unavailable or failed for {rel}", file=sys.stderr)
+            bad = 1; continue
+        a, b = fa, fb
         if a.rstrip(b"\n") == b.rstrip(b"\n"):
             continue
-        text = a.decode("utf-8", "replace")
-        if PLACEHOLDER.search(text) or rel in APPENDED:
-            rx = placeholder_regex(text, rel in APPENDED)
-            if rel in SUBSET_JSON:
-                try:
-                    expect = json.loads(PLACEHOLDER.sub("x", text))
-                    actual = json.loads(b.decode("utf-8"))
-                    if subset(expect, {**actual, "name": "x"}):
-                        continue
-                except ValueError:
-                    pass
-            elif re.fullmatch(rx, b.decode("utf-8", "replace"), re.S):
-                continue
-        else:
-            tool = formatter_for(rel)
-            if tool:
-                fa, fb = run_formatter(tool, rel, a), run_formatter(tool, rel, b)
-                if fa is None or fb is None:
-                    print(f"MISMATCH {combo} {rel}"); print(f"formatter {tool} unavailable or failed for {rel}", file=sys.stderr)
-                    bad = 1; continue
-                if fa.rstrip(b"\n") == fb.rstrip(b"\n"):
-                    continue
-        print(f"MISMATCH {combo} {rel}"); bad = 1
+    text = a.decode("utf-8", "replace")
+    if rel in SUBSET_JSON:
+        if package_json_ok(text, b.decode("utf-8", "replace")):
+            continue
+    elif PLACEHOLDER.search(text) or rel in APPENDED:
+        if re.fullmatch(placeholder_regex(text, rel in APPENDED), b.decode("utf-8", "replace"), re.S):
+            continue
+    print(f"MISMATCH {combo} {rel}"); bad = 1
 sys.exit(bad)
 PY
 }

@@ -34,6 +34,8 @@ TS_STACKS = ("nextjs", "vite-react", "nestjs")
 STACKS = TS_STACKS + ("fastapi",)
 CI_FILE = {"github": ".github/workflows/ci.yml", "azure": "azure-pipelines/templatecentral-gates.yml"}
 HEADING = re.compile(r"^(?:\*\*|#{2,4} )`([^`\s]+)`")
+TAG_EXT = {"bash": {"sh"}, "sh": {"sh"}, "shell": {"sh"}, "json": {"json"}, "python": {"py"}, "py": {"py"},
+           "yaml": {"yaml", "yml"}, "yml": {"yaml", "yml"}, "toml": {"toml"}}
 CREATE = re.compile(r"[Cc]reate `([^`\s]+)`")
 OPENER = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 EXTENSIONLESS = {"Dockerfile", "Makefile", "CODEOWNERS", "LICENSE", "Procfile", "Jenkinsfile"}
@@ -73,6 +75,7 @@ def parse(src_path, label):
     path_line = 0
     seen_variant = False
     satisfied = False
+    created_path = False
 
     def drop():
         nonlocal path
@@ -84,14 +87,17 @@ def parse(src_path, label):
     while i < len(lines):
         line = lines[i]
         m = HEADING.match(line)
+        created = False
         if not m and line.rstrip().endswith(":") and not line.startswith("#"):
             m = CREATE.search(line)
+            created = m is not None
         om = OPENER.match(line)
         if m and is_file_heading(m.group(1)):
             ev = drop() if m.group(1) != path else None
             if ev:
                 yield ev
             path, variant, path_line, seen_variant, satisfied = m.group(1), None, i + 1, False, False
+            created_path = created
             nxt = next((l for l in lines[i + 1:i + 6] if l.strip()), "")
             if nxt.startswith("Empty file"):
                 yield "fence", path, None, i + 1, []
@@ -116,6 +122,10 @@ def parse(src_path, label):
             if j >= len(lines):
                 raise ValueError(f"{label}:{i + 1} unterminated fence")
             body = lines[i + 1:j]
+            tag = om.group(2).strip().split(" ")[0].lower()
+            ext = os.path.splitext(path)[1].lstrip(".") if path else ""
+            if path and created_path and tag in TAG_EXT and ext not in TAG_EXT[tag]:
+                raise ValueError(f"{label}:{i + 1} a {tag} fence follows 'Create `{path}`:'; that is a command, not the file")
             if not path:
                 yield "skip", None, None, i + 1, "no path heading"
             elif seen_variant and not variant:

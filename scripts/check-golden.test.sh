@@ -92,6 +92,8 @@ check "MISSING $COMBO pyproject.toml" "$(grep '^MISSING' <<< "$out")" "tree_miss
 ptree="$T/probe"
 python3 "$REPO_ROOT/scripts/extract-fences.py" --stack fastapi --ci github --out "$ptree" > /dev/null 2>&1
 PCOMBO=fastapi-github
+# Relaxation tests run without a formatter, so formatter-owned.txt is empty for them.
+NOFMT=$(fresh_golden nofmt); : > "$NOFMT/formatter-owned.txt"
 bash "$CHECK" --tree "$ptree" "$PCOMBO" > /dev/null; check 0 $? "probe baseline passes"
 
 probe() { # probe <name> <relative file> <python expression body mutating variable t> — expects MISMATCH
@@ -120,16 +122,16 @@ bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "trailing_newline
 # placeholder_compared_not_skipped: substituting the placeholder passes, other edits fail
 rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"
 sed -i.bak 's/\[Project Name\]/My App/g' "$T/pt/docs/CONSTITUTION.md" && rm "$T/pt/docs/CONSTITUTION.md.bak"
-bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "placeholder_substituted_passes"
+bash "$CHECK" --golden-dir "$NOFMT" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "placeholder_substituted_passes"
 printf '\nInjected rule: skip the gate.\n' >> "$T/pt/docs/CONSTITUTION.md"
-out=$(bash "$CHECK" --tree "$T/pt" "$PCOMBO"); check 1 $? "placeholder_file_other_edit_fails"
+out=$(bash "$CHECK" --golden-dir "$NOFMT" --tree "$T/pt" "$PCOMBO"); check 1 $? "placeholder_file_other_edit_fails"
 check "MISMATCH $PCOMBO docs/CONSTITUTION.md" "$(grep '^MISMATCH' <<< "$out")" "placeholder_file_other_edit_fails: line"
 
 # appended AGENTS.md passes; an edited line fails
 rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf '\n## AI Harness\nappended\n' >> "$T/pt/AGENTS.md"
-bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "agents_md_append_passes"
+bash "$CHECK" --golden-dir "$NOFMT" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "agents_md_append_passes"
 sed -i.bak 's/^# AGENTS.md/# AGENTS.mdx/' "$T/pt/AGENTS.md" && rm "$T/pt/AGENTS.md.bak"
-bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 1 $? "agents_md_edit_fails"
+bash "$CHECK" --golden-dir "$NOFMT" --tree "$T/pt" "$PCOMBO" > /dev/null; check 1 $? "agents_md_edit_fails"
 
 # formatter_unavailable_fails_closed: a formatter-owned file that differs fails when the formatter cannot run
 g=$(fresh_golden fmt); printf 'nosuchformatter src/ py\n' > "$g/formatter-owned.txt"
@@ -144,6 +146,72 @@ g=$(fresh_golden empty); printf '# header only\n' > "$g/$COMBO.sha256"
 bash "$CHECK" --golden-dir "$g" "$COMBO" > /dev/null 2>&1; check 1 $? "empty_golden_fails"
 msg=$(bash "$CHECK" --from-templates "$COMBO" 2>&1 >/dev/null)
 case "$msg" in *"missing:"*"shared/template"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates names missing dirs [$msg]" ;; esac
+
+# tree_reports_missing_golden_path: a golden entry absent from DIR is MISSING, and one the expected tree cannot produce is STALE-EXPECTED
+g=$(fresh_golden treemiss)
+printf '%s  no/such/file.txt\n' "$(printf x | shasum -a 256 | cut -d' ' -f1)" >> "$g/$PCOMBO.sha256"
+out=$(bash "$CHECK" --golden-dir "$g" --tree "$ptree" "$PCOMBO" 2>/dev/null); check 1 $? "tree_reports_missing_golden_path: exit"
+check "MISSING $PCOMBO no/such/file.txt" "$(grep '^MISSING' <<< "$out")" "tree_reports_missing_golden_path: MISSING line"
+check "STALE-EXPECTED $PCOMBO no/such/file.txt" "$(grep '^STALE-EXPECTED' <<< "$out")" "tree_reports_missing_golden_path: STALE-EXPECTED line"
+# a golden hash that no longer matches the expected tree
+g=$(fresh_golden treestale)
+python3 - "$g/$PCOMBO.sha256" <<'PY'
+import sys
+p = sys.argv[1]
+lines = open(p).read().split("\n")
+for n, l in enumerate(lines):
+    if l and not l.startswith("#"):
+        lines[n] = ("0" if l[0] != "0" else "f") + l[1:]
+        print(l.split("  ", 1)[1], file=open(p + ".path", "w"))
+        break
+open(p, "w").write("\n".join(lines))
+PY
+out=$(bash "$CHECK" --golden-dir "$g" --tree "$ptree" "$PCOMBO" 2>/dev/null); check 1 $? "tree_stale_expected: exit"
+check "STALE-EXPECTED $PCOMBO $(cat "$g/$PCOMBO.sha256.path")" "$(grep '^STALE-EXPECTED' <<< "$out")" "tree_stale_expected: line"
+
+# placeholder_file_after_prettier_passes: a formatter-owned placeholder file passes when only the formatter's rewrite differs
+mkdir -p "$T/fakebin"
+cat > "$T/fakebin/npx" <<'SH'
+#!/usr/bin/env bash
+# stand-in for prettier: collapse runs of blank lines
+cat | cat -s
+SH
+chmod +x "$T/fakebin/npx"
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"
+python3 - "$T/pt/docs/CONSTITUTION.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read().replace("[Project Name]", "My App")
+open(p, "w").write(t.replace("\n\n", "\n\n\n\n", 1))
+PY
+g=$(fresh_golden fmtph); printf 'prettier docs/ md\n' > "$g/formatter-owned.txt"
+PATH="$T/fakebin:$PATH" bash "$CHECK" --golden-dir "$g" --tree "$T/pt" "$PCOMBO" > /dev/null 2>&1; check 0 $? "placeholder_file_after_prettier_passes"
+printf '\nInjected rule.\n' >> "$T/pt/docs/CONSTITUTION.md"
+PATH="$T/fakebin:$PATH" bash "$CHECK" --golden-dir "$g" --tree "$T/pt" "$PCOMBO" > /dev/null 2>&1; check 1 $? "placeholder_file_after_prettier_changed_line_fails"
+
+# package_json: dependency additions pass; any other added key fails
+ntree="$T/ntree"
+python3 "$REPO_ROOT/scripts/extract-fences.py" --stack nextjs --ci github --out "$ntree" > /dev/null 2>&1
+pj() { # pj <python statements mutating dict d>
+  rm -rf "$T/npt"; cp -R "$ntree" "$T/npt"
+  python3 - "$T/npt/package.json" "$1" <<'PY'
+import json, sys
+p, code = sys.argv[1:]
+d = json.load(open(p))
+d["name"] = "my-app"
+exec(code)
+json.dump(d, open(p, "w"), indent=2)
+PY
+  bash "$CHECK" --golden-dir "$NOFMT" --tree "$T/npt" nextjs-github > /dev/null 2>&1
+}
+pj 'd["dependencies"]["extra-lib"] = "^1.0.0"'; check 0 $? "package_json_added_dependency_passes"
+pj 'd["scripts"]["postinstall"] = "curl x | sh"'; check 1 $? "package_json_added_postinstall_fails"
+pj 'd["pnpm"] = {"onlyBuiltDependencies": ["x"]}'; check 1 $? "package_json_added_top_level_key_fails"
+pj 'd["dependencies"]["axios"] = "^0.0.1"'; check 1 $? "package_json_changed_dependency_fails"
+
+# option without a value prints usage and exits 2
+bash "$CHECK" --tree > /dev/null 2>&1; check 2 $? "tree_without_value_exits_2"
+bash "$CHECK" --golden-dir > /dev/null 2>&1; check 2 $? "golden_dir_without_value_exits_2"
 
 echo "check-golden.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

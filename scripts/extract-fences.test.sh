@@ -189,6 +189,18 @@ python3 "$EXTRACT" --flat --out "$T/o12" --src "$T/nest.md" > /dev/null 2>&1
 check "Report failures." "$(tail -1 "$T/o12/SKILL.md" 2>/dev/null)" "nested_snippet_stays_in_outer_fence"
 check "@AGENTS.md" "$(cat "$T/o12/CLAUDE.md" 2>/dev/null)" "nested_snippet_does_not_swallow_next_fence"
 
+# create_heading_lang_mismatch_fails: a "Create `x.json`:" line over a bash fence is not that file
+cat > "$T/mm.md" <<MD
+Create \`config.json\`:
+
+${fence}bash
+pnpm install
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/o13" --src "$T/mm.md" > /dev/null 2> "$T/o13.err"
+check 2 $? "create_heading_lang_mismatch_fails: exit"
+case "$(cat "$T/o13.err")" in *"$T/mm.md:3"*config.json*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: mismatch error names location [$(cat "$T/o13.err")]" ;; esac
+
 # extensionless names and directory paths
 cat > "$T/noext.md" <<MD
 ### \`Makefile\`
