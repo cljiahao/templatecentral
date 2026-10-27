@@ -242,7 +242,7 @@ export function assertOwner(ownerId: string | undefined, userId: string): void {
 }
 ```
 
-List `RolesGuard` after `JwtAuthGuard` so `req.user` is set before roles are checked. Call `assertOwner` after loading a record by id, before returning or changing it:
+List `RolesGuard` after `JwtAuthGuard` so `req.user` is set before roles are checked. Use `assertOwner` on record-by-id handlers (see Rules):
 
 ```typescript
 @Delete(':id')

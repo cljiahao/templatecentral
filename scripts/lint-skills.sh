@@ -930,6 +930,28 @@ check_no_fastapi_orjson_response() {
     "No deprecated FastAPI ORJSONResponse/UJSONResponse"
 }
 
+check_security_seeds_present() {
+  # The deps gate and the deny-by-default authz helpers are shipped security seeds: dropping one
+  # from a skill file silently removes the protection from every project scaffolded afterwards.
+  header "Deps gate and deny-by-default authz seeds present"
+  local missing="" f token
+  local kit="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
+  if [[ -f "$kit" ]]; then
+    [[ "$(grep -c 'ci-gates.sh deps' "$kit")" -ge 2 ]] || missing+=$'\n'"$kit: deps gate is not wired into both the GitHub and Azure pipelines"
+    grep -q '^  deps)' "$kit" || missing+=$'\n'"$kit: ci-gates.sh has no deps case"
+  fi
+  for f in "fastapi:require_roles ensure_owner" "nestjs:RolesGuard assertOwner" "nextjs:hasRole isOwner"; do
+    local file="$SKILLS_DIR/add/auth/${f%%:*}.md"
+    [[ -f "$file" ]] || continue
+    for token in ${f#*:}; do
+      grep -q "$token" "$file" || missing+=$'\n'"$file: missing authz helper $token"
+    done
+  done
+  report "${missing#$'\n'}" \
+    "Deps gate or authz seed missing — restore it (see the harness engineering checks in .claude/skills/tc-audit/implementation.md)" \
+    "Deps gate and authz seeds present"
+}
+
 check_harness_version_matches_plugin() {
   # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
   # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
@@ -1022,6 +1044,7 @@ check_no_tanstack_isLoading
 check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
+check_security_seeds_present
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 echo ""

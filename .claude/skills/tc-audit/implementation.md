@@ -235,7 +235,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] **DRY** — is the same guidance or code block repeated across sections without need?
 - [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
 - [ ] **Token efficiency** — targeted checks:
-  - Any reference file exceeding 200 lines? Flag for splitting.
+  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md`) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
   - Inline comments that restate what the surrounding code clearly shows? Delete them.
   - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
   - The same instruction stated in two different forms within 15 lines? Collapse to one.
@@ -278,7 +278,7 @@ Read each file in full, apply checklist above:
 - [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
 - [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
 - [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
-- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.3.1. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
+- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.10.0. The floor of record is `.claude/rules/fastapi.md` (≥1.3.1, covering the later form-limit DoS GHSA-82w8-qh3p-5jfq). Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
 - [ ] Every `pytest` invocation in FastAPI skill bodies uses `python -m pytest` (never bare `pytest`) — a bare invocation resolves via PATH and silently breaks or picks up the wrong interpreter when the caller's shell doesn't have `.venv` activated. Lint-enforced by `check_no_bare_pytest_invocation`.
 
 ---
@@ -321,7 +321,7 @@ Read each file in full, apply checklist above:
 - [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
 - [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
 - [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
-- [ ] `@nestjs/platform-fastify ≥11.1.27` — a critical trailing-slash auth-bypass advisory (fixed ≥11.1.24) supersedes the earlier Fastify URL-encoding middleware bypass (fixed ≥11.1.14); Fastify v5 requires ≥11.1.19. Flag any project pinned below `^11.1.24` that may resolve to a vulnerable version.
+- [ ] `@nestjs/platform-fastify` floor matches `.claude/rules/nestjs.md` (≥12.0.2 on Nest 12; ≥11.2.4 on the 11 line) — path-scoped and trailing-slash middleware bypass advisories (e.g. GHSA-6v32-fjc9-9qf6, fixed ≥11.1.24) are High severity; current stable is 12.2.0. Flag any project whose range can resolve below the floor.
 
 ---
 
@@ -470,6 +470,8 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **migrate seeds the FULL harness-kit (scaffold parity)**: `migrate/general` Phase 4 must execute harness-kit Steps **A–E** (incl. B2 git-hook layer, B3 CI, B4 integrity verifier, B5 `/skill-audit`), not just A–B — a migrated project must get the same enforcement layer as a scaffolded one. Its `harness.json` must defer to kit **Step E** (all 9 hooks incl. `skill-usage-log.sh`, `post-edit-comment-check.sh`, `lefthook.yml`, `.gitleaks.toml`, `ci.yml`, `verify/regen-harness.sh`, `skill-audit`, `.claude/comment-hygiene-patterns.txt`), never a hand-maintained partial copy. Phase 5d re-sync + the pre-push hook call `verify-harness.sh`, so B4 MUST be seeded. Flag any stale "10 hooks" / `post-tool-failure.sh` reference or partial-manifest drift.
 - [ ] **Local gitleaks is blocking**: the seeded `lefthook.yml` gitleaks command must NOT end in `|| true` (or otherwise swallow the exit code) — a non-blocking local secret scan lets a leaked credential reach the remote before CI runs. It must use `gitleaks git --pre-commit --staged` (not the deprecated `gitleaks protect`). The seeded CI must install the MIT gitleaks CLI with the version + SHA-256 in ONE `env` block and `sha256sum -c` (never `gitleaks/gitleaks-action`, which needs a paid `GITLEAKS_LICENSE` on org repos), scan `origin/<base>..HEAD` on PRs (no `--first-parent` — on GitHub's synthetic merge it scans nothing) and full history on push, and the seeded `.gitleaks.toml` must use `[[allowlists]]` (top-level `[allowlist]` deprecated since v8.25).
 - [ ] **verify-harness fails closed on a bad manifest**: the seeded `verify-harness.sh` exits non-zero when `.claude/harness.json` is missing, empty, unparseable, or has an empty file list — it must never report OK because there was nothing to check.
+- [ ] **Deps gate present and fail-closed**: `harness-kit-enforcement.md` ships `ci-gates.sh deps` in both the GitHub and Azure pipeline templates; the gate has no label bypass, rejects pnpm-native suppressions (`auditConfig`, `ignoreGhsas`, `ignoreCves`, `audit.ignore` in block or flow style, quoted or not), audits every ecosystem present, and fails on a missing tool or unparseable output. Unaudited packages cannot be allowlisted. Lint-enforced presence: `check_security_seeds_present`; behaviour: `scripts/test-harness-kit.sh`.
+- [ ] **Authz seeds deny by default**: `add/auth/{fastapi,nestjs,nextjs}.md` ship role and ownership helpers (`require_roles`/`ensure_owner`, `RolesGuard`/`assertOwner`, `hasRole`/`isOwner`) that deny on a missing role list, a malformed role entry or a missing record, return the same 404 for another user's record as for a missing one, take roles from the database and never the token or client input, and ship with unit tests. Lint-enforced presence: `check_security_seeds_present`.
 - [ ] **AGENTS.md hashed after its final write**: the scaffold/migrate step that records `harness.json` hashes runs AFTER the last edit to AGENTS.md (incl. any stack-specific append). Hashing earlier records a stale SHA and every fresh project reports drift on its first verify.
 
 ---
