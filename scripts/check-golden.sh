@@ -80,8 +80,8 @@ fi
 T=$(mktemp -d) || exit 2
 trap 'rm -rf "$T"' EXIT
 
-sha_of() { # sha_of <file> — portable sha256
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+sha_of() { # sha_of <file> — portable sha256, read from stdin because GNU sha256sum escapes a file name that holds a backslash and prefixes the hash with one
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d' ' -f1; else shasum -a 256 < "$1" | cut -d' ' -f1; fi
 }
 
 # template_dirs <stack> <ci> — the template trees one combo copies, in copy order.
