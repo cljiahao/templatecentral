@@ -416,12 +416,16 @@ case "$gate" in
     # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected outright.
     # package.json is parsed (any JSON layout, a parse failure fails closed); the YAML files and .npmrc are
     # matched by text. Not detected: the YAML complex-key form (`? audit`), which pnpm does not document.
+    # pnpm also reads package.json5 and package.yaml; they are not parsed here, so they fail closed.
+    for f in package.json5 package.yaml; do
+      [ ! -f "$f" ] || fail "unsupported pnpm manifest format: $f — use package.json"
+    done
     if [ -f package.json ]; then
       need node
       rc=0
       node -e '
         let pkg;
-        try { pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { process.exit(2); }
+        try { pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").replace(/^\uFEFF/, "")); } catch (e) { process.exit(2); }
         const walk = (v) => v !== null && typeof v === "object" &&
           Object.entries(v).some(([k, x]) => k === "ignoreGhsas" || k === "ignoreCves" || walk(x));
         const pnpm = pkg && typeof pkg === "object" ? pkg.pnpm : undefined;

@@ -89,7 +89,7 @@ Also record anti-patterns the community has converged on avoiding. A `RECOMMENDE
 **Reference: AWS AIDLC**
 Check the AWS AI Development Lifecycle (AIDLC) guidance for any new controls or patterns relevant to AI-assisted development workflows — particularly around prompt injection, model output validation, and agent trust boundaries.
 
-**After completing all searches**, write the results to `.claude/audit-ecosystem-research.md` in this exact format:
+**After completing all searches**, write the results to `.claude/audit-ecosystem-research.md` in this exact format. Write placeholders as `{name}`, never as `<name>`: the publish guard (`scripts/check-research-content.py`) rejects any `<`-tag, even inside code spans.
 
 ```markdown
 ---

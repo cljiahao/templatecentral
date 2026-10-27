@@ -936,6 +936,15 @@ SEED_BODY='{"name":"x",\n'
 expect_deps 1 "an unparseable package.json fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "package.json is not valid JSON"
 SEED_BODY='{"pnpm":{"overrides":{"audit":"1.0.0"}},"name":"x"}\n'
 expect_deps 0 "an unrelated pnpm key named audit-like text passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+SEED_BODY='\xef\xbb\xbf{"pnpm":{"auditConfig":{"ignoreGhsas":["GHSA-aaaa-bbbb-cccc"]}}}\n'
+expect_deps 1 "a BOM-prefixed package.json is still parsed and its suppression rejected" pnpm-lock.yaml "$PNPM_CLEAN" "" "advisory suppressions belong in .claude/dep-audit-allow.txt, not package.json"
+SEED_BODY='\xef\xbb\xbf{"name":"x"}\n'
+expect_deps 0 "a clean BOM-prefixed package.json passes" pnpm-lock.yaml "$PNPM_CLEAN" "" ""
+for manifest in package.json5 package.yaml; do
+  SEED_FILE=$manifest
+  SEED_BODY='name: x\n'
+  expect_deps 1 "$manifest fails closed" pnpm-lock.yaml "$PNPM_CLEAN" "" "unsupported pnpm manifest format: $manifest"
+done
 unset SEED_FILE SEED_BODY
 
 # Expiry horizon: at most 180 days ahead of today (UTC).
