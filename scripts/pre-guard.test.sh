@@ -146,6 +146,183 @@ fi
 run_guard "{\"tool_input\":{\"file_path\":\"$HOME/.claude/settings.json\"}}"
 expect_contains "absolute ~/.claude/settings.json asks" "\"permissionDecision\":\"ask\"" "$out"
 
+echo "== (h2) scratch dirs skip Tier 2 only =="
+SCRATCH=$(mktemp -d /tmp/pre-guard-scratch.XXXXXX)
+TMPD=$(mktemp -d)
+LINKDIR=$(mktemp -d /tmp/pre-guard-link.XXXXXX)
+ln -s "$REPO_ROOT" "$LINKDIR/repo"
+ask_json() { printf '%s' "$out" | grep -q '"permissionDecision":"ask"'; }
+expect_allowed() {
+  if [[ "$code" == 0 && -z "$out" ]]; then pass=$((pass + 1)); echo "  OK   $1 allowed"
+  else fail=$((fail + 1)); echo "  FAIL $1 — expected silent allow, got exit $code: $out"; fi
+}
+expect_asks() {
+  if [[ "$code" == 0 ]] && ask_json; then pass=$((pass + 1)); echo "  OK   $1 asks"
+  else fail=$((fail + 1)); echo "  FAIL $1 — expected ask, got exit $code: $out"; fi
+}
+run_guard '{"tool_input":{"file_path":"/tmp/scaffold-e2e/Dockerfile"}}'
+expect_allowed "/tmp/scaffold-e2e/Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"$SCRATCH/app/Dockerfile\"}}"
+expect_allowed "existing /tmp subdir Dockerfile"
+out=$(printf '%s' "{\"tool_input\":{\"file_path\":\"$TMPD/a/b/Dockerfile\"}}" | TMPDIR="$TMPD" bash "$GUARD" 2>&1); code=$?
+expect_allowed "\$TMPDIR/.../Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"$HOME/.claude/settings.json\"}}"
+expect_asks "\$HOME/.claude/settings.json"
+run_guard "{\"tool_input\":{\"file_path\":\"$REPO_ROOT/Dockerfile\"}}"
+expect_asks "in-repo Dockerfile"
+run_guard '{"tool_input":{"file_path":"Dockerfile"}}'
+expect_asks "relative in-repo Dockerfile"
+run_guard "{\"tool_input\":{\"file_path\":\"/tmp/../${REPO_ROOT#/}/Dockerfile\"}}"
+expect_asks "/tmp/.. path into repo"
+run_guard "{\"tool_input\":{\"file_path\":\"$LINKDIR/repo/Dockerfile\"}}"
+expect_asks "/tmp symlink into repo"
+run_guard '{"tool_input":{"file_path":"/tmp/nonexistent-dir/../Dockerfile"}}'
+expect_asks "/tmp unresolvable .. tail"
+run_guard '{"tool_input":{"file_path":"/tmp/x/.env"}}'
+expect_exit "/tmp/x/.env still blocked" 2 "$code"
+run_guard '{"tool_input":{"file_path":"/tmp/x/server.pem"}}'
+expect_exit "/tmp/x/server.pem still blocked" 2 "$code"
+
+# run_env INPUT_JSON VAR=value... — runs the guard with an explicit environment.
+run_env() {
+  local input="$1"; shift
+  out=$(printf '%s' "$input" | env "$@" bash "$GUARD" 2>&1)
+  code=$?
+}
+fj() { printf '{"tool_name":"%s","tool_input":{"file_path":"%s"}}' "${2:-Write}" "$1"; }
+RT=$(mktemp -d /tmp/pg-repo.XXXXXX)
+SIB=$(mktemp -d /tmp/pg-sib.XXXXXX)
+HOMEDIR="$HOME/pre-guard-nonexistent-scratch"
+
+# $TMPDIR outside a system temp tree, or covering $HOME / the repo, is ignored.
+run_env "$(fj "$HOME/.claude/settings.json")" "TMPDIR=$HOME"
+expect_asks "TMPDIR=\$HOME: ~/.claude/settings.json"
+run_env "$(fj "$HOMEDIR/Dockerfile")" "TMPDIR=$HOME"
+expect_asks "TMPDIR=\$HOME: Dockerfile under home"
+run_env "$(fj "$HOME/.claude/settings.json")" "TMPDIR=$(dirname "$HOME")"
+expect_asks "TMPDIR=parent of home"
+run_env "$(fj "$HOMEDIR/Dockerfile")" "TMPDIR=$(dirname "$REPO_ROOT")"
+expect_asks "TMPDIR=ancestor of repo"
+run_env "$(fj "$HOMEDIR/Dockerfile")" "TMPDIR=/"
+expect_asks "TMPDIR=/"
+run_env "$(fj "$REPO_ROOT/scripts/Dockerfile")" "TMPDIR=$REPO_ROOT/scripts"
+expect_asks "TMPDIR inside the repo"
+run_env "$(fj "$HOMEDIR/Dockerfile")" -u TMPDIR
+expect_asks "TMPDIR unset: non-/tmp target"
+run_env "$(fj "$HOMEDIR/Dockerfile")" "TMPDIR=$TMPD"
+expect_asks "TMPDIR set elsewhere: unrelated target"
+run_env "$(fj "$SIB/Dockerfile")" "TMPDIR=$HOME"
+expect_allowed "/tmp target allowed while TMPDIR=\$HOME"
+
+# Repo root under /tmp: /tmp contains the repo, so it is no scratch base and everything asks.
+run_env "$(fj "$RT/Dockerfile")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "repo under /tmp: in-repo Dockerfile"
+run_env "$(fj "$SIB/Dockerfile")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "repo under /tmp: sibling dir Dockerfile"
+run_env "$(fj "../$(basename "$SIB")/Dockerfile")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "repo under /tmp: relative .. into sibling dir"
+run_env "$(fj "../../../../../../../../tmp/$(basename "$SIB")/Dockerfile")"
+expect_allowed "relative .. out of the repo into /tmp"
+run_env "$(fj "../$(basename "$RT")/Dockerfile")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "relative .. back into the repo"
+run_env "$(fj "$SIB/Dockerfile/")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "trailing slash"
+ln -s "$RT/Dockerfile" "$SIB/Dockerfile"
+run_env "$(fj "$SIB/Dockerfile")" "CLAUDE_PROJECT_DIR=$RT"
+expect_asks "symlink leaf in /tmp"
+rm -f "$SIB/Dockerfile"
+
+# Case: folded only where the filesystem folds it. Detection also probes the target ancestor and
+# scratch base, which needs a casefold mount to exercise; a case-sensitive /tmp must not fold.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  run_guard '{"tool_input":{"file_path":"/TMP/scaffold-e2e/Dockerfile"}}'
+  expect_allowed "case-insensitive fs: /TMP"
+else
+  run_guard '{"tool_input":{"file_path":"/TMP/scaffold-e2e/Dockerfile"}}'
+  expect_asks "case-sensitive fs: /TMP"
+fi
+
+# A /tmp symlink into the repo matches the anchored Tier 2 patterns on the resolved path.
+run_guard "{\"tool_input\":{\"file_path\":\"$LINKDIR/repo/scripts/pre-guard.sh\"}}"
+expect_asks "symlink into repo: scripts/pre-guard.sh"
+run_guard "{\"tool_input\":{\"file_path\":\"$LINKDIR/repo/.claude/settings.json\"}}"
+expect_asks "symlink into repo: .claude/settings.json"
+run_guard "{\"tool_input\":{\"file_path\":\"$LINKDIR/repo/skills/add/SKILL.md\"}}"
+expect_allowed "symlink into repo: unprotected file"
+
+# Every writing tool name takes the same decision.
+for t in Write Edit MultiEdit NotebookEdit; do
+  run_guard "$(fj /tmp/scaffold-e2e/Dockerfile "$t")"
+  expect_allowed "$t /tmp/scaffold-e2e/Dockerfile"
+  run_guard "$(fj "$REPO_ROOT/Dockerfile" "$t")"
+  expect_asks "$t in-repo Dockerfile"
+done
+
+# Symlink leaves are followed, never judged by their own name.
+ln -s "$REPO_ROOT/scripts/pre-guard.sh" "$SIB/notes.txt"
+run_guard "$(fj "$SIB/notes.txt")"
+expect_asks "leaf symlink in /tmp into the repo"
+ln -s "$REPO_ROOT/scripts/Dockerfile" "$SIB/dangle.txt"
+run_guard "$(fj "$SIB/dangle.txt")"
+expect_asks "dangling leaf symlink into the repo"
+ln -s "$SIB/loop-b" "$SIB/loop-a"; ln -s "$SIB/loop-a" "$SIB/loop-b"
+run_guard "$(fj "$SIB/loop-a")"
+expect_asks "symlink hop loop"
+ln -s .claude/settings.json "$REPO_ROOT/pg-leaf-link.txt"
+run_guard "$(fj pg-leaf-link.txt)"
+expect_asks "in-repo leaf symlink to .claude/settings.json"
+rm -f "$REPO_ROOT/pg-leaf-link.txt"
+ln -s "$REPO_ROOT/.secrets" "$SIB/secretlink"
+run_guard "$(fj "$SIB/secretlink/foo.txt")"
+expect_exit "Tier 1 through a /tmp directory symlink" 2 "$code"
+ln -s "$REPO_ROOT/.env" "$SIB/.env.example"
+run_guard "$(fj "$SIB/.env.example")"
+expect_exit "Tier 1: .env.example link to .env" 2 "$code"
+run_guard "$(fj "$SIB/secretlink/foo.txt" Read)"
+expect_exit "Tier 1 on Read through a symlink" 2 "$code"
+
+# /tmp is no scratch base when it is or contains $HOME; an unset HOME disables the exemption.
+mkdir -p "$SIB/h"
+run_env "$(fj "$SIB/h/.claude/settings.json")" "HOME=$SIB/h"
+expect_asks "HOME=/tmp/h: \$HOME/.claude/settings.json"
+run_env "$(fj /tmp/scaffold-e2e/Dockerfile)" "HOME=/tmp"
+expect_asks "HOME=/tmp: /tmp Dockerfile"
+run_env "$(fj /tmp/scaffold-e2e/Dockerfile)" -u HOME
+expect_asks "HOME unset"
+
+# Symlinks to protected files outside the repo are matched on the resolved absolute path.
+ln -s "$HOME/.claude/settings.json" "$SIB/home-settings.txt"
+run_guard "$(fj "$SIB/home-settings.txt")"
+expect_asks "/tmp link to a .claude/settings.json"
+ln -s "$HOME/.claude/settings.json" "$REPO_ROOT/pg-foreign-link.txt"
+run_guard "$(fj pg-foreign-link.txt)"
+expect_asks "in-repo link to a foreign .claude/settings.json"
+rm -f "$REPO_ROOT/pg-foreign-link.txt"
+ln -s "$HOME/.claude" "$SIB/claude-dir"
+run_guard "$(fj "$SIB/claude-dir/settings.json")"
+expect_asks "/tmp dir link to a .claude dir"
+
+# Absolute ~/.claude coverage; session memory stays unprompted.
+for f in rules/x.md skills/x/SKILL.md commands/x.md keybindings.json settings.json; do
+  run_guard "$(fj "$HOME/.claude/$f")"
+  expect_asks "\$HOME/.claude/$f"
+done
+run_guard "$(fj "$HOME/.claude/projects/p/memory/m.md")"
+expect_allowed "\$HOME/.claude/projects/p/memory/m.md"
+
+# An ancestor named secrets / .secrets does not make in-repo targets secret.
+for d in secrets .secrets; do
+  SR="$SIB/$d/repo"; mkdir -p "$SR/src"
+  run_env "$(fj src/a.ts)" "CLAUDE_PROJECT_DIR=$SR"
+  expect_allowed "repo under $d/: src/a.ts"
+  run_env "$(fj "$SR/src/a.ts")" "CLAUDE_PROJECT_DIR=$SR"
+  expect_allowed "repo under $d/: absolute src/a.ts"
+  run_env "$(fj .env)" "CLAUDE_PROJECT_DIR=$SR"
+  expect_exit "repo under $d/: .env blocked" 2 "$code"
+done
+rm -rf "$RT" "$SIB"
+rm -rf "$SCRATCH" "$TMPD" "$LINKDIR"
+
 echo "== (i) bash-guard.sh =="
 BG="$REPO_ROOT/scripts/bash-guard.sh"
 E=.env

@@ -10,6 +10,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [6.1.2] — 2026-10-27
+
+### Fixed
+- The repo's `scripts/pre-guard.sh` no longer asks before writing protected-name files (for example
+  a `Dockerfile`) whose target resolves, with symlinks and `..` followed, outside the repo root and
+  under `/tmp` or a `$TMPDIR` inside a system temp tree, so the scaffold-verify workflow can write
+  `/tmp/scaffold-e2e/Dockerfile` (#26). A `$TMPDIR` that is or contains `$HOME` or the repo, or sits
+  outside a system temp tree, is ignored. Secret and `.env*` hard blocks still apply in those
+  directories; paths that cannot be resolved, anything inside the repo and `~/.claude/**` keep
+  asking. Case is folded only on case-insensitive filesystems.
+- `/tmp` and `$TMPDIR` are scratch bases only when neither is, or contains, `$HOME` or the repo
+  root; an unset or unresolvable `$HOME` disables the exemption.
+- `scripts/pre-guard.sh` asks for absolute `~/.claude/{rules,skills,commands}/**` and
+  `~/.claude/keybindings.json` (session memory under `~/.claude/projects` stays unprompted), and
+  matches the protected-path patterns on the resolved absolute path of a target outside the repo, so a
+  symlink cannot reach `~/.claude/settings.json`. The secret check uses the repo-relative resolved
+  path for in-repo targets, so a repo under a directory named `secrets` is not blocked wholesale.
+- `scripts/pre-guard.sh` follows a symlink target through `readlink` (dangling links included) and
+  matches both the secret hard blocks and the protected-path patterns on where the write really
+  lands; a symlink it cannot resolve asks instead of being judged by its own name.
+
+---
+
 ## [6.1.1] — 2026-10-27
 
 ### Fixed
