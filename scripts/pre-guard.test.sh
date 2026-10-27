@@ -289,6 +289,37 @@ run_env "$(fj /tmp/scaffold-e2e/Dockerfile)" "HOME=/tmp"
 expect_asks "HOME=/tmp: /tmp Dockerfile"
 run_env "$(fj /tmp/scaffold-e2e/Dockerfile)" -u HOME
 expect_asks "HOME unset"
+
+# Symlinks to protected files outside the repo are matched on the resolved absolute path.
+ln -s "$HOME/.claude/settings.json" "$SIB/home-settings.txt"
+run_guard "$(fj "$SIB/home-settings.txt")"
+expect_asks "/tmp link to a .claude/settings.json"
+ln -s "$HOME/.claude/settings.json" "$REPO_ROOT/pg-foreign-link.txt"
+run_guard "$(fj pg-foreign-link.txt)"
+expect_asks "in-repo link to a foreign .claude/settings.json"
+rm -f "$REPO_ROOT/pg-foreign-link.txt"
+ln -s "$HOME/.claude" "$SIB/claude-dir"
+run_guard "$(fj "$SIB/claude-dir/settings.json")"
+expect_asks "/tmp dir link to a .claude dir"
+
+# Absolute ~/.claude coverage; session memory stays unprompted.
+for f in rules/x.md skills/x/SKILL.md commands/x.md keybindings.json settings.json; do
+  run_guard "$(fj "$HOME/.claude/$f")"
+  expect_asks "\$HOME/.claude/$f"
+done
+run_guard "$(fj "$HOME/.claude/projects/p/memory/m.md")"
+expect_allowed "\$HOME/.claude/projects/p/memory/m.md"
+
+# An ancestor named secrets / .secrets does not make in-repo targets secret.
+for d in secrets .secrets; do
+  SR="$SIB/$d/repo"; mkdir -p "$SR/src"
+  run_env "$(fj src/a.ts)" "CLAUDE_PROJECT_DIR=$SR"
+  expect_allowed "repo under $d/: src/a.ts"
+  run_env "$(fj "$SR/src/a.ts")" "CLAUDE_PROJECT_DIR=$SR"
+  expect_allowed "repo under $d/: absolute src/a.ts"
+  run_env "$(fj .env)" "CLAUDE_PROJECT_DIR=$SR"
+  expect_exit "repo under $d/: .env blocked" 2 "$code"
+done
 rm -rf "$RT" "$SIB"
 rm -rf "$SCRATCH" "$TMPD" "$LINKDIR"
 

@@ -103,7 +103,7 @@ tier2_reason() {
   case "$path" in
   agents.md|*/agents.md|claude.md|*/claude.md|gemini.md|*/gemini.md|constitution.md|*/constitution.md|.github/copilot-instructions.md|.cursor/rules/*|.cursorrules)
     echo "agent instruction file — prompt-injection attack surface" ;;
-  .claude/rules/*|.claude/skills/*|.claude/commands/*)
+  .claude/rules/*|.claude/skills/*|.claude/commands/*|*/.claude/rules/*|*/.claude/skills/*|*/.claude/commands/*|.claude/keybindings.json|*/.claude/keybindings.json)
     echo "project agent rules/skills — steer every future session" ;;
   .claude/settings.json|.claude/settings.local.json|*/.claude/settings.json|*/.claude/settings.local.json)
     echo "harness config — can disable hooks or widen permissions" ;;
@@ -198,8 +198,11 @@ resolved_rel=""
 # Tier 1 — HARD BLOCK, on the lexical path and again on where the target really lands.
 if ! env_template "$path" && secret_path "$path"; then block_secret; fi
 if [[ -n "$resolved_lc" ]] && ! env_template "$resolved_lc"; then
-  secret_path "$resolved_lc" && block_secret
-  [[ -n "$resolved_rel" ]] && secret_path "$resolved_rel" && block_secret
+  if [[ -n "$resolved_rel" ]]; then
+    secret_path "$resolved_rel" && block_secret
+  elif [[ "$resolved_lc" != "$root_lc" ]]; then
+    secret_path "$resolved_lc" && block_secret
+  fi
 fi
 [[ "$TOOL" == "Read" || "$TOOL" == "Grep" ]] && exit 0
 
@@ -222,6 +225,8 @@ fi
 reason=$(tier2_reason "$path")
 if [[ -z "$reason" && -n "$resolved_rel" ]]; then
   reason=$(tier2_reason "$resolved_rel")
+elif [[ -z "$reason" && -n "$resolved_lc" && "$resolved_lc" != "$root_lc" ]]; then
+  reason=$(tier2_reason "$resolved_lc")
 fi
 if [[ -n "$reason" ]]; then
   jq -cn --arg r "PROTECTED ($reason): $FILE — confirm this change." \
