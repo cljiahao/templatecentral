@@ -94,7 +94,7 @@ def write(out, rel, body):
 
 
 def compose_quality_job(base, fragment):
-    out, lines, i = [], base.split("\n"), 0
+    lines = base.split("\n")
     start = next((n for n, l in enumerate(lines) if l == "  quality:"), None)
     if start is None:
         raise ValueError("shared ci.yml has no quality job to replace")
