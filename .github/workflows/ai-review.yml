@@ -22,7 +22,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b # v1.0.247
+      - name: Check Claude credential
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error title=AI PR Review::CLAUDE_CODE_OAUTH_TOKEN is not set (or this PR comes from a fork, which gets no secrets). Generate one with 'claude setup-token' and store it as a repository secret."
+            exit 1
+          fi
+
+      - id: claude
+        uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b # v1.0.247
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
@@ -45,3 +55,15 @@ jobs:
             - Skip stylistic nitpicks and formatting opinions.
             - If a finding is already addressed in the PR description checklist, skip it.
             - If no issues found, say so in one line.
+
+      # The action hides Claude's output, so an auth or usage-limit failure
+      # shows only "is_error: true". Print the result text so the cause is visible.
+      - name: Show Claude error
+        if: failure() && steps.claude.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          jq -r '[.[] | select(.type == "result")] | last
+            | (.result // (.errors | select(.) | tostring) // "no result text")
+            | "::error title=AI PR Review::" + gsub("\n"; "%0A")' \
+            "$EXECUTION_FILE"
