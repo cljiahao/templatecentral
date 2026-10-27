@@ -8,10 +8,12 @@
 #   the placeholder values in tests/golden/placeholders.env, and hashes that tree.
 #   --tree DIR (one COMBO) compares a generated project against the expected tree instead:
 #   golden paths must exist in DIR (MISSING) and match (MISMATCH); extra files are ignored.
-#   Skipped as generated at runtime: lockfiles, node_modules, shadcn output (src/components/ui/),
-#   .claude/harness.json (seeded_at, origin_hash) and .claude/.harness-base/. A file whose
-#   expected body holds a placeholder is only checked for existence; a file that differs
-#   only in whitespace (formatter output) passes.
+#   Files must match byte for byte, apart from a trailing-newline difference, and:
+#   - a placeholder (PROJECT_NAME_PLACEHOLDER, [Project Name], __TC_<NAME>__) matches any
+#     text on one line; AGENTS.md may carry appended text; package.json may carry added deps;
+#   - a file listed in tests/golden/formatter-owned.txt is compared after running its formatter
+#     over both sides, and fails if the formatter is unavailable.
+#   Skipped as generated at runtime: see tests/golden/exceptions.txt.
 # Prints MISMATCH|MISSING|EXTRA <combo> <path> per difference; exit 1 if any, else 0.
 # tests/golden/exceptions.txt lines (<combo|*> <path> # <reason>) suppress a path.
 set -uo pipefail
@@ -37,6 +39,15 @@ if [[ ${#COMBOS[@]} -eq 0 ]]; then
   done
 fi
 
+if [[ -n "$TREE" && ${#COMBOS[@]} -ne 1 ]]; then
+  echo "check-golden: --tree needs exactly one COMBO" >&2
+  exit 2
+fi
+if [[ -n "$TREE" && $FROM_TEMPLATES -eq 1 ]]; then
+  echo "check-golden: --tree and --from-templates are exclusive" >&2
+  exit 2
+fi
+
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 
@@ -59,7 +70,10 @@ actual_hashes() {
   for d in "${dirs[@]}"; do
     [[ -d "$d" ]] && { cp -Rp "$d/." "$tree/" && found=1; }
   done
-  if [[ $found -eq 0 ]]; then echo "check-golden: no template trees for $stack-$ci" >&2; return 1; fi
+  if [[ $found -eq 0 ]]; then
+    echo "check-golden: no template trees for $stack-$ci; missing: ${dirs[*]}" >&2
+    return 1
+  fi
   rm -rf "$tree/ci"
   if [[ -f "$GOLDEN_DIR/placeholders.env" ]]; then
     local name value
@@ -95,12 +109,64 @@ excepted() {
 
 # compare_tree <combo> <expected-tree> <generated-tree> — prints MISSING/MISMATCH lines.
 compare_tree() {
-  python3 - "$1" "$2" "$3" <<'PY'
-import os, re, sys
-combo, want, got = sys.argv[1:]
+  python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" <<'PY'
+import fnmatch, json, os, re, subprocess, sys
+
+combo, want, got, owned_file = sys.argv[1:]
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
 PLACEHOLDER = re.compile(r"PROJECT_NAME_PLACEHOLDER|\[Project Name\]|__TC_[A-Z0-9_]+__")
-squash = lambda b: re.sub(rb"\s+", b"", b)
+APPENDED = {"AGENTS.md"}
+SUBSET_JSON = {"package.json"}
+
+
+def owned_rules():
+    rules = []
+    if os.path.isfile(owned_file):
+        for line in open(owned_file, encoding="utf-8"):
+            line = line.split("#", 1)[0].split()
+            if len(line) == 3:
+                rules.append((line[0], line[1], set(line[2].split(","))))
+    return rules
+
+
+RULES = owned_rules()
+
+
+def formatter_for(rel):
+    ext = rel.rsplit(".", 1)[-1] if "." in os.path.basename(rel) else ""
+    for tool, prefix, exts in RULES:
+        inside = (os.path.dirname(rel) == "") if prefix == "." else rel.startswith(prefix)
+        if inside and ext in exts:
+            return tool
+    return None
+
+
+def run_formatter(tool, rel, data):
+    cmd = (["npx", "--no-install", "prettier", "--stdin-filepath", rel] if tool == "prettier"
+           else ["ruff", "format", "--stdin-filename", rel, "-"])
+    try:
+        r = subprocess.run(cmd, input=data, capture_output=True, cwd=got, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def placeholder_regex(text, appended):
+    parts, last = [], 0
+    for m in PLACEHOLDER.finditer(text):
+        parts.append(re.escape(text[last:m.start()]))
+        parts.append(r"[^\n]+?")
+        last = m.end()
+    parts.append(re.escape(text[last:].rstrip("\n")))
+    return "".join(parts) + (r"(?:\n.*)?" if appended else r"\n*")
+
+
+def subset(a, b):
+    if isinstance(a, dict):
+        return isinstance(b, dict) and all(k in b and subset(v, b[k]) for k, v in a.items())
+    return a == b
+
+
 bad = 0
 for dirpath, _, names in os.walk(want):
     for name in sorted(names):
@@ -112,8 +178,30 @@ for dirpath, _, names in os.walk(want):
         if not os.path.isfile(other):
             print(f"MISSING {combo} {rel}"); bad = 1; continue
         a, b = open(full, "rb").read(), open(other, "rb").read()
-        if a == b or PLACEHOLDER.search(a.decode("utf-8", "replace")) or squash(a) == squash(b):
+        if a.rstrip(b"\n") == b.rstrip(b"\n"):
             continue
+        text = a.decode("utf-8", "replace")
+        if PLACEHOLDER.search(text) or rel in APPENDED:
+            rx = placeholder_regex(text, rel in APPENDED)
+            if rel in SUBSET_JSON:
+                try:
+                    expect = json.loads(PLACEHOLDER.sub("x", text))
+                    actual = json.loads(b.decode("utf-8"))
+                    if subset(expect, {**actual, "name": "x"}):
+                        continue
+                except ValueError:
+                    pass
+            elif re.fullmatch(rx, b.decode("utf-8", "replace"), re.S):
+                continue
+        else:
+            tool = formatter_for(rel)
+            if tool:
+                fa, fb = run_formatter(tool, rel, a), run_formatter(tool, rel, b)
+                if fa is None or fb is None:
+                    print(f"MISMATCH {combo} {rel}"); print(f"formatter {tool} unavailable or failed for {rel}", file=sys.stderr)
+                    bad = 1; continue
+                if fa.rstrip(b"\n") == fb.rstrip(b"\n"):
+                    continue
         print(f"MISMATCH {combo} {rel}"); bad = 1
 sys.exit(bad)
 PY
@@ -127,16 +215,22 @@ for combo in "${COMBOS[@]}"; do
   stack="${combo%-*}"
   ci="${combo##*-}"
   if ! actual_hashes "$stack" "$ci" "$T/actual-$combo"; then echo "check-golden: could not build $combo" >&2; fail=1; continue; fi
+  grep -v '^#' "$golden" | grep . > "$T/want-$combo" || true
+  if [[ ! -s "$T/want-$combo" ]]; then echo "check-golden: golden $golden has no entries" >&2; fail=1; continue; fi
+  if [[ ! -s "$T/actual-$combo" ]]; then echo "check-golden: no files produced for $combo" >&2; fail=1; continue; fi
   if [[ -n "$TREE" ]]; then
     bad=0
-    # Paths in exceptions.txt are dropped from the report, not from the comparison.
+    report=$(compare_tree "$combo" "$T/tree-$stack-$ci" "$TREE")
+    rc=$?
+    # A path listed in exceptions.txt is dropped from the report; a crash with no report fails.
+    [[ $rc -ne 0 && -z "$report" ]] && bad=1
     while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
       excepted "$combo" "${line##* }" || { echo "$line"; bad=1; }
-    done < <(compare_tree "$combo" "$T/tree-$stack-$ci" "$TREE")
+    done <<< "$report"
     if [[ $bad -eq 0 ]]; then ok=$((ok + 1)); echo "OK $combo"; else fail=1; fi
     continue
   fi
-  grep -v '^#' "$golden" | grep . > "$T/want-$combo" || true
   bad=0
   # Pass 1: every golden entry. Pass 2: entries only the tree has.
   while IFS= read -r line; do

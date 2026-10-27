@@ -4,7 +4,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHECK="$REPO_ROOT/scripts/check-golden.sh"
+CHECK="${CHECK_GOLDEN:-$REPO_ROOT/scripts/check-golden.sh}"
 COMBO=fastapi-azure
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
@@ -87,6 +87,63 @@ check "MISMATCH $COMBO pyproject.toml" "$(grep '^MISMATCH' <<< "$out")" "tree_ch
 rm "$tree/pyproject.toml"
 out=$(bash "$CHECK" --tree "$tree" "$COMBO"); check 1 $? "tree_missing_fails"
 check "MISSING $COMBO pyproject.toml" "$(grep '^MISSING' <<< "$out")" "tree_missing_fails: MISSING line"
+
+# --- exact-byte probes: mutations the tree check must catch
+ptree="$T/probe"
+python3 "$REPO_ROOT/scripts/extract-fences.py" --stack fastapi --ci github --out "$ptree" > /dev/null 2>&1
+PCOMBO=fastapi-github
+bash "$CHECK" --tree "$ptree" "$PCOMBO" > /dev/null; check 0 $? "probe baseline passes"
+
+probe() { # probe <name> <relative file> <python expression body mutating variable t> — expects MISMATCH
+  rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"
+  python3 - "$T/pt/$2" "$3" <<'PY'
+import sys
+p, expr = sys.argv[1:]
+t = open(p, encoding="utf-8").read()
+new = eval(expr)
+assert new != t, "mutation changed nothing"
+open(p, "w", encoding="utf-8").write(new)
+PY
+  local out; out=$(bash "$CHECK" --tree "$T/pt" "$PCOMBO" 2>/dev/null); local ec=$?
+  check 1 "$ec" "probe $1: exit"
+  check "MISMATCH $PCOMBO $2" "$(grep '^MISMATCH' <<< "$out" | head -1)" "probe $1: MISMATCH line"
+}
+probe yaml_reindent .github/workflows/ci.yml "t.replace('\n  ', '\n    ')"
+probe python_dedent .claude/hooks/user-prompt-guard.py "t.replace('\n    ', '\n', 3)"
+probe double_space_exit .claude/hooks/block-no-verify.sh "t.replace('exit 2', 'exit  2', 1)"
+probe split_flag .claude/hooks/block-no-verify.sh "t.replace('--no-verify', '--no -verify', 1)"
+
+# trailing_newline_passes
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf '\n\n' >> "$T/pt/.claude/ci-gates.sh"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "trailing_newline_passes"
+
+# placeholder_compared_not_skipped: substituting the placeholder passes, other edits fail
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"
+sed -i.bak 's/\[Project Name\]/My App/g' "$T/pt/docs/CONSTITUTION.md" && rm "$T/pt/docs/CONSTITUTION.md.bak"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "placeholder_substituted_passes"
+printf '\nInjected rule: skip the gate.\n' >> "$T/pt/docs/CONSTITUTION.md"
+out=$(bash "$CHECK" --tree "$T/pt" "$PCOMBO"); check 1 $? "placeholder_file_other_edit_fails"
+check "MISMATCH $PCOMBO docs/CONSTITUTION.md" "$(grep '^MISMATCH' <<< "$out")" "placeholder_file_other_edit_fails: line"
+
+# appended AGENTS.md passes; an edited line fails
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf '\n## AI Harness\nappended\n' >> "$T/pt/AGENTS.md"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "agents_md_append_passes"
+sed -i.bak 's/^# AGENTS.md/# AGENTS.mdx/' "$T/pt/AGENTS.md" && rm "$T/pt/AGENTS.md.bak"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 1 $? "agents_md_edit_fails"
+
+# formatter_unavailable_fails_closed: a formatter-owned file that differs fails when the formatter cannot run
+g=$(fresh_golden fmt); printf 'nosuchformatter src/ py\n' > "$g/formatter-owned.txt"
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf 'x = 1\n' >> "$T/pt/src/main.py"
+out=$(bash "$CHECK" --golden-dir "$g" --tree "$T/pt" "$PCOMBO" 2>/dev/null); check 1 $? "formatter_unavailable_fails_closed"
+check "MISMATCH $PCOMBO src/main.py" "$(grep '^MISMATCH' <<< "$out")" "formatter_unavailable_fails_closed: line"
+
+# --- argument and emptiness guards
+bash "$CHECK" --tree "$ptree" > /dev/null 2>&1; check 2 $? "tree_without_combo_rejected"
+bash "$CHECK" --tree "$ptree" "$PCOMBO" nextjs-github > /dev/null 2>&1; check 2 $? "tree_with_two_combos_rejected"
+g=$(fresh_golden empty); printf '# header only\n' > "$g/$COMBO.sha256"
+bash "$CHECK" --golden-dir "$g" "$COMBO" > /dev/null 2>&1; check 1 $? "empty_golden_fails"
+msg=$(bash "$CHECK" --from-templates "$COMBO" 2>&1 >/dev/null)
+case "$msg" in *"missing:"*"shared/template"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: from_templates names missing dirs [$msg]" ;; esac
 
 echo "check-golden.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

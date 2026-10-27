@@ -1,0 +1,12 @@
+# Files a project formatter rewrites after the scaffold writes them. `check-golden.sh --tree`
+# compares these after running the formatter over both sides, and fails if it is unavailable.
+# Enforcement-layer files (.claude/, .github/, hooks, lefthook.yml, .gitleaks.toml) are never listed:
+# they are byte-exact.
+# Format: <prettier|ruff> <path prefix, or . for the project root only> <comma-separated extensions>
+prettier src/ ts,tsx,js,mjs,cjs,css,json,md
+prettier test/ ts,tsx,js,mjs,json
+prettier scripts/ mjs,js
+prettier docs/ md
+prettier . ts,mjs,json,md,yaml
+ruff src/ py
+ruff test/ py

@@ -1,3 +1,20 @@
 # Paths allowed to differ from the golden hashes.
 # Format: <combo|*> <path> # <reason>
 # <combo> is <stack>-<ci>, for example nextjs-github.
+#
+# What the golden covers
+#   One entry per file the scaffold markdown writes verbatim: the first fence after a
+#   path heading, a "Create `<path>`:" line, or a heading marked "Empty file".
+#   .claude/settings.json and lefthook.yml also carry an inline-bold heading in
+#   harness-kit-enforcement.md (Step A rules, Step B2 wiring). Those headings hold rules, not
+#   a body: the golden covers only the Step A / Step B2 fence in the stack's variant kit
+#   (harness-kit-ts.md or harness-kit-fastapi.md). tests/golden/unfenced.txt lists the headings
+#   without a body, and extract-fences.test.sh pins that the variant fence is the golden entry.
+#
+# What `check-golden.sh --tree` leaves out of a generated project (created at runtime)
+#   lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock), node_modules/,
+#   src/components/ui/ (shadcn output), .claude/harness.json (seeded_at, origin_hash),
+#   .claude/.harness-base/ (snapshot of the seeded files).
+# Also relaxed in --tree mode: a placeholder matches one line of text, AGENTS.md may carry
+#   appended sections, package.json may carry added dependencies, and the files in
+#   tests/golden/formatter-owned.txt are compared after their formatter runs.
