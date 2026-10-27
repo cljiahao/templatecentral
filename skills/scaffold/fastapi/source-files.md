@@ -1329,7 +1329,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
+Execute kit Step **0** now with `STACK=fastapi` in its fence (copy the template trees into the project root), then Steps **A through D** (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
 
 ### 6c. Create project skill files (`.claude/skills/`)
 

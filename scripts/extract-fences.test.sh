@@ -101,16 +101,22 @@ for combo in nextjs:github nextjs:azure fastapi:github fastapi:azure nestjs:gith
   check 0 $? "stack $combo exits 0"
   ok_if "stack $combo wrote output" test -s "$T/st-$combo.out"
 done
-ok_if "github combo has ci.yml" test -f "$T/st-nextjs:github/.github/workflows/ci.yml"
-ok_if "github combo has no azure pipeline" test ! -e "$T/st-nextjs:github/azure-pipelines"
-ok_if "azure combo has the gates template" test -f "$T/st-nextjs:azure/azure-pipelines/templatecentral-gates.yml"
-ok_if "azure combo has no github workflow" test ! -e "$T/st-nextjs:azure/.github"
-ok_if "fastapi ci.yml carries the pyright quality job" grep -q 'pyright' "$T/st-fastapi:github/.github/workflows/ci.yml"
-ok_if "fastapi ci.yml keeps the shared changelog job" grep -q '^  changelog:' "$T/st-fastapi:github/.github/workflows/ci.yml"
-ok_if "fastapi gets the py hook" test -f "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.py"
-ok_if "fastapi does not get the cjs hook" test ! -e "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.cjs"
-ok_if "nextjs gets the cjs hook" test -f "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.cjs"
-ok_if "nextjs does not get the py hook" test ! -e "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.py"
+# The CI files and the per-stack hooks live in the template trees; the extractor must not
+# produce them (check-golden.sh fails a path produced by both), and the trees must hold them.
+TPL="$REPO_ROOT/skills/scaffold/shared"
+ok_if "extractor yields no ci.yml (github)" test ! -e "$T/st-nextjs:github/.github/workflows/ci.yml"
+ok_if "extractor yields no gates template (azure)" test ! -e "$T/st-nextjs:azure/azure-pipelines/templatecentral-gates.yml"
+ok_if "extractor yields no hooks" test ! -e "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.py" -a ! -e "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.cjs"
+ok_if "github TS template has ci.yml" test -f "$TPL/template-ci/github-ts/.github/workflows/ci.yml"
+ok_if "github template has no azure pipeline" test ! -e "$TPL/template-ci/github-ts/azure-pipelines" -a ! -e "$TPL/template-ci/github-py/azure-pipelines"
+ok_if "azure template has the gates template" test -f "$TPL/template-ci/azure/azure-pipelines/templatecentral-gates.yml"
+ok_if "azure template has no github workflow" test ! -e "$TPL/template-ci/azure/.github"
+ok_if "fastapi ci.yml carries the pyright quality job" grep -q 'pyright' "$TPL/template-ci/github-py/.github/workflows/ci.yml"
+ok_if "fastapi ci.yml keeps the shared changelog job" grep -q '^  changelog:' "$TPL/template-ci/github-py/.github/workflows/ci.yml"
+ok_if "fastapi gets the py hook" test -f "$TPL/template-py/.claude/hooks/user-prompt-guard.py"
+ok_if "fastapi does not get the cjs hook" test ! -e "$TPL/template-py/.claude/hooks/user-prompt-guard.cjs"
+ok_if "nextjs gets the cjs hook" test -f "$TPL/template-ts/.claude/hooks/user-prompt-guard.cjs"
+ok_if "nextjs does not get the py hook" test ! -e "$TPL/template-ts/.claude/hooks/user-prompt-guard.py"
 
 # bare_opener_extracted: an untagged fence is a fence
 cat > "$T/bare.md" <<MD
@@ -256,13 +262,52 @@ for combo in nextjs:github nextjs:azure vite-react:github vite-react:azure fasta
   check "$want_unfenced" "$got" "coverage $combo: path headings without a file match tests/golden/unfenced.txt"
 done
 
-# pinned_inline_variants: the Step A / Step B2 bodies in the variant kits are the golden settings.json and lefthook.yml
+# pinned_inline_variants: the Step A body in the variant kits is the golden settings.json
 python3 "$EXTRACT" --flat --out "$T/flat-ts" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-ts.md" > /dev/null 2>&1
 python3 "$EXTRACT" --flat --out "$T/flat-py" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-fastapi.md" > /dev/null 2>&1
 check "" "$(diff "$T/flat-ts/settings.ts.json" "$T/cov-nextjs:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: ts settings.json"
 check "" "$(diff "$T/flat-py/settings.py.json" "$T/cov-fastapi:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: fastapi settings.json"
-check "" "$(diff "$T/flat-ts/lefthook.yml" "$T/cov-nextjs:github/lefthook.yml" 2>&1)" "pinned_inline_variants: ts lefthook.yml"
-check "" "$(diff "$T/flat-py/lefthook.yml" "$T/cov-fastapi:github/lefthook.yml" 2>&1)" "pinned_inline_variants: fastapi lefthook.yml"
+
+# pointer_contract: only a single line that starts with the backticked path closes a heading
+cat > "$T/ptr2.md" <<MD
+**\`.claude/settings.json\`** — rules heading.
+
+- \`.claude/hooks/x.sh\` is a hook. Step 0 copies it from \`<skill-dir>/shared/template/.claude/hooks/x.sh\`.
+
+${fence}bash
+chmod +x .claude/hooks/*.sh
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/optr2" --src "$T/ptr2.md" > "$T/optr2.out" 2> "$T/optr2.err"
+check "1" "$([[ -f "$T/optr2/settings.json" ]] && echo 1 || echo 0)" "pointer_contract: a pointer inside a bullet does not close the heading, so the next fence is read against it"
+cat > "$T/ptr3.md" <<MD
+**\`.claude/settings.json\`** — rules heading.
+
+\`.claude/hooks/x.sh\` is a hook. Step 0 copies it from
+\`<skill-dir>/shared/template/.claude/hooks/x.sh\`.
+
+${fence}bash
+chmod +x .claude/hooks/*.sh
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/optr3" --src "$T/ptr3.md" > "$T/optr3.out" 2> "$T/optr3.err"
+check "1" "$([[ -f "$T/optr3/settings.json" ]] && echo 1 || echo 0)" "pointer_contract: a pointer split over two lines does not close the heading"
+
+# pointer_closes_heading: a line that points at a template file ends the heading before it,
+# so a later bare fence is not read as that heading's file
+cat > "$T/ptr.md" <<MD
+**\`.claude/settings.json\`** — rules heading with no body here.
+
+\`.claude/hooks/x.sh\` is a hook. Step 0 copies it from \`<skill-dir>/shared/template/.claude/hooks/x.sh\`.
+
+${fence}bash
+chmod +x .claude/hooks/*.sh
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/optr" --src "$T/ptr.md" > "$T/optr.out" 2> "$T/optr.err"
+check "" "$(cat "$T/optr.out")" "pointer_closes_heading: no file written"
+check "1" "$(grep -c '^skipped .*no path heading' "$T/optr.err")" "pointer_closes_heading: the chmod fence has no heading"
+check "1" "$(grep -c '^unfenced .* .claude/settings.json' "$T/optr.err")" "pointer_closes_heading: the open heading is reported unfenced"
 
 # same_as_test_harness_kit: hook bytes match the original hook-only extractor
 cat > "$T/legacy.py" <<'PY'
@@ -296,11 +341,42 @@ for src in srcs:
             i = j
         i += 1
 PY
+cat > "$T/kit.md" <<MD
+**\`.claude/hooks/a.sh\`** (hook):
+
+**For TS stacks — uses node:**
+${fence}bash
+#!/usr/bin/env bash
+echo ts
+${fence}
+
+**For FastAPI — uses python3:**
+${fence}bash
+#!/usr/bin/env bash
+echo py
+${fence}
+
+**\`.claude/hooks/b.cjs\`** (TS only):
+${fence}javascript
+console.log(1);
+${fence}
+
+**\`.claude/hooks/c.py\`** (FastAPI only):
+${fence}python
+print(1)
+${fence}
+
+**\`.claude/hooks/d.sh\`**:
+${fence}bash
+#!/usr/bin/env bash
+echo d
+${fence}
+MD
 mkdir -p "$T/legacy-out"
-python3 "$T/legacy.py" "$T/legacy-out" "$REPO_ROOT"/skills/scaffold/shared/harness-kit*.md
-python3 "$EXTRACT" --flat --ext sh,cjs,py --out "$T/new-out" --src "$REPO_ROOT"/skills/scaffold/shared/harness-kit*.md > /dev/null 2>&1
+python3 "$T/legacy.py" "$T/legacy-out" "$T/kit.md"
+python3 "$EXTRACT" --flat --ext sh,cjs,py --out "$T/new-out" --src "$T/kit.md" > /dev/null 2>&1
 check "" "$(diff -r "$T/legacy-out" "$T/new-out" 2>&1)" "same_as_test_harness_kit: identical hook files"
-check "true" "$([[ -n "$(ls "$T/new-out")" ]] && echo true || echo false)" "same_as_test_harness_kit: non-empty"
+check "5" "$(find "$T/new-out" -type f | wc -l | tr -d ' ')" "same_as_test_harness_kit: every hook extracted"
 
 echo "extract-fences.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

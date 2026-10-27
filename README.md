@@ -168,7 +168,7 @@ An ordinary harness writes the rules down. templatecentral enforces them, checks
 
 | Evidence | Result |
 |:---|:---|
-| Harness kit regression suite (`scripts/test-harness-kit.sh`) | 721 tests pass |
+| Harness kit regression suite (`scripts/test-harness-kit.sh`) | 768 tests pass |
 | OpenCode adapter hook matrix | 157 tests pass |
 | Repo guard tests (`scripts/pre-guard.test.sh`) | 67 tests pass |
 | Branch-guard rewrite | Checked against the previous hook over 248 command × folder combinations; nothing it blocked became allowed |
@@ -294,13 +294,17 @@ templatecentral/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
 │   ├── validate-scaffold-configs.sh # Parses fenced JSON/JS config blocks in scaffold files
-│   ├── test-harness-kit.sh  # Regression suite for the hooks the harness kit (harness-kit*.md) seeds
+│   ├── test-harness-kit.sh  # Regression suite for the hooks and gates under skills/scaffold/shared/template*/
+│   ├── test-template-copy.sh # Tests for the Step 0 / Step B3 copy fences and the template trees
+│   ├── lint-skills.test.sh  # Negative tests for the lint checks that read the template trees
 │   ├── build-agents-dist.sh # Builds the namespace-free copy for other agent tools
 │   ├── pre-guard.sh         # Repo guard: blocks secret access, asks before instruction/CI edits
 │   ├── bash-guard.sh        # Repo guard: blocks shell reads/writes of secret files
 │   ├── post-edit-lint.sh    # Repo hook: lint feedback after skill edits
 │   └── pre-guard.test.sh    # Tests for both repo guards
 ├── skills/                  # Shipped skills — nested reference file architecture
+│   ├── scaffold/shared/template*/ # Files the scaffold copies verbatim: hooks, gates, lefthook, CI (template/, template-ts/, template-py/, template-ci/)
+│   ├── scaffold/shared/template.manifest # Every template file with its mode
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
 │   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
 │   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md

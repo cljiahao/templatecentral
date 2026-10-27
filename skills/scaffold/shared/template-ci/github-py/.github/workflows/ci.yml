@@ -1,0 +1,77 @@
+name: CI
+on:
+  pull_request: { branches: [main, uat, develop] }
+  push: { branches: [main] }
+permissions: { contents: read }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - if: hashFiles('uv.lock') != ''
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          [ -f requirements-dev.txt ] && pip install -r requirements-dev.txt || true
+      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
+        run: bash .claude/ci-gates.sh deps
+      - name: Harness integrity
+        run: bash .claude/verify-harness.sh
+      - run: ruff check src/ && ruff format --check src/
+      - run: python -m pyright src/
+      - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
+      - name: Changed-line coverage (>= 80%)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pipx run diff-cover coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
+      - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh secrets "$BASE_REF"
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+        run: bash .claude/ci-gates.sh changelog "$BASE_REF"
+  readme-freshness:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Require README.md update for changed folders (apply 'skip-readme-check' label to bypass)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+        run: bash .claude/ci-gates.sh readme "$BASE_REF"
+  comment-hygiene:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Require no change-narration comments (apply 'skip-comment-check' label to bypass)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+        run: bash .claude/ci-gates.sh comments "$BASE_REF"

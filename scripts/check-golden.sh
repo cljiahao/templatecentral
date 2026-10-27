@@ -3,9 +3,14 @@
 #
 # Usage: bash scripts/check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]
 #   COMBO is <stack>-<ci> (default: all 8 stack x ci combinations).
-#   Default mode hashes the output of scripts/extract-fences.py.
-#   --from-templates builds each combo by copying the template/ trees, then substituting
-#   the placeholder values in tests/golden/placeholders.env, and hashes that tree.
+#   Default mode hashes the output of scripts/extract-fences.py plus the template trees:
+#   a path held in a template tree comes from the templates, every other path from the
+#   fences, and a path produced by both fails as DUPLICATE (its fence is still in the markdown).
+#   --from-templates builds each combo from the template trees alone (shared/template,
+#   shared/template-<ts|py>, shared/template-ci/<github-<ts|py>|azure>, <stack>/template),
+#   substitutes the placeholder values in tests/golden/placeholders.env, and compares only
+#   the golden paths those trees hold: a path no template holds yet is still a fence, and the
+#   default mode fails it as MISSING if neither source produces it.
 #   --tree DIR (one COMBO) compares a generated project against the expected tree instead:
 #   golden paths must exist in DIR (MISSING) and match (MISMATCH); extra files are ignored.
 #   Files must match byte for byte, apart from a trailing-newline difference, and:
@@ -14,6 +19,9 @@
 #   - a file listed in tests/golden/formatter-owned.txt is compared after running its formatter
 #     over both sides, and fails if the formatter is unavailable.
 #   Skipped as generated at runtime: see tests/golden/exceptions.txt.
+#   File modes are not compared: the golden records content hashes only, and a checkout can change
+#   modes (umask, a Windows working tree). The exec bits of the template scripts are checked against
+#   template.manifest by test-template-copy.sh and lint-skills.sh instead.
 # A path in tests/golden/exceptions.txt suppresses STALE-EXPECTED, MISSING, MISMATCH and EXTRA
 # for that path.
 # Prints MISMATCH|MISSING|EXTRA <combo> <path> per difference; exit 1 if any, else 0.
@@ -21,6 +29,10 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# TC_SCAFFOLD_DIR and TC_EXTRACT point the check at test fixtures; they are read only when TC_TEST=1,
+# so a stray variable in a CI environment cannot redirect the real check.
+SCAFFOLD_DIR="$REPO_ROOT/skills/scaffold"
+[[ "${TC_TEST:-}" == 1 && -n "${TC_SCAFFOLD_DIR:-}" ]] && SCAFFOLD_DIR="$TC_SCAFFOLD_DIR"
 GOLDEN_DIR="$REPO_ROOT/tests/golden"
 FROM_TEMPLATES=0
 TREE=""
@@ -28,8 +40,12 @@ COMBOS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-templates) FROM_TEMPLATES=1 ;;
+    -h | --help)
+      echo "Usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]"
+      echo "  COMBO is <stack>-<ci>: stack nextjs, vite-react, fastapi or nestjs; ci github or azure."
+      exit 0 ;;
     --golden-dir | --tree)
-      if [[ $# -lt 2 || "$2" == --* ]]; then
+      if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
         echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
         exit 2
       fi
@@ -39,6 +55,12 @@ while [[ $# -gt 0 ]]; do
     *) COMBOS+=("$1") ;;
   esac
   shift
+done
+for combo in ${COMBOS[@]+"${COMBOS[@]}"}; do
+  case "$combo" in
+    nextjs-github | nextjs-azure | vite-react-github | vite-react-azure | fastapi-github | fastapi-azure | nestjs-github | nestjs-azure) ;;
+    *) echo "check-golden: unknown combo $combo (want <stack>-<ci>, see --help)" >&2; exit 2 ;;
+  esac
 done
 if [[ ${#COMBOS[@]} -eq 0 ]]; then
   for stack in nextjs vite-react fastapi nestjs; do
@@ -55,37 +77,85 @@ if [[ -n "$TREE" && $FROM_TEMPLATES -eq 1 ]]; then
   exit 2
 fi
 
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 2
 trap 'rm -rf "$T"' EXIT
 
-sha_of() { # sha_of <file> — portable sha256
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+sha_of() { # sha_of <file> — portable sha256, read from stdin because GNU sha256sum escapes a file name that holds a backslash and prefixes the hash with one
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d' ' -f1; else shasum -a 256 < "$1" | cut -d' ' -f1; fi
+}
+
+# template_dirs <stack> <ci> — the template trees one combo copies, in copy order.
+template_dirs() {
+  local stack="$1" ci="$2" ts=py ci_dir=azure
+  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
+  [[ "$ci" == github ]] && ci_dir="github-$ts"
+  printf '%s\n' "$SCAFFOLD_DIR/shared/template" "$SCAFFOLD_DIR/shared/template-$ts" \
+    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir" "$SCAFFOLD_DIR/$stack/template"
+}
+
+# overlay_templates <stack> <ci> <tree> — copy the combo's template trees into <tree>; prints
+# the relative path of every file copied; returns 1 when no template tree exists.
+overlay_templates() {
+  local d found=1
+  while IFS= read -r d; do
+    [[ -d "$d" ]] || continue
+    (cd "$d" && find . -type f | sed 's|^\./||') >> "$T/overlaid"
+    mkdir -p "$3" && cp -Rp "$d/." "$3/" && found=0
+  done < <(template_dirs "$1" "$2")
+  return $found
+}
+
+# expected_template_count <stack> <ci> — files the manifests list for one combo: the shared manifest
+# rows for its trees (template, template-<ts|py>, template-ci/<host>) plus every row of
+# <stack>/template.manifest when that exists.
+expected_template_count() {
+  local stack="$1" ci="$2" ts=py ci_dir=azure n=0 m
+  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
+  [[ "$ci" == github ]] && ci_dir="github-$ts"
+  m="$SCAFFOLD_DIR/shared/template.manifest"
+  if [[ -f "$m" ]]; then
+    n=$(awk -v a="template/" -v b="template-$ts/" -v c="template-ci/$ci_dir/" \
+      '!/^#/ && NF && (index($1, a) == 1 || index($1, b) == 1 || index($1, c) == 1) { n++ } END { print n + 0 }' "$m")
+  fi
+  m="$SCAFFOLD_DIR/$stack/template.manifest"
+  if [[ -f "$m" ]]; then n=$((n + $(awk '!/^#/ && NF { n++ } END { print n + 0 }' "$m"))); fi
+  echo "$n"
 }
 
 # actual_hashes <stack> <ci> <outfile> — "<sha>  <path>" lines, sorted by path.
 actual_hashes() {
   local stack="$1" ci="$2" out="$3" tree="$T/tree-$1-$2"
+  : > "$T/overlaid"
   if [[ $FROM_TEMPLATES -eq 0 ]]; then
-    python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2>/dev/null
-    return $?
+    local extract=(python3 "$REPO_ROOT/scripts/extract-fences.py")
+    # TC_EXTRACT replaces the extractor command (split on spaces); tests use it to simulate a failure.
+    [[ "${TC_TEST:-}" == 1 && -n "${TC_EXTRACT:-}" ]] && read -r -a extract <<< "$TC_EXTRACT"
+    if ! "${extract[@]}" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2> "$T/extract-$stack-$ci.err"; then
+      echo "check-golden: extract-fences failed for $stack-$ci:" >&2
+      cat "$T/extract-$stack-$ci.err" >&2
+      return 1
+    fi
+    mkdir -p "$tree"
+    local before="$T/fenced-$stack-$ci"
+    (cd "$tree" && find . -type f | sed 's|^\./||' | LC_ALL=C sort) > "$before"
+    overlay_templates "$stack" "$ci" "$tree" || true
+    LC_ALL=C sort -u "$T/overlaid" | comm -12 "$before" - | while IFS= read -r p; do echo "DUPLICATE $stack-$ci $p"; done > "$T/dups-$stack-$ci"
+  else
+    mkdir -p "$tree"
+    if ! overlay_templates "$stack" "$ci" "$tree"; then
+      echo "check-golden: no template trees for $stack-$ci; missing: $(template_dirs "$stack" "$ci" | tr '\n' ' ')" >&2
+      return 1
+    fi
+    rm -f "$T/dups-$stack-$ci"
   fi
-  local sk="$REPO_ROOT/skills/scaffold" ts=py
-  case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
-  local dirs=("$sk/shared/template" "$sk/shared/template-$ts" "$sk/shared/template/ci/$ci" "$sk/$stack/template")
-  mkdir -p "$tree"
-  local found=0 d
-  for d in "${dirs[@]}"; do
-    [[ -d "$d" ]] && { cp -Rp "$d/." "$tree/" && found=1; }
-  done
-  if [[ $found -eq 0 ]]; then
-    echo "check-golden: no template trees for $stack-$ci; missing: ${dirs[*]}" >&2
-    return 1
-  fi
-  rm -rf "$tree/ci"
   if [[ -f "$GOLDEN_DIR/placeholders.env" ]]; then
     local name value
-    while IFS='=' read -r name value; do
+    while IFS='=' read -r name value || [[ -n "$name" ]]; do
       [[ -z "$name" || "$name" == \#* ]] && continue
+      if [[ "$name" == *[[:space:]]* || -z "$value" ]]; then
+        echo "check-golden: placeholders.env line must be NAME=value, got: $name${value:+=$value}" >&2
+        return 1
+      fi
       grep -rlF "__TC_${name}__" "$tree" 2>/dev/null | while IFS= read -r f; do
         python3 - "$f" "__TC_${name}__" "$value" <<'PY'
 import sys
@@ -117,7 +187,16 @@ excepted() {
 # compare_tree <combo> <expected-tree> <generated-tree> — prints MISSING/MISMATCH lines.
 compare_tree() {
   python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" "$GOLDEN_DIR/$1.sha256" <<'PY'
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, traceback
+
+
+def crash(kind, value, tb):
+    traceback.print_exception(kind, value, tb)
+    os._exit(3)
+
+
+# Exit 1 means differences were reported; any other nonzero exit is a crash and never an OK.
+sys.excepthook = crash
 
 combo, want, got, owned_file, golden_file = sys.argv[1:]
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
@@ -200,14 +279,42 @@ def golden_paths():
 
 
 bad = 0
-for rel, sha in sorted(golden_paths().items()):
+compared = 0
+golden = golden_paths()
+reported = set()
+
+
+def symlink_in_chain(rel):
+    """The first directory above rel (from the top) that is a symlink in the project, or None."""
+    parts = rel.split("/")[:-1]
+    for n in range(1, len(parts) + 1):
+        d = "/".join(parts[:n])
+        if os.path.islink(os.path.join(got, d)):
+            return d
+    return None
+
+
+def report_symlink(path):
+    global bad
+    if path not in reported:
+        reported.add(path)
+        print(f"SYMLINK {combo} {path}")
+        bad = 1
+
+for rel, sha in sorted(golden.items()):
     if SKIP.search(rel):
         continue
+    compared += 1
     full = os.path.join(want, rel)
     other = os.path.join(got, rel)
     # The expected tree must still be what the golden records.
     if not os.path.isfile(full) or hashlib.sha256(open(full, "rb").read()).hexdigest() != sha:
         print(f"STALE-EXPECTED {combo} {rel}"); bad = 1
+    link = symlink_in_chain(rel)
+    if link:
+        report_symlink(link); continue
+    if os.path.islink(other):
+        report_symlink(rel); continue
     if not os.path.isfile(other):
         print(f"MISSING {combo} {rel}"); bad = 1; continue
     if not os.path.isfile(full):
@@ -232,6 +339,21 @@ for rel, sha in sorted(golden_paths().items()):
         if re.fullmatch(placeholder_regex(text, rel in APPENDED), b.decode("utf-8", "replace"), re.S):
             continue
     print(f"MISMATCH {combo} {rel}"); bad = 1
+if compared == 0:
+    print(f"EMPTY {combo} no golden path was compared"); bad = 1
+# The enforcement-layer directories hold only seeded files: a hook or git-hook script that is not in the
+# golden was added from outside the scaffold. hooks/local/ is where a project keeps its own guards.
+for top in (".claude/hooks", ".lefthook"):
+    if os.path.islink(os.path.join(got, top)):
+        report_symlink(top)
+    for dp, ds, fs in os.walk(os.path.join(got, top)):
+        for d in ds:
+            if os.path.islink(os.path.join(dp, d)):
+                report_symlink(os.path.relpath(os.path.join(dp, d), got))
+        for f in fs:
+            rel = os.path.relpath(os.path.join(dp, f), got)
+            if rel not in golden and not rel.startswith(".claude/hooks/local/"):
+                print(f"EXTRA {combo} {rel}"); bad = 1
 sys.exit(bad)
 PY
 }
@@ -247,36 +369,59 @@ for combo in "${COMBOS[@]}"; do
   grep -v '^#' "$golden" | grep . > "$T/want-$combo" || true
   if [[ ! -s "$T/want-$combo" ]]; then echo "check-golden: golden $golden has no entries" >&2; fail=1; continue; fi
   if [[ ! -s "$T/actual-$combo" ]]; then echo "check-golden: no files produced for $combo" >&2; fail=1; continue; fi
+  if [[ -s "$T/dups-$stack-$ci" ]]; then
+    while IFS= read -r line; do excepted "$combo" "${line##* }" || { echo "$line"; fail=1; }; done < "$T/dups-$stack-$ci"
+  fi
   if [[ -n "$TREE" ]]; then
     bad=0
     report=$(compare_tree "$combo" "$T/tree-$stack-$ci" "$TREE")
     rc=$?
-    # A path listed in exceptions.txt is dropped from the report; a crash with no report fails.
-    [[ $rc -ne 0 && -z "$report" ]] && bad=1
+    # A path listed in exceptions.txt is dropped from the report. Exit 0 and exit 1 (differences
+    # reported) are the only valid results: any other exit is a crash and fails, whatever was printed
+    # before it, and a report line that is not a difference is never exceptable.
+    if [[ $rc -gt 1 ]]; then echo "check-golden: compare of $combo crashed (exit $rc)" >&2; bad=1; fi
+    [[ $rc -eq 1 && -z "$report" ]] && bad=1
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
-      excepted "$combo" "${line##* }" || { echo "$line"; bad=1; }
+      case "$line" in
+        MISSING\ * | MISMATCH\ * | STALE-EXPECTED\ * | SYMLINK\ * | EXTRA\ *) excepted "$combo" "${line##* }" || { echo "$line"; bad=1; } ;;
+        *) echo "$line"; bad=1 ;;
+      esac
     done <<< "$report"
     if [[ $bad -eq 0 ]]; then ok=$((ok + 1)); echo "OK $combo"; else fail=1; fi
     continue
   fi
   bad=0
+  covered=0
   # Pass 1: every golden entry. Pass 2: entries only the tree has.
   while IFS= read -r line; do
     want_sha="${line%%  *}"
     path="${line#*  }"
-    got=$(grep -F -- "  $path" "$T/actual-$combo" | awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) { print $1; exit } }')
+    got=$(grep -F -- "  $path" "$T/actual-$combo" | P="$path" awk '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == ENVIRON["P"]) { print $1; exit } }')
+    [[ -n "$got" ]] && covered=$((covered + 1))
     excepted "$combo" "$path" && continue
-    if [[ -z "$got" ]]; then echo "MISSING $combo $path"; bad=1
+    if [[ -z "$got" && $FROM_TEMPLATES -eq 1 ]]; then continue
+    elif [[ -z "$got" ]]; then echo "MISSING $combo $path"; bad=1
     elif [[ "$got" != "$want_sha" ]]; then echo "MISMATCH $combo $path"; bad=1; fi
   done < "$T/want-$combo"
   while IFS= read -r line; do
     path="${line#*  }"
-    awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) found=1 } END { exit !found }' "$T/want-$combo" && continue
+    P="$path" awk '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == ENVIRON["P"]) found=1 } END { exit !found }' "$T/want-$combo" && continue
     excepted "$combo" "$path" && continue
     echo "EXTRA $combo $path"; bad=1
   done < "$T/actual-$combo"
-  if [[ $bad -eq 0 ]]; then ok=$((ok + 1)); echo "OK $combo"; else fail=1; fi
+  if [[ $FROM_TEMPLATES -eq 1 ]]; then
+    # The trees must hold every file the manifests list, so deleting a template file fails here
+    # even though a path no template holds yet is skipped above.
+    expected=$(expected_template_count "$stack" "$ci")
+    if [[ "$expected" -eq 0 || "$covered" -ne "$expected" ]]; then
+      echo "COUNT $combo templated $covered expected $expected"; bad=1
+    fi
+  fi
+  if [[ $bad -eq 0 ]]; then
+    ok=$((ok + 1))
+    if [[ $FROM_TEMPLATES -eq 1 ]]; then echo "OK $combo ($covered of $(wc -l < "$T/want-$combo" | tr -d ' ') golden paths templated)"; else echo "OK $combo"; fi
+  else fail=1; fi
 done
 
 echo "check-golden: $ok/${#COMBOS[@]} combos OK"

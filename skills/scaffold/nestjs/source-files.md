@@ -834,6 +834,12 @@ cp .env.example .env
 
 ### 4. Install Dependencies
 
+Before the first install, load the kit index and run kit Step **0** with `STACK=nestjs` in its fence: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
+
+```bash
+cat "<skill-dir>/shared/harness-kit.md"
+```
+
 ```bash
 git init
 pnpm install
@@ -917,16 +923,15 @@ Add new project skills here whenever you repeat a workflow more than once.
 
 ### 6b. Seed the agent harness (shared kit)
 
-Load the shared harness kit using the **nestjs** row of its delta table:
+Load the rest of the shared harness kit (the index was loaded before the install) using the **nestjs** row of its delta table:
 
 ```bash
-cat "<skill-dir>/shared/harness-kit.md"
 cat "<skill-dir>/shared/harness-kit-ts.md"
 cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
+Kit Step **0** already ran before the install. Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skill. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skill to exist first — Step E's prerequisites note explains this).
 
 ### 6c. Create project skill files (`.claude/skills/`)
 

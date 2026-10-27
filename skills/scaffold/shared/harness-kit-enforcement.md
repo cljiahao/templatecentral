@@ -4,13 +4,13 @@
 
 # Shared Harness Kit — enforcement layer (Steps A–B5, every stack)
 
-Stack-agnostic half of Steps A, B, and B2, plus all of B3–B5. Per-stack bodies are in the variant file (`harness-kit-ts.md` / `harness-kit-fastapi.md`); step order and the delta table are in `harness-kit.md`.
+Stack-agnostic half of Steps A, B, and B2, plus all of B3–B5. Per-stack bodies are in the variant file (`harness-kit-ts.md` / `harness-kit-fastapi.md`); step order and the delta table are in `harness-kit.md`. The scripts and config files named below are real files under the `template*/` directories of `shared/`; `harness-kit.md` Step 0 copies them into the project, so the entries below describe them and add the wiring rules rather than carry their text.
 
 ---
 
 ## Step A. Create `.claude/settings.json`
 
-Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (below). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
+Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (Step 0 copies them). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
 
 **`.claude/settings.json`** — write the variant file's **Step A** body, then apply the rules below.
 
@@ -28,7 +28,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 | NestJS · Vite + React | `Read(./**/node_modules/**)`, `Read(./**/dist/**)`, `Read(./**/coverage/**)`, `Read(./**/.turbo/**)`, `Read(./**/*.tsbuildinfo)` |
 | FastAPI | `Read(./**/.venv/**)`, `Read(./**/__pycache__/**)`, `Read(./**/.pytest_cache/**)`, `Read(./**/.ruff_cache/**)`, `Read(./**/.mypy_cache/**)`, `Read(./**/htmlcov/**)`, `Read(./**/dist/**)` |
 
-Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
+Hook logic lives in `.claude/hooks/` scripts (copied by Step 0) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
 - `protect-files.sh` (PreToolUse Edit|Write|NotebookEdit) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, and cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, any `azure-pipelines/` folder, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/settings.local.json`, `.claude/hooks/*`, `.claude/agents/*`, `.mcp.json`, `Dockerfile`, the harness verifier, `ci-gates.sh` and the dependency-audit allowlist `.claude/dep-audit-allow.txt`). Matching is case-insensitive (`.ENV`, `dockerfile`) and runs on a canonicalised project-relative path (leading `./` stripped, symlinked parents such as macOS `/tmp` → `/private/tmp` resolved). Fails closed (exit 2) if it cannot reach the project root. Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — splits the command on `&&` `||` `;` `|` and evaluates each git invocation (including `git -C <dir> …`, `/usr/bin/git`, `bash -c "…"`): blocks `--no-verify` on `commit`/`push`/`merge`/`am`/`rebase`/`cherry-pick`, `-n` only as a `git commit` short flag (`git log -n`, `grep -n` pass), the equivalent hook-layer bypasses (`LEFTHOOK=0`/`LEFTHOOK_EXCLUDE`, `git -c core.hooksPath=…`, `git config core.hooksPath …`, `--no-verify` aliases), direct commits to protected branches (`main`/`uat`/`develop`), force-push or delete of a protected branch (`--force`, `--force-with-lease`, `--force-if-includes`, `-f`, `+refspec`, `HEAD:main`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs. A best-effort tripwire — shell obfuscation can evade any pattern guard; lefthook + CI are the backstop.
@@ -47,90 +47,24 @@ Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards st
 
 ## Step B. Create hook scripts
 
-Write the 7 per-stack scripts from the variant file's **Step B** (`protect-files.sh`, `block-no-verify.sh`, `user-prompt-guard.cjs`/`.py`, `post-edit-typecheck.sh`, `post-edit-comment-check.sh`, `stop-checks.sh`, `subagent-stop.sh`), then the stack-agnostic files below.
+Step 0 already copied the 7 per-stack scripts (`protect-files.sh`, `block-no-verify.sh`, `user-prompt-guard.cjs`/`.py`, `post-edit-typecheck.sh`, `post-edit-comment-check.sh`, `stop-checks.sh`, `subagent-stop.sh`) from `template-ts/` or `template-py/`, and the stack-agnostic files below from `template/`. This step adds the rules around them.
 
 **Why JSON output, not a plain `echo`:** a `PostToolUse` hook's plain stdout on exit 0 is written to the debug log only — it is never shown to Claude or the user (the exceptions are `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart`, and `PostModelSwitch`). To actually surface a finding, the hook must emit `hookSpecificOutput.additionalContext`, which Claude Code inserts into the model's context at the point the hook fired — the same mechanism this repo's own `skills/add/redaction` hook already uses. A bare `echo` here would make this entire tier silently inert. `post-edit-typecheck.sh` uses the same mechanism for its type errors. (`additionalContext` is capped at 10,000 characters, so both scripts truncate their findings well below that.)
 
 **Scoping note:** narration scanning covers plain `#`/`//` lines and the opening line of a `"""`/`/** ` doc-comment block (the common single-line case, e.g. `"""Refactored to support X."""`). Deep multi-line docstring *body* scanning (continuation lines with no per-line marker) is out of scope for this pass.
 
-**`.claude/comment-hygiene-patterns.txt`** (identical across stacks — the canonical pattern list every comment-hygiene surface above, and the `comment-hygiene` lefthook command and CI job seeded later in this kit, read at runtime instead of hardcoding their own copy):
-```
-^[Ww][Aa][Ss][[:space:]]
-^[Aa][Dd][Dd][Ee][Dd][[:space:]]
-^[Rr][Ee][Mm][Oo][Vv][Ee][Dd][[:space:]]
-^[Cc][Hh][Aa][Nn][Gg][Ee][Dd][[:space:]]
-^[Uu][Pp][Dd][Aa][Tt][Ee][Dd][[:space:]]
-^[Rr][Ee][Nn][Aa][Mm][Ee][Dd][[:space:]]
-^[Mm][Oo][Vv][Ee][Dd][[:space:]]
-^[Rr][Ee][Ff][Aa][Cc][Tt][Oo][Rr][Ee][Dd][[:space:]]
-^[Pp][Ee][Rr] [Rr][Ee][Vv][Ii][Ee][Ww]
-^[Aa][Ss] [Rr][Ee][Qq][Uu][Ee][Ss][Tt][Ee][Dd]
-[0-9]{4}-[0-9]{2}-[0-9]{2}
-^[A-Z]{2,}-[0-9]+
-^#[0-9]+
-```
+`.claude/comment-hygiene-patterns.txt` (identical across stacks — the canonical pattern list every comment-hygiene surface above, and the `comment-hygiene` lefthook command and CI job seeded later in this kit, read at runtime instead of hardcoding their own copy). Step 0 copies it from `<skill-dir>/shared/template/.claude/comment-hygiene-patterns.txt`.
 The first 10 lines are the anchored change-narration keyword patterns (each spells out both cases per letter via bracket expressions — `grep -Ef`/`grep -qEf` is correct everywhere; never `-Eif`, since `-i` combined with the last two patterns would match ordinary lowercase text like `exit-2`). The last 3 lines (date, ticket-reference, issue-reference) are lower-precision — real tickets and legitimate technical terms (`ABC-123` vs. `UTF-8`) can be structurally identical, so the CI hard gate later in this kit reads only the first 10 lines; the two warn-only surfaces read all 13.
 
 ---
 
-**`.claude/hooks/session-context.sh`** (identical across all stacks — canonical):
-```bash
-#!/usr/bin/env bash
-# SessionStart(startup|resume|clear|compact) — re-inject the constitution + universal invariants.
-# Plain stdout is added to Claude's context (per Claude Code hooks docs); this is what survives compaction.
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-# If a CONSTITUTION.md exists, re-inject it (project binding invariants survive compaction)
-if [ -f docs/CONSTITUTION.md ]; then
-  echo ""
-  echo "=== Project invariants (docs/CONSTITUTION.md) ==="
-  cat docs/CONSTITUTION.md
-fi
+`.claude/hooks/session-context.sh` (identical across all stacks — canonical). Step 0 copies it from `<skill-dir>/shared/template/.claude/hooks/session-context.sh`.
 
-cat <<'EOF'
-
-## Always-on invariants (survive compaction)
-1. Secrets are never read or written by the agent — .env*, secrets/** and .secrets/** are guarded.
-2. Run the quality gate (typecheck + tests) before declaring any task done.
-3. Work on a feature branch — never commit directly to main/uat/develop.
-4. Protected files — AGENTS.md, CLAUDE.md, Dockerfile, .claude/settings.json, .claude/hooks/*, docs/CONSTITUTION.md — require human approval.
-5. Respect the architecture/dependency boundaries documented in AGENTS.md and docs/CONSTITUTION.md.
-EOF
-```
-
-**`.claude/hooks/skill-usage-log.sh`** (identical across all stacks — silent skill-usage logger; parses JSON with `node`, falling back to `python3`):
-```bash
-#!/usr/bin/env bash
-# PostToolUse(Skill) — silent skill-usage logger. Records which skills are invoked so the
-# /skill-audit skill can later surface workflows worth capturing as a committed project skill.
-# Silent + non-blocking: always exits 0, never interrupts. Log is per-developer (gitignored).
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-input=$(cat)
-# Real JSON parse (a regex misreads values containing `}`): node on TS stacks, python3 on FastAPI.
-if command -v node >/dev/null 2>&1; then
-  name=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const s=((JSON.parse(b||'{}')||{}).tool_input||{}).skill;if(typeof s==='string')process.stdout.write(s)}catch(e){}})" 2>/dev/null)
-elif command -v python3 >/dev/null 2>&1; then
-  name=$(printf '%s' "$input" | python3 -c "import json,sys
-try:
-    s=(json.load(sys.stdin).get('tool_input') or {}).get('skill')
-except Exception:
-    s=None
-sys.stdout.write(s if isinstance(s, str) else '')" 2>/dev/null)
-else
-  exit 0
-fi
-name=$(printf '%s' "$name" | head -1 | tr -d '\t\r')
-[ -z "$name" ] && exit 0
-[ -d .claude ] || exit 0
-printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$name" >> .claude/skill-usage.log 2>/dev/null
-exit 0
-```
+`.claude/hooks/skill-usage-log.sh` (identical across all stacks — silent skill-usage logger; parses JSON with `node`, falling back to `python3`). Step 0 copies it from `<skill-dir>/shared/template/.claude/hooks/skill-usage-log.sh`.
 
 Add `.claude/skill-usage.log` to the project `.gitignore` — it is per-developer telemetry, not shared state.
 
-Make all hook scripts executable:
-```bash
-chmod +x .claude/hooks/*.sh
-```
+The hook scripts are already executable: the copy sets each file's mode from `template.manifest`, so no `chmod` is needed.
 
 ---
 
@@ -140,55 +74,18 @@ The `.claude/hooks/*` above are **Claude-Code** hooks (they guard the agent). Th
 
 > **Why lefthook, not Husky:** Husky needs a Node runtime, so it cannot run in a Python-only FastAPI scaffold. lefthook installs from either ecosystem (`pnpm add -D lefthook` or `pip install lefthook`) and runs hook commands in parallel.
 
-**`lefthook.yml`** — write the variant file's **Step B2** body (and follow its re-sync note), then the stack-agnostic files below.
+`lefthook.yml` is the variant copy Step 0 placed in the project (`template-ts/` or `template-py/`); follow the variant file's **Step B2** re-sync note. The stack-agnostic files below came from `template/`.
 
-**`.lefthook/commit-msg.sh`** (identical across stacks — Conventional Commits gate; lefthook passes the message-file path as `{1}`):
-```bash
-#!/usr/bin/env bash
-# Conventional Commits gate. Invoked by lefthook commit-msg with the message file as $1.
-set -euo pipefail
-msg=$(head -1 "$1")
+`.lefthook/commit-msg.sh` (identical across stacks — Conventional Commits gate; lefthook passes the message-file path as `{1}`). Step 0 copies it from `<skill-dir>/shared/template/.lefthook/commit-msg.sh`.
 
-# Allow git-generated subjects (merge, revert, autosquash) and release commits.
-if printf '%s' "$msg" | grep -qE '^(Merge |Revert |fixup! |squash! |amend! )' || [[ "$msg" == "chore(release):"* ]]; then
-  exit 0
-fi
-
-pattern='^(feat|fix|chore|docs|style|refactor|test|ci|perf|build|revert)(\([a-z0-9/._-]+\))?!?: .{1,100}$'
-if ! printf '%s' "$msg" | grep -qE "$pattern"; then
-  {
-    echo "❌ Commit message must follow Conventional Commits:"
-    echo "   <type>(<scope>)!: <description>   e.g.  feat(auth): add OAuth2 sign-in   (! marks a breaking change)"
-    echo "   types: feat fix chore docs style refactor test ci perf build revert"
-    echo "   your message: $msg"
-  } >&2
-  exit 1
-fi
-```
-
-**`.gitleaks.toml`** (identical across stacks — extends the built-in ruleset; allowlist is for FALSE POSITIVES only, never real secrets):
-```toml
-[extend]
-useDefault = true
-
-[[allowlists]]
-description = "Known non-secrets"
-paths = [
-  '''\.env\.example$''',
-  '''\.env\.default$''',
-  '''(^|/)(pnpm-lock\.yaml|package-lock\.json|poetry\.lock|uv\.lock)$''',
-]
-```
+`.gitleaks.toml` (identical across stacks — extends the built-in ruleset; allowlist is for FALSE POSITIVES only, never real secrets). Step 0 copies it from `<skill-dir>/shared/template/.gitleaks.toml`.
 
 **Install wiring:**
-- **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install || true"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone; the `|| true` keeps Docker builds — which exclude `.git` via `.dockerignore` — from failing, since `lefthook install` hard-errors when no `.git` is present and has no built-in graceful skip). Freshen the `lefthook` pin with the review utility.
+- **TS stacks** — verify that `package.json` (written by the stack's config-files step) lists `lefthook` in `devDependencies` and has the `"prepare": "lefthook install || true"` script, and add whichever is missing (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone; the `|| true` keeps Docker builds — which exclude `.git` via `.dockerignore` — from failing, since `lefthook install` hard-errors when no `.git` is present and has no built-in graceful skip). Freshen the `lefthook` pin with the review utility.
 - **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
 - **gitleaks** is a system binary, not a package dependency. The pre-commit command (`gitleaks git --pre-commit --staged` — the v8.19+ form; `gitleaks protect`/`detect` are deprecated) skips only when it is absent (CI is the hard gate) and fails the commit on a finding when present; document `brew install gitleaks` / the release binary in the README. A reviewed false positive goes in `.gitleaksignore` (one finding fingerprint per line) or the `[[allowlists]]` table above — never a real secret.
 
-Then create the lefthook commit-msg script executable:
-```bash
-chmod +x .lefthook/commit-msg.sh
-```
+`.lefthook/commit-msg.sh` is already executable from the copy, as are `.claude/verify-harness.sh` and `.claude/regen-harness.sh`.
 
 ---
 
@@ -200,372 +97,145 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
 - **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
 
-**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
+**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-**`.github/workflows/ci.yml`** — TS stacks (nestjs / nextjs / vite-react):
-```yaml
-name: CI
-on:
-  pull_request: { branches: [main, uat, develop] }
-  push: { branches: [main] }
-permissions: { contents: read }
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — SHA-pinned per Skills Security; re-verify/bump via the review utility, don't hand-edit
-        with: { fetch-depth: 0 }    # diff-cover needs full history
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 — no `version:`; reads packageManager from package.json
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: "24", cache: pnpm }
-      - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
-      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
-        run: bash .claude/ci-gates.sh deps
-      - name: Harness integrity
-        run: bash .claude/verify-harness.sh
-      - run: pnpm run check                      # format:check + lint + typecheck
-      - run: pnpm exec vitest --run --coverage    # writes coverage/cobertura-coverage.xml
-      - name: Changed-line coverage (>= 80%)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
-      - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: bash .claude/ci-gates.sh secrets "$BASE_REF"
-  changelog:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
-      - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-        run: bash .claude/ci-gates.sh changelog "$BASE_REF"
-  readme-freshness:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
-      - name: Require README.md update for changed folders (apply 'skip-readme-check' label to bypass)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-        run: bash .claude/ci-gates.sh readme "$BASE_REF"
-  comment-hygiene:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
-      - name: Require no change-narration comments (apply 'skip-comment-check' label to bypass)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-        run: bash .claude/ci-gates.sh comments "$BASE_REF"
+Copy the CI file for the picked host. Edit only the `STACK=` line (it ships empty; use the same value as in Step 0, and the script refuses when `lefthook.yml` in the project is not the one that value's Step 0 copied) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0. This fence and the seed-neither fence below are scaffold-only: the first refuses unless `lefthook.yml` is the copy Step 0 made, and the second assumes Step 0 placed `.claude/ci-gates.sh`. `migrate` copies the CI file by hand (see its Phase 4 Step 4d).
+
+```bash
+bash <<'TC_GUARD'
+STACK=
+CI=github
+PART=ci
+WHAT="seed CI"
+NL='
+'
+IFS= read -r -d '' SK <<'TC_PATH'
+<skill-dir>/shared
+TC_PATH
+SK=${SK%"$NL"}
+IFS= read -r -d '' TGT <<'TC_PATH'
+<target>
+TC_PATH
+TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
+stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
+[ -d "$SK" ] || stop "$SK is not a directory"
+[ -d "$TGT" ] || stop "$TGT is not an existing directory"
+case "$STACK" in
+  nestjs|nextjs|vite-react) V=ts ;;
+  fastapi) V=py ;;
+  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
+esac
+case "$PART" in
+  base)
+    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
+    SEL="template template-$V" ;;
+  ci)
+    case "$CI" in
+      github) SEL="template-ci/github-$V" ;;
+      azure) SEL="template-ci/azure" ;;
+      *) stop "unknown CI '$CI' (want github or azure)" ;;
+    esac ;;
+  *) stop "unknown PART '$PART'" ;;
+esac
+for t in $SEL; do
+  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
+  [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
+done
+[ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
+plan=$(awk -v sel="$SEL" '
+  BEGIN { n = split(sel, s, " ") }
+  /^#/ || NF == 0 { next }
+  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $2 "\t" s[i] "\t" substr($1, length(s[i]) + 2); next } }
+' "$SK/template.manifest")
+listed=$(printf '%s\n' "$plan" | cut -f3 | LC_ALL=C sort)
+found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
+  stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
+fi
+clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
+  d=$p
+  while [ "${d%/*}" != "$d" ]; do
+    d=${d%/*}
+    if [ -L "$TGT/$d" ]; then echo "$d (symlink)"; elif [ -e "$TGT/$d" ] && [ ! -d "$TGT/$d" ]; then echo "$d (not a directory)"; fi
+  done
+done | LC_ALL=C sort -u)
+[ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+if [ "$PART" = ci ]; then
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+fi
+bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
+  [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
+  d=$p
+  if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
+    if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  done
+  if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
+  if [ ! -w "$base" ] || [ ! -x "$base" ]; then echo "$base (not writable or not searchable)"; fi
+done | LC_ALL=C sort -u)
+[ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
+copied=""
+while IFS="$TAB" read -r mode t p; do
+  d=${p%/*}
+  if [ "$d" != "$p" ]; then
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
+  fi
+  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
+  copied="$copied$NL$p"
+  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+done <<TC_PLAN
+$plan
+TC_PLAN
+TC_GUARD
 ```
 
-**`azure-pipelines/templatecentral-gates.yml`** — Azure DevOps (steps template, every stack):
-```yaml
-# templateCentral merge gates. Include from the PR pipeline after a full-history checkout:
-#   - checkout: self
-#     fetchDepth: 0
-#   - template: templatecentral-gates.yml   # path is relative to the including file
-# The deps step needs the project's package manager (pnpm or uv) and pipx on PATH: include the template after the pipeline's install steps.
-# Bypass a PR-only gate by queueing the run with variable LABELS=skip-changelog (or skip-readme-check / skip-comment-check).
-steps:
-  - bash: bash .claude/verify-harness.sh
-    displayName: Harness integrity
-  - bash: bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
-    displayName: Secret scan (gitleaks CLI, checksum-verified)
-  - bash: bash .claude/ci-gates.sh deps
-    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
-  - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
-    displayName: Changelog gate
-    env: { LABELS: $(LABELS) }
-  - bash: bash .claude/ci-gates.sh readme "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
-    displayName: README freshness gate
-    env: { LABELS: $(LABELS) }
-  - bash: bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
-    displayName: Comment hygiene gate
-    env: { LABELS: $(LABELS) }
+When the paragraph above says to seed neither CI file, copy nothing and delete the one file Step 0 already placed for this decision, so the project holds exactly what a seed-neither scaffold always held. The script deletes `.claude/ci-gates.sh` only when it is byte for byte the template's copy, and refuses otherwise:
+
+```bash
+bash <<'TC_RM'
+WHAT="seed CI"
+NL='
+'
+IFS= read -r -d '' SK <<'TC_PATH'
+<skill-dir>/shared
+TC_PATH
+SK=${SK%"$NL"}
+IFS= read -r -d '' TGT <<'TC_PATH'
+<target>
+TC_PATH
+TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
+stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
+[ -d "$SK" ] || stop "$SK is not a directory"
+[ -d "$TGT" ] || stop "$TGT is not an existing directory"
+gate=.claude/ci-gates.sh
+if [ -L "$TGT/.claude" ] || [ -L "$TGT/$gate" ]; then stop "$TGT/.claude or $TGT/$gate is a symlink, so removing the file could delete something outside the project"; fi
+[ -e "$TGT/$gate" ] || { echo "Nothing to remove: $TGT/$gate does not exist."; exit 0; }
+[ -f "$TGT/$gate" ] || stop "$TGT/$gate is not a regular file"
+cmp -s -- "$SK/template/$gate" "$TGT/$gate" || stop "$TGT/$gate differs from the template, so it is not the file Step 0 placed"
+rm -f -- "$TGT/$gate" || stop "rm failed for $TGT/$gate"
+TC_RM
 ```
+
+`.github/workflows/ci.yml` — TS stacks (nestjs / nextjs / vite-react). The copy above places it from `<skill-dir>/shared/template-ci/github-ts/.github/workflows/ci.yml`.
+
+`azure-pipelines/templatecentral-gates.yml` — Azure DevOps (steps template, every stack). The copy above places it from `<skill-dir>/shared/template-ci/azure/azure-pipelines/templatecentral-gates.yml`.
 
 The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every branch by default; a `fetchFilter` or `fetchTags`-only setup must keep it), and the PR-only gates fail closed without it. It carries only the harness gates: the project's own pipeline keeps its install / lint / typecheck / test steps. Add `pipx run diff-cover <cobertura.xml> --compare-branch="origin/${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}" --fail-under=80` after its test step for the changed-line coverage gate. Wiring the `template:` line into the PR pipeline is a pipeline edit, so `protect-files.sh` asks the human first.
 
-**`.claude/ci-gates.sh`** (identical across stacks and CI hosts — the PR merge gates both `.github/workflows/ci.yml` and `azure-pipelines/templatecentral-gates.yml` call):
-```bash
-#!/usr/bin/env bash
-# CI merge gates shared by GitHub Actions and Azure Pipelines.
-# Usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]
-# An empty base-branch scans full history (secrets) or skips the PR-only gates; deps takes no base branch.
-# LABELS: space-separated PR labels; skip-changelog / skip-readme-check / skip-comment-check bypass a gate.
-# deps has no label bypass: only .claude/dep-audit-allow.txt, whose entries expire, suppresses an advisory.
-set -uo pipefail
-gate=${1:-}
-branch=${2:-}
-branch=${branch#refs/heads/}
-base="origin/$branch"
-
-fail() {
-  if [ -n "${TF_BUILD:-}" ]; then echo "##vso[task.logissue type=error]$1"; else echo "::error::$1"; fi
-  exit 1
-}
-bypassed() {
-  case " ${LABELS:-} " in *" $1 "*) echo "$1 label present — OK"; return 0 ;; esac
-  return 1
-}
-pr_only() {
-  [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
-  git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
-}
-
-case "$gate" in
-  secrets)
-    GITLEAKS_VERSION="8.30.1"   # bump VERSION and SHA256 together, from the release's gitleaks_<version>_checksums.txt
-    GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"   # gitleaks_<version>_linux_x64.tar.gz
-    if ! command -v gitleaks >/dev/null 2>&1; then
-      tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gitleaks.XXXXXX")
-      curl -fsSL -o "$tmp/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" || fail "gitleaks download failed"
-      echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum -c - || fail "gitleaks checksum mismatch"
-      tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks || fail "gitleaks install failed"
-      PATH="$tmp:$PATH"   # no sudo: works on hosted and self-hosted Linux x64 agents
-    fi
-    if [ -n "$branch" ]; then
-      gitleaks git --redact --no-banner --log-opts="$base..HEAD" || fail "gitleaks found secrets in this PR's commits"
-    else
-      gitleaks git --redact --no-banner || fail "gitleaks found secrets in history"
-    fi
-    ;;
-  changelog)
-    pr_only
-    changed=$(git diff --name-only "$base"...HEAD) || fail "cannot diff against $base"
-    # Here-strings, not pipes: under pipefail, grep -q exiting early would SIGPIPE printf and flip the result.
-    if grep -qE '^src/' <<< "$changed" && ! grep -qx 'CHANGELOG.md' <<< "$changed"; then
-      bypassed skip-changelog && exit 0
-      fail "src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
-    fi
-    ;;
-  readme)
-    pr_only
-    tmp=$(mktemp)
-    git diff --name-only "$base"...HEAD > "$tmp" || fail "cannot diff against $base"
-    missing=""
-    while IFS= read -r f; do
-      case "$f" in */README.md|README.md) continue ;; esac
-      # documentation-kit.md never writes a README into these folders, so never demand one
-      case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
-      d=$(dirname "$f")
-      rm_path="README.md"
-      [ "$d" != "." ] && rm_path="$d/README.md"
-      grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
-    done < "$tmp"
-    rm -f "$tmp"
-    missing=$(printf '%b' "$missing" | sort -u)
-    if [ -n "$missing" ]; then
-      bypassed skip-readme-check && exit 0
-      printf '%s\n' "$missing"
-      fail "Folders changed without updating their README.md (listed above). Update them or apply the 'skip-readme-check' label."
-    fi
-    ;;
-  comments)
-    pr_only
-    patterns=".claude/comment-hygiene-patterns.txt"
-    [ -f "$patterns" ] || fail "comment-hygiene pattern list missing ($patterns)"
-    strict_patterns=$(mktemp)
-    head -n 10 "$patterns" > "$strict_patterns"
-    nl=$(printf '\nx'); nl=${nl%x}
-    flagged=""
-    while IFS= read -r -d '' f; do
-      case "$f" in *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.py) ;; *) continue ;; esac
-      [ -f "$f" ] || continue
-      while IFS= read -r content; do
-        stripped=$(printf '%s' "$content" | sed -E 's@^[[:space:]]*(#|//|\*|"""|/\*\*?)[[:space:]]?@@')
-        if [ -n "$stripped" ] && printf '%s' "$stripped" | grep -qEf "$strict_patterns"; then
-          flagged="$flagged$nl  - $f: $stripped"
-        fi
-      done < <(git diff -U0 "$base"...HEAD -- "$f" | grep '^+' | grep -vE '^\+\+\+' | sed 's/^+//' | grep -E '^[[:space:]]*(#|//|\*|"""|/\*\*?)')
-    done < <(git diff -z --name-only "$base"...HEAD)
-    rm -f "$strict_patterns"
-    if [ -n "$flagged" ]; then
-      bypassed skip-comment-check && exit 0
-      printf '%s\n' "$flagged"
-      fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
-    fi
-    ;;
-  deps)
-    PIP_AUDIT_VERSION="2.10.1"   # pip-audit release run through pipx; bump deliberately, it decides what fails the build
-    MAX_EXPIRY_DAYS=180          # an allowlist entry may not silence an advisory for longer than this
-    allow=".claude/dep-audit-allow.txt"
-    tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/deps.XXXXXX")
-    trap 'rm -rf "$tmp"' EXIT   # fail() exits, so this also covers every failure path
-    need() { command -v "$1" >/dev/null 2>&1 || fail "$1 not found — install it before the deps gate"; }
-    # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected outright.
-    # package.json is parsed (any JSON layout, a parse failure fails closed); the YAML files and .npmrc are
-    # matched by text. Not detected: the YAML complex-key form (`? audit`), which pnpm does not document.
-    # pnpm also reads package.json5 and package.yaml; they are not parsed here, so they fail closed.
-    for f in package.json5 package.yaml; do
-      [ ! -f "$f" ] || fail "unsupported pnpm manifest format: $f — use package.json"
-    done
-    if [ -f package.json ]; then
-      need node
-      rc=0
-      node -e '
-        let pkg;
-        try { pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").replace(/^\uFEFF/, "")); } catch (e) { process.exit(2); }
-        const walk = (v) => v !== null && typeof v === "object" &&
-          Object.entries(v).some(([k, x]) => k === "ignoreGhsas" || k === "ignoreCves" || walk(x));
-        const pnpm = pkg && typeof pkg === "object" ? pkg.pnpm : undefined;
-        const native = pnpm !== null && typeof pnpm === "object" && ("audit" in pnpm || "auditConfig" in pnpm);
-        process.exit(native || walk(pkg) ? 1 : 0);
-      ' package.json || rc=$?
-      [ "$rc" -ne 2 ] || fail "package.json is not valid JSON — the deps gate cannot check it for advisory suppressions"
-      [ "$rc" -eq 0 ] || fail "advisory suppressions belong in $allow, not package.json"
-    fi
-    q="[\"']"   # an optionally quoted key: audit, "audit" or 'audit'
-    for f in pnpm-workspace.yaml .npmrc; do
-      [ -f "$f" ] || continue
-      # Flow style (audit: { ignore: [...] }) and block style are both caught; any `ignore` under an audit key fails closed.
-      if grep -qE "auditConfig|ignoreGhsas|ignoreCves|(^|[^[:alnum:]_.-])${q}?audit${q}?[[:space:]]*:[[:space:]]*\\{" "$f" \
-        || awk -v q="$q" '$0 ~ "^" q "?audit" q "?[[:space:]]*:" { inblock = 1; if ($0 ~ /ignore/) found = 1; next } /^[^[:space:]#]/ { inblock = 0 } inblock && /ignore/ { found = 1 } END { exit !found }' "$f"; then
-        fail "advisory suppressions belong in $allow, not $f"
-      fi
-    done
-    # Allowlist lines: <ADVISORY-ID> <YYYY-MM-DD expiry> <reason>. An entry stops suppressing on its expiry date.
-    today=$(date -u +%Y-%m-%d)
-    latest=$(date -u -d "+$MAX_EXPIRY_DAYS days" +%Y-%m-%d 2>/dev/null || date -u -v"+${MAX_EXPIRY_DAYS}d" +%Y-%m-%d) || fail "cannot compute the expiry horizon"
-    : > "$tmp/allowed"
-    if [ -f "$allow" ]; then
-      while IFS= read -r line || [ -n "$line" ]; do
-        line=${line#"${line%%[![:space:]]*}"}
-        line=${line%"${line##*[![:space:]]}"}
-        case "$line" in ''|'#'*) continue ;; esac
-        if ! printf '%s\n' "$line" | grep -qiE '^(GHSA-[A-Za-z0-9-]+|CVE-[0-9]{4}-[0-9]+|PYSEC-[0-9]{4}-[0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[^[:space:]]'; then
-          echo "malformed allowlist line: $line" >&2
-          fail "$allow has a malformed line. Format: <GHSA|CVE|PYSEC id> <YYYY-MM-DD expiry> <reason>"
-        fi
-        read -r id expiry _ <<< "$line"
-        y=${expiry%%-*}; md=${expiry#*-}; m=$((10#${md%%-*})); d=$((10#${md#*-}))
-        case $m in 1|3|5|7|8|10|12) dim=31 ;; 4|6|9|11) dim=30 ;; 2) dim=28
-          if [ $((10#$y % 4)) -eq 0 ] && { [ $((10#$y % 100)) -ne 0 ] || [ $((10#$y % 400)) -eq 0 ]; }; then dim=29; fi ;; *) dim=0 ;; esac
-        if [ "$d" -lt 1 ] || [ "$d" -gt "$dim" ]; then
-          echo "malformed allowlist line (not a calendar date): $line" >&2
-          fail "$allow has an invalid expiry date: $expiry"
-        fi
-        if [[ ! "$today" < "$expiry" ]]; then
-          echo "expired allowlist entry: $id (expired $expiry)" >&2
-          fail "$allow entry for $id expired on $expiry. Fix the dependency or renew the entry with a new date and reason."
-        fi
-        if [[ "$expiry" > "$latest" ]]; then
-          echo "allowlist entry too far out: $id ($expiry)" >&2
-          fail "$allow entry for $id has an expiry more than $MAX_EXPIRY_DAYS days out ($expiry). Use a date on or before $latest."
-        fi
-        printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' >> "$tmp/allowed"
-      done < "$allow"
-    fi
-    : > "$tmp/found"   # one line per finding: <package>|<severity>|<ids>, or !<package>: not audited (...)
-    cat > "$tmp/pa.py" <<'PY'
-import json, re, sys
-try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
-        report = json.load(fh)
-except (OSError, ValueError):
-    sys.exit(3)
-deps = report.get("dependencies") if isinstance(report, dict) else None
-if not isinstance(deps, list):
-    sys.exit(3)
-if not deps:
-    sys.exit(4)
-for dep in deps:
-    name = str(dep.get("name"))
-    if dep.get("skip_reason"):
-        print("!" + name + ": not audited (" + re.sub(r"\s+", " ", str(dep.get("skip_reason"))).strip() + ")")
-    for vuln in dep.get("vulns") or []:
-        ids = [vuln.get("id")] + list(vuln.get("aliases") or [])
-        print(name + "|n/a|" + (" ".join(i for i in ids if i) or "unnamed"))
-PY
-    # One pip-audit run: $1 requirements file, $2 label for messages, remaining arguments are extra pip-audit flags.
-    py_audit() {
-      local file=$1 label=$2 rc
-      shift 2
-      # pip-audit reports no severity, so every known vulnerability counts.
-      pipx run "pip-audit==${PIP_AUDIT_VERSION}" -r "$file" "$@" --format json --progress-spinner off > "$tmp/report.json" 2> "$tmp/err.txt"
-      python3 "$tmp/pa.py" "$tmp/report.json" >> "$tmp/found"; rc=$?
-      [ "$rc" -ne 4 ] || fail "dependency audit covered no packages ($label)"
-      [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pip-audit, $label)"; }
-    }
-    reqs=()
-    for f in requirements*.txt; do if [ -f "$f" ]; then reqs+=("$f"); fi; done
-    audited=0
-    if [ -f pnpm-lock.yaml ]; then
-      audited=1
-      need pnpm
-      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
-      node - "$tmp/report.json" >> "$tmp/found" <<'JS'
-const fs = require("fs");
-let report;
-try { report = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch { process.exit(3); }
-if (!report || typeof report.advisories !== "object" || report.advisories === null) process.exit(3);
-const meta = report.metadata || {};
-const total = Number.isFinite(meta.totalDependencies) ? meta.totalDependencies
-  : ["dependencies", "devDependencies", "optionalDependencies"].reduce((n, k) => n + (Number.isFinite(meta[k]) ? meta[k] : 0), 0);
-if (!(total > 0)) process.exit(4);
-for (const a of Object.values(report.advisories)) {
-  if (a.severity !== "high" && a.severity !== "critical") continue;
-  const ids = [a.github_advisory_id, ...(Array.isArray(a.cves) ? a.cves : [])].filter(Boolean);
-  console.log((a.module_name || "unknown") + "|" + a.severity + "|" + (ids.length ? ids : ["advisory-" + a.id]).join(" "));
-}
-JS
-      rc=$?
-      [ "$rc" -ne 4 ] || fail "dependency audit covered no packages (pnpm audit)"
-      [ "$rc" -eq 0 ] || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (pnpm audit)"; }
-    fi
-    if [ -f uv.lock ] || [ "${#reqs[@]}" -gt 0 ]; then
-      audited=1
-      need pipx
-      if [ -f uv.lock ]; then
-        need uv
-        # --no-emit-project: a packaged project exports itself as "-e .", which pip-audit can only skip.
-        uv export --frozen --no-dev --no-emit-project --no-emit-workspace --quiet --format requirements-txt -o "$tmp/req.txt" 2> "$tmp/err.txt" || { cat "$tmp/err.txt" >&2; fail "dependency audit returned no report (uv export)"; }
-        # The export is hash-pinned, so pip-audit has nothing to resolve or build.
-        py_audit "$tmp/req.txt" uv.lock --no-deps --disable-pip
-      fi
-      for f in ${reqs[@]+"${reqs[@]}"}; do py_audit "$f" "$f"; done
-    fi
-    [ "$audited" -eq 1 ] || fail "no lockfile found (pnpm-lock.yaml, uv.lock or requirements*.txt) — nothing to audit"
-    blocked=""
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      case "$line" in "!"*) blocked="$blocked${blocked:+$'\n'}  - ${line#!}"; continue ;; esac
-      pkg=${line%%|*}; rest=${line#*|}; sev=${rest%%|*}; ids=${rest#*|}
-      covered=0
-      for id in $ids; do
-        if printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' | grep -qxFf "$tmp/allowed" -; then covered=1; break; fi
-      done
-      [ "$covered" -eq 1 ] || blocked="$blocked${blocked:+$'\n'}  - $pkg: $ids ($sev)"
-    done < <(sort -u "$tmp/found")
-    if [ -n "$blocked" ]; then
-      printf '%s\n' "$blocked" >&2
-      fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an audited advisory in $allow with an expiry date and a reason. Unaudited packages cannot be allowlisted: install the missing audit tool or make the package auditable, or remove it."
-    fi
-    ;;
-  *)
-    echo "usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]" >&2
-    exit 2
-    ;;
-esac
-exit 0
-```
+`.claude/ci-gates.sh` (identical across stacks and CI hosts — the PR merge gates both `.github/workflows/ci.yml` and `azure-pipelines/templatecentral-gates.yml` call). Step 0 copies it from `<skill-dir>/shared/template/.claude/ci-gates.sh`.
 
 **Why only the first 10 pattern lines gate CI:** the date / ticket / issue patterns also match legitimate comment openers (`UTF-8`, `SHA-256`, `RFC-7231`), a false-positive rate a blocking gate cannot carry; the warn-only hook and lefthook command still read all 13.
 
@@ -573,10 +243,10 @@ exit 0
 
 **Why the readme gates skip CI folders (`.github/`, `.azuredevops/`, `azure-pipelines/`), `.claude/`, and secrets dirs:** `documentation-kit.md` never seeds a README there (`protect-files.sh` blocks or gates those writes), so demanding one would fail every harness or CI change.
 
-**FastAPI:** replace the `quality` job above with the variant file's **Step B3** block (`harness-kit-fastapi.md`); the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical.
+**FastAPI:** the GitHub workflow is `template-ci/github-py/` (its Python `quality` job replaces the TS one; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical); `harness-kit-fastapi.md` **Step B3** describes it.
 
 **Notes:**
-- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
+- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` in the copied `ci.yml` is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
 - **SHA-pin the actions** (`actions/checkout`, `setup-node`, `setup-python`, `pnpm/action-setup`) to the full commit SHA of the current major for supply-chain hygiene, with the version in a trailing comment; let Dependabot/Renovate (or the review utility) bump them — never hand-type a SHA.
 - **pnpm version comes from `packageManager`** in `package.json` — `pnpm/action-setup` is given no `version:` input so CI can never drift from the pinned pnpm. pnpm 12 needs `pnpm/action-setup` ≥ v6.1.0 (the floating `v6` tag lagged behind v6.1.0, so pin the v6.1.0+ SHA rather than `@v6`). The lockfile records the package manager too: after bumping `packageManager`, run a plain `pnpm install` and commit `pnpm-lock.yaml`, or the frozen install fails with `ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`. To disable frozen mode use `--no-frozen-lockfile` (pnpm 12 removed `--frozen-lockfile false`).
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
@@ -592,77 +262,16 @@ exit 0
 
 `harness.json` records an `origin_hash` for every seeded file but nothing *checks* it. This step closes that loop with a **tamper/drift sensor** over the **enforcement layer** (hooks, `settings.json`, lefthook, gitleaks, CI) — the files that should never change except by deliberate human action. It deliberately does **not** verify living docs (`AGENTS.md`, `CLAUDE.md`, the verify skills) — those legitimately evolve. SHA-256, read-only, deterministic (the agent never self-certifies). To bless an intentional enforcement change, a **human** runs the regen script — never an agent, which would mask the very drift this catches.
 
-**`.claude/verify-harness.sh`** (portable bash — works on every stack via a jq/node/python3 fallback):
-```bash
-#!/usr/bin/env bash
-# Harness integrity sensor. Recomputes sha256 of the enforcement-layer seeded files and
-# compares to the origin_hash baseline in .claude/harness.json. Read-only; exits non-zero
-# on drift (1) or on an unreadable/unfilled manifest (2). Wired into CI and lefthook pre-push.
-# Bless intentional changes with regen-harness.sh.
-set -euo pipefail
-manifest=".claude/harness.json"
-[ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
+`.claude/verify-harness.sh` (portable bash — works on every stack via a jq/node/python3 fallback). Step 0 copies it from `<skill-dir>/shared/template/.claude/verify-harness.sh`.
 
-# Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|azure-pipelines/templatecentral-gates\.yml$)'
+`.claude/regen-harness.sh` (HUMAN-RUN ONLY — re-blesses the baseline). Step 0 copies it from `<skill-dir>/shared/template/.claude/regen-harness.sh`.
 
-sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
-read_manifest() {
-  if command -v jq >/dev/null 2>&1; then
-    jq -er '.seeded_files | to_entries[] | "\(.value.path)\t\(.value.origin_hash)"' "$manifest"
-  elif command -v node >/dev/null 2>&1; then
-    node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
-  else echo "verify-harness: need jq, node, or python3" >&2; return 3; fi
-}
+**Wiring (already present in the copied files; verify, do not add):**
+- **CI** — the `quality` job of `.github/workflows/ci.yml` and the Azure steps template each run `bash .claude/verify-harness.sh` (the hard gate — drift fails the PR).
+- **pre-push** — `lefthook.yml` has a `harness-integrity` pre-push command that runs `bash .claude/verify-harness.sh`.
+- **protect the manifest** — `protect-files.sh` already asks before an agent edits `.claude/harness.json`, `.claude/verify-harness.sh` or `.claude/regen-harness.sh`, so an agent cannot silently rewrite the baseline or the verifier.
 
-# Capture first: a parse failure must fail the run, not silently yield zero entries.
-entries=$(read_manifest) || { echo "verify-harness: cannot parse $manifest" >&2; exit 2; }
-
-drift=0; checked=0; unfilled=0
-while IFS=$'\t' read -r path origin; do
-  [ -n "$path" ] || continue
-  case "$origin" in ""|null|undefined|None|"<"*) echo "UNFILLED: $path (origin_hash is a placeholder)" >&2; unfilled=1; continue ;; esac
-  printf '%s' "$path" | grep -qE "$guard" || continue   # enforcement layer only
-  checked=$((checked + 1))
-  if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
-  [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
-done <<< "$entries"
-
-[ "$unfilled" -eq 0 ] || { echo "❌ $manifest still has unfilled origin_hash placeholders — finish Step E" >&2; exit 2; }
-[ "$checked" -gt 0 ] || { echo "❌ verify-harness checked zero enforcement-layer entries — manifest empty or malformed" >&2; exit 2; }
-if [ "$drift" -ne 0 ]; then
-  echo "❌ harness integrity drift. If intentional, a human runs: bash .claude/regen-harness.sh" >&2
-  exit 1
-fi
-echo "✓ harness integrity OK ($checked enforcement files)"
-```
-
-**`.claude/regen-harness.sh`** (HUMAN-RUN ONLY — re-blesses the baseline):
-```bash
-#!/usr/bin/env bash
-# HUMAN-RUN ONLY. Rewrites origin_hash in .claude/harness.json to the current files.
-# NEVER let an agent run this — regenerating the baseline masks the drift the verifier
-# exists to catch. protect-files.sh requires human approval to edit harness.json itself.
-set -euo pipefail
-if command -v node >/dev/null 2>&1; then
-  node -e 'const fs=require("fs"),cr=require("crypto"),j=JSON.parse(fs.readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(".claude/harness.json",JSON.stringify(j,null,2)+"\n");console.log("harness baseline regenerated");'
-elif command -v python3 >/dev/null 2>&1; then
-  python3 -c 'import json,hashlib,os;j=json.load(open(".claude/harness.json"));[v.__setitem__("origin_hash",hashlib.sha256(open(v["path"],"rb").read()).hexdigest()) for v in j["seeded_files"].values() if os.path.isfile(v["path"])];open(".claude/harness.json","w").write(json.dumps(j,indent=2)+"\n");print("harness baseline regenerated")'
-else
-  echo "regen-harness: need node or python3" >&2; exit 3
-fi
-```
-
-```bash
-chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
-```
-
-**Wiring:**
-- **CI** — add a step to the `quality` job in `.github/workflows/ci.yml`: `- name: Harness integrity` / `run: bash .claude/verify-harness.sh` (this is the hard gate — drift fails the PR).
-- **pre-push** — add a `harness-integrity` command to `lefthook.yml` pre-push: `run: bash .claude/verify-harness.sh`.
-- **protect the manifest** — add `.claude/harness.json`, `.claude/verify-harness.sh`, and `.claude/regen-harness.sh` to the `protect-files.sh` approval list (Step B) so an agent can't silently rewrite the baseline or the verifier. This is the "protect the manifest itself" safeguard — without it, drift detection is defeatable.
+If any of the three is missing from a copy, stop and report it: the template files are the source, so a missing line means the copy or the template is damaged.
 
 ---
 

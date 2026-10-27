@@ -14,26 +14,136 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 
 | File | Holds | Load for |
 |---|---|---|
-| `harness-kit-ts.md` | TS bodies for Steps A, B, B2: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.cjs`), `lefthook.yml` | nestjs · nextjs · vite-react |
-| `harness-kit-fastapi.md` | FastAPI bodies for Steps A, B, B2, B3: `settings.json`, the 7 per-stack hooks (`user-prompt-guard.py`), `lefthook.yml`, the CI `quality` job | fastapi |
-| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`); Steps B3 (`ci-gates.sh`, Azure template), B4, B5 | every stack |
+| `harness-kit-ts.md` | TS body for Step A (`settings.json`) and the notes for Steps B, B2 (the 7 per-stack hooks incl. `user-prompt-guard.cjs`, and `lefthook.yml`, which live in `template-ts/`) | nestjs · nextjs · vite-react |
+| `harness-kit-fastapi.md` | FastAPI body for Step A (`settings.json`) and the notes for Steps B, B2, B3 (the 7 per-stack hooks incl. `user-prompt-guard.py`, `lefthook.yml` and the CI `quality` job, which live in `template-py/` and `template-ci/github-py/`) | fastapi |
+| `harness-kit-enforcement.md` | Step A/B/B2 shared rules + notes on the stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, held in `template/`); Steps B3 (CI host pick, `ci-gates.sh`, Azure template), B4, B5 | every stack |
 | `harness-kit-finalize.md` | Steps C, D, E, E2, E3, F, G, H + the shared AGENTS.md tail fragment | every stack |
 
 ## Step order
 
 | Step | Seeds | Where |
 |---|---|---|
+| 0 | every template file below that is a real file: the 9 `.claude/hooks/` scripts, `.claude/ci-gates.sh`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml` | this file — scaffold only; migrate diffs and merges instead |
 | A | `.claude/settings.json` | variant (JSON body) + enforcement (merge rules, deny lists, hook inventory) |
-| B | `.claude/hooks/` scripts | variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
-| B2 | git-hook layer | variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
-| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` + `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (gate script with the `deps` dependency-audit gate, workflow + TS `quality` job, Azure template) + fastapi variant (FastAPI `quality` job) |
-| B4 | harness integrity verifier | enforcement |
+| B | `.claude/hooks/` scripts (copied in Step 0) | notes in the variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
+| B2 | git-hook layer (files copied in Step 0) | notes in the variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
+| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` from Step 0, plus the CI file copied here: `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (CI host pick and copy; the `deps` dependency-audit gate lives in `ci-gates.sh`) + fastapi variant (notes on the FastAPI `quality` job) |
+| B4 | harness integrity verifier (`verify-harness.sh`, `regen-harness.sh`, copied in Step 0) | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md` | finalize |
 | E, E2, E3 | `.claude/harness.json`, base snapshot, per-folder docs | finalize |
 | F, G, H | `.agents` symlink, post-scaffold workflow, plugins | finalize |
 
-For Steps A, B, B2 (and B3 on FastAPI) the enforcement file's section is the step: write the variant file's blocks for that step as part of it.
+For Step A the enforcement file's section is the step: write the variant file's `settings.json` body as part of it. Steps B and B2 only add rules and notes to the files Step 0 already copied.
+
+---
+
+## Step 0 — copy the template trees
+
+Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
+
+Run it once, before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. The file list is `<skill-dir>/shared/template.manifest`. Edit only the `STACK=` line, the first line of the script: set it to `nestjs`, `nextjs`, `vite-react` or `fastapi`. It ships empty, and the script refuses until it is set. The script derives the template trees from it (`template` plus `template-ts` for the three TS stacks, `template-py` for fastapi) and refuses any other value, so a wrong stack cannot copy the other stack's hooks. Leave `CI=` empty and `PART=base` here; Step B3 sets them.
+
+Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
+
+The script writes nothing when any check fails: the skill or target path is empty or not substituted, the target is not an existing directory, a template tree holds a symlink or an empty directory, the manifest is missing, empty or disagrees with the files in the trees (it names the files that differ, such as a stray `.DS_Store`), a file it would write already exists, a directory it would write into is a symlink or not a directory, or an existing directory is not writable or a source file is not readable (checked for every file before the first write). It then creates only the missing parent directories and copies each listed file with `cp`, giving the file the mode in the manifest. It never copies attributes onto the project root or an existing directory and never changes a mode it did not create. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user. After a failed copy the message lists the files already written. The script runs in `bash` through a quoted heredoc, so it behaves the same from bash or zsh and a refusal ends only that child process, never the caller's shell.
+
+```bash
+bash <<'TC_GUARD'
+STACK=
+CI=
+PART=base
+WHAT="scaffold"
+NL='
+'
+IFS= read -r -d '' SK <<'TC_PATH'
+<skill-dir>/shared
+TC_PATH
+SK=${SK%"$NL"}
+IFS= read -r -d '' TGT <<'TC_PATH'
+<target>
+TC_PATH
+TGT=${TGT%"$NL"}
+TAB=$(printf '\t')
+stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+case "$SK" in /*) ;; *) SK=./$SK ;; esac
+case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
+[ -d "$SK" ] || stop "$SK is not a directory"
+[ -d "$TGT" ] || stop "$TGT is not an existing directory"
+case "$STACK" in
+  nestjs|nextjs|vite-react) V=ts ;;
+  fastapi) V=py ;;
+  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
+esac
+case "$PART" in
+  base)
+    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
+    SEL="template template-$V" ;;
+  ci)
+    case "$CI" in
+      github) SEL="template-ci/github-$V" ;;
+      azure) SEL="template-ci/azure" ;;
+      *) stop "unknown CI '$CI' (want github or azure)" ;;
+    esac ;;
+  *) stop "unknown PART '$PART'" ;;
+esac
+for t in $SEL; do
+  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
+  [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
+done
+[ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
+plan=$(awk -v sel="$SEL" '
+  BEGIN { n = split(sel, s, " ") }
+  /^#/ || NF == 0 { next }
+  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $2 "\t" s[i] "\t" substr($1, length(s[i]) + 2); next } }
+' "$SK/template.manifest")
+listed=$(printf '%s\n' "$plan" | cut -f3 | LC_ALL=C sort)
+found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
+  stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
+fi
+clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
+  d=$p
+  while [ "${d%/*}" != "$d" ]; do
+    d=${d%/*}
+    if [ -L "$TGT/$d" ]; then echo "$d (symlink)"; elif [ -e "$TGT/$d" ] && [ ! -d "$TGT/$d" ]; then echo "$d (not a directory)"; fi
+  done
+done | LC_ALL=C sort -u)
+[ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+if [ "$PART" = ci ]; then
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+fi
+bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
+  [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
+  d=$p
+  if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
+    if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
+  done
+  if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
+  if [ ! -w "$base" ] || [ ! -x "$base" ]; then echo "$base (not writable or not searchable)"; fi
+done | LC_ALL=C sort -u)
+[ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
+copied=""
+while IFS="$TAB" read -r mode t p; do
+  d=${p%/*}
+  if [ "$d" != "$p" ]; then
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
+  fi
+  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
+  copied="$copied$NL$p"
+  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+done <<TC_PLAN
+$plan
+TC_PLAN
+TC_GUARD
+```
+
+The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
 
 ---
 

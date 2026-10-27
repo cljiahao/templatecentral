@@ -3,4 +3,3 @@
 # yielding a file fails the test unless it is listed here.
 # Format: <source file under skills/scaffold> <path> # <reason>
 shared/harness-kit-enforcement.md .claude/settings.json # Step A rules heading; the body is the Step A fence in the variant kit (harness-kit-ts.md / harness-kit-fastapi.md)
-shared/harness-kit-enforcement.md lefthook.yml # Step B2 wiring heading; the body is the lefthook.yml fence in the variant kit

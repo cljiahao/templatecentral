@@ -106,6 +106,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - name: Install PyYAML for the yaml checks
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
 
@@ -125,7 +127,7 @@ jobs:
   shell-lint:
     name: Shellcheck repo scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -133,10 +135,23 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Install zsh for the copy-guard shell tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
+      - name: Scaffold template scripts parse and pass shellcheck
+        run: |
+          set -euo pipefail
+          t=skills/scaffold/shared
+          [ "$(find "$t" -path "$t/template*" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no template scripts found"; exit 1; }
+          [ "$(find "$t" -path "$t/template*" -name '*.py' | wc -l)" -gt 0 ] || { echo "no template python files found"; exit 1; }
+          [ "$(find "$t" -path "$t/template*" -name '*.cjs' | wc -l)" -gt 0 ] || { echo "no template cjs files found"; exit 1; }
+          find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+          find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=warning
+          find "$t" -path "$t/template*" -name '*.py' -print0 | xargs -0 -r -n1 python3 -c 'import os, py_compile, sys, tempfile; py_compile.compile(sys.argv[1], cfile=os.path.join(tempfile.mkdtemp(), "x.pyc"), doraise=True)'
+          find "$t" -path "$t/template*" -name '*.cjs' -print0 | xargs -0 -r -n1 node --check
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests
@@ -149,8 +164,25 @@ jobs:
         run: bash scripts/check-golden.test.sh
       - name: Golden scaffold tree check
         run: bash scripts/check-golden.sh
+      - name: Golden scaffold tree check (template trees)
+        run: bash scripts/check-golden.sh --from-templates
+      - name: Template copy tests
+        run: bash scripts/test-template-copy.sh
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
+
+  lint-negative-tests:
+    name: Lint check negative tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Install PyYAML for the yaml checks
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
+      - name: Each lint check fails on an empty match and on a deleted anchor
+        run: bash scripts/lint-skills.test.sh
 
   token-count:
     name: Scaffold load size

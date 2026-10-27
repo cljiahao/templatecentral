@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Extract the copy-verbatim fences from the scaffold markdown into a file tree.
 
-A copy-verbatim fence is the first fence after a path heading, written
-**`<path>`** (kit files), ### `<path>` (stack files), or as a prose line that ends in
-a colon and says "Create `<path>`". A heading followed by "Empty file" is a 0-byte file.
-A "**For TS..." /
-"**For FastAPI..." label before a fence marks a per-stack variant. A shell
-script fence must open with a shebang; anything else after its heading is a
-command to run, not a file.
+A copy-verbatim fence is the first fence after a path heading, written **`<path>`** (kit
+files), ### `<path>` (stack files), or as a prose line that ends in a colon and says
+"Create `<path>`". A heading followed by "Empty file" is a 0-byte file.
+
+A "**For TS..." / "**For FastAPI..." label before a fence marks a per-stack variant. A
+shell script fence must open with a shebang; anything else after its heading is a command to
+run, not a file.
+
+A file that lives in a template tree has no fence. Its markdown entry is one line that starts
+at column 0 with the backticked path and names a `<skill-dir>/shared/template...` file in
+backticks on that same line. That pointer line closes the current heading, so the fences after
+it are not read as that heading's file. A pointer inside a bullet, a blockquote or a table, or
+one split over two lines, does not match and does not close the heading.
 
 Stack mode (the golden tree):
   extract-fences.py --stack {nextjs,vite-react,fastapi,nestjs} --ci {github,azure} --out DIR
@@ -36,6 +42,7 @@ CI_FILE = {"github": ".github/workflows/ci.yml", "azure": "azure-pipelines/templ
 HEADING = re.compile(r"^(?:\*\*|#{2,4} )`([^`\s]+)`")
 TAG_EXT = {"bash": {"sh"}, "sh": {"sh"}, "shell": {"sh"}, "json": {"json"}, "python": {"py"}, "py": {"py"},
            "yaml": {"yaml", "yml"}, "yml": {"yaml", "yml"}, "toml": {"toml"}}
+POINTER = re.compile(r"^`[^`\s]+`.*`<skill-dir>/shared/template[^`]*`")
 CREATE = re.compile(r"[Cc]reate `([^`\s]+)`")
 OPENER = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 EXTENSIONLESS = {"Dockerfile", "Makefile", "CODEOWNERS", "LICENSE", "Procfile", "Jenkinsfile"}
@@ -102,6 +109,12 @@ def parse(src_path, label):
             if nxt.startswith("Empty file"):
                 yield "fence", path, None, i + 1, []
                 path, satisfied = None, True
+        elif POINTER.match(line):
+            ev = drop()
+            if ev:
+                yield ev
+            path = variant = None
+            seen_variant = satisfied = created_path = False
         elif line.startswith("**For TS"):
             variant = "ts"
         elif line.startswith("**For FastAPI"):

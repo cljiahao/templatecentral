@@ -6,10 +6,10 @@
 # What the golden covers
 #   One entry per file the scaffold markdown writes verbatim: the first fence after a
 #   path heading, a "Create `<path>`:" line, or a heading marked "Empty file".
-#   .claude/settings.json and lefthook.yml also carry an inline-bold heading in
-#   harness-kit-enforcement.md (Step A rules, Step B2 wiring). Those headings hold rules, not
-#   a body: the golden covers only the Step A / Step B2 fence in the stack's variant kit
-#   (harness-kit-ts.md or harness-kit-fastapi.md). tests/golden/unfenced.txt lists the headings
+#   .claude/settings.json also carries an inline-bold heading in
+#   harness-kit-enforcement.md (Step A rules). That heading holds rules, not a body: the golden
+#   covers only the Step A fence in the stack's variant kit (harness-kit-ts.md or
+#   harness-kit-fastapi.md). tests/golden/unfenced.txt lists the headings
 #   without a body, and extract-fences.test.sh pins that the variant fence is the golden entry.
 #
 # What `check-golden.sh --tree` leaves out of a generated project (created at runtime)
