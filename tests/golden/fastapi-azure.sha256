@@ -1,9 +1,9 @@
 # Golden scaffold output hashes for fastapi on azure CI.
-# Source: tag v6.1.2, skills/scaffold, via scripts/extract-fences.py.
+# Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Format: <sha256>  <path>
 c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gates.sh
 61e448dd1b798c211ec37f4efc9667275a0eaea0ba3be2217d4d187d15cbf078  .claude/comment-hygiene-patterns.txt
-bbbef0dac3ea9e1f29e4a54adf9b77c2e9001fdbe4db46b105e83182b50c2891  .claude/harness.json
+2008d16b9295be4930e0f8c6e47bf692fea505cb0eb67771698d8926c5eb13cd  .claude/harness.json
 38dd2409c9505c668946cead287f2bd49111a8cc8bdd25e2b138d98344762da9  .claude/hooks/block-no-verify.sh
 7dd91cd041f864190e5493200e457b47cfb682f41231fffadaef226132c16b29  .claude/hooks/post-edit-comment-check.sh
 16acefc36f812e098ac9a3f17821ba0978a06491092653abeda1740bfa08aafc  .claude/hooks/post-edit-typecheck.sh
@@ -34,7 +34,7 @@ b6445d46e20ec04dd618f06770b173b426c1cf18a3cb3c2d256375d72d6dae0e  azure-pipeline
 d483f58a43b92170eccd47e712d4aa8c8284300214f0f1b59073b82184625856  pyproject.toml
 3b0ac975a7fdec02ad26e5e8b0c8444fcc8d0efac12f925aa22811fb4cdb91fb  pyrightconfig.json
 7b786732888187f3963465daa74d11a4a733d35c426457af017f03c1188c6d66  requirements-dev.txt
-498a5a38f51a1f0406d408d18c959403963109451b79195e10c355399b47bd88  src/.env.default
+a5097809f3068374c0ecaf2eb8f052860899cfe03f1891c2ae1cdfbe013afe07  src/.env.default
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/api/__init__.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/api/routers/__init__.py
 0d7cae69d0093de6c4dc881b6f44627b0e108fa5260510a580b8435a2b93d274  src/api/routers/example.py
@@ -51,11 +51,11 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/api/servic
 70eeab91526f21c6a511a06357ef8e43bd19bf7c2d6fab756e90217866c2d9b9  src/app.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/constants/__init__.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/core/__init__.py
-ec87eb2e9ed9855b8816e6e38e8765fad07fcbfb8044671355f3df66463ef9e4  src/core/config.py
+a6e5b529a4bf898182099127c832fcd0f23f051dbcf18669ee85209dbbac6719  src/core/config.py
 57cba3166a023e43492f8a703733bf699169d95c66c7439216d5d1a915b3aace  src/core/directory_manager.py
 4bf476f99881418eef73bac23edae9d7f915981f1f2b722f797dcd5c9523fa8c  src/core/exceptions.py
 4841af099ed1058c3b50af135094242f2ea33eae34854a5f85ef95cde0e7a292  src/core/logging.py
-aa36785189023810bbb6a10a21f8929c2bf9ef92f52dff695d004cf6e04dff84  src/core/security_headers.py
+ecd8d143ef84ae7bb524b2b65d432ce4dd598d1daa1aab3b7023204d5e5255c0  src/core/security_headers.py
 4e0d8d6ab0e86f47dcb8cb6324d1dc84b89154ed7d308a405ea04e24b143439b  src/core/uvicorn_log_config.json
 d88c41961126fa0971a6e1f62214b1ec10ce53072cab6cc97f6ab1167e050d57  src/error_handler.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/logic/__init__.py
@@ -74,3 +74,4 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test/test_logi
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test/test_models/__init__.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test/test_utils/__init__.py
 66a555ccaa9d633d502fe5079d69421b6187088cbb4c84b5bb5aa34178fd490e  test/test_utils/test_logging.py
+736dce85061cad4d03ceed557f09db9070d82d1fe9e10bb0ffff3ac791a7940a  test/test_utils/test_security_headers.py
