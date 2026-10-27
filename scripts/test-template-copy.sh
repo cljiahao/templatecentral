@@ -14,7 +14,7 @@ SHARED="$SK/shared"
 MANIFEST="$SHARED/template.manifest"
 KIT_INDEX="$SHARED/harness-kit.md"
 T=$(mktemp -d)
-trap 'rm -rf "$T"' EXIT
+trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT
 
 PASS=0
 FAIL=0
@@ -48,17 +48,17 @@ sys.exit(4)
 PY
 }
 
-# render <snippet-text> <target> <selector> — substitute the placeholders, set SEL, and keep only
-# the cp lines whose tree appears in the selector (a space-separated list of tree names).
+# render <snippet-text> <target> <selector> — substitute <skill-dir> and <target> byte for byte
+# (no sed, so any character in a path arrives untouched) and set the SEL line.
 render() {
-  printf '%s\n' "$1" | sed -e "s#<skill-dir>#$SK#g" -e "s#<target>#$2#g" -e "s#^SEL=.*#SEL=\"$3\"#" \
-    | awk -v sel="$3" '
-        BEGIN { n = split(sel, s, " ") }
-        /^cp / && /shared\/template/ {
-          for (i = 1; i <= n; i++) if (index($0, "shared/" s[i] "/.") > 0) { print; next }
-          next
-        }
-        { print }'
+  printf '%s\n' "$1" | python3 -c '
+import sys
+sk, tgt, sel = sys.argv[1:]
+out = []
+for line in sys.stdin.read().split("\n"):
+    out.append("SEL=\"" + sel + "\"" if line.startswith("SEL=") else line)
+sys.stdout.write("\n".join(out).replace("<skill-dir>", sk).replace("<target>", tgt))
+' "$SK" "$2" "$3"
 }
 
 STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
@@ -237,6 +237,8 @@ echo CALLER_SURVIVED" 2>&1)
   out=$(bash -c "$(render "$STEP0" "$tgt" "template template-ts")
 echo CALLER_SURVIVED" 2>&1)
   check 1 "$([[ "$out" == *CALLER_SURVIVED* ]] && echo 1 || echo 0)" "bash_refusal_leaves_caller_shell_alive"
+elif [[ "${CI:-}" == true ]]; then
+  FAIL=$((FAIL + 1)); echo "FAIL: zsh is not installed but CI=true; the zsh guard tests must run in CI"
 else
   echo "SKIP: zsh tests (zsh not installed)"
 fi
@@ -245,6 +247,102 @@ fi
 mkdir -p "$T/g10/.claude"; printf 'mine\n' > "$T/g10/.claude/own.txt"
 out=$(run_step0 "$T/g10" ts); check 0 "$?" "copy_allows_existing_directory_with_other_files ($out)"
 check mine "$(cat "$T/g10/.claude/own.txt")" "copy_allows_existing_directory_with_other_files: own file kept"
+# ── round 3: hostile paths, unsubstituted values, stop line, odd trees ────────
+STOPLINE="STOP: do not rm or overwrite anything; report this to the user"
+mkdir -p "$T/h"
+hostile_ok() { # hostile_ok <dir name> — Step 0 must copy into the literal path and run nothing
+  local name=$1 tgt out ec
+  tgt="$T/h/$name"; mkdir -p "$tgt"
+  out=$(run_step0 "$tgt" ts); ec=$?
+  check 0 "$ec" "hostile_target[$name]: exits 0 ($out)"
+  check 1 "$([[ -f "$tgt/.gitleaks.toml" && -x "$tgt/.claude/hooks/session-context.sh" ]] && echo 1 || echo 0)" "hostile_target[$name]: copied into the literal path"
+}
+hostile_ok 'sp ace'
+hostile_ok "q'uote"
+# shellcheck disable=SC2016  # the dollar signs are part of the hostile directory names
+hostile_ok 'dollar$x'
+# shellcheck disable=SC2016
+hostile_ok 'home$HOME'
+hostile_ok 'dq"uote'
+hostile_ok 'back\slash'
+hostile_ok 'semi;colon'
+hostile_ok "bt\`touch $T/PWNED\`x"
+hostile_ok "sub\$(touch $T/PWNED2)x"
+check 0 "$([[ -e "$T/PWNED" || -e "$T/PWNED2" ]] && echo 1 || echo 0)" "hostile_target: no command in a path was executed"
+# a path with a newline is refused, not truncated
+tgt="$T/h/new
+line"; mkdir -p "$tgt"
+out=$(run_step0 "$tgt" ts); ec=$?
+check 1 "$([[ $ec -ne 0 ]] && echo 1 || echo 0)" "hostile_target[newline]: refused"
+check 0 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "hostile_target[newline]: nothing copied"
+# the same through the CI block
+tgt="$T/h/ci'q\$x"; mkdir -p "$tgt"; out=$(run_ci "$tgt" ts github); check 0 "$?" "hostile_target[ci]: exits 0 ($out)"
+check 1 "$([[ -f "$tgt/.github/workflows/ci.yml" ]] && echo 1 || echo 0)" "hostile_target[ci]: copied into the literal path"
+
+# empty, unsubstituted and non-directory values are refused
+refuses_raw() { # refuses_raw <name> <snippet text> <expected message substring>
+  local out ec
+  out=$(bash -c "$2" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 ]] && echo 1 || echo 0)" "$1: nonzero exit"
+  check 1 "$([[ "$out" == *"$3"* ]] && echo 1 || echo 0)" "$1: message names the cause ($out)"
+  check 1 "$([[ "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "$1: ends with the stop line"
+}
+refuses_raw guard_refuses_empty_target "$(render "$STEP0" "" "template template-ts")" "target"
+refuses_raw guard_refuses_unsubstituted_target "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" "not substituted"
+refuses_raw guard_refuses_unsubstituted_skill_dir "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<target>", sys.argv[1]))' "$T/h")" "not substituted"
+refuses_raw guard_refuses_empty_skill_dir "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>/shared", "").replace("<target>", sys.argv[1]))' "$T/h")" "skill"
+: > "$T/regular-file"
+refuses_raw guard_refuses_regular_file_target "$(render "$STEP0" "$T/regular-file" "template template-ts")" "existing directory"
+refuses_raw guard_refuses_missing_target "$(render "$STEP0" "$T/no/such/dir" "template template-ts")" "existing directory"
+refuses_raw guard_refuses_clash_with_stop_line "$(mkdir -p "$T/c1" && : > "$T/c1/.gitleaks.toml" && render "$STEP0" "$T/c1" "template template-ts")" ".gitleaks.toml"
+
+# a cp failure stops the step, says files may be partly written, and ends with the stop line
+if [[ "$(id -u)" != 0 ]]; then
+  tgt="$T/ro"; mkdir -p "$tgt"; chmod a-w "$tgt"
+  refuses_raw copy_failure_stops_with_partial_write_warning "$(render "$STEP0" "$tgt" "template template-ts")" "partly written"
+  chmod u+w "$tgt"
+else
+  echo "SKIP: cp failure test (running as root)"
+fi
+
+# a symlink or an empty directory inside a template tree is refused, because find -type f misses both
+sk=$(alt_skill treelink); ln -s /etc/hosts "$sk/shared/template/zz-link"; mkdir -p "$T/o1"
+refuses tree_with_symlink_is_refused "$sk" "template template-ts" "$T/o1"
+sk=$(alt_skill treeempty); mkdir -p "$sk/shared/template/zz-empty"; mkdir -p "$T/o2"
+refuses tree_with_empty_dir_is_refused "$sk" "template template-ts" "$T/o2"
+
+# a read-only plugin cache must not leave read-only directories in the project
+sk=$(alt_skill readonly); chmod -R a-w "$sk/shared/template" "$sk/shared/template-ts"; tgt="$T/o3"; mkdir -p "$tgt"
+saved=$SK; SK=$sk; out=$(run_step0 "$tgt" ts); ec=$?; SK=$saved
+check 0 "$ec" "copy_from_read_only_cache_exits_0 ($out)"
+check 1 "$([[ -w "$tgt/.claude" && -w "$tgt/.claude/hooks" && -w "$tgt/.claude/hooks/session-context.sh" && -w "$tgt/lefthook.yml" ]] && echo 1 || echo 0)" "copy_from_read_only_cache_leaves_writable_paths"
+chmod -R u+w "$sk/shared"
+
+# the two guards are the same script apart from the SEL and WHAT lines
+norm() { printf '%s\n' "$1" | grep -v '^SEL=\|^WHAT=\|^cp ' ; }
+check "$(norm "$STEP0")" "$(norm "$CI_SNIPPET")" "guards_identical: Step 0 and Step B3 carry the same guard"
+
+# seed-neither CI path leaves exactly what 6.x left: the golden tree minus ci-gates.sh and the CI file
+NEITHER=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 2) || NEITHER=""
+tgt="$T/o4"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
+check 1 "$([[ -n "$NEITHER" ]] && echo 1 || echo 0)" "seed_neither: the removal fence exists in Step B3"
+bash -c "$(render "$NEITHER" "$tgt" "none")" >/dev/null 2>&1
+want=$(python3 - "$MANIFEST" "$REPO_ROOT/tests/golden/nextjs-github.sha256" <<'PY'
+import sys
+manifest, golden = sys.argv[1:]
+gold = {l.split("  ", 1)[1].strip() for l in open(golden) if l.strip() and not l.startswith("#")}
+out = set()
+for l in open(manifest):
+    if l.strip() and not l.startswith("#"):
+        p = l.split()[0]
+        for tree in ("template/", "template-ts/"):
+            if p.startswith(tree):
+                out.add(p[len(tree):])
+print("\n".join(sorted((out & gold) - {".claude/ci-gates.sh"})))
+PY
+)
+check "$want" "$(cd "$tgt" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)" "seed_neither: tree equals the 6.x seed-neither file set"
+
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')
 check "" "$bad" "template_sh_parses: bash -n over every template .sh"

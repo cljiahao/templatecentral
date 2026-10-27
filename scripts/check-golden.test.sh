@@ -107,6 +107,50 @@ TC_SCAFFOLD_DIR="$T/sk-del" bash "$CHECK" --from-templates "$COMBO" > /dev/null 
 g=$(fresh_golden excount); printf '* .gitleaks.toml # test\n' >> "$g/exceptions.txt"
 bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 0 $? "from_templates_excepted_templated_path_counts"
 
+# C1: the last line of placeholders.env counts even without a trailing newline
+rm -rf "$T/sk-ph"; mkdir -p "$T/sk-ph"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-ph/shared"
+python3 - "$T/sk-ph/shared/template/.gitleaks.toml" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read()
+assert "useDefault" in t
+open(p, "w").write(t.replace("useDefault", "__TC_FOO__", 1))
+PY
+g=$(fresh_golden ph); printf 'FOO=useDefault' > "$g/placeholders.env"
+TC_SCAFFOLD_DIR="$T/sk-ph" bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 0 $? "placeholders_env_last_line_without_newline_is_read"
+
+# C2: the extractor's stderr is shown when it fails
+printf '#!/usr/bin/env bash\necho "extractor exploded" >&2\nexit 2\n' > "$T/stub-extract.sh"
+out=$(TC_EXTRACT="bash $T/stub-extract.sh" bash "$CHECK" "$COMBO" 2>&1); ec=$?
+check 1 "$ec" "extractor_failure_exits_1"
+case "$out" in *"extractor exploded"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: extractor_stderr_is_printed [$out]" ;; esac
+
+# C3: a compare_tree crash is a failure even when the lines printed before it are all excepted
+mkdir -p "$T/fakepy"
+cat > "$T/fakepy/python3" <<SH
+#!/usr/bin/env bash
+if [[ "\$1" == "-" ]]; then
+  src=\$(cat)
+  if grep -q 'def golden_paths' <<<"\$src"; then printf 'MISSING fastapi-github .gitleaks.toml\n'; echo Traceback >&2; exit 3; fi
+  exec $(command -v python3) - "\${@:2}" <<<"\$src"
+fi
+exec $(command -v python3) "\$@"
+SH
+chmod +x "$T/fakepy/python3"
+g=$(fresh_golden crash); printf '* .gitleaks.toml # test\n' >> "$g/exceptions.txt"
+scaffold_tree fastapi github "$T/ctree"
+PATH="$T/fakepy:$PATH" bash "$CHECK" --golden-dir "$g" --tree "$T/ctree" fastapi-github > /dev/null 2>&1; check 1 $? "tree_crash_with_excepted_report_fails"
+
+# C4: backslashes in a path are not interpreted, an unknown combo exits 2, -h prints usage
+rm -rf "$T/sk-bs"; mkdir -p "$T/sk-bs"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bs/shared"
+printf 'x\n' > "$T/sk-bs/shared/template/a\tb"; printf 'template/a\\tb 644 - -\n' >> "$T/sk-bs/shared/template.manifest"
+g=$(fresh_golden bs); printf '%s  a\\tb\n' "$(printf 'x\n' | shasum -a 256 | cut -d' ' -f1)" >> "$g/$COMBO.sha256"
+TC_SCAFFOLD_DIR="$T/sk-bs" bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 0 $? "backslash_in_path_is_literal"
+bash "$CHECK" nosuch-combo > /dev/null 2>&1; check 2 $? "unknown_combo_exits_2"
+out=$(bash "$CHECK" -h 2>&1); ec=$?
+check 0 "$ec" "help_exits_0"
+case "$out" in *Usage:*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: help_prints_usage [$out]" ;; esac
+
 # a changed template byte is MISMATCH, an unexpected template file is EXTRA, a path both fenced and templated is DUPLICATE
 mkdir -p "$T/sk-bad"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bad/shared"
 printf 'x\n' >> "$T/sk-bad/shared/template/.gitleaks.toml"

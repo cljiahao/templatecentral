@@ -10,7 +10,7 @@ Stack-agnostic half of Steps A, B, and B2, plus all of B3–B5. Per-stack bodies
 
 ## Step A. Create `.claude/settings.json`
 
-Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (below). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
+Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (Step 0 copies them). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
 
 **`.claude/settings.json`** — write the variant file's **Step A** body, then apply the rules below.
 
@@ -28,7 +28,7 @@ Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` sc
 | NestJS · Vite + React | `Read(./**/node_modules/**)`, `Read(./**/dist/**)`, `Read(./**/coverage/**)`, `Read(./**/.turbo/**)`, `Read(./**/*.tsbuildinfo)` |
 | FastAPI | `Read(./**/.venv/**)`, `Read(./**/__pycache__/**)`, `Read(./**/.pytest_cache/**)`, `Read(./**/.ruff_cache/**)`, `Read(./**/.mypy_cache/**)`, `Read(./**/htmlcov/**)`, `Read(./**/dist/**)` |
 
-Hook logic lives in `.claude/hooks/` scripts (seeded below) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
+Hook logic lives in `.claude/hooks/` scripts (copied by Step 0) so complex guards stay readable and testable rather than crammed into inline JSON. All are self-contained — no dependency on the templateCentral plugin, so the harness keeps enforcing even if the plugin is uninstalled.
 
 - `protect-files.sh` (PreToolUse Edit|Write|NotebookEdit) — hard-blocks writes to `.env*` (except `.env.example`/`.env.default`), `secrets/` and `.secrets/` directories, and cert/credential files; requires human approval (`permissionDecision: "ask"`) before writing CI/CD pipeline definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, any `azure-pipelines/` folder, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/settings.local.json`, `.claude/hooks/*`, `.claude/agents/*`, `.mcp.json`, `Dockerfile`, the harness verifier, `ci-gates.sh` and the dependency-audit allowlist `.claude/dep-audit-allow.txt`). Matching is case-insensitive (`.ENV`, `dockerfile`) and runs on a canonicalised project-relative path (leading `./` stripped, symlinked parents such as macOS `/tmp` → `/private/tmp` resolved). Fails closed (exit 2) if it cannot reach the project root. Paired with `permissions.deny` above, which blocks *reading* secrets.
 - `block-no-verify.sh` (PreToolUse Bash) — splits the command on `&&` `||` `;` `|` and evaluates each git invocation (including `git -C <dir> …`, `/usr/bin/git`, `bash -c "…"`): blocks `--no-verify` on `commit`/`push`/`merge`/`am`/`rebase`/`cherry-pick`, `-n` only as a `git commit` short flag (`git log -n`, `grep -n` pass), the equivalent hook-layer bypasses (`LEFTHOOK=0`/`LEFTHOOK_EXCLUDE`, `git -c core.hooksPath=…`, `git config core.hooksPath …`, `--no-verify` aliases), direct commits to protected branches (`main`/`uat`/`develop`), force-push or delete of a protected branch (`--force`, `--force-with-lease`, `--force-if-includes`, `-f`, `+refspec`, `HEAD:main`), `git checkout`/`restore` that would discard guard-layer files (`.claude/`, `lefthook.yml`, `.github/`, etc.), and `rm -rf` on source dirs. A best-effort tripwire — shell obfuscation can evade any pattern guard; lefthook + CI are the backstop.
@@ -103,26 +103,42 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
 - **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
 
-**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` below. **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; delete it in this case) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
+**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Set `SEL` to `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack), run the guard (it refuses on a bad manifest, an existing file or a symlinked directory), and keep only the one matching `cp` line. Seed nothing when the paragraph above says to seed neither.
+Copy the CI file for the picked host. Edit only the `SEL` line: `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack). The guard is the one from `harness-kit.md` Step 0 (same path rules, same refusals, same `STOP:` line).
 
 ```bash
 bash <<'TC_GUARD'
 SEL="template-ci/github-ts"
-SK="<skill-dir>/shared"
-TGT="<target>"
+WHAT="seed CI"
+NL='
+'
+IFS= read -r -d '' SK <<'TC_PATH'
+<skill-dir>/shared
+TC_PATH
+SK=${SK%"$NL"}
+IFS= read -r -d '' TGT <<'TC_PATH'
+<target>
+TC_PATH
+TGT=${TGT%"$NL"}
+stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+case "$SK" in ''|*'<skill'*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<target'*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path contains a newline" ;; esac
+[ -d "$SK" ] || stop "$SK is not a directory"
+[ -d "$TGT" ] || stop "$TGT is not an existing directory"
 for t in $SEL; do
-  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || { echo "Refusing to seed CI: no files under $SK/$t"; exit 1; }
+  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
+  [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
 done
-[ -s "$SK/template.manifest" ] || { echo "Refusing to seed CI: $SK/template.manifest is missing or empty"; exit 1; }
+[ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
 listed=$(awk -v sel="$SEL" '
   BEGIN { n = split(sel, s, " ") }
   /^#/ || NF == 0 { next }
   { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
 ' "$SK/template.manifest" | LC_ALL=C sort)
 found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
-if [ -z "$listed" ] || [ "$listed" != "$found" ]; then echo "Refusing to seed CI: template.manifest and the template trees ($SEL) do not list the same files"; exit 1; fi
+[ -n "$listed" ] && [ "$listed" = "$found" ] || stop "template.manifest and the template trees ($SEL) do not list the same files"
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
 done)
@@ -133,11 +149,30 @@ links=$(printf '%s\n' "$found" | while IFS= read -r p; do
     if [ -L "$TGT/$d" ]; then echo "$d"; fi
   done
 done | LC_ALL=C sort -u)
-if [ -n "$clash$links" ]; then printf 'Refusing to seed CI: these paths already exist or are symlinks in %s:\n%s\n%s\n' "$TGT" "$clash" "$links"; exit 1; fi
-cp -Rp "<skill-dir>/shared/template-ci/github-ts/." "<target>/" || exit 1
-cp -Rp "<skill-dir>/shared/template-ci/github-py/." "<target>/" || exit 1
-cp -Rp "<skill-dir>/shared/template-ci/azure/." "<target>/" || exit 1
+[ -z "$clash$links" ] || stop "these paths already exist or are symlinks in $TGT:$NL$clash$NL$links"
+for t in $SEL; do
+  cp -Rp "$SK/$t/." "$TGT/" || stop "cp failed for $t; files may be partly written in $TGT"
+  chmod u+w "$TGT"
+  (cd "$SK/$t" && find . -mindepth 1 -maxdepth 1) | while IFS= read -r d; do
+    chmod -R u+w "$TGT/${d#./}"
+  done
+done
 TC_GUARD
+```
+
+When the paragraph above says to seed neither CI file, copy nothing and delete the one file Step 0 already placed for this decision, so the project holds exactly what a seed-neither scaffold always held:
+
+```bash
+bash <<'TC_RM'
+NL='
+'
+IFS= read -r -d '' TGT <<'TC_PATH'
+<target>
+TC_PATH
+TGT=${TGT%"$NL"}
+[ -d "$TGT" ] || { echo "STOP: $TGT is not an existing directory; report this to the user."; exit 1; }
+rm -f -- "$TGT/.claude/ci-gates.sh"
+TC_RM
 ```
 
 `.github/workflows/ci.yml` — TS stacks (nestjs / nextjs / vite-react). The copy above places it from `<skill-dir>/shared/template-ci/github-ts/.github/workflows/ci.yml`.
@@ -157,7 +192,7 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 **FastAPI:** the GitHub workflow is `template-ci/github-py/` (its Python `quality` job replaces the TS one; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical); `harness-kit-fastapi.md` **Step B3** describes it.
 
 **Notes:**
-- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` above is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
+- **Pin tactics:** the pinning model stays caret-floors + committed lockfile; `pnpm install --frozen-lockfile` in the copied `ci.yml` is the lockfile-in-sync gate (fails CI if the lockfile is stale). No caret ban.
 - **SHA-pin the actions** (`actions/checkout`, `setup-node`, `setup-python`, `pnpm/action-setup`) to the full commit SHA of the current major for supply-chain hygiene, with the version in a trailing comment; let Dependabot/Renovate (or the review utility) bump them — never hand-type a SHA.
 - **pnpm version comes from `packageManager`** in `package.json` — `pnpm/action-setup` is given no `version:` input so CI can never drift from the pinned pnpm. pnpm 12 needs `pnpm/action-setup` ≥ v6.1.0 (the floating `v6` tag lagged behind v6.1.0, so pin the v6.1.0+ SHA rather than `@v6`). The lockfile records the package manager too: after bumping `packageManager`, run a plain `pnpm install` and commit `pnpm-lock.yaml`, or the frozen install fails with `ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`. To disable frozen mode use `--no-frozen-lockfile` (pnpm 12 removed `--frozen-lockfile false`).
 - **`actions/setup-python` v7** has no `pip-install` input — dependencies install in the explicit `Install deps` step; `cache: pip` keys the cache on `requirements*.txt`.
@@ -181,10 +216,12 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
 ```
 
-**Wiring:**
-- **CI** — add a step to the `quality` job in `.github/workflows/ci.yml`: `- name: Harness integrity` / `run: bash .claude/verify-harness.sh` (this is the hard gate — drift fails the PR).
-- **pre-push** — add a `harness-integrity` command to `lefthook.yml` pre-push: `run: bash .claude/verify-harness.sh`.
-- **protect the manifest** — add `.claude/harness.json`, `.claude/verify-harness.sh`, and `.claude/regen-harness.sh` to the `protect-files.sh` approval list (Step B) so an agent can't silently rewrite the baseline or the verifier. This is the "protect the manifest itself" safeguard — without it, drift detection is defeatable.
+**Wiring (already present in the copied files; verify, do not add):**
+- **CI** — the `quality` job of `.github/workflows/ci.yml` and the Azure steps template each run `bash .claude/verify-harness.sh` (the hard gate — drift fails the PR).
+- **pre-push** — `lefthook.yml` has a `harness-integrity` pre-push command that runs `bash .claude/verify-harness.sh`.
+- **protect the manifest** — `protect-files.sh` already asks before an agent edits `.claude/harness.json`, `.claude/verify-harness.sh` or `.claude/regen-harness.sh`, so an agent cannot silently rewrite the baseline or the verifier.
+
+If any of the three is missing from a copy, stop and report it: the template files are the source, so a missing line means the copy or the template is damaged.
 
 ---
 

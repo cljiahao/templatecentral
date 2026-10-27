@@ -4,7 +4,7 @@
 # Usage: bash scripts/check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]
 #   COMBO is <stack>-<ci> (default: all 8 stack x ci combinations).
 #   Default mode hashes the output of scripts/extract-fences.py plus the template trees:
-#   a path moved out of the markdown comes from the templates, every other path from the
+#   a path held in a template tree comes from the templates, every other path from the
 #   fences, and a path produced by both fails as DUPLICATE (its fence is still in the markdown).
 #   --from-templates builds each combo from the template trees alone (shared/template,
 #   shared/template-<ts|py>, shared/template-ci/<github-<ts|py>|azure>, <stack>/template),
@@ -34,6 +34,10 @@ COMBOS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-templates) FROM_TEMPLATES=1 ;;
+    -h | --help)
+      echo "Usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]"
+      echo "  COMBO is <stack>-<ci>: stack nextjs, vite-react, fastapi or nestjs; ci github or azure."
+      exit 0 ;;
     --golden-dir | --tree)
       if [[ $# -lt 2 || "$2" == --* ]]; then
         echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
@@ -45,6 +49,12 @@ while [[ $# -gt 0 ]]; do
     *) COMBOS+=("$1") ;;
   esac
   shift
+done
+for combo in ${COMBOS[@]+"${COMBOS[@]}"}; do
+  case "$combo" in
+    nextjs-github | nextjs-azure | vite-react-github | vite-react-azure | fastapi-github | fastapi-azure | nestjs-github | nestjs-azure) ;;
+    *) echo "check-golden: unknown combo $combo (want <stack>-<ci>, see --help)" >&2; exit 2 ;;
+  esac
 done
 if [[ ${#COMBOS[@]} -eq 0 ]]; then
   for stack in nextjs vite-react fastapi nestjs; do
@@ -111,7 +121,14 @@ actual_hashes() {
   local stack="$1" ci="$2" out="$3" tree="$T/tree-$1-$2"
   : > "$T/overlaid"
   if [[ $FROM_TEMPLATES -eq 0 ]]; then
-    python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2>/dev/null || return 1
+    local extract=(python3 "$REPO_ROOT/scripts/extract-fences.py")
+    # TC_EXTRACT replaces the extractor command (split on spaces); tests use it to simulate a failure.
+    [[ -n "${TC_EXTRACT:-}" ]] && read -r -a extract <<< "$TC_EXTRACT"
+    if ! "${extract[@]}" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2> "$T/extract-$stack-$ci.err"; then
+      echo "check-golden: extract-fences failed for $stack-$ci:" >&2
+      cat "$T/extract-$stack-$ci.err" >&2
+      return 1
+    fi
     mkdir -p "$tree"
     local before="$T/fenced-$stack-$ci"
     (cd "$tree" && find . -type f | sed 's|^\./||' | LC_ALL=C sort) > "$before"
@@ -127,7 +144,7 @@ actual_hashes() {
   fi
   if [[ -f "$GOLDEN_DIR/placeholders.env" ]]; then
     local name value
-    while IFS='=' read -r name value; do
+    while IFS='=' read -r name value || [[ -n "$name" ]]; do
       [[ -z "$name" || "$name" == \#* ]] && continue
       grep -rlF "__TC_${name}__" "$tree" 2>/dev/null | while IFS= read -r f; do
         python3 - "$f" "__TC_${name}__" "$value" <<'PY'
@@ -160,7 +177,16 @@ excepted() {
 # compare_tree <combo> <expected-tree> <generated-tree> — prints MISSING/MISMATCH lines.
 compare_tree() {
   python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" "$GOLDEN_DIR/$1.sha256" <<'PY'
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, traceback
+
+
+def crash(kind, value, tb):
+    traceback.print_exception(kind, value, tb)
+    os._exit(3)
+
+
+# Exit 1 means differences were reported; any other nonzero exit is a crash and never an OK.
+sys.excepthook = crash
 
 combo, want, got, owned_file, golden_file = sys.argv[1:]
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
@@ -297,11 +323,17 @@ for combo in "${COMBOS[@]}"; do
     bad=0
     report=$(compare_tree "$combo" "$T/tree-$stack-$ci" "$TREE")
     rc=$?
-    # A path listed in exceptions.txt is dropped from the report; a crash with no report fails.
-    [[ $rc -ne 0 && -z "$report" ]] && bad=1
+    # A path listed in exceptions.txt is dropped from the report. Exit 0 and exit 1 (differences
+    # reported) are the only valid results: any other exit is a crash and fails, whatever was printed
+    # before it, and a report line that is not a difference is never exceptable.
+    if [[ $rc -gt 1 ]]; then echo "check-golden: compare of $combo crashed (exit $rc)" >&2; bad=1; fi
+    [[ $rc -eq 1 && -z "$report" ]] && bad=1
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
-      excepted "$combo" "${line##* }" || { echo "$line"; bad=1; }
+      case "$line" in
+        MISSING\ * | MISMATCH\ * | STALE-EXPECTED\ *) excepted "$combo" "${line##* }" || { echo "$line"; bad=1; } ;;
+        *) echo "$line"; bad=1 ;;
+      esac
     done <<< "$report"
     if [[ $bad -eq 0 ]]; then ok=$((ok + 1)); echo "OK $combo"; else fail=1; fi
     continue
@@ -312,7 +344,7 @@ for combo in "${COMBOS[@]}"; do
   while IFS= read -r line; do
     want_sha="${line%%  *}"
     path="${line#*  }"
-    got=$(grep -F -- "  $path" "$T/actual-$combo" | awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) { print $1; exit } }')
+    got=$(grep -F -- "  $path" "$T/actual-$combo" | P="$path" awk '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == ENVIRON["P"]) { print $1; exit } }')
     [[ -n "$got" ]] && covered=$((covered + 1))
     excepted "$combo" "$path" && continue
     if [[ -z "$got" && $FROM_TEMPLATES -eq 1 ]]; then continue
@@ -321,7 +353,7 @@ for combo in "${COMBOS[@]}"; do
   done < "$T/want-$combo"
   while IFS= read -r line; do
     path="${line#*  }"
-    awk -v p="$path" '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == p) found=1 } END { exit !found }' "$T/want-$combo" && continue
+    P="$path" awk '{ s=$0; sub(/^[^ ]+  /, "", s); if (s == ENVIRON["P"]) found=1 } END { exit !found }' "$T/want-$combo" && continue
     excepted "$combo" "$path" && continue
     echo "EXTRA $combo $path"; bad=1
   done < "$T/actual-$combo"

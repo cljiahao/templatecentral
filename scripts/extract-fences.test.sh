@@ -101,12 +101,12 @@ for combo in nextjs:github nextjs:azure fastapi:github fastapi:azure nestjs:gith
   check 0 $? "stack $combo exits 0"
   ok_if "stack $combo wrote output" test -s "$T/st-$combo.out"
 done
-# The CI files and the per-stack hooks moved into the template trees; the extractor must not
-# produce them any more (check-golden.sh fails a path produced by both), and the trees must hold them.
+# The CI files and the per-stack hooks live in the template trees; the extractor must not
+# produce them (check-golden.sh fails a path produced by both), and the trees must hold them.
 TPL="$REPO_ROOT/skills/scaffold/shared"
-ok_if "extractor no longer writes ci.yml (github)" test ! -e "$T/st-nextjs:github/.github/workflows/ci.yml"
-ok_if "extractor no longer writes the gates template (azure)" test ! -e "$T/st-nextjs:azure/azure-pipelines/templatecentral-gates.yml"
-ok_if "extractor no longer writes the hooks" test ! -e "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.py" -a ! -e "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.cjs"
+ok_if "extractor yields no ci.yml (github)" test ! -e "$T/st-nextjs:github/.github/workflows/ci.yml"
+ok_if "extractor yields no gates template (azure)" test ! -e "$T/st-nextjs:azure/azure-pipelines/templatecentral-gates.yml"
+ok_if "extractor yields no hooks" test ! -e "$T/st-fastapi:github/.claude/hooks/user-prompt-guard.py" -a ! -e "$T/st-nextjs:github/.claude/hooks/user-prompt-guard.cjs"
 ok_if "github TS template has ci.yml" test -f "$TPL/template-ci/github-ts/.github/workflows/ci.yml"
 ok_if "github template has no azure pipeline" test ! -e "$TPL/template-ci/github-ts/azure-pipelines" -a ! -e "$TPL/template-ci/github-py/azure-pipelines"
 ok_if "azure template has the gates template" test -f "$TPL/template-ci/azure/azure-pipelines/templatecentral-gates.yml"
@@ -268,7 +268,32 @@ python3 "$EXTRACT" --flat --out "$T/flat-py" --src "$REPO_ROOT/skills/scaffold/s
 check "" "$(diff "$T/flat-ts/settings.ts.json" "$T/cov-nextjs:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: ts settings.json"
 check "" "$(diff "$T/flat-py/settings.py.json" "$T/cov-fastapi:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: fastapi settings.json"
 
-# pointer_closes_heading: a line that points at a moved template file ends the heading before it,
+# pointer_contract: only a single line that starts with the backticked path closes a heading
+cat > "$T/ptr2.md" <<MD
+**\`.claude/settings.json\`** — rules heading.
+
+- \`.claude/hooks/x.sh\` is a hook. Step 0 copies it from \`<skill-dir>/shared/template/.claude/hooks/x.sh\`.
+
+${fence}bash
+chmod +x .claude/hooks/*.sh
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/optr2" --src "$T/ptr2.md" > "$T/optr2.out" 2> "$T/optr2.err"
+check "1" "$([[ -f "$T/optr2/settings.json" ]] && echo 1 || echo 0)" "pointer_contract: a pointer inside a bullet does not close the heading, so the next fence is read against it"
+cat > "$T/ptr3.md" <<MD
+**\`.claude/settings.json\`** — rules heading.
+
+\`.claude/hooks/x.sh\` is a hook. Step 0 copies it from
+\`<skill-dir>/shared/template/.claude/hooks/x.sh\`.
+
+${fence}bash
+chmod +x .claude/hooks/*.sh
+${fence}
+MD
+python3 "$EXTRACT" --flat --out "$T/optr3" --src "$T/ptr3.md" > "$T/optr3.out" 2> "$T/optr3.err"
+check "1" "$([[ -f "$T/optr3/settings.json" ]] && echo 1 || echo 0)" "pointer_contract: a pointer split over two lines does not close the heading"
+
+# pointer_closes_heading: a line that points at a template file ends the heading before it,
 # so a later bare fence is not read as that heading's file
 cat > "$T/ptr.md" <<MD
 **\`.claude/settings.json\`** — rules heading with no body here.

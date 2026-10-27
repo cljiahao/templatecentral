@@ -106,6 +106,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - name: Install PyYAML for the yaml checks
+        run: sudo apt-get install -y python3-yaml
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
 
@@ -139,8 +141,15 @@ jobs:
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
-      - name: bash -n over the scaffold template scripts
-        run: find skills -path '*/template*' -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Scaffold template scripts parse and pass shellcheck
+        run: |
+          set -euo pipefail
+          t=skills/scaffold/shared
+          [ "$(find "$t" -path "$t/template*" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no template scripts found"; exit 1; }
+          find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+          find "$t" -path "$t/template*" -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=warning
+          find "$t" -path "$t/template*" -name '*.py' -print0 | xargs -0 -r -n1 python3 -c 'import os, py_compile, sys, tempfile; py_compile.compile(sys.argv[1], cfile=os.path.join(tempfile.mkdtemp(), "x.pyc"), doraise=True)'
+          find "$t" -path "$t/template*" -name '*.cjs' -print0 | xargs -0 -r -n1 node --check
       - name: pre-guard.sh behavioral test
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests
@@ -168,6 +177,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Install PyYAML for the yaml checks
+        run: sudo apt-get install -y python3-yaml
       - name: Each re-pointed lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
 

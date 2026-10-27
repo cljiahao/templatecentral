@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Extract the copy-verbatim fences from the scaffold markdown into a file tree.
 
-A copy-verbatim fence is the first fence after a path heading, written
-**`<path>`** (kit files), ### `<path>` (stack files), or as a prose line that ends in
-a colon and says "Create `<path>`". A heading followed by "Empty file" is a 0-byte file. A line that starts with a backticked path and
-names a `<skill-dir>/shared/template...` file points at a file that was moved out of the markdown:
-it closes the current heading, so the fences after it are not read as that heading's file.
-A "**For TS..." /
-"**For FastAPI..." label before a fence marks a per-stack variant. A shell
-script fence must open with a shebang; anything else after its heading is a
-command to run, not a file.
+A copy-verbatim fence is the first fence after a path heading, written **`<path>`** (kit
+files), ### `<path>` (stack files), or as a prose line that ends in a colon and says
+"Create `<path>`". A heading followed by "Empty file" is a 0-byte file.
+
+A "**For TS..." / "**For FastAPI..." label before a fence marks a per-stack variant. A
+shell script fence must open with a shebang; anything else after its heading is a command to
+run, not a file.
+
+A file that lives in a template tree has no fence. Its markdown entry is one line that starts
+at column 0 with the backticked path and names a `<skill-dir>/shared/template...` file in
+backticks on that same line. That pointer line closes the current heading, so the fences after
+it are not read as that heading's file. A pointer inside a bullet, a blockquote or a table, or
+one split over two lines, does not match and does not close the heading.
 
 Stack mode (the golden tree):
   extract-fences.py --stack {nextjs,vite-react,fastapi,nestjs} --ci {github,azure} --out DIR

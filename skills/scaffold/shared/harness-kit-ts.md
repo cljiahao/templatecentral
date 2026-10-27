@@ -10,7 +10,7 @@ Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-
 
 ## Step A — `.claude/settings.json` (TS stacks (nestjs / nextjs / vite-react))
 
-**`.claude/settings.json`** (substitute runtime from delta table for `user-prompt-guard`):
+**`.claude/settings.json`** (the body below already names the stack's `user-prompt-guard` runtime):
 
 **For TS stacks (nestjs / nextjs / vite-react):**
 ```json
@@ -118,4 +118,4 @@ Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-
 
 `lefthook.yml` TS stacks (nestjs / nextjs / vite-react). Step 0 copies it from `<skill-dir>/shared/template-ts/lefthook.yml`.
 
-> **Re-sync hooks after writing this file:** the `"prepare": "lefthook install || true"` script (Step 4's `pnpm install`) already ran before this file existed, so lefthook wrote a stub config and only `.git/hooks/prepare-commit-msg` is wired. Run `pnpm exec lefthook install` now — otherwise `pre-commit`/`pre-push` never actually fire on a fresh scaffold.
+> **Hook install:** the TS stacks run Step 0 before their first `pnpm install`, so the `"prepare": "lefthook install || true"` script finds `lefthook.yml` and wires `pre-commit`/`pre-push` during that install. Run `pnpm exec lefthook install` only if the install ran before Step 0 (it would then have left a stub config and refused Step 0).

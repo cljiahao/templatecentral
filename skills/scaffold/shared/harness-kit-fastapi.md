@@ -10,7 +10,7 @@ Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): the `settings.json` 
 
 ## Step A — `.claude/settings.json` (FastAPI)
 
-**`.claude/settings.json`** (substitute runtime from delta table for `user-prompt-guard`):
+**`.claude/settings.json`** (the body below already names the stack's `user-prompt-guard` runtime):
 
 **For FastAPI:** identical shape; `UserPromptSubmit` runs `python3` on `user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`:
 ```json
