@@ -9,6 +9,7 @@ on:
     paths:
       - 'skills/**'
       - 'scripts/**'
+      - 'tests/**'
       - 'adapters/**'
       - '.claude-plugin/**'
       - 'README.md'
@@ -24,6 +25,7 @@ on:
     paths:
       - 'skills/**'
       - 'scripts/**'
+      - 'tests/**'
       - 'adapters/**'
       - '.claude-plugin/**'
       - 'README.md'

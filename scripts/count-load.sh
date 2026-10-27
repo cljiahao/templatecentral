@@ -87,6 +87,8 @@ def walk(read, stack):
 
 def measure(ref):
     read = reader(ref)
+    if read("skills/scaffold/SKILL.md") is None:
+        print(f"count-load: skills/scaffold/SKILL.md not found at {ref or 'the working tree'}; totals are zero", file=sys.stderr)
     out = {}
     for stack in STACKS:
         scaffold, utilities = walk(read, stack)

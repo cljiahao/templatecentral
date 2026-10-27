@@ -72,7 +72,8 @@ jobs:
           prompt: |
             Follow skills/scaffold/${{ matrix.stack }}/config-files.md and source-files.md to
             scaffold a brand-new project into /tmp/scaffold-e2e EXACTLY as written - no
-            improvisation, no silently fixing template bugs. Then run that stack's quality
+            improvisation, use GitHub Actions CI (seed .github/workflows/ci.yml, not the Azure
+            pipeline), no silently fixing template bugs. Then run that stack's quality
             gates (TS stacks: pnpm install, pnpm check or lint+typecheck, pnpm build, pnpm
             test or test:ci; FastAPI: pip install -r requirements.txt, ruff check src/,
             python -m pyright src/, python -m pytest). If every gate passes and you made no

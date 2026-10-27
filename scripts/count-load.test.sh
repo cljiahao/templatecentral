@@ -47,5 +47,11 @@ bash "$COUNT" > /dev/null 2>&1; check 0 $? "exit code is 0"
 out=$(bash "$COUNT" --base v6.1.2 2>/dev/null)
 case "$out" in *"delta vs v6.1.2"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: --base adds delta column" ;; esac
 
+# a --base ref without a scaffold skill warns on stderr and still exits 0
+first=$(git -C "$REPO_ROOT" rev-list --max-parents=0 HEAD | head -1)
+warn=$(bash "$COUNT" --base "$first" 2>&1 >/dev/null); ec=$?
+check 0 "$ec" "base_without_skill: exit code is 0"
+case "$warn" in *"SKILL.md not found"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: base_without_skill warns [$warn]" ;; esac
+
 echo "count-load.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
