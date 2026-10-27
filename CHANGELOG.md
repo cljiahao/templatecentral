@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Deterministic scaffold eval harness. `scripts/extract-fences.py` extracts every copy-verbatim fence
+  from the scaffold markdown; `scripts/check-golden.sh` compares that output for all eight
+  stack × CI combinations with the sha256 manifests in `tests/golden/`;
+  `scripts/count-load.sh` reports the tokens one scaffold run loads, with a delta against any git ref.
+  All three run in `validate-skills.yml`; the token count is informational.
+- `scaffold-verify.yml` now runs `.claude/verify-harness.sh` and a golden-tree diff on the generated
+  project, so its pass signal no longer rests on the agent's own report.
+
+### Changed
+- `scripts/test-harness-kit.sh` extracts hook scripts with `scripts/extract-fences.py`.
+- FUTURE.md roadmap §1 (phase-splitting) is marked superseded.
+
 ---
 
 ## [6.2.0] — 2026-10-27

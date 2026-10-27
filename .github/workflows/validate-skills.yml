@@ -138,6 +138,34 @@ jobs:
         run: bash scripts/test-harness-kit.sh
       - name: Research content guard tests
         run: bash scripts/check-research-content.test.sh
+      - name: Fence extractor tests
+        run: bash scripts/extract-fences.test.sh
+      - name: Golden scaffold tree tests
+        run: bash scripts/check-golden.test.sh
+      - name: Golden scaffold tree check
+        run: bash scripts/check-golden.sh
+      - name: Token counter tests
+        run: bash scripts/count-load.test.sh
+
+  token-count:
+    name: Scaffold load size
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Count tokens against origin/main
+        continue-on-error: true
+        run: |
+          {
+            echo '## Scaffold load vs origin/main'
+            echo '```'
+            bash scripts/count-load.sh --base origin/main
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   opencode-adapter-tests:
     name: OpenCode adapter hook tests

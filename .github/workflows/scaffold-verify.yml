@@ -88,6 +88,13 @@ jobs:
             cat /tmp/scaffold-e2e-report.md 2>/dev/null || echo "(agent produced no report)"
             exit 1
           fi
+      - name: Verify harness integrity
+        if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
+        working-directory: /tmp/scaffold-e2e
+        run: bash .claude/verify-harness.sh
+      - name: Diff generated tree against the golden scaffold
+        if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
+        run: bash scripts/check-golden.sh --tree /tmp/scaffold-e2e "${{ matrix.stack }}-github"
       - name: Open issue on failure
         if: failure() && steps.creds.outputs.ok == 'true' 
         env:

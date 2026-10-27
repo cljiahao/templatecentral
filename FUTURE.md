@@ -35,9 +35,11 @@ Promote the post-harness seams in scaffolded projects from documentation stubs t
 
 ## Roadmap
 
-### 1. Scaffold source-files phase-splits
+### 1. Scaffold source-files phase-splits — superseded
 
-Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. (The shared harness kit has been split into per-concern `scaffold/shared/harness-kit-*.md` files; the per-stack `source-files.md` files have not.)
+Superseded by the 7.0.0 template plan: copy-verbatim code moves out of the markdown into `template/` files that the scaffold copies, which removes the bulk that phase-splitting would only have deferred.
+
+Original proposal: Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. (The shared harness kit has been split into per-concern `scaffold/shared/harness-kit-*.md` files; the per-stack `source-files.md` files have not.)
 
 ### 2. New `templatecentral:add` capabilities under evaluation
 
