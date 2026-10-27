@@ -271,7 +271,7 @@ fi
 mkdir -p "$T/g10/.claude"; printf 'mine\n' > "$T/g10/.claude/own.txt"
 out=$(run_step0 "$T/g10" ts); check 0 "$?" "copy_allows_existing_directory_with_other_files ($out)"
 check mine "$(cat "$T/g10/.claude/own.txt")" "copy_allows_existing_directory_with_other_files: own file kept"
-# ── round 3: hostile paths, unsubstituted values, stop line, odd trees ────────
+# ── hostile paths, unsubstituted values, stop line, odd trees ─────────────────
 STOPLINE="STOP: do not rm or overwrite anything; report this to the user"
 mkdir -p "$T/h"
 hostile_ok() { # hostile_ok <dir name> — Step 0 must copy into the literal path and run nothing
@@ -365,7 +365,7 @@ PY
 )
 check "$want" "$(cd "$tgt" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)" "seed_neither: tree equals the 6.x seed-neither file set"
 
-# ── round 4: write only the listed paths, derive trees from STACK and CI ───────
+# ── write only the listed paths, derive trees from STACK and CI ───────────────
 modeof() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 # stack_check <stack> <ci> <guard file> <other guard file> — the right hook variant and CI file arrive
 for sc in nestjs:cjs nextjs:cjs vite-react:cjs fastapi:py; do
@@ -483,7 +483,7 @@ sk=$(alt_skill dsstore); printf 'x\n' > "$sk/shared/template/.DS_Store"; mkdir -
 saved=$SK; SK=$sk; out=$(bash -c "$(render "$STEP0" "$T/ds" "template template-ts")" 2>&1); SK=$saved
 check 1 "$([[ "$out" == *".DS_Store"* ]] && echo 1 || echo 0)" "mismatch_refusal_names_the_file ($out)"
 
-# ── round 5: seed-neither symlinks, pre-checks, PART, hostile-name matrix ─────
+# ── seed-neither symlinks, pre-checks, PART, hostile-name matrix ──────────────
 refuses_dir() { # refuses_dir <name> <snippet text> <message substring> <dir that must stay empty of new files>
   refuses_raw "$1" "$2" "$3"
 }
@@ -586,7 +586,7 @@ for name in '-dash' '~'; do
   done
 done
 
-# ── round 5, part 2: the shipped STACK line is empty, and Step B3 must match Step 0 ──
+# ── shipped STACK line is empty, and Step B3 must match Step 0 ────────────────
 raw_render() { # raw_render <snippet text> <target> — substitute only <skill-dir> and <target>; STACK, CI and PART stay as shipped
   printf '%s\n' "$1" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]).replace("<target>", sys.argv[2]))' "$SK" "$2"
 }
@@ -607,7 +607,7 @@ mkdir -p "$T/mis2"
 refuses_raw ci_without_step0_refused "$(render_sc "$CI_SNIPPET" "$T/mis2" nextjs github)" "does not match"
 check 0 "$(find "$T/mis2" -type f | wc -l | tr -d ' ')" "ci_without_step0_refused: nothing written"
 
-# ── round 6: searchable directories, rm and mkdir failures, relative targets, manifest message ──
+# ── searchable directories, rm and mkdir failures, relative targets, manifest message ──
 if [[ "$(id -u)" != 0 ]]; then
   # a directory that is writable but not searchable is refused before any write
   for pair in ".lefthook:0666" ".claude:0600"; do

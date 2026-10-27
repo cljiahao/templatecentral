@@ -285,11 +285,15 @@ PY
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
 
 # the B3 copy fence and the seed-neither fence are scaffold-only; the migrate docs and Step B3 say so
-for doc in "migrate/general/phase-4-upgrade.md" "migrate/general/phase-5-health-check.md" "scaffold/shared/harness-kit-enforcement.md"; do
+for entry in "migrate/general/phase-4-upgrade.md|copy fence and the seed-neither fence are scaffold-only" "migrate/general/phase-5-health-check.md|copy fence and seed-neither fence are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|and the seed-neither fence below are scaffold-only"; do
+  doc=${entry%%|*}; phrase=${entry#*|}
   fn="no_scaffold_only_$(echo "$doc" | tr -c 'a-z0-9\n' '_')"
-  eval "$fn() { strip_token 'scaffold-only' 'zz-gone' \"\$S/$doc\"; }"
+  eval "$fn() { strip_token '$phrase' 'zz-gone' \"\$S/$doc\"; }"
   fails "migrate_inventory_fails_when_scaffold_only_note_deleted[$doc]" "migrate hook inventory matches" "$fn" "$doc — missing the scaffold-only note"
 done
+# deleting only the note in phase-4 fails even though its Step B3 bullet still says "scaffold-only"
+grep -q 'per the scaffold-only note above' skills/migrate/general/phase-4-upgrade.md || { FAIL=$((FAIL + 1)); echo "FAIL: phase-4 no longer repeats the scaffold-only token, so the test below proves nothing"; }
+fails migrate_inventory_fails_when_only_the_phase4_note_is_deleted "migrate hook inventory matches" no_scaffold_only_migrate_general_phase_4_upgrade_md "phase-4-upgrade.md — missing the scaffold-only note"
 fastapi_step0_outside_6b() { python3 - "$S/scaffold/fastapi/source-files.md" <<'PY'
 import sys
 p = sys.argv[1]

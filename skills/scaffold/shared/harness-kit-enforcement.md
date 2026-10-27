@@ -64,10 +64,7 @@ The first 10 lines are the anchored change-narration keyword patterns (each spel
 
 Add `.claude/skill-usage.log` to the project `.gitignore` — it is per-developer telemetry, not shared state.
 
-Make all hook scripts executable:
-```bash
-chmod +x .claude/hooks/*.sh
-```
+The hook scripts are already executable: the copy sets each file's mode from `template.manifest`, so no `chmod` is needed.
 
 ---
 
@@ -88,10 +85,7 @@ The `.claude/hooks/*` above are **Claude-Code** hooks (they guard the agent). Th
 - **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
 - **gitleaks** is a system binary, not a package dependency. The pre-commit command (`gitleaks git --pre-commit --staged` — the v8.19+ form; `gitleaks protect`/`detect` are deprecated) skips only when it is absent (CI is the hard gate) and fails the commit on a finding when present; document `brew install gitleaks` / the release binary in the README. A reviewed false positive goes in `.gitleaksignore` (one finding fingerprint per line) or the `[[allowlists]]` table above — never a real secret.
 
-Then create the lefthook commit-msg script executable:
-```bash
-chmod +x .lefthook/commit-msg.sh
-```
+`.lefthook/commit-msg.sh` is already executable from the copy, as are `.claude/verify-harness.sh` and `.claude/regen-harness.sh`.
 
 ---
 
@@ -272,9 +266,6 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 
 `.claude/regen-harness.sh` (HUMAN-RUN ONLY — re-blesses the baseline). Step 0 copies it from `<skill-dir>/shared/template/.claude/regen-harness.sh`.
 
-```bash
-chmod +x .claude/verify-harness.sh .claude/regen-harness.sh
-```
 
 **Wiring (already present in the copied files; verify, do not add):**
 - **CI** — the `quality` job of `.github/workflows/ci.yml` and the Azure steps template each run `bash .claude/verify-harness.sh` (the hard gate — drift fails the PR).

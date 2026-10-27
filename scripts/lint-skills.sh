@@ -576,8 +576,16 @@ check_migrate_hook_inventory_matches_kit() {
   done
   # The Step B3 copy fence and the seed-neither fence assume Step 0 ran, so each doc that describes
   # them states that they are scaffold-only and that a migration copies the CI file by hand.
-  for doc in "$migrate" "$SKILLS_DIR/migrate/general/phase-5-health-check.md" "$kit_dir/harness-kit-enforcement.md"; do
-    grep -qF -- 'scaffold-only' "$doc" 2>/dev/null || missing+="$doc — missing the scaffold-only note"$'\n'
+  # Each anchor is a phrase that appears once in its file, so a later mention of the same word cannot
+  # stand in for the note.
+  local note_docs=(
+    "$migrate|copy fence and the seed-neither fence are scaffold-only"
+    "$SKILLS_DIR/migrate/general/phase-5-health-check.md|copy fence and seed-neither fence are scaffold-only"
+    "$kit_dir/harness-kit-enforcement.md|and the seed-neither fence below are scaffold-only"
+  )
+  local entry
+  for entry in "${note_docs[@]}"; do
+    grep -qF -- "${entry#*|}" "${entry%%|*}" 2>/dev/null || missing+="${entry%%|*} — missing the scaffold-only note"$'\n'
   done
   report "$missing" \
     "migrate's hook/file inventory has drifted from the template trees — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
