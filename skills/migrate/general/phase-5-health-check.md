@@ -54,6 +54,12 @@ If all files are `UNCHANGED` **and** `templatecentral_version` equals the curren
 ✓ All harness files match their templateCentral origin and are up to date. No action needed.
 ```
 
+If `CLAUDE.md` exists and no line is exactly `@AGENTS.md`, print a warning (report only; Step 5d may add the line on approval):
+```
+⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
+  Append `@AGENTS.md` to CLAUDE.md.
+```
+
 If any file is `MISSING`, print a warning:
 ```
 ⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.

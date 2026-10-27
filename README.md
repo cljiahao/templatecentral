@@ -37,7 +37,7 @@ templatecentral closes each of these, in every project it scaffolds or adopts.
 | 5 | **Commit and push** (git hooks) | Commit-message format and pre-commit checks; pre-push re-checks the harness hashes |
 | 6 | **Pull request** (CI gates) | Secret scan, dependency audit, harness integrity — no label bypass |
 
-Across all six, **context recovery** (`SessionStart`) re-injects `AGENTS.md` routing and `docs/CONSTITUTION.md` on start, resume, clear and compact, so the rules survive long sessions. Checkpoints 5 and 6 run in git and CI, so they still hold when someone works without the agent.
+Across all six, **context recovery** (`SessionStart`) re-injects `docs/CONSTITUTION.md` and the universal invariants on start, resume, clear and compact, so the rules survive long sessions. `AGENTS.md` arrives through the `@AGENTS.md` import in `CLAUDE.md`. Checkpoints 5 and 6 run in git and CI, so they still hold when someone works without the agent.
 
 ---
 
