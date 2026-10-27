@@ -414,8 +414,25 @@ case "$gate" in
     trap 'rm -rf "$tmp"' EXIT   # fail() exits, so this also covers every failure path
     need() { command -v "$1" >/dev/null 2>&1 || fail "$1 not found — install it before the deps gate"; }
     # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected outright.
+    # package.json is parsed (any JSON layout, a parse failure fails closed); the YAML files and .npmrc are
+    # matched by text. Not detected: the YAML complex-key form (`? audit`), which pnpm does not document.
+    if [ -f package.json ]; then
+      need node
+      rc=0
+      node -e '
+        let pkg;
+        try { pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch (e) { process.exit(2); }
+        const walk = (v) => v !== null && typeof v === "object" &&
+          Object.entries(v).some(([k, x]) => k === "ignoreGhsas" || k === "ignoreCves" || walk(x));
+        const pnpm = pkg && typeof pkg === "object" ? pkg.pnpm : undefined;
+        const native = pnpm !== null && typeof pnpm === "object" && ("audit" in pnpm || "auditConfig" in pnpm);
+        process.exit(native || walk(pkg) ? 1 : 0);
+      ' package.json || rc=$?
+      [ "$rc" -ne 2 ] || fail "package.json is not valid JSON — the deps gate cannot check it for advisory suppressions"
+      [ "$rc" -eq 0 ] || fail "advisory suppressions belong in $allow, not package.json"
+    fi
     q="[\"']"   # an optionally quoted key: audit, "audit" or 'audit'
-    for f in pnpm-workspace.yaml package.json .npmrc; do
+    for f in pnpm-workspace.yaml .npmrc; do
       [ -f "$f" ] || continue
       # Flow style (audit: { ignore: [...] }) and block style are both caught; any `ignore` under an audit key fails closed.
       if grep -qE "auditConfig|ignoreGhsas|ignoreCves|(^|[^[:alnum:]_.-])${q}?audit${q}?[[:space:]]*:[[:space:]]*\\{" "$f" \

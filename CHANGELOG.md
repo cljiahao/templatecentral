@@ -18,6 +18,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   mapping, and treats any `ignore` under an `audit` key as a suppression. Its final failure
   message now says only audited advisories can be allowlisted and that unaudited packages need
   the missing audit tool installed (or the package made auditable or removed).
+- The `deps` gate parses `package.json` instead of matching text, so `pnpm.audit`, `pnpm.auditConfig`
+  and any `ignoreGhsas` / `ignoreCves` key are rejected however the file is laid out; invalid JSON
+  fails the gate. Known limitation: the YAML complex-key form (`? audit`) in `pnpm-workspace.yaml`
+  is not detected.
 - NestJS `RolesGuard` denies a user whose `roles` list holds a non-string entry; a unit test covers it.
 - Next.js `hasRole` documents that callers check for a null session first, because the false branch
   also covers a missing session. The seeded `AGENTS.md` notes and `.claude/rules/nextjs.md` list
@@ -25,15 +29,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - The auth skills state the ownership-check rule once (in Rules) instead of twice.
 
 ### Changed
-- The ecosystem-refresh publish job also checks the research file's content: valid UTF-8, the
-  `last-scanned` frontmatter, and no HTML comments, script-like tags or invisible characters. The
+- The ecosystem-refresh publish job also checks the research file's content with
+  `scripts/check-research-content.py` (tests: `scripts/check-research-content.test.sh`, run in CI): valid
+  UTF-8, the `last-scanned` frontmatter, no invisible or bidirectional control characters (zero-width,
+  bidi, tag block, BOM, soft hyphen), no HTML comments, raw HTML tags or markdown link-reference
+  comments outside code spans. A guard crash fails the step instead of reading as clean. The
   workflow stays disabled; the maintainer refreshes manually.
 - `tc-audit` floors refreshed (Starlette current stable 1.10.0, floor of record stays in
   `.claude/rules/fastapi.md`; `@nestjs/platform-fastify` checks follow the Nest 12 floor, current
   stable 12.2.0), the 200-line reference-file check exempts the per-stack `source-files.md`
   files (FUTURE.md roadmap item 1), and two checklist items cover the deps gate and the authz seeds.
-- `scripts/lint-skills.sh` gains `check_security_seeds_present`: the deps gate (GitHub and Azure) and
-  the deny-by-default authz helpers must stay in the shipped skill files.
+- `scripts/lint-skills.sh` gains `check_security_seeds_present`: the GitHub and Azure `deps` pipeline
+  steps and the deny-by-default authz definitions must stay in the shipped skill files.
 - `FUTURE.md` marks the NestJS `strict` item done and Automated Ecosystem Refresh as shipped and
   disabled.
 

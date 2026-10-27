@@ -321,7 +321,7 @@ Read each file in full, apply checklist above:
 - [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
 - [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
 - [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
-- [ ] `@nestjs/platform-fastify` floor matches `.claude/rules/nestjs.md` (≥12.0.2 on Nest 12; ≥11.2.4 on the 11 line) — path-scoped and trailing-slash middleware bypass advisories (e.g. GHSA-6v32-fjc9-9qf6, fixed ≥11.1.24) are High severity; current stable is 12.2.0. Flag any project whose range can resolve below the floor.
+- [ ] `@nestjs/platform-fastify` floor matches `.claude/rules/nestjs.md`, the floor of record: the `@nestjs/*` core family is ≥12.1.2 on Nest 12 (≥11.2.4 on the 11 line). The path-scoped middleware bypass GHSA-9c5c-9qcx-q35q (High) is fixed in 12.0.2 / 11.2.4, so 12.0.2 is the advisory minimum, not the floor; current stable is 12.2.0. Flag any project whose range can resolve below the floor.
 
 ---
 
