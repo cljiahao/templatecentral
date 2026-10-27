@@ -21,8 +21,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - The `deps` gate parses `package.json` instead of matching text, so `pnpm.audit`, `pnpm.auditConfig`
   and any `ignoreGhsas` / `ignoreCves` key are rejected however the file is laid out; invalid JSON
   fails the gate, a leading BOM is ignored, and a `package.json5` or `package.yaml` fails closed as an
-  unsupported pnpm manifest format. Known limitation: the YAML complex-key form (`? audit`) in
-  `pnpm-workspace.yaml` is not detected.
+  unsupported pnpm manifest format. Only the root manifest is checked (workspace packages are not).
+  Known limitation: the YAML complex-key form (`? audit`) in `pnpm-workspace.yaml` is not detected.
 - NestJS `RolesGuard` denies a user whose `roles` list holds a non-string entry; a unit test covers it.
 - Next.js `hasRole` documents that callers check for a null session first, because the false branch
   also covers a missing session. The seeded `AGENTS.md` notes and `.claude/rules/nextjs.md` list
@@ -30,16 +30,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - The auth skills state the ownership-check rule once (in Rules) instead of twice.
 
 ### Changed
-- The ecosystem-refresh publish job also checks the research file's content with
-  `scripts/check-research-content.py` (tests: `scripts/check-research-content.test.sh`, run in CI). It
-  rejects invalid UTF-8; any character in Unicode categories Cc (except newline, tab and CRLF), Cf, Co, Cn,
-  Zl or Zp; a fixed list of other blank-rendering or invisible characters (variation selectors, Hangul
-  fillers, U+034F, U+17B4/17B5, Mongolian free variation selectors, U+2800, interlinear annotation); any
-  `<` followed by a letter, `/`, `!` or `?`, including inside code spans; any markdown link-reference
-  definition line; and `javascript:`. It checks the file's characters and markup only, not whether the
-  prose is accurate or free of plain-text instructions. A guard crash fails the step instead of reading
-  as clean. Research placeholders are written `{name}`, not `<name>`. The workflow stays disabled; the
-  maintainer refreshes manually.
+- The ecosystem-refresh publish job also checks the research file's content (workflow step: UTF-8 and the
+  `last-scanned` frontmatter; `scripts/check-research-content.py`, tests in
+  `scripts/check-research-content.test.sh` run in CI: everything below). The cache is plain prose and
+  bullet lists, so the guard bans whole constructs: any `<` followed by a letter, `/`, `!` or `?`;
+  `](` (links and images), `]:` (reference definitions, however nested or split), `![`; fence lines
+  (three backticks or `~~~`); lines indented four or more spaces or by a tab; and lines over 1,500
+  characters. It also rejects characters that do not render as visible text: categories Cc (so any
+  carriage return, CRLF included), Cf, Co, Zl, Zp; every space separator except U+0020; U+FFFC;
+  noncharacters; the tag block; variation selectors (U+FE0E and U+FE0F only after a symbol or keycap
+  base); Hangul fillers, U+034F, U+17B4/17B5, Mongolian free variation selectors, U+2800 and
+  interlinear annotation characters; and runs of three or more combining marks. Unassigned code points
+  are allowed. The guard does not judge plain-text instructions; human PR review does. A guard crash
+  fails the step instead of reading as clean. Research placeholders are written `{name}`, not
+  `<name>`. The workflow stays disabled; the maintainer refreshes manually.
 - `tc-audit` floors refreshed (Starlette current stable 1.10.0, floor of record stays in
   `.claude/rules/fastapi.md`; `@nestjs/platform-fastify` checks follow the Nest 12 floor, current
   stable 12.2.0), the 200-line reference-file check exempts the per-stack `source-files.md`
