@@ -84,7 +84,7 @@ The `.claude/hooks/*` above are **Claude-Code** hooks (they guard the agent). Th
 `.gitleaks.toml` (identical across stacks — extends the built-in ruleset; allowlist is for FALSE POSITIVES only, never real secrets). Step 0 copies it from `<skill-dir>/shared/template/.gitleaks.toml`.
 
 **Install wiring:**
-- **TS stacks** — add `lefthook` to `devDependencies` and a `"prepare": "lefthook install || true"` script to `package.json` (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone; the `|| true` keeps Docker builds — which exclude `.git` via `.dockerignore` — from failing, since `lefthook install` hard-errors when no `.git` is present and has no built-in graceful skip). Freshen the `lefthook` pin with the review utility.
+- **TS stacks** — verify that `package.json` (written by the stack's config-files step) lists `lefthook` in `devDependencies` and has the `"prepare": "lefthook install || true"` script, and add whichever is missing (the `prepare` script runs after every `pnpm install`, so hooks self-install on clone; the `|| true` keeps Docker builds — which exclude `.git` via `.dockerignore` — from failing, since `lefthook install` hard-errors when no `.git` is present and has no built-in graceful skip). Freshen the `lefthook` pin with the review utility.
 - **FastAPI** — add `lefthook` to `requirements-dev.txt` (it is an official PyPI package — `pip install lefthook` installs the Go binary, no Node needed) and run `lefthook install` once after install; document it in the README setup steps. *(Verified: `pip install lefthook` → 2.x, `lefthook validate` passes, hooks fire.)*
 - **gitleaks** is a system binary, not a package dependency. The pre-commit command (`gitleaks git --pre-commit --staged` — the v8.19+ form; `gitleaks protect`/`detect` are deprecated) skips only when it is absent (CI is the hard gate) and fails the commit on a finding when present; document `brew install gitleaks` / the release binary in the README. A reviewed false positive goes in `.gitleaksignore` (one finding fingerprint per line) or the `[[allowlists]]` table above — never a real secret.
 
@@ -105,11 +105,13 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 
 **Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Edit only the `SEL` line: `template-ci/github-ts` (GitHub, nestjs / nextjs / vite-react), `template-ci/github-py` (GitHub, fastapi) or `template-ci/azure` (Azure DevOps, every stack). The guard is the one from `harness-kit.md` Step 0 (same path rules, same refusals, same `STOP:` line).
+Copy the CI file for the picked host. Edit only the `STACK=` line (the stack's own value, as in Step 0) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0.
 
 ```bash
 bash <<'TC_GUARD'
-SEL="template-ci/github-ts"
+STACK=nextjs
+CI=github
+PART=ci
 WHAT="seed CI"
 NL='
 '
@@ -122,56 +124,92 @@ IFS= read -r -d '' TGT <<'TC_PATH'
 TC_PATH
 TGT=${TGT%"$NL"}
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
-case "$SK" in ''|*'<skill'*) stop "the skill directory path is empty or was not substituted" ;; esac
-case "$TGT" in ''|*'<target'*) stop "the target path is empty or was not substituted" ;; esac
-case "$SK$TGT" in *"$NL"*) stop "a path contains a newline" ;; esac
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
+case "$STACK" in
+  nestjs|nextjs|vite-react) V=ts ;;
+  fastapi) V=py ;;
+  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
+esac
+case "$PART" in
+  base)
+    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
+    SEL="template template-$V" ;;
+  ci)
+    case "$CI" in
+      github) SEL="template-ci/github-$V" ;;
+      azure) SEL="template-ci/azure" ;;
+      *) stop "unknown CI '$CI' (want github or azure)" ;;
+    esac ;;
+  *) stop "unknown PART '$PART'" ;;
+esac
 for t in $SEL; do
   [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
   [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
 done
 [ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
-listed=$(awk -v sel="$SEL" '
+plan=$(awk -v sel="$SEL" '
   BEGIN { n = split(sel, s, " ") }
   /^#/ || NF == 0 { next }
-  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
-' "$SK/template.manifest" | LC_ALL=C sort)
+  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $2 "\t" s[i] "\t" substr($1, length(s[i]) + 2); next } }
+' "$SK/template.manifest")
+listed=$(printf '%s\n' "$plan" | cut -f3 | LC_ALL=C sort)
 found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
-[ -n "$listed" ] && [ "$listed" = "$found" ] || stop "template.manifest and the template trees ($SEL) do not list the same files"
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
+  stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
+fi
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
-  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
-done)
-links=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
   d=$p
   while [ "${d%/*}" != "$d" ]; do
     d=${d%/*}
-    if [ -L "$TGT/$d" ]; then echo "$d"; fi
+    if [ -L "$TGT/$d" ]; then echo "$d (symlink)"; elif [ -e "$TGT/$d" ] && [ ! -d "$TGT/$d" ]; then echo "$d (not a directory)"; fi
   done
 done | LC_ALL=C sort -u)
-[ -z "$clash$links" ] || stop "these paths already exist or are symlinks in $TGT:$NL$clash$NL$links"
-for t in $SEL; do
-  cp -Rp "$SK/$t/." "$TGT/" || stop "cp failed for $t; files may be partly written in $TGT"
-  chmod u+w "$TGT"
-  (cd "$SK/$t" && find . -mindepth 1 -maxdepth 1) | while IFS= read -r d; do
-    chmod -R u+w "$TGT/${d#./}"
-  done
-done
+[ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+TAB=$(printf '\t')
+copied=""
+while IFS="$TAB" read -r mode t p; do
+  d=${p%/*}
+  if [ "$d" != "$p" ]; then
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; files may be partly written in $TGT.${NL}Files already written:$copied"
+  fi
+  cp -- "$SK/$t/$p" "$TGT/$p" && chmod -- "$mode" "$TGT/$p" || stop "copy failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+  copied="$copied$NL$p"
+done <<TC_PLAN
+$plan
+TC_PLAN
 TC_GUARD
 ```
 
-When the paragraph above says to seed neither CI file, copy nothing and delete the one file Step 0 already placed for this decision, so the project holds exactly what a seed-neither scaffold always held:
+When the paragraph above says to seed neither CI file, copy nothing and delete the one file Step 0 already placed for this decision, so the project holds exactly what a seed-neither scaffold always held. The script deletes `.claude/ci-gates.sh` only when it is byte for byte the template's copy, and refuses otherwise:
 
 ```bash
 bash <<'TC_RM'
+WHAT="seed CI"
 NL='
 '
+IFS= read -r -d '' SK <<'TC_PATH'
+<skill-dir>/shared
+TC_PATH
+SK=${SK%"$NL"}
 IFS= read -r -d '' TGT <<'TC_PATH'
 <target>
 TC_PATH
 TGT=${TGT%"$NL"}
-[ -d "$TGT" ] || { echo "STOP: $TGT is not an existing directory; report this to the user."; exit 1; }
-rm -f -- "$TGT/.claude/ci-gates.sh"
+stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
+[ -d "$SK" ] || stop "$SK is not a directory"
+[ -d "$TGT" ] || stop "$TGT is not an existing directory"
+gate=.claude/ci-gates.sh
+[ -e "$TGT/$gate" ] || { echo "Nothing to remove: $TGT/$gate does not exist."; exit 0; }
+cmp -s -- "$SK/template/$gate" "$TGT/$gate" || stop "$TGT/$gate differs from the template, so it is not the file Step 0 placed"
+rm -f -- "$TGT/$gate"
 TC_RM
 ```
 

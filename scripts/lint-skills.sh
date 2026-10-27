@@ -447,7 +447,7 @@ check_scaffold_seeds_complete_harness() {
     "template-ts/.claude/hooks/stop-checks.sh|stop_hook_active" "template-py/.claude/hooks/stop-checks.sh|stop_hook_active"
     "template-ts/.claude/hooks/subagent-stop.sh|stop_hook_active" "template-py/.claude/hooks/subagent-stop.sh|stop_hook_active"
     "template-ts/.claude/hooks/block-no-verify.sh|--no-verify" "template-py/.claude/hooks/block-no-verify.sh|--no-verify"
-    "template-ts/.claude/hooks/protect-files.sh|node" "template-py/.claude/hooks/protect-files.sh|python3"
+    "template-ts/.claude/hooks/protect-files.sh|node -e" "template-py/.claude/hooks/protect-files.sh|python3 -c"
     "template/.claude/hooks/session-context.sh|CONSTITUTION"
   )
   local missing="" tok f kf all_kit="" v other tdir hay p
@@ -480,14 +480,16 @@ check_scaffold_seeds_complete_harness() {
   # The copy instruction is anchored on its own lines (the SEL line and the cp loop), so prose that
   # merely names the trees cannot satisfy it.
   # shellcheck disable=SC2016  # the anchor is literal text, not an expansion
-  local cp_line='cp -Rp "$SK/$t/." "$TGT/"'
+  local cp_line='cp -- "$SK/$t/$p" "$TGT/$p"'
+  # shellcheck disable=SC2016  # the anchors are literal text, not expansions
   if [[ -f "$kit_dir/harness-kit.md" ]]; then
-    for tok in "$cp_line" 'SEL="template template-ts"' 'template template-py' '<skill-dir>/shared'; do
+    for tok in "$cp_line" 'PART=base' 'SEL="template template-$V"' 'template-py' '<skill-dir>/shared'; do
       grep -qF -- "$tok" "$kit_dir/harness-kit.md" || missing+="$kit_dir/harness-kit.md — Step 0 copy instruction missing: $tok"$'\n'
     done
   fi
+  # shellcheck disable=SC2016  # the anchors are literal text, not expansions
   if [[ -f "$kit_dir/harness-kit-enforcement.md" ]]; then
-    for tok in "$cp_line" 'SEL="template-ci/github-ts"' 'template-ci/github-py' 'template-ci/azure'; do
+    for tok in "$cp_line" 'PART=ci' 'SEL="template-ci/github-$V"' 'SEL="template-ci/azure"'; do
       grep -qF -- "$tok" "$kit_dir/harness-kit-enforcement.md" || missing+="$kit_dir/harness-kit-enforcement.md — Step B3 CI copy instruction missing: $tok"$'\n'
     done
   fi
@@ -567,7 +569,7 @@ check_migrate_hook_inventory_matches_kit() {
     missing+="migrate does not mention .claude/comment-hygiene-patterns.txt"$'\n'
   report "$missing" \
     "migrate's hook/file inventory has drifted from the template trees — update skills/migrate/general/phase-4-upgrade.md Step 4d" \
-    "migrate's hook inventory covers every hook + file in the harness kit template trees"
+    "migrate's phase-4 names every hook file in the template trees' .claude/hooks/ and the .claude/comment-hygiene-patterns.txt path"
 }
 
 check_duplicated_iam_blocks_match() {
@@ -753,8 +755,8 @@ for dp, _, fs in os.walk(root):
 # The copy instructions must exist and name every template tree, so a deleted instruction is not
 # mistaken for "no broken references".
 need = {
-    "scaffold/shared/harness-kit.md": ['cp -Rp "$SK/$t/." "$TGT/"', 'SEL="template template-ts"', "template template-py", "<skill-dir>/shared"],
-    "scaffold/shared/harness-kit-enforcement.md": ['cp -Rp "$SK/$t/." "$TGT/"', 'SEL="template-ci/github-ts"', "template-ci/github-py", "template-ci/azure"],
+    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', "<skill-dir>/shared"],
+    "scaffold/shared/harness-kit-enforcement.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=ci", 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"'],
 }
 for rel, toks in need.items():
     try: t = open(os.path.join(root, rel), encoding='utf-8').read()
@@ -1184,6 +1186,8 @@ for p in sorted(actual):
         print(f"{manifest}: {p} is in the tree but not listed")
     elif listed[p] != actual[p]:
         print(f"{manifest}: {p} is mode {actual[p]} but listed as {listed[p]}")
+    elif p.endswith(".sh") and listed[p] != "755":
+        print(f"{manifest}: {p} is a script and must be mode 755, not {listed[p]}")
 for p in sorted(listed):
     if p not in actual:
         print(f"{manifest}: lists {p}, which is not in the tree")
@@ -1197,12 +1201,18 @@ PY
 check_step0_before_install() {
   # Step 0 copies lefthook.yml. A `pnpm install` (whose prepare script runs `lefthook install`) or a
   # `lefthook install` that runs first writes a stub lefthook.yml, and Step 0's guard then refuses the
-  # scaffold. So in every scaffold stack file the first install must come after the Step 0 line, and
-  # a stack file with no Step 0 line fails. TIMELESS: the order is a property of the guard.
+  # scaffold. So in the TS stack files the first install must come after the Step 0 line. FastAPI has
+  # no install that writes a lefthook config (its `lefthook install` is a later Step B2 note), so for it
+  # the check only requires the Step 0 line. Every stack file must name its own STACK value, because
+  # the Step 0 and Step B3 fences derive the template trees from it. TIMELESS: the order is a property
+  # of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst
-  for f in "$SKILLS_DIR"/scaffold/{nestjs,nextjs,vite-react,fastapi}/source-files.md; do
+  local f bad="" step0 inst st vals
+  for st in nestjs nextjs vite-react fastapi; do
+    f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
+    vals=$(grep -oE 'STACK=[a-z-]+' "$f" | sort -u || true)
+    [[ "$vals" == "STACK=$st" ]] || bad+="$f — must name STACK=$st and no other STACK value (found: ${vals:-none})"$'\n'
     step0=$(grep -nE 'Step \*\*0\*\*' "$f" | head -n 1 | cut -d: -f1 || true)
     inst=$(grep -nE 'pnpm install|lefthook install' "$f" | head -n 1 | cut -d: -f1 || true)
     if [[ -z "$step0" ]]; then

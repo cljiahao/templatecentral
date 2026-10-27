@@ -48,30 +48,49 @@ sys.exit(4)
 PY
 }
 
-# render <snippet-text> <target> <selector> — substitute <skill-dir> and <target> byte for byte
-# (no sed, so any character in a path arrives untouched) and set the SEL line.
-render() {
+# render_sc <snippet-text> <target> <stack> <ci> — substitute <skill-dir> and <target> byte for byte
+# (no sed, so any character in a path arrives untouched) and set the STACK and CI lines.
+render_sc() {
   printf '%s\n' "$1" | python3 -c '
 import sys
-sk, tgt, sel = sys.argv[1:]
+sk, tgt, stack, ci = sys.argv[1:]
 out = []
 for line in sys.stdin.read().split("\n"):
-    out.append("SEL=\"" + sel + "\"" if line.startswith("SEL=") else line)
+    if line.startswith("STACK="):
+        line = "STACK=" + stack
+    elif line.startswith("CI="):
+        line = "CI=" + ci
+    out.append(line)
 sys.stdout.write("\n".join(out).replace("<skill-dir>", sk).replace("<target>", tgt))
-' "$SK" "$2" "$3"
+' "$SK" "$2" "$3" "$4"
+}
+
+# render <snippet-text> <target> <selector> — the older selector spelling, mapped onto STACK and CI:
+# "template template-ts" is nextjs, "template template-py" fastapi, "template-ci/github-ts" nextjs on
+# GitHub, "template-ci/github-py" fastapi on GitHub, "template-ci/azure" nextjs on Azure.
+render() {
+  local stack=bogus ci=""
+  case "$3" in
+    "template template-ts") stack=nextjs ;;
+    "template template-py") stack=fastapi ;;
+    template-ci/github-ts) stack=nextjs; ci=github ;;
+    template-ci/github-py) stack=fastapi; ci=github ;;
+    template-ci/azure) stack=nextjs; ci=azure ;;
+    template-ci/nope) stack=nextjs; ci=nope ;;
+  esac
+  render_sc "$1" "$2" "$stack" "$ci"
 }
 
 STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
 CI_SNIPPET=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 1) || CI_SNIPPET=""
 check 1 "$([[ -n "$STEP0" && -n "$CI_SNIPPET" ]] && echo 1 || echo 0)" "copy instructions found in the kit markdown (Step 0, Step B3 CI)"
 
+stack_of() { [[ "$1" == py ]] && echo fastapi || echo nextjs; }
 run_step0() { # run_step0 <target> <variant ts|py>
-  bash -c "$(render "$STEP0" "$1" "template template-$2")" 2>&1
+  bash -c "$(render_sc "$STEP0" "$1" "$(stack_of "$2")" "")" 2>&1
 }
 run_ci() { # run_ci <target> <variant ts|py> <host github|azure>
-  local sel=template-ci/azure
-  [[ "$3" == github ]] && sel="template-ci/github-$2"
-  bash -c "$(render "$CI_SNIPPET" "$1" "$sel")" 2>&1
+  bash -c "$(render_sc "$CI_SNIPPET" "$1" "$(stack_of "$2")" "$3")" 2>&1
 }
 run_copy() { # run_copy <target> <variant> <host> — Step 0, then the CI step; echoes output, returns the first failing exit code
   local out ec
@@ -319,7 +338,7 @@ check 1 "$([[ -w "$tgt/.claude" && -w "$tgt/.claude/hooks" && -w "$tgt/.claude/h
 chmod -R u+w "$sk/shared"
 
 # the two guards are the same script apart from the SEL and WHAT lines
-norm() { printf '%s\n' "$1" | grep -v '^SEL=\|^WHAT=\|^cp ' ; }
+norm() { printf '%s\n' "$1" | grep -v '^STACK=\|^CI=\|^PART=\|^WHAT=' ; }
 check "$(norm "$STEP0")" "$(norm "$CI_SNIPPET")" "guards_identical: Step 0 and Step B3 carry the same guard"
 
 # seed-neither CI path leaves exactly what 6.x left: the golden tree minus ci-gates.sh and the CI file
@@ -342,6 +361,113 @@ print("\n".join(sorted((out & gold) - {".claude/ci-gates.sh"})))
 PY
 )
 check "$want" "$(cd "$tgt" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)" "seed_neither: tree equals the 6.x seed-neither file set"
+
+# ── round 4: write only the listed paths, derive trees from STACK and CI ───────
+modeof() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+# stack_check <stack> <ci> <guard file> <other guard file> — the right hook variant and CI file arrive
+for sc in nestjs:cjs nextjs:cjs vite-react:cjs fastapi:py; do
+  st=${sc%%:*}; ext=${sc##*:}; other=py; [[ $ext == py ]] && other=cjs
+  for ci in github azure; do
+    tgt="$T/st-$st-$ci"; mkdir -p "$tgt"
+    out=$(bash -c "$(render_sc "$STEP0" "$tgt" "$st" "")" 2>&1); e1=$?
+    out2=$(bash -c "$(render_sc "$CI_SNIPPET" "$tgt" "$st" "$ci")" 2>&1); e2=$?
+    check 00 "$e1$e2" "stack_derives_trees[$st/$ci]: both fences exit 0 ($out $out2)"
+    check 1 "$([[ -f "$tgt/.claude/hooks/user-prompt-guard.$ext" && ! -e "$tgt/.claude/hooks/user-prompt-guard.$other" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: the right user-prompt-guard (.$ext, not .$other)"
+    if [[ $ci == azure ]]; then
+      check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" && ! -e "$tgt/.github" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: the Azure file only"
+    else
+      want=0; [[ $ext == py ]] && want=1
+      check "$want" "$(grep -c 'pyright' "$tgt/.github/workflows/ci.yml")" "stack_derives_trees[$st/$ci]: the GitHub workflow for this stack (pyright job only for fastapi)"
+      check 1 "$([[ ! -e "$tgt/azure-pipelines" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: no Azure file"
+    fi
+  done
+done
+refuses_raw unknown_stack_refused "$(mkdir -p "$T/u1" && render_sc "$STEP0" "$T/u1" "rails" "")" "unknown STACK"
+check 0 "$(find "$T/u1" -type f | wc -l | tr -d ' ')" "unknown_stack_refused: nothing copied"
+refuses_raw empty_stack_refused "$(mkdir -p "$T/u2" && render_sc "$STEP0" "$T/u2" "" "")" "unknown STACK"
+refuses_raw unknown_ci_refused "$(mkdir -p "$T/u3" && render_sc "$CI_SNIPPET" "$T/u3" "nextjs" "gitlab")" "unknown CI"
+refuses_raw empty_ci_in_ci_step_refused "$(mkdir -p "$T/u4" && render_sc "$CI_SNIPPET" "$T/u4" "nextjs" "")" "unknown CI"
+check 0 "$(find "$T/u3" "$T/u4" -type f | wc -l | tr -d ' ')" "unknown_ci_refused: nothing copied"
+
+# the project root and existing directories keep their modes; the user's own files are not touched
+for m in 0700 2775 0750; do
+  tgt="$T/mode-$m"; mkdir -p "$tgt/.claude" "$tgt/.github"; chmod "$m" "$tgt" "$tgt/.claude"
+  before=$(modeof "$tgt"); beforec=$(modeof "$tgt/.claude")
+  out=$(run_step0 "$tgt" ts); run_ci "$tgt" ts github >/dev/null
+  check "$before" "$(modeof "$tgt")" "root_mode_kept[$m]: the project root mode is unchanged ($out)"
+  check "$beforec" "$(modeof "$tgt/.claude")" "root_mode_kept[$m]: an existing .claude keeps its mode"
+done
+tgt="$T/ownfile"; mkdir -p "$tgt/.claude"; printf 'mine\n' > "$tgt/.claude/own.txt"; chmod 0400 "$tgt/.claude/own.txt"
+run_step0 "$tgt" ts >/dev/null
+check 400 "$(modeof "$tgt/.claude/own.txt")" "user_file_mode_kept: a 0400 file in an existing .claude stays 0400"
+# a regular file where a directory is needed refuses with nothing written
+for name in .claude .lefthook; do
+  tgt="$T/notdir$name"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/$name"
+  refuses_raw "not_a_directory_refused[$name]" "$(render_sc "$STEP0" "$tgt" nextjs "")" "not a directory"
+  check 1 "$(find "$tgt" -type f | wc -l | tr -d ' ')" "not_a_directory_refused[$name]: only the user's file is there"
+done
+tgt="$T/notdirgh"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/.github"
+refuses_raw "not_a_directory_refused[.github via CI]" "$(render_sc "$CI_SNIPPET" "$tgt" nextjs github)" "not a directory"
+# a read-only template source still yields the manifest modes in the target
+sk=$(alt_skill rosrc); chmod -R a-w "$sk/shared/template" "$sk/shared/template-ts"; tgt="$T/romodes"; mkdir -p "$tgt"
+saved=$SK; SK=$sk; run_step0 "$tgt" ts >/dev/null; SK=$saved
+bad=""
+while read -r p m _; do
+  case "$p" in template/*) f=${p#template/} ;; template-ts/*) f=${p#template-ts/} ;; *) continue ;; esac
+  [[ "$(modeof "$tgt/$f")" == "$m" ]] || bad+=" $f"
+done < <(grep -v '^#' "$MANIFEST")
+check "" "$bad" "read_only_source_yields_manifest_modes"
+check 1 "$([[ -w "$tgt/.claude/hooks" ]] && echo 1 || echo 0)" "read_only_source_leaves_directories_writable"
+chmod -R u+w "$sk/shared"
+
+# the failure state is reported: files written before a cp failure are listed, and nothing else is written
+if [[ "$(id -u)" != 0 ]]; then
+  tgt="$T/partial"; mkdir -p "$tgt/.lefthook"; chmod a-w "$tgt/.lefthook"
+  out=$(run_step0 "$tgt" ts); ec=$?
+  chmod u+w "$tgt/.lefthook"
+  check 1 "$([[ $ec -ne 0 && "$out" == *"partly written"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "cp_failure_reports_state: nonzero, says partly written, ends with the stop line"
+  written=$(cd "$tgt" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
+  listed_out=$(printf '%s\n' "$out" | sed -n '/^Files already written:/,/^STOP/p' | grep -v '^Files already\|^STOP' | grep . | LC_ALL=C sort)
+  check "$written" "$listed_out" "cp_failure_reports_state: the reported files are exactly the files on disk"
+  check 1 "$([[ ! -e "$tgt/.lefthook/commit-msg.sh" ]] && echo 1 || echo 0)" "cp_failure_reports_state: the read-only directory was not written"
+fi
+
+# hostile skill-dir paths
+# shellcheck disable=SC2016  # the dollar sign is part of the hostile directory name
+for name in 'sp ace' "q'uote" 'dollar$x' 'dq"uote' 'back\slash'; do
+  alt="$T/sk-$name"; mkdir -p "$alt"; cp -Rp "$SHARED" "$alt/shared"
+  tgt="$T/hs-target"; rm -rf "$tgt"; mkdir -p "$tgt"
+  saved=$SK; SK=$alt; out=$(run_step0 "$tgt" ts); ec=$?; SK=$saved
+  check 0 "$ec" "hostile_skill_dir[$name]: exits 0 ($out)"
+  check 1 "$([[ -f "$tgt/.gitleaks.toml" ]] && echo 1 || echo 0)" "hostile_skill_dir[$name]: copied"
+done
+alt="$T/sk-bt\`touch $T/PWNED3\`x"; mkdir -p "$alt"; cp -Rp "$SHARED" "$alt/shared"; tgt="$T/hs-target2"; mkdir -p "$tgt"
+saved=$SK; SK=$alt; run_step0 "$tgt" ts >/dev/null; SK=$saved
+check 0 "$([[ -e "$T/PWNED3" ]] && echo 1 || echo 0)" "hostile_skill_dir: no command in a skill-dir path was executed"
+
+# a relative target that starts with a dash
+mkdir -p "$T/rel/-proj"
+out=$(cd "$T/rel" && bash -c "$(render_sc "$STEP0" "-proj" nextjs "")" 2>&1); ec=$?
+check 0 "$ec" "dash_target: exits 0 ($out)"
+check 1 "$([[ -f "$T/rel/-proj/.gitleaks.toml" && -x "$T/rel/-proj/.claude/hooks/session-context.sh" ]] && echo 1 || echo 0)" "dash_target: copied into -proj"
+
+# seed-neither removes the gate script only when it is the template's byte for byte
+NEITHER=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 2) || NEITHER=""
+tgt="$T/sn1"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
+printf '# local edit\n' >> "$tgt/.claude/ci-gates.sh"
+refuses_raw seed_neither_keeps_a_modified_script "$(render_sc "$NEITHER" "$tgt" nextjs "")" "differs from the template"
+check 1 "$(grep -c 'local edit' "$tgt/.claude/ci-gates.sh")" "seed_neither_keeps_a_modified_script: the user's edit survives"
+refuses_raw seed_neither_refuses_unsubstituted_target "$(printf '%s\n' "$NEITHER" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" "not substituted"
+refuses_raw seed_neither_refuses_missing_dir "$(render_sc "$NEITHER" "$T/no/such" nextjs "")" "existing directory"
+tgt="$T/sn2"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
+out=$(bash -c "$(render_sc "$NEITHER" "$tgt" nextjs "")" 2>&1); ec=$?
+check 0 "$ec" "seed_neither_removes_an_identical_script ($out)"
+check 1 "$([[ ! -e "$tgt/.claude/ci-gates.sh" && -e "$tgt/.claude/verify-harness.sh" ]] && echo 1 || echo 0)" "seed_neither_removes_an_identical_script: only ci-gates.sh is gone"
+
+# the refusal for a manifest/tree mismatch names the offending files
+sk=$(alt_skill dsstore); printf 'x\n' > "$sk/shared/template/.DS_Store"; mkdir -p "$T/ds"
+saved=$SK; SK=$sk; out=$(bash -c "$(render "$STEP0" "$T/ds" "template template-ts")" 2>&1); SK=$saved
+check 1 "$([[ "$out" == *".DS_Store"* ]] && echo 1 || echo 0)" "mismatch_refusal_names_the_file ($out)"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')

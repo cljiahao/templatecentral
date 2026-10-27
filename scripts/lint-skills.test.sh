@@ -139,9 +139,9 @@ broken_lefthook_yaml() { printf '  bad:\n- not: [valid\n' >> "$SH/template-ts/le
 broken_ci_yaml() { printf '  bad:\n- not: [valid\n' >> "$SH/template-ci/github-ts/.github/workflows/ci.yml"; }
 no_copy_instruction() { strip_token '<skill-dir>/shared/template' '<skill-dir>/shared/templat' "$SH/harness-kit.md"; }
 # shellcheck disable=SC2016  # the anchor is literal text, not an expansion
-no_cp_line() { strip_token 'cp -Rp "$SK/$t/." "$TGT/"' 'true' "$SH/harness-kit.md"; }
+no_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit.md"; }
 # shellcheck disable=SC2016
-no_ci_cp_line() { strip_token 'cp -Rp "$SK/$t/." "$TGT/"' 'true' "$SH/harness-kit-enforcement.md"; }
+no_ci_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit-enforcement.md"; }
 no_deps_step_github() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-ts"; }
 no_deps_step_github_py() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-py"; }
 no_deps_step_azure() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/azure"; }
@@ -165,6 +165,19 @@ no_prepare_script() { strip_token '"prepare":' '"prepar3":' "$S"; }
 no_posttooluse() { strip_token '"PostToolUse"' '"PostToolUs3"' "$S"; }
 install_before_step0() { printf 'pnpm install\n\n' | cat - "$S/scaffold/nextjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nextjs/source-files.md"; }
 no_step0_line() { strip_token 'Step **0**' 'Step **O**' "$S/scaffold/nextjs/source-files.md"; }
+install_before_step0_nestjs() { printf 'pnpm install\n\n' | cat - "$S/scaffold/nestjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nestjs/source-files.md"; }
+install_before_step0_vite() { printf 'pnpm install\n\n' | cat - "$S/scaffold/vite-react/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/vite-react/source-files.md"; }
+no_step0_line_fastapi() { strip_token 'Step **0**' 'Step **O**' "$S/scaffold/fastapi/source-files.md"; }
+wrong_stack_value() { strip_token 'STACK=nestjs' 'STACK=nextjs' "$S/scaffold/nestjs/source-files.md"; }
+wrong_stack_value_fastapi() { strip_token 'STACK=fastapi' 'STACK=nestjs' "$S/scaffold/fastapi/source-files.md"; }
+no_stack_value_vite() { strip_token 'STACK=vite-react' 'STACK-vite-react' "$S/scaffold/vite-react/source-files.md"; }
+sh_not_755() { chmod 644 "$SH/template/.claude/hooks/session-context.sh"; python3 - "$SH/template.manifest" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read()
+open(p, 'w').write(t.replace('template/.claude/hooks/session-context.sh 755', 'template/.claude/hooks/session-context.sh 644'))
+PY
+}
 none() { :; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
@@ -244,6 +257,14 @@ fails posttooluse_mypy_fails_on_empty_match "mypy in PostToolUse hook" no_postto
 # ── check_step0_before_install ───────────────────────────────────────────────
 fails step0_order_fails_when_install_comes_first "Scaffold runs kit Step 0 before the first install" install_before_step0 "install runs before kit Step 0"
 fails step0_order_fails_when_step0_line_deleted "Scaffold runs kit Step 0 before the first install" no_step0_line "no kit Step 0 instruction"
+
+fails step0_order_fails_when_install_comes_first_nestjs "Scaffold runs kit Step 0 before the first install" install_before_step0_nestjs "install runs before kit Step 0"
+fails step0_order_fails_when_install_comes_first_vite "Scaffold runs kit Step 0 before the first install" install_before_step0_vite "install runs before kit Step 0"
+fails step0_order_fails_when_step0_line_deleted_fastapi "Scaffold runs kit Step 0 before the first install" no_step0_line_fastapi "no kit Step 0 instruction"
+fails stack_value_fails_when_wrong_nestjs "Scaffold runs kit Step 0 before the first install" wrong_stack_value "must name STACK=nestjs"
+fails stack_value_fails_when_wrong_fastapi "Scaffold runs kit Step 0 before the first install" wrong_stack_value_fastapi "must name STACK=fastapi"
+fails stack_value_fails_when_missing_vite "Scaffold runs kit Step 0 before the first install" no_stack_value_vite "must name STACK=vite-react"
+fails template_trees_fail_when_script_not_755 "Template trees are complete" sh_not_755 "must be mode 755"
 
 # ── scan() rules cover template files ────────────────────────────────────────
 fails scan_bcrypt_includes_templates "bcrypt references" bcrypt_in_template "bcrypt"

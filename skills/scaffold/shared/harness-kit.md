@@ -42,15 +42,17 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-Run it once, before Step A and before the first `pnpm install`, with `<target>` the (empty) project root. The file list is `<skill-dir>/shared/template.manifest`. Edit only the `SEL` line, the first of the script: `template template-ts` for nestjs, nextjs and vite-react, `template template-py` for fastapi. The `cp` loop copies every tree named in `SEL`, so no other line changes.
+Run it once, before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. The file list is `<skill-dir>/shared/template.manifest`. Edit only the `STACK=` line, the first of the script: `nestjs`, `nextjs`, `vite-react` or `fastapi`. The script derives the template trees from it (`template` plus `template-ts` for the three TS stacks, `template-py` for fastapi) and refuses any other value, so a wrong stack cannot copy the other stack's hooks. Leave `CI=` empty and `PART=base` here; Step B3 sets them.
 
-Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. It refuses a path that contains a newline.
+Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
-The guard runs first and writes nothing when the skill or target path is empty or not substituted, the target is not an existing directory, a template tree holds a symlink or an empty directory, the manifest is missing, empty or disagrees with the files in the selected trees, any file the copy writes already exists in `<target>`, or any directory the copy writes into (`.claude`, `.claude/hooks`, `.lefthook`, ...) is a symlink there. Every refusal and every failed `cp` ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user (after a failed `cp` some files may already be written). The script runs in `bash` through a quoted heredoc, so it behaves the same from bash or zsh and a refusal ends only that child process, never the caller's shell. `cp -Rp` with the trailing `/.` keeps dotfiles and the exec bit, and a final `chmod -R u+w` keeps a read-only plugin cache from leaving read-only directories in the project.
+The script writes nothing when any check fails: the skill or target path is empty or not substituted, the target is not an existing directory, a template tree holds a symlink or an empty directory, the manifest is missing, empty or disagrees with the files in the trees (it names the files that differ, such as a stray `.DS_Store`), a file it would write already exists, or a directory it would write into is a symlink or not a directory. It then creates only the missing parent directories and copies each listed file with `cp`, giving the file the mode in the manifest. It never copies attributes onto the project root or an existing directory and never changes a mode it did not create. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user. After a failed copy the message lists the files already written. The script runs in `bash` through a quoted heredoc, so it behaves the same from bash or zsh and a refusal ends only that child process, never the caller's shell.
 
 ```bash
 bash <<'TC_GUARD'
-SEL="template template-ts"
+STACK=nextjs
+CI=
+PART=base
 WHAT="scaffold"
 NL='
 '
@@ -63,45 +65,68 @@ IFS= read -r -d '' TGT <<'TC_PATH'
 TC_PATH
 TGT=${TGT%"$NL"}
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
-case "$SK" in ''|*'<skill'*) stop "the skill directory path is empty or was not substituted" ;; esac
-case "$TGT" in ''|*'<target'*) stop "the target path is empty or was not substituted" ;; esac
-case "$SK$TGT" in *"$NL"*) stop "a path contains a newline" ;; esac
+case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
+case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
+case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
+case "$STACK" in
+  nestjs|nextjs|vite-react) V=ts ;;
+  fastapi) V=py ;;
+  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
+esac
+case "$PART" in
+  base)
+    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
+    SEL="template template-$V" ;;
+  ci)
+    case "$CI" in
+      github) SEL="template-ci/github-$V" ;;
+      azure) SEL="template-ci/azure" ;;
+      *) stop "unknown CI '$CI' (want github or azure)" ;;
+    esac ;;
+  *) stop "unknown PART '$PART'" ;;
+esac
 for t in $SEL; do
   [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
   [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
 done
 [ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
-listed=$(awk -v sel="$SEL" '
+plan=$(awk -v sel="$SEL" '
   BEGIN { n = split(sel, s, " ") }
   /^#/ || NF == 0 { next }
-  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print substr($1, length(s[i]) + 2); next } }
-' "$SK/template.manifest" | LC_ALL=C sort)
+  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $2 "\t" s[i] "\t" substr($1, length(s[i]) + 2); next } }
+' "$SK/template.manifest")
+listed=$(printf '%s\n' "$plan" | cut -f3 | LC_ALL=C sort)
 found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
-[ -n "$listed" ] && [ "$listed" = "$found" ] || stop "template.manifest and the template trees ($SEL) do not list the same files"
+if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
+  stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
+fi
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
-  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p"; fi
-done)
-links=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
   d=$p
   while [ "${d%/*}" != "$d" ]; do
     d=${d%/*}
-    if [ -L "$TGT/$d" ]; then echo "$d"; fi
+    if [ -L "$TGT/$d" ]; then echo "$d (symlink)"; elif [ -e "$TGT/$d" ] && [ ! -d "$TGT/$d" ]; then echo "$d (not a directory)"; fi
   done
 done | LC_ALL=C sort -u)
-[ -z "$clash$links" ] || stop "these paths already exist or are symlinks in $TGT:$NL$clash$NL$links"
-for t in $SEL; do
-  cp -Rp "$SK/$t/." "$TGT/" || stop "cp failed for $t; files may be partly written in $TGT"
-  chmod u+w "$TGT"
-  (cd "$SK/$t" && find . -mindepth 1 -maxdepth 1) | while IFS= read -r d; do
-    chmod -R u+w "$TGT/${d#./}"
-  done
-done
+[ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
+TAB=$(printf '\t')
+copied=""
+while IFS="$TAB" read -r mode t p; do
+  d=${p%/*}
+  if [ "$d" != "$p" ]; then
+    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; files may be partly written in $TGT.${NL}Files already written:$copied"
+  fi
+  cp -- "$SK/$t/$p" "$TGT/$p" && chmod -- "$mode" "$TGT/$p" || stop "copy failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+  copied="$copied$NL$p"
+done <<TC_PLAN
+$plan
+TC_PLAN
 TC_GUARD
 ```
 
-Lines one and two are for nestjs, nextjs and vite-react; lines one and three are for fastapi. The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
+The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
 
 ---
 

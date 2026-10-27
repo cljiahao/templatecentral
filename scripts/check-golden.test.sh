@@ -2,6 +2,7 @@
 # scripts/check-golden.test.sh — tests for scripts/check-golden.sh.
 # Usage: bash scripts/check-golden.test.sh
 set -uo pipefail
+export TC_TEST=1
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="${CHECK_GOLDEN:-$REPO_ROOT/scripts/check-golden.sh}"
@@ -140,6 +141,25 @@ chmod +x "$T/fakepy/python3"
 g=$(fresh_golden crash); printf '* .gitleaks.toml # test\n' >> "$g/exceptions.txt"
 scaffold_tree fastapi github "$T/ctree"
 PATH="$T/fakepy:$PATH" bash "$CHECK" --golden-dir "$g" --tree "$T/ctree" fastapi-github > /dev/null 2>&1; check 1 $? "tree_crash_with_excepted_report_fails"
+
+# item 1: an empty --tree or --golden-dir value is a usage error, not a silent fall back to fence mode
+bash "$CHECK" --tree "" "$COMBO" > /dev/null 2>&1; check 2 $? "empty_tree_value_exits_2"
+bash "$CHECK" --golden-dir "" "$COMBO" > /dev/null 2>&1; check 2 $? "empty_golden_dir_value_exits_2"
+
+# item 6: a real exception inside compare_tree, after an excepted MISSING line, must not end in OK
+scaffold_tree fastapi github "$T/xtree"
+rm "$T/xtree/.claude/ci-gates.sh"; chmod 000 "$T/xtree/.gitleaks.toml"
+g=$(fresh_golden realcrash); printf 'fastapi-github .claude/ci-gates.sh # test\n' >> "$g/exceptions.txt"
+out=$(bash "$CHECK" --golden-dir "$g" --tree "$T/xtree" fastapi-github 2>&1); ec=$?
+chmod 644 "$T/xtree/.gitleaks.toml"
+check 1 "$([[ $ec -ne 0 && "$out" != *"OK fastapi-github"* ]] && echo 1 || echo 0)" "tree_real_exception_after_excepted_line_fails ($ec)"
+case "$out" in *"crashed (exit 3)"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: tree_real_exception_is_reported_as_a_crash [$out]" ;; esac
+
+# item 16: a placeholders.env line without = fails, and the test overrides only work with TC_TEST=1
+g=$(fresh_golden badph); printf 'NOEQUALS\n' > "$g/placeholders.env"
+bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 1 $? "placeholders_env_line_without_equals_fails"
+out=$(TC_TEST="" TC_SCAFFOLD_DIR="$T/emptysk" bash "$CHECK" --from-templates "$COMBO" 2>&1); ec=$?
+check 0 "$ec" "tc_scaffold_dir_is_ignored_without_tc_test ($out)"
 
 # C4: backslashes in a path are not interpreted, an unknown combo exits 2, -h prints usage
 rm -rf "$T/sk-bs"; mkdir -p "$T/sk-bs"; cp -R "$REPO_ROOT/skills/scaffold/shared" "$T/sk-bs/shared"

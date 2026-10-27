@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Install PyYAML for the yaml checks
-        run: sudo apt-get install -y python3-yaml
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Run skill lint checks
         run: bash scripts/lint-skills.sh skills/
 
@@ -136,7 +136,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - name: Install zsh for the copy-guard shell tests
-        run: sudo apt-get install -y zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: shellcheck + bash -n
         run: |
           shellcheck scripts/*.sh
@@ -172,13 +172,13 @@ jobs:
   lint-negative-tests:
     name: Lint check negative tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Install PyYAML for the yaml checks
-        run: sudo apt-get install -y python3-yaml
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Each re-pointed lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
 

@@ -26,7 +26,10 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCAFFOLD_DIR="${TC_SCAFFOLD_DIR:-$REPO_ROOT/skills/scaffold}"
+# TC_SCAFFOLD_DIR and TC_EXTRACT point the check at test fixtures; they are read only when TC_TEST=1,
+# so a stray variable in a CI environment cannot redirect the real check.
+SCAFFOLD_DIR="$REPO_ROOT/skills/scaffold"
+[[ "${TC_TEST:-}" == 1 && -n "${TC_SCAFFOLD_DIR:-}" ]] && SCAFFOLD_DIR="$TC_SCAFFOLD_DIR"
 GOLDEN_DIR="$REPO_ROOT/tests/golden"
 FROM_TEMPLATES=0
 TREE=""
@@ -39,7 +42,7 @@ while [[ $# -gt 0 ]]; do
       echo "  COMBO is <stack>-<ci>: stack nextjs, vite-react, fastapi or nestjs; ci github or azure."
       exit 0 ;;
     --golden-dir | --tree)
-      if [[ $# -lt 2 || "$2" == --* ]]; then
+      if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
         echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
         exit 2
       fi
@@ -71,7 +74,7 @@ if [[ -n "$TREE" && $FROM_TEMPLATES -eq 1 ]]; then
   exit 2
 fi
 
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 2
 trap 'rm -rf "$T"' EXIT
 
 sha_of() { # sha_of <file> — portable sha256
@@ -123,7 +126,7 @@ actual_hashes() {
   if [[ $FROM_TEMPLATES -eq 0 ]]; then
     local extract=(python3 "$REPO_ROOT/scripts/extract-fences.py")
     # TC_EXTRACT replaces the extractor command (split on spaces); tests use it to simulate a failure.
-    [[ -n "${TC_EXTRACT:-}" ]] && read -r -a extract <<< "$TC_EXTRACT"
+    [[ "${TC_TEST:-}" == 1 && -n "${TC_EXTRACT:-}" ]] && read -r -a extract <<< "$TC_EXTRACT"
     if ! "${extract[@]}" --stack "$stack" --ci "$ci" --out "$tree" > "$out" 2> "$T/extract-$stack-$ci.err"; then
       echo "check-golden: extract-fences failed for $stack-$ci:" >&2
       cat "$T/extract-$stack-$ci.err" >&2
@@ -146,6 +149,10 @@ actual_hashes() {
     local name value
     while IFS='=' read -r name value || [[ -n "$name" ]]; do
       [[ -z "$name" || "$name" == \#* ]] && continue
+      if [[ "$name" == *[[:space:]]* || -z "$value" ]]; then
+        echo "check-golden: placeholders.env line must be NAME=value, got: $name${value:+=$value}" >&2
+        return 1
+      fi
       grep -rlF "__TC_${name}__" "$tree" 2>/dev/null | while IFS= read -r f; do
         python3 - "$f" "__TC_${name}__" "$value" <<'PY'
 import sys

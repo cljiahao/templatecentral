@@ -1597,7 +1597,7 @@ cp .env.example .env
 
 ### 4. Initialize git and install dependencies
 
-Before the first install, load the kit index and run kit Step **0**: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
+Before the first install, load the kit index and run kit Step **0** with `STACK=vite-react` in its fence: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
