@@ -1,6 +1,7 @@
 # Paths allowed to differ from the golden hashes.
 # Format: <combo|*> <path> # <reason>
 # <combo> is <stack>-<ci>, for example nextjs-github.
+# A listed path is suppressed for every report: STALE-EXPECTED, MISSING, MISMATCH and EXTRA.
 #
 # What the golden covers
 #   One entry per file the scaffold markdown writes verbatim: the first fence after a

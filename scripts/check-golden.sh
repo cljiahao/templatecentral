@@ -14,6 +14,8 @@
 #   - a file listed in tests/golden/formatter-owned.txt is compared after running its formatter
 #     over both sides, and fails if the formatter is unavailable.
 #   Skipped as generated at runtime: see tests/golden/exceptions.txt.
+# A path in tests/golden/exceptions.txt suppresses STALE-EXPECTED, MISSING, MISMATCH and EXTRA
+# for that path.
 # Prints MISMATCH|MISSING|EXTRA <combo> <path> per difference; exit 1 if any, else 0.
 # tests/golden/exceptions.txt lines (<combo|*> <path> # <reason>) suppress a path.
 set -uo pipefail
@@ -27,7 +29,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-templates) FROM_TEMPLATES=1 ;;
     --golden-dir | --tree)
-      if [[ $# -lt 2 ]]; then
+      if [[ $# -lt 2 || "$2" == --* ]]; then
         echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
         exit 2
       fi

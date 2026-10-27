@@ -213,5 +213,14 @@ pj 'd["dependencies"]["axios"] = "^0.0.1"'; check 1 $? "package_json_changed_dep
 bash "$CHECK" --tree > /dev/null 2>&1; check 2 $? "tree_without_value_exits_2"
 bash "$CHECK" --golden-dir > /dev/null 2>&1; check 2 $? "golden_dir_without_value_exits_2"
 
+bash "$CHECK" --tree --from-templates "$PCOMBO" > /dev/null 2>&1; check 2 $? "tree_value_starting_with_dashes_exits_2"
+bash "$CHECK" --golden-dir --tree "$ptree" "$PCOMBO" > /dev/null 2>&1; check 2 $? "golden_dir_value_starting_with_dashes_exits_2"
+
+# an exceptions.txt path suppresses STALE-EXPECTED, MISSING and MISMATCH alike
+g=$(fresh_golden excall)
+printf '%s  no/such/file.txt\n' "$(printf x | shasum -a 256 | cut -d' ' -f1)" >> "$g/$PCOMBO.sha256"
+printf '%s no/such/file.txt # test\n' "$PCOMBO" > "$g/exceptions.txt"
+bash "$CHECK" --golden-dir "$g" --tree "$ptree" "$PCOMBO" > /dev/null 2>&1; check 0 $? "exception_suppresses_stale_and_missing_in_tree"
+
 echo "check-golden.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
