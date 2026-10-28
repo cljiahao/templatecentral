@@ -1303,12 +1303,15 @@ check_no_template_skill_md() {
   # Template skills ship as SKILL.md.tmpl; the copy step drops the suffix in the project. TIMELESS.
   header "Template trees hold no file named SKILL.md"
   local scaf="$SKILLS_DIR/scaffold" bad tmpl
-  tmpl=$(cd "$scaf" 2>/dev/null && find . -name 'SKILL.md.tmpl' -path './*/template*/*' | head -n 1 || true)
+  tmpl=
+  if [[ -d "$scaf" ]]; then
+    tmpl=$(cd "$scaf" && find . -name 'SKILL.md.tmpl' -path './*/template*/*' | LC_ALL=C sort)
+  fi
   if [[ -z "$tmpl" ]]; then
     fail "No SKILL.md.tmpl found under $scaf/*/template*/ — the check below would scan nothing"
     return
   fi
-  bad=$(cd "$scaf" && find . -name 'SKILL.md' -path './*/template*/*' | LC_ALL=C sort || true)
+  bad=$(cd "$scaf" && find . -name 'SKILL.md' -path './*/template*/*' | LC_ALL=C sort)
   report "$bad" \
     "A file named SKILL.md sits in a template tree — rename it to SKILL.md.tmpl so no skill loader registers it" \
     "No template tree holds a file named SKILL.md"
@@ -1322,7 +1325,7 @@ check_copy_script_single() {
   # script fence is the AGENTS.md tail command in harness-kit-finalize.md, named TC_TAIL. TIMELESS.
   header "The copy script has exactly one copy"
   local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md" enf="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
-  local bad="" tok b3 hits line file delim guard_n=0 tail_n=0 fin="$SKILLS_DIR/scaffold/shared/harness-kit-finalize.md"
+  local bad="" tok b3 hits line file delim guard_body guard_n=0 tail_n=0 fin="$SKILLS_DIR/scaffold/shared/harness-kit-finalize.md"
   # Any heredoc that feeds a shell, in any spelling: a shell named bare, by path or through env, with
   # options; a heredoc delimiter that is quoted, double-quoted, backslashed or bare; and a heredoc
   # piped into a shell. The bodies of the two allowed fences are skipped, so the heredocs inside the
@@ -1360,7 +1363,12 @@ check_copy_script_single() {
   [[ "$tail_n" == 1 ]] || bad+="skills/ holds $tail_n AGENTS.md tail fences (want exactly 1 TC_TAIL, in $fin)"$'\n'
   # The copy script copies files; the tail is appended to AGENTS.md by its own command, so the
   # script must not mention it anywhere.
-  if awk "/^bash <<'TC_GUARD'/ { on = 1; next } /^TC_GUARD\$/ { on = 0 } on" "$kit" 2>/dev/null | grep -q 'template-tail'; then
+  # The body is captured first: under pipefail, `awk | grep -q` fails when grep exits before awk has
+  # written everything (SIGPIPE), which would let a mention pass unseen.
+  guard_body=$(awk '$0 == "bash <<\047TC_GUARD\047" { on = 1; next } $0 == "TC_GUARD" { on = 0 } on' "$kit" 2>/dev/null || true)
+  if [[ -z "$guard_body" ]]; then
+    bad+="$kit — could not read the copy script body"$'\n'
+  elif [[ "$guard_body" == *template-tail* ]]; then
     bad+="$kit — the copy script mentions template-tail, which is appended to AGENTS.md and never copied"$'\n'
   fi
   # Only the Step B3 section counts: the same words elsewhere in the file would satisfy a whole-file grep.
