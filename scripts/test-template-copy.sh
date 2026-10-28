@@ -1014,6 +1014,7 @@ vsc() {
 if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   out=$(vsc ':')
   check 1 "$([[ "$out" == *"ok    skills/scaffold/nextjs/template/package.json"* && "$out" == *"ok    skills/scaffold/nextjs/template/eslint.config.mjs"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_checks_template_files: json and mjs files are validated ($out)"
+  check 1 "$([[ "$out" != *"skills/scaffold/shared"* ]] && echo 1 || echo 0)" "validate_configs_shared_manifest_does_not_trip_the_stack_check: the shared manifest has no JSON or JS by design ($out)"
   out=$(vsc "printf '{' >> skills/scaffold/nextjs/template/package.json")
   check 1 "$([[ "$out" == *"FAIL  skills/scaffold/nextjs/template/package.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_template_json ($out)"
   out=$(vsc "printf 'const = ;\\n' >> skills/scaffold/nextjs/template/eslint.config.mjs")
