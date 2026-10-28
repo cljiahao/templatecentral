@@ -1198,6 +1198,8 @@ echo CALLER_SURVIVED" 2>&1)
   check "$before" "$(snap "$tgt")" "zsh_agents_tail_refusal: no AGENTS.md was created"
 elif [[ "${CI:-}" == true ]]; then
   FAIL=$((FAIL + 1)); echo "FAIL: zsh is not installed but CI=true; the zsh tail tests must run in CI"
+else
+  echo "SKIP: zsh tail tests (zsh not installed)"
 fi
 # migrate reads the tail from <skill-dir>/../scaffold/shared/..., with <skill-dir> the migrate directory
 tgt="$T/tail-migrate"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
@@ -1271,7 +1273,6 @@ check 1 "$([[ -n "$src_set" ]] && echo 1 || echo 0)" "dist_registered_skill_set:
 tpl_skills=$(cd "$dist" && find . -name SKILL.md.tmpl -path '*/template*/*' | wc -l | tr -d ' ')
 check 1 "$([[ "$tpl_skills" -ge 3 ]] && echo 1 || echo 0)" "dist_registered_skill_set: the template skills are in the dist as SKILL.md.tmpl ($tpl_skills)"
 check "" "$(cd "$dist" && find . -name SKILL.md -path '*/template*/*')" "dist_registered_skill_set: no file named SKILL.md sits in a dist template tree"
-check "" "$(cd "$dist" && find . -mindepth 2 -maxdepth 2 -name SKILL.md | grep -v '^\./[^/]*/SKILL.md$' || true)" "dist_registered_skill_set: no SKILL.md sits at depth 2 outside skills/<name>/"
 # the stack trees and their manifest reach the dist too, with dotfiles, modes and bytes
 python3 - "$NX" "$dist/scaffold/nextjs" > "$T/dist-nx.diff" <<'PY'
 import os, sys
