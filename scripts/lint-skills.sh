@@ -19,6 +19,9 @@
 set -euo pipefail
 
 SKILLS_DIR="${1:-skills}"
+# One spelling of the root: every path below is built as "$SKILLS_DIR/...", so a trailing slash
+# (CI passes "skills/") would give "skills//..." and break string comparisons between paths.
+while [[ ${#SKILLS_DIR} -gt 1 && "$SKILLS_DIR" == */ ]]; do SKILLS_DIR=${SKILLS_DIR%/}; done
 FAILED=0
 
 # HARNESS_SCHEMA_VERSION — the AGENTS.md line-1 marker (`<!-- templateCentral: <stack>@X.Y.Z -->`)
@@ -283,12 +286,12 @@ check_skillmd_body_length() {
 check_nesting_depth() {
   # Skills nested more than 3 directory levels under skills/ are unreachable by templateCentral's
   # ref-file loader and indicate a structure drift from CONVENTIONS.md §1. TIMELESS.
-  # The depth is counted from the directory name without a trailing slash, so "skills" and "skills/"
+  # The depth is counted from the normalised directory name, so "skills" and "skills/"
   # agree: NF>5 catches skills/a/b/c/d/file.md (4+ dirs deep). The files under scaffold/*/template*/
   # are shipped into projects (they mirror a project's own layout), so they are not skill reference
   # files and are skipped.
   header "Nesting depth (<=3 levels under skills/)"
-  local base dir=${SKILLS_DIR%/}
+  local base dir=$SKILLS_DIR
   base=$(awk -F'/' '{print NF}' <<<"$dir")
   report "$(find "$dir" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' ! -path '*/scaffold/*/template*/*' \
     | awk -F'/' -v base="$base" 'NF > base + 4')" \

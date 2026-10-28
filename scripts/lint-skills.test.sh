@@ -43,7 +43,7 @@ damage_and_lint() {
   S="$w/skills"
   SH="$S/scaffold/shared"
   "$2"
-  OUT=$(bash "$LINT" "$w/skills" 2>&1 || true)
+  OUT=$(bash "$LINT" "$w/skills${SLASH:+/}" 2>&1 || true)
 }
 
 # fails <test name> <header substring> <mutation function> <expected FAIL text> — the section must
@@ -66,6 +66,14 @@ fails() {
     rm -rf "$T/w$NJOB"
   ) &
   if (( NJOB % JOBS == 0 )); then wait; fi
+}
+
+# fails_both <same arguments as fails> — the test as written, then again with the skills path given a trailing slash, as CI gives it.
+fails_both() {
+  fails "$@"
+  SLASH=1
+  fails "${1}_with_trailing_slash" "${@:2}"
+  SLASH=
 }
 
 collect() {
@@ -329,6 +337,8 @@ none() { :; }
 if [[ -z "${ONLY:-}" ]]; then
   damage_and_lint "$T/base" none
   [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes: lint passes on the unmodified tree (${OUT##*$'\n'})"
+  SLASH=1; damage_and_lint "$T/base-slash" none; SLASH=
+  [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes_with_a_trailing_slash: the command CI runs passes (${OUT##*$'\n'})"
 fi
 
 # ── template trees ───────────────────────────────────────────────────────────
@@ -510,12 +520,12 @@ fails template_pins_fail_on_empty_match "Template package.json dependencies use 
 fails template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_nx_package "left-pad"
 
 # ── one copy script ──────────────────────────────────────────────────────────
-fails copy_script_fails_on_empty_match "The copy script has exactly one copy" no_copy_script "holds 0 copy-script fences"
-fails copy_script_fails_when_a_second_copy_appears "The copy script has exactly one copy" second_copy_script_in_enforcement "must live only in"
-fails copy_script_fails_when_tc_rm_returns "The copy script has exactly one copy" tc_rm_script_returns "a second script fence (TC_RM)"
-fails copy_script_fails_when_b3_forgets_part_ci "The copy script has exactly one copy" b3_forgets_part_ci "Step B3 must name PART=ci"
-fails copy_script_fails_when_b3_forgets_ci_none "The copy script has exactly one copy" b3_forgets_ci_none "Step B3 must name CI=none"
-fails copy_script_fails_when_b3_forgets_the_kit "The copy script has exactly one copy" b3_forgets_kit "Step B3 must name harness-kit.md"
+fails_both copy_script_fails_on_empty_match "The copy script has exactly one copy" no_copy_script "holds 0 copy-script fences"
+fails_both copy_script_fails_when_a_second_copy_appears "The copy script has exactly one copy" second_copy_script_in_enforcement "must live only in"
+fails_both copy_script_fails_when_tc_rm_returns "The copy script has exactly one copy" tc_rm_script_returns "a second script fence (TC_RM)"
+fails_both copy_script_fails_when_b3_forgets_part_ci "The copy script has exactly one copy" b3_forgets_part_ci "Step B3 must name PART=ci"
+fails_both copy_script_fails_when_b3_forgets_ci_none "The copy script has exactly one copy" b3_forgets_ci_none "Step B3 must name CI=none"
+fails_both copy_script_fails_when_b3_forgets_the_kit "The copy script has exactly one copy" b3_forgets_kit "Step B3 must name harness-kit.md"
 fails skilldir_refs_fails_when_settings_late_case_deleted "<skill-dir> references resolve" no_kit_settings_case "harness-kit.md: copy instruction settings | late) missing"
 fails skilldir_refs_fails_when_none_case_deleted "<skill-dir> references resolve" no_kit_none_case "harness-kit.md: copy instruction none) SEL= ;; missing"
 fails skilldir_refs_fails_when_rm_line_deleted "<skill-dir> references resolve" no_kit_rm_line "harness-kit.md: copy instruction rm -f -- \"\$TGT/\$gate\" missing"
@@ -554,10 +564,10 @@ depth_slash_forms_agree() {
 depth_slash_forms_agree
 
 # ── the copy script: renamed copies, B3 scope, selectors, and ordering ────────
-fails copy_script_fails_when_a_renamed_second_fence_appears "The copy script has exactly one copy" second_fence_renamed "a second script fence (TC_COPY)"
-fails copy_script_fails_when_b3_tokens_sit_outside_b3 "The copy script has exactly one copy" b3_tokens_only_elsewhere "Step B3 must name PART=ci"
-fails copy_selector_fails_when_it_names_the_tail_tree "No copy selector names template-tail" sel_names_tail "a copy selector names template-tail"
-fails copy_selector_fails_on_empty_match "No copy selector names template-tail" no_sel_lines "no SEL assignment found"
+fails_both copy_script_fails_when_a_renamed_second_fence_appears "The copy script has exactly one copy" second_fence_renamed "a second script fence (TC_COPY)"
+fails_both copy_script_fails_when_b3_tokens_sit_outside_b3 "The copy script has exactly one copy" b3_tokens_only_elsewhere "Step B3 must name PART=ci"
+fails_both copy_selector_fails_when_it_names_the_tail_tree "No copy selector names template-tail" sel_names_tail "a copy selector names template-tail"
+fails_both copy_selector_fails_on_empty_match "No copy selector names template-tail" no_sel_lines "no SEL assignment found"
 fails steps_a_to_d_fails_before_the_agents_step_nextjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nextjs "comes before the AGENTS.md step"
 fails steps_a_to_d_fails_before_the_agents_step_nestjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nestjs "comes before the AGENTS.md step"
 fails steps_a_to_d_fails_before_the_agents_step_vite "Scaffold runs kit Step 0 before the first install" ad_before_agents_vite "comes before the AGENTS.md step"
@@ -570,28 +580,28 @@ fails template_skill_md_fails_on_empty_match "Template trees hold no file named 
 fails template_skill_md_fails_when_a_shared_template_holds_one "Template trees hold no file named SKILL.md" template_skill_md_appears "template-late/.claude/skills/zz/SKILL.md"
 fails template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nextjs_skill_md_appears "template/.claude/skills/next-verify/SKILL.md"
 # ── other spellings of a second script fence ──
-fails copy_script_fails_on_an_absolute_shell_path "The copy script has exactly one copy" fence_abs_bash "a second script fence (TC_X)"
-fails copy_script_fails_on_env_bash "The copy script has exactly one copy" fence_env_bash "a second script fence (TC_X)"
-fails copy_script_fails_on_zsh "The copy script has exactly one copy" fence_zsh "a second script fence (TC_X)"
-fails copy_script_fails_on_a_shell_option "The copy script has exactly one copy" fence_bash_option "a second script fence (TC_X)"
-fails copy_script_fails_on_no_space_before_heredoc "The copy script has exactly one copy" fence_no_space "a second script fence (TC_X)"
-fails copy_script_fails_on_a_backslash_delimiter "The copy script has exactly one copy" fence_backslash_delim "a second script fence (TC_X)"
-fails copy_script_fails_on_a_tc_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_tc "a second script fence (TC_X)"
-fails copy_script_fails_on_any_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_eof "a second script fence (EOF)"
-fails copy_script_fails_on_a_non_tc_delimiter "The copy script has exactly one copy" fence_plain_eof "a second script fence (EOF)"
-fails copy_script_fails_on_a_tc_delimiter_that_feeds_no_shell "The copy script has exactly one copy" fence_other_delim_not_shell "a second script fence (TC_X)"
+fails_both copy_script_fails_on_an_absolute_shell_path "The copy script has exactly one copy" fence_abs_bash "a second script fence (TC_X)"
+fails_both copy_script_fails_on_env_bash "The copy script has exactly one copy" fence_env_bash "a second script fence (TC_X)"
+fails_both copy_script_fails_on_zsh "The copy script has exactly one copy" fence_zsh "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_shell_option "The copy script has exactly one copy" fence_bash_option "a second script fence (TC_X)"
+fails_both copy_script_fails_on_no_space_before_heredoc "The copy script has exactly one copy" fence_no_space "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_backslash_delimiter "The copy script has exactly one copy" fence_backslash_delim "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_tc_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_tc "a second script fence (TC_X)"
+fails_both copy_script_fails_on_any_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_eof "a second script fence (EOF)"
+fails_both copy_script_fails_on_a_non_tc_delimiter "The copy script has exactly one copy" fence_plain_eof "a second script fence (EOF)"
+fails_both copy_script_fails_on_a_tc_delimiter_that_feeds_no_shell "The copy script has exactly one copy" fence_other_delim_not_shell "a second script fence (TC_X)"
 fails migrate_inventory_fails_when_the_tmpl_rule_is_dropped "migrate hook inventory matches" migrate_forgets_tmpl_rule "a source named <name>.tmpl is copied to <name>"
 fails template_trees_fail_when_a_tmpl_and_its_target_are_both_listed "Template trees are complete" tmpl_and_plain_both_listed "both copy to"
 fails template_trees_fail_when_a_tmpl_and_its_target_are_both_in_the_tree "Template trees are complete" tmpl_and_plain_both_in_tree "both copy to" 
-fails copy_script_fails_on_an_indented_fence "The copy script has exactly one copy" fence_indented "a second script fence (TC_X)"
-fails copy_script_fails_on_bash_dash_s "The copy script has exactly one copy" fence_dash_s "a second script fence (TC_X)"
-fails copy_script_fails_on_a_dash_heredoc "The copy script has exactly one copy" fence_dash_heredoc "a second script fence (TC_X)"
-fails copy_script_fails_on_a_double_quoted_delimiter "The copy script has exactly one copy" fence_double_quoted "a second script fence (TC_X)"
-fails copy_script_fails_on_an_unquoted_delimiter "The copy script has exactly one copy" fence_unquoted "a second script fence (TC_X)"
-fails copy_script_fails_on_a_sh_fence "The copy script has exactly one copy" fence_sh "a second script fence (TC_X)"
-fails copy_script_fails_on_a_second_tail_fence "The copy script has exactly one copy" second_tail_fence "the AGENTS.md tail command must live only in"
-fails copy_script_fails_when_the_tail_fence_is_gone "The copy script has exactly one copy" no_tail_fence "holds 0 AGENTS.md tail fences"
-fails copy_script_fails_when_it_mentions_template_tail "The copy script has exactly one copy" script_mentions_tail "the copy script mentions template-tail"
+fails_both copy_script_fails_on_an_indented_fence "The copy script has exactly one copy" fence_indented "a second script fence (TC_X)"
+fails_both copy_script_fails_on_bash_dash_s "The copy script has exactly one copy" fence_dash_s "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_dash_heredoc "The copy script has exactly one copy" fence_dash_heredoc "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_double_quoted_delimiter "The copy script has exactly one copy" fence_double_quoted "a second script fence (TC_X)"
+fails_both copy_script_fails_on_an_unquoted_delimiter "The copy script has exactly one copy" fence_unquoted "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_sh_fence "The copy script has exactly one copy" fence_sh "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_second_tail_fence "The copy script has exactly one copy" second_tail_fence "the AGENTS.md tail command must live only in"
+fails_both copy_script_fails_when_the_tail_fence_is_gone "The copy script has exactly one copy" no_tail_fence "holds 0 AGENTS.md tail fences"
+fails_both copy_script_fails_when_it_mentions_template_tail "The copy script has exactly one copy" script_mentions_tail "the copy script mentions template-tail"
 fails migrate_inventory_fails_when_the_settings_tree_is_missing "migrate hook inventory matches" migrate_forgets_settings_tree "missing template anchor scaffold/shared/template-settings-ts/"
 fails migrate_inventory_fails_when_the_late_tree_is_missing "migrate hook inventory matches" migrate_forgets_late_tree "missing template anchor scaffold/shared/template-late/"
 
