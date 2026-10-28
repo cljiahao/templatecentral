@@ -5,9 +5,13 @@
 # blocks are JSONC, so a string-aware pass strips // and /* */ comments first (URLs like
 # "https://..." are preserved). Also extracts every ```js/```mjs/```javascript fenced block
 # (eslint.config.mjs and other JS config templates, all written as ESM) and syntax-checks each
-# with `node --check` (loaded as a module via a .mjs temp file). Reports every malformed block and
-# exits 1, so a broken scaffold config template is caught by a PR check, not only by the
-# optional monthly LLM scaffold-verify cron.
+# with `node --check` (loaded as a module via a .mjs temp file).
+# A stack whose files live in skills/scaffold/<stack>/template/ is checked on the files
+# themselves: every *.json with jq (JSONC comments stripped first) and every *.js, *.mjs and *.cjs
+# with `node --check` (the nearest package.json decides how a .js file loads).
+# Reports every malformed block or file and exits 1, so a broken scaffold config template is caught
+# by a PR check, not only by the optional monthly LLM scaffold-verify cron. Exits 1 when nothing
+# at all was validated.
 # No `set -e`: a failing block is reported and the loop continues to the next one.
 set -uo pipefail
 
@@ -83,8 +87,40 @@ for f in skills/scaffold/*/config-files.md; do
   done
 done
 
+# Template trees: the files are real, so they are checked directly.
+for tree in skills/scaffold/*/template; do
+  [ -d "$tree" ] || continue
+  while IFS= read -r file; do
+    total=$((total + 1))
+    case "$file" in
+      *.json)
+        if strip_jsonc < "$file" | jq empty >/dev/null 2>&1; then
+          echo "  ok    $file"
+        else
+          echo "  FAIL  $file  — invalid JSON" >&2
+          strip_jsonc < "$file" | jq empty 2>&1 | sed 's/^/          /' >&2
+          fail=1
+        fi ;;
+      *)
+        err="$workdir/node_check_err"
+        if node --check "$file" >/dev/null 2>"$err"; then
+          echo "  ok    $file"
+        else
+          echo "  FAIL  $file  — invalid JS" >&2
+          sed 's/^/          /' "$err" >&2
+          fail=1
+        fi
+        rm -f "$err" ;;
+    esac
+  done < <(find "$tree" -type f \( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) | LC_ALL=C sort)
+done
+
+if [ "$total" -eq 0 ]; then
+  echo "validate-scaffold-configs: no config fence or template file was found, so nothing was validated." >&2
+  exit 1
+fi
 if [ "$fail" -ne 0 ]; then
   echo "validate-scaffold-configs: one or more scaffold config templates are malformed." >&2
   exit 1
 fi
-echo "validate-scaffold-configs: all $total JSON/JS config fences valid."
+echo "validate-scaffold-configs: all $total JSON/JS config fences and template files valid."

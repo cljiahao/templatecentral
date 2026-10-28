@@ -29,18 +29,27 @@ the project has customised either, stop and show the user the current lines befo
 Load the current scaffold source for the stack and copy the named sections from it **verbatim**:
 
 ```bash
-cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # nextjs, fastapi, nestjs
-cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # nextjs, vite-react, nestjs
+cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # fastapi, nestjs
+cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # vite-react, nestjs
+```
+
+For Next.js the scaffold files are real files; read the ones the steps below name:
+
+```bash
+cat "<skill-dir>/../scaffold/nextjs/template/src/lib/security/frame-protection.ts"
+cat "<skill-dir>/../scaffold/nextjs/template/test/lib/frame-protection.test.ts"
+cat "<skill-dir>/../scaffold/nextjs/template/src/proxy.ts"
+cat "<skill-dir>/../scaffold/nextjs/template/next.config.ts"
 ```
 
 **Next.js** — `next.config.ts` `headers()` is resolved at build time, so the CSP and frame headers
 move to the runtime proxy, which becomes the only place the CSP is set.
-1. Add `src/lib/security/frame-protection.ts` and `test/lib/frame-protection.test.ts` (source-files.md).
+1. Add `src/lib/security/frame-protection.ts` and `test/lib/frame-protection.test.ts` (the first two files above).
    If the project's `next.config.ts` CSP has directives beyond the 6.1 baseline
    (`frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`), move them into
    `CSP_BASE` in that file — never leave them in `headers()`, where the proxy's header replaces them.
    If the backend rewrite path is not `/api/external`, set `BACKEND_PROXY_PATH` to it.
-2. In `next.config.ts` `headers()` (config-files.md): remove the `X-Frame-Options` and
+2. In `next.config.ts` `headers()` (the scaffold's `next.config.ts` above): remove the `X-Frame-Options` and
    `Content-Security-Policy` entries. Leave every other header unchanged.
 3. Find the proxy: `src/proxy.ts`, or `proxy.ts` at the project root. Next.js runs it only from
    the same level as the `app/` directory: `src/proxy.ts` for `src/app/`, root `proxy.ts` for a
@@ -48,7 +57,7 @@ move to the runtime proxy, which becomes the only place the CSP is set.
    relying on it. Edit the file Next.js runs, in place. Put `frame-protection.ts` (and its test
    import) where that project's `@/*` path alias points — `src/lib/…` for `@/*` → `./src/*`,
    `lib/…` for `@/*` → `./*`.
-   - **Neither exists:** add the scaffold's `src/proxy.ts` (source-files.md), at the `app/` level.
+   - **Neither exists:** add the scaffold's `src/proxy.ts` (above), at the `app/` level.
    - **It exists without auth** (no `better-auth` import): make every response it returns go through
      `applyFrameProtection(req.nextUrl.pathname, res)`, and make sure its `matcher` covers every
      page and route (excluding at most `_next/static`, `_next/image` and `favicon.ico`).

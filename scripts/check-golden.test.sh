@@ -24,14 +24,15 @@ scaffold_tree() {
   python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$1" --ci "$2" --out "$3" > /dev/null 2>&1
   local d
   for d in "$REPO_ROOT/skills/scaffold/shared/template" "$REPO_ROOT/skills/scaffold/shared/template-$ts" \
-    "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template"; do
+    "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template" \
+    "$REPO_ROOT/skills/scaffold/$1/template-agents"; do
     [[ -d "$d" ]] && cp -Rp "$d/." "$3/"
   done
 }
 
 fresh_golden() { # fresh_golden <name> — a writable copy of the real goldens
   mkdir -p "$T/$1"
-  cp "$REPO_ROOT"/tests/golden/*.sha256 "$REPO_ROOT"/tests/golden/exceptions.txt "$T/$1/"
+  cp "$REPO_ROOT"/tests/golden/*.sha256 "$REPO_ROOT"/tests/golden/exceptions.txt "$REPO_ROOT"/tests/golden/placeholders.env "$T/$1/"
   echo "$T/$1"
 }
 

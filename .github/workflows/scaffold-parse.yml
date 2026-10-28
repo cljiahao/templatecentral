@@ -2,19 +2,22 @@ name: Scaffold Parse (deterministic)
 # Deterministic PR gate over the scaffold config templates: extracts every ```json fenced block
 # from skills/scaffold/*/config-files.md and validates it with jq (JSONC comments stripped first),
 # and every ```js/```mjs/```javascript fenced block (eslint.config.mjs and friends) and
-# syntax-checks it with `node --check`. A malformed scaffold config template fails this check on
-# the PR — no LLM, no monthly cron (that is scaffold-verify.yml, which stays as the end-to-end
-# complement).
+# syntax-checks it with `node --check`. The files in skills/scaffold/<stack>/template/ are checked
+# the same way (*.json with jq, *.js/*.mjs/*.cjs with node --check). A malformed scaffold config
+# template fails this check on the PR — no LLM, no monthly cron (that is scaffold-verify.yml, which
+# stays as the end-to-end complement).
 on:
   pull_request:
     paths:
       - "skills/scaffold/**/config-files.md"
+      - "skills/scaffold/*/template/**"
       - "scripts/validate-scaffold-configs.sh"
       - ".github/workflows/scaffold-parse.yml"
   push:
     branches: [main]
     paths:
       - "skills/scaffold/**/config-files.md"
+      - "skills/scaffold/*/template/**"
       - "scripts/validate-scaffold-configs.sh"
   workflow_dispatch:
 permissions:

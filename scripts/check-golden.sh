@@ -7,7 +7,7 @@
 #   a path held in a template tree comes from the templates, every other path from the
 #   fences, and a path produced by both fails as DUPLICATE (its fence is still in the markdown).
 #   --from-templates builds each combo from the template trees alone (shared/template,
-#   shared/template-<ts|py>, shared/template-ci/<github-<ts|py>|azure>, <stack>/template),
+#   shared/template-<ts|py>, shared/template-ci/<github-<ts|py>|azure>, <stack>/template, <stack>/template-agents),
 #   substitutes the placeholder values in tests/golden/placeholders.env, and compares only
 #   the golden paths those trees hold: a path no template holds yet is still a fence, and the
 #   default mode fails it as MISSING if neither source produces it.
@@ -90,7 +90,7 @@ template_dirs() {
   case "$stack" in nextjs | vite-react | nestjs) ts=ts ;; esac
   [[ "$ci" == github ]] && ci_dir="github-$ts"
   printf '%s\n' "$SCAFFOLD_DIR/shared/template" "$SCAFFOLD_DIR/shared/template-$ts" \
-    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir" "$SCAFFOLD_DIR/$stack/template"
+    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir" "$SCAFFOLD_DIR/$stack/template" "$SCAFFOLD_DIR/$stack/template-agents"
 }
 
 # overlay_templates <stack> <ci> <tree> — copy the combo's template trees into <tree>; prints

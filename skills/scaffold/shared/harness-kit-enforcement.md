@@ -125,6 +125,7 @@ case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
 case "$SK" in /*) ;; *) SK=./$SK ;; esac
 case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
 [ -d "$SK" ] || stop "$SK is not a directory"
+SH=$SK
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
 case "$STACK" in
   nestjs|nextjs|vite-react) V=ts ;;
@@ -141,6 +142,13 @@ case "$PART" in
       azure) SEL="template-ci/azure" ;;
       *) stop "unknown CI '$CI' (want github or azure)" ;;
     esac ;;
+  stack | agents)
+    [ -z "$CI" ] || stop "CI must stay empty for PART=$PART"
+    case "$SH" in
+      */shared) SK=${SH%/shared}/$STACK ;;
+      *) stop "the skill directory path must end in /shared" ;;
+    esac
+    if [ "$PART" = stack ]; then SEL="template"; else SEL="template-agents"; fi ;;
   *) stop "unknown PART '$PART'" ;;
 esac
 for t in $SEL; do
@@ -168,7 +176,7 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
 if [ "$PART" = ci ]; then
-  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+  cmp -s -- "$TGT/lefthook.yml" "$SH/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
 fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"

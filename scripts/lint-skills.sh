@@ -71,14 +71,26 @@ scan() {
 
 have_python() { command -v python3 >/dev/null 2>&1; }
 
-# template_files — every file in the scaffold template trees, one path per line. The four trees are
+# TEMPLATED_STACKS — the stacks whose verbatim files live in skills/scaffold/<stack>/template and
+# template-agents (listed in <stack>/template.manifest). A stack joins this list in the PR that moves
+# its fences into files.
+TEMPLATED_STACKS=(nextjs)
+
+# template_files — every file in the scaffold template trees, one path per line. The trees are
 # named explicitly (not matched by a path glob), so a checkout directory whose name contains
-# "template" cannot widen the set, and a missing shared/ directory yields an empty list.
+# "template" cannot widen the set, and a missing shared/ or stack directory yields no paths.
 template_files() {
-  local d
-  for d in template template-ts template-py template-ci; do
-    find "$SKILLS_DIR/scaffold/shared/$d" -type f 2>/dev/null
-  done | LC_ALL=C sort
+  local d st
+  {
+    for d in template template-ts template-py template-ci; do
+      find "$SKILLS_DIR/scaffold/shared/$d" -type f 2>/dev/null
+    done
+    for st in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
+      for d in template template-agents; do
+        find "$SKILLS_DIR/scaffold/$st/$d" -type f 2>/dev/null
+      done
+    done
+  } | LC_ALL=C sort
 }
 
 # ── TIMELESS ──────────────────────────────────────────────────────────────────
@@ -231,13 +243,18 @@ check_ref_file_headers() {
   # Every reference .md file under skills/ (except SKILL.md and CONVENTIONS.md) must begin with
   # a <!-- ref: --> comment so agents know the file's load path and purpose without reading the body.
   # Missing headers cause agents to silently skip context about how to load the file. TIMELESS.
+  # The files under scaffold/*/template*/ are shipped verbatim into every scaffolded project (the
+  # AGENTS.md seed starts with its own schema marker on line 1), so they are not reference files and
+  # are skipped. A skills tree with no reference file at all fails, so the check cannot pass on nothing.
   header "Ref file <!-- ref: --> headers"
-  local bad="" f firstline
+  local bad="" f firstline n=0
   while IFS= read -r f; do
+    n=$((n + 1))
     firstline=""
     IFS= read -r firstline < "$f" || true
     [[ "$firstline" == "<!-- ref:"* ]] || bad+="$f"$'\n'
-  done < <(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' 2>/dev/null)
+  done < <(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' ! -path '*/scaffold/*/template*/*' 2>/dev/null)
+  [[ "$n" -gt 0 ]] || bad+="$SKILLS_DIR: no reference .md file found — the header check scanned nothing"$'\n'
   report "${bad%$'\n'}" \
     "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2" \
     "All ref files have <!-- ref: --> headers"
@@ -775,8 +792,9 @@ for dp, _, fs in os.walk(root):
 # The copy instructions must exist and name every template tree, so a deleted instruction is not
 # mistaken for "no broken references".
 need = {
-    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', "<skill-dir>/shared"],
+    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', 'SEL="template-agents"', "<skill-dir>/shared"],
     "scaffold/shared/harness-kit-enforcement.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=ci", 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"'],
+    "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
 }
 for rel, toks in need.items():
     try: t = open(os.path.join(root, rel), encoding='utf-8').read()
@@ -966,10 +984,11 @@ check_no_deprecated_zod_flatten() {
 check_no_middleware_ts() {
   # Next.js 16 replaced middleware.ts with proxy.ts for auth/proxy patterns.
   # REVISIT: if Next.js reintroduces middleware.ts, remove or adjust this check.
-  # Excluded files are meta-documents (audit checklist, migration guides, scaffold templates)
-  # that legitimately reference middleware.ts to explain the deprecation.
+  # Excluded files are meta-documents (audit checklist, migration guide) and the Next.js AGENTS.md
+  # seed, which legitimately reference middleware.ts to explain the deprecation. The exclusion
+  # names that one template file, so every other template file is still scanned.
   header "middleware.ts references"
-  report "$(scan "" 'middleware\.ts' 'audit/implementation' 'migrate/general/phase-4-upgrade' 'scaffold/nextjs/source-files')" \
+  report "$(scan "" 'middleware\.ts' 'audit/implementation' 'migrate/general/phase-4-upgrade' 'scaffold/nextjs/template-agents/AGENTS\.md')" \
     "middleware.ts found — Next.js 16 uses proxy.ts" \
     "No middleware.ts references"
 }
@@ -1146,22 +1165,13 @@ check_security_seeds_present() {
     "Deps gate and authz seeds present"
 }
 
-check_template_trees_complete() {
-  # The scaffold copies skills/scaffold/shared/template*/ verbatim, so the file set is the contract:
-  # template.manifest lists every file with its mode, and the tree holds exactly those files. A
-  # file added without a manifest line, a manifest line without a file, or a mode that differs from
-  # the manifest (a hook that lost its exec bit) fails here. An empty or missing tree fails too,
-  # so the checks that scan these trees cannot pass on nothing. TIMELESS.
-  header "Template trees are complete and listed in the manifest"
-  if ! have_python; then
-    pass "skipped (python3 not available)"
-    return
-  fi
-  local out
-  out=$(python3 - "$SKILLS_DIR/scaffold/shared" <<'PY'
+# tree_problems <root> <tree>... — one line per disagreement between <root>/template.manifest and
+# the files in the named trees under <root> (path and mode), plus a line for each empty or missing tree.
+tree_problems() {
+  python3 - "$@" <<'PY'
 import os, sys
 shared = sys.argv[1]
-want_trees = ["template", "template-ts", "template-py", "template-ci"]
+want_trees = sys.argv[2:]
 actual = {}
 import subprocess
 # Inside a git work tree the index mode is what a checkout (and the plugin cache) reproduces; a
@@ -1212,7 +1222,26 @@ for p in sorted(listed):
     if p not in actual:
         print(f"{manifest}: lists {p}, which is not in the tree")
 PY
-)
+}
+
+check_template_trees_complete() {
+  # The scaffold copies skills/scaffold/shared/template*/ verbatim, so the file set is the contract:
+  # template.manifest lists every file with its mode, and the tree holds exactly those files. A
+  # file added without a manifest line, a manifest line without a file, or a mode that differs from
+  # the manifest (a hook that lost its exec bit) fails here. An empty or missing tree fails too,
+  # so the checks that scan these trees cannot pass on nothing. TIMELESS.
+  header "Template trees are complete and listed in the manifest"
+  if ! have_python; then
+    pass "skipped (python3 not available)"
+    return
+  fi
+  local out="" st
+  out=$(
+    tree_problems "$SKILLS_DIR/scaffold/shared" template template-ts template-py template-ci
+    for st in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
+      tree_problems "$SKILLS_DIR/scaffold/$st" template template-agents
+    done
+  )
   report "$out" \
     "Template tree and template.manifest disagree — list every file (path mode placeholders seams) and keep each .sh mode 755" \
     "Template trees match template.manifest"

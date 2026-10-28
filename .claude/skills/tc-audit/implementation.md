@@ -236,7 +236,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] **DRY** — is the same guidance or code block repeated across sections without need?
 - [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
 - [ ] **Token efficiency** — targeted checks:
-  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md`) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
+  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md` that still hold fences) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
   - Inline comments that restate what the surrounding code clearly shows? Delete them.
   - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
   - The same instruction stated in two different forms within 15 lines? Collapse to one.
@@ -332,6 +332,7 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/scaffold/nextjs/config-files.md`
 - [ ] `skills/scaffold/nextjs/source-files.md`
+- [ ] `skills/scaffold/nextjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nextjs.md`, no `middleware.ts`, every route wrapped in `withLogging()`. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/nextjs.md`
 - [ ] `skills/add/database/typescript/nextjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nextjs-kysely.md`
