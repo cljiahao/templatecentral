@@ -99,7 +99,7 @@ for f in files:
         open(f, "w", encoding="utf-8").write(t.replace(tok, repl))
 PY
 }
-no_templates() { rm -rf "$SH"/template "$SH"/template-ts "$SH"/template-py "$SH"/template-ci "$SH"/template.manifest; }
+no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest; }
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
 no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
@@ -117,7 +117,7 @@ narration_in_template_py() { printf '\n# Updated for python\n' >> "$SH/template-
 narration_in_template_cjs() { printf '\n// Moved the check here\n' >> "$SH/template-ts/.claude/hooks/user-prompt-guard.cjs"; }
 no_stop_hook_guard() { strip_token stop_hook_active sha_active "$SH/template-ts" "$SH/harness-kit-ts.md"; }
 no_akia_in_py_guard() { strip_token AKIA AKXX "$SH/template-py" "$SH/harness-kit-fastapi.md"; }
-array_command_in_settings() { python3 - "$SH/harness-kit-ts.md" <<'PY'
+array_command_in_settings() { python3 - "$SH/template-settings-ts/.claude/settings.json" <<'PY'
 import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
@@ -125,7 +125,7 @@ assert '"command": "node"' in t
 open(p, "w", encoding="utf-8").write(t.replace('"command": "node"', '"command": ["node"]', 1))
 PY
 }
-no_settings_hooks() { python3 - "$SH/harness-kit-ts.md" "$SH/harness-kit-fastapi.md" <<'PY'
+no_settings_hooks() { python3 - "$SH/template-settings-ts/.claude/settings.json" "$SH/template-settings-py/.claude/settings.json" <<'PY'
 import re, sys
 for p in sys.argv[1:]:
     t = open(p, encoding="utf-8").read()
@@ -141,7 +141,6 @@ no_copy_instruction() { strip_token '<skill-dir>/shared/template' '<skill-dir>/s
 # shellcheck disable=SC2016  # the anchor is literal text, not an expansion
 no_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit.md"; }
 # shellcheck disable=SC2016
-no_ci_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit-enforcement.md"; }
 no_deps_step_github() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-ts"; }
 no_deps_step_github_py() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-py"; }
 no_deps_step_azure() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/azure"; }
@@ -223,9 +222,7 @@ nx_agents_before_format() { printf 'Run kit Step 0 with STACK=nextjs and PART=ag
 nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
 # shellcheck disable=SC2016
 no_kit_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit.md"; }
-no_ci_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit-enforcement.md"; }
 no_kit_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit.md"; }
-no_ci_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit-enforcement.md"; }
 exact_pin_in_nx_package() { python3 - "$(NXD)/template/package.json" <<'PY'
 import sys
 p = sys.argv[1]
@@ -234,6 +231,55 @@ open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependenci
 PY
 }
 no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
+second_copy_script_in_enforcement() { python3 - "$SH/harness-kit.md" "$SH/harness-kit-enforcement.md" <<'PY'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+a = src.index("bash <<'TC_GUARD'"); b = src.index("TC_GUARD\n", src.index("\n", a) + 1) + len("TC_GUARD\n")
+with open(sys.argv[2], "a", encoding="utf-8") as f:
+    f.write("\n```bash\n" + src[a:b] + "```\n")
+PY
+}
+tc_rm_script_returns() { printf "\n\`\`\`bash\nbash <<'TC_RM'\nexit 0\nTC_RM\n\`\`\`\n" >> "$SH/harness-kit-enforcement.md"; }
+no_copy_script() { strip_token "bash <<'TC_" "bash <<'XX_" "$SH/harness-kit.md"; }
+b3_forgets_part_ci() { strip_token 'PART=ci' 'PART=cx' "$SH/harness-kit-enforcement.md"; }
+b3_forgets_ci_none() { strip_token 'CI=none' 'CI=nope' "$SH/harness-kit-enforcement.md"; }
+b3_forgets_kit() { strip_token 'harness-kit.md' 'harness-kit-x.md' "$SH/harness-kit-enforcement.md"; }
+no_kit_settings_case() { strip_token 'settings | late)' 'settings | lat)' "$SH/harness-kit.md"; }
+no_kit_none_case() { strip_token 'none) SEL= ;;' 'nope) SEL= ;;' "$SH/harness-kit.md"; }
+# shellcheck disable=SC2016  # the anchors are literal script text
+no_kit_rm_line() { strip_token 'rm -f -- "$TGT/$gate"' 'true' "$SH/harness-kit.md"; }
+no_kit_late_sel() { strip_token 'SEL="template-late"' 'SEL="template-lat"' "$SH/harness-kit.md"; }
+# shellcheck disable=SC2016
+no_kit_settings_sel() { strip_token 'SEL="template-settings-$V"' 'SEL="template-settin-$V"' "$SH/harness-kit.md"; }
+no_settings_tree() { rm -rf "$SH/template-settings-ts" "$SH/template-settings-py"; }
+no_late_tree() { rm -rf "$SH/template-late"; }
+no_tail_tree() { rm -rf "$SH/template-tail"; }
+no_settings_ts_file() { rm -f "$SH/template-settings-ts/.claude/settings.json"; }
+no_late_constitution() { rm -f "$SH/template-late/docs/CONSTITUTION.md"; }
+no_tail_file() { rm -f "$SH/template-tail/AGENTS-tail.md"; }
+deep_skill_file() { mkdir -p "$S/add/auth/a/b" && printf '<!-- ref: x -->\n' > "$S/add/auth/a/b/c.md"; }
+second_fence_renamed() { printf "\n\`\`\`bash\nbash <<'TC_COPY'\nexit 0\nTC_COPY\n\`\`\`\n" >> "$SH/harness-kit-enforcement.md"; }
+b3_tokens_only_elsewhere() { python3 - "$SH/harness-kit-enforcement.md" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("## Step B3"); b = t.index("\n## ", a + 5)
+sec = t[a:b].replace("PART=ci", "PART=cx").replace("CI=none", "CI=nope").replace("harness-kit.md", "harness-kit-x.md")
+t = t[:a] + sec + t[b:] + "\nPART=ci CI=none harness-kit.md\n"
+open(p, "w", encoding="utf-8").write(t)
+PY
+}
+# shellcheck disable=SC2016  # the text is literal script content
+sel_names_tail() { printf '\nif [ "$PART" = zz ]; then SEL="template-tail"; fi\n' >> "$SH/harness-kit.md"; }
+no_sel_lines() { strip_token 'SEL=' 'SEX=' "$SH/harness-kit.md"; }
+ad_before_agents_nextjs() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/nextjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nextjs/source-files.md"; }
+ad_before_agents_nestjs() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/nestjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nestjs/source-files.md"; }
+ad_before_agents_vite() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/vite-react/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/vite-react/source-files.md"; }
+ad_before_agents_fastapi() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/fastapi/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/fastapi/source-files.md"; }
+no_ad_line_nextjs() { strip_token 'A through D' 'A to D' "$S/scaffold/nextjs/source-files.md"; }
+migrate_forgets_tail_path() { strip_token 'scaffold/shared/template-tail/AGENTS-tail.md' 'zz-gone/AGENTS-tail.md' "$S/migrate/general/phase-4-upgrade.md"; }
+migrate_forgets_settings_tree() { strip_token 'scaffold/shared/template-settings-ts/' 'zz-gone/' "$S/migrate/general/phase-4-upgrade.md"; }
+migrate_forgets_late_tree() { strip_token 'scaffold/shared/template-late/' 'zz-gone/' "$S/migrate/general/phase-4-upgrade.md"; }
 none() { :; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
@@ -267,7 +313,6 @@ fails scaffold_seeds_fails_when_anchor_deleted "Scaffold/migrate templates seed 
 fails scaffold_seeds_fails_when_variant_token_deleted "Scaffold/migrate templates seed the complete harness" no_akia_in_py_guard "missing token: AKIA"
 fails scaffold_seeds_fails_when_variant_lefthook_deleted "Scaffold/migrate templates seed the complete harness" no_py_lefthook "lefthook.yml — template file not found"
 fails scaffold_seeds_fails_when_cp_line_deleted "Scaffold/migrate templates seed the complete harness" no_cp_line "Step 0 copy instruction missing"
-fails scaffold_seeds_fails_when_ci_cp_line_deleted "Scaffold/migrate templates seed the complete harness" no_ci_cp_line "Step B3 CI copy instruction missing"
 
 # ── check_migrate_hook_inventory_matches_kit ─────────────────────────────────
 fails migrate_inventory_fails_on_empty_match "migrate hook inventory matches" no_hooks "nothing to compare"
@@ -340,8 +385,8 @@ PY
 }
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
 
-# the B3 copy fence and the seed-neither fence are scaffold-only; the migrate docs and Step B3 say so
-for entry in "migrate/general/phase-4-upgrade.md|copy fence and the seed-neither fence are scaffold-only" "migrate/general/phase-5-health-check.md|copy fence and seed-neither fence are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|and the seed-neither fence below are scaffold-only"; do
+# the PART=ci runs of the copy script are scaffold-only; the migrate docs and Step B3 say so
+for entry in "migrate/general/phase-4-upgrade.md|runs of the copy script are scaffold-only" "migrate/general/phase-5-health-check.md|runs of the copy script are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|runs of the copy script are scaffold-only"; do
   doc=${entry%%|*}; phrase=${entry#*|}
   fn="no_scaffold_only_$(echo "$doc" | tr -c 'a-z0-9\n' '_')"
   eval "$fn() { strip_token '$phrase' 'zz-gone' \"\$S/$doc\"; }"
@@ -416,13 +461,69 @@ fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 befo
 
 # ── the kit fences keep the stack and agents branches ────────────────────────
 fails skilldir_refs_fails_when_kit_stack_case_deleted "<skill-dir> references resolve" no_kit_stack_case "harness-kit.md: copy instruction stack | agents) missing"
-fails skilldir_refs_fails_when_ci_stack_case_deleted "<skill-dir> references resolve" no_ci_stack_case "harness-kit-enforcement.md: copy instruction stack | agents) missing"
 fails skilldir_refs_fails_when_kit_sel_template_deleted "<skill-dir> references resolve" no_kit_sel_template "harness-kit.md: copy instruction SEL=\"template\" missing"
-fails skilldir_refs_fails_when_ci_sel_template_deleted "<skill-dir> references resolve" no_ci_sel_template "harness-kit-enforcement.md: copy instruction SEL=\"template\" missing"
 
 # ── template package.json pins ───────────────────────────────────────────────
 fails template_pins_fail_on_empty_match "Template package.json dependencies use floors" no_nx_package_json "no template package.json found"
 fails template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_nx_package "left-pad"
+
+# ── one copy script ──────────────────────────────────────────────────────────
+fails copy_script_fails_on_empty_match "The copy script has exactly one copy" no_copy_script "no copy script found"
+fails copy_script_fails_when_a_second_copy_appears "The copy script has exactly one copy" second_copy_script_in_enforcement "must live only in"
+fails copy_script_fails_when_tc_rm_returns "The copy script has exactly one copy" tc_rm_script_returns "must live only in"
+fails copy_script_fails_when_b3_forgets_part_ci "The copy script has exactly one copy" b3_forgets_part_ci "Step B3 must name PART=ci"
+fails copy_script_fails_when_b3_forgets_ci_none "The copy script has exactly one copy" b3_forgets_ci_none "Step B3 must name CI=none"
+fails copy_script_fails_when_b3_forgets_the_kit "The copy script has exactly one copy" b3_forgets_kit "Step B3 must name harness-kit.md"
+fails skilldir_refs_fails_when_settings_late_case_deleted "<skill-dir> references resolve" no_kit_settings_case "harness-kit.md: copy instruction settings | late) missing"
+fails skilldir_refs_fails_when_none_case_deleted "<skill-dir> references resolve" no_kit_none_case "harness-kit.md: copy instruction none) SEL= ;; missing"
+fails skilldir_refs_fails_when_rm_line_deleted "<skill-dir> references resolve" no_kit_rm_line "harness-kit.md: copy instruction rm -f -- \"\$TGT/\$gate\" missing"
+fails skilldir_refs_fails_when_late_sel_deleted "<skill-dir> references resolve" no_kit_late_sel "harness-kit.md: copy instruction SEL=\"template-late\" missing"
+fails skilldir_refs_fails_when_settings_sel_deleted "<skill-dir> references resolve" no_kit_settings_sel "harness-kit.md: copy instruction SEL=\"template-settings-\$V\" missing"
+fails scaffold_seeds_fails_when_kit_settings_sel_deleted "Scaffold/migrate templates seed the complete harness" no_kit_settings_sel "Step 0 copy instruction missing: SEL=\"template-settings-\$V\""
+
+# ── trees added by the moved fences ──────────────────────────────────────────
+fails settings_trees_fail_on_empty_match "Template trees are complete" no_settings_tree "template-settings-ts: tree is missing or empty"
+fails late_tree_fails_on_empty_match "Template trees are complete" no_late_tree "template-late: tree is missing or empty"
+fails tail_tree_fails_on_empty_match "Template trees are complete" no_tail_tree "template-tail: tree is missing or empty"
+fails late_tree_fails_when_file_deleted "Template trees are complete" no_late_constitution "template-late/docs/CONSTITUTION.md, which is not in the tree"
+fails tail_tree_fails_when_file_deleted "Template trees are complete" no_tail_file "template-tail/AGENTS-tail.md, which is not in the tree"
+fails scaffold_seeds_fails_when_settings_file_deleted "Scaffold/migrate templates seed the complete harness" no_settings_ts_file "template-settings-ts/.claude/settings.json — template file not found"
+fails scaffold_seeds_fails_when_late_file_deleted "Scaffold/migrate templates seed the complete harness" no_late_constitution "template-late/docs/CONSTITUTION.md — template file not found"
+fails scaffold_seeds_fails_when_tail_file_deleted "Scaffold/migrate templates seed the complete harness" no_tail_file "template-tail/AGENTS-tail.md — template file not found"
+
+# ── nesting depth: the same answer with and without a trailing slash, templates skipped ──
+fails nesting_depth_fails_on_a_deep_file "Nesting depth" deep_skill_file "c.md"
+depth_slash_forms_agree() {
+  [[ -n "${ONLY:-}" && ! "depth_slash_forms_agree" =~ $ONLY ]] && return 0
+  local w="$T/wdepth" f a b
+  rm -rf "$w"; mkdir -p "$w"; cp -R skills "$w/skills"
+  for f in .claude .claude-plugin CHANGELOG.md; do ln -s "$REPO_ROOT/$f" "$w/$f"; done
+  mkdir -p "$w/skills/add/auth/a/b"; printf '<!-- ref: x -->\n' > "$w/skills/add/auth/a/b/c.md"
+  a=$(section "$(bash "$LINT" "$w/skills" 2>&1 || true)" "Nesting depth")
+  b=$(section "$(bash "$LINT" "$w/skills/" 2>&1 || true)" "Nesting depth")
+  check "$a" "$b" "nesting_depth_slash_and_no_slash_agree"
+  check 1 "$([[ "$a" == *"FAIL"* && "$a" == *"c.md"* ]] && echo 1 || echo 0)" "nesting_depth_slash_form_catches_the_deep_file ($b)"
+  rm -f "$w/skills/add/auth/a/b/c.md"
+  a=$(section "$(bash "$LINT" "$w/skills" 2>&1 || true)" "Nesting depth")
+  b=$(section "$(bash "$LINT" "$w/skills/" 2>&1 || true)" "Nesting depth")
+  check 1 "$([[ "$a" == *"OK:"* && "$b" == *"OK:"* ]] && echo 1 || echo 0)" "nesting_depth_passes_with_the_template_trees_in_both_forms"
+  rm -rf "$w"
+}
+depth_slash_forms_agree
+
+# ── the copy script: renamed copies, B3 scope, selectors, and ordering ────────
+fails copy_script_fails_when_a_renamed_second_fence_appears "The copy script has exactly one copy" second_fence_renamed "must live only in"
+fails copy_script_fails_when_b3_tokens_sit_outside_b3 "The copy script has exactly one copy" b3_tokens_only_elsewhere "Step B3 must name PART=ci"
+fails copy_selector_fails_when_it_names_the_tail_tree "No copy selector names template-tail" sel_names_tail "a copy selector names template-tail"
+fails copy_selector_fails_on_empty_match "No copy selector names template-tail" no_sel_lines "no SEL assignment found"
+fails steps_a_to_d_fails_before_the_agents_step_nextjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nextjs "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_nestjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nestjs "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_vite "Scaffold runs kit Step 0 before the first install" ad_before_agents_vite "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_fastapi "Scaffold runs kit Step 0 before the first install" ad_before_agents_fastapi "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" no_ad_line_nextjs "needs a \"Steps A through D\" instruction"
+fails migrate_inventory_fails_when_the_tail_path_is_missing "migrate hook inventory matches" migrate_forgets_tail_path "missing template anchor scaffold/shared/template-tail/AGENTS-tail.md"
+fails migrate_inventory_fails_when_the_settings_tree_is_missing "migrate hook inventory matches" migrate_forgets_settings_tree "missing template anchor scaffold/shared/template-settings-ts/"
+fails migrate_inventory_fails_when_the_late_tree_is_missing "migrate hook inventory matches" migrate_forgets_late_tree "missing template anchor scaffold/shared/template-late/"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

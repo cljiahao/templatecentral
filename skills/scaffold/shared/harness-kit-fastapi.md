@@ -10,77 +10,9 @@ Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): the `settings.json` 
 
 ## Step A — `.claude/settings.json` (FastAPI)
 
-**`.claude/settings.json`** (the body below already names the stack's `user-prompt-guard` runtime):
+`.claude/settings.json` — Step A copies it (`PART=settings` of the Step 0 script) from `<skill-dir>/shared/template-settings-py/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
 
-**For FastAPI:** identical shape; `UserPromptSubmit` runs `python3` on `user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`:
-```json
-{
-  "permissions": {
-    "deny": [
-      "Read(.env)",
-      "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.production)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.test)",
-      "Read(**/*.pem)",
-      "Read(**/*.key)",
-      "Read(./secrets/**)",
-      "Read(./.secrets/**)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-files.sh"], "timeout": 10 }]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/block-no-verify.sh"], "timeout": 10 }]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [{ "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-guard.py"], "timeout": 10 }]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-typecheck.sh"], "timeout": 60 }]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-comment-check.sh"], "timeout": 30 }]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/skill-usage-log.sh"], "timeout": 10 }]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-checks.sh"], "timeout": 300 }]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-stop.sh"], "timeout": 120 }]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [{ "type": "command", "command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/session-context.sh"], "timeout": 10 }]
-      }
-    ]
-  },
-  "skillListingBudgetFraction": 0.02
-}
-```
+FastAPI: identical shape to the TS body; `UserPromptSubmit` runs `python3` on `user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`.
 
 ---
 

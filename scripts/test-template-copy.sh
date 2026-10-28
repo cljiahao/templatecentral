@@ -86,8 +86,9 @@ render() {
 }
 
 STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
-CI_SNIPPET=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 1) || CI_SNIPPET=""
-check 1 "$([[ -n "$STEP0" && -n "$CI_SNIPPET" ]] && echo 1 || echo 0)" "copy instructions found in the kit markdown (Step 0, Step B3 CI)"
+# Step B3 runs Step 0's script with PART=ci: the CI and seed-neither runs are that fence with its PART line set.
+CI_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^PART=base$/PART=ci/')
+check 1 "$([[ -n "$STEP0" ]] && echo 1 || echo 0)" "the copy script is found in the kit markdown (Step 0)"
 
 stack_of() { if [[ "$1" == py ]]; then echo fastapi; else echo nextjs; fi; }
 run_step0() { # run_step0 <target> <variant ts|py>
@@ -96,6 +97,9 @@ run_step0() { # run_step0 <target> <variant ts|py>
 run_ci() { # run_ci <target> <variant ts|py> <host github|azure> — Step B3 requires Step 0's lefthook.yml, so run Step 0 first when it is absent
   [[ -f "$1/lefthook.yml" ]] || bash -c "$(render_sc "$STEP0" "$1" "$(stack_of "$2")" "")" >/dev/null 2>&1
   bash -c "$(render_sc "$CI_SNIPPET" "$1" "$(stack_of "$2")" "$3")" 2>&1
+}
+run_part() { # run_part <target> <stack> <part> [ci] — the Step 0 script with another PART
+  bash -c "$(render_sc "$STEP0" "$1" "$2" "${4:-}" "$3")" 2>&1
 }
 run_copy() { # run_copy <target> <variant> <host> — Step 0, then the CI step; echoes output, returns the first failing exit code
   local out ec
@@ -341,15 +345,16 @@ check 0 "$ec" "copy_from_read_only_cache_exits_0 ($out)"
 check 1 "$([[ -w "$tgt/.claude" && -w "$tgt/.claude/hooks" && -w "$tgt/.claude/hooks/session-context.sh" && -w "$tgt/lefthook.yml" ]] && echo 1 || echo 0)" "copy_from_read_only_cache_leaves_writable_paths"
 chmod -R u+w "$sk/shared"
 
-# the two guards are the same script apart from the SEL and WHAT lines
+# the STACK, CI, PART and WHAT lines differ between runs; norm drops them so a text comparison sees the script alone
 norm() { printf '%s\n' "$1" | grep -v '^STACK=\|^CI=\|^PART=\|^WHAT=' ; }
-check "$(norm "$STEP0")" "$(norm "$CI_SNIPPET")" "guards_identical: Step 0 and Step B3 carry the same guard"
+check 1 "$([[ "$(norm "$STEP0")" == "$(norm "$CI_SNIPPET")" ]] && echo 1 || echo 0)" "single_script: the PART=ci run is Step 0's script with the PART line set"
 
 # seed-neither CI path leaves exactly what 6.x left: the golden tree minus ci-gates.sh and the CI file
-NEITHER=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 2) || NEITHER=""
+NEITHER=$CI_SNIPPET
 tgt="$T/o4"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
-check 1 "$([[ -n "$NEITHER" ]] && echo 1 || echo 0)" "seed_neither: the removal fence exists in Step B3"
-bash -c "$(render "$NEITHER" "$tgt" "none")" >/dev/null 2>&1
+# shellcheck disable=SC2016  # the anchor is literal script text
+check 1 "$([[ "$NEITHER" == *'rm -f -- "$TGT/$gate"'* ]] && echo 1 || echo 0)" "seed_neither: the removal branch exists in the Step 0 script"
+bash -c "$(render_sc "$NEITHER" "$tgt" nextjs none)" >/dev/null 2>&1
 want=$(python3 - "$MANIFEST" "$REPO_ROOT/tests/golden/nextjs-github.sha256" <<'PY'
 import sys
 manifest, golden = sys.argv[1:]
@@ -467,15 +472,15 @@ check 0 "$ec" "dash_target: exits 0 ($out)"
 check 1 "$([[ -f "$T/rel/-proj/.gitleaks.toml" && -x "$T/rel/-proj/.claude/hooks/session-context.sh" ]] && echo 1 || echo 0)" "dash_target: copied into -proj"
 
 # seed-neither removes the gate script only when it is the template's byte for byte
-NEITHER=$(snippet "$SHARED/harness-kit-enforcement.md" '^## Step B3\b' 2) || NEITHER=""
+NEITHER=$CI_SNIPPET
 tgt="$T/sn1"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
 printf '# local edit\n' >> "$tgt/.claude/ci-gates.sh"
-refuses_raw seed_neither_keeps_a_modified_script "$(render_sc "$NEITHER" "$tgt" nextjs "")" "differs from the template"
+refuses_raw seed_neither_keeps_a_modified_script "$(render_sc "$NEITHER" "$tgt" nextjs none)" "differs from the template"
 check 1 "$(grep -c 'local edit' "$tgt/.claude/ci-gates.sh")" "seed_neither_keeps_a_modified_script: the user's edit survives"
 refuses_raw seed_neither_refuses_unsubstituted_target "$(printf '%s\n' "$NEITHER" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" "not substituted"
-refuses_raw seed_neither_refuses_missing_dir "$(render_sc "$NEITHER" "$T/no/such" nextjs "")" "existing directory"
+refuses_raw seed_neither_refuses_missing_dir "$(render_sc "$NEITHER" "$T/no/such" nextjs none)" "existing directory"
 tgt="$T/sn2"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
-out=$(bash -c "$(render_sc "$NEITHER" "$tgt" nextjs "")" 2>&1); ec=$?
+out=$(bash -c "$(render_sc "$NEITHER" "$tgt" nextjs none)" 2>&1); ec=$?
 check 0 "$ec" "seed_neither_removes_an_identical_script ($out)"
 check 1 "$([[ ! -e "$tgt/.claude/ci-gates.sh" && -e "$tgt/.claude/verify-harness.sh" ]] && echo 1 || echo 0)" "seed_neither_removes_an_identical_script: only ci-gates.sh is gone"
 
@@ -491,16 +496,16 @@ refuses_dir() { # refuses_dir <name> <snippet text> <message substring> <dir tha
 # the seed-neither fence follows no symlink
 tgt="$T/sl1"; mkdir -p "$tgt" "$T/sl1-real/.claude"; cp "$SHARED/template/.claude/ci-gates.sh" "$T/sl1-real/.claude/ci-gates.sh"
 ln -s "$T/sl1-real/.claude" "$tgt/.claude"
-refuses_raw seed_neither_refuses_symlinked_claude_dir "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+refuses_raw seed_neither_refuses_symlinked_claude_dir "$(render_sc "$NEITHER" "$tgt" nextjs none)" "symlink"
 check 1 "$([[ -f "$T/sl1-real/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_symlinked_claude_dir: the link target is untouched"
 tgt="$T/sl2"; mkdir -p "$tgt/.claude"; cp "$SHARED/template/.claude/ci-gates.sh" "$T/sl2-real.sh"; ln -s "$T/sl2-real.sh" "$tgt/.claude/ci-gates.sh"
-refuses_raw seed_neither_refuses_symlinked_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+refuses_raw seed_neither_refuses_symlinked_gate "$(render_sc "$NEITHER" "$tgt" nextjs none)" "symlink"
 check 1 "$([[ -f "$T/sl2-real.sh" && -L "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_symlinked_gate: the link and its target are untouched"
 tgt="$T/sl3"; mkdir -p "$tgt/.claude"; ln -s "$T/does-not-exist" "$tgt/.claude/ci-gates.sh"
-refuses_raw seed_neither_refuses_dangling_symlink_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "symlink"
+refuses_raw seed_neither_refuses_dangling_symlink_gate "$(render_sc "$NEITHER" "$tgt" nextjs none)" "symlink"
 check 1 "$([[ -L "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_refuses_dangling_symlink_gate: the link is still there"
 tgt="$T/sl4"; mkdir -p "$tgt/.claude/ci-gates.sh"
-refuses_raw seed_neither_refuses_a_directory_gate "$(render_sc "$NEITHER" "$tgt" nextjs "")" "not a regular file"
+refuses_raw seed_neither_refuses_a_directory_gate "$(render_sc "$NEITHER" "$tgt" nextjs none)" "not a regular file"
 
 # an unwritable existing directory is caught before anything is written
 if [[ "$(id -u)" != 0 ]]; then
@@ -620,7 +625,7 @@ if [[ "$(id -u)" != 0 ]]; then
   done
   # the seed-neither fence reports a failed rm and leaves the gate in place
   tgt="$T/rmfail"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null; chmod 0555 "$tgt/.claude"
-  refuses_raw seed_neither_reports_a_failed_rm "$(render_sc "$NEITHER" "$tgt" nextjs "")" "rm failed"
+  refuses_raw seed_neither_reports_a_failed_rm "$(render_sc "$NEITHER" "$tgt" nextjs none)" "rm failed"
   check 1 "$([[ -f "$tgt/.claude/ci-gates.sh" ]] && echo 1 || echo 0)" "seed_neither_reports_a_failed_rm: the gate is still there"
   chmod 0755 "$tgt/.claude"
 fi
@@ -693,7 +698,7 @@ stack_manifest_diff() { # stack_manifest_diff <stack dir>
   python3 - "$1" <<'PY'
 import os, re, sys
 root = sys.argv[1]
-trees = ["template", "template-agents"]
+trees = ["template", "template-agents", "template-tail"]
 actual = {}
 for tree in trees:
     for dp, _, fs in os.walk(os.path.join(root, tree)):
@@ -769,8 +774,14 @@ if n > 5:
     print("TOOMANY", n, "placeholder files across", " ".join(sys.argv[1:]))
 PY
 }
-check "" "$(big_placeholders "$NX/template" "$NX/template-agents")" "placeholders_only_in_small_files: nextjs"
-check "" "$(big_placeholders "$SHARED/template" "$SHARED/template-ts" "$SHARED/template-py" "$SHARED/template-ci")" "placeholders_only_in_small_files: shared"
+# every shared tree plus the stack's own trees count together: a stack's project receives all of them
+check "" "$(big_placeholders "$NX/template" "$NX/template-agents" "$SHARED"/template*)" "placeholders_only_in_small_files: nextjs with every shared tree"
+check "" "$(big_placeholders "$SHARED"/template*)" "placeholders_only_in_small_files: shared"
+rm -rf "$T/span-shared"; mkdir -p "$T/span-shared"; cp -Rp "$SHARED" "$T/span-shared/shared"; cp -Rp "$NX" "$T/span-shared/nextjs"
+for f in template/.gitleaks.toml template/.claude/ci-gates.sh template-ts/lefthook.yml; do printf '__TC_X__\n' >> "$T/span-shared/shared/$f"; done
+check 1 "$([[ "$(big_placeholders "$T/span-shared/nextjs/template" "$T/span-shared/nextjs/template-agents" "$T/span-shared"/shared/template*)" == *"TOOMANY 6"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: 4 shared plus 2 stack files is over the limit per stack"
+python3 -c 'import sys; open(sys.argv[1],"a").write("__TC_X__\n"+"x"*5000+"\n")' "$T/span-shared/shared/template-late/FUTURE.md"
+check 1 "$([[ "$(big_placeholders "$T/span-shared"/shared/template-late)" == "BIG FUTURE.md"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a large template-late file is reported"
 sk=$(alt_nx big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/nextjs/template/vitest.config.ts"
 check 1 "$([[ "$(big_placeholders "$sk/nextjs/template")" == "BIG vitest.config.ts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a file over 4 KB is reported"
 sk=$(alt_nx many-ph); for f in .npmrc .prettierrc .gitignore .dockerignore .env.example tsconfig.json; do printf '__TC_X__\n' >> "$sk/nextjs/template/$f"; done
@@ -802,10 +813,10 @@ for dp, _, fs in os.walk(root):
 PY
 }
 tgt="$T/nlp"; mkdir -p "$tgt"
-out=$(run_step0 "$tgt" ts); out2=$(run_ci "$tgt" ts github); out3=$(run_stack "$tgt"); out4=$(run_agents "$tgt")
+out=$(run_step0 "$tgt" ts); out2=$(run_ci "$tgt" ts github); out3=$(run_stack "$tgt"); out4=$(run_agents "$tgt"); out4+=$(run_part "$tgt" nextjs late)
 check 1 "$([[ $(count_files "$tgt") -gt $((N_STACK + N_AGENTS)) ]] && echo 1 || echo 0)" "no_leftover_placeholders: the kit, CI and stack trees all copied ($out $out2 $out3 $out4)"
 before=$(grep -rln '__TC_' "$tgt" | sed "s|^$tgt/||" | LC_ALL=C sort | tr '\n' ' ')
-check "AGENTS.md package.json " "$before" "no_leftover_placeholders: the placeholders are present before the substitution"
+check "AGENTS.md docs/CONSTITUTION.md package.json " "$before" "no_leftover_placeholders: the placeholders are present before the substitution"
 substitute_placeholders "$tgt" "$REPO_ROOT/tests/golden/placeholders.env"
 check "" "$(grep -rn '__TC_' "$tgt" || true)" "no_leftover_placeholders: nothing is left after the substitution"
 check 1 "$([[ "$(grep -c '"name": "PROJECT_NAME_PLACEHOLDER"' "$tgt/package.json")" == 1 && "$(grep -c '^# AGENTS.md — \[Project Name\]$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "no_leftover_placeholders: the values landed where the golden holds them"
@@ -1014,7 +1025,7 @@ vsc() {
 if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   out=$(vsc ':')
   check 1 "$([[ "$out" == *"ok    skills/scaffold/nextjs/template/package.json"* && "$out" == *"ok    skills/scaffold/nextjs/template/eslint.config.mjs"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_checks_template_files: json and mjs files are validated ($out)"
-  check 1 "$([[ "$out" != *"skills/scaffold/shared"* ]] && echo 1 || echo 0)" "validate_configs_shared_manifest_does_not_trip_the_stack_check: the shared manifest has no JSON or JS by design ($out)"
+  check 1 "$([[ "$out" != *"FAIL  skills/scaffold/shared"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_shared_manifest_does_not_trip_the_stack_check: the shared manifest has no JSON or JS by design ($out)"
   out=$(vsc "printf '{' >> skills/scaffold/nextjs/template/package.json")
   check 1 "$([[ "$out" == *"FAIL  skills/scaffold/nextjs/template/package.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_template_json ($out)"
   out=$(vsc "printf 'const = ;\\n' >> skills/scaffold/nextjs/template/eslint.config.mjs")
@@ -1025,13 +1036,110 @@ if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: a renamed template/ tree fails while its manifest exists ($out)"
   out=$(vsc "find skills/scaffold/nextjs/template \\( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -delete")
   check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a template/ tree with no JSON or JS file ($out)"
-  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest; rm -f skills/scaffold/*/config-files.md")
+  out=$(vsc "printf '{' >> skills/scaffold/shared/template-settings-ts/.claude/settings.json")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/shared/template-settings-ts/.claude/settings.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_settings_json ($out)"
+  out=$(vsc "rm -rf skills/scaffold/shared/template-settings-py")
+  check 1 "$([[ "$out" == *"template-settings-py  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a missing settings tree ($out)"
+  out=$(vsc "rm -rf skills/scaffold/shared/template-settings-ts skills/scaffold/shared/template-settings-py")
+  check 1 "$([[ "$out" == *"template-settings-ts  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: both settings trees gone ($out)"
+  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest skills/scaffold/shared/template-settings-*; rm -f skills/scaffold/*/config-files.md")
   check 1 "$([[ "$out" == *"nothing was validated"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_nothing_is_validated ($out)"
 elif [[ "${CI:-}" == true ]]; then
   FAIL=$((FAIL + 1)); echo "FAIL: jq or node is missing but CI=true; the validate-scaffold-configs tests must run in CI"
 else
   echo "SKIP: validate-scaffold-configs tests (jq or node not installed)"
 fi
+
+# ── PART=settings, PART=late, PART=claude and the AGENTS.md tail ─────────────
+for sv in nextjs:ts fastapi:py; do
+  st=${sv%%:*}; v=${sv##*:}
+  tgt="$T/part-$st"; mkdir -p "$tgt"
+  out=$(run_part "$tgt" "$st" base)
+  out2=$(run_part "$tgt" "$st" settings); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out2" == *"AGENTS.md does not exist yet"* && ! -e "$tgt/.claude/settings.json" ]] && echo 1 || echo 0)" "part_settings[$st]: refused before AGENTS.md exists ($out2)"
+  out3=$(run_part "$tgt" "$st" late); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out3" == *"AGENTS.md does not exist yet"* && ! -e "$tgt/FUTURE.md" ]] && echo 1 || echo 0)" "part_late[$st]: refused before AGENTS.md exists ($out3)"
+  printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
+  out2=$(run_part "$tgt" "$st" settings); ec=$?
+  check 0 "$ec" "part_settings[$st]: exits 0 ($out2)"
+  check 1 "$([[ -f "$tgt/.claude/settings.json" ]] && cmp -s "$tgt/.claude/settings.json" "$SHARED/template-settings-$v/.claude/settings.json" && echo 1 || echo 0)" "part_settings[$st]: settings.json is the $v variant byte for byte"
+  want=$(grep -F '  .claude/settings.json' "$REPO_ROOT/tests/golden/$st-github.sha256" | cut -d' ' -f1)
+  check "$want" "$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$tgt/.claude/settings.json")" "part_settings[$st]: settings.json matches the golden"
+  out3=$(run_part "$tgt" "$st" late); ec=$?
+  check 0 "$ec" "part_late[$st]: exits 0 ($out3)"
+  missing=""
+  for p in FUTURE.md docs/CONSTITUTION.md .claude/skills/skill-audit/SKILL.md; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
+  check "" "$missing" "part_late[$st]: the three late files arrived"
+  check 1 "$([[ "$(grep -c '__TC_PROJECT_TITLE__' "$tgt/docs/CONSTITUTION.md")" == 1 ]] && echo 1 || echo 0)" "part_late[$st]: CONSTITUTION carries its one placeholder"
+  check 1 "$([[ ! -e "$tgt/AGENTS-tail.md" && ! -e "$tgt/template-tail" && ! -e "$tgt/.claude/AGENTS-tail.md" ]] && echo 1 || echo 0)" "part_late[$st]: the tail is never copied as a file"
+  out=$(run_part "$tgt" "$st" late); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_late[$st]: a second run refuses (the files exist)"
+  out=$(run_part "$tgt" "$st" settings); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_settings[$st]: a second run refuses (settings.json exists)"
+done
+# settings and late refuse without Step 0, and with a STACK that does not match it
+for part in settings late; do
+  tgt="$T/part-nostep0-$part"; mkdir -p "$tgt"; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
+  refuses_raw "part_${part}_refuses_without_step0" "$(render_sc "$STEP0" "$tgt" nextjs "" "$part")" "does not match"
+  check 1 "$(count_files "$tgt")" "part_${part}_refuses_without_step0: nothing written but the AGENTS.md the test placed"
+  tgt="$T/part-mismatch-$part"; mkdir -p "$tgt"; run_part "$tgt" nextjs base >/dev/null; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
+  before=$(count_files "$tgt")
+  refuses_raw "part_${part}_refuses_a_stack_that_differs_from_step0" "$(render_sc "$STEP0" "$tgt" fastapi "" "$part")" "does not match"
+  check "$before" "$(count_files "$tgt")" "part_${part}_refuses_a_stack_that_differs_from_step0: nothing written"
+  refuses_raw "part_${part}_ci_must_stay_empty" "$(render_sc "$STEP0" "$T/part-nostep0-$part" nextjs github "$part")" "CI must stay empty"
+done
+# an existing settings.json is never overwritten
+tgt="$T/part-own-settings"; mkdir -p "$tgt/.claude"; printf 'mine\n' > "$tgt/.claude/settings.json"; run_part "$tgt" nextjs base >/dev/null; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
+out=$(run_part "$tgt" nextjs settings); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/settings.json"* ]] && echo 1 || echo 0)" "part_settings_refuses_existing_file: names settings.json ($out)"
+check mine "$(cat "$tgt/.claude/settings.json")" "part_settings_refuses_existing_file: the user's file is untouched"
+# the AGENTS.md tail: one marker, fixed per-stack values, atomic append, and the migrate path
+TAIL_FILE="$SHARED/template-tail/AGENTS-tail.md"
+check 1 "$(grep -c 'see delta table for stack command' "$TAIL_FILE")" "agents_tail: the tail file holds the marker exactly once"
+TAIL_CMD=$(snippet "$SHARED/harness-kit-finalize.md" '^## Step G\b' 1)
+check 1 "$([[ "$TAIL_CMD" == *'ENVIRON["TC"]'* && "$TAIL_CMD" != *'sed '* ]] && echo 1 || echo 0)" "agents_tail: the command fills the marker from fixed values, with no sed pattern"
+run_tail() { # run_tail <stack> <project dir> [skill-dir text for the tail path] — the documented command in <project dir>
+  local body
+  body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
+t = sys.stdin.read().replace("STACK=\n", "STACK=" + sys.argv[1] + "\n", 1)
+t = t.replace("<skill-dir>/shared/template-tail", sys.argv[3] + "/template-tail" if len(sys.argv) > 3 else "<skill-dir>/shared/template-tail")
+print(t.replace("<skill-dir>", sys.argv[2]))' "$1" "$SK" ${3:+"$3"})
+  (cd "$2" && bash -c "$body" 2>&1)
+}
+for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec tsc --noEmit --incremental' nestjs:'pnpm exec tsc --noEmit --incremental' fastapi:'python -m pyright src/'; do
+  st=${sc%%:*}; cmd=${sc#*:}
+  tgt="$T/tail-$st"; rm -rf "$tgt"; mkdir -p "$tgt"; cp "$NX/template-agents/AGENTS.md" "$tgt/AGENTS.md"; before=$(cat "$tgt/AGENTS.md")
+  out=$(run_tail "$st" "$tgt"); ec=$?
+  check 0 "$ec" "agents_tail[$st]: the documented command exits 0 ($out)"
+  check 1 "$([[ "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 && "$(grep -c 'see delta table for stack command' "$tgt/AGENTS.md")" == 0 && "$(grep -cF "incremental type-check ($cmd)" "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail[$st]: one tail, with the fixed command inside the parentheses"
+  check 1 "$([[ "$(head -c "${#before}" "$tgt/AGENTS.md")" == "$before" ]] && echo 1 || echo 0)" "agents_tail[$st]: the stack's AGENTS.md body is untouched"
+done
+# an unknown or empty STACK appends nothing
+for bad in rails ''; do
+  tgt="$T/tail-bad"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+  out=$(run_tail "$bad" "$tgt"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$(cat "$tgt/AGENTS.md")" == body && ! -e "$tgt/PWN" ]] && echo 1 || echo 0)" "agents_tail_refuses_stack[$bad]: nonzero, AGENTS.md untouched, nothing ran ($out)"
+done
+tgt="$T/tail-nofile"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys; print(sys.stdin.read().replace("STACK=\n", "STACK=nextjs\n", 1).replace("<skill-dir>", sys.argv[1]))' "$T/no-such-skill")" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$(cat "$tgt/AGENTS.md")" == body ]] && echo 1 || echo 0)" "agents_tail_is_atomic: a failed read appends nothing, not even the blank line ($out)"
+# migrate reads the tail from <skill-dir>/../scaffold/shared/..., with <skill-dir> the migrate directory
+tgt="$T/tail-migrate"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
+t = sys.stdin.read().replace("STACK=\n", "STACK=nextjs\n", 1)
+t = t.replace("<skill-dir>/shared/template-tail", "<skill-dir>/../scaffold/shared/template-tail")
+print(t.replace("<skill-dir>", sys.argv[1]))' "$REPO_ROOT/skills/migrate")
+out=$(cd "$tgt" && bash -c "$body" 2>&1); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_migrate_path: the path the migrate doc names resolves and appends ($out)"
+check 1 "$([[ "$(grep -c 'scaffold/shared/template-tail/AGENTS-tail.md' "$REPO_ROOT/skills/migrate/general/phase-4-upgrade.md")" -ge 1 ]] && echo 1 || echo 0)" "agents_tail_migrate_path: phase-4 names the tail path"
+# the task-management text appends with a plain command
+TM_CMD=$(snippet "$NX/source-files.md" '^### 7b\.' 1)
+tgt="$T/tail-tm"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TM_CMD" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" 2>&1); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Task Management$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "task_management_append: the documented command appends the section ($out)"
+# Step D fills the title with the Edit tool: no script and no heredoc carries the name
+check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_name_heredoc"
+check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -n '__TC_' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')
@@ -1071,8 +1179,18 @@ PY
 check "" "$(cat "$T/dist.diff")" "dist_keeps_templates"
 # the dist copy works the same way: copy from the dist skill dir
 tgt="$T/dist-copy"; mkdir -p "$tgt"
+# shellcheck disable=SC2030,SC2031  # the subshell keeps the dist skill dir out of the rest of the run
 (SK="$dist/scaffold"; run_step0 "$tgt" ts) >/dev/null 2>&1
 check 1 "$([[ -x "$tgt/.claude/hooks/session-context.sh" && -f "$tgt/.gitleaks.toml" ]] && echo 1 || echo 0)" "dist_keeps_templates: copy from the dist layout keeps dotfiles and exec bits"
+# the registered skill set (top-level skills/*/SKILL.md) is the same in the dist, and the SKILL.md files
+# the templates carry sit deeper, so a loader that reads one level never registers them
+src_set=$(cd "$REPO_ROOT/skills" && find . -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort | tr '\n' ' ')
+dist_set=$(cd "$dist" && find . -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort | tr '\n' ' ')
+check "$src_set" "$dist_set" "dist_registered_skill_set: the top-level skills match the source"
+check 1 "$([[ -n "$src_set" ]] && echo 1 || echo 0)" "dist_registered_skill_set: the source has registered skills"
+tpl_skills=$(cd "$dist" && find . -name SKILL.md -path '*/template*/*' | wc -l | tr -d ' ')
+check 1 "$([[ "$tpl_skills" -ge 3 ]] && echo 1 || echo 0)" "dist_registered_skill_set: the template skills are in the dist ($tpl_skills)"
+check "" "$(cd "$dist" && find . -mindepth 2 -maxdepth 2 -name SKILL.md -path '*/template*/*')" "dist_registered_skill_set: no template SKILL.md sits at the registered depth"
 # the stack trees and their manifest reach the dist too, with dotfiles, modes and bytes
 python3 - "$NX" "$dist/scaffold/nextjs" > "$T/dist-nx.diff" <<'PY'
 import os, sys

@@ -32,7 +32,7 @@ The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.m
 
 ### 1. Create directory and files
 
-Create the target directory, then load the kit index: its Step 0 fence is the copy script (Step B3 carries an identical copy for `PART=ci`).
+Create the target directory, then load the kit index: its Step 0 fence is the copy script (Step B3 runs it with `PART=ci`).
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
@@ -124,45 +124,13 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Kit Step **0** (`PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json, hook scripts, FUTURE.md, CONSTITUTION.md). Then continue with step 6c below to create the verify skills. After step 6c, execute kit Steps **E through H** (harness.json requires the verify skills to exist first — Step E's prerequisites note explains this).
+Kit Step **0** (`PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`, each run of the Step 0 script with `STACK=nextjs` in its fence). The verify skills (6c) are already in place, which Step E requires, so the kit's Steps **E through H** follow.
 
 
 
-### 6c. Create project skill files (`.claude/skills/`)
+### 6c. Project skill files (`.claude/skills/`)
 
-Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
-
-Run `mkdir -p .claude/skills/next-migrate .claude/skills/next-verify`, then create `.claude/skills/next-migrate/SKILL.md`:
-
-```markdown
----
-name: next-migrate
-description: Run Drizzle push/migrate for this project with a safety gate.
-allowed-tools: Bash(pnpm *)
----
-
-Check that `src/integrations/database/` exists before running — database must be wired up first (`templatecentral:add (database)`).
-
-- `pnpm db:push` — dev only, no migration files generated (schema overwrite)
-- `pnpm db:migrate` — production-safe, generates migration files
-
-Before running against production: verify `DATABASE_URL` in `.env.local` points to the correct instance.
-```
-
-Create `.claude/skills/next-verify/SKILL.md`:
-
-```markdown
----
-name: next-verify
-description: Run typecheck + lint + test suite for this project in one pass.
-allowed-tools: Bash(pnpm *)
----
-
-Run `pnpm check && pnpm test` and report any failures.
-
-- If `pnpm check` fails: fix TypeScript or lint errors before marking work done.
-- If `pnpm test` fails: investigate root cause — do not skip or disable tests.
-```
+`.claude/skills/next-migrate/SKILL.md` and `.claude/skills/next-verify/SKILL.md` were copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
 
 Now execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the nextjs `PostToolUse` line), and plugin install (Step H).
 
@@ -196,12 +164,11 @@ After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness
 
 ### 7b. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append this to the project's `AGENTS.md`:
+Ask whether the user wants structured task management for complex features. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
-```markdown
-## Task Management
-
-For complex tasks (3+ files, architectural decisions): `/superpowers:brainstorm` → `/superpowers:write-plan` → `/superpowers:execute-plan`. Skip for single-file edits or quick fixes.
+```bash
+printf '\n' >> AGENTS.md
+cat "<skill-dir>/nextjs/template-tail/task-management.md" >> AGENTS.md
 ```
 
 ### 8. Remove example code (optional)

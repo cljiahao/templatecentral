@@ -8,7 +8,9 @@
 # with `node --check` (loaded as a module via a .mjs temp file).
 # A stack whose files live in skills/scaffold/<stack>/template/ is checked on the files
 # themselves: every *.json with jq (JSONC comments stripped first) and every *.js, *.mjs and *.cjs
-# with `node --check` (the nearest package.json decides how a .js file loads).
+# with `node --check` (the nearest package.json decides how a .js file loads). The shared
+# template-settings-ts and template-settings-py trees are checked the same way and must each hold a
+# settings.json.
 # Reports every malformed block or file and exits 1, so a broken scaffold config template is caught
 # by a PR check, not only by the optional monthly LLM scaffold-verify cron. Exits 1 when nothing
 # at all was validated, or when a stack's template.manifest has no JSON or JS file under its template/.
@@ -88,7 +90,7 @@ for f in skills/scaffold/*/config-files.md; do
 done
 
 # Template trees: the files are real, so they are checked directly.
-for tree in skills/scaffold/*/template; do
+for tree in skills/scaffold/*/template skills/scaffold/shared/template-settings-*; do
   [ -d "$tree" ] || continue
   while IFS= read -r file; do
     total=$((total + 1))
@@ -124,6 +126,16 @@ for manifest in skills/scaffold/*/template.manifest; do
   n=$(find "$stack_dir/template" -type f \( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) 2>/dev/null | wc -l | tr -d ' ')
   if [ "$n" -eq 0 ]; then
     echo "  FAIL  $stack_dir  — template.manifest exists but template/ holds no JSON or JS file to validate" >&2
+    fail=1
+  fi
+done
+
+# The two settings.json bodies are JSON that Claude Code reads at the start of every session, so each
+# settings tree must exist and hold a JSON file to validate.
+for variant in ts py; do
+  n=$(find "skills/scaffold/shared/template-settings-$variant" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$n" -eq 0 ]; then
+    echo "  FAIL  skills/scaffold/shared/template-settings-$variant  — no settings.json to validate" >&2
     fail=1
   fi
 done

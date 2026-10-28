@@ -14,23 +14,23 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 
 | File | Holds | Load for |
 |---|---|---|
-| `harness-kit-ts.md` | TS body for Step A (`settings.json`) and the notes for Steps B, B2 (the 7 per-stack hooks incl. `user-prompt-guard.cjs`, and `lefthook.yml`, which live in `template-ts/`) | nestjs · nextjs · vite-react |
-| `harness-kit-fastapi.md` | FastAPI body for Step A (`settings.json`) and the notes for Steps B, B2, B3 (the 7 per-stack hooks incl. `user-prompt-guard.py`, `lefthook.yml` and the CI `quality` job, which live in `template-py/` and `template-ci/github-py/`) | fastapi |
+| `harness-kit-ts.md` | Notes for Steps A, B, B2 (the TS `settings.json` in `template-settings-ts/`, the 7 per-stack hooks incl. `user-prompt-guard.cjs`, and `lefthook.yml`, which live in `template-ts/`) | nestjs · nextjs · vite-react |
+| `harness-kit-fastapi.md` | Notes for Steps A, B, B2, B3 (the FastAPI `settings.json` in `template-settings-py/`, the 7 per-stack hooks incl. `user-prompt-guard.py`, `lefthook.yml` and the CI `quality` job, which live in `template-py/` and `template-ci/github-py/`) | fastapi |
 | `harness-kit-enforcement.md` | Step A/B/B2 shared rules + notes on the stack-agnostic files (`comment-hygiene-patterns.txt`, `session-context.sh`, `skill-usage-log.sh`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`, held in `template/`); Steps B3 (CI host pick, `ci-gates.sh`, Azure template), B4, B5 | every stack |
-| `harness-kit-finalize.md` | Steps C, D, E, E2, E3, F, G, H + the shared AGENTS.md tail fragment | every stack |
+| `harness-kit-finalize.md` | Steps C, D, E, E2, E3, F, G, H (the AGENTS.md tail is `template-tail/AGENTS-tail.md`, appended in Step G) | every stack |
 
 ## Step order
 
 | Step | Seeds | Where |
 |---|---|---|
 | 0 | every template file below that is a real file: the 9 `.claude/hooks/` scripts, `.claude/ci-gates.sh`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml` | this file — scaffold only; migrate diffs and merges instead |
-| A | `.claude/settings.json` | variant (JSON body) + enforcement (merge rules, deny lists, hook inventory) |
+| A | `.claude/settings.json` (copied here with `PART=settings`) | enforcement (merge rules, deny lists, hook inventory) + variant notes |
 | B | `.claude/hooks/` scripts (copied in Step 0) | notes in the variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
 | B2 | git-hook layer (files copied in Step 0) | notes in the variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
 | B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` from Step 0, plus the CI file copied here: `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (CI host pick and copy; the `deps` dependency-audit gate lives in `ci-gates.sh`) + fastapi variant (notes on the FastAPI `quality` job) |
 | B4 | harness integrity verifier (`verify-harness.sh`, `regen-harness.sh`, copied in Step 0) | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
-| C, D | `FUTURE.md`, `docs/CONSTITUTION.md` | finalize |
+| C, D | `FUTURE.md`, `docs/CONSTITUTION.md` (copied with `PART=late`, together with the `/skill-audit` skill of Step B5) | finalize |
 | E, E2, E3 | `.claude/harness.json`, base snapshot, per-folder docs | finalize |
 | F, G, H | `.agents` symlink, post-scaffold workflow, plugins | finalize |
 
@@ -42,7 +42,17 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-The fence below is the copy script (Step B3 carries an identical copy for `PART=ci`), and it runs once per `PART`. `PART=base` is this step: run it before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. A stack whose files live in `<skill-dir>/<stack>/template/` and `template-agents/` (its `source-files.md` says when) runs it again with `PART=stack` and `PART=agents`; Step B3 runs its own copy with `PART=ci`. Edit `STACK=` (the first line of the script) and, where the stack's `source-files.md` says, `PART=`; leave `CI=` empty. Set `STACK=` to `nestjs`, `nextjs`, `vite-react` or `fastapi`. It ships empty, and the script refuses until it is set. From it the script derives the trees and the manifest and refuses any other value, so a wrong stack cannot copy another stack's files: `base` copies `template` plus `template-ts` (the three TS stacks) or `template-py` (fastapi) per `<skill-dir>/shared/template.manifest`; `stack` and `agents` copy `<skill-dir>/<STACK>/template` and `<skill-dir>/<STACK>/template-agents` per `<skill-dir>/<STACK>/template.manifest`.
+The fence below is the only copy script. Other steps and the stack's `source-files.md` run it again with another `PART`; edit `STACK=` (the first line; it ships empty and the script refuses until it is set to `nestjs`, `nextjs`, `vite-react` or `fastapi`), `PART=` and, for `ci` only, `CI=`. `<target>` is the project root; the app files may already be there, and only the paths a copy writes must be absent. The script derives its trees and manifest from `STACK` and `PART` and refuses any other value, so a wrong stack cannot copy another stack's files:
+
+| `PART` | Run it | Copies |
+|---|---|---|
+| `base` | here, before Step A and the first `pnpm install` | `template` + `template-ts` (nestjs, nextjs, vite-react) or `template-py` (fastapi), per `<skill-dir>/shared/template.manifest` |
+| `settings` | Step A, after the stack's `AGENTS.md` step | `template-settings-ts` or `template-settings-py`: `.claude/settings.json` |
+| `ci` | Step B3, with `CI=github` or `CI=azure` | `template-ci/github-ts`, `github-py` or `azure`; `CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise |
+| `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `.claude/skills/skill-audit/SKILL.md` (prettier would reformat the first two at an earlier format pass) |
+| `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
+
+`settings`, `late` and `ci` refuse unless the project's `lefthook.yml` is the one `base` copied for this `STACK`, so run `base` first. `settings` and `late` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
 
 Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
@@ -83,11 +93,16 @@ case "$PART" in
   base)
     [ -z "$CI" ] || stop "CI must stay empty in Step 0"
     SEL="template template-$V" ;;
+  settings | late)
+    [ -z "$CI" ] || stop "CI must stay empty for PART=$PART"
+    [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: PART=$PART runs after the stack's AGENTS.md step and its verification gate"
+    if [ "$PART" = settings ]; then SEL="template-settings-$V"; else SEL="template-late"; fi ;;
   ci)
     case "$CI" in
       github) SEL="template-ci/github-$V" ;;
       azure) SEL="template-ci/azure" ;;
-      *) stop "unknown CI '$CI' (want github or azure)" ;;
+      none) SEL= ;;
+      *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
   stack | agents)
     [ -z "$CI" ] || stop "CI must stay empty for PART=$PART"
@@ -98,6 +113,16 @@ case "$PART" in
     if [ "$PART" = stack ]; then SEL="template"; else SEL="template-agents"; fi ;;
   *) stop "unknown PART '$PART'" ;;
 esac
+if [ "$PART" = ci ] && [ "$CI" = none ]; then
+  WHAT="remove the CI gate script"
+  gate=.claude/ci-gates.sh
+  if [ -L "$TGT/.claude" ] || [ -L "$TGT/$gate" ]; then stop "$TGT/.claude or $TGT/$gate is a symlink, so removing the file could delete something outside the project"; fi
+  [ -e "$TGT/$gate" ] || { echo "Nothing to remove: $TGT/$gate does not exist."; exit 0; }
+  [ -f "$TGT/$gate" ] || stop "$TGT/$gate is not a regular file"
+  cmp -s -- "$SK/template/$gate" "$TGT/$gate" || stop "$TGT/$gate differs from the template, so it is not the file Step 0 placed"
+  rm -f -- "$TGT/$gate" || stop "rm failed for $TGT/$gate"
+  exit 0
+fi
 for t in $SEL; do
   [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
   [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
@@ -122,7 +147,7 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
   done
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
-if [ "$PART" = ci ]; then
+if [ "$PART" = ci ] || [ "$PART" = settings ] || [ "$PART" = late ]; then
   cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
 fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
