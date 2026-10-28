@@ -262,11 +262,17 @@ for combo in nextjs:github nextjs:azure vite-react:github vite-react:azure fasta
   check "$want_unfenced" "$got" "coverage $combo: path headings without a file match tests/golden/unfenced.txt"
 done
 
-# pinned_inline_variants: the Step A body in the variant kits is the golden settings.json
-python3 "$EXTRACT" --flat --out "$T/flat-ts" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-ts.md" > /dev/null 2>&1
-python3 "$EXTRACT" --flat --out "$T/flat-py" --src "$REPO_ROOT/skills/scaffold/shared/harness-kit-fastapi.md" > /dev/null 2>&1
-check "" "$(diff "$T/flat-ts/settings.ts.json" "$T/cov-nextjs:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: ts settings.json"
-check "" "$(diff "$T/flat-py/settings.py.json" "$T/cov-fastapi:github/.claude/settings.json" 2>&1)" "pinned_inline_variants: fastapi settings.json"
+# pinned_settings_files: the settings.json bodies in the template trees are the golden settings.json,
+# and the variant kits keep no fence of their own for them
+sha_of_file() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
+for pair in "ts:nextjs" "py:fastapi"; do
+  v=${pair%%:*}; st=${pair##*:}
+  want=$(grep -F '  .claude/settings.json' "$REPO_ROOT/tests/golden/$st-github.sha256" | cut -d' ' -f1)
+  got=$(sha_of_file "$REPO_ROOT/skills/scaffold/shared/template-settings-$v/.claude/settings.json" 2>/dev/null)
+  check "$want" "$got" "pinned_settings_files: template-settings-$v settings.json is the golden $st settings.json"
+  check 1 "$([[ -n "$want" ]] && echo 1 || echo 0)" "pinned_settings_files: the $st golden lists settings.json"
+done
+check "" "$(ls "$T"/cov-nextjs:github/.claude/settings.json 2>/dev/null)" "pinned_settings_files: no markdown fence yields the nextjs settings.json"
 
 # pointer_contract: only a single line that starts with the backticked path closes a heading
 cat > "$T/ptr2.md" <<MD

@@ -49,6 +49,9 @@ into `~/.config/opencode/skills/` (global) or a project `.opencode/skills/`. Ope
 auto-loads `~/.claude/skills/` and `~/.agents/skills/` if you prefer to stage them there. Restart
 OpenCode after changing config — it loads config once at start.
 
+The scaffold's template skills (`next-verify`, `next-migrate`, `skill-audit`) ship as `SKILL.md.tmpl`, so
+no loader, recursive or not, registers them; the scaffold copy drops the suffix in the project.
+
 ### OpenAI Codex
 
 Codex auto-discovers skills under `.agents/skills/` (walking from the cwd up to the repo root),

@@ -24,14 +24,33 @@ scaffold_tree() {
   python3 "$REPO_ROOT/scripts/extract-fences.py" --stack "$1" --ci "$2" --out "$3" > /dev/null 2>&1
   local d
   for d in "$REPO_ROOT/skills/scaffold/shared/template" "$REPO_ROOT/skills/scaffold/shared/template-$ts" \
-    "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template"; do
+    "$REPO_ROOT/skills/scaffold/shared/template-settings-$ts" "$REPO_ROOT/skills/scaffold/shared/template-late" \
+    "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template" \
+    "$REPO_ROOT/skills/scaffold/$1/template-agents"; do
     [[ -d "$d" ]] && cp -Rp "$d/." "$3/"
   done
+  # a <name>.tmpl source is the project file <name>
+  find "$3" -name '*.tmpl' | while IFS= read -r f; do mv -- "$f" "${f%.tmpl}"; done
+  # a generated project carries a real name where the template holds a placeholder
+  python3 - "$3" "$REPO_ROOT/tests/golden/placeholders.env" <<'PY'
+import os, sys
+root, env = sys.argv[1:]
+values = dict(l.rstrip("\n").split("=", 1) for l in open(env, encoding="utf-8") if l.strip() and not l.startswith("#"))
+for dp, _, fs in os.walk(root):
+    for f in fs:
+        full = os.path.join(dp, f)
+        data = open(full, "rb").read()
+        new = data
+        for k, v in values.items():
+            new = new.replace(("__TC_%s__" % k).encode(), v.encode())
+        if new != data:
+            open(full, "wb").write(new)
+PY
 }
 
 fresh_golden() { # fresh_golden <name> — a writable copy of the real goldens
   mkdir -p "$T/$1"
-  cp "$REPO_ROOT"/tests/golden/*.sha256 "$REPO_ROOT"/tests/golden/exceptions.txt "$T/$1/"
+  cp "$REPO_ROOT"/tests/golden/*.sha256 "$REPO_ROOT"/tests/golden/exceptions.txt "$REPO_ROOT"/tests/golden/placeholders.env "$T/$1/"
   echo "$T/$1"
 }
 
@@ -117,7 +136,7 @@ t = open(p).read()
 assert "useDefault" in t
 open(p, "w").write(t.replace("useDefault", "__TC_FOO__", 1))
 PY
-g=$(fresh_golden ph); printf 'FOO=useDefault' > "$g/placeholders.env"
+g=$(fresh_golden ph); printf 'PROJECT_TITLE=[Project Name]\nFOO=useDefault' > "$g/placeholders.env"
 TC_SCAFFOLD_DIR="$T/sk-ph" bash "$CHECK" --golden-dir "$g" --from-templates "$COMBO" > /dev/null 2>&1; check 0 $? "placeholders_env_last_line_without_newline_is_read"
 
 # extractor failure: its stderr is shown when it fails
@@ -233,11 +252,11 @@ check 1 "$ec" "from_templates_changed_byte_fails: exit"
 check "MISMATCH $COMBO .gitleaks.toml" "$(grep '^MISMATCH' <<< "$out")" "from_templates_changed_byte_fails: MISMATCH line"
 printf 'x\n' > "$T/sk-bad/shared/template/stray.txt"
 out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" --from-templates "$COMBO"); check "EXTRA $COMBO stray.txt" "$(grep '^EXTRA' <<< "$out")" "from_templates_extra_file_fails"
-rm -rf "$T/sk-bad"; mkdir -p "$T/sk-bad/shared/template/docs"
-printf 'x\n' > "$T/sk-bad/shared/template/docs/CONSTITUTION.md"
+rm -rf "$T/sk-bad"; mkdir -p "$T/sk-bad/shared/template"
+printf 'x\n' > "$T/sk-bad/shared/template/pyproject.toml"
 out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" "$COMBO"); ec=$?
 check 1 "$ec" "duplicate_fence_and_template_fails: exit"
-check "DUPLICATE $COMBO docs/CONSTITUTION.md" "$(grep '^DUPLICATE' <<< "$out")" "duplicate_fence_and_template_fails: DUPLICATE line"
+check "DUPLICATE $COMBO pyproject.toml" "$(grep '^DUPLICATE' <<< "$out")" "duplicate_fence_and_template_fails: DUPLICATE line"
 
 # --tree: a generated project is compared against the expected tree
 tree="$T/project"

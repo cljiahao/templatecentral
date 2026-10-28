@@ -1,13 +1,22 @@
 # Files the scaffold copies verbatim. One line per file: path mode placeholders seams
 # path          relative to skills/scaffold/shared/; the first segment names the tree
 #               (template: every stack; template-ts / template-py: the stack variant;
-#               template-ci/<github-ts|github-py|azure>: the CI host file)
+#               template-ci/<github-ts|github-py|azure>: the CI host file;
+#               template-settings-<ts|py>: .claude/settings.json, copied at Step A;
+#               template-late: copied at Step C, after the format pass that precedes it;
+#               template-tail: the AGENTS.md tail, appended to AGENTS.md at Step G, never copied as a file)
+#               A name ending in .tmpl is the source of the project file with that suffix removed
+#               (SKILL.md.tmpl becomes SKILL.md), so no skill loader registers a template skill; the
+#               manifest lists the source name, and the copy and the golden check strip the suffix
 # mode          octal file mode, equal to the git mode (644 or 755)
 # placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
 # seams         comma-separated [[post-harness]] markers the file carries, or - for none
 template-ci/azure/azure-pipelines/templatecentral-gates.yml 644 - -
 template-ci/github-py/.github/workflows/ci.yml 644 - -
 template-ci/github-ts/.github/workflows/ci.yml 644 - -
+template-late/.claude/skills/skill-audit/SKILL.md.tmpl 644 - -
+template-late/FUTURE.md 644 - -
+template-late/docs/CONSTITUTION.md 644 __TC_PROJECT_TITLE__ -
 template-py/.claude/hooks/block-no-verify.sh 755 - -
 template-py/.claude/hooks/post-edit-comment-check.sh 755 - -
 template-py/.claude/hooks/post-edit-typecheck.sh 755 - -
@@ -16,6 +25,9 @@ template-py/.claude/hooks/stop-checks.sh 755 - -
 template-py/.claude/hooks/subagent-stop.sh 755 - -
 template-py/.claude/hooks/user-prompt-guard.py 644 - -
 template-py/lefthook.yml 644 - -
+template-settings-py/.claude/settings.json 644 - -
+template-settings-ts/.claude/settings.json 644 - -
+template-tail/AGENTS-tail.md 644 - -
 template-ts/.claude/hooks/block-no-verify.sh 755 - -
 template-ts/.claude/hooks/post-edit-comment-check.sh 755 - -
 template-ts/.claude/hooks/post-edit-typecheck.sh 755 - -

@@ -236,7 +236,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] **DRY** — is the same guidance or code block repeated across sections without need?
 - [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
 - [ ] **Token efficiency** — targeted checks:
-  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md`) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
+  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md` that still hold fences) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
   - Inline comments that restate what the surrounding code clearly shows? Delete them.
   - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
   - The same instruction stated in two different forms within 15 lines? Collapse to one.
@@ -330,8 +330,8 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/scaffold/nextjs/config-files.md`
 - [ ] `skills/scaffold/nextjs/source-files.md`
+- [ ] `skills/scaffold/nextjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nextjs.md`, no `middleware.ts`, every route wrapped in `withLogging()`. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/nextjs.md`
 - [ ] `skills/add/database/typescript/nextjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nextjs-kysely.md`
@@ -403,7 +403,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/standards/validation-patterns/patterns.md`
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
-- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`. The hooks, `lefthook.yml`, `.gitleaks.toml`, `ci-gates.sh`, `verify-harness.sh`, `regen-harness.sh` and the CI files are real files under `skills/scaffold/shared/template/`, `template-ts/`, `template-py/` and `template-ci/` (listed in `skills/scaffold/shared/template.manifest`): audit those files, not the kit markdown, and flag any fenced copy of one that reappears in the markdown
+- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`. The hooks, `lefthook.yml`, `.gitleaks.toml`, `ci-gates.sh`, `verify-harness.sh`, `regen-harness.sh` and the CI files are real files under `skills/scaffold/shared/template/`, `template-ts/`, `template-py/`, `template-ci/`, `template-settings-ts/`, `template-settings-py/` and `template-late/` (the settings, `FUTURE.md`, `docs/CONSTITUTION.md` and `/skill-audit` files), plus `template-tail/` (the AGENTS.md tail, appended by Step G); the copy is one script, `harness-kit.md` Step 0, run with a different `PART`; the manifest is `skills/scaffold/shared/template.manifest`: audit those files, not the kit markdown, and flag any fenced copy of one that reappears in the markdown
 - [ ] `skills/scaffold/shared/documentation-kit.md` ← per-folder README/`.order` generation SSOT
 - [ ] `skills/migrate/general/implementation.md` ← Phases 0–3 + router; `phase-4-upgrade.md` (full seed), `phase-5-health-check.md` (health check + re-sync)
 - [ ] `skills/migrate/nextjs-backend-extraction.md`

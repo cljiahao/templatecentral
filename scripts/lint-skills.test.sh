@@ -43,7 +43,7 @@ damage_and_lint() {
   S="$w/skills"
   SH="$S/scaffold/shared"
   "$2"
-  OUT=$(bash "$LINT" "$w/skills" 2>&1 || true)
+  OUT=$(bash "$LINT" "$w/skills${SLASH:+/}" 2>&1 || true)
 }
 
 # fails <test name> <header substring> <mutation function> <expected FAIL text> — the section must
@@ -66,6 +66,14 @@ fails() {
     rm -rf "$T/w$NJOB"
   ) &
   if (( NJOB % JOBS == 0 )); then wait; fi
+}
+
+# fails_both <same arguments as fails> — the test as written, then again with the skills path given a trailing slash, as CI gives it.
+fails_both() {
+  fails "$@"
+  SLASH=1
+  fails "${1}_with_trailing_slash" "${@:2}"
+  SLASH=
 }
 
 collect() {
@@ -99,11 +107,11 @@ for f in files:
         open(f, "w", encoding="utf-8").write(t.replace(tok, repl))
 PY
 }
-no_templates() { rm -rf "$SH"/template "$SH"/template-ts "$SH"/template-py "$SH"/template-ci "$SH"/template.manifest; }
+no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest; }
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
-no_yaml() { find "$SH"/template* -name '*.yml' -delete; }
-no_scannable() { find "$SH"/template* -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
+no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
+no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
 no_patterns() { rm -f "$SH/template/.claude/comment-hygiene-patterns.txt"; }
 no_ts_overlay() { rm -rf "$SH/template-ts"; }
 no_py_overlay() { rm -rf "$SH/template-py"; }
@@ -117,7 +125,7 @@ narration_in_template_py() { printf '\n# Updated for python\n' >> "$SH/template-
 narration_in_template_cjs() { printf '\n// Moved the check here\n' >> "$SH/template-ts/.claude/hooks/user-prompt-guard.cjs"; }
 no_stop_hook_guard() { strip_token stop_hook_active sha_active "$SH/template-ts" "$SH/harness-kit-ts.md"; }
 no_akia_in_py_guard() { strip_token AKIA AKXX "$SH/template-py" "$SH/harness-kit-fastapi.md"; }
-array_command_in_settings() { python3 - "$SH/harness-kit-ts.md" <<'PY'
+array_command_in_settings() { python3 - "$SH/template-settings-ts/.claude/settings.json" <<'PY'
 import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
@@ -125,7 +133,7 @@ assert '"command": "node"' in t
 open(p, "w", encoding="utf-8").write(t.replace('"command": "node"', '"command": ["node"]', 1))
 PY
 }
-no_settings_hooks() { python3 - "$SH/harness-kit-ts.md" "$SH/harness-kit-fastapi.md" <<'PY'
+no_settings_hooks() { python3 - "$SH/template-settings-ts/.claude/settings.json" "$SH/template-settings-py/.claude/settings.json" <<'PY'
 import re, sys
 for p in sys.argv[1:]:
     t = open(p, encoding="utf-8").read()
@@ -139,9 +147,8 @@ broken_lefthook_yaml() { printf '  bad:\n- not: [valid\n' >> "$SH/template-ts/le
 broken_ci_yaml() { printf '  bad:\n- not: [valid\n' >> "$SH/template-ci/github-ts/.github/workflows/ci.yml"; }
 no_copy_instruction() { strip_token '<skill-dir>/shared/template' '<skill-dir>/shared/templat' "$SH/harness-kit.md"; }
 # shellcheck disable=SC2016  # the anchor is literal text, not an expansion
-no_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit.md"; }
+no_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$dest"' 'true' "$SH/harness-kit.md"; }
 # shellcheck disable=SC2016
-no_ci_cp_line() { strip_token 'cp -- "$SK/$t/$p" "$TGT/$p"' 'true' "$SH/harness-kit-enforcement.md"; }
 no_deps_step_github() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-ts"; }
 no_deps_step_github_py() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/github-py"; }
 no_deps_step_azure() { strip_token 'ci-gates.sh deps' 'ci-gates.sh depz' "$SH/template-ci/azure"; }
@@ -178,12 +185,160 @@ t = open(p).read()
 open(p, 'w').write(t.replace('template/.claude/hooks/session-context.sh 755', 'template/.claude/hooks/session-context.sh 644'))
 PY
 }
+
+# nextjs stack trees (skills/scaffold/nextjs/template, template-agents, template.manifest)
+NXD() { echo "$S/scaffold/nextjs"; }
+no_nx_templates() { rm -rf "$(NXD)/template" "$(NXD)/template-agents" "$(NXD)/template.manifest"; }
+no_nx_manifest() { rm -f "$(NXD)/template.manifest"; }
+no_nx_agents_tree() { rm -rf "$(NXD)/template-agents"; }
+no_nx_main_tree() { rm -rf "$(NXD)/template"; }
+nx_manifest_lists_missing() { printf 'template/zz-ghost.txt 644 - -\n' >> "$(NXD)/template.manifest"; }
+nx_unlisted_file() { printf 'x\n' > "$(NXD)/template/zz-unlisted.txt"; }
+nx_exec_bit_lost() { chmod -x "$(NXD)/template/docker-entrypoint.sh"; }
+nx_empty_dir() { mkdir -p "$(NXD)/template/zz-empty"; }
+nx_narration_in_sh() { printf '\n# Added a retry loop\n' >> "$(NXD)/template/docker-entrypoint.sh"; }
+nx_narration_in_yaml() { printf '\n# Removed the old setting\n' >> "$(NXD)/template/pnpm-workspace.yaml"; }
+nx_broken_yaml() { printf '  bad:\n- not: [valid\n' >> "$(NXD)/template/pnpm-workspace.yaml"; }
+nx_no_stack_copy() { strip_token 'PART=stack' 'PART=stac' "$(NXD)/source-files.md"; }
+nx_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
+nx_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
+nx_no_manifest_ref() { strip_token '<skill-dir>/nextjs/template.manifest' '<skill-dir>/nextjs/template.manifes' "$(NXD)/source-files.md"; }
+nx_wrong_stack() { strip_token 'STACK=nextjs' 'STACK=nestjs' "$(NXD)/source-files.md"; }
+nx_no_stack_value() { strip_token 'STACK=nextjs' 'STACK-nextjs' "$(NXD)/source-files.md"; }
+no_ref_md() { find "$S" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' -delete; }
+nx_ref_header_deleted() { sed -i.bak '1d' "$(NXD)/source-files.md" && rm -f "$(NXD)/source-files.md.bak"; }
+headerless_md_beside_template() { printf 'no header\n' > "$(NXD)/zz-note.md"; }
+headerless_md_named_template() { printf 'no header\n' > "$(NXD)/template-notes.md"; }
+headerless_md_in_shared_next_to_trees() { printf 'no header\n' > "$SH/zz-note.md"; }
+middleware_in_nx_template() { printf '\n// see middleware.ts\n' >> "$(NXD)/template/next.config.ts"; }
+middleware_in_other_template_md() { printf '\nmiddleware.ts\n' > "$(NXD)/template/zz-other.md"; }
+middleware_in_nx_source_files() { printf '\nmiddleware.ts\n' >> "$(NXD)/source-files.md"; }
+pin_in_nx_template() { printf 'left-pad@1.3.0\n' >> "$(NXD)/template/.npmrc"; }
+secret_in_nx_template() { printf 'password = "hunter2hunter2"\n' >> "$(NXD)/template/.npmrc"; }
+bare_handler_in_nx_template() { printf '\nexport async function GET() {}\n' >> "$(NXD)/template/src/app/api/health/route.ts"; }
+marker_drift_in_nx_template() { strip_token 'nextjs@6.0.0' 'nextjs@99.0.0' "$(NXD)/template-agents/AGENTS.md"; }
+nx_base_after_install() { python3 - "$(NXD)/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=nextjs and PART=base.\n")
+PY
+}
+nx_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
+nx_agents_before_format() { printf 'Run kit Step 0 with STACK=nextjs and PART=agents.\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
+nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
+# shellcheck disable=SC2016
+no_kit_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit.md"; }
+no_kit_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit.md"; }
+exact_pin_in_nx_package() { python3 - "$(NXD)/template/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
+PY
+}
+no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
+second_copy_script_in_enforcement() { python3 - "$SH/harness-kit.md" "$SH/harness-kit-enforcement.md" <<'PY'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+a = src.index("bash <<'TC_GUARD'"); b = src.index("TC_GUARD\n", src.index("\n", a) + 1) + len("TC_GUARD\n")
+with open(sys.argv[2], "a", encoding="utf-8") as f:
+    f.write("\n```bash\n" + src[a:b] + "```\n")
+PY
+}
+tc_rm_script_returns() { printf "\n\`\`\`bash\nbash <<'TC_RM'\nexit 0\nTC_RM\n\`\`\`\n" >> "$SH/harness-kit-enforcement.md"; }
+no_copy_script() { strip_token "bash <<'TC_" "bash <<'XX_" "$SH/harness-kit.md"; }
+b3_forgets_part_ci() { strip_token 'PART=ci' 'PART=cx' "$SH/harness-kit-enforcement.md"; }
+b3_forgets_ci_none() { strip_token 'CI=none' 'CI=nope' "$SH/harness-kit-enforcement.md"; }
+b3_forgets_kit() { strip_token 'harness-kit.md' 'harness-kit-x.md' "$SH/harness-kit-enforcement.md"; }
+no_kit_settings_case() { strip_token 'settings | late)' 'settings | lat)' "$SH/harness-kit.md"; }
+no_kit_none_case() { strip_token 'none) SEL= ;;' 'nope) SEL= ;;' "$SH/harness-kit.md"; }
+# shellcheck disable=SC2016  # the anchors are literal script text
+no_kit_rm_line() { strip_token 'rm -f -- "$TGT/$gate"' 'true' "$SH/harness-kit.md"; }
+no_kit_late_sel() { strip_token 'SEL="template-late"' 'SEL="template-lat"' "$SH/harness-kit.md"; }
+# shellcheck disable=SC2016
+no_kit_settings_sel() { strip_token 'SEL="template-settings-$V"' 'SEL="template-settin-$V"' "$SH/harness-kit.md"; }
+no_settings_tree() { rm -rf "$SH/template-settings-ts" "$SH/template-settings-py"; }
+no_late_tree() { rm -rf "$SH/template-late"; }
+no_tail_tree() { rm -rf "$SH/template-tail"; }
+no_settings_ts_file() { rm -f "$SH/template-settings-ts/.claude/settings.json"; }
+no_late_constitution() { rm -f "$SH/template-late/docs/CONSTITUTION.md"; }
+no_tail_file() { rm -f "$SH/template-tail/AGENTS-tail.md"; }
+deep_skill_file() { mkdir -p "$S/add/auth/a/b" && printf '<!-- ref: x -->\n' > "$S/add/auth/a/b/c.md"; }
+second_fence_renamed() { printf "\n\`\`\`bash\nbash <<'TC_COPY'\nexit 0\nTC_COPY\n\`\`\`\n" >> "$SH/harness-kit-enforcement.md"; }
+b3_tokens_only_elsewhere() { python3 - "$SH/harness-kit-enforcement.md" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("## Step B3"); b = t.index("\n## ", a + 5)
+sec = t[a:b].replace("PART=ci", "PART=cx").replace("CI=none", "CI=nope").replace("harness-kit.md", "harness-kit-x.md")
+t = t[:a] + sec + t[b:] + "\nPART=ci CI=none harness-kit.md\n"
+open(p, "w", encoding="utf-8").write(t)
+PY
+}
+# shellcheck disable=SC2016  # the text is literal script content
+sel_names_tail() { printf '\nif [ "$PART" = zz ]; then SEL="template-tail"; fi\n' >> "$SH/harness-kit.md"; }
+no_sel_lines() { strip_token 'SEL=' 'SEX=' "$SH/harness-kit.md"; }
+ad_before_agents_nextjs() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/nextjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nextjs/source-files.md"; }
+ad_before_agents_nestjs() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/nestjs/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/nestjs/source-files.md"; }
+ad_before_agents_vite() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/vite-react/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/vite-react/source-files.md"; }
+ad_before_agents_fastapi() { printf 'Execute kit Steps **A through D** now.\n' | cat - "$S/scaffold/fastapi/source-files.md" > "$S/x" && mv "$S/x" "$S/scaffold/fastapi/source-files.md"; }
+no_ad_line_nextjs() { strip_token 'A through D' 'A to D' "$S/scaffold/nextjs/source-files.md"; }
+migrate_forgets_tail_path() { strip_token 'scaffold/shared/template-tail/AGENTS-tail.md' 'zz-gone/AGENTS-tail.md' "$S/migrate/general/phase-4-upgrade.md"; }
+migrate_forgets_settings_tree() { strip_token 'scaffold/shared/template-settings-ts/' 'zz-gone/' "$S/migrate/general/phase-4-upgrade.md"; }
+migrate_forgets_late_tree() { strip_token 'scaffold/shared/template-late/' 'zz-gone/' "$S/migrate/general/phase-4-upgrade.md"; }
+migrate_4f3_forgets_tail_path() { python3 - "$S/migrate/general/phase-4-upgrade.md" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("\n**Step 4f-3:")
+b = t.index("\n**Step ", a + 5)
+seg = t[a:b].replace("<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md", "<skill-dir>/zz-gone/AGENTS-tail.md")
+open(p, "w", encoding="utf-8").write(t[:a] + seg + t[b:])
+PY
+}
+template_skill_md_appears() { mkdir -p "$SH/template-late/.claude/skills/zz"; printf -- '---\nname: zz\n---\n' > "$SH/template-late/.claude/skills/zz/SKILL.md"; }
+nextjs_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(NXD)/template/.claude/skills/next-verify/SKILL.md"; }
+no_tmpl_skills() { find "$S/scaffold" -name 'SKILL.md.tmpl' -delete; }
+fence_indented() { printf "\n  bash <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_dash_s() { printf "\nbash -s <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_dash_heredoc() { printf "\nbash <<-'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_double_quoted() { printf '\nbash <<"TC_X"\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
+fence_unquoted() { printf '\nbash <<TC_X\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
+fence_sh() { printf "\nsh <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+second_tail_fence() { printf "\n\`\`\`bash\nbash <<'TC_TAIL'\nexit 0\nTC_TAIL\n\`\`\`\n" >> "$SH/harness-kit-enforcement.md"; }
+no_tail_fence() { strip_token "bash <<'TC_TAIL'" "bash <<'XX_TAIL'" "$SH/harness-kit-finalize.md"; }
+script_mentions_tail() { python3 - "$SH/harness-kit.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+t = t.replace("TAB=$(printf '\\t')\n", "TAB=$(printf '\\t')\n# see template-tail\n", 1)
+open(p, "w", encoding="utf-8").write(t)
+PY
+}
+# shellcheck disable=SC2016  # the token is literal text with backticks
+migrate_forgets_tmpl_rule() { strip_token 'is copied to `<name>`' 'is copied elsewhere' "$S/migrate/general/phase-4-upgrade.md"; }
+tmpl_and_plain_both_listed() { printf 'template/.claude/skills/next-verify/SKILL.md 644 - -\n' >> "$(NXD)/template.manifest"; }
+tmpl_and_plain_both_in_tree() { printf 'x\n' > "$(NXD)/template/.claude/skills/next-verify/SKILL.md"; }
+fence_abs_bash() { printf "\n/bin/bash <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_env_bash() { printf "\n/usr/bin/env bash <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_zsh() { printf "\nzsh <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_bash_option() { printf "\nbash --norc <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_no_space() { printf "\nbash<<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_backslash_delim() { printf '\nbash <<\\TC_X\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
+fence_cat_pipe_tc() { printf "\ncat <<'TC_X' | bash\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_cat_pipe_eof() { printf "\ncat <<'EOF' | bash\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_plain_eof() { printf "\nbash <<'EOF'\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_other_delim_not_shell() { printf "\ncat <<'TC_X'\nhello\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
 none() { :; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
 if [[ -z "${ONLY:-}" ]]; then
   damage_and_lint "$T/base" none
   [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes: lint passes on the unmodified tree (${OUT##*$'\n'})"
+  SLASH=1; damage_and_lint "$T/base-slash" none; SLASH=
+  [[ "$OUT" == *"=== All checks passed ==="* ]]; check 0 $? "baseline_passes_with_a_trailing_slash: the command CI runs passes (${OUT##*$'\n'})"
 fi
 
 # ── template trees ───────────────────────────────────────────────────────────
@@ -211,7 +366,6 @@ fails scaffold_seeds_fails_when_anchor_deleted "Scaffold/migrate templates seed 
 fails scaffold_seeds_fails_when_variant_token_deleted "Scaffold/migrate templates seed the complete harness" no_akia_in_py_guard "missing token: AKIA"
 fails scaffold_seeds_fails_when_variant_lefthook_deleted "Scaffold/migrate templates seed the complete harness" no_py_lefthook "lefthook.yml — template file not found"
 fails scaffold_seeds_fails_when_cp_line_deleted "Scaffold/migrate templates seed the complete harness" no_cp_line "Step 0 copy instruction missing"
-fails scaffold_seeds_fails_when_ci_cp_line_deleted "Scaffold/migrate templates seed the complete harness" no_ci_cp_line "Step B3 CI copy instruction missing"
 
 # ── check_migrate_hook_inventory_matches_kit ─────────────────────────────────
 fails migrate_inventory_fails_on_empty_match "migrate hook inventory matches" no_hooks "nothing to compare"
@@ -284,8 +438,8 @@ PY
 }
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
 
-# the B3 copy fence and the seed-neither fence are scaffold-only; the migrate docs and Step B3 say so
-for entry in "migrate/general/phase-4-upgrade.md|copy fence and the seed-neither fence are scaffold-only" "migrate/general/phase-5-health-check.md|copy fence and seed-neither fence are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|and the seed-neither fence below are scaffold-only"; do
+# the PART=ci runs of the copy script are scaffold-only; the migrate docs and Step B3 say so
+for entry in "migrate/general/phase-4-upgrade.md|runs of the copy script are scaffold-only" "migrate/general/phase-5-health-check.md|runs of the copy script are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|runs of the copy script are scaffold-only"; do
   doc=${entry%%|*}; phrase=${entry#*|}
   fn="no_scaffold_only_$(echo "$doc" | tr -c 'a-z0-9\n' '_')"
   eval "$fn() { strip_token '$phrase' 'zz-gone' \"\$S/$doc\"; }"
@@ -310,6 +464,146 @@ fails fastapi_step0_must_sit_in_step_6b "Scaffold runs kit Step 0 before the fir
 fails scan_bcrypt_includes_templates "bcrypt references" bcrypt_in_template "bcrypt"
 fails scan_version_pins_includes_templates "Version pins in skills" pin_in_template "left-pad@1.3.0"
 fails scan_hardcoded_secrets_includes_templates "Hardcoded secrets" secret_in_template "hunter2hunter2"
+
+# ── nextjs stack trees ───────────────────────────────────────────────────────
+fails nextjs_template_trees_fail_on_empty_match "Template trees are complete" no_nx_templates "nextjs/template: tree is missing or empty"
+fails nextjs_template_trees_fail_when_main_tree_deleted "Template trees are complete" no_nx_main_tree "nextjs/template: tree is missing or empty"
+fails nextjs_template_trees_fail_when_agents_tree_deleted "Template trees are complete" no_nx_agents_tree "nextjs/template-agents: tree is missing or empty"
+fails nextjs_template_trees_fail_when_manifest_deleted "Template trees are complete" no_nx_manifest "nextjs/template.manifest: file not found"
+fails nextjs_template_trees_fail_when_manifest_lists_missing_file "Template trees are complete" nx_manifest_lists_missing "which is not in the tree"
+fails nextjs_template_trees_fail_when_file_unlisted "Template trees are complete" nx_unlisted_file "is in the tree but not listed"
+fails nextjs_template_trees_fail_when_script_loses_exec_bit "Template trees are complete" nx_exec_bit_lost "is mode 644 but listed as 755"
+fails nextjs_template_trees_fail_on_empty_directory "Template trees are complete" nx_empty_dir "empty directory in a template tree"
+fails nextjs_comment_narration_scans_template_sh "Change-narration comments" nx_narration_in_sh "Added a retry loop"
+fails nextjs_comment_narration_scans_template_yaml "Change-narration comments" nx_narration_in_yaml "Removed the old setting"
+fails nextjs_scaffold_seeds_fails_on_empty_match "Scaffold/migrate templates seed the complete harness" no_templates "template file not found"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  fails nextjs_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" nx_broken_yaml "pnpm-workspace.yaml:"
+fi
+fails nextjs_skilldir_refs_fails_on_empty_match "<skill-dir> references resolve" nx_no_stack_copy "scaffold/nextjs/source-files.md: copy instruction PART=stack missing"
+fails nextjs_skilldir_refs_fails_when_base_copy_deleted "<skill-dir> references resolve" nx_no_base_copy "scaffold/nextjs/source-files.md: copy instruction PART=base missing"
+fails nextjs_skilldir_refs_fails_when_agents_copy_deleted "<skill-dir> references resolve" nx_no_agents_copy "scaffold/nextjs/source-files.md: copy instruction PART=agents missing"
+fails nextjs_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> references resolve" nx_no_manifest_ref "scaffold/nextjs/source-files.md: copy instruction <skill-dir>/nextjs/template.manifest missing"
+fails nextjs_stack_value_fails_when_wrong "Scaffold runs kit Step 0 before the first install" nx_wrong_stack "must name STACK=nextjs"
+fails nextjs_stack_value_fails_when_missing "Scaffold runs kit Step 0 before the first install" nx_no_stack_value "must name STACK=nextjs"
+
+# ── check_ref_file_headers skips shipped template files and still catches reference files ──
+fails ref_headers_fail_on_empty_match "Ref file <!-- ref: --> headers" no_ref_md "scanned nothing"
+fails ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" nx_ref_header_deleted "nextjs/source-files.md"
+fails ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_template "nextjs/zz-note.md"
+fails ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" headerless_md_named_template "nextjs/template-notes.md"
+fails ref_headers_still_check_a_file_in_shared "Ref file <!-- ref: --> headers" headerless_md_in_shared_next_to_trees "shared/zz-note.md"
+
+# ── check_no_middleware_ts: the exclusion names one template file ────────────
+fails middleware_fails_in_another_nextjs_template_file "middleware.ts references" middleware_in_nx_template "next.config.ts"
+fails middleware_fails_in_a_second_template_markdown_file "middleware.ts references" middleware_in_other_template_md "zz-other.md"
+fails middleware_fails_in_nextjs_source_files "middleware.ts references" middleware_in_nx_source_files "source-files.md"
+
+# ── scan() rules and the marker check cover the nextjs template files ────────
+fails scan_version_pins_includes_nextjs_template "Version pins in skills" pin_in_nx_template "left-pad@1.3.0"
+fails scan_hardcoded_secrets_includes_nextjs_template "Hardcoded secrets" secret_in_nx_template "hunter2hunter2"
+fails scan_bare_route_handler_includes_nextjs_template "Bare Next.js route handler exports" bare_handler_in_nx_template "route.ts"
+fails scan_agents_marker_includes_nextjs_template "AGENTS.md schema marker not drifted" marker_drift_in_nx_template "template-agents/AGENTS.md"
+
+# ── check_step0_before_install: the PART=base, PART=agents and install order for a templated stack ──
+fails nextjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" nx_base_after_install "comes after the first install"
+fails nextjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" nx_no_base_line "no kit Step 0 instruction with STACK=nextjs and PART=base"
+fails nextjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" nx_agents_before_format "comes before the pnpm format line"
+fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "needs a PART=agents instruction"
+
+# ── the kit fences keep the stack and agents branches ────────────────────────
+fails skilldir_refs_fails_when_kit_stack_case_deleted "<skill-dir> references resolve" no_kit_stack_case "harness-kit.md: copy instruction stack | agents) missing"
+fails skilldir_refs_fails_when_kit_sel_template_deleted "<skill-dir> references resolve" no_kit_sel_template "harness-kit.md: copy instruction SEL=\"template\" missing"
+
+# ── template package.json pins ───────────────────────────────────────────────
+fails template_pins_fail_on_empty_match "Template package.json dependencies use floors" no_nx_package_json "no template package.json found"
+fails template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_nx_package "left-pad"
+
+# ── one copy script ──────────────────────────────────────────────────────────
+fails_both copy_script_fails_on_empty_match "The copy script has exactly one copy" no_copy_script "holds 0 copy-script fences"
+fails_both copy_script_fails_when_a_second_copy_appears "The copy script has exactly one copy" second_copy_script_in_enforcement "must live only in"
+fails_both copy_script_fails_when_tc_rm_returns "The copy script has exactly one copy" tc_rm_script_returns "a second script fence (TC_RM)"
+fails_both copy_script_fails_when_b3_forgets_part_ci "The copy script has exactly one copy" b3_forgets_part_ci "Step B3 must name PART=ci"
+fails_both copy_script_fails_when_b3_forgets_ci_none "The copy script has exactly one copy" b3_forgets_ci_none "Step B3 must name CI=none"
+fails_both copy_script_fails_when_b3_forgets_the_kit "The copy script has exactly one copy" b3_forgets_kit "Step B3 must name harness-kit.md"
+fails skilldir_refs_fails_when_settings_late_case_deleted "<skill-dir> references resolve" no_kit_settings_case "harness-kit.md: copy instruction settings | late) missing"
+fails skilldir_refs_fails_when_none_case_deleted "<skill-dir> references resolve" no_kit_none_case "harness-kit.md: copy instruction none) SEL= ;; missing"
+fails skilldir_refs_fails_when_rm_line_deleted "<skill-dir> references resolve" no_kit_rm_line "harness-kit.md: copy instruction rm -f -- \"\$TGT/\$gate\" missing"
+fails skilldir_refs_fails_when_late_sel_deleted "<skill-dir> references resolve" no_kit_late_sel "harness-kit.md: copy instruction SEL=\"template-late\" missing"
+fails skilldir_refs_fails_when_settings_sel_deleted "<skill-dir> references resolve" no_kit_settings_sel "harness-kit.md: copy instruction SEL=\"template-settings-\$V\" missing"
+fails scaffold_seeds_fails_when_kit_settings_sel_deleted "Scaffold/migrate templates seed the complete harness" no_kit_settings_sel "Step 0 copy instruction missing: SEL=\"template-settings-\$V\""
+
+# ── settings and late trees ──────────────────────────────────────────
+fails settings_trees_fail_on_empty_match "Template trees are complete" no_settings_tree "template-settings-ts: tree is missing or empty"
+fails late_tree_fails_on_empty_match "Template trees are complete" no_late_tree "template-late: tree is missing or empty"
+fails tail_tree_fails_on_empty_match "Template trees are complete" no_tail_tree "template-tail: tree is missing or empty"
+fails late_tree_fails_when_file_deleted "Template trees are complete" no_late_constitution "template-late/docs/CONSTITUTION.md, which is not in the tree"
+fails tail_tree_fails_when_file_deleted "Template trees are complete" no_tail_file "template-tail/AGENTS-tail.md, which is not in the tree"
+fails scaffold_seeds_fails_when_settings_file_deleted "Scaffold/migrate templates seed the complete harness" no_settings_ts_file "template-settings-ts/.claude/settings.json — template file not found"
+fails scaffold_seeds_fails_when_late_file_deleted "Scaffold/migrate templates seed the complete harness" no_late_constitution "template-late/docs/CONSTITUTION.md — template file not found"
+fails scaffold_seeds_fails_when_tail_file_deleted "Scaffold/migrate templates seed the complete harness" no_tail_file "template-tail/AGENTS-tail.md — template file not found"
+
+# ── nesting depth: the same answer with and without a trailing slash, templates skipped ──
+fails nesting_depth_fails_on_a_deep_file "Nesting depth" deep_skill_file "c.md"
+depth_slash_forms_agree() {
+  [[ -n "${ONLY:-}" && ! "depth_slash_forms_agree" =~ $ONLY ]] && return 0
+  local w="$T/wdepth" f a b
+  rm -rf "$w"; mkdir -p "$w"; cp -R skills "$w/skills"
+  for f in .claude .claude-plugin CHANGELOG.md; do ln -s "$REPO_ROOT/$f" "$w/$f"; done
+  mkdir -p "$w/skills/add/auth/a/b"; printf '<!-- ref: x -->\n' > "$w/skills/add/auth/a/b/c.md"
+  a=$(section "$(bash "$LINT" "$w/skills" 2>&1 || true)" "Nesting depth")
+  b=$(section "$(bash "$LINT" "$w/skills/" 2>&1 || true)" "Nesting depth")
+  check "$a" "$b" "nesting_depth_slash_and_no_slash_agree"
+  check 1 "$([[ "$a" == *"FAIL"* && "$a" == *"c.md"* ]] && echo 1 || echo 0)" "nesting_depth_slash_form_catches_the_deep_file ($b)"
+  rm -f "$w/skills/add/auth/a/b/c.md"
+  a=$(section "$(bash "$LINT" "$w/skills" 2>&1 || true)" "Nesting depth")
+  b=$(section "$(bash "$LINT" "$w/skills/" 2>&1 || true)" "Nesting depth")
+  check 1 "$([[ "$a" == *"OK:"* && "$b" == *"OK:"* ]] && echo 1 || echo 0)" "nesting_depth_passes_with_the_template_trees_in_both_forms"
+  rm -rf "$w"
+}
+depth_slash_forms_agree
+
+# ── the copy script: renamed copies, B3 scope, selectors, and ordering ────────
+fails_both copy_script_fails_when_a_renamed_second_fence_appears "The copy script has exactly one copy" second_fence_renamed "a second script fence (TC_COPY)"
+fails_both copy_script_fails_when_b3_tokens_sit_outside_b3 "The copy script has exactly one copy" b3_tokens_only_elsewhere "Step B3 must name PART=ci"
+fails_both copy_selector_fails_when_it_names_the_tail_tree "No copy selector names template-tail" sel_names_tail "a copy selector names template-tail"
+fails_both copy_selector_fails_on_empty_match "No copy selector names template-tail" no_sel_lines "no SEL assignment found"
+fails steps_a_to_d_fails_before_the_agents_step_nextjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nextjs "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_nestjs "Scaffold runs kit Step 0 before the first install" ad_before_agents_nestjs "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_vite "Scaffold runs kit Step 0 before the first install" ad_before_agents_vite "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_before_the_agents_step_fastapi "Scaffold runs kit Step 0 before the first install" ad_before_agents_fastapi "comes before the AGENTS.md step"
+fails steps_a_to_d_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" no_ad_line_nextjs "needs a \"Steps A through D\" instruction"
+fails migrate_inventory_fails_when_the_tail_path_is_missing "migrate hook inventory matches" migrate_forgets_tail_path "Step 4f-3 must name <skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md"
+fails migrate_inventory_fails_when_only_step_4f3_forgets_the_tail_path "migrate hook inventory matches" migrate_4f3_forgets_tail_path "Step 4f-3 must name <skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md"
+# ── template skills ship as SKILL.md.tmpl ──
+fails template_skill_md_fails_on_empty_match "Template trees hold no file named SKILL.md" no_tmpl_skills "the check below would scan nothing"
+fails template_skill_md_fails_when_a_shared_template_holds_one "Template trees hold no file named SKILL.md" template_skill_md_appears "template-late/.claude/skills/zz/SKILL.md"
+fails template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nextjs_skill_md_appears "template/.claude/skills/next-verify/SKILL.md"
+# ── other spellings of a second script fence ──
+fails_both copy_script_fails_on_an_absolute_shell_path "The copy script has exactly one copy" fence_abs_bash "a second script fence (TC_X)"
+fails_both copy_script_fails_on_env_bash "The copy script has exactly one copy" fence_env_bash "a second script fence (TC_X)"
+fails_both copy_script_fails_on_zsh "The copy script has exactly one copy" fence_zsh "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_shell_option "The copy script has exactly one copy" fence_bash_option "a second script fence (TC_X)"
+fails_both copy_script_fails_on_no_space_before_heredoc "The copy script has exactly one copy" fence_no_space "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_backslash_delimiter "The copy script has exactly one copy" fence_backslash_delim "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_tc_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_tc "a second script fence (TC_X)"
+fails_both copy_script_fails_on_any_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_eof "a second script fence (EOF)"
+fails_both copy_script_fails_on_a_non_tc_delimiter "The copy script has exactly one copy" fence_plain_eof "a second script fence (EOF)"
+fails_both copy_script_fails_on_a_tc_delimiter_that_feeds_no_shell "The copy script has exactly one copy" fence_other_delim_not_shell "a second script fence (TC_X)"
+fails migrate_inventory_fails_when_the_tmpl_rule_is_dropped "migrate hook inventory matches" migrate_forgets_tmpl_rule "a source named <name>.tmpl is copied to <name>"
+fails template_trees_fail_when_a_tmpl_and_its_target_are_both_listed "Template trees are complete" tmpl_and_plain_both_listed "both copy to"
+fails template_trees_fail_when_a_tmpl_and_its_target_are_both_in_the_tree "Template trees are complete" tmpl_and_plain_both_in_tree "both copy to"
+fails_both copy_script_fails_on_an_indented_fence "The copy script has exactly one copy" fence_indented "a second script fence (TC_X)"
+fails_both copy_script_fails_on_bash_dash_s "The copy script has exactly one copy" fence_dash_s "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_dash_heredoc "The copy script has exactly one copy" fence_dash_heredoc "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_double_quoted_delimiter "The copy script has exactly one copy" fence_double_quoted "a second script fence (TC_X)"
+fails_both copy_script_fails_on_an_unquoted_delimiter "The copy script has exactly one copy" fence_unquoted "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_sh_fence "The copy script has exactly one copy" fence_sh "a second script fence (TC_X)"
+fails_both copy_script_fails_on_a_second_tail_fence "The copy script has exactly one copy" second_tail_fence "the AGENTS.md tail command must live only in"
+fails_both copy_script_fails_when_the_tail_fence_is_gone "The copy script has exactly one copy" no_tail_fence "holds 0 AGENTS.md tail fences"
+fails_both copy_script_fails_when_it_mentions_template_tail "The copy script has exactly one copy" script_mentions_tail "the copy script mentions template-tail"
+fails migrate_inventory_fails_when_the_settings_tree_is_missing "migrate hook inventory matches" migrate_forgets_settings_tree "missing template anchor scaffold/shared/template-settings-ts/"
+fails migrate_inventory_fails_when_the_late_tree_is_missing "migrate hook inventory matches" migrate_forgets_late_tree "missing template anchor scaffold/shared/template-late/"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

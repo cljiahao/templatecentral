@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+build
+coverage
+pnpm-lock.yaml
+.claude
+
+# Enforcement-layer config — human-reviewed, never auto-formatted.
+# Prettier would otherwise rewrite these (yaml quoting/whitespace), drifting them from the
+# harness-integrity baseline and failing verify-harness.sh on the first push / in CI.
+lefthook.yml
+.github/
+.gitleaks.toml

@@ -8,103 +8,25 @@ Every stack. Step order and the delta table are in `harness-kit.md`.
 
 ---
 
-## Step C. Create `FUTURE.md`
+## Step C. Seed `FUTURE.md`, `docs/CONSTITUTION.md` and the `/skill-audit` skill
 
-Create `FUTURE.md` at the project root:
+Run the Step 0 script of `harness-kit.md` with `STACK=` as in Step 0 and `PART=late`, after the stack's verification gate and its format pass (prettier would reformat the two documents at an earlier pass). It copies three real files from `<skill-dir>/shared/template-late/` and refuses when any of them already exists:
 
-**`FUTURE.md`**:
-```markdown
-# Future Directions
-
-Design seams built into this project for AI collaboration patterns that are not yet activated. These are integration points, not features — nothing here runs unless you build it.
-
-## Meta-Harness
-
-CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
-
-**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
-
-## Trace-Driven Evolution
-
-Capture agent decision traces across sessions, aggregate patterns, and use them to improve conventions over time. Off by default.
-
-**Seam:** None yet — no trace hook exists in the seeded `.claude/settings.json` (it is comment-free JSON with no disabled/placeholder entries). This is a roadmap item: a future revision could add a dedicated hook (e.g. a `Stop` or `SessionEnd` trace-writer) once a concrete consumer for the captured traces is designed. Until then, treat this as unactivated design intent, not an existing seam.
-
-## Environment Engineering
-
-A fully specified, reproducible environment ensuring every agent session starts from the same known state. Think devcontainers or Nix flakes with agent-specific overlays.
-
-**Seam:** `devcontainer.json` if present.
+- `FUTURE.md` — the design seams for AI collaboration patterns that are not yet activated.
+- `docs/CONSTITUTION.md` — the binding invariants document. It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
+- `.claude/skills/skill-audit/SKILL.md` — the Step B5 skill.
 
 ---
 
-*Seams from [templateCentral](https://github.com/cljiahao/templatecentral). None activated.*
+## Step D. Fill in `docs/CONSTITUTION.md`
+
+With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project name. The name must be a single line: if it holds a newline, stop and ask the user for a one-line name and edit nothing. Fill in the other `[...]` placeholders (Architecture Invariants, project-specific protected files) with the actual project values, and use the **quality-gate line** from the per-stack delta table in §6 Behavioural rules. Then check that no placeholder is left:
+
+```bash
+grep -n '__TC_' docs/CONSTITUTION.md
 ```
 
----
-
-## Step D. Seed `docs/CONSTITUTION.md`
-
-Create `docs/CONSTITUTION.md` as the binding invariants document for this project.
-It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
-Fill in the `[...]` placeholders with the actual project values.
-Use the **quality-gate line** from the per-stack delta table in §6 Behavioural rules.
-
-**`docs/CONSTITUTION.md`**:
-```markdown
-# CONSTITUTION.md
-
-## 1. Purpose
-
-This document defines the non-negotiable invariants for **[Project Name]**.
-It applies to all contributors — human and AI agent alike. When `AGENTS.md`,
-templateCentral skills, or any other guidance conflicts with this document,
-**this document wins**. No PR may be merged that violates these rules without
-an explicit `## Human Approval Override` section in the PR description.
-
-## 2. Architecture Invariants
-
-[Define the load-bearing architectural rules: layering, module boundaries,
-factory/composition-root patterns, forbidden cross-imports, etc.]
-
-## 3. Security Invariants
-
-- Secrets NEVER appear in code, git, logs, or build output — use environment
-  variables loaded from a secrets manager.
-- All API routes authenticate before executing business logic.
-- All mutations write to an audit log.
-
-## 4. Testing Invariants
-
-- New services must have integration tests (success, error, at least one edge case).
-- New API routes must have route tests covering 401, 200, and at least one error path.
-- CI must stay green — no PR may be merged with failing tests.
-
-## 5. Git & PR Invariants
-
-- Branch from `main`. Protected branches (`main`, `uat`, `develop`) — no direct commits.
-- Every PR to `uat` and `main` requires the PR template fully filled.
-
-## 6. Agent Governance Rules
-
-### Protected files — human approval required
-
-The following files require explicit human approval noted in the PR under
-`## Protected File Changes`. Agents MUST NOT modify them without approval.
-
-- `AGENTS.md` / `CLAUDE.md` — agent instruction files
-- `docs/CONSTITUTION.md` — this document
-- `.claude/settings.json` — harness wiring
-- `.claude/hooks/*` — enforcement hooks
-- `Dockerfile`
-[Add project-specific protected files here]
-
-### Behavioural rules
-
-- Run the quality gate (see delta table for stack-specific command) before declaring any task done.
-- Never use `--no-verify` on commits — this bypasses pre-commit hooks.
-- Work on a feature branch — never commit directly to `main`, `uat`, or `develop`.
-```
+It must print nothing.
 
 ---
 
@@ -230,7 +152,22 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — it is intentionally omitted from every one of them so this step is the *only* place it comes from. After the stack-specific AGENTS.md template body is written, unconditionally append the shared tail fragment below, substituting the `PostToolUse` line's `(see delta table for stack command)` placeholder with the current stack's **Typecheck feedback cmd** from the Per-stack delta table. Do this every time — for a fresh scaffold and for a migrate re-seed — so the tail can never drift out of sync with what's actually shipped: there is exactly one copy of this text in the whole repo (below), and every AGENTS.md gets it fresh from here.
+**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md` (a migration reads it at `<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md`: change only that path). The command below builds the whole text first and appends it only when that worked, so a failure appends nothing. Run it in the project root (the script appends to `./AGENTS.md` and refuses when that file does not exist); it runs in its own `bash`, so a refusal ends only that process. The model fills in only `STACK=`; the typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack in the script:
+
+```bash
+bash <<'TC_TAIL'
+STACK=
+case "$STACK" in
+  nestjs | nextjs | vite-react) TC='pnpm exec tsc --noEmit --incremental' ;;
+  fastapi) TC='python -m pyright src/' ;;
+  *) echo "Refusing to append the tail: unknown STACK '$STACK'" >&2; exit 1 ;;
+esac
+out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "<skill-dir>/shared/template-tail/AGENTS-tail.md") || exit 1
+[ -n "$out" ] || { echo "Refusing to append the tail: the tail file is empty" >&2; exit 1; }
+[ -f AGENTS.md ] || { echo "Refusing to append the tail: AGENTS.md does not exist in $(pwd); run this in the project root" >&2; exit 1; }
+printf '\n%s\n' "$out" >> AGENTS.md
+TC_TAIL
+```
 
 **Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)
 
@@ -280,40 +217,3 @@ claude plugin install superpowers
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
-
----
-
-## Shared AGENTS.md tail fragment
-
-**Append this below the stack-specific AGENTS.md template** (after the stack's Rules section, before the closing line if any):
-
-```markdown
-## AI Harness
-PreToolUse (Edit/Write/NotebookEdit): blocks secrets only (exit 2): `.env*` (except `.env.example`), `secrets/`, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`; asks for human approval before editing CI/CD definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines/`, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (AGENTS.md, CLAUDE.md, `.claude/settings.json`, `.claude/hooks/`); project-specific guards live in `.claude/hooks/local/`, which re-sync never overwrites; a second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`, `git config core.hooksPath`), commits to protected branches, and force-pushes to them (incl. `--force-with-lease`, `HEAD:main`). Skills, specs, and all app code are unrestricted. SessionStart (startup/resume/clear/compact): re-injects the CONSTITUTION + universal invariants so they survive compaction (PostCompact stdout is also injected as context and fires after compaction, but SessionStart additionally covers resume/startup, so it's the seeded mechanism here).
-UserPromptSubmit: pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
-PostToolUse: incremental type-check (see delta table for stack command) and a comment-hygiene scan (change-narration comments, oversized comment blocks — patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both feedback-only — findings reach Claude as `additionalContext`, never a block.
-Stop hook: runs the full test suite when there are uncommitted changes; exit 2 feeds failures to Claude via stderr; exit 0 on pass (Claude Code caps consecutive Stop continuations — 8 by default). SubagentStop: type-gates a subagent's uncommitted changes (read-only Explore/Plan agents skipped).
-Hook wiring: every `settings.json` hook is `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]` — an array-valued `command` is silently ignored by Claude Code.
-Git hooks (lefthook): pre-commit runs format/lint/typecheck + gitleaks secret-scan on staged files, plus a readme-coupling staleness warning and a comment-hygiene warning; commit-msg enforces Conventional Commits; pre-push runs the quality gate. Hard-local; coverage/changed-line/comment-hygiene gates run in CI.
-CI (GitHub Actions `.github/workflows/ci.yml`, or on Azure DevOps either the project's own pipelines — skipping the seed only when they already run gitleaks, the harness check and a dependency audit — or the `azure-pipelines/templatecentral-gates.yml` steps template included from the PR pipeline): the harness integrity check plus `.claude/ci-gates.sh` gates — a gitleaks secret scan (the PR's commits; full history off-PR) via the checksum-verified MIT CLI, a changelog-touched check, a readme-freshness check, and a comment-hygiene check on added lines (bypass labels `skip-changelog` / `skip-readme-check` / `skip-comment-check`; on Azure, queue with variable `LABELS`), and a dependency-audit gate (`deps`: fails on high/critical advisories, no label bypass; the only suppression is the expiring allowlist `.claude/dep-audit-allow.txt`). GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sync (`--frozen-lockfile`); on Azure the project pipeline owns those steps.
-Project skills: `.claude/skills/` | Manifest: `.claude/harness.json`
-Context load order (context only — not enforcement, broad → specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → this file → `.claude/rules/*.md` (lazy per-directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
-
-## Skills Security
-- Review `SKILL.md` content before installing any third-party skill — treat skills like packages.
-- Scope `allowed-tools:` in skill frontmatter to the minimum needed (e.g. `Bash(git *)` not `Bash`).
-- Never install skills that hardcode secrets or make outbound network calls without an explicit allow-list.
-
-## Git Workflow
-
-**Branch source:** Always fork from an up-to-date `main`.
-Before branching: `git fetch -p` then update `main` (`git checkout main && git pull --ff-only`). Fork the feature FROM the freshly-pulled `main`.
-
-(The seeded hooks separately protect the common branch names `main`/`uat`/`develop` from direct commits and force-push regardless of which PR route you use — see "AI Harness" above. That protection is a fixed baseline safety net independent of the route table below; it is not "the route" this repo follows, just names the hooks always guard.)
-
-<!-- Per-repo: below this line, document the protected-branch route table for THIS deployment (e.g. develop/uat, develop/staging/live, or trunk). The fetch-first step above is universal; the route clause is not. -->
-
-## Skill capture
-- A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from `.claude/skill-usage.log`.
-- Don't vendor third-party plugin skills — re-author the workflow as a project skill tuned to this repo.
-```

@@ -305,6 +305,8 @@ templatecentral/
 ├── skills/                  # Shipped skills — nested reference file architecture
 │   ├── scaffold/shared/template*/ # Files the scaffold copies verbatim: hooks, gates, lefthook, CI (template/, template-ts/, template-py/, template-ci/)
 │   ├── scaffold/shared/template.manifest # Every template file with its mode
+│   ├── scaffold/shared/template-{settings-ts,settings-py,late,tail}/ # settings.json (copied at Step A), FUTURE.md + CONSTITUTION + /skill-audit (copied at Step C), and the AGENTS.md tail (appended at Step G, never copied)
+│   ├── scaffold/nextjs/template*/ # The Next.js files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nextjs/template.manifest
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
 │   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
 │   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md

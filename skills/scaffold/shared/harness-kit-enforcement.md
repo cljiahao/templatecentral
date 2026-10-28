@@ -10,11 +10,11 @@ Stack-agnostic half of Steps A, B, and B2, plus all of B3–B5. Per-stack bodies
 
 ## Step A. Create `.claude/settings.json`
 
-Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (Step 0 copies them). If `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
+Create `.claude/settings.json` at the project root, plus the `.claude/hooks/` scripts it references (Step 0 copies them). A scaffold writes a new project, so `PART=settings` stops when `.claude/settings.json` already exists: report it to the user instead of overwriting. Merging is `migrate`-only: if `settings.json` already exists, merge all hook entries (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart) and the `permissions.deny` list into the existing object rather than overwriting — preserve any hooks already present, but **replace** any existing entry for one of these `.claude/hooks/` scripts whose `"command"` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` (those never ran — see the hook-form note below), and drop any leftover `PostToolUseFailure` → `post-tool-failure.sh` entry from older seeds (no longer shipped: Claude already sees tool errors).
 
-**`.claude/settings.json`** — write the variant file's **Step A** body, then apply the rules below.
+**`.claude/settings.json`** — run the Step 0 script with `PART=settings` (it copies the variant's body from `template-settings-ts/.claude/settings.json` or `template-settings-py/.claude/settings.json` under `<skill-dir>/shared/`), then apply the rules below.
 
-**Hook entry form — string `command` + `args`, never an array.** Every hook above uses Claude Code's exec form: `"command"` is a single executable name and `"args"` is the argv array. An array-valued `"command"` (a JSON list such as `["bash", "…"]` in place of the string) is **silently ignored** by Claude Code — the hook never fires and nothing reports it — so always write string `command` + `args`. Claude Code substitutes `${CLAUDE_PROJECT_DIR}` (and `${CLAUDE_PLUGIN_ROOT}`) into `command` and each `args` element; anchor every script path on it, because hooks execute in Claude's *current* directory, which moves whenever Claude `cd`s into a subdirectory. The same reason makes every seeded script `cd "${CLAUDE_PROJECT_DIR:-.}"` first, so relative paths (`AGENTS.md`, `.claude/comment-hygiene-patterns.txt`, `.venv`) resolve. `timeout` is in seconds; the defaults (600 s for command hooks, 30 s for `UserPromptSubmit`) are far longer than these guards need, so each entry sets its own: 10 s for the guards/loggers, 30 s for the comment scan, 60 s for the typecheck, 120 s for `SubagentStop`, 300 s for the `Stop` test run.
+**Hook entry form — string `command` + `args`, never an array.** Every hook in the copied `settings.json` uses Claude Code's exec form: `"command"` is a single executable name and `"args"` is the argv array. An array-valued `"command"` (a JSON list such as `["bash", "…"]` in place of the string) is **silently ignored** by Claude Code — the hook never fires and nothing reports it — so always write string `command` + `args`. Claude Code substitutes `${CLAUDE_PROJECT_DIR}` (and `${CLAUDE_PLUGIN_ROOT}`) into `command` and each `args` element; anchor every script path on it, because hooks execute in Claude's *current* directory, which moves whenever Claude `cd`s into a subdirectory. The same reason makes every seeded script `cd "${CLAUDE_PROJECT_DIR:-.}"` first, so relative paths (`AGENTS.md`, `.claude/comment-hygiene-patterns.txt`, `.venv`) resolve. `timeout` is in seconds; the defaults (600 s for command hooks, 30 s for `UserPromptSubmit`) are far longer than these guards need, so each entry sets its own: 10 s for the guards/loggers, 30 s for the comment scan, 60 s for the typecheck, 120 s for `SubagentStop`, 300 s for the `Stop` test run.
 
 **Secret `Read` denies — explicit variants, not a `.env.*` catch-all.** A `Read(...)` deny also blocks `Edit`/`Write` on the same path in current Claude Code, so a catch-all `Read(**/.env.*)` would make the committed `.env.example`/`.env.default` templates uneditable. The deny list therefore names the conventional secret-bearing variants (`.env`, `.env.local`, `.env.*.local`, `.env.development`, `.env.production`, `.env.staging`, `.env.test`) plus key material (`*.pem`, `*.key`) and the `secrets/`/`.secrets/` directories. Every other `.env*` name stays **write**-blocked by `protect-files.sh` (which exempts only `.env.example`/`.env.default`); if the project keeps secrets in another variant (e.g. `.env.qa`), add a matching `Read(**/.env.qa)` deny. Never add `Edit`/`Write` denies for CI or governance files — `protect-files.sh` asks there, and a deny would block the approved edit too. Permission precedence is deny > ask > allow, and `Bash` permission rules are pattern matches on the command string, not a security boundary — the hooks and the git/CI layers are the enforcement.
 
@@ -97,137 +97,11 @@ The git hooks above are the **warn-local** layer; CI is the **hard gate** that c
 - **TS stacks** — add `cobertura` to the Vitest coverage reporters (keep global thresholds lenient or unset; the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura'] }` → writes `coverage/cobertura-coverage.xml`.
 - **FastAPI** — run pytest with `--cov=src --cov-report=xml` → writes `coverage.xml`.
 
-**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the fence below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
+**Pick the CI host** from `git remote get-url origin` (and any existing pipeline files): **GitHub** (default) → seed `.github/workflows/ci.yml` (the copy further down in this step). **Azure DevOps** (`dev.azure.com` / `visualstudio.com` remote, or an `azure-pipelines/` folder or `azure-pipelines*.yml` already present) → never `ci.yml` (a GitHub workflow never runs on Azure Repos). First check what the existing pipelines run, including shared templates they `extends:` or `template:`: if they already run a gitleaks scan, the harness check (`verify-harness`) and a dependency audit that fails on high/critical advisories, seed **neither** `azure-pipelines/templatecentral-gates.yml` **nor** `.claude/ci-gates.sh` (Step 0 already copied `.claude/ci-gates.sh`; the `CI=none` run below deletes it) — those gates are covered, and a file no pipeline runs is dead weight that reviewers rightly flag. If they run the first two but no dependency audit, seed `.claude/ci-gates.sh` and add a `bash .claude/ci-gates.sh deps` step to the existing pipeline. Otherwise seed both **and** wire the template into the PR pipeline in the same change (a pipeline edit, so `protect-files.sh` asks the human); never leave it unwired. Both hosts call the same `.claude/ci-gates.sh`, so the gate logic lives once.
 
-Copy the CI file for the picked host. Edit only the `STACK=` line (it ships empty; use the same value as in Step 0, and the script refuses when `lefthook.yml` in the project is not the one that value's Step 0 copied) and the `CI=` line (`github` or `azure`); `PART=ci` stays; the script derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack) and refuses an unknown value. The guard, the path rules and the refusals are the ones in `harness-kit.md` Step 0. This fence and the seed-neither fence below are scaffold-only: the first refuses unless `lefthook.yml` is the copy Step 0 made, and the second assumes Step 0 placed `.claude/ci-gates.sh`. `migrate` copies the CI file by hand (see its Phase 4 Step 4d).
+Copy the CI file for the picked host with the Step 0 script of `harness-kit.md`: set `STACK=` to the value used in Step 0, `PART=ci`, and `CI=github` or `CI=azure`. It derives the tree (`github-ts` or `github-py` for GitHub by stack, `azure` for every stack), refuses an unknown value, and refuses unless `lefthook.yml` in the project is the one Step 0 copied for that `STACK`. The `PART=ci` runs of the copy script are scaffold-only: `migrate` copies the CI file by hand (see its Phase 4 Step 4d).
 
-```bash
-bash <<'TC_GUARD'
-STACK=
-CI=github
-PART=ci
-WHAT="seed CI"
-NL='
-'
-IFS= read -r -d '' SK <<'TC_PATH'
-<skill-dir>/shared
-TC_PATH
-SK=${SK%"$NL"}
-IFS= read -r -d '' TGT <<'TC_PATH'
-<target>
-TC_PATH
-TGT=${TGT%"$NL"}
-TAB=$(printf '\t')
-stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
-case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
-case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
-case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
-case "$SK" in /*) ;; *) SK=./$SK ;; esac
-case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
-[ -d "$SK" ] || stop "$SK is not a directory"
-[ -d "$TGT" ] || stop "$TGT is not an existing directory"
-case "$STACK" in
-  nestjs|nextjs|vite-react) V=ts ;;
-  fastapi) V=py ;;
-  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
-esac
-case "$PART" in
-  base)
-    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
-    SEL="template template-$V" ;;
-  ci)
-    case "$CI" in
-      github) SEL="template-ci/github-$V" ;;
-      azure) SEL="template-ci/azure" ;;
-      *) stop "unknown CI '$CI' (want github or azure)" ;;
-    esac ;;
-  *) stop "unknown PART '$PART'" ;;
-esac
-for t in $SEL; do
-  [ -n "$(find "$SK/$t" -type f 2>/dev/null | head -n 1)" ] || stop "no files under $SK/$t"
-  [ -z "$(find "$SK/$t" \( -type l -o -type d -empty \) 2>/dev/null | head -n 1)" ] || stop "$SK/$t holds a symlink or an empty directory"
-done
-[ -s "$SK/template.manifest" ] || stop "$SK/template.manifest is missing or empty"
-plan=$(awk -v sel="$SEL" '
-  BEGIN { n = split(sel, s, " ") }
-  /^#/ || NF == 0 { next }
-  { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $2 "\t" s[i] "\t" substr($1, length(s[i]) + 2); next } }
-' "$SK/template.manifest")
-listed=$(printf '%s\n' "$plan" | cut -f3 | LC_ALL=C sort)
-found=$(for t in $SEL; do (cd "$SK/$t" && find . -type f | sed 's|^\./||'); done | LC_ALL=C sort)
-if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
-  stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
-fi
-clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
-  if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
-  d=$p
-  while [ "${d%/*}" != "$d" ]; do
-    d=${d%/*}
-    if [ -L "$TGT/$d" ]; then echo "$d (symlink)"; elif [ -e "$TGT/$d" ] && [ ! -d "$TGT/$d" ]; then echo "$d (not a directory)"; fi
-  done
-done | LC_ALL=C sort -u)
-[ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
-if [ "$PART" = ci ]; then
-  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
-fi
-bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
-  [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
-  d=$p
-  if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
-  while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
-    if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
-  done
-  if [ -n "$d" ]; then base="$TGT/$d"; else base="$TGT"; fi
-  if [ ! -w "$base" ] || [ ! -x "$base" ]; then echo "$base (not writable or not searchable)"; fi
-done | LC_ALL=C sort -u)
-[ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
-copied=""
-while IFS="$TAB" read -r mode t p; do
-  d=${p%/*}
-  if [ "$d" != "$p" ]; then
-    mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
-  fi
-  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
-  copied="$copied$NL$p"
-  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
-done <<TC_PLAN
-$plan
-TC_PLAN
-TC_GUARD
-```
-
-When the paragraph above says to seed neither CI file, copy nothing and delete the one file Step 0 already placed for this decision, so the project holds exactly what a seed-neither scaffold always held. The script deletes `.claude/ci-gates.sh` only when it is byte for byte the template's copy, and refuses otherwise:
-
-```bash
-bash <<'TC_RM'
-WHAT="seed CI"
-NL='
-'
-IFS= read -r -d '' SK <<'TC_PATH'
-<skill-dir>/shared
-TC_PATH
-SK=${SK%"$NL"}
-IFS= read -r -d '' TGT <<'TC_PATH'
-<target>
-TC_PATH
-TGT=${TGT%"$NL"}
-TAB=$(printf '\t')
-stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
-case "$SK" in ''|*'<skill'"-dir>"*) stop "the skill directory path is empty or was not substituted" ;; esac
-case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
-case "$SK$TGT" in *"$NL"*) stop "a path ends in or contains a newline" ;; esac
-case "$SK" in /*) ;; *) SK=./$SK ;; esac
-case "$TGT" in /*) ;; *) TGT=./$TGT ;; esac
-[ -d "$SK" ] || stop "$SK is not a directory"
-[ -d "$TGT" ] || stop "$TGT is not an existing directory"
-gate=.claude/ci-gates.sh
-if [ -L "$TGT/.claude" ] || [ -L "$TGT/$gate" ]; then stop "$TGT/.claude or $TGT/$gate is a symlink, so removing the file could delete something outside the project"; fi
-[ -e "$TGT/$gate" ] || { echo "Nothing to remove: $TGT/$gate does not exist."; exit 0; }
-[ -f "$TGT/$gate" ] || stop "$TGT/$gate is not a regular file"
-cmp -s -- "$SK/template/$gate" "$TGT/$gate" || stop "$TGT/$gate differs from the template, so it is not the file Step 0 placed"
-rm -f -- "$TGT/$gate" || stop "rm failed for $TGT/$gate"
-TC_RM
-```
+When the paragraph above says to seed neither CI file, run the same script with `PART=ci` and `CI=none`: it copies nothing and deletes `.claude/ci-gates.sh` (placed by Step 0) only when it is byte for byte the template's copy, so the project holds exactly what a seed-neither scaffold always held. It refuses when the file differs or is a symlink.
 
 `.github/workflows/ci.yml` — TS stacks (nestjs / nextjs / vite-react). The copy above places it from `<skill-dir>/shared/template-ci/github-ts/.github/workflows/ci.yml`.
 
@@ -279,40 +153,7 @@ If any of the three is missing from a copy, stop and report it: the template fil
 
 The `skill-usage-log.sh` hook (Step B) silently records which skills get used; this is its **consumer**. Seed a stack-agnostic project skill that turns the log into action — surface workflows the developer repeats but hasn't committed as a project skill, then help author one. Run **on demand** (never automatic; no nagging).
 
-```bash
-mkdir -p .claude/skills/skill-audit
-```
-
-**`.claude/skills/skill-audit/SKILL.md`**:
-~~~markdown
----
-name: skill-audit
-description: Surface repeated workflows worth capturing as committed project skills, from the skill-usage log.
-disable-model-invocation: true
-allowed-tools: "Bash(awk *), Bash(sort *), Bash(cat .claude/skill-usage.log), Bash(ls .claude/skills/*)"
----
-
-# Skill Audit
-
-Find workflows you repeat often that aren't yet committed project skills — so the repo (and teammates) carry them, not just your session memory.
-
-## 1. Aggregate usage
-```bash
-[ -f .claude/skill-usage.log ] || { echo "No skill usage logged yet."; exit 0; }
-awk -F'\t' '{c[$2]++} END{for (k in c) printf "%4d  %s\n", c[k], k}' .claude/skill-usage.log | sort -rn
-```
-
-## 2. Filter to capture candidates
-A skill is a **capture candidate** when it is used **≥ 2 times** AND:
-- it is NOT a Claude Code built-in (`code-review`, `verify`, `run`, `init`, `review`, `security-review`, `simplify`) — those ship with the CLI, nothing to capture;
-- it is NOT already a project skill — `.claude/skills/<name>/SKILL.md` does not exist (`ls .claude/skills/`).
-
-## 3. Capture (with the user, per candidate)
-- **Author a project skill** (recommended) — create `.claude/skills/<name>/SKILL.md` encoding the workflow, tuned to this project, and commit it. Do NOT vendor a third-party skill's files — write a project skill that captures the same intent (a plugin skill used often is a *signal* to author your own).
-- **Skip** — note it's intentionally not captured.
-
-Keep each new SKILL.md to one workflow, with a clear trigger description and tightly-scoped `allowed-tools`. See the `## Skill capture` norm in AGENTS.md.
-~~~
+`.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`) is a real file under `<skill-dir>/shared/template-late/`; the Step 0 script copies it with `PART=late` at Step C, together with `FUTURE.md` and `docs/CONSTITUTION.md`.
 
 Track it in `harness.json` (Step E) alongside the other seeded skills.
 
