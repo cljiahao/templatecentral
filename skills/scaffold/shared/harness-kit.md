@@ -34,7 +34,7 @@ The kit is split by stack so a run never loads the other stack's script bodies. 
 | E, E2, E3 | `.claude/harness.json`, base snapshot, per-folder docs | finalize |
 | F, G, H | `.agents` symlink, post-scaffold workflow, plugins | finalize |
 
-For Step A the enforcement file's section is the step: write the variant file's `settings.json` body as part of it. Steps B and B2 only add rules and notes to the files Step 0 already copied.
+For Step A the enforcement file's section is the step: run the Step 0 script with `PART=settings` as part of it. Steps B and B2 only add rules and notes to the files Step 0 already copied.
 
 ---
 
@@ -52,7 +52,9 @@ The fence below is the only copy script. Other steps and the stack's `source-fil
 | `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `.claude/skills/skill-audit/SKILL.md` (prettier would reformat the first two at an earlier format pass) |
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 
-`settings`, `late` and `ci` refuse unless the project's `lefthook.yml` is the one `base` copied for this `STACK`, so run `base` first. `settings` and `late` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
+`settings`, `late` and `ci` with `CI=github` or `CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `STACK`, so run `base` first (`CI=none` returns before that check: it only removes a file, and compares it with the template's). `settings` and `late` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.
+
+A template file named `<name>.tmpl` is copied to `<name>` (the manifest lists the `.tmpl` source). Skill files ship that way (`SKILL.md.tmpl`), so no skill loader that scans the plugin registers a template skill.
 
 Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
@@ -139,6 +141,7 @@ if [ -z "$listed" ] || [ "$listed" != "$found" ]; then
   stop "template.manifest and the template trees ($SEL) disagree.${NL}Only in the manifest:${NL}$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))${NL}Only in the trees:${NL}$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$found"))"
 fi
 clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
+  p=${p%.tmpl}
   if [ -e "$TGT/$p" ] || [ -L "$TGT/$p" ]; then echo "$p (exists)"; fi
   d=$p
   while [ "${d%/*}" != "$d" ]; do
@@ -152,7 +155,7 @@ if [ "$PART" = ci ] || [ "$PART" = settings ] || [ "$PART" = late ]; then
 fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"
-  d=$p
+  d=${p%.tmpl}
   if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
   while [ -n "$d" ] && [ ! -d "$TGT/$d" ]; do
     if [ "${d%/*}" != "$d" ]; then d=${d%/*}; else d=; fi
@@ -163,13 +166,14 @@ done | LC_ALL=C sort -u)
 [ -z "$bad" ] || stop "nothing was written, because the copy would fail part way:$NL$bad"
 copied=""
 while IFS="$TAB" read -r mode t p; do
-  d=${p%/*}
-  if [ "$d" != "$p" ]; then
+  dest=${p%.tmpl}
+  d=${dest%/*}
+  if [ "$d" != "$dest" ]; then
     mkdir -p -- "$TGT/$d" || stop "mkdir failed for $d; the copy may have created parent directories and files may be partly written in $TGT.${NL}Files already written:$copied"
   fi
-  cp -- "$SK/$t/$p" "$TGT/$p" || stop "copy failed for $p; the copy may also have written a partial $p or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
-  copied="$copied$NL$p"
-  chmod -- "$mode" "$TGT/$p" || stop "chmod failed for $p; files may be partly written in $TGT.${NL}Files already written:$copied"
+  cp -- "$SK/$t/$p" "$TGT/$dest" || stop "copy failed for $dest; the copy may also have written a partial $dest or created parent directories, so files may be partly written in $TGT.${NL}Files already written:$copied"
+  copied="$copied$NL$dest"
+  chmod -- "$mode" "$TGT/$dest" || stop "chmod failed for $dest; files may be partly written in $TGT.${NL}Files already written:$copied"
 done <<TC_PLAN
 $plan
 TC_PLAN

@@ -11,7 +11,7 @@ on:
     paths:
       - "skills/scaffold/**/config-files.md"
       - "skills/scaffold/*/template/**"
-      - "skills/scaffold/shared/template-settings-*/**"
+      - "skills/scaffold/shared/template*/**"
       - "scripts/validate-scaffold-configs.sh"
       - ".github/workflows/scaffold-parse.yml"
   push:
@@ -19,7 +19,7 @@ on:
     paths:
       - "skills/scaffold/**/config-files.md"
       - "skills/scaffold/*/template/**"
-      - "skills/scaffold/shared/template-settings-*/**"
+      - "skills/scaffold/shared/template*/**"
       - "scripts/validate-scaffold-configs.sh"
   workflow_dispatch:
 permissions:

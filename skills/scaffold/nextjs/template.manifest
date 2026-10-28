@@ -3,13 +3,16 @@
 #               (template: copied at scaffold Step 1; template-agents: copied at Step 6, after the
 #               verification gate, because prettier would reformat AGENTS.md if it existed earlier;
 #               template-tail: text appended to AGENTS.md on request, never copied as a file)
+#               A name ending in .tmpl is the source of the project file with that suffix removed
+#               (SKILL.md.tmpl becomes SKILL.md), so no skill loader registers a template skill; the
+#               manifest lists the source name, and the copy and the golden check strip the suffix
 # mode          octal file mode, equal to the git mode (644 or 755)
 # placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
 # seams         comma-separated [[post-harness]] markers the file carries, or - for none
 template-agents/AGENTS.md 644 __TC_PROJECT_TITLE__ [[post-harness]]
 template-tail/task-management.md 644 - -
-template/.claude/skills/next-migrate/SKILL.md 644 - -
-template/.claude/skills/next-verify/SKILL.md 644 - -
+template/.claude/skills/next-migrate/SKILL.md.tmpl 644 - -
+template/.claude/skills/next-verify/SKILL.md.tmpl 644 - -
 template/.dockerignore 644 - -
 template/.env.example 644 - -
 template/.gitignore 644 - -

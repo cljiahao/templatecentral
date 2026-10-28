@@ -501,14 +501,14 @@ check_scaffold_seeds_complete_harness() {
     [[ -f "$kit_dir/template-ci/$p" ]] || missing+="$kit_dir/template-ci/$p — template file not found"$'\n'
   done
   for p in template-settings-ts/.claude/settings.json template-settings-py/.claude/settings.json \
-    template-late/FUTURE.md template-late/docs/CONSTITUTION.md template-late/.claude/skills/skill-audit/SKILL.md \
+    template-late/FUTURE.md template-late/docs/CONSTITUTION.md template-late/.claude/skills/skill-audit/SKILL.md.tmpl \
     template-tail/AGENTS-tail.md; do
     [[ -f "$kit_dir/$p" ]] || missing+="$kit_dir/$p — template file not found"$'\n'
   done
   # The copy instruction is anchored on its own lines (the SEL line and the cp loop), so prose that
   # merely names the trees cannot satisfy it.
   # shellcheck disable=SC2016  # the anchor is literal text, not an expansion
-  local cp_line='cp -- "$SK/$t/$p" "$TGT/$p"'
+  local cp_line='cp -- "$SK/$t/$p" "$TGT/$dest"'
   # shellcheck disable=SC2016  # the anchors are literal text, not expansions
   if [[ -f "$kit_dir/harness-kit.md" ]]; then
     for tok in "$cp_line" 'PART=base' 'PART=settings' 'PART=late' 'SEL="template template-$V"' 'SEL="template-settings-$V"' 'SEL="template-late"' 'template-py' '<skill-dir>/shared'; do
@@ -603,11 +603,15 @@ check_migrate_hook_inventory_matches_kit() {
     done
   done
   # Phase 4 runs the kit's Step G from the migrate directory, where <skill-dir>/shared does not exist:
-  # it must name the tail file through ../scaffold, as it does for the other template trees.
-  for tok in 'scaffold/shared/template-tail/AGENTS-tail.md' 'scaffold/shared/template-settings-ts/' 'scaffold/shared/template-late/'; do
+  # its Step 4f-3 paragraph must name the tail file through ../scaffold (another paragraph naming it does not count).
+  local step_4f3
+  step_4f3=$(awk '/^\*\*Step 4f-3[: ]/ { on = 1; next } /^\*\*Step / { on = 0 } on' "$migrate" 2>/dev/null || true)
+  grep -qF -- '<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md' <<<"$step_4f3" || \
+    missing+="$migrate — Step 4f-3 must name <skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md"$'\n'
+  for tok in 'scaffold/shared/template-settings-ts/' 'scaffold/shared/template-late/'; do
     grep -qF -- "$tok" "$migrate" 2>/dev/null || missing+="$migrate — missing template anchor $tok"$'\n'
   done
-  # The Step B3 copy fence and the seed-neither fence assume Step 0 ran, so each doc that describes
+  # The Step B3 runs of the copy script (PART=ci, CI=github, azure or none) assume Step 0 ran, so each doc that describes
   # them states that they are scaffold-only and that a migration copies the CI file by hand.
   # Each anchor is a phrase that appears once in its file, so a later mention of the same word cannot
   # stand in for the note.
@@ -808,7 +812,7 @@ for dp, _, fs in os.walk(root):
 # The copy instructions must exist and name every template tree, so a deleted instruction is not
 # mistaken for "no broken references".
 need = {
-    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"', "<skill-dir>/shared"],
+    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$dest"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"', "<skill-dir>/shared"],
     "scaffold/shared/harness-kit-enforcement.md": ["PART=ci", "CI=none", "PART=settings", "PART=late"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
 }
@@ -1280,22 +1284,57 @@ check_template_trees_complete() {
     "Template trees match template.manifest"
 }
 
+check_no_template_skill_md() {
+  # A skill loader that scans a skills path recursively for SKILL.md registers any such file it
+  # finds, so a template skill that ships under that name would load as a skill of this plugin.
+  # Template skills ship as SKILL.md.tmpl; the copy step drops the suffix in the project. TIMELESS.
+  header "Template trees hold no file named SKILL.md"
+  local scaf="$SKILLS_DIR/scaffold" bad tmpl
+  tmpl=$(cd "$scaf" 2>/dev/null && find . -name 'SKILL.md.tmpl' -path './*/template*/*' | head -n 1 || true)
+  if [[ -z "$tmpl" ]]; then
+    fail "No SKILL.md.tmpl found under $scaf/*/template*/ — the check below would scan nothing"
+    return
+  fi
+  bad=$(cd "$scaf" && find . -name 'SKILL.md' -path './*/template*/*' | LC_ALL=C sort || true)
+  report "$bad" \
+    "A file named SKILL.md sits in a template tree — rename it to SKILL.md.tmpl so no skill loader registers it" \
+    "No template tree holds a file named SKILL.md"
+}
+
 check_copy_script_single() {
   # Every copy in a scaffold (base, settings, ci, late and the stack parts) is one script: the fence
   # in harness-kit.md Step 0, run with another PART. A second guard body would drift from the first
   # and halve the tokens the template trees save, so no other skills file may carry one under any
-  # heredoc name, and Step B3 must say it runs that script with PART=ci. TIMELESS.
+  # heredoc name or spelling, and Step B3 must say it runs that script with PART=ci. The one other
+  # script fence is the AGENTS.md tail command in harness-kit-finalize.md, named TC_TAIL. TIMELESS.
   header "The copy script has exactly one copy"
   local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md" enf="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
-  local bad="" holders n tok b3
-  holders=$(grep -rlE "^bash <<'TC_" "$SKILLS_DIR/" 2>/dev/null | LC_ALL=C sort || true)
-  if [[ -z "$holders" ]]; then
-    bad+="no copy script found under $SKILLS_DIR/"$'\n'
-  elif [[ "$holders" != "$kit" ]]; then
-    bad+="the copy script must live only in $kit; also found in:"$'\n'"$(grep -vxF "$kit" <<<"$holders" || true)"$'\n'
+  local bad="" tok b3 fence_re hits line file delim guard_n=0 tail_n=0 fin="$SKILLS_DIR/scaffold/shared/harness-kit-finalize.md"
+  # A heredoc fence that feeds a shell, in any spelling: indented, `bash -s`, `<<-`, and a quoted,
+  # double-quoted or bare TC_ delimiter.
+  fence_re="^[[:space:]]*(ba)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+<<-?[[:space:]]*[\"']?TC_"
+  hits=$(grep -rnE "$fence_re" "$SKILLS_DIR/" 2>/dev/null | LC_ALL=C sort || true)
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    file=${line%%:*}
+    delim=$(sed -E "s/.*<<-?[[:space:]]*[\"']?(TC_[A-Za-z0-9_]*).*/\\1/" <<<"$line")
+    if [[ "$delim" == TC_GUARD ]]; then
+      guard_n=$((guard_n + 1))
+      [[ "$file" == "$kit" ]] || bad+="the copy script must live only in $kit; also found in $file"$'\n'
+    elif [[ "$delim" == TC_TAIL ]]; then
+      tail_n=$((tail_n + 1))
+      [[ "$file" == "$fin" ]] || bad+="the AGENTS.md tail command must live only in $fin; also found in $file"$'\n'
+    else
+      bad+="a second script fence ($delim) in $file — the only fences allowed are TC_GUARD in $kit and TC_TAIL in $fin"$'\n'
+    fi
+  done <<<"$hits"
+  [[ "$guard_n" == 1 ]] || bad+="skills/ holds $guard_n copy-script fences (want exactly 1 TC_GUARD, in $kit)"$'\n'
+  [[ "$tail_n" == 1 ]] || bad+="skills/ holds $tail_n AGENTS.md tail fences (want exactly 1 TC_TAIL, in $fin)"$'\n'
+  # The copy script copies files; the tail is appended to AGENTS.md by its own command, so the
+  # script must not mention it anywhere.
+  if awk "/^bash <<'TC_GUARD'/ { on = 1; next } /^TC_GUARD\$/ { on = 0 } on" "$kit" 2>/dev/null | grep -q 'template-tail'; then
+    bad+="$kit — the copy script mentions template-tail, which is appended to AGENTS.md and never copied"$'\n'
   fi
-  n=$({ grep -rhE "^bash <<'TC_" "$SKILLS_DIR/" 2>/dev/null || true; } | wc -l | tr -d ' ')
-  [[ "${n:-0}" == 1 ]] || bad+="skills/ holds ${n:-0} copy-script fences (want exactly 1, in $kit)"$'\n'
   # Only the Step B3 section counts: the same words elsewhere in the file would satisfy a whole-file grep.
   b3=$(awk '/^## Step B3[. ]/ { on = 1; next } /^## / { on = 0 } on' "$enf" 2>/dev/null || true)
   if [[ -z "$b3" ]]; then bad+="$enf — no Step B3 section found"$'\n'; fi
@@ -1327,7 +1366,7 @@ check_step0_before_install() {
   # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
   # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat
+  local f bad="" step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1451,6 +1490,7 @@ check_no_toplevel_command_in_hooks
 check_hook_command_uses_args_array
 check_scaffold_seeds_complete_harness
 check_template_trees_complete
+check_no_template_skill_md
 check_copy_script_single
 check_step0_before_install
 check_migrate_hook_inventory_matches_kit

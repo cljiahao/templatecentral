@@ -124,15 +124,13 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Kit Step **0** (`PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`, each run of the Step 0 script with `STACK=nextjs` in its fence). The verify skills (6c) are already in place, which Step E requires, so the kit's Steps **E through H** follow.
-
-
+Kit Step **0** (`PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`, each run of the Step 0 script with `STACK=nextjs` in its fence). The verify skills (6c) are already in place, which Step E requires.
 
 ### 6c. Project skill files (`.claude/skills/`)
 
 `.claude/skills/next-migrate/SKILL.md` and `.claude/skills/next-verify/SKILL.md` were copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
 
-Now execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the nextjs `PostToolUse` line), and plugin install (Step H).
+Execute kit Steps **E through H** using the **nextjs** row: harness.json (Steps E — both `next-verify` and `next-migrate` skill hashes are included for nextjs), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the nextjs `PostToolUse` line), and plugin install (Step H).
 
 ### 6d. Seed additional project skills
 

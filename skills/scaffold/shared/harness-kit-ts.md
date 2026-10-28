@@ -4,7 +4,7 @@
 
 # Shared Harness Kit — TS stacks (nestjs / nextjs / vite-react) bodies
 
-Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-react)): the `settings.json` body, written in Step A, and notes on the per-stack hooks and `lefthook.yml`, which are real files under `template-ts/` that `harness-kit.md` Step 0 copies. The other stack's bodies live in `harness-kit-fastapi.md` — do not load it.
+Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-react)): notes on the `settings.json` that Step A copies from `template-settings-ts/`, and notes on the per-stack hooks and `lefthook.yml`, which are real files under `template-ts/` that `harness-kit.md` Step 0 copies. The other stack's bodies live in `harness-kit-fastapi.md` — do not load it.
 
 ---
 

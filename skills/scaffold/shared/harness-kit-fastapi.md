@@ -4,7 +4,7 @@
 
 # Shared Harness Kit — FastAPI bodies
 
-Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): the `settings.json` body, written in Step A, and notes on the per-stack hooks, `lefthook.yml` and the CI `quality` job, which are real files under `template-py/` and `template-ci/github-py/` that `harness-kit.md` Step 0 and `harness-kit-enforcement.md` Step B3 copy. The other stack's bodies live in `harness-kit-ts.md` — do not load it.
+Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): notes on the `settings.json` that Step A copies from `template-settings-py/`, and notes on the per-stack hooks, `lefthook.yml` and the CI `quality` job, which are real files under `template-py/` and `template-ci/github-py/` that `harness-kit.md` Step 0 and `harness-kit-enforcement.md` Step B3 copy. The other stack's bodies live in `harness-kit-ts.md` — do not load it.
 
 ---
 

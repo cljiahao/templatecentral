@@ -5,13 +5,16 @@
 #               template-settings-<ts|py>: .claude/settings.json, copied at Step A;
 #               template-late: copied at Step C, after the format pass that precedes it;
 #               template-tail: the AGENTS.md tail, appended to AGENTS.md at Step G, never copied as a file)
+#               A name ending in .tmpl is the source of the project file with that suffix removed
+#               (SKILL.md.tmpl becomes SKILL.md), so no skill loader registers a template skill; the
+#               manifest lists the source name, and the copy and the golden check strip the suffix
 # mode          octal file mode, equal to the git mode (644 or 755)
 # placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
 # seams         comma-separated [[post-harness]] markers the file carries, or - for none
 template-ci/azure/azure-pipelines/templatecentral-gates.yml 644 - -
 template-ci/github-py/.github/workflows/ci.yml 644 - -
 template-ci/github-ts/.github/workflows/ci.yml 644 - -
-template-late/.claude/skills/skill-audit/SKILL.md 644 - -
+template-late/.claude/skills/skill-audit/SKILL.md.tmpl 644 - -
 template-late/FUTURE.md 644 - -
 template-late/docs/CONSTITUTION.md 644 __TC_PROJECT_TITLE__ -
 template-py/.claude/hooks/block-no-verify.sh 755 - -

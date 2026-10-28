@@ -29,6 +29,8 @@ scaffold_tree() {
     "$REPO_ROOT/skills/scaffold/$1/template-agents"; do
     [[ -d "$d" ]] && cp -Rp "$d/." "$3/"
   done
+  # a <name>.tmpl source is the project file <name>
+  find "$3" -name '*.tmpl' | while IFS= read -r f; do mv -- "$f" "${f%.tmpl}"; done
   # a generated project carries a real name where the template holds a placeholder
   python3 - "$3" "$REPO_ROOT/tests/golden/placeholders.env" <<'PY'
 import os, sys

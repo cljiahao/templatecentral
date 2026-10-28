@@ -152,9 +152,10 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md` (a migration reads it at `<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md`: change only that path). The command below builds the whole text first and appends it only when that worked, so a failure appends nothing. The model fills in only `STACK=`; the typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack in the script:
+**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md` (a migration reads it at `<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md`: change only that path). The command below builds the whole text first and appends it only when that worked, so a failure appends nothing. Run it in the project root (the script appends to `./AGENTS.md` and refuses when that file does not exist); it runs in its own `bash`, so a refusal ends only that process. The model fills in only `STACK=`; the typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack in the script:
 
 ```bash
+bash <<'TC_TAIL'
 STACK=
 case "$STACK" in
   nestjs | nextjs | vite-react) TC='pnpm exec tsc --noEmit --incremental' ;;
@@ -163,7 +164,9 @@ case "$STACK" in
 esac
 out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "<skill-dir>/shared/template-tail/AGENTS-tail.md") || exit 1
 [ -n "$out" ] || { echo "Refusing to append the tail: the tail file is empty" >&2; exit 1; }
+[ -f AGENTS.md ] || { echo "Refusing to append the tail: AGENTS.md does not exist in $(pwd); run this in the project root" >&2; exit 1; }
 printf '\n%s\n' "$out" >> AGENTS.md
+TC_TAIL
 ```
 
 **Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)
