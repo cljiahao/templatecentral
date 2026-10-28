@@ -1,6 +1,16 @@
 <!-- ref: scaffold/nextjs/source-files.md
      loaded-by: scaffold/SKILL.md
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
+## Part B — Config Files
+
+The config files are real files in `<skill-dir>/nextjs/template/`, listed in `<skill-dir>/nextjs/template.manifest`. Step 1 below copies them; do not re-type them. Notes on the ones that need context:
+
+- `package.json` — Step 1 replaces `__TC_PROJECT_NAME__` in `"name"` with the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/nextjs.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@testing-library/*` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` respectively. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
+  - **ESLint 10** (`^10.12.0`; engines `^20.19 || ^22.13 || >=24`, so Node ≥24 is fine). Direct plugins all peer-support `^10` (`eslint-config-next` `>=9`, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs`, `@eslint-community/eslint-plugin-eslint-comments`, `typescript-eslint` 8.x). `eslint-config-next` 16.4's transitive `eslint-plugin-react` 7.37 / `eslint-plugin-import` 2.32 / `eslint-plugin-jsx-a11y` 6.10 still declare peers only up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning — non-fatal (pnpm does not enforce strict peers by default), and their rules (`react/jsx-key`, `jsx-a11y/alt-text`, `import/no-anonymous-default-export`, `@next/next/no-img-element`) were verified to fire normally under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it; the warning clears once those plugins ship `^10` peers.
+- `scripts/check-route-logging.mjs` — Next.js App Router has no global request-logging layer, so coverage can't be automatic like NestJS (pino-http) or FastAPI (ASGI middleware). This dependency-free check fails the build if any API handler ships unwrapped — wired into `pnpm check`, so it runs locally, in lefthook, and in CI. See `add/logging/nextjs.md`.
+- `eslint.config.mjs` — Next.js 16 ships `eslint-config-next` as native flat configs — `FlatCompat` causes circular JSON crashes. Import the flat config objects directly and spread them. `pnpm check` runs `eslint .`, so this file must exist.
+  - `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, security, code smell, tests, React/JSX) — see `templatecentral:standards` code-standards notes for the two scoping overrides in the file. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret; peer `eslint ^8 || ^9 || ^10`) and kept identical across the nextjs, nestjs, and vite-react scaffolds — `configs.recommended`'s enabled-rule set and rule heuristics change across minor versions (4.1.0 enabled ~206 of 268; 4.2.x also skips low-entropy literals in `no-hardcoded-passwords`, which can turn an existing `eslint-disable` for it into an unused-directive error); bump all three together, deliberately, and re-verify — don't let `pnpm install` silently resolve a newer minor. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
+
 ## Part C — Source Files
 
 The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.md` in `<skill-dir>/nextjs/template-agents/`), listed in `<skill-dir>/nextjs/template.manifest`. Steps 1 and 6 below copy them; do not re-type or modify them. Notes on the ones that need context:
@@ -22,23 +32,25 @@ The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.m
 
 ### 1. Create directory and files
 
-Create the target directory, then load the kit index: its Step 0 fence is the copy script, and it is the only copy of it.
+Create the target directory, then load the kit index: its Step 0 fence is the copy script (Step B3 carries an identical copy for `PART=ci`).
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
 ```
 
-Run kit Step **0** now with `STACK=nextjs` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/nextjs/template/` into the project root per `<skill-dir>/nextjs/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way. Then, with the Edit tool, replace `__TC_PROJECT_NAME__` in `package.json` with the project name (kebab-case), and check that nothing else was left unsubstituted:
+Run kit Step **0** now with `STACK=nextjs` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/nextjs/template/` into the project root per `<skill-dir>/nextjs/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
+
+Then set the project name in `package.json`. The name must match `^[a-z0-9][a-z0-9-]*$` (lowercase letters, digits and hyphens, starting with a letter or digit). If it does not (a quote, backslash, space or newline would break the JSON), stop and ask the user for a valid name; do not edit anything. Otherwise, with the Edit tool, replace `__TC_PROJECT_NAME__` in `package.json` with the name, then check that nothing was left unsubstituted and that the file still parses:
 
 ```bash
 grep -n '__TC_' package.json
+node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'
 ```
 
-It must print nothing.
+Both must print nothing.
 
 ### 2. Update project name and branding
 
-- In `package.json`: set `"name"` to kebab-case project name
 - In `src/app/layout.tsx`: update `metadata.title` and `metadata.description`
 - In `src/app/(public)/page.tsx`: replace the `templateCentral` heading with the project name
 - In `src/components/layout/site-footer.tsx`: update credit text
@@ -92,7 +104,9 @@ If check fails, a generated file violates the eslint or prettier config.
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** a third time with `STACK=nextjs` in its fence and `PART=agents`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name, and check that no placeholder is left anywhere in the project:
+Run kit Step **0** a third time with `STACK=nextjs` in its fence and `PART=agents`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
+
+Afterwards, check that no placeholder is left anywhere in the project:
 
 ```bash
 grep -rn '__TC_' . --exclude-dir=node_modules --exclude-dir=.git

@@ -5,12 +5,12 @@ Design seams built into templateCentral for AI collaboration patterns that are n
 ## Meta-Harness
 
 CI that validates templateCentral's own harness layer — the harness checking itself.
-Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`).
+Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`; for a stack with a `template.manifest`, the files named in its `seams` column).
 
 ## Trace-Driven Skill Evolution
 
 Capture agent traces from real scaffolding sessions to detect skill gaps, measure step completion rates, and drive data-informed skill improvements.
-Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`).
+Seam: `[[post-harness]]` markers inside scaffold templates (`skills/scaffold/*/source-files.md`; for a stack with a `template.manifest`, the files named in its `seams` column).
 
 ## Community Skill Registry
 

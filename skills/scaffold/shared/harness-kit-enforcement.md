@@ -176,7 +176,7 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
 if [ "$PART" = ci ]; then
-  cmp -s -- "$TGT/lefthook.yml" "$SH/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
 fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"

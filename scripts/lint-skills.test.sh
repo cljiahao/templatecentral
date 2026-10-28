@@ -199,7 +199,7 @@ nx_no_manifest_ref() { strip_token '<skill-dir>/nextjs/template.manifest' '<skil
 nx_wrong_stack() { strip_token 'STACK=nextjs' 'STACK=nestjs' "$(NXD)/source-files.md"; }
 nx_no_stack_value() { strip_token 'STACK=nextjs' 'STACK-nextjs' "$(NXD)/source-files.md"; }
 no_ref_md() { find "$S" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' -delete; }
-nx_ref_header_deleted() { sed -i.bak '1d' "$(NXD)/config-files.md" && rm -f "$(NXD)/config-files.md.bak"; }
+nx_ref_header_deleted() { sed -i.bak '1d' "$(NXD)/source-files.md" && rm -f "$(NXD)/source-files.md.bak"; }
 headerless_md_beside_template() { printf 'no header\n' > "$(NXD)/zz-note.md"; }
 headerless_md_named_template() { printf 'no header\n' > "$(NXD)/template-notes.md"; }
 headerless_md_in_shared_next_to_trees() { printf 'no header\n' > "$SH/zz-note.md"; }
@@ -210,6 +210,30 @@ pin_in_nx_template() { printf 'left-pad@1.3.0\n' >> "$(NXD)/template/.npmrc"; }
 secret_in_nx_template() { printf 'password = "hunter2hunter2"\n' >> "$(NXD)/template/.npmrc"; }
 bare_handler_in_nx_template() { printf '\nexport async function GET() {}\n' >> "$(NXD)/template/src/app/api/health/route.ts"; }
 marker_drift_in_nx_template() { strip_token 'nextjs@6.0.0' 'nextjs@99.0.0' "$(NXD)/template-agents/AGENTS.md"; }
+nx_base_after_install() { python3 - "$(NXD)/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=nextjs and PART=base.\n")
+PY
+}
+nx_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
+nx_agents_before_format() { printf 'Run kit Step 0 with STACK=nextjs and PART=agents.\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
+nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
+# shellcheck disable=SC2016
+no_kit_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit.md"; }
+no_ci_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit-enforcement.md"; }
+no_kit_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit.md"; }
+no_ci_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit-enforcement.md"; }
+exact_pin_in_nx_package() { python3 - "$(NXD)/template/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
+PY
+}
+no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
 none() { :; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
@@ -368,7 +392,7 @@ fails nextjs_stack_value_fails_when_missing "Scaffold runs kit Step 0 before the
 
 # ── check_ref_file_headers skips shipped template files and still catches reference files ──
 fails ref_headers_fail_on_empty_match "Ref file <!-- ref: --> headers" no_ref_md "scanned nothing"
-fails ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" nx_ref_header_deleted "nextjs/config-files.md"
+fails ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" nx_ref_header_deleted "nextjs/source-files.md"
 fails ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_template "nextjs/zz-note.md"
 fails ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" headerless_md_named_template "nextjs/template-notes.md"
 fails ref_headers_still_check_a_file_in_shared "Ref file <!-- ref: --> headers" headerless_md_in_shared_next_to_trees "shared/zz-note.md"
@@ -383,6 +407,22 @@ fails scan_version_pins_includes_nextjs_template "Version pins in skills" pin_in
 fails scan_hardcoded_secrets_includes_nextjs_template "Hardcoded secrets" secret_in_nx_template "hunter2hunter2"
 fails scan_bare_route_handler_includes_nextjs_template "Bare Next.js route handler exports" bare_handler_in_nx_template "route.ts"
 fails scan_agents_marker_includes_nextjs_template "AGENTS.md schema marker not drifted" marker_drift_in_nx_template "template-agents/AGENTS.md"
+
+# ── check_step0_before_install: the PART=base, PART=agents and install order for a templated stack ──
+fails nextjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" nx_base_after_install "comes after the first install"
+fails nextjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" nx_no_base_line "no kit Step 0 instruction with STACK=nextjs and PART=base"
+fails nextjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" nx_agents_before_format "comes before the pnpm format line"
+fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "needs a PART=agents instruction"
+
+# ── the kit fences keep the stack and agents branches ────────────────────────
+fails skilldir_refs_fails_when_kit_stack_case_deleted "<skill-dir> references resolve" no_kit_stack_case "harness-kit.md: copy instruction stack | agents) missing"
+fails skilldir_refs_fails_when_ci_stack_case_deleted "<skill-dir> references resolve" no_ci_stack_case "harness-kit-enforcement.md: copy instruction stack | agents) missing"
+fails skilldir_refs_fails_when_kit_sel_template_deleted "<skill-dir> references resolve" no_kit_sel_template "harness-kit.md: copy instruction SEL=\"template\" missing"
+fails skilldir_refs_fails_when_ci_sel_template_deleted "<skill-dir> references resolve" no_ci_sel_template "harness-kit-enforcement.md: copy instruction SEL=\"template\" missing"
+
+# ── template package.json pins ───────────────────────────────────────────────
+fails template_pins_fail_on_empty_match "Template package.json dependencies use floors" no_nx_package_json "no template package.json found"
+fails template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_nx_package "left-pad"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

@@ -667,7 +667,7 @@ nxdoc=$(cat "$NX/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=stack`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=base`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
 # the nextjs docs carry no copy of the guard: the kit index holds the only one
-check 0 "$(grep -c 'TC_GUARD' "$NX/source-files.md" "$NX/config-files.md" | awk -F: '{ s += $2 } END { print s + 0 }')" "nextjs_docs_hold_no_second_guard"
+check 0 "$(grep -c 'TC_GUARD' "$NX/source-files.md" | awk -F: '{ s += $2 } END { print s + 0 }')" "nextjs_docs_hold_no_second_guard"
 run_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nextjs "")" 2>&1; }   # run_stack <target>
 run_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nextjs "")" 2>&1; } # run_agents <target>
 count_files() { find "$1" -type f | wc -l | tr -d ' '; }
@@ -752,11 +752,11 @@ check 1 "$([[ "$(stack_manifest_diff "$sk/nextjs")" == *"PLACEHOLDERS template/p
 
 # ── placeholders_only_in_small_files ─────────────────────────────────────────
 # A file that carries __TC_ tokens is read and edited by the model, so it stays small, and a stack has at most 5.
-big_placeholders() { # big_placeholders <dir>... — one line per template file over 4 KB that carries a placeholder, then TOOMANY per tree dir over 5 files
+big_placeholders() { # big_placeholders <dir>... — one line per template file over 4 KB that carries a placeholder, then TOOMANY when the dirs together hold more than 5 such files
   python3 - "$@" <<'PY'
 import os, sys
+n = 0
 for root in sys.argv[1:]:
-    n = 0
     for dp, _, fs in os.walk(root):
         for f in fs:
             full = os.path.join(dp, f)
@@ -765,15 +765,18 @@ for root in sys.argv[1:]:
                 n += 1
                 if len(data) >= 4096:
                     print("BIG", os.path.relpath(full, root), len(data))
-    if n > 5:
-        print("TOOMANY", root, n)
+if n > 5:
+    print("TOOMANY", n, "placeholder files across", " ".join(sys.argv[1:]))
 PY
 }
-check "" "$(big_placeholders "$NX/template" "$NX/template-agents" "$SHARED/template" "$SHARED/template-ts" "$SHARED/template-py" "$SHARED/template-ci")" "placeholders_only_in_small_files"
+check "" "$(big_placeholders "$NX/template" "$NX/template-agents")" "placeholders_only_in_small_files: nextjs"
+check "" "$(big_placeholders "$SHARED/template" "$SHARED/template-ts" "$SHARED/template-py" "$SHARED/template-ci")" "placeholders_only_in_small_files: shared"
 sk=$(alt_nx big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/nextjs/template/vitest.config.ts"
 check 1 "$([[ "$(big_placeholders "$sk/nextjs/template")" == "BIG vitest.config.ts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a file over 4 KB is reported"
 sk=$(alt_nx many-ph); for f in .npmrc .prettierrc .gitignore .dockerignore .env.example tsconfig.json; do printf '__TC_X__\n' >> "$sk/nextjs/template/$f"; done
 check 1 "$([[ "$(big_placeholders "$sk/nextjs/template")" == *"TOOMANY"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: more than 5 placeholder files is reported"
+sk=$(alt_nx span-ph); for f in .npmrc .prettierrc; do printf '__TC_X__\n' >> "$sk/nextjs/template/$f"; done; printf '__TC_Y__\n' > "$sk/nextjs/template-agents/zz-a.md"; printf '__TC_Z__\n' > "$sk/nextjs/template-agents/zz-b.md"
+check 1 "$([[ "$(big_placeholders "$sk/nextjs/template" "$sk/nextjs/template-agents")" == *"TOOMANY 6"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: 4 in template/ plus 2 in template-agents/ is over the limit per stack"
 
 # ── no_leftover_placeholders ─────────────────────────────────────────────────
 # After the copy and the substitution, grep -rn '__TC_' over the project is empty. The values come from tests/golden/placeholders.env.
@@ -1018,9 +1021,11 @@ if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   out=$(vsc "printf 'const = ;\\n' > skills/scaffold/nextjs/template/zz.cjs")
   check 1 "$([[ "$out" == *"FAIL  skills/scaffold/nextjs/template/zz.cjs"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_template_cjs ($out)"
   out=$(vsc "mv skills/scaffold/nextjs/template skills/scaffold/nextjs/template-moved")
-  check 1 "$([[ "$out" != *"nextjs/template/package.json"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: a renamed tree is no longer checked, so the baseline files above are the anchor ($out)"
-  out=$(vsc "rm -rf skills/scaffold/*/template; rm -f skills/scaffold/*/config-files.md")
-  check 1 "$([[ "$out" == *"nothing was validated"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match ($out)"
+  check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: a renamed template/ tree fails while its manifest exists ($out)"
+  out=$(vsc "find skills/scaffold/nextjs/template \\( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -delete")
+  check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a template/ tree with no JSON or JS file ($out)"
+  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest; rm -f skills/scaffold/*/config-files.md")
+  check 1 "$([[ "$out" == *"nothing was validated"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_nothing_is_validated ($out)"
 elif [[ "${CI:-}" == true ]]; then
   FAIL=$((FAIL + 1)); echo "FAIL: jq or node is missing but CI=true; the validate-scaffold-configs tests must run in CI"
 else

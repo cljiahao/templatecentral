@@ -1,6 +1,6 @@
 <!-- ref: scaffold/shared/harness-kit.md
      loaded-by: scaffold/<stack>/source-files.md + migrate/general/phase-4-upgrade.md + migrate/general/phase-5-health-check.md → scaffold/SKILL.md | migrate/SKILL.md
-     prereq: Stack identified; scaffold app+config files already written (or migrate Phase 4/5 in progress). Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold and templatecentral:migrate skills. -->
+     prereq: Stack identified and the target directory created (nextjs loads this file at its Step 1, before copying its files; the other stacks load it after writing their app and config files), or migrate Phase 4/5 in progress. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold and templatecentral:migrate skills. -->
 
 # Shared Harness Kit
 
@@ -42,7 +42,7 @@ For Step A the enforcement file's section is the step: write the variant file's 
 
 Scaffold only. `migrate` never runs this step: it diffs each file under `<skill-dir>/shared/template/`, `<skill-dir>/shared/template-ts/` and `<skill-dir>/shared/template-py/` against the project and merges (see its Phase 4 and Phase 5).
 
-The fence below is the only copy script, and it runs once per `PART`. `PART=base` is this step: run it before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. A stack whose files live in `<skill-dir>/<stack>/template/` and `template-agents/` (its `source-files.md` says when) runs it again with `PART=stack` and `PART=agents`; Step B3 runs its own copy with `PART=ci`. Edit only the `STACK=` line, the first line of the script: set it to `nestjs`, `nextjs`, `vite-react` or `fastapi`. It ships empty, and the script refuses until it is set. From it the script derives the trees and the manifest and refuses any other value, so a wrong stack cannot copy another stack's files: `base` copies `template` plus `template-ts` (the three TS stacks) or `template-py` (fastapi) per `<skill-dir>/shared/template.manifest`; `stack` and `agents` copy `<skill-dir>/<STACK>/template` and `<skill-dir>/<STACK>/template-agents` per `<skill-dir>/<STACK>/template.manifest`. Leave `CI=` empty here; set `PART=` only as the stack's `source-files.md` says.
+The fence below is the copy script (Step B3 carries an identical copy for `PART=ci`), and it runs once per `PART`. `PART=base` is this step: run it before Step A and before the first `pnpm install`, with `<target>` the project root. The app files may already be there; only the paths the copy writes must be absent. A stack whose files live in `<skill-dir>/<stack>/template/` and `template-agents/` (its `source-files.md` says when) runs it again with `PART=stack` and `PART=agents`; Step B3 runs its own copy with `PART=ci`. Edit `STACK=` (the first line of the script) and, where the stack's `source-files.md` says, `PART=`; leave `CI=` empty. Set `STACK=` to `nestjs`, `nextjs`, `vite-react` or `fastapi`. It ships empty, and the script refuses until it is set. From it the script derives the trees and the manifest and refuses any other value, so a wrong stack cannot copy another stack's files: `base` copies `template` plus `template-ts` (the three TS stacks) or `template-py` (fastapi) per `<skill-dir>/shared/template.manifest`; `stack` and `agents` copy `<skill-dir>/<STACK>/template` and `<skill-dir>/<STACK>/template-agents` per `<skill-dir>/<STACK>/template.manifest`.
 
 Substitute `<skill-dir>` and `<target>` as plain text, with no quoting or escaping: the script reads each path from a quoted heredoc, so no character in a path is expanded or run. A path must not contain a newline, and the fence cannot reliably catch one that does (a line equal to `TC_PATH` ends the heredoc early and the lines after it run). If a path contains a newline, stop and ask the user for another directory before substituting.
 
@@ -123,7 +123,7 @@ clash=$(printf '%s\n' "$found" | while IFS= read -r p; do
 done | LC_ALL=C sort -u)
 [ -z "$clash" ] || stop "these paths already exist, are symlinks or are not directories in $TGT:$NL$clash"
 if [ "$PART" = ci ]; then
-  cmp -s -- "$TGT/lefthook.yml" "$SH/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
+  cmp -s -- "$TGT/lefthook.yml" "$SK/template-$V/lefthook.yml" || stop "$TGT/lefthook.yml is not the one Step 0 copied for STACK=$STACK, so this STACK does not match Step 0 (or Step 0 has not run)"
 fi
 bad=$(printf '%s\n' "$plan" | while IFS="$TAB" read -r mode t p; do
   [ -r "$SK/$t/$p" ] || echo "$SK/$t/$p (unreadable)"

@@ -72,8 +72,7 @@ scan() {
 have_python() { command -v python3 >/dev/null 2>&1; }
 
 # TEMPLATED_STACKS — the stacks whose verbatim files live in skills/scaffold/<stack>/template and
-# template-agents (listed in <stack>/template.manifest). A stack joins this list in the PR that moves
-# its fences into files.
+# template-agents (listed in <stack>/template.manifest). Add a stack here once its files live in `template/`.
 TEMPLATED_STACKS=(nextjs)
 
 # template_files — every file in the scaffold template trees, one path per line. The trees are
@@ -792,8 +791,8 @@ for dp, _, fs in os.walk(root):
 # The copy instructions must exist and name every template tree, so a deleted instruction is not
 # mistaken for "no broken references".
 need = {
-    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', 'SEL="template-agents"', "<skill-dir>/shared"],
-    "scaffold/shared/harness-kit-enforcement.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=ci", 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"'],
+    "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', "stack | agents)", "<skill-dir>/shared"],
+    "scaffold/shared/harness-kit-enforcement.md": ['cp -- "$SK/$t/$p" "$TGT/$p"', "PART=ci", 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', 'SEL="template"', 'SEL="template-agents"', "stack | agents)"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
 }
 for rel, toks in need.items():
@@ -959,6 +958,21 @@ check_no_version_pins() {
     } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' || true)" \
     "Version pins found — move floors/pins to .claude/rules/*.md" \
     "No version pins in skills"
+
+  # The template package.json files carry caret floors, so a dependency written as an exact
+  # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs is the one exact pin by design
+  # (its enabled-rule set changes across minor versions; see the scaffold notes).
+  header "Template package.json dependencies use floors, not exact pins"
+  local pj pins="" n=0
+  while IFS= read -r pj; do
+    n=$((n + 1))
+    pins+=$(grep -nE '^[[:space:]]+"[^"]+":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$pj" \
+      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs)"' | sed "s#^#$pj:#" || true)
+  done < <(template_files | grep '/package\.json$' || true)
+  [[ "$n" -gt 0 ]] || pins="no template package.json found — nothing to check"
+  report "$pins" \
+    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs is the only exact pin)" \
+    "Template package.json dependencies use floors (eslint-plugin-sonarjs exact by design)"
 }
 
 check_no_bcrypt() {
@@ -1256,7 +1270,7 @@ check_step0_before_install() {
   # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
   # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst st vals step0_line h6b hnext
+  local f bad="" step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1265,7 +1279,30 @@ check_step0_before_install() {
     step0_line=$(grep -m1 -E 'Step \*\*0\*\*' "$f" || true)
     [[ "$step0_line" == *"STACK=$st"* ]] || bad+="$f — must name STACK=$st on the Step 0 line"$'\n'
     step0=$(grep -nE 'Step \*\*0\*\*' "$f" | head -n 1 | cut -d: -f1 || true)
-    inst=$(grep -nE 'pnpm install|lefthook install' "$f" | head -n 1 | cut -d: -f1 || true)
+    templated=0
+    for h6b in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
+      if [[ "$h6b" == "$st" ]]; then templated=1; fi
+    done
+    # A templated stack runs kit Step 0 for PART=base, PART=stack and PART=agents; its install commands are
+    # the ones on a line of their own (prose notes mention `pnpm install` too).
+    inst_pat='pnpm install|lefthook install'
+    if [[ "$templated" == 1 ]]; then inst_pat='^(pnpm install|lefthook install)'; fi
+    inst=$(grep -nE "$inst_pat" "$f" | head -n 1 | cut -d: -f1 || true)
+    if [[ "$templated" == 1 ]]; then
+      base_line=$(grep -nE 'STACK=.*PART=base|PART=base.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
+      agents_line=$(grep -nE 'STACK=.*PART=agents|PART=agents.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
+      fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
+      if [[ -z "$base_line" ]]; then
+        bad+="$f — no kit Step 0 instruction with STACK=$st and PART=base"$'\n'
+      elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
+        bad+="$f:$base_line — the PART=base copy comes after the first install (line $inst)"$'\n'
+      fi
+      if [[ -z "$agents_line" || -z "$fmt_line" ]]; then
+        bad+="$f — needs a PART=agents instruction and a pnpm format line (the AGENTS.md copy must follow the format step)"$'\n'
+      elif [[ "$agents_line" -le "$fmt_line" ]]; then
+        bad+="$f:$agents_line — the PART=agents copy comes before the pnpm format line ($fmt_line); prettier would reformat AGENTS.md"$'\n'
+      fi
+    fi
     if [[ "$st" == fastapi && -n "$step0" ]]; then
       h6b=$(grep -nE '^### 6b\.' "$f" | head -n 1 | cut -d: -f1 || true)
       hnext=$(awk -v h="${h6b:-0}" 'NR > h && /^### / { print NR; exit }' "$f")

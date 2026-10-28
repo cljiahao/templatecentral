@@ -330,7 +330,6 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/scaffold/nextjs/config-files.md`
 - [ ] `skills/scaffold/nextjs/source-files.md`
 - [ ] `skills/scaffold/nextjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nextjs.md`, no `middleware.ts`, every route wrapped in `withLogging()`. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/nextjs.md`

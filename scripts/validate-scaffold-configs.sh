@@ -11,7 +11,7 @@
 # with `node --check` (the nearest package.json decides how a .js file loads).
 # Reports every malformed block or file and exits 1, so a broken scaffold config template is caught
 # by a PR check, not only by the optional monthly LLM scaffold-verify cron. Exits 1 when nothing
-# at all was validated.
+# at all was validated, or when a stack's template.manifest has no JSON or JS file under its template/.
 # No `set -e`: a failing block is reported and the loop continues to the next one.
 set -uo pipefail
 
@@ -113,6 +113,19 @@ for tree in skills/scaffold/*/template; do
         rm -f "$err" ;;
     esac
   done < <(find "$tree" -type f \( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) | LC_ALL=C sort)
+done
+
+# A stack with a template.manifest must have JSON or JS template files to validate, so deleting or
+# renaming its template/ tree cannot pass on the config fences of the other stacks.
+for manifest in skills/scaffold/*/template.manifest; do
+  [ -f "$manifest" ] || continue
+  stack_dir=$(dirname "$manifest")
+  case "$stack_dir" in */shared) continue ;; esac
+  n=$(find "$stack_dir/template" -type f \( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$n" -eq 0 ]; then
+    echo "  FAIL  $stack_dir  — template.manifest exists but template/ holds no JSON or JS file to validate" >&2
+    fail=1
+  fi
 done
 
 if [ "$total" -eq 0 ]; then
