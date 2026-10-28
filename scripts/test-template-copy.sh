@@ -881,6 +881,20 @@ out=$(run_stack "$tgt"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"package.json"* && "$out" == *"src/app/layout.tsx"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stack_copy_refuses_existing_file: nonzero, names every clashing path, ends with the stop line ($out)"
 check mine "$(cat "$tgt/package.json")" "stack_copy_refuses_existing_file: existing file untouched"
 check "$before" "$(snap "$tgt")" "stack_copy_refuses_existing_file: nothing written"
+# a <name>.tmpl source is checked under its project name: a file or a symlink there is a clash, and is never overwritten
+tgt="$T/nx-tmpl-clash"; mkdir -p "$tgt/.claude/skills/next-verify"; printf 'mine\n' > "$tgt/.claude/skills/next-verify/SKILL.md"
+before=$(snap "$tgt")
+out=$(run_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/skills/next-verify/SKILL.md (exists)"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stack_copy_refuses_existing_tmpl_target: nonzero and names SKILL.md (exists) ($out)"
+check mine "$(cat "$tgt/.claude/skills/next-verify/SKILL.md")" "stack_copy_refuses_existing_tmpl_target: the user's SKILL.md is untouched"
+check "$before" "$(snap "$tgt")" "stack_copy_refuses_existing_tmpl_target: nothing written"
+tgt="$T/nx-tmpl-link"; mkdir -p "$tgt/.claude/skills/next-verify"; printf 'mine\n' > "$T/nx-tmpl-link-real.md"
+ln -s "$T/nx-tmpl-link-real.md" "$tgt/.claude/skills/next-verify/SKILL.md"
+before=$(snap "$tgt")
+out=$(run_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/skills/next-verify/SKILL.md (exists)"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stack_copy_refuses_symlinked_tmpl_target: nonzero and names SKILL.md (exists) ($out)"
+check "mine|L" "$(cat "$T/nx-tmpl-link-real.md")|$([[ -L "$tgt/.claude/skills/next-verify/SKILL.md" ]] && echo L)" "stack_copy_refuses_symlinked_tmpl_target: the link and its target are untouched"
+check "$before" "$(snap "$tgt")" "stack_copy_refuses_symlinked_tmpl_target: nothing written"
 tgt="$T/nx-refuse-agents"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/AGENTS.md"
 out=$(run_agents "$tgt"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "agents_copy_refuses_existing_file: nonzero and names AGENTS.md ($out)"
@@ -1163,6 +1177,28 @@ tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md does not exist"* ]] && echo 1 || echo 0)" "agents_tail_refuses_without_agents_md: nonzero and says so ($out)"
 check "$before" "$(snap "$tgt")" "agents_tail_refuses_without_agents_md: no AGENTS.md was created"
+# the tail command behaves the same under zsh, and a refusal never kills the caller's shell
+if command -v zsh >/dev/null 2>&1; then
+  zsh_tail() { # zsh_tail <stack> <project dir> — the documented command under zsh, then a marker line
+    local body
+    body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
+print(sys.stdin.read().replace("STACK=\n", "STACK=" + sys.argv[1] + "\n", 1).replace("<skill-dir>", sys.argv[2]))' "$1" "$SK")
+    (cd "$2" && zsh -c "$body
+echo CALLER_SURVIVED" 2>&1)
+  }
+  tgt="$T/tail-zsh"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+  out=$(zsh_tail nextjs "$tgt")
+  check 1 "$([[ "$out" == *CALLER_SURVIVED* && "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "zsh_agents_tail_success: appends and returns ($out)"
+  tgt="$T/tail-zsh-bad"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
+  out=$(zsh_tail rails "$tgt")
+  check 1 "$([[ "$out" == *CALLER_SURVIVED* && "$out" == *Refusing* && "$(cat "$tgt/AGENTS.md")" == body ]] && echo 1 || echo 0)" "zsh_agents_tail_refusal_leaves_caller_shell_alive: unknown STACK ($out)"
+  tgt="$T/tail-zsh-none"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
+  out=$(zsh_tail nextjs "$tgt")
+  check 1 "$([[ "$out" == *CALLER_SURVIVED* && "$out" == *"AGENTS.md does not exist"* ]] && echo 1 || echo 0)" "zsh_agents_tail_refusal_leaves_caller_shell_alive: no AGENTS.md ($out)"
+  check "$before" "$(snap "$tgt")" "zsh_agents_tail_refusal: no AGENTS.md was created"
+elif [[ "${CI:-}" == true ]]; then
+  FAIL=$((FAIL + 1)); echo "FAIL: zsh is not installed but CI=true; the zsh tail tests must run in CI"
+fi
 # migrate reads the tail from <skill-dir>/../scaffold/shared/..., with <skill-dir> the migrate directory
 tgt="$T/tail-migrate"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
 body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
@@ -1235,7 +1271,7 @@ check 1 "$([[ -n "$src_set" ]] && echo 1 || echo 0)" "dist_registered_skill_set:
 tpl_skills=$(cd "$dist" && find . -name SKILL.md.tmpl -path '*/template*/*' | wc -l | tr -d ' ')
 check 1 "$([[ "$tpl_skills" -ge 3 ]] && echo 1 || echo 0)" "dist_registered_skill_set: the template skills are in the dist as SKILL.md.tmpl ($tpl_skills)"
 check "" "$(cd "$dist" && find . -name SKILL.md -path '*/template*/*')" "dist_registered_skill_set: no file named SKILL.md sits in a dist template tree"
-check "" "$(cd "$dist" && find . -mindepth 2 -maxdepth 2 -name SKILL.md -path '*/template*/*')" "dist_registered_skill_set: no template SKILL.md sits at the registered depth"
+check "" "$(cd "$dist" && find . -mindepth 2 -maxdepth 2 -name SKILL.md | grep -v '^\./[^/]*/SKILL.md$' || true)" "dist_registered_skill_set: no SKILL.md sits at depth 2 outside skills/<name>/"
 # the stack trees and their manifest reach the dist too, with dotfiles, modes and bytes
 python3 - "$NX" "$dist/scaffold/nextjs" > "$T/dist-nx.diff" <<'PY'
 import os, sys

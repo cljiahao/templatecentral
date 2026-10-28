@@ -309,6 +309,20 @@ t = t.replace("TAB=$(printf '\\t')\n", "TAB=$(printf '\\t')\n# see template-tail
 open(p, "w", encoding="utf-8").write(t)
 PY
 }
+# shellcheck disable=SC2016  # the token is literal text with backticks
+migrate_forgets_tmpl_rule() { strip_token 'is copied to `<name>`' 'is copied elsewhere' "$S/migrate/general/phase-4-upgrade.md"; }
+tmpl_and_plain_both_listed() { printf 'template/.claude/skills/next-verify/SKILL.md 644 - -\n' >> "$(NXD)/template.manifest"; }
+tmpl_and_plain_both_in_tree() { printf 'x\n' > "$(NXD)/template/.claude/skills/next-verify/SKILL.md"; }
+fence_abs_bash() { printf "\n/bin/bash <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_env_bash() { printf "\n/usr/bin/env bash <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_zsh() { printf "\nzsh <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_bash_option() { printf "\nbash --norc <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_no_space() { printf "\nbash<<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_backslash_delim() { printf '\nbash <<\\TC_X\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
+fence_cat_pipe_tc() { printf "\ncat <<'TC_X' | bash\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_cat_pipe_eof() { printf "\ncat <<'EOF' | bash\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_plain_eof() { printf "\nbash <<'EOF'\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
+fence_other_delim_not_shell() { printf "\ncat <<'TC_X'\nhello\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
 none() { :; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
@@ -556,6 +570,19 @@ fails template_skill_md_fails_on_empty_match "Template trees hold no file named 
 fails template_skill_md_fails_when_a_shared_template_holds_one "Template trees hold no file named SKILL.md" template_skill_md_appears "template-late/.claude/skills/zz/SKILL.md"
 fails template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nextjs_skill_md_appears "template/.claude/skills/next-verify/SKILL.md"
 # ── other spellings of a second script fence ──
+fails copy_script_fails_on_an_absolute_shell_path "The copy script has exactly one copy" fence_abs_bash "a second script fence (TC_X)"
+fails copy_script_fails_on_env_bash "The copy script has exactly one copy" fence_env_bash "a second script fence (TC_X)"
+fails copy_script_fails_on_zsh "The copy script has exactly one copy" fence_zsh "a second script fence (TC_X)"
+fails copy_script_fails_on_a_shell_option "The copy script has exactly one copy" fence_bash_option "a second script fence (TC_X)"
+fails copy_script_fails_on_no_space_before_heredoc "The copy script has exactly one copy" fence_no_space "a second script fence (TC_X)"
+fails copy_script_fails_on_a_backslash_delimiter "The copy script has exactly one copy" fence_backslash_delim "a second script fence (TC_X)"
+fails copy_script_fails_on_a_tc_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_tc "a second script fence (TC_X)"
+fails copy_script_fails_on_any_heredoc_piped_to_bash "The copy script has exactly one copy" fence_cat_pipe_eof "a second script fence (EOF)"
+fails copy_script_fails_on_a_non_tc_delimiter "The copy script has exactly one copy" fence_plain_eof "a second script fence (EOF)"
+fails copy_script_fails_on_a_tc_delimiter_that_feeds_no_shell "The copy script has exactly one copy" fence_other_delim_not_shell "a second script fence (TC_X)"
+fails migrate_inventory_fails_when_the_tmpl_rule_is_dropped "migrate hook inventory matches" migrate_forgets_tmpl_rule "a source named <name>.tmpl is copied to <name>"
+fails template_trees_fail_when_a_tmpl_and_its_target_are_both_listed "Template trees are complete" tmpl_and_plain_both_listed "both copy to"
+fails template_trees_fail_when_a_tmpl_and_its_target_are_both_in_the_tree "Template trees are complete" tmpl_and_plain_both_in_tree "both copy to" 
 fails copy_script_fails_on_an_indented_fence "The copy script has exactly one copy" fence_indented "a second script fence (TC_X)"
 fails copy_script_fails_on_bash_dash_s "The copy script has exactly one copy" fence_dash_s "a second script fence (TC_X)"
 fails copy_script_fails_on_a_dash_heredoc "The copy script has exactly one copy" fence_dash_heredoc "a second script fence (TC_X)"

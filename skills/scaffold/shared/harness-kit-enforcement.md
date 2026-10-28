@@ -153,7 +153,7 @@ If any of the three is missing from a copy, stop and report it: the template fil
 
 The `skill-usage-log.sh` hook (Step B) silently records which skills get used; this is its **consumer**. Seed a stack-agnostic project skill that turns the log into action — surface workflows the developer repeats but hasn't committed as a project skill, then help author one. Run **on demand** (never automatic; no nagging).
 
-`.claude/skills/skill-audit/SKILL.md` is a real file under `<skill-dir>/shared/template-late/`; the Step 0 script copies it with `PART=late` at Step C, together with `FUTURE.md` and `docs/CONSTITUTION.md`.
+`.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`) is a real file under `<skill-dir>/shared/template-late/`; the Step 0 script copies it with `PART=late` at Step C, together with `FUTURE.md` and `docs/CONSTITUTION.md`.
 
 Track it in `harness.json` (Step E) alongside the other seeded skills.
 

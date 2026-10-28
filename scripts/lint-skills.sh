@@ -604,6 +604,9 @@ check_migrate_hook_inventory_matches_kit() {
   done
   # Phase 4 runs the kit's Step G from the migrate directory, where <skill-dir>/shared does not exist:
   # its Step 4f-3 paragraph must name the tail file through ../scaffold (another paragraph naming it does not count).
+  # shellcheck disable=SC2016  # the anchor is literal text with backticks, not an expansion
+  grep -qF -- 'a source named `<name>.tmpl` is copied to `<name>`' "$migrate" 2>/dev/null || \
+    missing+="$migrate — the Template files paragraph must say a source named <name>.tmpl is copied to <name>"$'\n'
   local step_4f3
   step_4f3=$(awk '/^\*\*Step 4f-3[: ]/ { on = 1; next } /^\*\*Step / { on = 0 } on' "$migrate" 2>/dev/null || true)
   grep -qF -- '<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md' <<<"$step_4f3" || \
@@ -1256,6 +1259,13 @@ for p in sorted(actual):
 for p in sorted(listed):
     if p not in actual:
         print(f"{manifest}: lists {p}, which is not in the tree")
+# a <name>.tmpl source is copied to <name>, so two paths that agree once the suffix is dropped would write one project file twice
+by_target = {}
+for p in sorted(set(actual) | set(listed)):
+    by_target.setdefault(p[:-5] if p.endswith(".tmpl") else p, []).append(p)
+for target, srcs in sorted(by_target.items()):
+    if len(srcs) > 1:
+        print(f"{manifest}: {' and '.join(srcs)} both copy to {target}")
 PY
 }
 
@@ -1309,15 +1319,30 @@ check_copy_script_single() {
   # script fence is the AGENTS.md tail command in harness-kit-finalize.md, named TC_TAIL. TIMELESS.
   header "The copy script has exactly one copy"
   local kit="$SKILLS_DIR/scaffold/shared/harness-kit.md" enf="$SKILLS_DIR/scaffold/shared/harness-kit-enforcement.md"
-  local bad="" tok b3 fence_re hits line file delim guard_n=0 tail_n=0 fin="$SKILLS_DIR/scaffold/shared/harness-kit-finalize.md"
-  # A heredoc fence that feeds a shell, in any spelling: indented, `bash -s`, `<<-`, and a quoted,
-  # double-quoted or bare TC_ delimiter.
-  fence_re="^[[:space:]]*(ba)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+<<-?[[:space:]]*[\"']?TC_"
-  hits=$(grep -rnE "$fence_re" "$SKILLS_DIR/" 2>/dev/null | LC_ALL=C sort || true)
+  local bad="" tok b3 hits line file delim guard_n=0 tail_n=0 fin="$SKILLS_DIR/scaffold/shared/harness-kit-finalize.md"
+  # Any heredoc that feeds a shell, in any spelling: a shell named bare, by path or through env, with
+  # options; a heredoc delimiter that is quoted, double-quoted, backslashed or bare; and a heredoc
+  # piped into a shell. The bodies of the two allowed fences are skipped, so the heredocs inside the
+  # copy script do not count. Only skills/**/*.md is scanned: template files are not instructions.
+  # shellcheck disable=SC2016  # the awk program is single-quoted on purpose
+  hits=$(find "$SKILLS_DIR" -name '*.md' -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 awk '
+    function delim(s,   t) {
+      if (match(s, /<<-?[ \t]*["\047\\]*[A-Za-z0-9_]+/)) { t = substr(s, RSTART, RLENGTH); sub(/^<<-?[ \t]*["\047\\]*/, "", t); return t }
+      return ""
+    }
+    FNR == 1 { skip = "" }
+    skip != "" { if ($0 == skip) skip = ""; next }
+    {
+      hit = 0
+      if ($0 ~ /(^|[^A-Za-z0-9_\/])(\/bin\/|\/usr\/bin\/env )?(ba|z)?sh([^A-Za-z0-9_]|$)[^<]*<</) hit = 1
+      if ($0 ~ /<<-?[ \t]*["\047\\]*TC_/) hit = 1
+      if ($0 ~ /<<[^|]*\|[ \t]*(\/bin\/|\/usr\/bin\/env )?(ba|z)?sh([^A-Za-z0-9_]|$)/) hit = 1
+      if (hit) { print FILENAME ":" FNR ":" $0; d = delim($0); if (d == "TC_GUARD" || d == "TC_TAIL") skip = d }
+    }' 2>/dev/null || true)
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
     file=${line%%:*}
-    delim=$(sed -E "s/.*<<-?[[:space:]]*[\"']?(TC_[A-Za-z0-9_]*).*/\\1/" <<<"$line")
+    delim=$(sed -nE "s/.*<<-?[[:space:]]*[\"'\\\\]*([A-Za-z0-9_]+).*/\\1/p" <<<"$line")
     if [[ "$delim" == TC_GUARD ]]; then
       guard_n=$((guard_n + 1))
       [[ "$file" == "$kit" ]] || bad+="the copy script must live only in $kit; also found in $file"$'\n'
@@ -1325,7 +1350,7 @@ check_copy_script_single() {
       tail_n=$((tail_n + 1))
       [[ "$file" == "$fin" ]] || bad+="the AGENTS.md tail command must live only in $fin; also found in $file"$'\n'
     else
-      bad+="a second script fence ($delim) in $file — the only fences allowed are TC_GUARD in $kit and TC_TAIL in $fin"$'\n'
+      bad+="a second script fence (${delim:-no delimiter}) in $line — the only fences allowed are TC_GUARD in $kit and TC_TAIL in $fin"$'\n'
     fi
   done <<<"$hits"
   [[ "$guard_n" == 1 ]] || bad+="skills/ holds $guard_n copy-script fences (want exactly 1 TC_GUARD, in $kit)"$'\n'

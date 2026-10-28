@@ -49,7 +49,7 @@ The fence below is the only copy script. Other steps and the stack's `source-fil
 | `base` | here, before Step A and the first `pnpm install` | `template` + `template-ts` (nestjs, nextjs, vite-react) or `template-py` (fastapi), per `<skill-dir>/shared/template.manifest` |
 | `settings` | Step A, after the stack's `AGENTS.md` step | `template-settings-ts` or `template-settings-py`: `.claude/settings.json` |
 | `ci` | Step B3, with `CI=github` or `CI=azure` | `template-ci/github-ts`, `github-py` or `azure`; `CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise |
-| `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `.claude/skills/skill-audit/SKILL.md` (prettier would reformat the first two at an earlier format pass) |
+| `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`; prettier would reformat the first two at an earlier format pass) |
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 
 `settings`, `late` and `ci` with `CI=github` or `CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `STACK`, so run `base` first (`CI=none` returns before that check: it only removes a file, and compares it with the template's). `settings` and `late` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.

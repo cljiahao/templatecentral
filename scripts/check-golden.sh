@@ -11,6 +11,8 @@
 #   substitutes the placeholder values in tests/golden/placeholders.env, and compares only
 #   the golden paths those trees hold: a path no template tree holds is not compared in this mode (the default
 #   mode fails it as MISSING when neither the fences nor the templates produce it).
+#   A template file named <name>.tmpl is the project file <name>: both modes above strip the suffix;
+#   --tree does not, because its tree is the generated project.
 #   --tree DIR (one COMBO) compares a generated project against the expected tree instead:
 #   golden paths must exist in DIR (MISSING) and match (MISMATCH); extra files are ignored.
 #   Files must match byte for byte, apart from a trailing-newline difference, and:
