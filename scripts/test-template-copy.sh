@@ -1149,7 +1149,7 @@ print(t.replace("<skill-dir>", sys.argv[2]))' "$1" "$SK" ${3:+"$3"})
 }
 for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec tsc --noEmit --incremental' nestjs:'pnpm exec tsc --noEmit --incremental' fastapi:'python -m pyright src/'; do
   st=${sc%%:*}; cmd=${sc#*:}
-  tgt="$T/tail-$st"; rm -rf "$tgt"; mkdir -p "$tgt"; cp "$NX/template-agents/AGENTS.md" "$tgt/AGENTS.md"; before=$(cat "$tgt/AGENTS.md")
+  tgt="$T/tail-$st"; rm -rf "$tgt"; mkdir -p "$tgt"; cp "$NX/template-agents/AGENTS.md" "$tgt/AGENTS.md"
   out=$(run_tail "$st" "$tgt"); ec=$?
   check 0 "$ec" "agents_tail[$st]: the documented command exits 0 ($out)"
   check 1 "$([[ "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 && "$(grep -c 'see delta table for stack command' "$tgt/AGENTS.md")" == 0 && "$(grep -cF "incremental type-check ($cmd)" "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail[$st]: one tail, with the fixed command inside the parentheses"
@@ -1161,7 +1161,6 @@ want = open(base, "rb").read() + b"\n" + body.rstrip(b"\n") + b"\n"
 print("ok" if open(got, "rb").read() == want else "differs")
 PY
 )" "agents_tail[$st]: the appended bytes are one blank line, then the tail with the marker filled"
-  check 1 "$([[ "$(head -c "${#before}" "$tgt/AGENTS.md")" == "$before" ]] && echo 1 || echo 0)" "agents_tail[$st]: the stack's AGENTS.md body is untouched"
 done
 # an unknown or empty STACK appends nothing
 for bad in rails ''; do
