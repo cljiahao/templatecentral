@@ -1,0 +1,41 @@
+# sha256	file	heading	index	lang
+4c71823c01f6f1aa801aa361f05ce46db335e194df1bbee8045d214459af6995	skills/standards/code-standards/fastapi.md	Dependency Rules	0	-
+c16ca8cb17b1d8d2364ca95c6383ddfd069ec0eebac55c5544b2e35d76ff1e40	skills/standards/code-standards/nestjs.md	DTOs and Validation	0	typescript
+47fb838d8c210e0f08e7a137e9ebd53e57179c49655fe2a2249bcdd2f798a2cb	skills/standards/code-standards/nestjs.md	Module Structure	0	-
+30bf77d9c253e19973be4576b1fa3f0ced96701c888a4fa97226cb6213fb33bb	skills/standards/drift-check/implementation.md	Step 1 — Confirm a templateCentral project	0	-
+a6de310fdd0b3f1c11773b85470dba6afa6f927f15ef6f20374e56c19a604f7d	skills/standards/drift-check/implementation.md	Step 4 — Convention drift report	0	-
+c25bb58843e251ef0a2a0018a4ee5007c5415894ea00e46ce834e283280d5825	skills/standards/full-stack-pairing/implementation.md	Frontend `.env`	0	env
+524ddefd81776e628a09afb481fca21dc3385e83333ca5ce067b428c37ee9889	skills/standards/full-stack-pairing/implementation.md	Next.js	0	typescript
+8c1cf52f9424cf032dc030657686ad9a1deed4015e2857f9e0b7c5e5f29c7e89	skills/standards/full-stack-pairing/implementation.md	Next.js	1	typescript
+4b36a560b34993d333e16ce042f1e31aebe1beb20cf1902a53639aaaa0fa77ae	skills/standards/full-stack-pairing/implementation.md	Next.js	2	typescript
+3ed55b2ef4221e41c098df6df21319e98d3b68f2ce35cf3a62d3bc908ddf0a12	skills/standards/full-stack-pairing/implementation.md	Next.js (`next.config.ts`)	0	typescript
+a6a1b73a49ef048bc96825842923e322a491290f2ce180a3d2f42c838949bd1e	skills/standards/full-stack-pairing/implementation.md	Next.js (`next.config.ts`)	1	typescript
+5a3ac926b7f23372766cc12b7c531c6a995fc77b1fc9c8734dfc923536f7d7fa	skills/standards/full-stack-pairing/implementation.md	Vite + React	0	typescript
+1f80fdbe156b530f3ba710149af784280f0f4d6a3ac1c538df33d6063926478d	skills/standards/full-stack-pairing/implementation.md	Vite + React (`vite.config.ts`)	0	typescript
+a946b4432f2fc3f144360bc9347e65560dc6613771ada85898faac8c6a54c1c5	skills/standards/full-stack-pairing/implementation.md	Vite + React — `nginx.conf.template`	0	nginx
+cf4b117dd051519f3f1a3b42e835d802ffcc4c9ed413ab7afc6bacf8ca9285ba	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	0	python
+ce00062372fd1a241debcca8c30b96827e10758792ed6981283d5ab089ccc334	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	1	python
+0558c6e063afe5131c8a4fcdaa83d6931dd147c351408e1e3ffd6ff0ef287354	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	2	python
+ce3ce9a6e4deab4f8a9f67be7b978b1e4e5bd811188dd9ac65c0126b6d07304d	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	3	python
+cac11174e1cf9de633c109d252af85b1e9dc060df22917bc7b67159f949ad9ed	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	4	python
+ba5ac345f610ab07a75807efd9080058ec1c47be2f0607946c219fe4821bd887	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	5	python
+72d5078a2c4a3cd9bd274ed80ea6dc0cc2d8f98d851433cd88cadb5e3f16dc69	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	6	python
+336797d8f62f9b5678f9c485b80264322044ffc95f7013412dbad5b6cf3ca531	skills/standards/validation-patterns/fastapi.md	FastAPI (Python + Pydantic)	7	python
+54732248e3a8243b35d3992e96f2a8143149959a3417df9c2c1a40c254e64416	skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	0	ts
+4e38f5544a3eb74ae751bed0b060efb697071f837401be7a0fb62ce2c86498d2	skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	1	ts
+33ea98cf3df8b229c436b8d840c0389b0f81eaa034d0f093e41818f2555ef66f	skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	2	ts
+962abe97f38cbefe73cf2216cbf9fee90fcbc3c95c92b896363e7d7b266ca4a9	skills/standards/validation-patterns/nestjs.md	NestJS (TypeScript + Zod via nestjs-zod)	3	ts
+2fb1436cde955bdf8921c15c0bf0f183b92cc1d7e709117e66c4870a6a5ae731	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	0	ts
+e52a41813fc702edcd3207ec2e8c3692387b1380fc1ed332826c2798b9fb9f03	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	1	tsx
+c3a0f6ba4cb0a684b45883ea2fe0b05f417e1c2bfc3eeca4070d545e3d15df79	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	2	ts
+a2b76f46ce34e076ad4a9121d09d33f9b558244f7638fad749c83149e29b879a	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	3	ts
+4524b82394881888d9dce4454ea06b467037ce66b0af5c8242d1a6e1a848aae9	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	4	ts
+a052eb01a4218ea34772403fe500457316419e21d43bd918883e7403edcb7c6f	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	5	ts
+3578d5d154332dfcaee96b39ff8a01ed926943d719cec621b3e082629288f654	skills/standards/validation-patterns/nextjs.md	Next.js (TypeScript + React + Zod)	6	ts
+4aa6f2b88e9cabc1af2ceaba3871766fdc60956ebb6707887450b9289f543855	skills/standards/validation-patterns/patterns.md	Field-level error formatting	0	ts
+b103fb205dc7d32f599d91cbf408412c659d335b551e5e8260986277d90faf74	skills/standards/validation-patterns/patterns.md	Zod Pattern Library (Reusable)	0	ts
+68efa5916ae68c32e4e6137e3507ff0c549f25c082b8e318f1c1e16ba58bb91d	skills/standards/validation-patterns/patterns.md	Zod Pattern Library (Reusable)	1	ts
+4ed4f20eea81d4598cad172baf4ed5ec472cd6644334b6a0dbba006beaf4f7eb	skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	0	ts
+26d88ede2612de5b5eb4962eb69cbc6acf30ab85b3a32882abe56c9c75f83730	skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	1	tsx
+b69e2a8c83611c6b1d5cad1817facf3ddfa67760a357779b0d73b5ab424db67c	skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	2	tsx
+e9a803526ceb68f6bb4ddfaff5dd57c2cef28d04531ff528ab5caf1267dd6a30	skills/standards/validation-patterns/vite-react.md	Vite + React (TypeScript + React Hook Form + Zod)	3	ts
