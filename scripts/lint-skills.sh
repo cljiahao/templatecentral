@@ -81,21 +81,35 @@ TEMPLATED_STACKS=(nextjs vite-react fastapi)
 SHARED_TREES="template template-ts template-py template-ci template-settings-ts template-settings-py template-late template-tail"
 STACK_TREES="template template-agents template-tail"
 
-# template_files — every file in the scaffold template trees, one path per line. The trees are
-# named explicitly (not matched by a path glob), so a checkout directory whose name contains
-# "template" cannot widen the set, and a missing shared/ or stack directory yields no paths.
+# Template trees (CONVENTIONS.md §1): any directory named `template` or `template-*` under the skills
+# root. The paths below are matched relative to the root, so a checkout directory whose own name
+# contains "template" cannot widen the set; a tree is found wherever it sits, so a new one needs no
+# lint edit. Each prints paths prefixed with SKILLS_DIR.
+under_root() { awk -v p="$SKILLS_DIR" '{ sub(/^\.\//, ""); print p "/" $0 }'; }
+
+# template_trees — every template tree directory, one path per line.
+template_trees() {
+  { (cd "$SKILLS_DIR" 2>/dev/null && find . ! -type f \( -name template -o -name 'template-*' \) -prune -print) || true; } \
+    | under_root | LC_ALL=C sort
+}
+
+# template_files — every file in any template tree, one path per line.
 template_files() {
-  local d st
-  {
-    for d in $SHARED_TREES; do
-      find "$SKILLS_DIR/scaffold/shared/$d" -type f 2>/dev/null
-    done
-    for st in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
-      for d in $STACK_TREES; do
-        find "$SKILLS_DIR/scaffold/$st/$d" -type f 2>/dev/null
-      done
-    done
-  } | LC_ALL=C sort
+  { (cd "$SKILLS_DIR" 2>/dev/null && find . -type f \( -path '*/template/*' -o -path '*/template-*/*' \)) || true; } \
+    | under_root | LC_ALL=C sort
+}
+
+# scaffold_template_files — the template files under skills/scaffold, for the checks that compare the
+# harness kit with the seeded files and must not see another skill's trees.
+scaffold_template_files() {
+  template_files | awk -v p="$SKILLS_DIR/scaffold/" 'index($0, p) == 1'
+}
+
+# ref_md_files — every reference .md: not SKILL.md, not CONVENTIONS.md, not a file inside a template
+# tree. A file merely named template-*.md outside a tree directory is still listed.
+ref_md_files() {
+  { (cd "$SKILLS_DIR" 2>/dev/null && find . -type f -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' \
+      ! -path '*/template/*' ! -path '*/template-*/*') || true; } | under_root
 }
 
 # ── TIMELESS ──────────────────────────────────────────────────────────────────
@@ -248,9 +262,8 @@ check_ref_file_headers() {
   # Every reference .md file under skills/ (except SKILL.md and CONVENTIONS.md) must begin with
   # a <!-- ref: --> comment so agents know the file's load path and purpose without reading the body.
   # Missing headers cause agents to silently skip context about how to load the file. TIMELESS.
-  # The files under scaffold/*/template*/ are shipped verbatim into every scaffolded project (the
-  # AGENTS.md seed starts with its own schema marker on line 1), so they are not reference files and
-  # are skipped. A skills tree with no reference file at all fails, so the check cannot pass on nothing.
+  # The files under any template*/ tree are shipped verbatim into projects (the AGENTS.md seed starts
+  # with its own schema marker on line 1), so they are not reference files and are skipped. A skills tree with no reference file at all fails, so the check cannot pass on nothing.
   header "Ref file <!-- ref: --> headers"
   local bad="" f firstline n=0
   while IFS= read -r f; do
@@ -258,7 +271,7 @@ check_ref_file_headers() {
     firstline=""
     IFS= read -r firstline < "$f" || true
     [[ "$firstline" == "<!-- ref:"* ]] || bad+="$f"$'\n'
-  done < <(find "$SKILLS_DIR" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' ! -path '*/scaffold/*/template*/*' 2>/dev/null)
+  done < <(ref_md_files)
   [[ "$n" -gt 0 ]] || bad+="$SKILLS_DIR: no reference .md file found — the header check scanned nothing"$'\n'
   report "${bad%$'\n'}" \
     "Ref file missing <!-- ref: --> on line 1 — add a ref header following CONVENTIONS.md §2" \
@@ -287,14 +300,13 @@ check_nesting_depth() {
   # Skills nested more than 3 directory levels under skills/ are unreachable by templateCentral's
   # ref-file loader and indicate a structure drift from CONVENTIONS.md §1. TIMELESS.
   # The depth is counted from the normalised directory name, so "skills" and "skills/"
-  # agree: NF>5 catches skills/a/b/c/d/file.md (4+ dirs deep). The files under scaffold/*/template*/
+  # agree: NF>5 catches skills/a/b/c/d/file.md (4+ dirs deep). The files under any template*/ tree
   # are shipped into projects (they mirror a project's own layout), so they are not skill reference
   # files and are skipped.
   header "Nesting depth (<=3 levels under skills/)"
   local base dir=$SKILLS_DIR
   base=$(awk -F'/' '{print NF}' <<<"$dir")
-  report "$(find "$dir" -name '*.md' ! -name 'SKILL.md' ! -name 'CONVENTIONS.md' ! -path '*/scaffold/*/template*/*' \
-    | awk -F'/' -v base="$base" 'NF > base + 4')" \
+  report "$(ref_md_files | awk -F'/' -v base="$base" 'NF > base + 4')" \
     "File nested >3 levels under skills/ — restructure to match CONVENTIONS.md §1" \
     "No files nested >3 levels under skills/"
 }
@@ -529,13 +541,13 @@ check_scaffold_seeds_complete_harness() {
     [[ -f "$f" ]] && { grep -qF -- "${tok#*|}" "$f" || missing+="$f — missing token: ${tok#*|}"$'\n'; }
   done
   if [[ -z "$missing" ]]; then
-    all_kit=$(cat "${kit_files[@]}"; { template_files | while IFS= read -r f; do cat "$f"; done; } || true)
+    all_kit=$(cat "${kit_files[@]}"; { scaffold_template_files | while IFS= read -r f; do cat "$f"; done; } || true)
     for tok in "${kit_tokens[@]}"; do
       grep -qF -- "$tok" <<<"$all_kit" || missing+="$kit_dir/harness-kit*.md + template*/ — missing harness element: $tok"$'\n'
     done
     for v in ts fastapi; do
       tdir=ts; [[ $v == fastapi ]] && tdir=py
-      hay=$(cat "$kit_dir/harness-kit-$v.md"; { template_files | grep -E "$kit_dir/template(-settings)?-$tdir/" | while IFS= read -r f; do cat "$f"; done; } || true)
+      hay=$(cat "$kit_dir/harness-kit-$v.md"; { scaffold_template_files | grep -E "$kit_dir/template(-settings)?-$tdir/" | while IFS= read -r f; do cat "$f"; done; } || true)
       for tok in "${variant_tokens[@]}"; do
         grep -qF -- "$tok" <<<"$hay" || \
           missing+="$kit_dir/harness-kit-$v.md + template-$tdir/ — variant missing harness element: $tok"$'\n'
@@ -588,7 +600,7 @@ check_migrate_hook_inventory_matches_kit() {
   fi
   local hooks missing="" h
   # The hooks the kit seeds are the files in the template trees' .claude/hooks/ directories.
-  hooks=$(template_files | grep '/\.claude/hooks/' | sed -E 's#.*/##; s#\.[a-z]+$##' | sort -u || true)
+  hooks=$(scaffold_template_files | grep '/\.claude/hooks/' | sed -E 's#.*/##; s#\.[a-z]+$##' | sort -u || true)
   if [[ -z "$hooks" ]]; then
     fail "No hook files under the template trees' .claude/hooks/ — nothing to compare against migrate's inventory"
     return
@@ -656,30 +668,37 @@ check_duplicated_iam_blocks_match() {
 import sys
 root = sys.argv[1]
 
-# (label, canonical file, canonical anchor, copy file, copy anchor, fence language)
+# Each pair is (label, canonical side, copy side). A side is one of
+#   ("fence", markdown file, heading anchor, fence language) — the first fence after the anchor line
+#   ("file", path)                                           — the whole file
+# with paths relative to the skills root, so either side can move into a template tree on its own.
 PAIRS = [
     ("FastAPI IAM session.py",
-     "add/database/python/sqlalchemy-iam.md", "### A4. Create `src/database/session.py`",
-     "migrate/database/fastapi.md", "### Step 2 — Replace `src/database/session.py`", "python"),
+     ("fence", "add/database/python/sqlalchemy-iam.md", "### A4. Create `src/database/session.py`", "python"),
+     ("fence", "migrate/database/fastapi.md", "### Step 2 — Replace `src/database/session.py`", "python")),
     ("FastAPI IAM alembic/env.py",
-     "add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`",
-     "migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python"),
+     ("fence", "add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`", "python"),
+     ("fence", "migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python")),
     ("NestJS IAM KyselyService",
-     "add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:",
-     "migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript"),
+     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:", "typescript"),
+     ("fence", "migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript")),
     ("NestJS IAM envSchema fields",
-     "add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`",
-     "migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript"),
+     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`", "typescript"),
+     ("fence", "migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript")),
     ("NestJS IAM serviceConfig mapping",
-     "add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`",
-     "migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript"),
+     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`", "typescript"),
+     ("fence", "migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript")),
 ]
 
-def fence_after(path, anchor, lang):
+def read_text(path):
     try:
-        lines = open(path, encoding="utf-8").read().split("\n")
-    except OSError:
+        with open(path, encoding="utf-8", newline="") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError):
         return None
+
+def fence_after(text, anchor, lang):
+    lines = text.split("\n")
     start = next((i for i, l in enumerate(lines) if anchor in l), None)
     if start is None:
         return None
@@ -688,18 +707,31 @@ def fence_after(path, anchor, lang):
             j = i + 1
             while j < len(lines) and not lines[j].startswith('```'):
                 j += 1
-            return "\n".join(lines[i + 1:j])
+            return "".join(l + "\n" for l in lines[i + 1:j])
     return None
 
-for label, ca_f, ca_a, cp_f, cp_a, lang in PAIRS:
-    a = fence_after(root + "/" + ca_f, ca_a, lang)
-    b = fence_after(root + "/" + cp_f, cp_a, lang)
-    if a is None:
-        print("%s: canonical anchor/fence not found in %s (%r)" % (label, ca_f, ca_a))
-    elif b is None:
-        print("%s: copy anchor/fence not found in %s (%r)" % (label, cp_f, cp_a))
+def resolve(side):
+    """Return (text, problem): the side's content, or why it could not be read."""
+    text = read_text(root + "/" + side[1])
+    if text is None:
+        return None, "%s not found" % side[1]
+    if side[0] == "fence":
+        text = fence_after(text, side[2], side[3])
+        if text is None:
+            return None, "anchor/fence not found in %s (%r)" % (side[1], side[2])
+    if not text.strip():
+        return None, "%s is empty" % side[1]
+    return text, None
+
+for label, canon, copy in PAIRS:
+    a, pa = resolve(canon)
+    b, pb = resolve(copy)
+    if pa:
+        print("%s: canonical %s" % (label, pa))
+    elif pb:
+        print("%s: copy %s" % (label, pb))
     elif a != b:
-        print("%s: %s has drifted from canonical %s" % (label, cp_f, ca_f))
+        print("%s: %s has drifted from canonical %s" % (label, copy[1], canon[1]))
 PY
 )
   report "$out" \
@@ -870,8 +902,11 @@ check_owasp_llm_sections_complete() {
     fail "add/ai-security/implementation.md not found"
     return
   fi
-  local present missing="" n
-  present=$(grep -o '### LLM[0-9][0-9]' "$ai_sec" || true)
+  local present missing="" n f
+  # The sections may sit in implementation.md or in a ref file split out beside it; template trees
+  # (copied content, not guidance) never count.
+  present=$({ ref_md_files | awk -v p="$SKILLS_DIR/add/ai-security/" 'index($0, p) == 1' \
+    | while IFS= read -r f; do grep -o '### LLM[0-9][0-9]' "$f" || true; done; } || true)
   for n in 01 02 03 04 05 06 07 08 09 10; do
     [[ "$present" == *"### LLM${n}"* ]] || missing+=" LLM${n}"
   done
@@ -1170,10 +1205,11 @@ check_no_fastapi_orjson_response() {
 check_security_seeds_present() {
   # The deps gate and the deny-by-default authz helpers are shipped security seeds: dropping one
   # from a skill file silently removes the protection from every project scaffolded afterwards.
-  # Matches anchor on the pipeline step lines and the code definitions, not on prose mentions.
+  # Matches anchor on the pipeline step lines and the code definitions, not on prose mentions; an authz
+  # definition counts in the add/auth leaf or in a template tree under that leaf's directory.
   # The gate script and CI files are real files under shared/template*/; a missing file fails.
   header "Deps gate and deny-by-default authz seeds present"
-  local missing="" spec file pattern
+  local missing="" spec file pattern tree_files found
   local shared="$SKILLS_DIR/scaffold/shared" gates f
   gates="$shared/template/.claude/ci-gates.sh"
   if [[ -f "$gates" ]]; then
@@ -1200,8 +1236,16 @@ check_security_seeds_present() {
     "nextjs|^export function hasRole\(" "nextjs|^export function isOwner\("; do
     file="$SKILLS_DIR/add/auth/${spec%%|*}.md"
     pattern="${spec#*|}"
-    [[ -f "$file" ]] || continue
-    grep -qE "$pattern" "$file" || missing+=$'\n'"$file: authz definition /$pattern/ missing"
+    # The definition lives in the leaf, or in the leaf's template trees once it has moved there.
+    tree_files=$(template_files | awk -v p="$SKILLS_DIR/add/auth/${spec%%|*}/" 'index($0, p) == 1')
+    [[ -f "$file" || -n "$tree_files" ]] || continue
+    found=0
+    if [[ -f "$file" ]] && grep -qE "$pattern" "$file"; then found=1; fi
+    if [[ "$found" == 0 && -n "$tree_files" ]]; then
+      # shellcheck disable=SC2086  # newline-separated paths without spaces
+      if grep -qE "$pattern" $tree_files; then found=1; fi
+    fi
+    [[ "$found" == 1 ]] || missing+=$'\n'"$file: authz definition /$pattern/ missing"
   done
   report "${missing#$'\n'}" \
     "Deps gate or authz seed missing — restore it (see the harness engineering checks in .claude/skills/tc-audit/implementation.md)" \
@@ -1278,24 +1322,35 @@ PY
 }
 
 check_template_trees_complete() {
-  # The scaffold copies skills/scaffold/shared/template*/ verbatim, so the file set is the contract:
-  # template.manifest lists every file with its mode, and the tree holds exactly those files. A
-  # file added without a manifest line, a manifest line without a file, or a mode that differs from
-  # the manifest (a hook that lost its exec bit) fails here. An empty or missing tree fails too,
-  # so the checks that scan these trees cannot pass on nothing. TIMELESS.
+  # Every skill copies its template trees verbatim (CONVENTIONS.md §1), so the file set is the
+  # contract: the template.manifest beside the trees lists every file with its mode, and the trees
+  # hold exactly those files. A file added without a manifest line, a manifest line without a file,
+  # or a mode that differs from the manifest (a hook that lost its exec bit) fails here. The scaffold
+  # trees are required by name, so an empty or missing one fails and the checks that scan them cannot
+  # pass on nothing; every other tree, and every manifest, is found by directory name and checked the
+  # same way, so a new tree needs no edit here. TIMELESS.
   header "Template trees are complete and listed in the manifest"
   if ! have_python; then
     pass "skipped (python3 not available)"
     return
   fi
-  local out="" st
-  out=$(
-    # shellcheck disable=SC2086  # the tree lists are space-separated names
-    tree_problems "$SKILLS_DIR/scaffold/shared" $SHARED_TREES
+  local out="" st d pairs root trees
+  # One "<root>\t<tree>" line per tree; a manifest with no tree contributes its root alone.
+  pairs=$(
+    for d in $SHARED_TREES; do printf '%s\t%s\n' "$SKILLS_DIR/scaffold/shared" "$d"; done
     for st in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
-      # shellcheck disable=SC2086
-      tree_problems "$SKILLS_DIR/scaffold/$st" $STACK_TREES
+      for d in $STACK_TREES; do printf '%s\t%s\n' "$SKILLS_DIR/scaffold/$st" "$d"; done
     done
+    template_trees | awk '{ r = $0; sub(/\/[^\/]*$/, "", r); t = $0; sub(/.*\//, "", t); printf "%s\t%s\n", r, t }'
+    { (cd "$SKILLS_DIR" 2>/dev/null && find . -name template.manifest ! -type d) || true; } | under_root \
+      | awk '{ r = $0; sub(/\/[^\/]*$/, "", r); printf "%s\t\n", r }'
+  )
+  out=$(
+    while IFS= read -r root; do
+      trees=$(awk -F'\t' -v r="$root" '$1 == r && $2 != "" { print $2 }' <<<"$pairs" | LC_ALL=C sort -u | tr '\n' ' ')
+      # shellcheck disable=SC2086  # the tree list is space-separated names
+      tree_problems "$root" $trees
+    done < <(cut -f1 <<<"$pairs" | LC_ALL=C sort -u)
   )
   report "$out" \
     "Template tree and template.manifest disagree — list every file (path mode placeholders seams) and keep each .sh mode 755" \
@@ -1305,18 +1360,17 @@ check_template_trees_complete() {
 check_no_template_skill_md() {
   # A skill loader that scans a skills path recursively for SKILL.md registers any such file it
   # finds, so a template skill that ships under that name would load as a skill of this plugin.
-  # Template skills ship as SKILL.md.tmpl; the copy step drops the suffix in the project. TIMELESS.
+  # Template skills ship as SKILL.md.tmpl; the copy step drops the suffix in the project. This holds
+  # for every template tree under skills/, not only the scaffold ones. TIMELESS.
   header "Template trees hold no file named SKILL.md"
-  local scaf="$SKILLS_DIR/scaffold" bad tmpl
-  tmpl=
-  if [[ -d "$scaf" ]]; then
-    tmpl=$(cd "$scaf" && find . -name 'SKILL.md.tmpl' -path './*/template*/*' | LC_ALL=C sort)
-  fi
+  local bad tmpl
+  tmpl=$(template_files | awk -F/ '$NF == "SKILL.md.tmpl"')
   if [[ -z "$tmpl" ]]; then
-    fail "No SKILL.md.tmpl found under $scaf/*/template*/ — the check below would scan nothing"
+    fail "No SKILL.md.tmpl found in any template tree under $SKILLS_DIR — the check below would scan nothing"
     return
   fi
-  bad=$(cd "$scaf" && find . -name 'SKILL.md' -path './*/template*/*' | LC_ALL=C sort)
+  bad=$({ (cd "$SKILLS_DIR" 2>/dev/null && find . ! -type d -name 'SKILL.md' \( -path '*/template/*' -o -path '*/template-*/*' \)) || true; } \
+    | under_root | LC_ALL=C sort)
   report "$bad" \
     "A file named SKILL.md sits in a template tree — rename it to SKILL.md.tmpl so no skill loader registers it" \
     "No template tree holds a file named SKILL.md"

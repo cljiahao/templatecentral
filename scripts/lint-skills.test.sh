@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# scripts/lint-skills.test.sh — negative tests for the lint checks that read the scaffold
-# template trees (skills/scaffold/shared/template*/) and the guards that stop a check passing
-# on nothing.
+# scripts/lint-skills.test.sh — negative tests for the lint checks that read the template trees
+# (skills/**/template*/, CONVENTIONS.md §1) and the guards that stop a check passing on nothing.
 #
 # Usage: bash scripts/lint-skills.test.sh   (run from anywhere; needs python3)
 #   ONLY=<regex> runs just the tests whose name matches; JOBS=<n> sets the parallelism (default 4);
@@ -74,6 +73,41 @@ fails_both() {
   SLASH=1
   fails "${1}_with_trailing_slash" "${@:2}"
   SLASH=
+}
+
+# passes <test name> <header substring> <mutation function> — the section must exist and report no FAIL.
+passes() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  NJOB=$((NJOB + 1))
+  (
+    damage_and_lint "$T/w$NJOB" "$3"
+    sec=$(section "$OUT" "$2")
+    if [[ -z "$sec" ]]; then
+      echo "FAIL: $1 — no section '$2' in the lint output" > "$T/r$NJOB"
+    elif grep -q '^FAIL:' <<<"$sec"; then
+      echo "FAIL: $1 — '$2' failed: $(head -3 <<<"$sec")" > "$T/r$NJOB"
+    else
+      echo PASS > "$T/r$NJOB"
+    fi
+    rm -rf "$T/w$NJOB"
+  ) &
+  if (( NJOB % JOBS == 0 )); then wait; fi
+}
+
+# passes_all <test name> <mutation function> — the whole lint must pass on the damaged copy.
+passes_all() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  NJOB=$((NJOB + 1))
+  (
+    damage_and_lint "$T/w$NJOB" "$2"
+    if [[ "$OUT" == *"=== All checks passed ==="* ]]; then
+      echo PASS > "$T/r$NJOB"
+    else
+      echo "FAIL: $1 — the lint did not pass: $(grep -m3 '^FAIL:' <<<"$OUT")" > "$T/r$NJOB"
+    fi
+    rm -rf "$T/w$NJOB"
+  ) &
+  if (( NJOB % JOBS == 0 )); then wait; fi
 }
 
 collect() {
@@ -376,6 +410,152 @@ fence_cat_pipe_eof() { printf "\ncat <<'EOF' | bash\nexit 0\nEOF\n" >> "$SH/harn
 fence_plain_eof() { printf "\nbash <<'EOF'\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
 fence_other_delim_not_shell() { printf "\ncat <<'TC_X'\nhello\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
 none() { :; }
+
+# Template trees outside skills/scaffold (CONVENTIONS.md §1): the leaf skills/add/auth/nestjs.md owns
+# skills/add/auth/nestjs/template*/ and the template.manifest beside them.
+AT=add/auth/nestjs
+# plant_tree <dir under skills> <path inside it> [mode] [content] — one tree file and its manifest line.
+plant_tree() {
+  local d="$S/$1" rel=$2 mode=${3:-644}
+  mkdir -p "$d/$(dirname "$rel")"
+  printf '%s\n' "${4:-x}" > "$d/$rel"
+  if [[ "$mode" == 755 ]]; then chmod 755 "$d/$rel"; fi
+  printf '%s %s - -\n' "$rel" "$mode" >> "$d/template.manifest"
+}
+add_tree() { plant_tree "$AT" template/src/a.ts; }
+# A complete tree: a header-free .md, a nested path deeper than the nesting limit, a skill template and a script.
+add_tree_full() {
+  plant_tree "$AT" template/src/a.ts
+  plant_tree "$AT" template/docs/notes.md 644 'no header here'
+  plant_tree "$AT" template/a/b/c/d/e/deep.md 644 'deep'
+  plant_tree "$AT" template/.claude/skills/zz-verify/SKILL.md.tmpl
+  plant_tree "$AT" template/run.sh 755 '#!/usr/bin/env bash'
+  plant_tree "$AT" template-late/FUTURE.md
+}
+add_tree_unlisted() { add_tree; printf 'x\n' > "$S/$AT/template/src/zz-unlisted.ts"; }
+add_tree_manifest_ghost() { add_tree; printf 'template/src/ghost.ts 644 - -\n' >> "$S/$AT/template.manifest"; }
+add_tree_no_manifest() { add_tree; rm -f "$S/$AT/template.manifest"; }
+add_tree_manifest_alone() { add_tree; rm -rf "$S/$AT/template"; }
+add_tree_skill_md() { plant_tree "$AT" template/.claude/skills/zz/SKILL.md; }
+add_tree_other_prefix_skill_md() { plant_tree "$AT" template-late/.claude/skills/zz/SKILL.md; }
+add_tree_symlink() { add_tree; ln -s a.ts "$S/$AT/template/src/link.ts"; }
+add_tree_symlinked_dir() { add_tree; ln -s src "$S/$AT/template/linked"; }
+add_tree_empty_dir() { add_tree; mkdir -p "$S/$AT/template/zz-empty"; }
+add_tree_mode_lost() { plant_tree "$AT" template/run.sh 755 '#!/usr/bin/env bash'; chmod 644 "$S/$AT/template/run.sh"; }
+add_tree_tmpl_and_plain() { add_tree_full; printf 'template/.claude/skills/zz-verify/SKILL.md 644 - -\n' >> "$S/$AT/template.manifest"; }
+add_headerless_md_beside_tree() { add_tree; printf 'no header\n' > "$S/$AT/zz-note.md"; }
+add_headerless_md_named_template() { add_tree; printf 'no header\n' > "$S/add/auth/template-notes.md"; }
+add_deep_md_outside_tree() { add_tree; mkdir -p "$S/$AT/zz/a/b"; printf '<!-- ref: x -->\n' > "$S/$AT/zz/a/b/c.md"; }
+narration_in_add_tree() { plant_tree "$AT" template/run.sh 755 '# Added a retry loop'; }
+pin_in_add_tree() { plant_tree "$AT" template/.npmrc 644 'left-pad@1.3.0'; }
+secret_in_add_tree() { plant_tree "$AT" template/.npmrc 644 'password = "hunter2hunter2"'; }
+exact_pin_in_add_tree() { plant_tree "$AT" template/package.json 644 '{ "dependencies": {
+  "left-pad": "1.3.0" } }'; }
+bare_handler_in_add_tree() { plant_tree "$AT" template/src/app/api/health/route.ts 644 'export async function GET() {}'; }
+add_tree_hook() { plant_tree "$AT" template/.claude/hooks/zz-add-only-hook.sh 755 '#!/usr/bin/env bash'; }
+
+# The IAM pairs compare a fence or a file on each side. The lint's PAIRS table names the sides, so a
+# test that turns a fence into a file patches a copy of the lint (LINT, set inside the test's subshell).
+# iam_to_file <markdown file> <anchor> <fence language> <new file> — move that fence into <new file>
+# (under skills/) and point the lint's PAIRS at the file.
+iam_to_file() {
+  local w; w=$(dirname "$S")
+  if [[ "$LINT" != "$w/lint-patched.sh" ]]; then cp "$LINT" "$w/lint-patched.sh"; LINT="$w/lint-patched.sh"; fi
+  python3 - "$S" "$LINT" "$@" <<'PY'
+import os, sys
+root, lint, md, anchor, lang, new = sys.argv[1:7]
+lines = open(os.path.join(root, md), encoding="utf-8").read().split("\n")
+start = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == "```" + lang)
+j = i + 1
+while not lines[j].startswith("```"):
+    j += 1
+os.makedirs(os.path.dirname(os.path.join(root, new)), exist_ok=True)
+open(os.path.join(root, new), "w", encoding="utf-8").write("".join(l + "\n" for l in lines[i + 1:j]))
+old = '("fence", "%s", "%s", "%s")' % (md, anchor, lang)
+src = open(lint, encoding="utf-8").read()
+assert src.count(old) == 1, old
+open(lint, "w", encoding="utf-8").write(src.replace(old, '("file", "%s")' % new))
+PY
+}
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_A4=("add/database/python/sqlalchemy-iam.md" '### A4. Create `src/database/session.py`' python)
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_S2=("migrate/database/fastapi.md" '### Step 2 — Replace `src/database/session.py`' python)
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_A6=("add/database/python/sqlalchemy-iam.md" '### A6. Update `alembic/env.py`' python)
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_S4=("migrate/database/fastapi.md" '### Step 4 — Update `alembic/env.py`' python)
+iam_copy_fence_to_file() { iam_to_file "${IAM_S2[@]}" migrate/database/zz-session.py; }
+iam_canon_fence_to_file() { iam_to_file "${IAM_A4[@]}" add/database/python/zz-session.py; }
+iam_both_to_file() { iam_canon_fence_to_file; iam_copy_fence_to_file; }
+iam_all_four_to_file() { iam_both_to_file; iam_to_file "${IAM_A6[@]}" add/database/python/zz-env.py; iam_to_file "${IAM_S4[@]}" migrate/database/zz-env.py; }
+iam_fence_byte_diff() { strip_token 'create_engine(' 'create_engine (' "$S/migrate/database/fastapi.md"; }
+iam_fence_vs_file_byte_diff() { iam_copy_fence_to_file; printf '# drift\n' >> "$S/migrate/database/zz-session.py"; }
+iam_file_vs_file_byte_diff() { iam_both_to_file; printf '# drift\n' >> "$S/add/database/python/zz-session.py"; }
+iam_file_trailing_newline_lost() { iam_copy_fence_to_file; printf '%s' "$(cat "$S/migrate/database/zz-session.py")" > "$S/migrate/database/zz-session.py"; }
+iam_file_deleted() { iam_copy_fence_to_file; rm -f "$S/migrate/database/zz-session.py"; }
+iam_canon_file_deleted() { iam_canon_fence_to_file; rm -f "$S/add/database/python/zz-session.py"; }
+iam_file_emptied() { iam_both_to_file; : > "$S/add/database/python/zz-session.py"; : > "$S/migrate/database/zz-session.py"; }
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+iam_copy_anchor_deleted() { strip_token '### Step 2 — Replace `src/database/session.py`' '### Step 2 — Replace session' "$S/migrate/database/fastapi.md"; }
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+iam_canon_anchor_deleted() { strip_token '### A4. Create `src/database/session.py`' '### A4. Create session' "$S/add/database/python/sqlalchemy-iam.md"; }
+iam_fence_emptied() { python3 - "$S/migrate/database/fastapi.md" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("### Step 2 — Replace")
+i = t.index("```python\n", a) + len("```python\n")
+j = t.index("\n```", i)
+open(p, "w", encoding="utf-8").write(t[:i] + t[j + 1:])
+PY
+}
+iam_both_fences_emptied() { iam_fence_emptied; python3 - "$S/add/database/python/sqlalchemy-iam.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("### A4. Create")
+i = t.index("```python\n", a) + len("```python\n")
+j = t.index("\n```", i)
+open(p, "w", encoding="utf-8").write(t[:i] + t[j + 1:])
+PY
+}
+
+# check_security_seeds_present: a definition may live in the leaf's template tree.
+# seed_to_tree <stack> <definition regex> <file in the tree> — the definition line leaves the leaf and
+# lands in a tree file under add/auth/<stack>/.
+seed_to_tree() {
+  local leaf="$S/add/auth/$1.md" line
+  line=$(grep -m1 -E "$2" "$leaf")
+  python3 - "$leaf" "$line" <<'PY'
+import sys
+p, line = sys.argv[1], sys.argv[2]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace(line, "// moved: " + line.split("(")[0], 1))
+PY
+  plant_tree "add/auth/$1" "$3" 644 "$line"
+}
+seed_moved_roles_guard() { seed_to_tree nestjs '^export class RolesGuard ' template/src/auth/roles.guard.ts; }
+seed_moved_require_roles() { seed_to_tree fastapi '^def require_roles\(' template/src/auth/roles.py; }
+seed_moved_has_role() { seed_to_tree nextjs '^export function hasRole\(' template/src/lib/roles.ts; }
+seed_moved_to_wrong_leaf() { seed_to_tree nestjs '^export class RolesGuard ' template/src/auth/roles.guard.ts; mv "$S/add/auth/nestjs" "$S/add/auth/zz-other"; }
+seed_deleted_nest_with_tree() { strip_token 'export class RolesGuard ' 'export class Guard ' "$S/add/auth/nestjs.md"; plant_tree add/auth/nestjs template/src/auth/other.ts 644 'export class Other {}'; }
+seed_deleted_require_roles() { strip_token 'def require_roles(' 'def require_role_list(' "$S/add/auth/fastapi.md"; }
+
+# check_owasp_llm_sections_complete: the sections may be split into a ref file beside implementation.md.
+owasp_split_to_ref() {
+  python3 - "$S/add/ai-security/implementation.md" "$S/add/ai-security/zz-extra.md" <<'PY'
+import sys
+src, dst = sys.argv[1:3]
+t = open(src, encoding="utf-8").read()
+a = t.index("### LLM10")
+open(src, "w", encoding="utf-8").write(t[:a].rstrip("\n") + "\n")
+open(dst, "w", encoding="utf-8").write("<!-- ref: add/ai-security/zz-extra.md -->\n" + t[a:])
+PY
+}
+owasp_section_only_in_tree() { owasp_split_to_ref; mkdir -p "$S/add/ai-security/zz-extra/template"; mv "$S/add/ai-security/zz-extra.md" "$S/add/ai-security/zz-extra/template/zz.md"; }
+owasp_section_deleted() { strip_token '### LLM10' '### LLX10' "$S/add/ai-security/implementation.md"; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
 if [[ -z "${ONLY:-}" ]]; then
@@ -764,6 +944,61 @@ fails fastapi_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the fi
 fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "comes before the format/verification-gate step"
 fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "no PART=agents instruction"
 fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "no format/verification-gate step for the PART=agents copy to follow"
+
+# ── template trees outside skills/scaffold (CONVENTIONS.md §1) ───────────────────────────────
+passes_all add_tree_full_passes_the_whole_lint add_tree_full
+passes add_tree_ref_headers_skip_files_in_the_tree "Ref file <!-- ref: --> headers" add_tree_full
+passes add_tree_nesting_depth_skips_files_in_the_tree "Nesting depth" add_tree_full
+fails_both add_tree_fails_when_file_unlisted "Template trees are complete" add_tree_unlisted "zz-unlisted.ts is in the tree but not listed"
+fails add_tree_fails_when_manifest_lists_missing_file "Template trees are complete" add_tree_manifest_ghost "lists template/src/ghost.ts, which is not in the tree"
+fails add_tree_fails_without_a_manifest "Template trees are complete" add_tree_no_manifest "template.manifest: file not found"
+fails add_tree_fails_when_only_the_manifest_is_left "Template trees are complete" add_tree_manifest_alone "which is not in the tree"
+fails add_tree_fails_on_a_symlinked_file "Template trees are complete" add_tree_symlink "link.ts: symlink in a template tree"
+fails add_tree_fails_on_a_symlinked_directory "Template trees are complete" add_tree_symlinked_dir "linked: symlink in a template tree"
+fails add_tree_fails_on_an_empty_directory "Template trees are complete" add_tree_empty_dir "empty directory in a template tree"
+fails add_tree_fails_when_exec_bit_lost "Template trees are complete" add_tree_mode_lost "is mode 644 but listed as 755"
+fails add_tree_fails_when_tmpl_and_plain_both_listed "Template trees are complete" add_tree_tmpl_and_plain "both copy to"
+fails add_tree_skill_md_fails "Template trees hold no file named SKILL.md" add_tree_skill_md "add/auth/nestjs/template/.claude/skills/zz/SKILL.md"
+fails add_tree_skill_md_fails_in_a_suffixed_tree "Template trees hold no file named SKILL.md" add_tree_other_prefix_skill_md "template-late/.claude/skills/zz/SKILL.md"
+fails add_ref_headers_still_check_a_file_beside_the_tree "Ref file <!-- ref: --> headers" add_headerless_md_beside_tree "add/auth/nestjs/zz-note.md"
+fails add_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" add_headerless_md_named_template "add/auth/template-notes.md"
+fails add_nesting_depth_still_checks_a_file_beside_the_tree "Nesting depth" add_deep_md_outside_tree "add/auth/nestjs/zz/a/b/c.md"
+fails add_tree_comment_narration_is_scanned "Change-narration comments" narration_in_add_tree "Added a retry loop"
+fails add_tree_version_pins_are_scanned "Version pins in skills" pin_in_add_tree "left-pad@1.3.0"
+fails add_tree_hardcoded_secrets_are_scanned "Hardcoded secrets" secret_in_add_tree "hunter2hunter2"
+fails add_tree_exact_dependency_pins_are_scanned "Template package.json dependencies use floors" exact_pin_in_add_tree "add/auth/nestjs/template/package.json"
+fails add_tree_bare_route_handlers_are_scanned "Bare Next.js route handler exports" bare_handler_in_add_tree "add/auth/nestjs/template/src/app/api/health/route.ts"
+passes add_tree_hook_does_not_enter_the_migrate_inventory "migrate hook inventory matches" add_tree_hook
+
+# ── check_duplicated_iam_blocks_match: a side is a fence or a file ───────────────────────────
+passes iam_pairs_pass_fence_vs_fence "Duplicated IAM session/config blocks match" none
+passes iam_pairs_pass_fence_vs_file "Duplicated IAM session/config blocks match" iam_copy_fence_to_file
+passes iam_pairs_pass_file_vs_fence "Duplicated IAM session/config blocks match" iam_canon_fence_to_file
+passes iam_pairs_pass_file_vs_file "Duplicated IAM session/config blocks match" iam_both_to_file
+passes iam_pairs_pass_with_every_fastapi_pair_as_files "Duplicated IAM session/config blocks match" iam_all_four_to_file
+fails iam_pairs_fail_on_a_fence_byte_diff "Duplicated IAM session/config blocks match" iam_fence_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
+fails iam_pairs_fail_on_a_fence_vs_file_byte_diff "Duplicated IAM session/config blocks match" iam_fence_vs_file_byte_diff "FastAPI IAM session.py: migrate/database/zz-session.py has drifted"
+fails iam_pairs_fail_on_a_file_vs_file_byte_diff "Duplicated IAM session/config blocks match" iam_file_vs_file_byte_diff "has drifted"
+fails iam_pairs_fail_when_a_file_loses_its_trailing_newline "Duplicated IAM session/config blocks match" iam_file_trailing_newline_lost "has drifted"
+fails iam_pairs_fail_when_the_copy_file_is_missing "Duplicated IAM session/config blocks match" iam_file_deleted "copy migrate/database/zz-session.py not found"
+fails iam_pairs_fail_when_the_canonical_file_is_missing "Duplicated IAM session/config blocks match" iam_canon_file_deleted "canonical add/database/python/zz-session.py not found"
+fails iam_pairs_fail_on_two_empty_files "Duplicated IAM session/config blocks match" iam_file_emptied "is empty"
+fails iam_pairs_fail_on_two_empty_fences "Duplicated IAM session/config blocks match" iam_both_fences_emptied "is empty"
+fails iam_pairs_fail_when_the_copy_anchor_is_deleted "Duplicated IAM session/config blocks match" iam_copy_anchor_deleted "copy anchor/fence not found in migrate/database/fastapi.md"
+fails iam_pairs_fail_when_the_canonical_anchor_is_deleted "Duplicated IAM session/config blocks match" iam_canon_anchor_deleted "canonical anchor/fence not found in add/database/python/sqlalchemy-iam.md"
+
+# ── check_security_seeds_present: the definition may live in the leaf's template tree ────────
+passes security_seed_moved_into_the_nestjs_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_roles_guard
+passes security_seed_moved_into_the_fastapi_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_require_roles
+passes security_seed_moved_into_the_nextjs_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_has_role
+fails security_seed_fails_when_a_tree_holds_a_different_file "Deps gate and deny-by-default authz seeds" seed_deleted_nest_with_tree "RolesGuard"
+fails security_seed_fails_when_the_tree_belongs_to_another_leaf "Deps gate and deny-by-default authz seeds" seed_moved_to_wrong_leaf "RolesGuard"
+fails security_seed_fails_when_the_definition_is_deleted "Deps gate and deny-by-default authz seeds" seed_deleted_require_roles "require_roles"
+
+# ── check_owasp_llm_sections_complete ────────────────────────────────────────────────────────
+passes owasp_sections_may_be_split_into_a_ref_file "OWASP LLM Top 10 v2.0 completeness" owasp_split_to_ref
+fails owasp_sections_in_a_template_tree_do_not_count "OWASP LLM Top 10 v2.0 completeness" owasp_section_only_in_tree "LLM10"
+fails owasp_fails_when_a_section_is_deleted "OWASP LLM Top 10 v2.0 completeness" owasp_section_deleted "LLM10"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

@@ -24,6 +24,16 @@ All other tasks and skill authors must follow these conventions exactly.
 
 **Rule:** If a file has implementation steps in it, it is a reference file. If a file detects context and issues `cat` commands, it is a registered skill. These two roles must never be combined in a single file.
 
+### Template trees
+
+A leaf that tells the agent to write a file verbatim keeps that file as a real file, not as a code fence to re-type. The files live in a **template tree**, and a manifest lists them. The same layout serves every skill (scaffold, add, migrate); the lint finds a tree by its directory name, so adding one needs no lint edit.
+
+- **Tree directory:** a directory named `template` or `template-<suffix>`, holding the files exactly as they land in the project, at their project-relative paths. Scaffold trees sit under `skills/scaffold/<stack>/` and `skills/scaffold/shared/`. For add and migrate, the tree sits in a directory named after the leaf's file stem, next to the leaf: the leaf `skills/add/auth/nestjs.md` owns `skills/add/auth/nestjs/template/`, and `skills/add/database/typescript/nestjs-kysely-iam.md` owns `skills/add/database/typescript/nestjs-kysely-iam/template/`. Use a `template-<suffix>` sibling when one leaf copies different file sets at different steps.
+- **Manifest:** one `template.manifest` in the directory that holds the trees (the leaf's stem directory, or the scaffold stack directory). It lists every file of every `template*` tree there in the scaffold format: one line `path mode placeholders seams`. `path` is relative to the manifest's directory and starts with the tree name; `mode` is the octal git mode (`644` or `755`, and every `.sh` is `755`); `placeholders` is a comma-separated list of `__TC_<NAME>__` tokens or `-`; `seams` is a comma-separated list of `[[post-harness]]` markers or `-`. Lines starting with `#` are comments. The lint fails on a file missing from the manifest, a manifest line with no file, a mode mismatch, an empty directory, a symlink, or a manifest with no tree.
+- **Skill files:** a template skill ships as `SKILL.md.tmpl`, never `SKILL.md`. A loader that scans for `SKILL.md` would register it as a skill of this plugin. The copy drops the `.tmpl` suffix; a manifest must not list both `X` and `X.tmpl`.
+- **Not reference files:** files inside a tree are shipped content, so they carry no `<!-- ref: -->` header and are exempt from the nesting-depth limit (§2). Every content scan (version pins, secrets, change narration, bare route handlers) still reads them. A file merely *named* `template-*.md` outside a tree directory is an ordinary reference file and needs its header.
+- **Leaf prose stays:** the leaf keeps the steps, the decisions and the pointer to the tree. Only the copy-verbatim content moves.
+
 ---
 
 ## Section 2: Nesting Depth Rules
@@ -76,6 +86,7 @@ The chain is: `add/SKILL.md` → stack router → leaf file (2 `cat` calls).
 - **Never use 4+ levels.** Maximum nesting depth is 3 levels (2 `cat` calls per chain).
 - **Threshold:** If the per-stack variant count exceeds 2 for any stack, promote the **entire skill** to 3-level, not just that stack.
 - Stack routers at the 3-level middle tier are reference files themselves (never registered skills).
+- Files inside a template tree (Section 1) mirror a project's own layout, so the depth limit does not apply below the tree directory.
 
 ---
 
@@ -166,6 +177,7 @@ Every reference file must begin with this comment block as its **first line**:
 - The `loaded-by:` field lists the full chain from nearest parent to root SKILL.md (arrow-separated) for 3-level files.
 - The `prereq:` field must contain `Do not invoke this file directly` (as a phrase), followed by a note naming the skill that loads it: `— it is loaded at runtime by the templatecentral:<skill> skill.`
 - No blank lines between the opening `<!--` and closing `-->`.
+- Files inside a template tree (Section 1) are shipped content and take no ref header.
 
 ### Agent-utility variant
 
@@ -314,7 +326,8 @@ This checklist matches what `/tc-audit` enforces automatically. Use it for manua
 
 - [ ] No reference file is also a registered skill (dual-role files are forbidden)
 - [ ] Maximum nesting depth: 3 levels (max 2 `cat` calls per chain)
-- [ ] No 4-level or deeper nesting exists anywhere under `skills/`
+- [ ] No 4-level or deeper nesting exists anywhere under `skills/` (outside template trees)
+- [ ] Every template tree has a `template.manifest` that lists exactly its files, holds `SKILL.md.tmpl` rather than `SKILL.md`, and has no symlink or empty directory
 
 ### Count Limit
 
