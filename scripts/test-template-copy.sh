@@ -693,7 +693,7 @@ nxdoc=$(cat "$NX/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=stack`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=base`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
 # the nextjs docs carry no copy of the guard: the kit index holds the only one
-check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$NX/source-files.md" || true)" "nextjs_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NX/source-files.md" || true)" "nextjs_docs_hold_no_second_guard"
 run_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nextjs "")" 2>&1; }   # run_stack <target>
 run_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nextjs "")" 2>&1; } # run_agents <target>
 count_files() { find "$1" -type f | wc -l | tr -d ' '; }
@@ -1059,7 +1059,7 @@ VR="$SK/vite-react"
 vrdoc=$(cat "$VR/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=stack`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=base`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
-check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$VR/source-files.md" || true)" "vite_react_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$VR/source-files.md" || true)" "vite_react_docs_hold_no_second_guard"
 check 0 "$([[ -e "$VR/config-files.md" ]] && echo 1 || echo 0)" "vite_react_has_no_config_files_md"
 run_vr_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" vite-react "")" 2>&1; }
 run_vr_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" vite-react "")" 2>&1; }
@@ -1425,7 +1425,7 @@ check 1 "$([[ "$FN_STACK" -gt 40 && "$FN_AGENTS" -eq 1 ]] && echo 1 || echo 0)" 
 fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
-check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
 check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
 alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }

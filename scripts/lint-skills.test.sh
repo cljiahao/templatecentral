@@ -501,7 +501,6 @@ fa_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-file
 fa_no_manifest_ref() { strip_token '<skill-dir>/fastapi/template.manifest' '<skill-dir>/fastapi/template.manifes' "$(FAD)/source-files.md"; }
 fa_no_agents_ref() { strip_token '<skill-dir>/fastapi/template-agents/' '<skill-dir>/fastapi/template-agent/' "$(FAD)/source-files.md"; }
 headerless_md_named_fa_template() { printf 'no header\n' > "$(FAD)/template-notes.md"; }
-fa_symlink_in_tree() { ln -s /etc/hosts "$(FAD)/template/zz-link"; }
 fa_ref_header_deleted() { sed -i.bak '1d' "$(FAD)/source-files.md" && rm -f "$(FAD)/source-files.md.bak"; }
 headerless_md_beside_fa_template() { printf 'no header\n' > "$(FAD)/zz-note.md"; }
 pin_in_fa_template() { printf 'left-pad@1.3.0\n' >> "$(FAD)/template/.gitignore"; }
@@ -520,6 +519,12 @@ PY
 fa_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(FAD)/source-files.md"; }
 fa_agents_before_gate() { printf 'Run kit Step 0 with STACK=fastapi and PART=agents.\n' | cat - "$(FAD)/source-files.md" > "$S/x" && mv "$S/x" "$(FAD)/source-files.md"; }
 fa_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-files.md"; }
+nx_no_format_line() { strip_token 'pnpm format ' 'pnpm fmt ' "$(NXD)/source-files.md"; }
+vr_no_format_line() { strip_token 'pnpm format' 'pnpm fmt' "$(VRD)/source-files.md"; }
+fa_symlinked_dir() { rm -rf "$(FAD)/template/src/api" && ln -s "$(FAD)/template/src/core" "$(FAD)/template/src/api"; }
+fa_symlinked_file() { rm "$(FAD)/template/.gitignore" && ln -s "$(FAD)/template/.dockerignore" "$(FAD)/template/.gitignore"; }
+nx_symlinked_file() { rm "$(NXD)/template/.npmrc" && ln -s "$(NXD)/template/.prettierrc" "$(NXD)/template/.npmrc"; }
+vr_symlinked_dir() { rm -rf "$(VRD)/template/src/lib" && ln -s "$(VRD)/template/src/components" "$(VRD)/template/src/lib"; }
 fa_no_gate_heading() { strip_token '### 5. Verification gate' '### 5. Check' "$(FAD)/source-files.md"; }
 
 # the PART=ci runs of the copy script are scaffold-only; the migrate docs and Step B3 say so
@@ -594,7 +599,7 @@ fails scan_agents_marker_includes_nextjs_template "AGENTS.md schema marker not d
 fails nextjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" nx_base_after_install "comes after the first install"
 fails nextjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" nx_no_base_line "no kit Step 0 instruction with STACK=nextjs and PART=base"
 fails nextjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" nx_agents_before_format "comes before the pnpm format line"
-fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "needs a PART=agents instruction"
+fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "no PART=agents instruction"
 
 # ── vite-react stack trees ───────────────────────────────────────────────────
 fails vite_react_template_trees_fail_on_empty_match "Template trees are complete" no_vr_templates "vite-react/template: tree is missing or empty"
@@ -623,7 +628,7 @@ fails scan_agents_marker_includes_vite_react_template "AGENTS.md schema marker n
 fails vite_react_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" vr_base_after_install "comes after the first install"
 fails vite_react_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" vr_no_base_line "no kit Step 0 instruction with STACK=vite-react and PART=base"
 fails vite_react_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" vr_agents_before_format "comes before the pnpm format line"
-fails vite_react_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" vr_no_agents_line "needs a PART=agents instruction"
+fails vite_react_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" vr_no_agents_line "no PART=agents instruction"
 fails vite_react_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_vr_package "left-pad"
 fails vite_react_template_trees_fail_when_package_json_deleted "Template trees are complete" no_vr_package_json "template/package.json"
 fails vite_react_skill_md_fails_when_the_template_holds_one "Template trees hold no file named SKILL.md" vite_skill_md_appears "template/.claude/skills/vite-verify/SKILL.md"
@@ -743,7 +748,12 @@ fails fastapi_skilldir_refs_fails_when_agents_ref_deleted "<skill-dir> reference
 fails fastapi_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" fa_ref_header_deleted "fastapi/source-files.md"
 fails fastapi_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_fa_template "fastapi/zz-note.md"
 fails fastapi_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" headerless_md_named_fa_template "fastapi/template-notes.md"
-fails fastapi_template_trees_fail_on_a_symlinked_parent "Template trees are complete" fa_symlink_in_tree "zz-link"
+fails fastapi_template_trees_fail_on_a_symlinked_directory "Template trees are complete" fa_symlinked_dir "src/api: symlink in a template tree"
+fails fastapi_template_trees_fail_on_a_symlinked_file "Template trees are complete" fa_symlinked_file ".gitignore: symlink in a template tree"
+fails nextjs_template_trees_fail_on_a_symlinked_file "Template trees are complete" nx_symlinked_file ".npmrc: symlink in a template tree"
+fails vite_react_template_trees_fail_on_a_symlinked_directory "Template trees are complete" vr_symlinked_dir "src/lib: symlink in a template tree"
+fails nextjs_step0_fails_when_format_line_deleted "Scaffold runs kit Step 0 before the first install" nx_no_format_line "no pnpm format line for the PART=agents copy to follow"
+fails vite_react_step0_fails_when_format_line_deleted "Scaffold runs kit Step 0 before the first install" vr_no_format_line "no pnpm format line for the PART=agents copy to follow"
 fails scan_version_pins_includes_fastapi_template "Version pins in skills" pin_in_fa_template "left-pad@1.3.0"
 fails scan_hardcoded_secrets_includes_fastapi_template "Hardcoded secrets" secret_in_fa_template "hunter2hunter2"
 fails scan_agents_marker_includes_fastapi_template "AGENTS.md schema marker not drifted" marker_drift_in_fa_template "template-agents/AGENTS.md"
@@ -752,8 +762,8 @@ fails seeded_skills_scope_tools_fails_on_a_fastapi_template_skill_with_bare_bash
 fails fastapi_step0_fails_when_base_copy_is_after_6b "Scaffold runs kit Step 0 before the first install" fa_base_after_6b "the Step 0 line must be in the step 6b section"
 fails fastapi_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" fa_no_base_line "no kit Step 0 instruction with STACK=fastapi and PART=base"
 fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "comes before the format/verification-gate step"
-fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "needs a PART=agents instruction and a format/verification-gate step"
-fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "needs a PART=agents instruction and a format/verification-gate step"
+fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "no PART=agents instruction"
+fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "no format/verification-gate step for the PART=agents copy to follow"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

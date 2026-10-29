@@ -1234,6 +1234,9 @@ for tree in want_trees:
     for dp, ds, fs in os.walk(root):
         if not ds and not fs and dp != root:
             print(f"{dp}: empty directory in a template tree")
+        for name in ds + fs:
+            if os.path.islink(os.path.join(dp, name)):
+                print(f"{os.path.join(dp, name)}: symlink in a template tree")
         for f in fs:
             full = os.path.join(dp, f)
             rel = os.path.relpath(full, shared)
@@ -1434,8 +1437,10 @@ check_step0_before_install() {
       elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
         bad+="$f:$base_line — the PART=base copy comes after the first install (line $inst)"$'\n'
       fi
-      if [[ -z "$agents_line" || -z "$fmt_line" ]]; then
-        bad+="$f — needs a PART=agents instruction and a ${fmt_name} (the AGENTS.md copy must follow it)"$'\n'
+      if [[ -z "$agents_line" ]]; then
+        bad+="$f — no PART=agents instruction (the AGENTS.md copy must follow the ${fmt_name})"$'\n'
+      elif [[ -z "$fmt_line" ]]; then
+        bad+="$f — no ${fmt_name} for the PART=agents copy to follow"$'\n'
       elif [[ "$agents_line" -le "$fmt_line" ]]; then
         bad+="$f:$agents_line — the PART=agents copy comes before the ${fmt_name} ($fmt_line); the AGENTS.md copy must follow it"$'\n'
       fi
