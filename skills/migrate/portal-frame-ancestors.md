@@ -29,8 +29,15 @@ the project has customised either, stop and show the user the current lines befo
 Load the current scaffold source for the stack and copy the named sections from it **verbatim**:
 
 ```bash
-cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # fastapi, nestjs
+cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # nestjs
 cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # vite-react, nestjs
+```
+
+For FastAPI the scaffold files are real files; read the ones the steps below name:
+
+```bash
+cat "<skill-dir>/../scaffold/fastapi/template/src/core/security_headers.py"
+cat "<skill-dir>/../scaffold/fastapi/template/test/test_utils/test_security_headers.py"
 ```
 
 For Next.js the scaffold files are real files; read the ones the steps below name:
@@ -77,7 +84,7 @@ to start, so a sourced entrypoint script always exports both values.
 **FastAPI**
 1. Add `APPCENTRAL_PORTAL_ORIGIN: str = Field(default="")` to `CommonSettings` in `src/core/config.py`.
 2. Replace `src/core/security_headers.py` with the scaffold version, and add
-   `test/test_utils/test_security_headers.py`. `error_handler.py` reuses `SECURITY_HEADERS` — no change.
+   `test/test_utils/test_security_headers.py` (the two files above). `error_handler.py` reuses `SECURITY_HEADERS` — no change.
 
 **NestJS**
 1. Add `APPCENTRAL_PORTAL_ORIGIN: z.string().optional()` to `envSchema` and to `appConfig` in

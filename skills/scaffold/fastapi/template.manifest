@@ -1,0 +1,63 @@
+# Files the scaffold copies verbatim into a new fastapi project. One line per file: path mode placeholders seams
+# path          relative to skills/scaffold/fastapi/; the first segment names the tree
+#               (template: copied at scaffold Step 1; template-agents: copied at Step 6, after the
+#               verification gate, because prettier would reformat AGENTS.md if it existed earlier;
+#               template-tail: text appended to AGENTS.md on request, never copied as a file)
+#               A name ending in .tmpl is the source of the project file with that suffix removed
+#               (SKILL.md.tmpl becomes SKILL.md), so no skill loader registers a template skill; the
+#               manifest lists the source name, and the copy and the golden check strip the suffix
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template-agents/AGENTS.md 644 __TC_PROJECT_TITLE__ [[post-harness]]
+template-tail/task-management.md 644 - -
+template/.claude/skills/api-verify/SKILL.md.tmpl 644 - -
+template/.dockerignore 644 - -
+template/.env.example 644 - -
+template/.gitignore 644 - -
+template/Dockerfile 644 - -
+template/docker-entrypoint.sh 755 - -
+template/pyproject.toml 644 - -
+template/pyrightconfig.json 644 - -
+template/requirements-dev.txt 644 - -
+template/src/.env.default 644 - -
+template/src/api/__init__.py 644 - -
+template/src/api/routers/__init__.py 644 - -
+template/src/api/routers/example.py 644 - -
+template/src/api/routes.py 644 - -
+template/src/api/schemas/__init__.py 644 - -
+template/src/api/schemas/base.py 644 - -
+template/src/api/schemas/request/__init__.py 644 - -
+template/src/api/schemas/request/example.py 644 - -
+template/src/api/schemas/response/__init__.py 644 - -
+template/src/api/schemas/response/example.py 644 - -
+template/src/api/services/__init__.py 644 - -
+template/src/api/services/example.py 644 - -
+template/src/api/tags.py 644 - -
+template/src/app.py 644 - -
+template/src/constants/__init__.py 644 - -
+template/src/core/__init__.py 644 - -
+template/src/core/config.py 644 - -
+template/src/core/directory_manager.py 644 - -
+template/src/core/exceptions.py 644 - -
+template/src/core/logging.py 644 - -
+template/src/core/security_headers.py 644 - -
+template/src/core/uvicorn_log_config.json 644 - -
+template/src/error_handler.py 644 - -
+template/src/logic/__init__.py 644 - -
+template/src/main.py 644 - -
+template/src/models/__init__.py 644 - -
+template/src/models/base.py 644 - -
+template/src/utils/__init__.py 644 - -
+template/src/utils/date.py 644 - -
+template/test/conftest.py 644 - -
+template/test/factories/__init__.py 644 - -
+template/test/factories/models.py 644 - -
+template/test/test_api/__init__.py 644 - -
+template/test/test_api/test_example.py 644 - -
+template/test/test_api/test_health.py 644 - -
+template/test/test_logic/__init__.py 644 - -
+template/test/test_models/__init__.py 644 - -
+template/test/test_utils/__init__.py 644 - -
+template/test/test_utils/test_logging.py 644 - -
+template/test/test_utils/test_security_headers.py 644 - -
