@@ -456,9 +456,9 @@ exact_pin_in_add_tree() { plant_tree "$AT" template/package.json 644 '{ "depende
 bare_handler_in_add_tree() { plant_tree "$AT" template/src/app/api/health/route.ts 644 'export async function GET() {}'; }
 add_tree_hook() { plant_tree "$AT" template/.claude/hooks/zz-add-only-hook.sh 755 '#!/usr/bin/env bash'; }
 
-# The IAM pairs compare a fence on each side. A slice that moves a fence into a template file
-# names it in tests/golden/fences/moved.d/*.tsv (check-fences.py's row format); the lint resolves the
-# side through that row.
+# The IAM pairs compare a fence on each side. A fence that lives in a template file is named in
+# tests/golden/fences/moved.d/*.tsv (check-fences.py's row format), and the lint resolves the side
+# through that row; these tests never patch the lint.
 # iam_move <markdown file under skills> <anchor> <fence language> <new file under skills> [indent] —
 # take the first fence of that language after the anchor out of the markdown, write its body (without
 # the indent) to the new file and map it in moved.d.
@@ -509,7 +509,7 @@ PY
 }
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 IAM_A4=("add/database/python/sqlalchemy-iam.md" '### A4. Create `src/database/session.py`' python)
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 IAM_S2=("migrate/database/fastapi.md" '### Step 2 — Replace `src/database/session.py`' python)
 IAM_NEW_S=migrate/database/zz/template/session.py
 IAM_NEW_A=add/database/python/zz/template/session.py
@@ -518,17 +518,20 @@ iam_canon_moved() { iam_move "${IAM_A4[@]}" "$IAM_NEW_A"; }
 iam_both_moved() { iam_canon_moved; iam_copy_moved; }
 iam_copy_moved_indented() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S" 3; }
 # Indent the canonical fence by 3 spaces in the markdown: the opener, the body and the closer.
-iam_canon_fence_indented() {
-  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" <<'PY'
+iam_canon_fence_indented() { iam_canon_fence_indent 3; }
+# A fence indented by 4 or more spaces is not a fence to check-fences.py, so it is not one here.
+iam_canon_fence_indented_4() { iam_canon_fence_indent 4; }
+iam_canon_fence_indent() {
+  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" "$1" <<'PY'
 import sys
-p, anchor = sys.argv[1:3]
+p, anchor, n = sys.argv[1:4]
 lines = open(p, encoding="utf-8").read().split("\n")
 a = next(i for i, l in enumerate(lines) if anchor in l)
 i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```python"))
 j = next(j for j in range(i + 1, len(lines)) if lines[j].startswith("```"))
 for k in range(i, j + 1):
     if lines[k]:
-        lines[k] = "   " + lines[k]
+        lines[k] = " " * int(n) + lines[k]
 open(p, "w", encoding="utf-8").write("\n".join(lines))
 PY
 }
@@ -549,6 +552,39 @@ iam_remap() {
 iam_fence_gone_unmapped() { iam_copy_moved; rm -f "$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv"; }
 # The row names another fence, so this side has no mapping.
 iam_row_for_another_index() { iam_copy_moved; iam_remap 3 7; }
+# Fences that share a heading: the kysely heading holds typescript fences 0-2 (and an env fence 3);
+# migrate Step 10 holds typescript fences 0 and 1. Moving one leaves its siblings live.
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+KY_ENV=("add/database/typescript/nestjs-kysely-iam.md" 'Add IAM fields to `envSchema`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+KY_MAP=("add/database/typescript/nestjs-kysely-iam.md" 'Then map the validated fields into `serviceConfig`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+S10_ENV=("migrate/database/nestjs.md" '### Step 10 — Update `src/config/env.config.ts`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+S10_MAP=("migrate/database/nestjs.md" 'Then map the validated fields into `serviceConfig`' typescript)
+IAM_NEW_KY=add/database/typescript/zz/template/env-schema.ts
+IAM_NEW_S10=migrate/database/zz/template/env-config.ts
+iam_ky_mid_moved() { iam_move "${KY_ENV[@]}" "$IAM_NEW_KY"; }
+iam_s10_first_moved() { iam_move "${S10_ENV[@]}" "$IAM_NEW_S10"; }
+# iam_touch <markdown file> <anchor> <fence language> — add a line to the first such fence after the anchor.
+iam_touch() {
+  python3 - "$S/$1" "$2" "$3" <<'PY'
+import sys
+p, anchor, lang = sys.argv[1:4]
+lines = open(p, encoding="utf-8").read().split("\n")
+a = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```" + lang))
+lines.insert(i + 1, "// drift")
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+iam_ky_moved_file_byte_diff() { iam_ky_mid_moved; printf '// drift\n' >> "$S/$IAM_NEW_KY"; }
+iam_ky_live_sibling_byte_diff() { iam_ky_mid_moved; iam_touch "${KY_MAP[@]}"; }
+# shellcheck disable=SC2016  # the anchor is literal text with backticks
+iam_ky_first_sibling_byte_diff() { iam_ky_mid_moved; iam_touch "add/database/typescript/nestjs-kysely-iam.md" 'Replace the entire contents of `kysely.service.ts` with:' typescript; }
+iam_s10_moved_file_byte_diff() { iam_s10_first_moved; printf '// drift\n' >> "$S/$IAM_NEW_S10"; }
+iam_s10_live_sibling_byte_diff() { iam_s10_first_moved; iam_touch "${S10_MAP[@]}"; }
+iam_moved_path_with_empty_segment() { iam_copy_moved; iam_remap 4 skills/migrate/database/zz//template/session.py; }
 iam_fence_byte_diff() { strip_token 'create_engine(' 'create_engine (' "$S/migrate/database/fastapi.md"; }
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 iam_copy_anchor_deleted() { strip_token '### Step 2 — Replace `src/database/session.py`' '### Step 2 — Replace session' "$S/migrate/database/fastapi.md"; }
@@ -1031,6 +1067,15 @@ passes iam_pairs_pass_a_moved_canonical_side "$IAMH" iam_canon_moved
 passes iam_pairs_pass_when_both_sides_moved "$IAMH" iam_both_moved
 passes iam_pairs_pass_a_moved_side_with_an_indent_column "$IAMH" iam_copy_moved_indented
 passes iam_pairs_pass_an_indented_fence "$IAMH" iam_canon_fence_indented
+passes iam_pairs_pass_a_moved_middle_fence_with_typescript_siblings "$IAMH" iam_ky_mid_moved
+passes iam_pairs_pass_a_moved_first_fence_of_a_heading "$IAMH" iam_s10_first_moved
+fails iam_pairs_fail_on_a_byte_change_in_a_moved_middle_fence "$IAMH" iam_ky_moved_file_byte_diff "NestJS IAM envSchema fields: migrate/database/nestjs.md has drifted"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_after_the_moved_one "$IAMH" iam_ky_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_before_the_moved_one "$IAMH" iam_ky_first_sibling_byte_diff "NestJS IAM KyselyService"
+fails iam_pairs_fail_on_a_byte_change_in_a_moved_first_fence "$IAMH" iam_s10_moved_file_byte_diff "NestJS IAM envSchema fields"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_of_a_moved_first_fence "$IAMH" iam_s10_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
+fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical anchor/fence not found"
+fails iam_pairs_fail_on_a_mapping_path_with_an_empty_segment "$IAMH" iam_moved_path_with_empty_segment "outside a template* directory"
 fails iam_pairs_fail_on_a_fence_byte_diff "$IAMH" iam_fence_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
 fails iam_pairs_fail_on_a_moved_file_byte_diff "$IAMH" iam_moved_file_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
 fails iam_pairs_fail_on_two_moved_files_byte_diff "$IAMH" iam_moved_both_byte_diff "has drifted"

@@ -670,17 +670,19 @@ import importlib.util, os, sys
 skills, cf_path = sys.argv[1], sys.argv[2]
 root = os.path.dirname(os.path.abspath(skills))
 
-# check-fences.py owns the moved.d row format, the fence heading and the indent=N rule; load it
-# rather than re-implement them.
+# check-fences.py owns the moved.d row format, the fence heading and the fence-opening rule; load it
+# rather than re-implement them, and leave no bytecode behind in scripts/.
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("check_fences", cf_path)
 cf = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cf)
 
 # Each pair is (label, canonical side, copy side). A side is (markdown file, anchor line, fence
-# language, index): the first fence of that language under the anchor's heading, after the anchor
-# line. The index is the fence's index under that heading in tests/golden/fences/*.tsv. Once a slice
-# moves the fence into a template file, the side resolves through that slice's row in
-# tests/golden/fences/moved.d/*.tsv (key: skills/<file>, heading, index), so no edit is needed here.
+# language, index). The anchor line gives the heading; the index is the fence's index under that
+# heading in tests/golden/fences/*.tsv. A fence that lives in a template file resolves through its
+# row in tests/golden/fences/moved.d/*.tsv (key: skills/<file>, heading, index). A fence still in the
+# markdown is the live fence whose rank among the heading's live fences equals the index's rank
+# among its unmapped indexes, as check-fences.py pairs them.
 PAIRS = [
     ("FastAPI IAM session.py",
      ("add/database/python/sqlalchemy-iam.md", "### A4. Create `src/database/session.py`", "python", 0),
@@ -710,24 +712,35 @@ def dedent(lines, n):
     return "".join((l[n:] if l[:n] == " " * n else l.lstrip(" ")) + "\n" for l in lines)
 
 def fences(text):
-    """Return [(heading, start line, opener indent, lang, body lines)] and the (line, heading) of each line.
+    """Return ([(heading, start line, opener indent, lang, body lines)], heading of each line, lines).
 
-    Opening and closing follow check-fences.py: an opener is 0 or more spaces, 3+ backticks or
-    tildes and an info string; a closer is the same character, at least as long, with nothing else.
+    Opening and closing follow check-fences.py: an opener is indented by at most 3 spaces, or sits
+    0 to 3 spaces past the content column of the list item above it, and carries 3+ backticks or
+    tildes; a closer is the same character, at least as long, with nothing else on the line.
     """
     lines = text.split("\n")
-    out, heading, cur, per_line = [], "(top)", None, []
+    out, heading, cur, per_line, list_col = [], "(top)", None, [], None
     for n, raw in enumerate(lines):
         line = raw.rstrip("\r")
         if cur is None:
-            h = cf.HEADING.match(line)
-            if h:
-                heading = h.group(1).replace("\t", " ")
             m = cf.OPEN.match(line)
             if m and not (m.group(2)[0] == "`" and "`" in m.group(3)):
-                info = m.group(3).split()
-                lang = (info[0] if info else "-").lower().split("{")[0]
-                cur = [heading, n, len(m.group(1)), lang, [], m.group(2)[0], len(m.group(2))]
+                indent = len(m.group(1))
+                if indent <= 3 or (list_col is not None and list_col <= indent <= list_col + 3):
+                    info = m.group(3).split()
+                    lang = (info[0] if info else "-").lower().split("{")[0]
+                    cur = [heading, n, indent, lang, [], m.group(2)[0], len(m.group(2))]
+                    per_line.append(heading)
+                    continue
+            h = cf.HEADING.match(line)
+            if h:
+                heading, list_col = h.group(1).replace("\t", " "), None
+            else:
+                li = cf.LIST_ITEM.match(line)
+                if li:
+                    list_col = len(li.group(1)) + len(li.group(2)) + len(li.group(3))
+                elif line.strip() and not line.startswith(" "):
+                    list_col = None
         else:
             s = line.strip()
             if s and set(s) == {cur[5]} and len(s) >= cur[6]:
@@ -749,29 +762,31 @@ def resolve(side, moved):
     if at is None:
         return None, "anchor/fence not found in %s (%r)" % (md, anchor)
     heading = per_line[at]
-    body = None
-    for h, start, indent, flang, blines in found:
-        if start > at and h == heading and flang == lang:
-            body = dedent(blines, indent)
-            break
-    if body is None:
-        row = moved.get(("skills/" + md, heading, index))
-        if row is None:
+    row = moved.get(("skills/" + md, heading, index))
+    if row is None:
+        live = [f for f in found if f[0] == heading and f[3] not in cf.SHELL_TAGS]
+        mapped_idx = {i for (f, h, i) in moved if f == "skills/" + md and h == heading}
+        unmapped = [i for i in range(len(live) + len(mapped_idx)) if i not in mapped_idx]
+        if index not in unmapped or unmapped.index(index) >= len(live):
             return None, "anchor/fence not found in %s (%r): no fence under %r and no moved.d row for index %d" % (md, anchor, heading, index)
+        _, _, indent, flang, blines = live[unmapped.index(index)]
+        if flang != lang:
+            return None, "fence %d under %r in %s is %s, expected %s" % (index, heading, md, flang, lang)
+        body = dedent(blines, indent)
+    else:
         tpl, indent, src = row
         parts = tpl.split("/")
-        if parts[0] != "skills" or ".." in parts or not any(q.startswith("template") for q in parts[1:-1]):
+        if parts[0] != "skills" or ".." in parts or "" in parts or not any(q.startswith("template") for q in parts[1:-1]):
             return None, "moved.d row (%s) maps %s outside a template* directory of skills/" % (src, tpl)
         if cf.symlink_in_chain(root, tpl):
             return None, "moved.d row (%s) maps %s through a symlink" % (src, tpl)
-        try:
-            with open(os.path.join(root, tpl), "rb") as fh:
-                data = cf.reindent(fh.read(), indent)
-        except OSError:
+        # The file holds the fence body without its indent; the row's indent=N only re-adds it for hashing.
+        data = read_text(os.path.join(root, tpl))
+        if data is None:
             return None, "mapped file %s (moved.d row %s) not found" % (tpl, src)
-        if data and not data.endswith(b"\n"):
+        if data and not data.endswith("\n"):
             return None, "mapped file %s must end in a newline" % tpl
-        body = dedent(data.decode("utf-8").split("\n")[:-1], indent)
+        body = data
         md = tpl
     if not body.strip():
         return None, "%s is empty" % md
