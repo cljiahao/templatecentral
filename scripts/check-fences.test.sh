@@ -51,8 +51,8 @@ const c = 3;
 ```
 MD
   printf '## Only\n\n```json\n{"k": 1}\n```\n' > "$r/skills/migrate/m.md"
-  printf '## Only\n\n    ```yaml\n    a: 1\n    ```\n' > "$r/skills/standards/s.md"
-  printf '# file\theading\tindex\ttemplate-path\n' > "$r/tests/golden/fences/moved.tsv"
+  printf '## Only\n\n- item\n\n  ```yaml\n  a: 1\n  ```\n' > "$r/skills/standards/s.md"
+  mkdir -p "$r/tests/golden/fences/moved.d"
   python3 "$REPO_ROOT/scripts/check-fences.py" --root "$r" --snapshot > /dev/null
   echo "$r"
 }
@@ -96,7 +96,7 @@ r=$(fixture trailing)
 printf '\n' >> "$r/skills/migrate/m.md"
 expect_ok "$r" "text after a fence is not part of it"
 r=$(fixture indent)
-sed -i.bak 's/    a: 1/  a: 1/' "$r/skills/standards/s.md" && rm "$r/skills/standards/s.md.bak"
+sed -i.bak 's/^  a: 1/ a: 1/' "$r/skills/standards/s.md" && rm "$r/skills/standards/s.md.bak"
 expect_fail "$r" "MISMATCH skills/standards/s.md" "changed_indentation"
 
 # deleted fence
@@ -142,7 +142,7 @@ p = sys.argv[1]
 s = open(p).read().replace("```ts\nconst c = 3;\n```\n", "File: `template/c.ts`.\n")
 open(p, "w").write(s)
 PY
-  printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/c.ts\n' >> "$r/tests/golden/fences/moved.tsv"
+  printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/c.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 }
 r=$(fixture moved)
 move "$r"
@@ -177,22 +177,22 @@ expect_fail "$r" "BADMAP" "mapped_file_deleted_from_templates" --from-templates
 # mapping rows that are wrong
 r=$(fixture badmap-dir)
 mkdir -p "$r/skills/add/notes"; printf 'const c = 3;\n' > "$r/skills/add/notes/c.ts"
-printf 'skills/add/a.md\tStep 2\t1\tskills/add/notes/c.ts\n' >> "$r/tests/golden/fences/moved.tsv"
+printf 'skills/add/a.md\tStep 2\t1\tskills/add/notes/c.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "not under a template* directory" "mapping_outside_template_dir"
 r=$(fixture badmap-escape)
 printf 'x\n' > "$r/skills/add/template.ts"
-printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/../template.ts\n' >> "$r/tests/golden/fences/moved.tsv"
+printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/../template.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "BADMAP" "mapping_with_dotdot"
 r=$(fixture badmap-key)
 mkdir -p "$r/skills/add/template"; printf 'q\n' > "$r/skills/add/template/q.ts"
-printf 'skills/add/a.md\tStep 9\t0\tskills/add/template/q.ts\n' >> "$r/tests/golden/fences/moved.tsv"
+printf 'skills/add/a.md\tStep 9\t0\tskills/add/template/q.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "is not in the snapshot" "mapping_unknown_key"
 r=$(fixture badmap-twice)
 move "$r"
-printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/c.ts\n' >> "$r/tests/golden/fences/moved.tsv"
+printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/c.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "is mapped twice" "mapping_repeated"
 r=$(fixture badmap-columns)
-printf 'skills/add/a.md\tStep 2\n' >> "$r/tests/golden/fences/moved.tsv"
+printf 'skills/add/a.md\tStep 2\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 run "$r"
 check 2 "$RC" "mapping_row_with_wrong_columns exits 2"
 r=$(fixture badmap-link)
@@ -211,6 +211,184 @@ r=$(fixture unterminated)
 printf '\n```ts\nopen\n' >> "$r/skills/add/a.md"
 run "$r"
 check 2 "$RC" "unterminated_fence exits 2"
+
+# --- fence recognition ---------------------------------------------------------------------------
+# mkroot <name> — an empty tree: a one-fence anchor file per skill so a case needs only its own file.
+mkroot() {
+  local r="$T/$1"
+  mkdir -p "$r/skills/add" "$r/skills/migrate" "$r/skills/standards" "$r/tests/golden/fences/moved.d"
+  printf '## A\n\n```ts\na\n```\n' > "$r/skills/migrate/anchor.md"
+  printf '## A\n\n```ts\na\n```\n' > "$r/skills/standards/anchor.md"
+  echo "$r"
+}
+snapshot() { python3 "$REPO_ROOT/scripts/check-fences.py" --root "$1" --snapshot > /dev/null; }
+rows_of() { grep -F "$2" "$1/tests/golden/fences/add.tsv" 2>/dev/null | grep -vc '^#' || true; }
+
+r=$(mkroot tilde)
+printf '## T\n\n~~~markdown\n```ts\ninner\n```\n~~~\n' > "$r/skills/add/t.md"
+snapshot "$r"
+check 1 "$(rows_of "$r" skills/add/t.md)" "a tilde fence holding backtick fences is one fence"
+check 1 "$(grep -c "$(printf '\tmarkdown$')" "$r/tests/golden/fences/add.tsv")" "tilde fence keeps its lang"
+printf '## T\n\n~~~markdown\n```ts\ninnerX\n```\n~~~\n' > "$r/skills/add/t.md"
+expect_fail "$r" "MISMATCH skills/add/t.md :: T :: 0" "tilde_fence_changed"
+
+r=$(mkroot four)
+printf '## F\n\n````md\n```ts\ninner\n```\n````\n\n## G\n\n```ts\nafter\n```\n' > "$r/skills/add/f.md"
+snapshot "$r"
+check 2 "$(rows_of "$r" skills/add/f.md)" "a 4-backtick fence holding a 3-backtick fence is one fence, and the next heading is seen"
+check 1 "$(grep -c "$(printf 'G\t0\tts')" "$r/tests/golden/fences/add.tsv")" "the fence after a nested fence keys under its own heading"
+
+r=$(mkroot crlf)
+printf '## C\r\n\r\n```ts\r\nline\r\n```\r\n' > "$r/skills/add/c.md"
+snapshot "$r"
+expect_ok "$r" "crlf fence passes unchanged"
+printf '## C\n\n```ts\nline\n```\n' > "$r/skills/add/c.md"
+expect_fail "$r" "MISMATCH skills/add/c.md :: C :: 0" "crlf_to_lf"
+r=$(mkroot crlf2)
+printf '## C\n\n```ts\nline\n```\n' > "$r/skills/add/c.md"
+snapshot "$r"
+printf '## C\r\n\r\n```ts\r\nline\r\n```\r\n' > "$r/skills/add/c.md"
+expect_fail "$r" "MISMATCH skills/add/c.md :: C :: 0" "lf_to_crlf"
+
+r=$(mkroot tags)
+printf '## T\n\n```\nuntagged\n```\n\n```ts{1}\nbraced\n```\n\n```sh\na\n```\n\n```shell\na\n```\n\n```console\na\n```\n\n```zsh\na\n```\n\n```BASH\n# hash\n```\n\n```bash{2}\na\n```\n' > "$r/skills/add/t.md"
+snapshot "$r"
+check 2 "$(rows_of "$r" skills/add/t.md)" "only the untagged and the ts{1} fence are tracked (sh, shell, console, zsh, BASH, bash{2} are not)"
+check 1 "$(grep -c "$(printf '\t0\t-$')" "$r/tests/golden/fences/add.tsv")" "an untagged fence has lang -"
+check 1 "$(grep -c "$(printf '\t1\tts{1}$')" "$r/tests/golden/fences/add.tsv")" "a ts{1} fence keeps its full tag"
+printf '## T\n\n```\nuntagged\n```\n\n```ts{1}\nbraced\n```\n\n```sh\nCHANGED\n```\n\n```shell\nCHANGED\n```\n\n```console\nCHANGED\n```\n\n```zsh\nCHANGED\n```\n\n```BASH\nCHANGED\n```\n\n```bash{2}\nCHANGED\n```\n' > "$r/skills/add/t.md"
+expect_ok "$r" "shell-tagged fences change freely"
+printf '## T\n\n```\nuntaggedX\n```\n\n```ts{1}\nbraced\n```\n' > "$r/skills/add/t.md"
+expect_fail "$r" "MISMATCH skills/add/t.md :: T :: 0" "untagged_fence_changed"
+
+r=$(mkroot repeat)
+printf '## Same\n\n```ts\none\n```\n\n## Other\n\n## Same\n\n```ts\ntwo\n```\n' > "$r/skills/add/r.md"
+snapshot "$r"
+check 1 "$(grep -c "$(printf 'Same\t1\tts')" "$r/tests/golden/fences/add.tsv")" "a repeated heading shares one counter"
+
+r=$(mkroot opener)
+printf 'text\n\n```a``` x\n\n    ```ts\n    indented code, not a fence\n    ```\n\n## H\n\n```ts\nreal\n```\n' > "$r/skills/add/o.md"
+snapshot "$r"
+check 1 "$(rows_of "$r" skills/add/o.md)" "an inline triple-backtick line and a 4-space code block are not fences"
+check 1 "$(grep -c "$(printf '\tH\t0\tts')" "$r/tests/golden/fences/add.tsv")" "the heading after them is seen"
+r=$(mkroot listopen)
+printf '1. step\n\n    ```ts\n    inside: 1\n    ```\n\n2. step\n\n   ```ts\n   inside: 2\n   ```\n' > "$r/skills/add/l.md"
+snapshot "$r"
+check 2 "$(rows_of "$r" skills/add/l.md)" "fences indented to a list item's content column are fences"
+
+# --- fences held in files: sibling indexes, slices, indentation --------------------------------------
+three() { # three <name> — one heading with three fences A, B, C; snapshotted; prints the root
+  local r; r=$(mkroot "$1")
+  printf '## S\n\n```ts\nA\n```\n\n```ts\nB\n```\n\n```ts\nC\n```\n' > "$r/skills/add/s.md"
+  snapshot "$r"
+  echo "$r"
+}
+# mv_fence <root> <letter> <index> <slice file> — the fence's file, a pointer in its place, one row
+mv_fence() {
+  local r="$1" letter="$2" idx="$3" slice="$4"
+  mkdir -p "$r/skills/add/template"
+  printf '%s\n' "$letter" > "$r/skills/add/template/$letter.ts"
+  python3 - "$r/skills/add/s.md" "$letter" <<'PY'
+import sys
+p, letter = sys.argv[1:]
+s = open(p).read().replace("```ts\n" + letter + "\n```\n", "File: `template/" + letter + ".ts`.\n")
+open(p, "w").write(s)
+PY
+  printf 'skills/add/s.md\tS\t%s\tskills/add/template/%s.ts\n' "$idx" "$letter" >> "$r/tests/golden/fences/moved.d/$slice.tsv"
+}
+for which in "A 0" "B 1" "C 2"; do
+  read -r -a pair <<< "$which"
+  set -- "${pair[@]}"
+  r=$(three "move-$1")
+  before=$(cat "$r"/tests/golden/fences/{add,migrate,standards}.tsv | cksum)
+  mv_fence "$r" "$1" "$2" slice-a
+  expect_ok "$r" "moving fence $2 of three passes"
+  expect_ok "$r" "moving fence $2 of three passes from templates" --from-templates
+  check "$before" "$(cat "$r"/tests/golden/fences/{add,migrate,standards}.tsv | cksum)" "moving fence $2 leaves the snapshot alone"
+done
+r=$(three move-first-edit-last)
+mv_fence "$r" A 0 slice-a
+sed -i.bak 's/^C$/C2/' "$r/skills/add/s.md" && rm "$r/skills/add/s.md.bak"
+expect_fail "$r" "MISMATCH skills/add/s.md :: S :: 2" "later_sibling_byte_change_after_a_move"
+r=$(three move-middle-edit-last)
+mv_fence "$r" B 1 slice-a
+sed -i.bak 's/^C$/C2/' "$r/skills/add/s.md" && rm "$r/skills/add/s.md.bak"
+expect_fail "$r" "MISMATCH skills/add/s.md :: S :: 2" "last_sibling_byte_change_after_a_middle_move"
+r=$(three move-then-delete)
+mv_fence "$r" A 0 slice-a
+python3 - "$r/skills/add/s.md" <<'PY'
+import sys
+p = sys.argv[1]
+open(p, "w").write(open(p).read().replace("```ts\nC\n```\n", ""))
+PY
+expect_fail "$r" "MISSING skills/add/s.md :: S :: 1" "later_sibling_deleted_after_a_move"
+r=$(three move-keep-fence)
+mv_fence "$r" A 0 slice-a
+printf '\n```ts\nA\n```\n' >> "$r/skills/add/s.md"
+expect_fail "$r" "DUPLICATE skills/add/s.md :: S :: 0" "moved_first_fence_still_in_markdown"
+r=$(three slices)
+mv_fence "$r" A 0 slice-a
+mv_fence "$r" B 1 slice-b
+expect_ok "$r" "two slices each moving a fence of one heading pass"
+expect_ok "$r" "two slices pass from templates" --from-templates
+r=$(three slices-clash)
+mv_fence "$r" A 0 slice-a
+printf 'skills/add/s.md\tS\t0\tskills/add/template/A.ts\n' > "$r/tests/golden/fences/moved.d/slice-b.tsv"
+expect_fail "$r" "is mapped twice (slice-b.tsv and slice-a.tsv)" "same_fence_in_two_slices"
+r=$(three legacy)
+mv_fence "$r" A 0 slice-a
+printf 'x\n' > "$r/tests/golden/fences/moved.d/notes.txt"
+expect_ok "$r" "only moved.d/*.tsv are read"
+
+# a fence indented in a list item: the file holds it without the indentation
+indented() { # indented <name> — a list item with a 2-space-indented fence; snapshotted
+  local r; r=$(mkroot "$1")
+  printf -- '- item\n\n  ```ts\n  x: 1\n\n  y: 2\n  ```\n' > "$r/skills/add/s.md"
+  snapshot "$r"
+  mkdir -p "$r/skills/add/template"
+  printf 'x: 1\n\ny: 2\n' > "$r/skills/add/template/x.ts"
+  printf -- '- item\n\nFile.\n' > "$r/skills/add/s.md"
+  echo "$r"
+}
+r=$(indented indent-ok)
+printf 'skills/add/s.md\t(top)\t0\tskills/add/template/x.ts\tindent=2\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+expect_ok "$r" "an indent=2 mapping matches the indented fence"
+expect_ok "$r" "an indent=2 mapping matches from templates" --from-templates
+printf 'skills/add/s.md\t(top)\t0\tskills/add/template/x.ts\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+expect_fail "$r" "MISMATCH" "indented_fence_mapped_without_indent"
+printf 'skills/add/s.md\t(top)\t0\tskills/add/template/x.ts\tindent=4\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+expect_fail "$r" "MISMATCH" "indented_fence_mapped_with_wrong_indent"
+printf 'skills/add/s.md\t(top)\t0\tskills/add/template/x.ts\tindent=two\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+run "$r"
+check 2 "$RC" "a malformed indent column exits 2"
+
+# CRLF in a moved fence: the file must carry the carriage returns
+r=$(mkroot crlf-move)
+printf '## C\r\n\r\n```ts\r\nline\r\n```\r\n' > "$r/skills/add/c.md"
+snapshot "$r"
+mkdir -p "$r/skills/add/template"
+printf '## C\r\n\r\nFile.\r\n' > "$r/skills/add/c.md"
+printf 'skills/add/c.md\tC\t0\tskills/add/template/c.ts\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+printf 'line\n' > "$r/skills/add/template/c.ts"
+expect_fail "$r" "MISMATCH" "moved_crlf_fence_with_an_lf_file"
+printf 'line\r\n' > "$r/skills/add/template/c.ts"
+expect_ok "$r" "moved crlf fence with a crlf file passes"
+
+# a symlinked directory above the template file
+r=$(three symlink-dir)
+mv_fence "$r" A 0 slice-a
+mkdir -p "$r/real"; mv "$r/skills/add/template/A.ts" "$r/real/A.ts"; rmdir "$r/skills/add/template"
+ln -s ../../real "$r/skills/add/template"
+expect_fail "$r" "goes through a symlink" "symlinked_template_directory"
+expect_fail "$r" "goes through a symlink" "symlinked_template_directory_from_templates" --from-templates
+
+# --has-mappings: 0 with a row, 1 with none, 2 on a parse error
+r=$(three has-map)
+run "$r" --has-mappings; check 1 "$RC" "has_mappings is 1 with no slice file"
+mv_fence "$r" A 0 slice-a
+run "$r" --has-mappings; check 0 "$RC" "has_mappings is 0 with a row"
+printf 'only\ttwo\n' > "$r/tests/golden/fences/moved.d/slice-b.tsv"
+run "$r" --has-mappings; check 2 "$RC" "has_mappings is 2 on a malformed row"
 
 # the real tree matches its snapshot
 expect_ok "$REPO_ROOT" "repo snapshot matches skills/"

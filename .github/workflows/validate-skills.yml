@@ -181,10 +181,15 @@ jobs:
         run: bash scripts/check-fences.sh
       - name: Skill fence snapshot check (template files)
         run: |
-          if bash scripts/check-fences.sh --has-mappings; then
+          rc=0
+          bash scripts/check-fences.sh --has-mappings || rc=$?
+          if [ "$rc" -eq 0 ]; then
             bash scripts/check-fences.sh --from-templates
-          else
+          elif [ "$rc" -eq 1 ]; then
             echo "no fence is mapped to a template file yet"
+          else
+            echo "check-fences --has-mappings failed with exit $rc"
+            exit "$rc"
           fi
 
   lint-negative-tests:
