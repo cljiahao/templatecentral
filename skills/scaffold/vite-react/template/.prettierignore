@@ -1,0 +1,26 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+.claude
+
+# Enforcement-layer config — human-reviewed, never auto-formatted.
+# Prettier would otherwise rewrite these (yaml quoting/whitespace), drifting them from the
+# harness-integrity baseline and failing verify-harness.sh on the first push / in CI.
+lefthook.yml
+.github/
+.gitleaks.toml
+
+# shadcn CLI output — the registry emits double-quoted, semicolon-less code that
+# conflicts with this project's singleQuote/semi settings. `pnpm exec prettier
+# --check` would fail on every `shadcn add`, forever, if this weren't ignored.
+src/components/ui/
+
+# Governance markdown — human-approved (protect-files.sh gates AGENTS.md) and
+# alignment-sensitive. Prettier reflows headings and collapses the padded
+# file-layout tables, silently drifting them from the approved content.
+AGENTS.md
+CLAUDE.md
+docs/CONSTITUTION.md
+FUTURE.md

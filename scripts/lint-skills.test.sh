@@ -110,8 +110,8 @@ PY
 no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest; }
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
-no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
-no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" "$S/scaffold/fastapi/template" "$S/scaffold/fastapi/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
+no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" "$S/scaffold/vite-react/template" "$S/scaffold/vite-react/template-agents" "$S/scaffold/fastapi/template" "$S/scaffold/fastapi/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
+no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" "$S/scaffold/vite-react/template" "$S/scaffold/vite-react/template-agents" "$S/scaffold/fastapi/template" "$S/scaffold/fastapi/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
 no_patterns() { rm -f "$SH/template/.claude/comment-hygiene-patterns.txt"; }
 no_ts_overlay() { rm -rf "$SH/template-ts"; }
 no_py_overlay() { rm -rf "$SH/template-py"; }
@@ -228,6 +228,49 @@ PY
 nx_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
 nx_agents_before_format() { printf 'Run kit Step 0 with STACK=nextjs and PART=agents.\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
 nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
+# vite-react stack trees (skills/scaffold/vite-react/template, template-agents, template.manifest)
+VRD() { echo "$S/scaffold/vite-react"; }
+no_vr_templates() { rm -rf "$(VRD)/template" "$(VRD)/template-agents" "$(VRD)/template.manifest"; }
+no_vr_manifest() { rm -f "$(VRD)/template.manifest"; }
+no_vr_agents_tree() { rm -rf "$(VRD)/template-agents"; }
+no_vr_main_tree() { rm -rf "$(VRD)/template"; }
+vr_manifest_lists_missing() { printf 'template/zz-ghost.txt 644 - -\n' >> "$(VRD)/template.manifest"; }
+vr_unlisted_file() { printf 'x\n' > "$(VRD)/template/zz-unlisted.txt"; }
+vr_exec_bit_lost() { chmod -x "$(VRD)/template/docker-entrypoint.sh"; }
+vr_empty_dir() { mkdir -p "$(VRD)/template/zz-empty"; }
+vr_narration_in_sh() { printf '\n# Added a retry loop\n' >> "$(VRD)/template/docker-entrypoint.sh"; }
+vr_narration_in_yaml() { printf '\n# Removed the old setting\n' >> "$(VRD)/template/pnpm-workspace.yaml"; }
+vr_broken_yaml() { printf '  bad:\n- not: [valid\n' >> "$(VRD)/template/pnpm-workspace.yaml"; }
+vr_no_stack_copy() { strip_token 'PART=stack' 'PART=stac' "$(VRD)/source-files.md"; }
+vr_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(VRD)/source-files.md"; }
+vr_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(VRD)/source-files.md"; }
+vr_no_manifest_ref() { strip_token '<skill-dir>/vite-react/template.manifest' '<skill-dir>/vite-react/template.manifes' "$(VRD)/source-files.md"; }
+vr_wrong_stack() { strip_token 'STACK=vite-react' 'STACK=nestjs' "$(VRD)/source-files.md"; }
+vr_ref_header_deleted() { sed -i.bak '1d' "$(VRD)/source-files.md" && rm -f "$(VRD)/source-files.md.bak"; }
+headerless_md_beside_vr_template() { printf 'no header\n' > "$(VRD)/zz-note.md"; }
+pin_in_vr_template() { printf 'left-pad@1.3.0\n' >> "$(VRD)/template/.npmrc"; }
+secret_in_vr_template() { printf 'password = "hunter2hunter2"\n' >> "$(VRD)/template/.npmrc"; }
+marker_drift_in_vr_template() { strip_token 'vite-react@6.0.0' 'vite-react@99.0.0' "$(VRD)/template-agents/AGENTS.md"; }
+vr_base_after_install() { python3 - "$(VRD)/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=vite-react and PART=base.\n")
+PY
+}
+vr_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(VRD)/source-files.md"; }
+vr_agents_before_format() { printf 'Run kit Step 0 with STACK=vite-react and PART=agents.\n' | cat - "$(VRD)/source-files.md" > "$S/x" && mv "$S/x" "$(VRD)/source-files.md"; }
+vr_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(VRD)/source-files.md"; }
+exact_pin_in_vr_package() { python3 - "$(VRD)/template/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
+PY
+}
+vite_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(VRD)/template/.claude/skills/vite-verify/SKILL.md"; }
+vr_tmpl_and_plain_both_listed() { printf 'template/.claude/skills/vite-verify/SKILL.md 644 - -\n' >> "$(VRD)/template.manifest"; }
 # shellcheck disable=SC2016
 no_kit_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit.md"; }
 no_kit_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit.md"; }
@@ -238,7 +281,8 @@ t = open(p, encoding="utf-8").read()
 open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
 PY
 }
-no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
+no_nx_package_json() { rm -f "$(NXD)/template/package.json" "$(VRD)/template/package.json"; }
+no_vr_package_json() { rm -f "$(VRD)/template/package.json"; }
 second_copy_script_in_enforcement() { python3 - "$SH/harness-kit.md" "$SH/harness-kit-enforcement.md" <<'PY'
 import sys
 src = open(sys.argv[1], encoding="utf-8").read()
@@ -517,6 +561,7 @@ fails nextjs_template_trees_fail_on_empty_directory "Template trees are complete
 fails nextjs_comment_narration_scans_template_sh "Change-narration comments" nx_narration_in_sh "Added a retry loop"
 fails nextjs_comment_narration_scans_template_yaml "Change-narration comments" nx_narration_in_yaml "Removed the old setting"
 fails nextjs_scaffold_seeds_fails_on_empty_match "Scaffold/migrate templates seed the complete harness" no_templates "template file not found"
+fails vite_react_scaffold_seeds_fails_on_empty_match "Scaffold/migrate templates seed the complete harness" no_templates "template file not found"
 if python3 -c 'import yaml' >/dev/null 2>&1; then
   fails nextjs_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" nx_broken_yaml "pnpm-workspace.yaml:"
 fi
@@ -550,6 +595,39 @@ fails nextjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit S
 fails nextjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" nx_no_base_line "no kit Step 0 instruction with STACK=nextjs and PART=base"
 fails nextjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" nx_agents_before_format "comes before the pnpm format line"
 fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "needs a PART=agents instruction"
+
+# ── vite-react stack trees ───────────────────────────────────────────────────
+fails vite_react_template_trees_fail_on_empty_match "Template trees are complete" no_vr_templates "vite-react/template: tree is missing or empty"
+fails vite_react_template_trees_fail_when_main_tree_deleted "Template trees are complete" no_vr_main_tree "vite-react/template: tree is missing or empty"
+fails vite_react_template_trees_fail_when_agents_tree_deleted "Template trees are complete" no_vr_agents_tree "vite-react/template-agents: tree is missing or empty"
+fails vite_react_template_trees_fail_when_manifest_deleted "Template trees are complete" no_vr_manifest "vite-react/template.manifest: file not found"
+fails vite_react_template_trees_fail_when_manifest_lists_missing_file "Template trees are complete" vr_manifest_lists_missing "which is not in the tree"
+fails vite_react_template_trees_fail_when_file_unlisted "Template trees are complete" vr_unlisted_file "is in the tree but not listed"
+fails vite_react_template_trees_fail_when_script_loses_exec_bit "Template trees are complete" vr_exec_bit_lost "is mode 644 but listed as 755"
+fails vite_react_template_trees_fail_on_empty_directory "Template trees are complete" vr_empty_dir "empty directory in a template tree"
+fails vite_react_comment_narration_scans_template_sh "Change-narration comments" vr_narration_in_sh "Added a retry loop"
+fails vite_react_comment_narration_scans_template_yaml "Change-narration comments" vr_narration_in_yaml "Removed the old setting"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  fails vite_react_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" vr_broken_yaml "pnpm-workspace.yaml:"
+fi
+fails vite_react_skilldir_refs_fails_on_empty_match "<skill-dir> references resolve" vr_no_stack_copy "scaffold/vite-react/source-files.md: copy instruction PART=stack missing"
+fails vite_react_skilldir_refs_fails_when_base_copy_deleted "<skill-dir> references resolve" vr_no_base_copy "scaffold/vite-react/source-files.md: copy instruction PART=base missing"
+fails vite_react_skilldir_refs_fails_when_agents_copy_deleted "<skill-dir> references resolve" vr_no_agents_copy "scaffold/vite-react/source-files.md: copy instruction PART=agents missing"
+fails vite_react_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> references resolve" vr_no_manifest_ref "scaffold/vite-react/source-files.md: copy instruction <skill-dir>/vite-react/template.manifest missing"
+fails vite_react_stack_value_fails_when_wrong "Scaffold runs kit Step 0 before the first install" vr_wrong_stack "must name STACK=vite-react"
+fails vite_react_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" vr_ref_header_deleted "vite-react/source-files.md"
+fails vite_react_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_vr_template "vite-react/zz-note.md"
+fails scan_version_pins_includes_vite_react_template "Version pins in skills" pin_in_vr_template "left-pad@1.3.0"
+fails scan_hardcoded_secrets_includes_vite_react_template "Hardcoded secrets" secret_in_vr_template "hunter2hunter2"
+fails scan_agents_marker_includes_vite_react_template "AGENTS.md schema marker not drifted" marker_drift_in_vr_template "template-agents/AGENTS.md"
+fails vite_react_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" vr_base_after_install "comes after the first install"
+fails vite_react_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" vr_no_base_line "no kit Step 0 instruction with STACK=vite-react and PART=base"
+fails vite_react_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" vr_agents_before_format "comes before the pnpm format line"
+fails vite_react_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" vr_no_agents_line "needs a PART=agents instruction"
+fails vite_react_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_vr_package "left-pad"
+fails vite_react_template_trees_fail_when_package_json_deleted "Template trees are complete" no_vr_package_json "template/package.json"
+fails vite_react_skill_md_fails_when_the_template_holds_one "Template trees hold no file named SKILL.md" vite_skill_md_appears "template/.claude/skills/vite-verify/SKILL.md"
+fails vite_react_template_trees_fail_when_a_tmpl_and_its_target_are_both_listed "Template trees are complete" vr_tmpl_and_plain_both_listed "both copy to"
 
 # ── the kit fences keep the stack and agents branches ────────────────────────
 fails skilldir_refs_fails_when_kit_stack_case_deleted "<skill-dir> references resolve" no_kit_stack_case "harness-kit.md: copy instruction stack | agents) missing"

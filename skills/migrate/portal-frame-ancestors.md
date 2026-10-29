@@ -30,7 +30,7 @@ Load the current scaffold source for the stack and copy the named sections from 
 
 ```bash
 cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # nestjs
-cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # vite-react, nestjs
+cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # nestjs
 ```
 
 For FastAPI the scaffold files are real files; read the ones the steps below name:
@@ -41,13 +41,19 @@ cat "<skill-dir>/../scaffold/fastapi/template/src/core/security_headers.py"
 cat "<skill-dir>/../scaffold/fastapi/template/test/test_utils/test_security_headers.py"
 ```
 
-For Next.js the scaffold files are real files; read the ones the steps below name:
+For Next.js and Vite + React the scaffold files are real files; read the ones the steps below name:
 
 ```bash
 cat "<skill-dir>/../scaffold/nextjs/template/src/lib/security/frame-protection.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/test/lib/frame-protection.test.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/src/proxy.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/next.config.ts"
+```
+
+```bash
+cat "<skill-dir>/../scaffold/vite-react/template/docker/15-frame-protection.envsh"
+cat "<skill-dir>/../scaffold/vite-react/template/Dockerfile"
+cat "<skill-dir>/../scaffold/vite-react/template/nginx.conf.template"
 ```
 
 **Next.js** — `next.config.ts` `headers()` is resolved at build time, so the CSP and frame headers
@@ -76,10 +82,10 @@ move to the runtime proxy, which becomes the only place the CSP is set.
 
 **Vite + React** — nginx `envsubst` leaves an undefined `${VAR}` in place, and nginx then refuses
 to start, so a sourced entrypoint script always exports both values.
-1. Add `docker/15-frame-protection.envsh` (config-files.md).
-2. In `Dockerfile` prod stage, add the `COPY --chmod=755 ./docker/15-frame-protection.envsh …` line
+1. Add `docker/15-frame-protection.envsh` (the first Vite file above).
+2. In `Dockerfile` prod stage (the second Vite file above), add the `COPY --chmod=755 ./docker/15-frame-protection.envsh …` line
    after the `nginx.conf.template` copy.
-3. In `nginx.conf.template`, replace the `X-Frame-Options` and `Content-Security-Policy` lines with
+3. In `nginx.conf.template` (the third Vite file above), replace the `X-Frame-Options` and `Content-Security-Policy` lines with
    the `${TC_X_FRAME_OPTIONS}` / `${TC_FRAME_ANCESTORS}` versions.
 
 **FastAPI**

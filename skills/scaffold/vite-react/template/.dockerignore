@@ -1,0 +1,56 @@
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (installed in container)
+node_modules/
+.pnpm-store/
+
+# Vite build outputs & cache
+dist/
+build/
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Environment variables (security)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+*.log
+logs/
+
+# Testing & coverage
+coverage/
+.vitest/
+
+# Editor / OS cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker (don't copy into image)
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+docker-compose*.yaml
+
+# CI/CD & docs
+.github/
+README*.md
+docs/
+
+# Certificates & secrets
+*.pem
+*.key
+*.crt
+.secrets/
