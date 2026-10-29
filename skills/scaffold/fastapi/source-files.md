@@ -28,7 +28,7 @@ cat "<skill-dir>/shared/harness-kit.md"
 
 Run kit Step **0** now with `STACK=fastapi` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
 
-Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` block of the Step 6 AGENTS.md. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
+Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
 Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4.
 

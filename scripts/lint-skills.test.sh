@@ -456,6 +456,8 @@ fa_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(FAD)/source-files.md";
 fa_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-files.md"; }
 fa_no_manifest_ref() { strip_token '<skill-dir>/fastapi/template.manifest' '<skill-dir>/fastapi/template.manifes' "$(FAD)/source-files.md"; }
 fa_no_agents_ref() { strip_token '<skill-dir>/fastapi/template-agents/' '<skill-dir>/fastapi/template-agent/' "$(FAD)/source-files.md"; }
+headerless_md_named_fa_template() { printf 'no header\n' > "$(FAD)/template-notes.md"; }
+fa_symlink_in_tree() { ln -s /etc/hosts "$(FAD)/template/zz-link"; }
 fa_ref_header_deleted() { sed -i.bak '1d' "$(FAD)/source-files.md" && rm -f "$(FAD)/source-files.md.bak"; }
 headerless_md_beside_fa_template() { printf 'no header\n' > "$(FAD)/zz-note.md"; }
 pin_in_fa_template() { printf 'left-pad@1.3.0\n' >> "$(FAD)/template/.gitignore"; }
@@ -662,6 +664,8 @@ fails fastapi_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> referen
 fails fastapi_skilldir_refs_fails_when_agents_ref_deleted "<skill-dir> references resolve" fa_no_agents_ref "scaffold/fastapi/source-files.md: copy instruction <skill-dir>/fastapi/template-agents/ missing"
 fails fastapi_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" fa_ref_header_deleted "fastapi/source-files.md"
 fails fastapi_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_fa_template "fastapi/zz-note.md"
+fails fastapi_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" headerless_md_named_fa_template "fastapi/template-notes.md"
+fails fastapi_template_trees_fail_on_a_symlinked_parent "Template trees are complete" fa_symlink_in_tree "zz-link"
 fails scan_version_pins_includes_fastapi_template "Version pins in skills" pin_in_fa_template "left-pad@1.3.0"
 fails scan_hardcoded_secrets_includes_fastapi_template "Hardcoded secrets" secret_in_fa_template "hunter2hunter2"
 fails scan_agents_marker_includes_fastapi_template "AGENTS.md schema marker not drifted" marker_drift_in_fa_template "template-agents/AGENTS.md"
@@ -669,9 +673,9 @@ fails template_skill_md_fails_when_the_fastapi_template_holds_one "Template tree
 fails seeded_skills_scope_tools_fails_on_a_fastapi_template_skill_with_bare_bash "Seeded project skills declare scoped allowed-tools" fa_bare_bash_in_verify "bare Bash in allowed-tools"
 fails fastapi_step0_fails_when_base_copy_is_after_6b "Scaffold runs kit Step 0 before the first install" fa_base_after_6b "the Step 0 line must be in the step 6b section"
 fails fastapi_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" fa_no_base_line "no kit Step 0 instruction with STACK=fastapi and PART=base"
-fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "the PART=agents copy comes before the pnpm format line"
-fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "needs a PART=agents instruction"
-fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "needs a PART=agents instruction"
+fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "comes before the format/verification-gate step"
+fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "needs a PART=agents instruction and a format/verification-gate step"
+fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "needs a PART=agents instruction and a format/verification-gate step"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

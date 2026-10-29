@@ -1403,7 +1403,7 @@ check_step0_before_install() {
   # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
   # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" s0 step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
+  local f bad="" fmt_name s0 step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1426,16 +1426,17 @@ check_step0_before_install() {
       agents_line=$(grep -nE 'STACK=.*PART=agents|PART=agents.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
       fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
       # FastAPI has no pnpm: its AGENTS.md copy must follow the verification-gate step instead.
-      if [[ "$st" == fastapi ]]; then fmt_line=$(grep -nE '^### [0-9]+[a-z]?\. Verification gate' "$f" | head -n 1 | cut -d: -f1 || true); fi
+      fmt_name="pnpm format line"
+      if [[ "$st" == fastapi ]]; then fmt_name="format/verification-gate step"; fmt_line=$(grep -nE '^### [0-9]+[a-z]?\. Verification gate' "$f" | head -n 1 | cut -d: -f1 || true); fi
       if [[ -z "$base_line" ]]; then
         bad+="$f — no kit Step 0 instruction with STACK=$st and PART=base"$'\n'
       elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
         bad+="$f:$base_line — the PART=base copy comes after the first install (line $inst)"$'\n'
       fi
       if [[ -z "$agents_line" || -z "$fmt_line" ]]; then
-        bad+="$f — needs a PART=agents instruction and a pnpm format line (the AGENTS.md copy must follow the format step)"$'\n'
+        bad+="$f — needs a PART=agents instruction and a ${fmt_name} (the AGENTS.md copy must follow it)"$'\n'
       elif [[ "$agents_line" -le "$fmt_line" ]]; then
-        bad+="$f:$agents_line — the PART=agents copy comes before the pnpm format line ($fmt_line); prettier would reformat AGENTS.md"$'\n'
+        bad+="$f:$agents_line — the PART=agents copy comes before the ${fmt_name} ($fmt_line); the AGENTS.md copy must follow it"$'\n'
       fi
     fi
     if [[ "$st" == fastapi && -n "$step0" ]]; then

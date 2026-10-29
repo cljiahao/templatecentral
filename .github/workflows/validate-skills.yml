@@ -150,6 +150,8 @@ jobs:
           [ "$(find "$t" -path "$t/*/template*" -name '*.cjs' | wc -l)" -gt 0 ] || { echo "no template cjs files found"; exit 1; }
           [ "$(find "$t/nextjs/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no nextjs template scripts found"; exit 1; }
           [ "$(find "$t/nextjs/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no nextjs template mjs files found"; exit 1; }
+          [ "$(find "$t/fastapi/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no fastapi template scripts found"; exit 1; }
+          [ "$(find "$t/fastapi/template" -name '*.py' | wc -l)" -gt 0 ] || { echo "no fastapi template python files found"; exit 1; }
           find "$t" -path "$t/*/template*" -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
           find "$t" -path "$t/*/template*" -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=warning
           find "$t" -path "$t/*/template*" -name '*.py' -print0 | xargs -0 -r -n1 python3 -c 'import os, py_compile, sys, tempfile; py_compile.compile(sys.argv[1], cfile=os.path.join(tempfile.mkdtemp(), "x.pyc"), doraise=True)'

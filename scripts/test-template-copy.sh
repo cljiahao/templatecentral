@@ -1317,8 +1317,8 @@ check 1 "$([[ "$FN_STACK" -gt 40 && "$FN_AGENTS" -eq 1 ]] && echo 1 || echo 0)" 
 fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
-check 0 "$(grep -c 'TC_GUARD' "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
-check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 20) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
+check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
+check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
 alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
 
