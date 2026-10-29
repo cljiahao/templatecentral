@@ -111,7 +111,7 @@ no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest;
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
 no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
-no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
+no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" "$S/scaffold/fastapi/template" "$S/scaffold/fastapi/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
 no_patterns() { rm -f "$SH/template/.claude/comment-hygiene-patterns.txt"; }
 no_ts_overlay() { rm -rf "$SH/template-ts"; }
 no_py_overlay() { rm -rf "$SH/template-py"; }
