@@ -33,7 +33,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 
 ### Adding a new stack
 
-1. Add reference files under `skills/scaffold/<stack>/` (e.g., `source-files.md`, `config-files.md`) and route to them from `skills/scaffold/SKILL.md`
+1. Add `skills/scaffold/<stack>/source-files.md`, the files it copies in `template/` (plus `template-agents/`, `template-tail/` and a `template.manifest` listing them; copy an existing stack's layout) and route to it from `skills/scaffold/SKILL.md`
 2. Add `skills/add/<capability>/<stack>.md` for each supported capability and its detection row in `skills/add/SKILL.md` (procedure: `skills/CONVENTIONS.md` §6)
 3. Add `.claude/rules/<stack>.md` with stack-specific agent rules
 4. Add the detection signal to the Stack Detection table in `AGENTS.md`
@@ -45,7 +45,7 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 - [ ] Version floors in skill files agree with `.claude/rules/*.md` (the floor of record)
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] `bash scripts/validate-manifest.sh` passes locally (validates `plugin.json` and `marketplace.json`)
-- [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if a `skills/scaffold/*/config-files.md` or anything under `skills/scaffold/*/template/` was touched (validates fenced JSON/JS config blocks and the template JSON/JS files)
+- [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if anything under `skills/scaffold/*/template/` was touched (validates the template JSON/JS files)
 - [ ] `bash scripts/test-harness-kit.sh` passes locally if any `skills/scaffold/shared/harness-kit*.md` file or anything under `skills/scaffold/shared/template*/` was touched
 - [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`), a `template.manifest` (shared or `<stack>/template.manifest`), the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched

@@ -55,9 +55,7 @@ def is_file_heading(path):
 
 def sources_for(stack):
     variant = "ts" if stack in TS_STACKS else "fastapi"
-    config = f"{stack}/config-files.md"
     return [
-        *([config] if os.path.exists(os.path.join(SCAFFOLD, config)) else []),
         f"{stack}/source-files.md",
         "shared/harness-kit.md",
         f"shared/harness-kit-{variant}.md",

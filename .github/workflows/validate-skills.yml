@@ -152,8 +152,13 @@ jobs:
           [ "$(find "$t/nextjs/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no nextjs template mjs files found"; exit 1; }
           [ "$(find "$t/nestjs/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no nestjs template scripts found"; exit 1; }
           [ "$(find "$t/nestjs/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no nestjs template mjs files found"; exit 1; }
-          find "$t" -path "$t/*/template*" -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
-          find "$t" -path "$t/*/template*" -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=warning
+          [ "$(find "$t/fastapi/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no fastapi template scripts found"; exit 1; }
+          [ "$(find "$t/fastapi/template" -name '*.py' | wc -l)" -gt 0 ] || { echo "no fastapi template python files found"; exit 1; }
+          [ "$(find "$t/vite-react/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no vite-react template scripts found"; exit 1; }
+          [ "$(find "$t/vite-react/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no vite-react template mjs files found"; exit 1; }
+          [ "$(find "$t/vite-react/template" -name '*.envsh' | wc -l)" -gt 0 ] || { echo "no vite-react template envsh files found"; exit 1; }
+          find "$t" -path "$t/*/template*" \( -name '*.sh' -o -name '*.envsh' \) -print0 | xargs -0 -r -n1 bash -n
+          find "$t" -path "$t/*/template*" \( -name '*.sh' -o -name '*.envsh' \) -print0 | xargs -0 -r shellcheck --severity=warning
           find "$t" -path "$t/*/template*" -name '*.py' -print0 | xargs -0 -r -n1 python3 -c 'import os, py_compile, sys, tempfile; py_compile.compile(sys.argv[1], cfile=os.path.join(tempfile.mkdtemp(), "x.pyc"), doraise=True)'
           find "$t" -path "$t/*/template*" \( -name '*.cjs' -o -name '*.mjs' \) -print0 | xargs -0 -r -n1 node --check
       - name: pre-guard.sh behavioral test

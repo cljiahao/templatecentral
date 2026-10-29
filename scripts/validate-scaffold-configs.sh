@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 # Deterministic scaffold-config validator.
-# Extracts every ```json fenced block from skills/scaffold/*/config-files.md (package.json,
-# tsconfig.json, settings-style configs, ...) and validates each as JSON with jq. tsconfig-style
-# blocks are JSONC, so a string-aware pass strips // and /* */ comments first (URLs like
-# "https://..." are preserved). Also extracts every ```js/```mjs/```javascript fenced block
-# (eslint.config.mjs and other JS config templates, all written as ESM) and syntax-checks each
-# with `node --check` (loaded as a module via a .mjs temp file).
-# A stack whose files live in skills/scaffold/<stack>/template/ is checked on the files
-# themselves: every *.json with jq (JSONC comments stripped first) and every *.js, *.mjs and *.cjs
-# with `node --check` (the nearest package.json decides how a .js file loads). The shared
-# template-settings-ts and template-settings-py trees are checked the same way and must each hold a
-# settings.json.
-# Reports every malformed block or file and exits 1, so a broken scaffold config template is caught
+# Checks the files in skills/scaffold/<stack>/template/ themselves: every *.json with jq (JSONC
+# comments stripped first, by a string-aware pass that keeps URLs like "https://..." intact) and
+# every *.js, *.mjs and *.cjs with `node --check` (the nearest package.json decides how a .js file
+# loads). The shared template-settings-ts and template-settings-py trees are checked the same way
+# and must each hold a settings.json.
+# Reports every malformed file and exits 1, so a broken scaffold config template is caught
 # by a PR check, not only by the optional monthly LLM scaffold-verify cron. Exits 1 when nothing
 # at all was validated, or when a stack's template.manifest has no JSON or JS file under its template/.
-# No `set -e`: a failing block is reported and the loop continues to the next one.
+# No `set -e`: a failing file is reported and the loop continues to the next one.
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || { echo "validate-scaffold-configs: jq not found" >&2; exit 2; }
@@ -39,55 +33,8 @@ strip_jsonc() {
     process.stdout.write(o);' 2>/dev/null
 }
 
-# split_fences <md-file> <fence-tag-ERE> <ext> — writes each matching fence body to
-# $workdir/<start-line>.<ext>, so failures can be reported by source line.
-split_fences() {
-  rm -f "$workdir"/*."$3" 2>/dev/null || true
-  awk -v dir="$workdir" -v ext="$3" -v open='^```('"$2"')[[:space:]]*$' '
-    $0 ~ open { inblk=1; out=dir "/" NR "." ext; next }
-    inblk && /^```[[:space:]]*$/ { close(out); inblk=0; next }
-    inblk { print > out }
-  ' "$1"
-}
-
 fail=0
 total=0
-
-for f in skills/scaffold/*/config-files.md; do
-  [ -f "$f" ] || continue
-
-  split_fences "$f" 'json' json
-  for blk in "$workdir"/*.json; do
-    [ -e "$blk" ] || continue
-    total=$((total + 1))
-    line=$(basename "$blk" .json)
-    if strip_jsonc < "$blk" | jq empty >/dev/null 2>&1; then
-      echo "  ok    $f:$line"
-    else
-      echo "  FAIL  $f:$line  — invalid JSON fence" >&2
-      strip_jsonc < "$blk" | jq empty 2>&1 | sed 's/^/          /' >&2
-      fail=1
-    fi
-  done
-
-  # All scaffold JS config templates (eslint.config.mjs, postcss.config.mjs, ...) are ESM, so
-  # every block is checked as a module regardless of its fence tag.
-  split_fences "$f" 'js|mjs|javascript' mjs
-  for blk in "$workdir"/*.mjs; do
-    [ -e "$blk" ] || continue
-    total=$((total + 1))
-    line=$(basename "$blk" .mjs)
-    err="$workdir/node_check_err"
-    if node --check "$blk" >/dev/null 2>"$err"; then
-      echo "  ok    $f:$line"
-    else
-      echo "  FAIL  $f:$line  — invalid JS fence" >&2
-      sed 's/^/          /' "$err" >&2
-      fail=1
-    fi
-    rm -f "$err"
-  done
-done
 
 # Template trees: the files are real, so they are checked directly.
 for tree in skills/scaffold/*/template skills/scaffold/shared/template-settings-*; do
@@ -118,7 +65,7 @@ for tree in skills/scaffold/*/template skills/scaffold/shared/template-settings-
 done
 
 # A stack with a template.manifest must have JSON or JS template files to validate, so deleting or
-# renaming its template/ tree cannot pass on the config fences of the other stacks.
+# renaming its template/ tree cannot pass on the other stacks' files.
 for manifest in skills/scaffold/*/template.manifest; do
   [ -f "$manifest" ] || continue
   stack_dir=$(dirname "$manifest")
@@ -141,11 +88,11 @@ for variant in ts py; do
 done
 
 if [ "$total" -eq 0 ]; then
-  echo "validate-scaffold-configs: no config fence or template file was found, so nothing was validated." >&2
+  echo "validate-scaffold-configs: no template file was found, so nothing was validated." >&2
   exit 1
 fi
 if [ "$fail" -ne 0 ]; then
   echo "validate-scaffold-configs: one or more scaffold config templates are malformed." >&2
   exit 1
 fi
-echo "validate-scaffold-configs: all $total JSON/JS config fences and template files valid."
+echo "validate-scaffold-configs: all $total JSON/JS template files valid."

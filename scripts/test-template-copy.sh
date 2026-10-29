@@ -154,8 +154,8 @@ PY
 check "" "$(cat "$T/manifest.diff")" "manifest_matches_tree"
 
 # ── template_sh_executable ───────────────────────────────────────────────────
-bad=$(cd "$REPO_ROOT" && git ls-files -s -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/nestjs/template*' | awk '$4 ~ /\.sh$/ && $1 != "100755" { print $4 }')
-count=$(git -C "$REPO_ROOT" ls-files -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/nestjs/template*' | grep -c '\.sh$' || true)
+bad=$(cd "$REPO_ROOT" && git ls-files -s -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' 'skills/scaffold/nestjs/template*' | awk '$4 ~ /\.sh$/ && $1 != "100755" { print $4 }')
+count=$(git -C "$REPO_ROOT" ls-files -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' 'skills/scaffold/nestjs/template*' | grep -c '\.sh$' || true)
 check "" "$bad" "template_sh_executable: git mode 100755 for every template .sh"
 check 1 "$([[ "$count" -gt 0 ]] && echo 1 || echo 0)" "template_sh_executable: at least one template .sh is tracked"
 
@@ -693,7 +693,7 @@ nxdoc=$(cat "$NX/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=stack`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=base`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
 # the nextjs docs carry no copy of the guard: the kit index holds the only one
-check 0 "$(grep -c 'TC_GUARD' "$NX/source-files.md" | awk -F: '{ s += $2 } END { print s + 0 }')" "nextjs_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NX/source-files.md" || true)" "nextjs_docs_hold_no_second_guard"
 run_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nextjs "")" 2>&1; }   # run_stack <target>
 run_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nextjs "")" 2>&1; } # run_agents <target>
 count_files() { find "$1" -type f | wc -l | tr -d ' '; }
@@ -1053,6 +1053,104 @@ echo CALLER_SURVIVED" 2>&1)
   check 1 "$([[ "$out" == *CALLER_SURVIVED* && "$out" == *Refusing* ]] && echo 1 || echo 0)" "zsh_stack_refusal_leaves_caller_shell_alive"
   check "$before" "$(snap "$tgt")" "zsh_stack_refusal_copies_nothing"
 fi
+# ── vite-react stack trees ───────────────────────────────────────────────────
+# The same copy as the nextjs trees above, run for STACK=vite-react.
+VR="$SK/vite-react"
+vrdoc=$(cat "$VR/source-files.md")
+# shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
+check 1 "$([[ "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=stack`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=base`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$VR/source-files.md" || true)" "vite_react_docs_hold_no_second_guard"
+check 0 "$([[ -e "$VR/config-files.md" ]] && echo 1 || echo 0)" "vite_react_has_no_config_files_md"
+run_vr_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" vite-react "")" 2>&1; }
+run_vr_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" vite-react "")" 2>&1; }
+N_VR=$(count_files "$VR/template")
+N_VR_AGENTS=$(count_files "$VR/template-agents")
+check 1 "$([[ "$N_VR" -gt 50 && "$N_VR_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "vite_react_trees_are_not_empty (template $N_VR files, template-agents $N_VR_AGENTS)"
+alt_vr() { rm -rf "$T/altvr-$1"; mkdir -p "$T/altvr-$1/scaffold/shared"; cp -Rp "$VR" "$T/altvr-$1/scaffold/vite-react"; echo "$T/altvr-$1/scaffold"; }
+
+# vite_react_manifest_matches_tree
+check "" "$(stack_manifest_diff "$VR")" "vite_react_manifest_matches_tree"
+sk=$(alt_vr mf-unlisted); printf 'x\n' > "$sk/vite-react/template/zz-unlisted.txt"
+check 1 "$([[ "$(stack_manifest_diff "$sk/vite-react")" == *"UNLISTED template/zz-unlisted.txt"* ]] && echo 1 || echo 0)" "vite_react_manifest_matches_tree: an unlisted file is reported"
+sk=$(alt_vr mf-ghost); printf 'template/ghost.txt 644 - -\n' >> "$sk/vite-react/template.manifest"
+check 1 "$([[ "$(stack_manifest_diff "$sk/vite-react")" == *"MISSING template/ghost.txt"* ]] && echo 1 || echo 0)" "vite_react_manifest_matches_tree: a listed file without a file is reported"
+sk=$(alt_vr mf-empty); rm -rf "$sk/vite-react/template" "$sk/vite-react/template-agents"
+check 1 "$([[ "$(stack_manifest_diff "$sk/vite-react")" == *"EMPTYTREE"* ]] && echo 1 || echo 0)" "vite_react_manifest_matches_tree: an empty tree is reported"
+sk=$(alt_vr mf-ph); python3 -c 'import sys; p=sys.argv[1]; t=open(p).read(); open(p,"w").write(t.replace("__TC_PROJECT_NAME__","__TC_OTHER_NAME__"))' "$sk/vite-react/template/package.json"
+check 1 "$([[ "$(stack_manifest_diff "$sk/vite-react")" == *"PLACEHOLDERS template/package.json"* ]] && echo 1 || echo 0)" "vite_react_manifest_matches_tree: an undeclared placeholder is reported"
+sk=$(alt_vr mf-mode); chmod -x "$sk/vite-react/template/docker-entrypoint.sh"
+check 1 "$([[ "$(stack_manifest_diff "$sk/vite-react")" == "MODE template/docker-entrypoint.sh manifest 755 tree 644" ]] && echo 1 || echo 0)" "vite_react_manifest_matches_tree: a lost exec bit is reported"
+
+# placeholders_only_in_small_files, for vite-react
+check "" "$(big_placeholders "$VR/template" "$VR/template-agents" "$SHARED"/template*)" "placeholders_only_in_small_files: vite-react with every shared tree"
+sk=$(alt_vr big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/vite-react/template/vite.config.ts"
+check 1 "$([[ "$(big_placeholders "$sk/vite-react/template")" == "BIG vite.config.ts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a vite-react placeholder in a file over 4 KB is reported"
+sk=$(alt_vr many-ph); for f in .npmrc .prettierrc .gitignore .dockerignore .env.example tsconfig.json; do printf '__TC_X__\n' >> "$sk/vite-react/template/$f"; done
+check 1 "$([[ "$(big_placeholders "$sk/vite-react/template")" == *"TOOMANY"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: more than 5 vite-react placeholder files is reported"
+
+# no_leftover_placeholders, for vite-react
+tgt="$T/vr-nlp"; mkdir -p "$tgt"
+out=$(run_step0 "$tgt" ts); out2=$(run_ci "$tgt" ts github); out3=$(run_vr_stack "$tgt"); out4=$(run_vr_agents "$tgt"); out4+=$(run_part "$tgt" vite-react late)
+check 1 "$([[ $(count_files "$tgt") -gt $((N_VR + N_VR_AGENTS)) ]] && echo 1 || echo 0)" "no_leftover_placeholders[vite-react]: the kit, CI and stack trees all copied ($out $out2 $out3 $out4)"
+before=$(grep -rln '__TC_' "$tgt" | sed "s|^$tgt/||" | LC_ALL=C sort | tr '\n' ' ')
+check "AGENTS.md docs/CONSTITUTION.md package.json " "$before" "no_leftover_placeholders[vite-react]: the placeholders are present before the substitution"
+substitute_placeholders "$tgt" "$REPO_ROOT/tests/golden/placeholders.env"
+check "" "$(grep -rn '__TC_' "$tgt" || true)" "no_leftover_placeholders[vite-react]: nothing is left after the substitution"
+check 1 "$([[ "$(grep -c '"name": "PROJECT_NAME_PLACEHOLDER"' "$tgt/package.json")" == 1 && "$(grep -c '^# AGENTS.md — \[Project Name\]$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "no_leftover_placeholders[vite-react]: the values landed where the golden holds them"
+declared=$(grep -v '^#' "$VR/template.manifest" | awk '$3 != "-" { print $3 }' | tr ',' '\n' | sed 's/^__TC_//; s/__$//' | LC_ALL=C sort -u)
+check "" "$(comm -23 <(printf '%s\n' "$declared") <(printf '%s\n' "$valued"))" "no_leftover_placeholders[vite-react]: every declared placeholder has a value in placeholders.env"
+
+# copy_keeps_dotfiles[vite-react]
+tgt="$T/vr-copy"; mkdir -p "$tgt"
+out=$(run_vr_stack "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[vite-react]: stack copy exits 0 ($out)"
+missing=""
+for p in .dockerignore .env.example .gitignore .npmrc .prettierignore .prettierrc docker-entrypoint.sh docker/15-frame-protection.envsh package.json src/main.tsx src/features/example/schemas/index.ts .claude/skills/vite-verify/SKILL.md; do
+  [[ -f "$tgt/$p" ]] || missing+=" $p"
+done
+check "" "$missing" "copy_keeps_dotfiles[vite-react]: dotfiles and nested files arrived"
+check 1 "$([[ -x "$tgt/docker-entrypoint.sh" && "$(modeof "$tgt/docker-entrypoint.sh")" == 755 ]] && echo 1 || echo 0)" "template_sh_executable[vite-react]: docker-entrypoint.sh keeps its exec bit"
+check 1 "$([[ ! -e "$tgt/.claude/skills/vite-verify/SKILL.md.tmpl" ]] && echo 1 || echo 0)" "copy_strips_tmpl_suffix[vite-react]: no .tmpl file in the project"
+stray=""
+for p in template template-agents template-tail template.manifest vite-react ci; do [[ -e "$tgt/$p" ]] && stray+=" $p"; done
+check "" "$stray" "copy_keeps_dotfiles[vite-react]: no stray directory or manifest in the target"
+check "$N_VR" "$(count_files "$tgt")" "copy_keeps_dotfiles[vite-react]: exactly the template tree was written"
+check 1 "$([[ ! -e "$tgt/AGENTS.md" ]] && echo 1 || echo 0)" "copy_keeps_dotfiles[vite-react]: AGENTS.md waits for the second copy"
+out=$(run_vr_agents "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[vite-react]: agents copy exits 0 ($out)"
+check 1 "$([[ -f "$tgt/AGENTS.md" ]] && cmp -s "$tgt/AGENTS.md" "$VR/template-agents/AGENTS.md" && echo 1 || echo 0)" "copy_keeps_dotfiles[vite-react]: AGENTS.md is the template byte for byte"
+tgt="$T/vr-both"; mkdir -p "$tgt"
+out=$(run_step0 "$tgt" ts); ec=$?; out2=$(run_vr_stack "$tgt"); ec2=$?; out3=$(run_ci "$tgt" ts github); ec3=$?
+check 000 "$ec$ec2$ec3" "copy_keeps_dotfiles[vite-react]: Step 0, the stack copy and the CI copy all exit 0 ($out $out2 $out3)"
+
+# the stack copy refuses and writes nothing
+tgt="$T/vr-refuse"; mkdir -p "$tgt/src"; printf 'mine\n' > "$tgt/package.json"; printf 'mine\n' > "$tgt/src/main.tsx"
+before=$(snap "$tgt")
+out=$(run_vr_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"package.json"* && "$out" == *"src/main.tsx"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stack_copy_refuses_existing_file[vite-react]: nonzero, names every clashing path, ends with the stop line ($out)"
+check "$before" "$(snap "$tgt")" "stack_copy_refuses_existing_file[vite-react]: nothing written"
+tgt="$T/vr-tmpl-clash"; mkdir -p "$tgt/.claude/skills/vite-verify"; printf 'mine\n' > "$tgt/.claude/skills/vite-verify/SKILL.md"
+before=$(snap "$tgt")
+out=$(run_vr_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/skills/vite-verify/SKILL.md (exists)"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "stack_copy_refuses_existing_tmpl_target[vite-react]: nonzero and names SKILL.md (exists) ($out)"
+check "$before" "$(snap "$tgt")" "stack_copy_refuses_existing_tmpl_target[vite-react]: nothing written"
+tgt="$T/vr-refuse-agents"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/AGENTS.md"
+out=$(run_vr_agents "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "agents_copy_refuses_existing_file[vite-react]: nonzero and names AGENTS.md ($out)"
+sk=$(alt_vr ghost); printf 'template/zz-ghost.txt 644 - -\n' >> "$sk/vite-react/template.manifest"; mkdir -p "$T/vr-m1"
+saved=$SK; SK=$sk
+out=$(bash -c "$(render_sc "$STACK_SNIPPET" "$T/vr-m1" vite-react "")" 2>&1); ec=$?
+SK=$saved
+check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* && "$(snap "$T/vr-m1")" == . ]] && echo 1 || echo 0)" "stack_copy_refuses_manifest_line_without_file[vite-react]: nothing copied ($out)"
+tgt="$T/vr-modes"; mkdir -p "$tgt"; run_vr_stack "$tgt" >/dev/null; run_vr_agents "$tgt" >/dev/null
+bad=""
+while read -r p m _; do
+  case "$p" in template/*) f=${p#template/} ;; template-agents/*) f=${p#template-agents/} ;; *) continue ;; esac
+  f=${f%.tmpl}
+  [[ "$(modeof "$tgt/$f")" == "$m" ]] || bad+=" $f"
+done < <(grep -v '^#' "$VR/template.manifest")
+check "" "$bad" "stack_copy_yields_manifest_modes[vite-react]"
+
 # ── validate-scaffold-configs.sh checks the stack template files ─────────────
 # vsc <shell snippet run in the scratch repo before the check> — echoes the check's output, then its exit code.
 vsc() {
@@ -1077,13 +1175,23 @@ if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: a renamed template/ tree fails while its manifest exists ($out)"
   out=$(vsc "find skills/scaffold/nextjs/template \\( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -delete")
   check 1 "$([[ "$out" == *"template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a template/ tree with no JSON or JS file ($out)"
+  out=$(vsc ':')
+  check 1 "$([[ "$out" == *"ok    skills/scaffold/vite-react/template/package.json"* && "$out" == *"ok    skills/scaffold/vite-react/template/tsconfig.json"* && "$out" == *"ok    skills/scaffold/vite-react/template/eslint.config.mjs"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_checks_vite_react_template_files: json and mjs files are validated ($out)"
+  out=$(vsc "printf '{' >> skills/scaffold/vite-react/template/package.json")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/vite-react/template/package.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_vite_react_json ($out)"
+  out=$(vsc "printf 'const = ;\\n' >> skills/scaffold/vite-react/template/postcss.config.mjs")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/vite-react/template/postcss.config.mjs"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_vite_react_mjs ($out)"
+  out=$(vsc "mv skills/scaffold/vite-react/template skills/scaffold/vite-react/template-moved")
+  check 1 "$([[ "$out" == *"vite-react  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_vite_react_anchor_deleted ($out)"
+  out=$(vsc "find skills/scaffold/vite-react/template \\( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -delete")
+  check 1 "$([[ "$out" == *"vite-react  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match_vite_react ($out)"
   out=$(vsc "printf '{' >> skills/scaffold/shared/template-settings-ts/.claude/settings.json")
   check 1 "$([[ "$out" == *"FAIL  skills/scaffold/shared/template-settings-ts/.claude/settings.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_settings_json ($out)"
   out=$(vsc "rm -rf skills/scaffold/shared/template-settings-py")
   check 1 "$([[ "$out" == *"template-settings-py  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a missing settings tree ($out)"
   out=$(vsc "rm -rf skills/scaffold/shared/template-settings-ts skills/scaffold/shared/template-settings-py")
   check 1 "$([[ "$out" == *"template-settings-ts  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: both settings trees gone ($out)"
-  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest skills/scaffold/shared/template-settings-*; rm -f skills/scaffold/*/config-files.md")
+  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest skills/scaffold/shared/template-settings-*")
   check 1 "$([[ "$out" == *"nothing was validated"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_nothing_is_validated ($out)"
 elif [[ "${CI:-}" == true ]]; then
   FAIL=$((FAIL + 1)); echo "FAIL: jq or node is missing but CI=true; the validate-scaffold-configs tests must run in CI"
@@ -1305,13 +1413,159 @@ tgt="$T/dist-nx-copy"; mkdir -p "$tgt"
 (SK="$dist/scaffold"; run_stack "$tgt") >/dev/null 2>&1
 check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count_files "$tgt")" == "$N_STACK" ]] && echo 1 || echo 0)" "dist_keeps_templates[nextjs]: the stack copy from the dist layout keeps dotfiles and exec bits"
 
+# ── fastapi stack trees ──────────────────────────────────────────────────────
+# Same trees, manifest and copy script as nextjs: <stack>/template (Step 1), template-agents (Step 6),
+# template-tail (appended on request), with kit Step 0 run for PART=stack and PART=agents.
+FA="${SHARED%/shared}/fastapi"
+fa_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" fastapi "")" 2>&1; }   # fa_stack <target>
+fa_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" fastapi "")" 2>&1; } # fa_agents <target>
+FN_STACK=$(count_files "$FA/template")
+FN_AGENTS=$(count_files "$FA/template-agents")
+check 1 "$([[ "$FN_STACK" -gt 40 && "$FN_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "fastapi trees are not empty (template $FN_STACK files, template-agents $FN_AGENTS)"
+fadoc=$(cat "$FA/source-files.md")
+# shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
+check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
+check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
+check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
+alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
+
+# fastapi_manifest_matches_tree
+check "" "$(stack_manifest_diff "$FA")" "fastapi_manifest_matches_tree"
+sk=$(alt_fa mf-unlisted); printf 'x\n' > "$sk/fastapi/template/zz-unlisted.txt"
+check 1 "$([[ "$(stack_manifest_diff "$sk/fastapi")" == *"UNLISTED template/zz-unlisted.txt"* ]] && echo 1 || echo 0)" "fastapi_manifest_matches_tree: an unlisted file is reported"
+sk=$(alt_fa mf-ghost); printf 'template/ghost.txt 644 - -\n' >> "$sk/fastapi/template.manifest"
+check 1 "$([[ "$(stack_manifest_diff "$sk/fastapi")" == *"MISSING template/ghost.txt"* ]] && echo 1 || echo 0)" "fastapi_manifest_matches_tree: a listed file without a file is reported"
+sk=$(alt_fa mf-empty); rm -rf "$sk/fastapi/template" "$sk/fastapi/template-agents"
+check 1 "$([[ "$(stack_manifest_diff "$sk/fastapi")" == *"EMPTYTREE"* ]] && echo 1 || echo 0)" "fastapi_manifest_matches_tree: an empty tree is reported"
+sk=$(alt_fa mf-ph); python3 -c 'import sys; p=sys.argv[1]; t=open(p).read(); open(p,"w").write(t.replace("__TC_PROJECT_TITLE__","__TC_OTHER_NAME__"))' "$sk/fastapi/template-agents/AGENTS.md"
+check 1 "$([[ "$(stack_manifest_diff "$sk/fastapi")" == *"PLACEHOLDERS template-agents/AGENTS.md"* ]] && echo 1 || echo 0)" "fastapi_manifest_matches_tree: an undeclared placeholder is reported"
+sk=$(alt_fa mf-mode); chmod 755 "$sk/fastapi/template/.gitignore"
+check 1 "$([[ "$(stack_manifest_diff "$sk/fastapi")" == *"MODE template/.gitignore"* ]] && echo 1 || echo 0)" "fastapi_manifest_matches_tree: a mode that differs from the manifest is reported"
+
+# placeholders_only_in_small_files, fastapi
+check "" "$(big_placeholders "$FA/template" "$FA/template-agents" "$SHARED"/template*)" "placeholders_only_in_small_files: fastapi with every shared tree"
+sk=$(alt_fa big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("# __TC_PROJECT_TITLE__\n"+"x"*5000+"\n")' "$sk/fastapi/template/pyproject.toml"
+check 1 "$([[ "$(big_placeholders "$sk/fastapi/template")" == "BIG pyproject.toml"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files[fastapi]: a placeholder in a file over 4 KB is reported"
+sk=$(alt_fa many-ph); for f in .gitignore .dockerignore .env.example pyproject.toml pyrightconfig.json requirements-dev.txt; do printf '__TC_X__\n' >> "$sk/fastapi/template/$f"; done
+check 1 "$([[ "$(big_placeholders "$sk/fastapi/template")" == *"TOOMANY"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files[fastapi]: more than 5 placeholder files is reported"
+
+# no_leftover_placeholders, fastapi
+tgt="$T/fa-nlp"; mkdir -p "$tgt"
+out=$(run_step0 "$tgt" py); out2=$(run_ci "$tgt" py github); out3=$(fa_stack "$tgt"); out4=$(fa_agents "$tgt"); out4+=$(run_part "$tgt" fastapi late)
+check 1 "$([[ $(count_files "$tgt") -gt $((FN_STACK + FN_AGENTS)) ]] && echo 1 || echo 0)" "no_leftover_placeholders[fastapi]: the kit, CI and stack trees all copied ($out $out2 $out3 $out4)"
+before=$(grep -rln '__TC_' "$tgt" | sed "s|^$tgt/||" | LC_ALL=C sort | tr '\n' ' ')
+check "AGENTS.md docs/CONSTITUTION.md " "$before" "no_leftover_placeholders[fastapi]: the placeholders are present before the substitution"
+substitute_placeholders "$tgt" "$REPO_ROOT/tests/golden/placeholders.env"
+check "" "$(grep -rn '__TC_' "$tgt" || true)" "no_leftover_placeholders[fastapi]: nothing is left after the substitution"
+check 1 "$([[ "$(grep -c '^# AGENTS.md — \[Project Name\]$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "no_leftover_placeholders[fastapi]: the value landed where the golden holds it"
+declared=$(grep -v '^#' "$FA/template.manifest" | awk '$3 != "-" { print $3 }' | tr ',' '\n' | sed 's/^__TC_//; s/__$//' | LC_ALL=C sort -u)
+check "" "$(comm -23 <(printf '%s\n' "$declared") <(printf '%s\n' "$valued"))" "no_leftover_placeholders[fastapi]: every declared placeholder has a value in placeholders.env"
+
+# copy_keeps_dotfiles[fastapi]
+tgt="$T/fa-copy"; mkdir -p "$tgt"
+out=$(fa_stack "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[fastapi]: stack copy exits 0 ($out)"
+missing=""
+for p in .dockerignore .env.example .gitignore Dockerfile docker-entrypoint.sh pyproject.toml pyrightconfig.json requirements-dev.txt src/.env.default src/main.py src/core/security_headers.py src/api/routers/example.py test/conftest.py test/test_api/test_health.py .claude/skills/api-verify/SKILL.md; do
+  [[ -f "$tgt/$p" ]] || missing+=" $p"
+done
+check "" "$missing" "copy_keeps_dotfiles[fastapi]: dotfiles and nested files arrived"
+check 1 "$([[ -x "$tgt/docker-entrypoint.sh" && "$(modeof "$tgt/docker-entrypoint.sh")" == 755 ]] && echo 1 || echo 0)" "template_sh_executable[fastapi]: docker-entrypoint.sh keeps its exec bit"
+check 1 "$([[ ! -e "$tgt/.claude/skills/api-verify/SKILL.md.tmpl" ]] && echo 1 || echo 0)" "copy_keeps_dotfiles[fastapi]: the skill is copied without the .tmpl suffix"
+stray=""
+for p in template template-agents template-tail template.manifest fastapi ci; do [[ -e "$tgt/$p" ]] && stray+=" $p"; done
+check "" "$stray" "copy_keeps_dotfiles[fastapi]: no stray directory or manifest in the target"
+check "$FN_STACK" "$(count_files "$tgt")" "copy_keeps_dotfiles[fastapi]: exactly the template tree was written"
+check 1 "$([[ ! -e "$tgt/AGENTS.md" && ! -e "$tgt/requirements.txt" ]] && echo 1 || echo 0)" "copy_keeps_dotfiles[fastapi]: AGENTS.md waits for the second copy and requirements.txt is not copied"
+out=$(fa_agents "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[fastapi]: agents copy exits 0 ($out)"
+check "$((FN_STACK + 1))" "$(count_files "$tgt")" "copy_keeps_dotfiles[fastapi]: the agents copy wrote one file"
+check 1 "$([[ -f "$tgt/AGENTS.md" ]] && cmp -s "$tgt/AGENTS.md" "$FA/template-agents/AGENTS.md" && echo 1 || echo 0)" "copy_keeps_dotfiles[fastapi]: AGENTS.md is the template byte for byte"
+tgt="$T/fa-both"; mkdir -p "$tgt"
+out=$(fa_stack "$tgt"); ec=$?; out2=$(run_step0 "$tgt" py); ec2=$?; out3=$(run_ci "$tgt" py github); ec3=$?
+check 000 "$ec$ec2$ec3" "copy_keeps_dotfiles[fastapi]: stack copy, Step 0 and the CI copy all exit 0 ($out $out2 $out3)"
+tgt="$T/fa-both2"; mkdir -p "$tgt"
+out=$(run_step0 "$tgt" py); ec=$?; out2=$(fa_stack "$tgt"); ec2=$?
+check 00 "$ec$ec2" "copy_keeps_dotfiles[fastapi]: Step 0 then the stack copy exit 0 ($out $out2)"
+
+# the fastapi stack copy refuses and writes nothing
+tgt="$T/fa-refuse"; mkdir -p "$tgt/src"; printf 'mine\n' > "$tgt/src/main.py"; printf 'mine\n' > "$tgt/Dockerfile"
+before=$(snap "$tgt")
+out=$(fa_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"src/main.py"* && "$out" == *"Dockerfile"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "fastapi_stack_copy_refuses_existing_file: nonzero, names every clashing path, ends with the stop line ($out)"
+check mine "$(cat "$tgt/src/main.py")" "fastapi_stack_copy_refuses_existing_file: existing file untouched"
+check "$before" "$(snap "$tgt")" "fastapi_stack_copy_refuses_existing_file: nothing written"
+tgt="$T/fa-tmpl-clash"; mkdir -p "$tgt/.claude/skills/api-verify"; printf 'mine\n' > "$tgt/.claude/skills/api-verify/SKILL.md"
+before=$(snap "$tgt")
+out=$(fa_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/skills/api-verify/SKILL.md (exists)"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "fastapi_stack_copy_refuses_existing_tmpl_target: nonzero and names SKILL.md (exists) ($out)"
+check "$before" "$(snap "$tgt")" "fastapi_stack_copy_refuses_existing_tmpl_target: nothing written"
+tgt="$T/fa-refuse-agents"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/AGENTS.md"
+out=$(fa_agents "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "fastapi_agents_copy_refuses_existing_file: nonzero and names AGENTS.md ($out)"
+check mine "$(cat "$tgt/AGENTS.md")" "fastapi_agents_copy_refuses_existing_file: existing AGENTS.md untouched"
+sk=$(alt_fa unlisted); printf 'x\n' > "$sk/fastapi/template/zz-unlisted.txt"; mkdir -p "$T/fa-m1"
+refuses_nx fastapi_stack_copy_refuses_unlisted_file "$sk" "$STACK_SNIPPET" "$T/fa-m1" fastapi
+sk=$(alt_fa ghost); printf 'template/zz-ghost.txt 644 - -\n' >> "$sk/fastapi/template.manifest"; mkdir -p "$T/fa-m2"
+refuses_nx fastapi_stack_copy_refuses_ghost_manifest_row "$sk" "$STACK_SNIPPET" "$T/fa-m2" fastapi
+mkdir -p "$T/fa-l1" "$T/fa-l1-real"; ln -s "$T/fa-l1-real" "$T/fa-l1/src"
+refuses_nx fastapi_stack_copy_refuses_symlink_parent "${SHARED%/shared}" "$STACK_SNIPPET" "$T/fa-l1" fastapi
+check . "$(snap "$T/fa-l1-real")" "fastapi_stack_copy_refuses_symlink_parent: nothing written through the link"
+refuses_raw fastapi_stack_ci_must_stay_empty "$(mkdir -p "$T/fa-v1" && render_sc "$STACK_SNIPPET" "$T/fa-v1" fastapi github)" "CI must stay empty"
+
+# validate-scaffold-configs.sh checks the fastapi template files
+if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  out=$(vsc ':')
+  check 1 "$([[ "$out" == *"ok    skills/scaffold/fastapi/template/src/core/uvicorn_log_config.json"* && "$out" == *"ok    skills/scaffold/fastapi/template/pyrightconfig.json"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_checks_fastapi_template_files: json files are validated ($out)"
+  out=$(vsc "printf '{' >> skills/scaffold/fastapi/template/pyrightconfig.json")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/fastapi/template/pyrightconfig.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_fastapi_template_json ($out)"
+  out=$(vsc "mv skills/scaffold/fastapi/template skills/scaffold/fastapi/template-moved")
+  check 1 "$([[ "$out" == *"fastapi  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted[fastapi]: a renamed template/ tree fails while its manifest exists ($out)"
+  out=$(vsc "find skills/scaffold/fastapi/template -name '*.json' -delete")
+  check 1 "$([[ "$out" == *"fastapi  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match[fastapi]: a template/ tree with no JSON file ($out)"
+fi
+
+# dist_keeps_templates[fastapi]
+python3 - "$FA" "$dist/scaffold/fastapi" > "$T/dist-fa.diff" <<'PY'
+import os, sys
+src, dist = sys.argv[1:]
+def listing(root):
+    out = {}
+    for tree in ("template", "template-agents", "template-tail"):
+        for dp, _, fs in os.walk(os.path.join(root, tree)):
+            for f in fs:
+                full = os.path.join(dp, f)
+                out[os.path.relpath(full, root)] = (os.stat(full).st_mode & 0o777, open(full, "rb").read())
+    return out
+a, b = listing(src), (listing(dist) if os.path.isdir(dist) else {})
+if not a:
+    print("EMPTY source fastapi templates")
+for p in sorted(a):
+    if p not in b:
+        print("LOST", p)
+    elif a[p][0] != b[p][0]:
+        print("MODE", p, "%o" % a[p][0], "%o" % b[p][0])
+    elif a[p][1] != b[p][1]:
+        print("CONTENT", p)
+for p in sorted(b):
+    if p not in a:
+        print("EXTRA", p)
+if not os.path.isfile(os.path.join(dist, "template.manifest")):
+    print("LOST template.manifest")
+PY
+check "" "$(cat "$T/dist-fa.diff")" "dist_keeps_templates[fastapi]"
+tgt="$T/dist-fa-copy"; mkdir -p "$tgt"
+(SK="$dist/scaffold"; fa_stack "$tgt") >/dev/null 2>&1
+check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count_files "$tgt")" == "$FN_STACK" ]] && echo 1 || echo 0)" "dist_keeps_templates[fastapi]: the stack copy from the dist layout keeps dotfiles and exec bits"
+
 # ── nestjs stack trees ───────────────────────────────────────────────────────
 # Same copy and the same checks as the nextjs trees: kit Step 0's guard run with PART=stack and PART=agents.
 NS="$REPO_ROOT/skills/scaffold/nestjs"
 nsdoc=$(cat "$NS/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=stack`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=base`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
-check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
 run_ns_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nestjs "")" 2>&1; }   # run_ns_stack <target>
 run_ns_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nestjs "")" 2>&1; } # run_ns_agents <target>
 NS_STACK=$(count_files "$NS/template")

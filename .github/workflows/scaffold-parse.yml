@@ -1,15 +1,12 @@
 name: Scaffold Parse (deterministic)
-# Deterministic PR gate over the scaffold config templates: extracts every ```json fenced block
-# from skills/scaffold/*/config-files.md and validates it with jq (JSONC comments stripped first),
-# and every ```js/```mjs/```javascript fenced block (eslint.config.mjs and friends) and
-# syntax-checks it with `node --check`. The files in skills/scaffold/<stack>/template/ are checked
-# the same way (*.json with jq, *.js/*.mjs/*.cjs with node --check). A malformed scaffold config
+# Deterministic PR gate over the scaffold config templates: the files in
+# skills/scaffold/<stack>/template/ are checked (*.json with jq, JSONC comments stripped first;
+# *.js/*.mjs/*.cjs with node --check). A malformed scaffold config
 # template fails this check on the PR — no LLM, no monthly cron (that is scaffold-verify.yml, which
 # stays as the end-to-end complement).
 on:
   pull_request:
     paths:
-      - "skills/scaffold/**/config-files.md"
       - "skills/scaffold/*/template/**"
       - "skills/scaffold/shared/template*/**"
       - "scripts/validate-scaffold-configs.sh"
@@ -17,7 +14,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "skills/scaffold/**/config-files.md"
       - "skills/scaffold/*/template/**"
       - "skills/scaffold/shared/template*/**"
       - "scripts/validate-scaffold-configs.sh"
@@ -35,5 +31,5 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # jq and node are preinstalled on the ubuntu-24.04 runner image; both are required (node also runs the
       # JS/MJS syntax check, not just the JSONC-comment-stripper fast path).
-      - name: Validate scaffold JSON/JS config fences
+      - name: Validate scaffold JSON/JS config templates
         run: bash scripts/validate-scaffold-configs.sh

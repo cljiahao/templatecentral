@@ -1,0 +1,24 @@
+#!/bin/sh
+# APPCENTRAL_PORTAL_ORIGIN (injected by appCentral at runtime) is the only origin allowed to
+# frame this app. It must be exactly one https origin — ^https://[a-z0-9-]+(\.[a-z0-9-]+)+$ —
+# with no path, port, wildcard, quotes, whitespace, semicolons or newlines, so it can never
+# inject extra CSP directives or headers. Unset or invalid denies all framing.
+tc_portal_host=
+case "${APPCENTRAL_PORTAL_ORIGIN:-}" in
+  https://*) tc_portal_host=${APPCENTRAL_PORTAL_ORIGIN#https://} ;;
+esac
+case "$tc_portal_host" in
+  "" | *[!abcdefghijklmnopqrstuvwxyz0123456789.-]* | .* | *. | *..*) tc_portal_host= ;;
+  *.*) ;;
+  *) tc_portal_host= ;;
+esac
+
+if [ -n "$tc_portal_host" ]; then
+  export TC_FRAME_ANCESTORS="https://$tc_portal_host"
+  # Empty: nginx skips an add_header whose value is empty, so X-Frame-Options is not sent.
+  export TC_X_FRAME_OPTIONS=""
+else
+  export TC_FRAME_ANCESTORS="'none'"
+  export TC_X_FRAME_OPTIONS="DENY"
+fi
+unset tc_portal_host

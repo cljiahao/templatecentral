@@ -70,7 +70,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--max-turns 160 --allowedTools Read,Glob,Grep,Write,Edit,Bash"
           prompt: |
-            Follow skills/scaffold/${{ matrix.stack }}/source-files.md (and config-files.md where the stack has one) to
+            Follow skills/scaffold/${{ matrix.stack }}/source-files.md to
             scaffold a brand-new project into /tmp/scaffold-e2e EXACTLY as written - no
             improvisation, use GitHub Actions CI (seed .github/workflows/ci.yml, not the Azure
             pipeline), no silently fixing template bugs. Then run that stack's quality

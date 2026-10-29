@@ -1,0 +1,13 @@
+---
+name: api-verify
+description: Run pyright, ruff lint, and pytest for this FastAPI project in one pass
+allowed-tools: Bash(python *), Bash(ruff *)
+---
+
+Run all quality checks in sequence:
+
+```bash
+python -m pyright src/ && ruff check src/ && python -m pytest test/ -q
+```
+
+Report failures with the exact error output. Fix before proceeding.

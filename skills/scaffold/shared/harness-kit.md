@@ -1,6 +1,6 @@
 <!-- ref: scaffold/shared/harness-kit.md
      loaded-by: scaffold/<stack>/source-files.md + migrate/general/phase-4-upgrade.md + migrate/general/phase-5-health-check.md → scaffold/SKILL.md | migrate/SKILL.md
-     prereq: Stack identified and the target directory created (nextjs and nestjs load this file at their Step 1, before copying their files; the other stacks load it after writing their app and config files), or migrate Phase 4/5 in progress. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold and templatecentral:migrate skills. -->
+     prereq: Stack identified and the target directory created (every templated stack loads this file at its Step 1, before copying its files), or migrate Phase 4/5 in progress. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold and templatecentral:migrate skills. -->
 
 # Shared Harness Kit
 

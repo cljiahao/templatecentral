@@ -110,10 +110,11 @@ PY
 no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest; }
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
-# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
-no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
-# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
-no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
+# Every templated stack; the empty-match helpers below empty all of them, so a check that scans the
+# stacks still sees nothing.
+TEMPLATED_TREES=(nextjs vite-react fastapi nestjs)
+no_yaml() { local d; find "$SH"/template* \( -name '*.yml' -o -name '*.yaml' \) -delete; for d in "${TEMPLATED_TREES[@]}"; do find "$S/scaffold/$d/template" "$S/scaffold/$d/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; done; }
+no_scannable() { local d; find "$SH"/template* -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; for d in "${TEMPLATED_TREES[@]}"; do find "$S/scaffold/$d/template" "$S/scaffold/$d/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; done; }
 no_patterns() { rm -f "$SH/template/.claude/comment-hygiene-patterns.txt"; }
 no_ts_overlay() { rm -rf "$SH/template-ts"; }
 no_py_overlay() { rm -rf "$SH/template-py"; }
@@ -230,6 +231,49 @@ PY
 nx_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
 nx_agents_before_format() { printf 'Run kit Step 0 with STACK=nextjs and PART=agents.\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
 nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
+# vite-react stack trees (skills/scaffold/vite-react/template, template-agents, template.manifest)
+VRD() { echo "$S/scaffold/vite-react"; }
+no_vr_templates() { rm -rf "$(VRD)/template" "$(VRD)/template-agents" "$(VRD)/template.manifest"; }
+no_vr_manifest() { rm -f "$(VRD)/template.manifest"; }
+no_vr_agents_tree() { rm -rf "$(VRD)/template-agents"; }
+no_vr_main_tree() { rm -rf "$(VRD)/template"; }
+vr_manifest_lists_missing() { printf 'template/zz-ghost.txt 644 - -\n' >> "$(VRD)/template.manifest"; }
+vr_unlisted_file() { printf 'x\n' > "$(VRD)/template/zz-unlisted.txt"; }
+vr_exec_bit_lost() { chmod -x "$(VRD)/template/docker-entrypoint.sh"; }
+vr_empty_dir() { mkdir -p "$(VRD)/template/zz-empty"; }
+vr_narration_in_sh() { printf '\n# Added a retry loop\n' >> "$(VRD)/template/docker-entrypoint.sh"; }
+vr_narration_in_yaml() { printf '\n# Removed the old setting\n' >> "$(VRD)/template/pnpm-workspace.yaml"; }
+vr_broken_yaml() { printf '  bad:\n- not: [valid\n' >> "$(VRD)/template/pnpm-workspace.yaml"; }
+vr_no_stack_copy() { strip_token 'PART=stack' 'PART=stac' "$(VRD)/source-files.md"; }
+vr_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(VRD)/source-files.md"; }
+vr_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(VRD)/source-files.md"; }
+vr_no_manifest_ref() { strip_token '<skill-dir>/vite-react/template.manifest' '<skill-dir>/vite-react/template.manifes' "$(VRD)/source-files.md"; }
+vr_wrong_stack() { strip_token 'STACK=vite-react' 'STACK=nestjs' "$(VRD)/source-files.md"; }
+vr_ref_header_deleted() { sed -i.bak '1d' "$(VRD)/source-files.md" && rm -f "$(VRD)/source-files.md.bak"; }
+headerless_md_beside_vr_template() { printf 'no header\n' > "$(VRD)/zz-note.md"; }
+pin_in_vr_template() { printf 'left-pad@1.3.0\n' >> "$(VRD)/template/.npmrc"; }
+secret_in_vr_template() { printf 'password = "hunter2hunter2"\n' >> "$(VRD)/template/.npmrc"; }
+marker_drift_in_vr_template() { strip_token 'vite-react@6.0.0' 'vite-react@99.0.0' "$(VRD)/template-agents/AGENTS.md"; }
+vr_base_after_install() { python3 - "$(VRD)/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=vite-react and PART=base.\n")
+PY
+}
+vr_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(VRD)/source-files.md"; }
+vr_agents_before_format() { printf 'Run kit Step 0 with STACK=vite-react and PART=agents.\n' | cat - "$(VRD)/source-files.md" > "$S/x" && mv "$S/x" "$(VRD)/source-files.md"; }
+vr_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(VRD)/source-files.md"; }
+exact_pin_in_vr_package() { python3 - "$(VRD)/template/package.json" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
+PY
+}
+vite_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(VRD)/template/.claude/skills/vite-verify/SKILL.md"; }
+vr_tmpl_and_plain_both_listed() { printf 'template/.claude/skills/vite-verify/SKILL.md 644 - -\n' >> "$(VRD)/template.manifest"; }
 # shellcheck disable=SC2016
 no_kit_stack_case() { strip_token 'stack | agents)' 'stack | agent)' "$SH/harness-kit.md"; }
 no_kit_sel_template() { strip_token 'SEL="template"' 'SEL="templat"' "$SH/harness-kit.md"; }
@@ -240,8 +284,8 @@ t = open(p, encoding="utf-8").read()
 open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
 PY
 }
-# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
-no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
+no_nx_package_json() { local d; for d in "${TEMPLATED_TREES[@]}"; do rm -f "$S/scaffold/$d/template/package.json"; done; }
+no_vr_package_json() { rm -f "$(VRD)/template/package.json"; }
 
 # nestjs stack trees (skills/scaffold/nestjs/template, template-agents, template.manifest)
 NSD() { echo "$S/scaffold/nestjs"; }
@@ -278,6 +322,9 @@ PY2
 }
 ns_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NSD)/source-files.md"; }
 ns_agents_before_format() { printf 'Run kit Step 0 with STACK=nestjs and PART=agents.\n' | cat - "$(NSD)/source-files.md" > "$S/x" && mv "$S/x" "$(NSD)/source-files.md"; }
+ns_no_format_line() { strip_token 'pnpm format' 'pnpm fmt' "$(NSD)/source-files.md"; }
+ns_symlinked_dir() { rm -rf "$(NSD)/template/src/config" && ln -s "$(NSD)/template/src/common" "$(NSD)/template/src/config"; }
+ns_symlinked_file() { rm "$(NSD)/template/.npmrc" && ln -s "$(NSD)/template/.prettierrc" "$(NSD)/template/.npmrc"; }
 ns_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NSD)/source-files.md"; }
 no_ad_line_nestjs() { strip_token 'A through D' 'A to D' "$(NSD)/source-files.md"; }
 nest_verify_bare_bash() { sed -i.bak 's/^allowed-tools: Bash(pnpm \*)/allowed-tools: Bash/' "$(NSD)/template/.claude/skills/nest-verify/SKILL.md.tmpl" && rm -f "$(NSD)/template/.claude/skills/nest-verify/SKILL.md.tmpl.bak"; }
@@ -289,14 +336,6 @@ t = open(p, encoding="utf-8").read()
 open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
 PY2
 }
-# The empty-match helpers above empty the nextjs trees; these empty the nestjs trees as well, so a
-# check that scans every templated stack still sees nothing.
-eval "before_nestjs_$(declare -f no_yaml)"
-no_yaml() { before_nestjs_no_yaml; find "$S/scaffold/nestjs/template" "$S/scaffold/nestjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
-eval "before_nestjs_$(declare -f no_scannable)"
-no_scannable() { before_nestjs_no_scannable; find "$S/scaffold/nestjs/template" "$S/scaffold/nestjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
-eval "before_nestjs_$(declare -f no_nx_package_json)"
-no_nx_package_json() { before_nestjs_no_nx_package_json; rm -f "$(NSD)/template/package.json"; }
 second_copy_script_in_enforcement() { python3 - "$SH/harness-kit.md" "$SH/harness-kit-enforcement.md" <<'PY'
 import sys
 src = open(sys.argv[1], encoding="utf-8").read()
@@ -496,6 +535,51 @@ PY
 }
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
 
+# fastapi stack trees (skills/scaffold/fastapi/template, template-agents, template-tail, template.manifest)
+FAD() { echo "$S/scaffold/fastapi"; }
+no_fa_templates() { rm -rf "$(FAD)/template" "$(FAD)/template-agents" "$(FAD)/template.manifest"; }
+no_fa_manifest() { rm -f "$(FAD)/template.manifest"; }
+no_fa_agents_tree() { rm -rf "$(FAD)/template-agents"; }
+no_fa_main_tree() { rm -rf "$(FAD)/template"; }
+fa_manifest_lists_missing() { printf 'template/zz-ghost.txt 644 - -\n' >> "$(FAD)/template.manifest"; }
+fa_unlisted_file() { printf 'x\n' > "$(FAD)/template/zz-unlisted.txt"; }
+fa_exec_bit_lost() { chmod -x "$(FAD)/template/docker-entrypoint.sh"; }
+fa_empty_dir() { mkdir -p "$(FAD)/template/zz-empty"; }
+fa_narration_in_sh() { printf '\n# Added a retry loop\n' >> "$(FAD)/template/docker-entrypoint.sh"; }
+fa_narration_in_py() { printf '\n# Removed the old handler\n' >> "$(FAD)/template/src/main.py"; }
+fa_narration_in_toml() { printf '\n# Removed the old rule\n' >> "$(FAD)/template/pyproject.toml"; }
+fa_no_stack_copy() { strip_token 'PART=stack' 'PART=stac' "$(FAD)/source-files.md"; }
+fa_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(FAD)/source-files.md"; }
+fa_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-files.md"; }
+fa_no_manifest_ref() { strip_token '<skill-dir>/fastapi/template.manifest' '<skill-dir>/fastapi/template.manifes' "$(FAD)/source-files.md"; }
+fa_no_agents_ref() { strip_token '<skill-dir>/fastapi/template-agents/' '<skill-dir>/fastapi/template-agent/' "$(FAD)/source-files.md"; }
+headerless_md_named_fa_template() { printf 'no header\n' > "$(FAD)/template-notes.md"; }
+fa_ref_header_deleted() { sed -i.bak '1d' "$(FAD)/source-files.md" && rm -f "$(FAD)/source-files.md.bak"; }
+headerless_md_beside_fa_template() { printf 'no header\n' > "$(FAD)/zz-note.md"; }
+pin_in_fa_template() { printf 'left-pad@1.3.0\n' >> "$(FAD)/template/.gitignore"; }
+secret_in_fa_template() { printf 'password = "hunter2hunter2"\n' >> "$(FAD)/template/.gitignore"; }
+marker_drift_in_fa_template() { strip_token 'fastapi@6.0.0' 'fastapi@99.0.0' "$(FAD)/template-agents/AGENTS.md"; }
+fa_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(FAD)/template/.claude/skills/api-verify/SKILL.md"; }
+fa_bare_bash_in_verify() { strip_token 'allowed-tools: Bash(python *), Bash(ruff *)' 'allowed-tools: Bash' "$(FAD)/template/.claude/skills/api-verify/SKILL.md.tmpl"; }
+fa_base_after_6b() { python3 - "$(FAD)/source-files.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=fastapi and PART=base.\n")
+PY
+}
+fa_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(FAD)/source-files.md"; }
+fa_agents_before_gate() { printf 'Run kit Step 0 with STACK=fastapi and PART=agents.\n' | cat - "$(FAD)/source-files.md" > "$S/x" && mv "$S/x" "$(FAD)/source-files.md"; }
+fa_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-files.md"; }
+nx_no_format_line() { strip_token 'pnpm format ' 'pnpm fmt ' "$(NXD)/source-files.md"; }
+vr_no_format_line() { strip_token 'pnpm format' 'pnpm fmt' "$(VRD)/source-files.md"; }
+fa_symlinked_dir() { rm -rf "$(FAD)/template/src/api" && ln -s "$(FAD)/template/src/core" "$(FAD)/template/src/api"; }
+fa_symlinked_file() { rm "$(FAD)/template/.gitignore" && ln -s "$(FAD)/template/.dockerignore" "$(FAD)/template/.gitignore"; }
+nx_symlinked_file() { rm "$(NXD)/template/.npmrc" && ln -s "$(NXD)/template/.prettierrc" "$(NXD)/template/.npmrc"; }
+vr_symlinked_dir() { rm -rf "$(VRD)/template/src/lib" && ln -s "$(VRD)/template/src/components" "$(VRD)/template/src/lib"; }
+fa_no_gate_heading() { strip_token '### 5. Verification gate' '### 5. Check' "$(FAD)/source-files.md"; }
+
 # the PART=ci runs of the copy script are scaffold-only; the migrate docs and Step B3 say so
 for entry in "migrate/general/phase-4-upgrade.md|runs of the copy script are scaffold-only" "migrate/general/phase-5-health-check.md|runs of the copy script are scaffold-only" "scaffold/shared/harness-kit-enforcement.md|runs of the copy script are scaffold-only"; do
   doc=${entry%%|*}; phrase=${entry#*|}
@@ -510,7 +594,7 @@ fastapi_step0_outside_6b() { python3 - "$S/scaffold/fastapi/source-files.md" <<'
 import sys
 p = sys.argv[1]
 lines = open(p, encoding="utf-8").read().split("\n")
-i = next(n for n, l in enumerate(lines) if "Step **0**" in l)
+i = next(n for n, l in enumerate(lines) if "`PART=base`" in l)
 moved = lines.pop(i)
 lines += ["", moved, ""]
 open(p, "w", encoding="utf-8").write("\n".join(lines))
@@ -535,6 +619,7 @@ fails nextjs_template_trees_fail_on_empty_directory "Template trees are complete
 fails nextjs_comment_narration_scans_template_sh "Change-narration comments" nx_narration_in_sh "Added a retry loop"
 fails nextjs_comment_narration_scans_template_yaml "Change-narration comments" nx_narration_in_yaml "Removed the old setting"
 fails nextjs_scaffold_seeds_fails_on_empty_match "Scaffold/migrate templates seed the complete harness" no_templates "template file not found"
+fails vite_react_scaffold_seeds_fails_on_empty_match "Scaffold/migrate templates seed the complete harness" no_templates "template file not found"
 if python3 -c 'import yaml' >/dev/null 2>&1; then
   fails nextjs_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" nx_broken_yaml "pnpm-workspace.yaml:"
 fi
@@ -567,7 +652,40 @@ fails scan_agents_marker_includes_nextjs_template "AGENTS.md schema marker not d
 fails nextjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" nx_base_after_install "comes after the first install"
 fails nextjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" nx_no_base_line "no kit Step 0 instruction with STACK=nextjs and PART=base"
 fails nextjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" nx_agents_before_format "comes before the pnpm format line"
-fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "needs a PART=agents instruction"
+fails nextjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" nx_no_agents_line "no PART=agents instruction"
+
+# ── vite-react stack trees ───────────────────────────────────────────────────
+fails vite_react_template_trees_fail_on_empty_match "Template trees are complete" no_vr_templates "vite-react/template: tree is missing or empty"
+fails vite_react_template_trees_fail_when_main_tree_deleted "Template trees are complete" no_vr_main_tree "vite-react/template: tree is missing or empty"
+fails vite_react_template_trees_fail_when_agents_tree_deleted "Template trees are complete" no_vr_agents_tree "vite-react/template-agents: tree is missing or empty"
+fails vite_react_template_trees_fail_when_manifest_deleted "Template trees are complete" no_vr_manifest "vite-react/template.manifest: file not found"
+fails vite_react_template_trees_fail_when_manifest_lists_missing_file "Template trees are complete" vr_manifest_lists_missing "which is not in the tree"
+fails vite_react_template_trees_fail_when_file_unlisted "Template trees are complete" vr_unlisted_file "is in the tree but not listed"
+fails vite_react_template_trees_fail_when_script_loses_exec_bit "Template trees are complete" vr_exec_bit_lost "is mode 644 but listed as 755"
+fails vite_react_template_trees_fail_on_empty_directory "Template trees are complete" vr_empty_dir "empty directory in a template tree"
+fails vite_react_comment_narration_scans_template_sh "Change-narration comments" vr_narration_in_sh "Added a retry loop"
+fails vite_react_comment_narration_scans_template_yaml "Change-narration comments" vr_narration_in_yaml "Removed the old setting"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  fails vite_react_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" vr_broken_yaml "pnpm-workspace.yaml:"
+fi
+fails vite_react_skilldir_refs_fails_on_empty_match "<skill-dir> references resolve" vr_no_stack_copy "scaffold/vite-react/source-files.md: copy instruction PART=stack missing"
+fails vite_react_skilldir_refs_fails_when_base_copy_deleted "<skill-dir> references resolve" vr_no_base_copy "scaffold/vite-react/source-files.md: copy instruction PART=base missing"
+fails vite_react_skilldir_refs_fails_when_agents_copy_deleted "<skill-dir> references resolve" vr_no_agents_copy "scaffold/vite-react/source-files.md: copy instruction PART=agents missing"
+fails vite_react_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> references resolve" vr_no_manifest_ref "scaffold/vite-react/source-files.md: copy instruction <skill-dir>/vite-react/template.manifest missing"
+fails vite_react_stack_value_fails_when_wrong "Scaffold runs kit Step 0 before the first install" vr_wrong_stack "must name STACK=vite-react"
+fails vite_react_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" vr_ref_header_deleted "vite-react/source-files.md"
+fails vite_react_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_vr_template "vite-react/zz-note.md"
+fails scan_version_pins_includes_vite_react_template "Version pins in skills" pin_in_vr_template "left-pad@1.3.0"
+fails scan_hardcoded_secrets_includes_vite_react_template "Hardcoded secrets" secret_in_vr_template "hunter2hunter2"
+fails scan_agents_marker_includes_vite_react_template "AGENTS.md schema marker not drifted" marker_drift_in_vr_template "template-agents/AGENTS.md"
+fails vite_react_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" vr_base_after_install "comes after the first install"
+fails vite_react_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" vr_no_base_line "no kit Step 0 instruction with STACK=vite-react and PART=base"
+fails vite_react_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" vr_agents_before_format "comes before the pnpm format line"
+fails vite_react_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" vr_no_agents_line "no PART=agents instruction"
+fails vite_react_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_vr_package "left-pad"
+fails vite_react_template_trees_fail_when_package_json_deleted "Template trees are complete" no_vr_package_json "template/package.json"
+fails vite_react_skill_md_fails_when_the_template_holds_one "Template trees hold no file named SKILL.md" vite_skill_md_appears "template/.claude/skills/vite-verify/SKILL.md"
+fails vite_react_template_trees_fail_when_a_tmpl_and_its_target_are_both_listed "Template trees are complete" vr_tmpl_and_plain_both_listed "both copy to"
 
 # ── the kit fences keep the stack and agents branches ────────────────────────
 fails skilldir_refs_fails_when_kit_stack_case_deleted "<skill-dir> references resolve" no_kit_stack_case "harness-kit.md: copy instruction stack | agents) missing"
@@ -692,11 +810,50 @@ fails scan_agents_marker_includes_nestjs_template "AGENTS.md schema marker not d
 fails nestjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" ns_base_after_install "comes after the first install"
 fails nestjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" ns_no_base_line "no kit Step 0 instruction with STACK=nestjs and PART=base"
 fails nestjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" ns_agents_before_format "comes before the pnpm format line"
-fails nestjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" ns_no_agents_line "needs a PART=agents instruction"
+fails nestjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" ns_no_agents_line "no PART=agents instruction"
 fails nestjs_steps_a_to_d_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" no_ad_line_nestjs "needs a \"Steps A through D\" instruction"
+fails nestjs_template_trees_fail_on_a_symlinked_directory "Template trees are complete" ns_symlinked_dir "src/config: symlink in a template tree"
+fails nestjs_template_trees_fail_on_a_symlinked_file "Template trees are complete" ns_symlinked_file ".npmrc: symlink in a template tree"
+fails nestjs_step0_fails_when_format_line_deleted "Scaffold runs kit Step 0 before the first install" ns_no_format_line "no pnpm format line for the PART=agents copy to follow"
 fails nestjs_template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nestjs_skill_md_appears "nestjs/template/.claude/skills/nest-verify/SKILL.md"
 fails nestjs_seeded_skills_fail_on_bare_bash "Seeded project skills declare scoped allowed-tools" nest_verify_bare_bash "nest-verify - bare Bash in allowed-tools"
 fails nestjs_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_ns_package "nestjs/template/package.json"
+# ── fastapi stack trees ──────────────────────────────────────────────────────
+fails fastapi_template_trees_fail_on_empty_match "Template trees are complete" no_fa_templates "fastapi/template: tree is missing or empty"
+fails fastapi_template_trees_fail_when_main_tree_deleted "Template trees are complete" no_fa_main_tree "fastapi/template: tree is missing or empty"
+fails fastapi_template_trees_fail_when_agents_tree_deleted "Template trees are complete" no_fa_agents_tree "fastapi/template-agents: tree is missing or empty"
+fails fastapi_template_trees_fail_when_manifest_deleted "Template trees are complete" no_fa_manifest "fastapi/template.manifest: file not found"
+fails fastapi_template_trees_fail_when_manifest_lists_missing_file "Template trees are complete" fa_manifest_lists_missing "which is not in the tree"
+fails fastapi_template_trees_fail_when_file_unlisted "Template trees are complete" fa_unlisted_file "is in the tree but not listed"
+fails fastapi_template_trees_fail_when_script_loses_exec_bit "Template trees are complete" fa_exec_bit_lost "is mode 644 but listed as 755"
+fails fastapi_template_trees_fail_on_empty_directory "Template trees are complete" fa_empty_dir "empty directory in a template tree"
+fails fastapi_comment_narration_scans_template_sh "Change-narration comments" fa_narration_in_sh "Added a retry loop"
+fails fastapi_comment_narration_scans_template_py "Change-narration comments" fa_narration_in_py "Removed the old handler"
+fails fastapi_comment_narration_scans_template_toml "Change-narration comments" fa_narration_in_toml "Removed the old rule"
+fails fastapi_skilldir_refs_fails_on_empty_match "<skill-dir> references resolve" fa_no_stack_copy "scaffold/fastapi/source-files.md: copy instruction PART=stack missing"
+fails fastapi_skilldir_refs_fails_when_base_copy_deleted "<skill-dir> references resolve" fa_no_base_copy "scaffold/fastapi/source-files.md: copy instruction PART=base missing"
+fails fastapi_skilldir_refs_fails_when_agents_copy_deleted "<skill-dir> references resolve" fa_no_agents_copy "scaffold/fastapi/source-files.md: copy instruction PART=agents missing"
+fails fastapi_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> references resolve" fa_no_manifest_ref "scaffold/fastapi/source-files.md: copy instruction <skill-dir>/fastapi/template.manifest missing"
+fails fastapi_skilldir_refs_fails_when_agents_ref_deleted "<skill-dir> references resolve" fa_no_agents_ref "scaffold/fastapi/source-files.md: copy instruction <skill-dir>/fastapi/template-agents/ missing"
+fails fastapi_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" fa_ref_header_deleted "fastapi/source-files.md"
+fails fastapi_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" headerless_md_beside_fa_template "fastapi/zz-note.md"
+fails fastapi_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" headerless_md_named_fa_template "fastapi/template-notes.md"
+fails fastapi_template_trees_fail_on_a_symlinked_directory "Template trees are complete" fa_symlinked_dir "src/api: symlink in a template tree"
+fails fastapi_template_trees_fail_on_a_symlinked_file "Template trees are complete" fa_symlinked_file ".gitignore: symlink in a template tree"
+fails nextjs_template_trees_fail_on_a_symlinked_file "Template trees are complete" nx_symlinked_file ".npmrc: symlink in a template tree"
+fails vite_react_template_trees_fail_on_a_symlinked_directory "Template trees are complete" vr_symlinked_dir "src/lib: symlink in a template tree"
+fails nextjs_step0_fails_when_format_line_deleted "Scaffold runs kit Step 0 before the first install" nx_no_format_line "no pnpm format line for the PART=agents copy to follow"
+fails vite_react_step0_fails_when_format_line_deleted "Scaffold runs kit Step 0 before the first install" vr_no_format_line "no pnpm format line for the PART=agents copy to follow"
+fails scan_version_pins_includes_fastapi_template "Version pins in skills" pin_in_fa_template "left-pad@1.3.0"
+fails scan_hardcoded_secrets_includes_fastapi_template "Hardcoded secrets" secret_in_fa_template "hunter2hunter2"
+fails scan_agents_marker_includes_fastapi_template "AGENTS.md schema marker not drifted" marker_drift_in_fa_template "template-agents/AGENTS.md"
+fails template_skill_md_fails_when_the_fastapi_template_holds_one "Template trees hold no file named SKILL.md" fa_skill_md_appears "template/.claude/skills/api-verify/SKILL.md"
+fails seeded_skills_scope_tools_fails_on_a_fastapi_template_skill_with_bare_bash "Seeded project skills declare scoped allowed-tools" fa_bare_bash_in_verify "bare Bash in allowed-tools"
+fails fastapi_step0_fails_when_base_copy_is_after_6b "Scaffold runs kit Step 0 before the first install" fa_base_after_6b "the Step 0 line must be in the step 6b section"
+fails fastapi_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" fa_no_base_line "no kit Step 0 instruction with STACK=fastapi and PART=base"
+fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "comes before the format/verification-gate step"
+fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "no PART=agents instruction"
+fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "no format/verification-gate step for the PART=agents copy to follow"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

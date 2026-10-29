@@ -253,10 +253,10 @@ check "MISMATCH $COMBO .gitleaks.toml" "$(grep '^MISMATCH' <<< "$out")" "from_te
 printf 'x\n' > "$T/sk-bad/shared/template/stray.txt"
 out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" --from-templates "$COMBO"); check "EXTRA $COMBO stray.txt" "$(grep '^EXTRA' <<< "$out")" "from_templates_extra_file_fails"
 rm -rf "$T/sk-bad"; mkdir -p "$T/sk-bad/shared/template"
-printf 'x\n' > "$T/sk-bad/shared/template/pyproject.toml"
+printf 'x\n' > "$T/sk-bad/shared/template/CLAUDE.md"
 out=$(TC_SCAFFOLD_DIR="$T/sk-bad" bash "$CHECK" "$COMBO"); ec=$?
 check 1 "$ec" "duplicate_fence_and_template_fails: exit"
-check "DUPLICATE $COMBO pyproject.toml" "$(grep '^DUPLICATE' <<< "$out")" "duplicate_fence_and_template_fails: DUPLICATE line"
+check "DUPLICATE $COMBO CLAUDE.md" "$(grep '^DUPLICATE' <<< "$out")" "duplicate_fence_and_template_fails: DUPLICATE line"
 
 # --tree: a generated project is compared against the expected tree
 tree="$T/project"
