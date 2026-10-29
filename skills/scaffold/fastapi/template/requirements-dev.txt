@@ -1,0 +1,6 @@
+pytest
+pytest-asyncio
+pytest-cov
+httpx2
+ruff
+pyright

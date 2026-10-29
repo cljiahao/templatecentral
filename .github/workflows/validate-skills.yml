@@ -150,6 +150,8 @@ jobs:
           [ "$(find "$t" -path "$t/*/template*" -name '*.cjs' | wc -l)" -gt 0 ] || { echo "no template cjs files found"; exit 1; }
           [ "$(find "$t/nextjs/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no nextjs template scripts found"; exit 1; }
           [ "$(find "$t/nextjs/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no nextjs template mjs files found"; exit 1; }
+          [ "$(find "$t/fastapi/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no fastapi template scripts found"; exit 1; }
+          [ "$(find "$t/fastapi/template" -name '*.py' | wc -l)" -gt 0 ] || { echo "no fastapi template python files found"; exit 1; }
           [ "$(find "$t/vite-react/template" -name '*.sh' | wc -l)" -gt 0 ] || { echo "no vite-react template scripts found"; exit 1; }
           [ "$(find "$t/vite-react/template" -name '*.mjs' | wc -l)" -gt 0 ] || { echo "no vite-react template mjs files found"; exit 1; }
           [ "$(find "$t/vite-react/template" -name '*.envsh' | wc -l)" -gt 0 ] || { echo "no vite-react template envsh files found"; exit 1; }

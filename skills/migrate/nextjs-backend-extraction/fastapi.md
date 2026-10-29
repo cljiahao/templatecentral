@@ -19,7 +19,6 @@ cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ## Phase 3 — Scaffold FastAPI (autonomous)
 
 ```bash
-cat "<skill-dir>/../scaffold/fastapi/config-files.md"
 cat "<skill-dir>/../scaffold/fastapi/source-files.md"
 ```
 

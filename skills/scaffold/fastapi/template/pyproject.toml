@@ -1,0 +1,31 @@
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+# `select`, not `extend-select`: ruff >=0.16 enables ~413 rules by default, and this is the
+# deliberate scaffold-verified set. Per-tier and deferral rationale: templatecentral:standards
+# code-standards (fastapi.md, comments.md).
+select = [
+  "E4", "E7", "E9", "F", "I",
+  "S", "B", "FAST", "SIM", "C4", "RET", "PT", "PIE", "UP",
+  "ERA", "PGH003", "PGH004", "RUF100", "TD005",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures/assertions and test doubles are not the bandit findings they look like.
+"test/**/*.py" = ["S101", "S105"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "test"]
+# Run `async def test_*` as coroutine tests without per-test markers.
+asyncio_mode = "auto"
+
+markers = [
+    "unit: unit tests",
+    "end_to_end: end to end tests",
+]
+
+addopts = [
+    "--import-mode=importlib",
+]

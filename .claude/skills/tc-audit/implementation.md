@@ -253,8 +253,8 @@ Apply these questions to every file. If the check is not applicable to that skil
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/scaffold/fastapi/config-files.md`
 - [ ] `skills/scaffold/fastapi/source-files.md`
+- [ ] `skills/scaffold/fastapi/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/fastapi.md`, `response_model` on every route, layered flow `api/` → `models/`. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/fastapi.md`
 - [ ] `skills/add/database/python.md` ← stack router
 - [ ] `skills/add/database/python/sqlalchemy.md`
