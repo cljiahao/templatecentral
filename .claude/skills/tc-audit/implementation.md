@@ -365,8 +365,8 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/scaffold/vite-react/config-files.md`
 - [ ] `skills/scaffold/vite-react/source-files.md`
+- [ ] `skills/scaffold/vite-react/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/vite-react.md`, no `process.env`, no `export default` outside tooling configs. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/vite-react.md`
 - [ ] `skills/add/feature/vite-react.md`
 - [ ] `skills/add/form/vite-react.md`

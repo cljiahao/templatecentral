@@ -76,7 +76,7 @@ have_python() { command -v python3 >/dev/null 2>&1; }
 
 # TEMPLATED_STACKS — the stacks whose verbatim files live in skills/scaffold/<stack>/template and
 # template-agents (listed in <stack>/template.manifest). Add a stack here once its files live in `template/`.
-TEMPLATED_STACKS=(nextjs)
+TEMPLATED_STACKS=(nextjs vite-react)
 # The trees the manifests list. template-tail files are appended to AGENTS.md, never copied as files.
 SHARED_TREES="template template-ts template-py template-ci template-settings-ts template-settings-py template-late template-tail"
 STACK_TREES="template template-agents template-tail"
@@ -821,6 +821,7 @@ need = {
     "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$dest"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"', "<skill-dir>/shared"],
     "scaffold/shared/harness-kit-enforcement.md": ["PART=ci", "CI=none", "PART=settings", "PART=late"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
+    "scaffold/vite-react/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=vite-react", "<skill-dir>/vite-react/template.manifest", "<skill-dir>/vite-react/template-agents/"],
 }
 for rel, toks in need.items():
     try: t = open(os.path.join(root, rel), encoding='utf-8').read()
