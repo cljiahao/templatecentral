@@ -110,7 +110,9 @@ PY
 no_templates() { rm -rf "$SH"/template "$SH"/template-* "$SH"/template.manifest; }
 no_shared() { rm -rf "$SH"; }
 no_hooks() { rm -rf "$SH"/template/.claude/hooks "$SH"/template-ts/.claude/hooks "$SH"/template-py/.claude/hooks; }
+# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
 no_yaml() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
+# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
 no_scannable() { find "$SH"/template* "$S/scaffold/nextjs/template" "$S/scaffold/nextjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
 no_patterns() { rm -f "$SH/template/.claude/comment-hygiene-patterns.txt"; }
 no_ts_overlay() { rm -rf "$SH/template-ts"; }
@@ -238,7 +240,62 @@ t = open(p, encoding="utf-8").read()
 open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
 PY
 }
+# shellcheck disable=SC2329  # redefined below, where the nestjs trees are emptied too
 no_nx_package_json() { rm -f "$(NXD)/template/package.json"; }
+
+# nestjs stack trees (skills/scaffold/nestjs/template, template-agents, template.manifest)
+NSD() { echo "$S/scaffold/nestjs"; }
+no_ns_templates() { rm -rf "$(NSD)/template" "$(NSD)/template-agents" "$(NSD)/template.manifest"; }
+no_ns_manifest() { rm -f "$(NSD)/template.manifest"; }
+no_ns_agents_tree() { rm -rf "$(NSD)/template-agents"; }
+no_ns_main_tree() { rm -rf "$(NSD)/template"; }
+ns_manifest_lists_missing() { printf 'template/zz-ghost.txt 644 - -\n' >> "$(NSD)/template.manifest"; }
+ns_unlisted_file() { printf 'x\n' > "$(NSD)/template/zz-unlisted.txt"; }
+ns_exec_bit_lost() { chmod -x "$(NSD)/template/docker-entrypoint.sh"; }
+ns_empty_dir() { mkdir -p "$(NSD)/template/zz-empty"; }
+ns_narration_in_sh() { printf '\n# Added a retry loop\n' >> "$(NSD)/template/docker-entrypoint.sh"; }
+ns_narration_in_yaml() { printf '\n# Removed the old setting\n' >> "$(NSD)/template/pnpm-workspace.yaml"; }
+ns_broken_yaml() { printf '  bad:\n- not: [valid\n' >> "$(NSD)/template/pnpm-workspace.yaml"; }
+ns_no_stack_copy() { strip_token 'PART=stack' 'PART=stac' "$(NSD)/source-files.md"; }
+ns_no_base_copy() { strip_token 'PART=base' 'PART=bas' "$(NSD)/source-files.md"; }
+ns_no_agents_copy() { strip_token 'PART=agents' 'PART=agent' "$(NSD)/source-files.md"; }
+ns_no_manifest_ref() { strip_token '<skill-dir>/nestjs/template.manifest' '<skill-dir>/nestjs/template.manifes' "$(NSD)/source-files.md"; }
+ns_wrong_stack() { strip_token 'STACK=nestjs' 'STACK=nextjs' "$(NSD)/source-files.md"; }
+ns_no_stack_value() { strip_token 'STACK=nestjs' 'STACK-nestjs' "$(NSD)/source-files.md"; }
+ns_ref_header_deleted() { sed -i.bak '1d' "$(NSD)/source-files.md" && rm -f "$(NSD)/source-files.md.bak"; }
+ns_headerless_md_beside_template() { printf 'no header\n' > "$(NSD)/zz-note.md"; }
+ns_headerless_md_named_template() { printf 'no header\n' > "$(NSD)/template-notes.md"; }
+pin_in_ns_template() { printf 'left-pad@1.3.0\n' >> "$(NSD)/template/.npmrc"; }
+secret_in_ns_template() { printf 'password = "hunter2hunter2"\n' >> "$(NSD)/template/.npmrc"; }
+marker_drift_in_ns_template() { strip_token 'nestjs@6.0.0' 'nestjs@99.0.0' "$(NSD)/template-agents/AGENTS.md"; }
+ns_base_after_install() { python3 - "$(NSD)/source-files.md" <<'PY2'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+assert "`PART=base`" in t
+open(p, "w", encoding="utf-8").write(t.replace("`PART=base`", "`PART=bas`") + "\nRun kit Step 0 with STACK=nestjs and PART=base.\n")
+PY2
+}
+ns_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NSD)/source-files.md"; }
+ns_agents_before_format() { printf 'Run kit Step 0 with STACK=nestjs and PART=agents.\n' | cat - "$(NSD)/source-files.md" > "$S/x" && mv "$S/x" "$(NSD)/source-files.md"; }
+ns_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NSD)/source-files.md"; }
+no_ad_line_nestjs() { strip_token 'A through D' 'A to D' "$(NSD)/source-files.md"; }
+nestjs_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(NSD)/template/.claude/skills/nest-verify/SKILL.md"; }
+exact_pin_in_ns_package() { python3 - "$(NSD)/template/package.json" <<'PY2'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace('"dependencies": {', '"dependencies": {\n    "left-pad": "1.3.0",', 1))
+PY2
+}
+# The empty-match helpers above empty the nextjs trees; these empty the nestjs trees as well, so a
+# check that scans every templated stack still sees nothing.
+eval "before_nestjs_$(declare -f no_yaml)"
+no_yaml() { before_nestjs_no_yaml; find "$S/scaffold/nestjs/template" "$S/scaffold/nestjs/template-agents" \( -name '*.yml' -o -name '*.yaml' \) -delete; }
+eval "before_nestjs_$(declare -f no_scannable)"
+no_scannable() { before_nestjs_no_scannable; find "$S/scaffold/nestjs/template" "$S/scaffold/nestjs/template-agents" -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -name '*.py' -o -name '*.cjs' \) -delete; }
+eval "before_nestjs_$(declare -f no_nx_package_json)"
+no_nx_package_json() { before_nestjs_no_nx_package_json; rm -f "$(NSD)/template/package.json"; }
 second_copy_script_in_enforcement() { python3 - "$SH/harness-kit.md" "$SH/harness-kit-enforcement.md" <<'PY'
 import sys
 src = open(sys.argv[1], encoding="utf-8").read()
@@ -604,6 +661,40 @@ fails_both copy_script_fails_when_the_tail_fence_is_gone "The copy script has ex
 fails_both copy_script_fails_when_it_mentions_template_tail "The copy script has exactly one copy" script_mentions_tail "the copy script mentions template-tail"
 fails migrate_inventory_fails_when_the_settings_tree_is_missing "migrate hook inventory matches" migrate_forgets_settings_tree "missing template anchor scaffold/shared/template-settings-ts/"
 fails migrate_inventory_fails_when_the_late_tree_is_missing "migrate hook inventory matches" migrate_forgets_late_tree "missing template anchor scaffold/shared/template-late/"
+
+# ── nestjs stack trees ───────────────────────────────────────────────────────
+fails nestjs_template_trees_fail_on_empty_match "Template trees are complete" no_ns_templates "nestjs/template: tree is missing or empty"
+fails nestjs_template_trees_fail_when_main_tree_deleted "Template trees are complete" no_ns_main_tree "nestjs/template: tree is missing or empty"
+fails nestjs_template_trees_fail_when_agents_tree_deleted "Template trees are complete" no_ns_agents_tree "nestjs/template-agents: tree is missing or empty"
+fails nestjs_template_trees_fail_when_manifest_deleted "Template trees are complete" no_ns_manifest "nestjs/template.manifest: file not found"
+fails nestjs_template_trees_fail_when_manifest_lists_missing_file "Template trees are complete" ns_manifest_lists_missing "which is not in the tree"
+fails nestjs_template_trees_fail_when_file_unlisted "Template trees are complete" ns_unlisted_file "is in the tree but not listed"
+fails nestjs_template_trees_fail_when_script_loses_exec_bit "Template trees are complete" ns_exec_bit_lost "is mode 644 but listed as 755"
+fails nestjs_template_trees_fail_on_empty_directory "Template trees are complete" ns_empty_dir "empty directory in a template tree"
+fails nestjs_comment_narration_scans_template_sh "Change-narration comments" ns_narration_in_sh "Added a retry loop"
+fails nestjs_comment_narration_scans_template_yaml "Change-narration comments" ns_narration_in_yaml "Removed the old setting"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  fails nestjs_yaml_parse_fails_when_template_yaml_broken "template yaml files parse" ns_broken_yaml "pnpm-workspace.yaml:"
+fi
+fails nestjs_skilldir_refs_fails_on_empty_match "<skill-dir> references resolve" ns_no_stack_copy "scaffold/nestjs/source-files.md: copy instruction PART=stack missing"
+fails nestjs_skilldir_refs_fails_when_base_copy_deleted "<skill-dir> references resolve" ns_no_base_copy "scaffold/nestjs/source-files.md: copy instruction PART=base missing"
+fails nestjs_skilldir_refs_fails_when_agents_copy_deleted "<skill-dir> references resolve" ns_no_agents_copy "scaffold/nestjs/source-files.md: copy instruction PART=agents missing"
+fails nestjs_skilldir_refs_fails_when_manifest_ref_deleted "<skill-dir> references resolve" ns_no_manifest_ref "scaffold/nestjs/source-files.md: copy instruction <skill-dir>/nestjs/template.manifest missing"
+fails nestjs_stack_value_fails_when_wrong "Scaffold runs kit Step 0 before the first install" ns_wrong_stack "must name STACK=nestjs"
+fails nestjs_stack_value_fails_when_missing "Scaffold runs kit Step 0 before the first install" ns_no_stack_value "must name STACK=nestjs"
+fails nestjs_ref_headers_fail_when_anchor_deleted "Ref file <!-- ref: --> headers" ns_ref_header_deleted "nestjs/source-files.md"
+fails nestjs_ref_headers_still_check_a_file_beside_the_trees "Ref file <!-- ref: --> headers" ns_headerless_md_beside_template "nestjs/zz-note.md"
+fails nestjs_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" ns_headerless_md_named_template "nestjs/template-notes.md"
+fails scan_version_pins_includes_nestjs_template "Version pins in skills" pin_in_ns_template "left-pad@1.3.0"
+fails scan_hardcoded_secrets_includes_nestjs_template "Hardcoded secrets" secret_in_ns_template "hunter2hunter2"
+fails scan_agents_marker_includes_nestjs_template "AGENTS.md schema marker not drifted" marker_drift_in_ns_template "template-agents/AGENTS.md"
+fails nestjs_step0_fails_when_base_copy_moves_after_install "Scaffold runs kit Step 0 before the first install" ns_base_after_install "comes after the first install"
+fails nestjs_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" ns_no_base_line "no kit Step 0 instruction with STACK=nestjs and PART=base"
+fails nestjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit Step 0 before the first install" ns_agents_before_format "comes before the pnpm format line"
+fails nestjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" ns_no_agents_line "needs a PART=agents instruction"
+fails nestjs_steps_a_to_d_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" no_ad_line_nestjs "needs a \"Steps A through D\" instruction"
+fails nestjs_template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nestjs_skill_md_appears "nestjs/template/.claude/skills/nest-verify/SKILL.md"
+fails nestjs_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_ns_package "nestjs/template/package.json"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

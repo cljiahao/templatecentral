@@ -29,8 +29,8 @@ the project has customised either, stop and show the user the current lines befo
 Load the current scaffold source for the stack and copy the named sections from it **verbatim**:
 
 ```bash
-cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # fastapi, nestjs
-cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # vite-react, nestjs
+cat "<skill-dir>/../scaffold/<stack>/source-files.md"   # fastapi
+cat "<skill-dir>/../scaffold/<stack>/config-files.md"   # vite-react
 ```
 
 For Next.js the scaffold files are real files; read the ones the steps below name:
@@ -40,6 +40,14 @@ cat "<skill-dir>/../scaffold/nextjs/template/src/lib/security/frame-protection.t
 cat "<skill-dir>/../scaffold/nextjs/template/test/lib/frame-protection.test.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/src/proxy.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/next.config.ts"
+```
+
+For NestJS the scaffold files are real files too; read the ones its steps below name:
+
+```bash
+cat "<skill-dir>/../scaffold/nestjs/template/src/config/env.config.ts"
+cat "<skill-dir>/../scaffold/nestjs/template/src/config/setups/security.setup.ts"
+cat "<skill-dir>/../scaffold/nestjs/template/test/config/security.setup.spec.ts"
 ```
 
 **Next.js** — `next.config.ts` `headers()` is resolved at build time, so the CSP and frame headers
@@ -84,7 +92,7 @@ to start, so a sourced entrypoint script always exports both values.
    `src/config/env.config.ts`. Do not validate it there: an invalid value must deny framing, not fail boot.
 2. In `src/config/setups/security.setup.ts`, add `PORTAL_ORIGIN_RE` and `portalFrameAncestor()`, set
    `'frame-ancestors': isDev ? null : [portal ?? "'none'"]` and
-   `frameguard: isDev || portal ? false : { action: 'deny' }`. Add `test/config/security.setup.spec.ts`.
+   `frameguard: isDev || portal ? false : { action: 'deny' }`. Add `test/config/security.setup.spec.ts` (the three files above).
 
 Next.js, NestJS and FastAPI: add the commented `APPCENTRAL_PORTAL_ORIGIN` line to `.env.example` (FastAPI: `src/.env.default`). Vite + React reads it only in the nginx container, so its `.env.example` (build-time `VITE_*`) does not change.
 

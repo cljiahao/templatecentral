@@ -288,8 +288,8 @@ Read each file in full, apply checklist above:
 
 Read each file in full, apply checklist above:
 
-- [ ] `skills/scaffold/nestjs/config-files.md`
 - [ ] `skills/scaffold/nestjs/source-files.md`
+- [ ] `skills/scaffold/nestjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nestjs.md`, DTOs use `createZodDto`, every endpoint has `@ApiTags()` + `@ApiOperation()`. `lint-skills.sh` already checks tree ↔ manifest
 - [ ] `skills/add/auth/nestjs.md`
 - [ ] `skills/add/database/typescript.md` ← stack router (NestJS + Next.js)
 - [ ] `skills/add/database/typescript/nestjs-drizzle.md`
