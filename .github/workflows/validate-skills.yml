@@ -177,6 +177,8 @@ jobs:
         run: bash scripts/count-load.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
+      - name: Fence snapshot freeze tests
+        run: bash scripts/check-fences-frozen.test.sh
       - name: Skill fence snapshot check
         run: bash scripts/check-fences.sh
       - name: Skill fence snapshot check (template files)
@@ -204,6 +206,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y python3-yaml
       - name: Each lint check fails on an empty match and on a deleted anchor
         run: bash scripts/lint-skills.test.sh
+
+  fence-snapshot-frozen:
+    name: Fence snapshot unchanged
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fail when the fence snapshot changed without the fence-snapshot-change label
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          FENCE_SNAPSHOT_CHANGE_OK: ${{ contains(github.event.pull_request.labels.*.name, 'fence-snapshot-change') && '1' || '' }}
+        run: bash scripts/check-fences-frozen.sh "origin/$BASE_REF"
 
   token-count:
     name: Scaffold load size

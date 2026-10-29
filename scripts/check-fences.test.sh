@@ -118,7 +118,7 @@ expect_fail "$r" "EXTRA skills/add/a.md :: Step 3 :: 0" "unmapped_fence"
 # empty match: no fence anywhere, no snapshot, nothing mapped
 r=$(fixture empty-md)
 for f in "$r"/skills/*/*.md; do printf '# no fences\n' > "$f"; done
-expect_fail "$r" "EMPTY no fence was found" "empty_markdown_matches_nothing"
+expect_fail "$r" "EMPTY no copy-verbatim fence was found" "empty_markdown_matches_nothing"
 r=$(fixture empty-snapshot)
 rm "$r"/tests/golden/fences/{add,migrate,standards}.tsv
 expect_fail "$r" "EMPTY the snapshot has no rows" "empty_snapshot"
@@ -180,7 +180,7 @@ mkdir -p "$r/skills/add/notes"; printf 'const c = 3;\n' > "$r/skills/add/notes/c
 printf 'skills/add/a.md\tStep 2\t1\tskills/add/notes/c.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "not under a template* directory" "mapping_outside_template_dir"
 r=$(fixture badmap-escape)
-printf 'x\n' > "$r/skills/add/template.ts"
+mkdir -p "$r/skills/add/template"; printf 'const c = 3;\n' > "$r/skills/add/template.ts"
 printf 'skills/add/a.md\tStep 2\t1\tskills/add/template/../template.ts\n' >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
 expect_fail "$r" "BADMAP" "mapping_with_dotdot"
 r=$(fixture badmap-key)
@@ -335,7 +335,7 @@ r=$(three slices-clash)
 mv_fence "$r" A 0 slice-a
 printf 'skills/add/s.md\tS\t0\tskills/add/template/A.ts\n' > "$r/tests/golden/fences/moved.d/slice-b.tsv"
 expect_fail "$r" "is mapped twice (slice-b.tsv and slice-a.tsv)" "same_fence_in_two_slices"
-r=$(three legacy)
+r=$(three only-tsv-read)
 mv_fence "$r" A 0 slice-a
 printf 'x\n' > "$r/tests/golden/fences/moved.d/notes.txt"
 expect_ok "$r" "only moved.d/*.tsv are read"
@@ -381,6 +381,56 @@ mkdir -p "$r/real"; mv "$r/skills/add/template/A.ts" "$r/real/A.ts"; rmdir "$r/s
 ln -s ../../real "$r/skills/add/template"
 expect_fail "$r" "goes through a symlink" "symlinked_template_directory"
 expect_fail "$r" "goes through a symlink" "symlinked_template_directory_from_templates" --from-templates
+
+# a mapped fence with the same bytes as an unmapped sibling is not a duplicate
+twin() { # twin <name> — one heading with two identical fences A, A; snapshotted; prints the root
+  local r; r=$(mkroot "$1")
+  printf '## S\n\n```ts\nA\n```\n\n```ts\nA\n```\n' > "$r/skills/add/s.md"
+  snapshot "$r"
+  mkdir -p "$r/skills/add/template"
+  printf 'A\n' > "$r/skills/add/template/A.ts"
+  printf 'skills/add/s.md\tS\t0\tskills/add/template/A.ts\n' > "$r/tests/golden/fences/moved.d/slice-a.tsv"
+  echo "$r"
+}
+r=$(twin twin-moved)
+printf '## S\n\nFile: `template/A.ts`.\n\n```ts\nA\n```\n' > "$r/skills/add/s.md"
+expect_ok "$r" "moving one of two identical fences passes"
+expect_ok "$r" "moving one of two identical fences passes from templates" --from-templates
+r=$(twin twin-kept)
+expect_fail "$r" "DUPLICATE skills/add/s.md :: S :: 0" "moved_fence_with_an_identical_twin_still_in_markdown"
+r=$(twin twin-extra)
+printf '## S\n\nFile: `template/A.ts`.\n\n```ts\nA\n```\n\n```ts\nB\n```\n' > "$r/skills/add/s.md"
+expect_fail "$r" "EXTRA skills/add/s.md :: S :: 1" "a_new_fence_beside_a_moved_one_is_extra"
+
+# every fence moved: nothing is left in the markdown and the check still passes
+r=$(mkroot all-moved)
+printf '## S\n\n```ts\nA\n```\n' > "$r/skills/add/s.md"
+snapshot "$r"
+mkdir -p "$r/skills/add/template"; printf 'A\n' > "$r/skills/add/template/A.ts"
+printf '## S\n\nFile.\n' > "$r/skills/add/s.md"
+printf 'skills/add/s.md\tS\t0\tskills/add/template/A.ts\n' > "$r/tests/golden/fences/moved.d/slice-a.tsv"
+for f in migrate standards; do
+  rm "$r/skills/$f/anchor.md"
+  printf 'File.\n' > "$r/skills/$f/anchor.md"
+  mkdir -p "$r/skills/$f/template"; printf 'a\n' > "$r/skills/$f/template/a.ts"
+  printf 'skills/%s/anchor.md\tA\t0\tskills/%s/template/a.ts\n' "$f" "$f" >> "$r/tests/golden/fences/moved.d/slice-a.tsv"
+done
+expect_ok "$r" "a tree whose fences all moved passes"
+
+# a list opener goes at most 3 spaces past the content column
+r=$(mkroot deep)
+printf -- '- item\n\n     ```ts\n     five: 1\n     ```\n\n       ```ts\n       seven: 1\n       ```\n' > "$r/skills/add/d.md"
+snapshot "$r"
+check 1 "$(rows_of "$r" skills/add/d.md)" "a fence 3 spaces past the list column is a fence, 5 past is indented code"
+
+# a whitespace-only line inside an indented fence does not round-trip
+r=$(mkroot ws-line)
+printf -- '- item\n\n  ```ts\n  x: 1\n  \n  y: 2\n  ```\n' > "$r/skills/add/s.md"
+snapshot "$r"
+mkdir -p "$r/skills/add/template"; printf 'x: 1\n\ny: 2\n' > "$r/skills/add/template/x.ts"
+printf -- '- item\n\nFile.\n' > "$r/skills/add/s.md"
+printf 'skills/add/s.md\t(top)\t0\tskills/add/template/x.ts\tindent=2\n' > "$r/tests/golden/fences/moved.d/a.tsv"
+expect_fail "$r" "MISMATCH" "whitespace_only_line_in_indented_fence"
 
 # --has-mappings: 0 with a row, 1 with none, 2 on a parse error
 r=$(three has-map)

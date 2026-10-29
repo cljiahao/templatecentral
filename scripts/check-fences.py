@@ -10,7 +10,7 @@ indentation change fails, and a file that replaces the fence must end in a newli
 final newline does not match).
 
 A fence opens at a line of 3 or more backticks or tildes indented by at most 3 spaces, or indented
-to the content column of the list item above it. A backtick opener whose info string holds a
+by 0 to 3 spaces past the content column of the list item above it. A backtick opener whose info string holds a
 backtick is not an opener. A fence closes at a line of the same character, at least as long, with
 nothing else on it.
 
@@ -23,7 +23,8 @@ Layout, under <root>/tests/golden/fences/:
                    starts with skills/ and has a template* directory in it; neither the file nor a
                    directory above it may be a symlink. indent=N means the markdown fence is indented
                    by N spaces: N spaces are added to every non-empty line of the file before hashing
-                   (a blank line of the fence must be empty). '#' starts a comment line.
+                   (a blank line of the fence must be empty: a line of only spaces inside an indented fence does not
+                   round-trip and fails as MISMATCH). '#' starts a comment line.
 
 Moving a fence leaves the index of its later siblings unchanged in the snapshot. The check drops the
 mapped rows, then pairs the remaining rows of each heading with the live fences of that heading in
@@ -43,7 +44,7 @@ Check results, one line each, exit 1 if any:
   DUPLICATE a mapped fence is still in the markdown
   BADMAP    a mapping row names no snapshot row, repeats one (in any file), points outside template*
             under skills/, goes through a symlink, or points at a missing file
-  EMPTY     nothing was compared
+  EMPTY     nothing was compared, or no copy-verbatim fence is left in the markdown and none is mapped
 Exit 0 ok, 1 differences, 2 usage or parse error.
 """
 import glob
@@ -82,7 +83,7 @@ def scan(path, rel):
             m = OPEN.match(line)
             if m and not (m.group(2)[0] == "`" and "`" in m.group(3)):
                 indent = len(m.group(1))
-                if indent <= 3 or (list_col is not None and indent >= list_col):
+                if indent <= 3 or (list_col is not None and list_col <= indent <= list_col + 3):
                     info = m.group(3).split()
                     fence, body = (m.group(2)[0], len(m.group(2)), (info[0] if info else "-").lower()), []
                     continue
@@ -264,8 +265,8 @@ def main(argv):
     live = {}
     for key, digest, _lang in found:
         live.setdefault(key[:2], []).append(digest)
-    if not live:
-        print("EMPTY no fence was found in skills/add, skills/migrate or skills/standards")
+    if not live and not mapped:
+        print("EMPTY no copy-verbatim fence was found in skills/add, skills/migrate or skills/standards, and none is mapped to a file")
         return 1
     groups = {}
     for key in snap:
@@ -273,12 +274,18 @@ def main(argv):
     for group in sorted(set(groups) | set(live)):
         rows = sorted(groups.get(group, []), key=lambda k: k[2])
         digests = list(live.get(group, []))
-        for k in rows:
-            if k in mapped and snap[k] in digests:
-                digests.remove(snap[k])
-                print(f"DUPLICATE {key_text(k)}")
-                bad = 1
         kept = [k for k in rows if k not in mapped]
+        # A mapped fence is still in the markdown only when the heading holds more fences than it has
+        # unmapped rows; it is reported when removing one copy lines the rest up with the rows; otherwise the surplus is EXTRA.
+        for k in rows:
+            if k in mapped and len(digests) > len(kept) and snap[k] in digests:
+                same = [i for i, d in enumerate(digests) if d == snap[k]]
+                want = [snap[x] for x in kept]
+                drop = next((i for i in same if (digests[:i] + digests[i + 1:])[:len(kept)] == want), None)
+                if drop is not None:
+                    del digests[drop]
+                    print(f"DUPLICATE {key_text(k)}")
+                    bad = 1
         for rank, k in enumerate(kept):
             compared += 1
             if rank >= len(digests):

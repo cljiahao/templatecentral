@@ -16,13 +16,18 @@
 #   2. replace the fence in the markdown with a pointer;
 #   3. add one row to moved.d/<slice>.tsv: file, heading, index, template path, and indent=N when
 #      the markdown fence is indented by N spaces (the file holds it without the indentation).
-#   A slice never edits <skill>.tsv: the snapshot keeps its keys, and the check pairs the unmapped
+#   A slice never edits <skill>.tsv, and CI enforces it: scripts/check-fences-frozen.sh fails a pull
+#   request that adds, changes or deletes tests/golden/fences/*.tsv. The only way through is a human
+#   adding the label `fence-snapshot-change` and re-running the job. A heading rename, a new fence and
+#   a reviewed content change are deliberate snapshot changes that take that label.
+#   The snapshot keeps its keys: the check pairs the unmapped
 #   rows of a heading with the live fences of that heading in order, so moving a fence does not
 #   renumber its siblings. The same fence in two slice files fails.
 #
 # What counts as the same bytes: the lines of the fence exactly as written, each ended by a newline.
 # A carriage return and the indentation are part of the line; a file without a final newline does not
-# match. Fences tagged bash, sh, shell, zsh or console are not tracked.
+# match; a line of only spaces inside an indented fence does not round-trip through indent=N, so keep
+# blank lines in an indented fence empty. Fences tagged bash, sh, shell, zsh or console are not tracked.
 # Details: scripts/check-fences.py. Exit 0 ok, 1 differences, 2 usage or parse error.
 set -uo pipefail
 
