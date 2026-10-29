@@ -665,30 +665,38 @@ check_duplicated_iam_blocks_match() {
     return
   fi
   local out
-  out=$(python3 - "$SKILLS_DIR" <<'PY'
-import sys
-root = sys.argv[1]
+  out=$(python3 - "$SKILLS_DIR" "$(dirname "${BASH_SOURCE[0]}")/check-fences.py" <<'PY'
+import importlib.util, os, sys
+skills, cf_path = sys.argv[1], sys.argv[2]
+root = os.path.dirname(os.path.abspath(skills))
 
-# Each pair is (label, canonical side, copy side). A side is one of
-#   ("fence", markdown file, heading anchor, fence language) — the first fence after the anchor line
-#   ("file", path)                                           — the whole file
-# with paths relative to the skills root, so either side can move into a template tree on its own.
+# check-fences.py owns the moved.d row format, the fence heading and the indent=N rule; load it
+# rather than re-implement them.
+spec = importlib.util.spec_from_file_location("check_fences", cf_path)
+cf = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cf)
+
+# Each pair is (label, canonical side, copy side). A side is (markdown file, anchor line, fence
+# language, index): the first fence of that language under the anchor's heading, after the anchor
+# line. The index is the fence's index under that heading in tests/golden/fences/*.tsv. Once a slice
+# moves the fence into a template file, the side resolves through that slice's row in
+# tests/golden/fences/moved.d/*.tsv (key: skills/<file>, heading, index), so no edit is needed here.
 PAIRS = [
     ("FastAPI IAM session.py",
-     ("fence", "add/database/python/sqlalchemy-iam.md", "### A4. Create `src/database/session.py`", "python"),
-     ("fence", "migrate/database/fastapi.md", "### Step 2 — Replace `src/database/session.py`", "python")),
+     ("add/database/python/sqlalchemy-iam.md", "### A4. Create `src/database/session.py`", "python", 0),
+     ("migrate/database/fastapi.md", "### Step 2 — Replace `src/database/session.py`", "python", 0)),
     ("FastAPI IAM alembic/env.py",
-     ("fence", "add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`", "python"),
-     ("fence", "migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python")),
+     ("add/database/python/sqlalchemy-iam.md", "### A6. Update `alembic/env.py`", "python", 0),
+     ("migrate/database/fastapi.md", "### Step 4 — Update `alembic/env.py`", "python", 0)),
     ("NestJS IAM KyselyService",
-     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:", "typescript"),
-     ("fence", "migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript")),
+     ("add/database/typescript/nestjs-kysely-iam.md", "Replace the entire contents of `kysely.service.ts` with:", "typescript", 0),
+     ("migrate/database/nestjs.md", "### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)", "typescript", 0)),
     ("NestJS IAM envSchema fields",
-     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`", "typescript"),
-     ("fence", "migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript")),
+     ("add/database/typescript/nestjs-kysely-iam.md", "Add IAM fields to `envSchema`", "typescript", 1),
+     ("migrate/database/nestjs.md", "### Step 10 — Update `src/config/env.config.ts`", "typescript", 0)),
     ("NestJS IAM serviceConfig mapping",
-     ("fence", "add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`", "typescript"),
-     ("fence", "migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript")),
+     ("add/database/typescript/nestjs-kysely-iam.md", "Then map the validated fields into `serviceConfig`", "typescript", 2),
+     ("migrate/database/nestjs.md", "Then map the validated fields into `serviceConfig`", "typescript", 1)),
 ]
 
 def read_text(path):
@@ -698,41 +706,92 @@ def read_text(path):
     except (OSError, UnicodeDecodeError):
         return None
 
-def fence_after(text, anchor, lang):
-    lines = text.split("\n")
-    start = next((i for i, l in enumerate(lines) if anchor in l), None)
-    if start is None:
-        return None
-    for i in range(start + 1, len(lines)):
-        if lines[i].strip() == '```' + lang:
-            j = i + 1
-            while j < len(lines) and not lines[j].startswith('```'):
-                j += 1
-            return "".join(l + "\n" for l in lines[i + 1:j])
-    return None
+def dedent(lines, n):
+    return "".join((l[n:] if l[:n] == " " * n else l.lstrip(" ")) + "\n" for l in lines)
 
-def resolve(side):
-    """Return (text, problem): the side's content, or why it could not be read."""
-    text = read_text(root + "/" + side[1])
+def fences(text):
+    """Return [(heading, start line, opener indent, lang, body lines)] and the (line, heading) of each line.
+
+    Opening and closing follow check-fences.py: an opener is 0 or more spaces, 3+ backticks or
+    tildes and an info string; a closer is the same character, at least as long, with nothing else.
+    """
+    lines = text.split("\n")
+    out, heading, cur, per_line = [], "(top)", None, []
+    for n, raw in enumerate(lines):
+        line = raw.rstrip("\r")
+        if cur is None:
+            h = cf.HEADING.match(line)
+            if h:
+                heading = h.group(1).replace("\t", " ")
+            m = cf.OPEN.match(line)
+            if m and not (m.group(2)[0] == "`" and "`" in m.group(3)):
+                info = m.group(3).split()
+                lang = (info[0] if info else "-").lower().split("{")[0]
+                cur = [heading, n, len(m.group(1)), lang, [], m.group(2)[0], len(m.group(2))]
+        else:
+            s = line.strip()
+            if s and set(s) == {cur[5]} and len(s) >= cur[6]:
+                out.append(tuple(cur[:5]))
+                cur = None
+            else:
+                cur[4].append(raw)
+        per_line.append(heading)
+    return out, per_line, lines
+
+def resolve(side, moved):
+    """Return (text, problem): the side's fence body without its indent, or why it could not be read."""
+    md, anchor, lang, index = side
+    text = read_text(skills + "/" + md)
     if text is None:
-        return None, "%s not found" % side[1]
-    if side[0] == "fence":
-        text = fence_after(text, side[2], side[3])
-        if text is None:
-            return None, "anchor/fence not found in %s (%r)" % (side[1], side[2])
-    if not text.strip():
-        return None, "%s is empty" % side[1]
-    return text, None
+        return None, "%s not found" % md
+    found, per_line, lines = fences(text)
+    at = next((n for n, l in enumerate(lines) if anchor in l), None)
+    if at is None:
+        return None, "anchor/fence not found in %s (%r)" % (md, anchor)
+    heading = per_line[at]
+    body = None
+    for h, start, indent, flang, blines in found:
+        if start > at and h == heading and flang == lang:
+            body = dedent(blines, indent)
+            break
+    if body is None:
+        row = moved.get(("skills/" + md, heading, index))
+        if row is None:
+            return None, "anchor/fence not found in %s (%r): no fence under %r and no moved.d row for index %d" % (md, anchor, heading, index)
+        tpl, indent, src = row
+        parts = tpl.split("/")
+        if parts[0] != "skills" or ".." in parts or not any(q.startswith("template") for q in parts[1:-1]):
+            return None, "moved.d row (%s) maps %s outside a template* directory of skills/" % (src, tpl)
+        if cf.symlink_in_chain(root, tpl):
+            return None, "moved.d row (%s) maps %s through a symlink" % (src, tpl)
+        try:
+            with open(os.path.join(root, tpl), "rb") as fh:
+                data = cf.reindent(fh.read(), indent)
+        except OSError:
+            return None, "mapped file %s (moved.d row %s) not found" % (tpl, src)
+        if data and not data.endswith(b"\n"):
+            return None, "mapped file %s must end in a newline" % tpl
+        body = dedent(data.decode("utf-8").split("\n")[:-1], indent)
+        md = tpl
+    if not body.strip():
+        return None, "%s is empty" % md
+    return body, None
+
+try:
+    moved = {(f, h, i): (tpl, ind, src) for src, f, h, i, tpl, ind in cf.read_moved(os.path.join(root, "tests", "golden", "fences"))}
+except (OSError, ValueError) as e:
+    print("moved.d unreadable: %s" % e)
+    moved = {}
 
 for label, canon, copy in PAIRS:
-    a, pa = resolve(canon)
-    b, pb = resolve(copy)
+    a, pa = resolve(canon, moved)
+    b, pb = resolve(copy, moved)
     if pa:
         print("%s: canonical %s" % (label, pa))
     elif pb:
         print("%s: copy %s" % (label, pb))
     elif a != b:
-        print("%s: %s has drifted from canonical %s" % (label, copy[1], canon[1]))
+        print("%s: %s has drifted from canonical %s" % (label, copy[0], canon[0]))
 PY
 )
   report "$out" \
@@ -1276,6 +1335,9 @@ except OSError:
 for tree in want_trees:
     root = os.path.join(shared, tree)
     n = 0
+    if os.path.islink(root):
+        print(f"{root}: symlink in a template tree")
+        continue
     for dp, ds, fs in os.walk(root):
         if not ds and not fs and dp != root:
             print(f"{dp}: empty directory in a template tree")
@@ -1290,6 +1352,8 @@ for tree in want_trees:
     if n == 0:
         print(f"{root}: tree is missing or empty")
 manifest = os.path.join(shared, "template.manifest")
+if not want_trees:
+    print(f"{manifest}: no template tree sits beside this manifest")
 listed = {}
 try:
     for line in open(manifest, encoding="utf-8"):
