@@ -263,7 +263,8 @@ check_ref_file_headers() {
   # a <!-- ref: --> comment so agents know the file's load path and purpose without reading the body.
   # Missing headers cause agents to silently skip context about how to load the file. TIMELESS.
   # The files under any template*/ tree are shipped verbatim into projects (the AGENTS.md seed starts
-  # with its own schema marker on line 1), so they are not reference files and are skipped. A skills tree with no reference file at all fails, so the check cannot pass on nothing.
+  # with its own schema marker on line 1), so they are not reference files and are skipped. A skills
+  # tree with no reference file at all fails, so the check cannot pass on nothing.
   header "Ref file <!-- ref: --> headers"
   local bad="" f firstline n=0
   while IFS= read -r f; do
