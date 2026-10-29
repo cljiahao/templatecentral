@@ -1,0 +1,54 @@
+# sha256	file	heading	index	lang
+a1e6580f299dcf646caa3bca92e5239117ff063c419f58465f1014c783f4c892	skills/migrate/database/drizzle-to-kysely.md	Step 10 — Update env vars	0	env
+3afcb251abb975c6b423b608fd32cc913210fbd7a8e5930830e00d9553a74252	skills/migrate/database/drizzle-to-kysely.md	Step 5 — Create `types.ts`	0	typescript
+cb2073a078e305f6a5db63227f4593213261bcea98495a2c7704fc1ce3691728	skills/migrate/database/drizzle-to-kysely.md	Step 8 — Write first Kysely migration for existing tables	0	typescript
+890153bc8c27b4635ebb37f249948ee09b5315b8e72e13c6a24a6cfdb3142767	skills/migrate/database/fastapi.md	Step 1 — Install boto3 + psycopg 3	0	-
+b8f0ac6de22f12c1d0f121261e76e464bf2473ea2353238af0d976c112e5b388	skills/migrate/database/fastapi.md	Step 2 — Replace `src/database/session.py`	0	python
+15b2394b865553e654d4f0b6b235eb4fe218597ae16920fd6c8c2430b2c56534	skills/migrate/database/fastapi.md	Step 3 — Update `src/core/config.py`	0	python
+ea4e65cc01a59a1450085773a50a9df425cd39ab5108d3972c41ca6133499e02	skills/migrate/database/fastapi.md	Step 4 — Update `alembic/env.py`	0	python
+4474740fd3acef64dfe8904ff0dc7e4adae3834199cc71ffca563c2c24074e9a	skills/migrate/database/fastapi.md	Step 4 — Update `alembic/env.py`	1	python
+942c6e8d10226b34a2d55d52f3170149143cb6114c92b922c364f892998bb74b	skills/migrate/database/fastapi.md	Step 5 — Update `src/.env` and `src/.env.default`	0	-
+df4d5aad55d5ef0f127edfc7828a34da218e7d451c27509264e150d71901d851	skills/migrate/database/nestjs.md	Step 10 — Update `src/config/env.config.ts`	0	typescript
+9a5ced2eef96bcdbcd37b469d3c91f5820ea777148e7a30f50aa67a8c9c2c27b	skills/migrate/database/nestjs.md	Step 10 — Update `src/config/env.config.ts`	1	typescript
+dfafeb0249623849a5c16ec1c2bb19cf2b4850cddf74a9eda7314edb64e4578a	skills/migrate/database/nestjs.md	Step 2 — Update `package.json` scripts	0	json
+a2554a9fb03ef8816db216eecb7422a3d87b7ea9a4963507f9df90b67860bae0	skills/migrate/database/nestjs.md	Step 4 — Create `src/database/kysely.service.ts` (IAM variant)	0	typescript
+45a3b669a4c5f345903c3e5181a2e8349a48f4b5f6821a5dc753479c4c5fbff7	skills/migrate/database/nestjs.md	Step 6 — Update `src/database/database.module.ts`	0	typescript
+365cc48bbd798f84f0e4f39872796f6fd13ce2627af9a22feb64e738b740e758	skills/migrate/database/nestjs.md	Step 7 — Create `src/database/migrate.ts`	0	typescript
+e94003fda9af58bc2a041ffd7681d6bb0168e7faf79885ff087a61ba16d9e900	skills/migrate/database/nextjs.md	Step 2 — Update `package.json` scripts	0	json
+d33f75d573493e46535431562a634bfc820abac99255296ca0d6bae19279dfef	skills/migrate/database/nextjs.md	Step 4 — Create `src/integrations/database/kysely-client.ts` (IAM variant)	0	typescript
+6221af3404985699b2973c74e78b3bfcb95b20b451adb93b47bfd69537e15d29	skills/migrate/database/nextjs.md	Step 6 — Create `src/integrations/database/migrate.ts`	0	typescript
+964536177d74a84a2d944d6277a36dcd444554b2ec21bb15cb122e45759036d1	skills/migrate/database/nextjs.md	Step 7 — Update `src/integrations/database/index.ts`	0	typescript
+bcbe89886d774fd454e93e146887439679957c043fe6f3299cc2f9c8b4fb04d4	skills/migrate/database/nextjs.md	Step 9 — Update query code in API routes and Server Components	0	typescript
+a4dd8d34b7ed32e1d474545e4d64c6b772bb50497597a3e5157a4356bfc7dae5	skills/migrate/general/implementation.md	If A — Light adoption	0	-
+ce111660992e116de4ddcfb412014f524f0f7138830550b070ade232b3069a7c	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	0	-
+63afea46864c2b44049a861dcb9cdf82fd0f0f3ee5e4264d26fcbb38489091a5	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	1	-
+91bc9016639205da6f506418a78e409597e78434dcb172d97beec99552871cfa	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	2	-
+b2ec8789e729ab7afee69570b289c7692ac762e8f774dea60cbe3c06b9adc20b	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	3	-
+42a6b0c290f0cb7fd21e10c1f8fd4c50a44e8344581b73cc22743f325ddafbb7	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	4	-
+7430ac98d01b9381257298a87503cd8795c21c639a15d6d0b8179829689de063	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	5	-
+292d96052b77f6db12a10e65d5018a063e2ff2f038febb3ee0fb4ed377618a8b	skills/migrate/general/implementation.md	Phase 2 — Human Decision ⛔ GATE	0	-
+67c6a3730dceacc69d73396503b52f0baa43dd30ebd37b35f8c435619c044d59	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	0	markdown
+336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	1	-
+9927eac45673a62f7f33c93c76d097fc948dc4fb1a4c8a623f408163d093f838	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	2	markdown
+1b14ad6ef54edfb3096e056a0dc82a51f8b6f6149e7c354bcfe5cb538911c89f	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	3	markdown
+41f002885586d70ed3e3535c20ef0d1f0eae81a36b2209be135579a520e5acb0	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	4	-
+0b3220ff1a4b2153cf9edd751f266edbc35167e23002d9d6eb57e55d4080b5a0	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	0	-
+833e41fb33ccb9e5376c223820b72a1efdd811f3b4f7dcdc871d945f7d3b3495	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	1	-
+3f61cb998b3b199a3b67a75501acab5af958b8f295acefa5191a60163d8294cf	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	2	-
+acf2c690a5f8ebcac3c71120d662f16d2c27f17ddfddb79149c53c9cb1181430	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	3	-
+232db5f669db552d12f33370a158ec793cfd7c097e331b18d5f9f97f9c29bbe5	skills/migrate/nextjs-backend-extraction/common.md	Phase 1 — Assessment (autonomous)	0	-
+8d4b776c4204ad37ff9878e5a6bf488f67b39ece5c86aa28606b1264f8149be7	skills/migrate/nextjs-backend-extraction/common.md	Phase 10 — Verify (autonomous)	0	-
+88e4108f6aa94ee5bd545f47250ff663fc82383f6dfa97fec989e3ca63daf6c2	skills/migrate/nextjs-backend-extraction/common.md	Phase 8 — Rewire Next.js Frontend (autonomous)	0	typescript
+06634b8be1d7c8f420e350b6cbad41e8c352da0f74e45ff4fba15106f97888d2	skills/migrate/nextjs-backend-extraction/common.md	Phase 8 — Rewire Next.js Frontend (autonomous)	1	-
+9e349e44f6fb78dda134878eae2146249d52c9c45a693a0d27ac3153d3256a5a	skills/migrate/nextjs-backend-extraction/common.md	Phase 9 — Update Config & Docs (autonomous)	0	-
+54b154cd5c0f01db8c416beb833481a9e7932aee8db3e957172c468a2e5a4747	skills/migrate/nextjs-backend-extraction/common.md	Phase 9 — Update Config & Docs (autonomous)	1	-
+292c06a8c97103ad9b7466957b5c681e47767167e3eb4d0d9ed9cec78d6d90c3	skills/migrate/nextjs-backend-extraction/fastapi.md	Phase 4 — Migrate API Routes (autonomous)	0	python
+296ff43ac8164d14619670b428175ef1587e5195c5a514ee0d949fe85737b4ee	skills/migrate/nextjs-backend-extraction/fastapi.md	Phase 4 — Migrate API Routes (autonomous)	1	python
+1d8a7b2d5e324b41c672f4ac1f5873417f921a9f0f4f9df8be26270131eceb39	skills/migrate/nextjs-backend-extraction/fastapi.md	Phase 4 — Migrate API Routes (autonomous)	2	python
+4e257e6c130682d3d2203677e4942c36c224b122905a7fca84fabb54f1b434e2	skills/migrate/nextjs-backend-extraction/fastapi.md	Phase 4 — Migrate API Routes (autonomous)	3	python
+8b170372052a3af136e75689e5cacc63a4a15cfa2e80c115f5ecfbffc702d251	skills/migrate/nextjs-backend-extraction/fastapi.md	Phase 5 — Migrate Integrations (autonomous)	0	python
+d6b9b5067229c7c8c622c3fc2390dfad601df2d0d948595529a5183ae4f45643	skills/migrate/nextjs-backend-extraction/nestjs.md	Phase 4 — Migrate API Routes (autonomous)	0	typescript
+9748efa20ea7b701f37804ee345f58283e940a911c6767fd7614297be113b8eb	skills/migrate/nextjs-backend-extraction/nestjs.md	Phase 4 — Migrate API Routes (autonomous)	1	typescript
+b14d2892bbe2383e3a13ef3310daac6095153f0b2d2ad12795efa11af954ac2c	skills/migrate/nextjs-backend-extraction/nestjs.md	Phase 4 — Migrate API Routes (autonomous)	2	typescript
+a15df27e1e398f77983ee2e5849b024ec6c67525a928ec16af644d5048a974d0	skills/migrate/nextjs-backend-extraction/nestjs.md	Phase 4 — Migrate API Routes (autonomous)	3	typescript
+c9d89d87b232790ec3a0caede0ebf3d12fd1fb7106818360d58169a86f7fa5e7	skills/migrate/nextjs-backend-extraction/nestjs.md	Phase 5 — Migrate Integrations (autonomous)	0	typescript
