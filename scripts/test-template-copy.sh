@@ -1426,7 +1426,7 @@ fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
-check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
+check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
 alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
 
@@ -1566,7 +1566,7 @@ nsdoc=$(cat "$NS/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=stack`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=base`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
-check 0 "$(grep -c '^```' "$NS/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "nestjs_docs_hold_no_verbatim_file_fences: only command fences remain"
+check 0 "$(grep -c '^```' "$NS/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "nestjs_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$NS/config-files.md" ]] && echo 1 || echo 0)" "nestjs_has_no_config_files_md"
 run_ns_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nestjs "")" 2>&1; }   # run_ns_stack <target>
 run_ns_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nestjs "")" 2>&1; } # run_ns_agents <target>
