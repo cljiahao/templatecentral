@@ -175,6 +175,17 @@ jobs:
         run: bash scripts/test-template-copy.sh
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
+      - name: Skill fence snapshot tests
+        run: bash scripts/check-fences.test.sh
+      - name: Skill fence snapshot check
+        run: bash scripts/check-fences.sh
+      - name: Skill fence snapshot check (template files)
+        run: |
+          if bash scripts/check-fences.sh --has-mappings; then
+            bash scripts/check-fences.sh --from-templates
+          else
+            echo "no fence is mapped to a template file yet"
+          fi
 
   lint-negative-tests:
     name: Lint check negative tests
@@ -206,6 +217,15 @@ jobs:
             echo '## Scaffold load vs origin/main'
             echo '```'
             bash scripts/count-load.sh --base origin/main
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Count add, migrate and standards load against origin/main
+        continue-on-error: true
+        run: |
+          {
+            echo '## Add, migrate and standards load vs origin/main'
+            echo '```'
+            bash scripts/count-load.sh --summary all --base origin/main
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
