@@ -236,7 +236,7 @@ Apply these questions to every file. If the check is not applicable to that skil
 - [ ] **DRY** — is the same guidance or code block repeated across sections without need?
 - [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
 - [ ] **Token efficiency** — targeted checks:
-  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Files that carry verbatim code seeds (the per-stack `scaffold/*/source-files.md` that still hold fences) are exempt: splitting them is the roadmap item in `FUTURE.md` §1.
+  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Template files are not reference files: review them through their `template.manifest`.
   - Inline comments that restate what the surrounding code clearly shows? Delete them.
   - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
   - The same instruction stated in two different forms within 15 lines? Collapse to one.

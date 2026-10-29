@@ -3,7 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
 ## Part B — Config and Source Files
 
-The config and source files are real files in `<skill-dir>/nestjs/template/` (`AGENTS.md` in `<skill-dir>/nestjs/template-agents/`), listed in `<skill-dir>/nestjs/template.manifest`. Steps 1 and 6 copy them; do not re-type or modify them. Notes:
+The config and source files are real files in `<skill-dir>/nestjs/template/` (`AGENTS.md` in `<skill-dir>/nestjs/template-agents/`), listed in `<skill-dir>/nestjs/template.manifest`. Steps 1, 4 and 6 copy them (stack, base and agents parts); do not re-type or modify them. Notes:
 
 - `package.json` — Step 1 sets `"name"`. Versions are caret floors aligned with `.claude/rules/nestjs.md`; `pnpm install` resolves the newest compatible; extra test tooling is omitted (`templatecentral:add (test)` adds it). Freshen pins post-scaffold with the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`). `engines.node` (`^24.15.0 || >=26.0.0`) is the `@nestjs/schematics` 12 CLI floor for `nest generate`; the app runtime alone needs only ≥20.19/≥22.12. The project stays CommonJS (no `"type": "module"`) and loads the ESM Nest 12 packages through `require(esm)`, so no `.js` import suffixes are needed. The unmet-peer **warning** for `nestjs-zod` is expected and safe to ignore.
 - `pnpm-workspace.yaml` — If `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites it with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` and re-run `pnpm install`.

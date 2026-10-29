@@ -24,7 +24,7 @@ concurrency:
   group: scaffold-parse-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  validate-config-fences:
+  validate-config-templates:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
