@@ -178,3 +178,4 @@ Or use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.
 - Verify `pnpm build`, `pnpm typecheck`, and `pnpm test` all pass before generating `AGENTS.md`
 - Remove example code only after the user confirms the project runs
 - NEVER copy `node_modules/` or `dist/` when scaffolding
+- NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off
