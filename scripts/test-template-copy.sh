@@ -1311,7 +1311,7 @@ NS="$REPO_ROOT/skills/scaffold/nestjs"
 nsdoc=$(cat "$NS/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=stack`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=base`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
-check 0 "$(grep -c 'TC_GUARD' "$NS/source-files.md" | awk -F: '{ s += $2 } END { print s + 0 }')" "nestjs_docs_hold_no_second_guard"
+check 0 "$(grep -cE "<<-?['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
 run_ns_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nestjs "")" 2>&1; }   # run_ns_stack <target>
 run_ns_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nestjs "")" 2>&1; } # run_ns_agents <target>
 NS_STACK=$(count_files "$NS/template")
@@ -1391,6 +1391,16 @@ sk=$(alt_ns notree); rm -rf "$sk/nestjs/template"; mkdir -p "$T/ns-m2"
 refuses_nx nestjs_stack_copy_refuses_missing_tree "$sk" "$STACK_SNIPPET" "$T/ns-m2" nestjs
 sk=$(alt_ns noagents); rm -rf "$sk/nestjs/template-agents"; mkdir -p "$T/ns-m3"
 refuses_nx nestjs_agents_copy_refuses_missing_tree "$sk" "$AGENTS_SNIPPET" "$T/ns-m3" nestjs
+mkdir -p "$T/ns-l1" "$T/ns-l1-real"; ln -s "$T/ns-l1-real" "$T/ns-l1/src"
+refuses_nx nestjs_stack_copy_refuses_symlink_parent "$REPO_ROOT/skills/scaffold" "$STACK_SNIPPET" "$T/ns-l1" nestjs
+check . "$(snap "$T/ns-l1-real")" "nestjs_stack_copy_refuses_symlink_parent: nothing written through the link"
+mkdir -p "$T/ns-l2/src" "$T/ns-l2-real"; ln -s "$T/ns-l2-real" "$T/ns-l2/src/modules"
+refuses_nx nestjs_stack_copy_refuses_nested_symlink_parent "$REPO_ROOT/skills/scaffold" "$STACK_SNIPPET" "$T/ns-l2" nestjs
+check . "$(snap "$T/ns-l2-real")" "nestjs_stack_copy_refuses_nested_symlink_parent: nothing written through the link"
+mkdir -p "$T/ns-v1" "$T/ns-v2"
+refuses_raw nestjs_stack_ci_must_stay_empty "$(render_sc "$STACK_SNIPPET" "$T/ns-v1" nestjs github)" "CI must stay empty"
+refuses_raw nestjs_agents_ci_must_stay_empty "$(render_sc "$AGENTS_SNIPPET" "$T/ns-v2" nestjs azure)" "CI must stay empty"
+check ". ." "$(snap "$T/ns-v1") $(snap "$T/ns-v2")" "nestjs_ci_must_stay_empty: nothing copied"
 tgt="$T/ns-modes"; mkdir -p "$tgt"; run_ns_stack "$tgt" >/dev/null; run_ns_agents "$tgt" >/dev/null
 bad=""
 while read -r p m _; do

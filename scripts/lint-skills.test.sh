@@ -280,6 +280,7 @@ ns_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NSD)/source-files.md";
 ns_agents_before_format() { printf 'Run kit Step 0 with STACK=nestjs and PART=agents.\n' | cat - "$(NSD)/source-files.md" > "$S/x" && mv "$S/x" "$(NSD)/source-files.md"; }
 ns_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NSD)/source-files.md"; }
 no_ad_line_nestjs() { strip_token 'A through D' 'A to D' "$(NSD)/source-files.md"; }
+nest_verify_bare_bash() { sed -i.bak 's/^allowed-tools: Bash(pnpm \*)/allowed-tools: Bash/' "$(NSD)/template/.claude/skills/nest-verify/SKILL.md.tmpl" && rm -f "$(NSD)/template/.claude/skills/nest-verify/SKILL.md.tmpl.bak"; }
 nestjs_skill_md_appears() { printf -- '---\nname: zz\n---\n' > "$(NSD)/template/.claude/skills/nest-verify/SKILL.md"; }
 exact_pin_in_ns_package() { python3 - "$(NSD)/template/package.json" <<'PY2'
 import sys
@@ -694,6 +695,7 @@ fails nestjs_step0_fails_when_agents_copy_moves_before_format "Scaffold runs kit
 fails nestjs_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" ns_no_agents_line "needs a PART=agents instruction"
 fails nestjs_steps_a_to_d_fails_on_empty_match "Scaffold runs kit Step 0 before the first install" no_ad_line_nestjs "needs a \"Steps A through D\" instruction"
 fails nestjs_template_skill_md_fails_when_a_stack_template_holds_one "Template trees hold no file named SKILL.md" nestjs_skill_md_appears "nestjs/template/.claude/skills/nest-verify/SKILL.md"
+fails nestjs_seeded_skills_fail_on_bare_bash "Seeded project skills declare scoped allowed-tools" nest_verify_bare_bash "nest-verify - bare Bash in allowed-tools"
 fails nestjs_template_pins_fail_on_exact_dependency "Template package.json dependencies use floors" exact_pin_in_ns_package "nestjs/template/package.json"
 
 collect
