@@ -76,7 +76,7 @@ have_python() { command -v python3 >/dev/null 2>&1; }
 
 # TEMPLATED_STACKS — the stacks whose verbatim files live in skills/scaffold/<stack>/template and
 # template-agents (listed in <stack>/template.manifest). Add a stack here once its files live in `template/`.
-TEMPLATED_STACKS=(nextjs)
+TEMPLATED_STACKS=(nextjs fastapi)
 # The trees the manifests list. template-tail files are appended to AGENTS.md, never copied as files.
 SHARED_TREES="template template-ts template-py template-ci template-settings-ts template-settings-py template-late template-tail"
 STACK_TREES="template template-agents template-tail"
@@ -821,6 +821,7 @@ need = {
     "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$dest"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"', "<skill-dir>/shared"],
     "scaffold/shared/harness-kit-enforcement.md": ["PART=ci", "CI=none", "PART=settings", "PART=late"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
+    "scaffold/fastapi/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=fastapi", "<skill-dir>/fastapi/template.manifest", "<skill-dir>/fastapi/template-agents/"],
 }
 for rel, toks in need.items():
     try: t = open(os.path.join(root, rel), encoding='utf-8').read()
@@ -1402,7 +1403,7 @@ check_step0_before_install() {
   # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
   # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
+  local f bad="" s0 step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1424,6 +1425,8 @@ check_step0_before_install() {
       base_line=$(grep -nE 'STACK=.*PART=base|PART=base.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
       agents_line=$(grep -nE 'STACK=.*PART=agents|PART=agents.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
       fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
+      # FastAPI has no pnpm: its AGENTS.md copy must follow the verification-gate step instead.
+      if [[ "$st" == fastapi ]]; then fmt_line=$(grep -nE '^### [0-9]+[a-z]?\. Verification gate' "$f" | head -n 1 | cut -d: -f1 || true); fi
       if [[ -z "$base_line" ]]; then
         bad+="$f — no kit Step 0 instruction with STACK=$st and PART=base"$'\n'
       elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
@@ -1438,8 +1441,9 @@ check_step0_before_install() {
     if [[ "$st" == fastapi && -n "$step0" ]]; then
       h6b=$(grep -nE '^### 6b\.' "$f" | head -n 1 | cut -d: -f1 || true)
       hnext=$(awk -v h="${h6b:-0}" 'NR > h && /^### / { print NR; exit }' "$f")
-      if [[ -z "$h6b" || "$step0" -le "$h6b" || ( -n "$hnext" && "$step0" -ge "$hnext" ) ]]; then
-        bad+="$f:$step0 — the Step 0 line must be in the step 6b section"$'\n'
+      s0=${base_line:-$step0}
+      if [[ -z "$h6b" || "$s0" -le "$h6b" || ( -n "$hnext" && "$s0" -ge "$hnext" ) ]]; then
+        bad+="$f:$s0 — the Step 0 line must be in the step 6b section"$'\n'
       fi
     fi
     # PART=settings and PART=late refuse until AGENTS.md exists, so the "Steps A through D" instruction
