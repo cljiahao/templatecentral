@@ -19,11 +19,10 @@ cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ## Phase 3 — Scaffold NestJS (autonomous)
 
 ```bash
-cat "<skill-dir>/../scaffold/nestjs/config-files.md"
 cat "<skill-dir>/../scaffold/nestjs/source-files.md"
 ```
 
-Set the project name to `[project-name]-api` in `package.json`.
+The scaffold files are real files in `<skill-dir>/../scaffold/nestjs/template/`; scaffold Step 1 copies them. Set the project name to `[project-name]-api` in `package.json`.
 
 ---
 

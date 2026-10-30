@@ -307,6 +307,7 @@ templatecentral/
 │   ├── scaffold/shared/template.manifest # Every template file with its mode
 │   ├── scaffold/shared/template-{settings-ts,settings-py,late,tail}/ # settings.json (copied at Step A), FUTURE.md + CONSTITUTION + /skill-audit (copied at Step C), and the AGENTS.md tail (appended at Step G, never copied)
 │   ├── scaffold/nextjs/template*/ # The Next.js files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nextjs/template.manifest
+│   ├── scaffold/nestjs/template*/ # The NestJS files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nestjs/template.manifest
 │   ├── scaffold/fastapi/template*/ # The FastAPI files the scaffold copies verbatim (same three trees) plus scaffold/fastapi/template.manifest
 │   ├── scaffold/vite-react/template*/ # The same trees for Vite + React, plus scaffold/vite-react/template.manifest
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules

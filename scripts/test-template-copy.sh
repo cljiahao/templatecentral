@@ -154,8 +154,8 @@ PY
 check "" "$(cat "$T/manifest.diff")" "manifest_matches_tree"
 
 # ── template_sh_executable ───────────────────────────────────────────────────
-bad=$(cd "$REPO_ROOT" && git ls-files -s -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' | awk '$4 ~ /\.sh$/ && $1 != "100755" { print $4 }')
-count=$(git -C "$REPO_ROOT" ls-files -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' | grep -c '\.sh$' || true)
+bad=$(cd "$REPO_ROOT" && git ls-files -s -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' 'skills/scaffold/nestjs/template*' | awk '$4 ~ /\.sh$/ && $1 != "100755" { print $4 }')
+count=$(git -C "$REPO_ROOT" ls-files -- 'skills/scaffold/shared/template*' 'skills/scaffold/nextjs/template*' 'skills/scaffold/vite-react/template*' 'skills/scaffold/fastapi/template*' 'skills/scaffold/nestjs/template*' | grep -c '\.sh$' || true)
 check "" "$bad" "template_sh_executable: git mode 100755 for every template .sh"
 check 1 "$([[ "$count" -gt 0 ]] && echo 1 || echo 0)" "template_sh_executable: at least one template .sh is tracked"
 
@@ -1191,7 +1191,7 @@ if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   check 1 "$([[ "$out" == *"template-settings-py  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a missing settings tree ($out)"
   out=$(vsc "rm -rf skills/scaffold/shared/template-settings-ts skills/scaffold/shared/template-settings-py")
   check 1 "$([[ "$out" == *"template-settings-ts  — no settings.json to validate"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_anchor_deleted: both settings trees gone ($out)"
-  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest skills/scaffold/shared/template-settings-*; rm -f skills/scaffold/*/config-files.md")
+  out=$(vsc "rm -rf skills/scaffold/*/template skills/scaffold/*/template.manifest skills/scaffold/shared/template-settings-*")
   check 1 "$([[ "$out" == *"nothing was validated"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_nothing_is_validated ($out)"
 elif [[ "${CI:-}" == true ]]; then
   FAIL=$((FAIL + 1)); echo "FAIL: jq or node is missing but CI=true; the validate-scaffold-configs tests must run in CI"
@@ -1426,7 +1426,7 @@ fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
 check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
-check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only command fences remain"
+check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
 alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
 
@@ -1558,6 +1558,160 @@ check "" "$(cat "$T/dist-fa.diff")" "dist_keeps_templates[fastapi]"
 tgt="$T/dist-fa-copy"; mkdir -p "$tgt"
 (SK="$dist/scaffold"; fa_stack "$tgt") >/dev/null 2>&1
 check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count_files "$tgt")" == "$FN_STACK" ]] && echo 1 || echo 0)" "dist_keeps_templates[fastapi]: the stack copy from the dist layout keeps dotfiles and exec bits"
+
+# ── nestjs stack trees ───────────────────────────────────────────────────────
+# Same copy and the same checks as the nextjs trees: kit Step 0's guard run with PART=stack and PART=agents.
+NS="$REPO_ROOT/skills/scaffold/nestjs"
+nsdoc=$(cat "$NS/source-files.md")
+# shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
+check 1 "$([[ "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=stack`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=base`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
+check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
+check 0 "$(grep -c '^```' "$NS/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "nestjs_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
+check 1 "$([[ ! -e "$NS/config-files.md" ]] && echo 1 || echo 0)" "nestjs_has_no_config_files_md"
+run_ns_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nestjs "")" 2>&1; }   # run_ns_stack <target>
+run_ns_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" nestjs "")" 2>&1; } # run_ns_agents <target>
+NS_STACK=$(count_files "$NS/template")
+NS_AGENTS=$(count_files "$NS/template-agents")
+check 1 "$([[ "$NS_STACK" -gt 30 && "$NS_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "nestjs stack trees are not empty (template $NS_STACK files, template-agents $NS_AGENTS)"
+# alt_ns <name> — a writable skill dir with an empty shared/ and a copy of the nestjs trees; echoes it.
+alt_ns() { rm -rf "$T/altns-$1"; mkdir -p "$T/altns-$1/scaffold/shared"; cp -Rp "$NS" "$T/altns-$1/scaffold/nestjs"; echo "$T/altns-$1/scaffold"; }
+
+# nestjs_manifest_matches_tree
+check "" "$(stack_manifest_diff "$NS")" "nestjs_manifest_matches_tree"
+sk=$(alt_ns mf-unlisted); printf 'x\n' > "$sk/nestjs/template/zz-unlisted.txt"
+check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"UNLISTED template/zz-unlisted.txt"* ]] && echo 1 || echo 0)" "nestjs_manifest_matches_tree: an unlisted file is reported"
+sk=$(alt_ns mf-ghost); printf 'template/ghost.txt 644 - -\n' >> "$sk/nestjs/template.manifest"
+check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"MISSING template/ghost.txt"* ]] && echo 1 || echo 0)" "nestjs_manifest_matches_tree: a listed file without a file is reported"
+sk=$(alt_ns mf-empty); rm -rf "$sk/nestjs/template" "$sk/nestjs/template-agents"
+check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"EMPTYTREE"* ]] && echo 1 || echo 0)" "nestjs_manifest_matches_tree: an empty tree is reported"
+sk=$(alt_ns mf-ph); python3 -c 'import sys; p=sys.argv[1]; t=open(p).read(); open(p,"w").write(t.replace("__TC_PROJECT_NAME__","__TC_OTHER_NAME__"))' "$sk/nestjs/template/package.json"
+check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"PLACEHOLDERS template/package.json"* ]] && echo 1 || echo 0)" "nestjs_manifest_matches_tree: an undeclared placeholder is reported"
+sk=$(alt_ns mf-mode); chmod 644 "$sk/nestjs/template/docker-entrypoint.sh"
+check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"MODE template/docker-entrypoint.sh"* ]] && echo 1 || echo 0)" "nestjs_manifest_matches_tree: a script that lost its exec bit is reported"
+
+# placeholders_only_in_small_files, for nestjs
+check "" "$(big_placeholders "$NS/template" "$NS/template-agents" "$SHARED"/template*)" "placeholders_only_in_small_files: nestjs with every shared tree"
+sk=$(alt_ns big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/nestjs/template/vitest.config.ts"
+check 1 "$([[ "$(big_placeholders "$sk/nestjs/template")" == "BIG vitest.config.ts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a nestjs file over 4 KB is reported"
+sk=$(alt_ns many-ph); for f in .npmrc .prettierrc .gitignore .dockerignore .env.example tsconfig.json; do printf '__TC_X__\n' >> "$sk/nestjs/template/$f"; done
+check 1 "$([[ "$(big_placeholders "$sk/nestjs/template")" == *"TOOMANY"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: more than 5 nestjs placeholder files is reported"
+
+# no_leftover_placeholders, for nestjs
+tgt="$T/nslp"; mkdir -p "$tgt"
+out=$(run_part "$tgt" nestjs base); out2=$(run_part "$tgt" nestjs ci github); out3=$(run_ns_stack "$tgt"); out4=$(run_ns_agents "$tgt"); out4+=$(run_part "$tgt" nestjs late)
+check 1 "$([[ $(count_files "$tgt") -gt $((NS_STACK + NS_AGENTS)) ]] && echo 1 || echo 0)" "no_leftover_placeholders[nestjs]: the kit, stack and agents trees all copied ($out $out2 $out3 $out4)"
+before=$(grep -rln '__TC_' "$tgt" | sed "s|^$tgt/||" | LC_ALL=C sort | tr '\n' ' ')
+check "AGENTS.md docs/CONSTITUTION.md package.json " "$before" "no_leftover_placeholders[nestjs]: the placeholders are present before the substitution"
+substitute_placeholders "$tgt" "$REPO_ROOT/tests/golden/placeholders.env"
+check "" "$(grep -rn '__TC_' "$tgt" || true)" "no_leftover_placeholders[nestjs]: nothing is left after the substitution"
+check 1 "$([[ "$(grep -c '"name": "PROJECT_NAME_PLACEHOLDER"' "$tgt/package.json")" == 1 && "$(grep -c '^# AGENTS.md — \[Project Name\]$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "no_leftover_placeholders[nestjs]: the values landed where the golden holds them"
+declared=$(grep -v '^#' "$NS/template.manifest" | awk '$3 != "-" { print $3 }' | tr ',' '\n' | sed 's/^__TC_//; s/__$//' | LC_ALL=C sort -u)
+check "" "$(comm -23 <(printf '%s\n' "$declared") <(printf '%s\n' "$valued"))" "no_leftover_placeholders[nestjs]: every declared placeholder has a value in placeholders.env"
+
+# copy_keeps_dotfiles, for nestjs
+tgt="$T/ns-copy"; mkdir -p "$tgt"
+out=$(run_ns_stack "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[nestjs]: stack copy exits 0 ($out)"
+missing=""
+for p in .dockerignore .env.example .gitignore .npmrc .prettierignore .prettierrc docker-entrypoint.sh package.json src/main.ts src/config/setups/security.setup.ts test/app.e2e-spec.ts .claude/skills/nest-verify/SKILL.md; do
+  [[ -f "$tgt/$p" ]] || missing+=" $p"
+done
+check "" "$missing" "copy_keeps_dotfiles[nestjs]: dotfiles and nested files arrived"
+check 1 "$([[ -x "$tgt/docker-entrypoint.sh" && "$(modeof "$tgt/docker-entrypoint.sh")" == 755 ]] && echo 1 || echo 0)" "template_sh_executable[nestjs]: docker-entrypoint.sh keeps its exec bit"
+check "$NS_STACK" "$(count_files "$tgt")" "copy_keeps_dotfiles[nestjs]: exactly the template tree was written"
+check 1 "$([[ ! -e "$tgt/AGENTS.md" && ! -e "$tgt/.claude/skills/nest-verify/SKILL.md.tmpl" ]] && echo 1 || echo 0)" "copy_keeps_dotfiles[nestjs]: AGENTS.md waits and the .tmpl suffix is dropped"
+out=$(run_ns_agents "$tgt"); ec=$?
+check 0 "$ec" "copy_keeps_dotfiles[nestjs]: agents copy exits 0 ($out)"
+check 1 "$([[ -f "$tgt/AGENTS.md" ]] && cmp -s "$tgt/AGENTS.md" "$NS/template-agents/AGENTS.md" && echo 1 || echo 0)" "copy_keeps_dotfiles[nestjs]: AGENTS.md is the template byte for byte"
+tgt="$T/ns-both"; mkdir -p "$tgt"
+out=$(run_part "$tgt" nestjs base); ec=$?; out2=$(run_ns_stack "$tgt"); ec2=$?
+check 00 "$ec$ec2" "copy_keeps_dotfiles[nestjs]: Step 0 then the stack copy exit 0 ($out $out2)"
+
+# the stack copy refuses and writes nothing
+tgt="$T/ns-refuse"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/package.json"
+before=$(snap "$tgt")
+out=$(run_ns_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"package.json"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "nestjs_stack_copy_refuses_existing_file: nonzero, names the clash, ends with the stop line ($out)"
+check "$before" "$(snap "$tgt")" "nestjs_stack_copy_refuses_existing_file: nothing written"
+tgt="$T/ns-tmpl-clash"; mkdir -p "$tgt/.claude/skills/nest-verify"; printf 'mine\n' > "$tgt/.claude/skills/nest-verify/SKILL.md"
+before=$(snap "$tgt")
+out=$(run_ns_stack "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *".claude/skills/nest-verify/SKILL.md (exists)"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "nestjs_stack_copy_refuses_existing_tmpl_target: nonzero and names SKILL.md (exists) ($out)"
+check "$before" "$(snap "$tgt")" "nestjs_stack_copy_refuses_existing_tmpl_target: nothing written"
+tgt="$T/ns-refuse-agents"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/AGENTS.md"
+out=$(run_ns_agents "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "nestjs_agents_copy_refuses_existing_file: nonzero and names AGENTS.md ($out)"
+sk=$(alt_ns unlisted); printf 'x\n' > "$sk/nestjs/template/zz-unlisted.txt"; mkdir -p "$T/ns-m1"
+refuses_nx nestjs_stack_copy_refuses_file_missing_from_manifest "$sk" "$STACK_SNIPPET" "$T/ns-m1" nestjs
+sk=$(alt_ns notree); rm -rf "$sk/nestjs/template"; mkdir -p "$T/ns-m2"
+refuses_nx nestjs_stack_copy_refuses_missing_tree "$sk" "$STACK_SNIPPET" "$T/ns-m2" nestjs
+sk=$(alt_ns noagents); rm -rf "$sk/nestjs/template-agents"; mkdir -p "$T/ns-m3"
+refuses_nx nestjs_agents_copy_refuses_missing_tree "$sk" "$AGENTS_SNIPPET" "$T/ns-m3" nestjs
+mkdir -p "$T/ns-l1" "$T/ns-l1-real"; ln -s "$T/ns-l1-real" "$T/ns-l1/src"
+refuses_nx nestjs_stack_copy_refuses_symlink_parent "$REPO_ROOT/skills/scaffold" "$STACK_SNIPPET" "$T/ns-l1" nestjs
+check . "$(snap "$T/ns-l1-real")" "nestjs_stack_copy_refuses_symlink_parent: nothing written through the link"
+mkdir -p "$T/ns-l2/src" "$T/ns-l2-real"; ln -s "$T/ns-l2-real" "$T/ns-l2/src/modules"
+refuses_nx nestjs_stack_copy_refuses_nested_symlink_parent "$REPO_ROOT/skills/scaffold" "$STACK_SNIPPET" "$T/ns-l2" nestjs
+check . "$(snap "$T/ns-l2-real")" "nestjs_stack_copy_refuses_nested_symlink_parent: nothing written through the link"
+mkdir -p "$T/ns-v1" "$T/ns-v2"
+refuses_raw nestjs_stack_ci_must_stay_empty "$(render_sc "$STACK_SNIPPET" "$T/ns-v1" nestjs github)" "CI must stay empty"
+refuses_raw nestjs_agents_ci_must_stay_empty "$(render_sc "$AGENTS_SNIPPET" "$T/ns-v2" nestjs azure)" "CI must stay empty"
+check ". ." "$(snap "$T/ns-v1") $(snap "$T/ns-v2")" "nestjs_ci_must_stay_empty: nothing copied"
+tgt="$T/ns-modes"; mkdir -p "$tgt"; run_ns_stack "$tgt" >/dev/null; run_ns_agents "$tgt" >/dev/null
+bad=""
+while read -r p m _; do
+  case "$p" in template/*) f=${p#template/} ;; template-agents/*) f=${p#template-agents/} ;; *) continue ;; esac
+  f=${f%.tmpl}
+  [[ "$(modeof "$tgt/$f")" == "$m" ]] || bad+=" $f"
+done < <(grep -v '^#' "$NS/template.manifest")
+check "" "$bad" "nestjs_stack_copy_yields_manifest_modes"
+
+# validate-scaffold-configs.sh checks the nestjs template files
+if command -v jq >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  out=$(vsc ':')
+  check 1 "$([[ "$out" == *"ok    skills/scaffold/nestjs/template/package.json"* && "$out" == *"ok    skills/scaffold/nestjs/template/eslint.config.mjs"* && "$out" == *"ok    skills/scaffold/nestjs/template/nest-cli.json"* && "$out" == *"EXIT=0" ]] && echo 1 || echo 0)" "validate_configs_checks_nestjs_template_files: json and mjs files are validated ($out)"
+  out=$(vsc "printf '{' >> skills/scaffold/nestjs/template/package.json")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/nestjs/template/package.json"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_nestjs_template_json ($out)"
+  out=$(vsc "printf 'const = ;\\n' >> skills/scaffold/nestjs/template/eslint.config.mjs")
+  check 1 "$([[ "$out" == *"FAIL  skills/scaffold/nestjs/template/eslint.config.mjs"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_invalid_nestjs_template_mjs ($out)"
+  out=$(vsc "mv skills/scaffold/nestjs/template skills/scaffold/nestjs/template-moved")
+  check 1 "$([[ "$out" == *"skills/scaffold/nestjs  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_when_nestjs_anchor_deleted: a renamed template/ tree fails while its manifest exists ($out)"
+  out=$(vsc "find skills/scaffold/nestjs/template \\( -name '*.json' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -delete")
+  check 1 "$([[ "$out" == *"skills/scaffold/nestjs  — template.manifest exists but template/ holds no JSON or JS file"* && "$out" == *"EXIT=1" ]] && echo 1 || echo 0)" "validate_configs_fails_on_empty_match: a nestjs template/ tree with no JSON or JS file ($out)"
+fi
+
+# dist_keeps_templates, for nestjs
+python3 - "$NS" "$dist/scaffold/nestjs" > "$T/dist-ns.diff" <<'PY'
+import os, sys
+src, dist = sys.argv[1:]
+def listing(root):
+    out = {}
+    for tree in ("template", "template-agents", "template-tail"):
+        for dp, _, fs in os.walk(os.path.join(root, tree)):
+            for f in fs:
+                full = os.path.join(dp, f)
+                out[os.path.relpath(full, root)] = (os.stat(full).st_mode & 0o777, open(full, "rb").read())
+    return out
+a, b = listing(src), (listing(dist) if os.path.isdir(dist) else {})
+if not a:
+    print("EMPTY source nestjs templates")
+for p in sorted(a):
+    if p not in b:
+        print("LOST", p)
+    elif a[p][0] != b[p][0]:
+        print("MODE", p, "%o" % a[p][0], "%o" % b[p][0])
+    elif a[p][1] != b[p][1]:
+        print("CONTENT", p)
+for p in sorted(b):
+    if p not in a:
+        print("EXTRA", p)
+if not os.path.isfile(os.path.join(dist, "template.manifest")):
+    print("LOST template.manifest")
+PY
+check "" "$(cat "$T/dist-ns.diff")" "dist_keeps_templates[nestjs]"
+tgt="$T/dist-ns-copy"; mkdir -p "$tgt"
+(SK="$dist/scaffold"; run_ns_stack "$tgt") >/dev/null 2>&1
+check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count_files "$tgt")" == "$NS_STACK" ]] && echo 1 || echo 0)" "dist_keeps_templates[nestjs]: the stack copy from the dist layout keeps dotfiles and exec bits"
 
 echo "test-template-copy: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
