@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# scripts/lint-skills.test.sh — negative tests for the lint checks that read the scaffold
-# template trees (skills/scaffold/shared/template*/) and the guards that stop a check passing
-# on nothing.
+# scripts/lint-skills.test.sh — negative tests for the lint checks that read the template trees
+# (skills/**/template*/, CONVENTIONS.md §1) and the guards that stop a check passing on nothing.
 #
 # Usage: bash scripts/lint-skills.test.sh   (run from anywhere; needs python3)
 #   ONLY=<regex> runs just the tests whose name matches; JOBS=<n> sets the parallelism (default 4);
@@ -38,6 +37,8 @@ damage_and_lint() {
   local w=$1 f
   rm -rf "$w"; mkdir -p "$w"
   cp -R skills "$w/skills"
+  mkdir -p "$w/tests/golden"
+  cp -R tests/golden/fences "$w/tests/golden/fences"
   # Some skill references climb out of skills/ (<skill-dir>/../../.claude/rules); mirror the repo root.
   for f in .claude .claude-plugin CHANGELOG.md; do ln -s "$REPO_ROOT/$f" "$w/$f"; done
   S="$w/skills"
@@ -74,6 +75,41 @@ fails_both() {
   SLASH=1
   fails "${1}_with_trailing_slash" "${@:2}"
   SLASH=
+}
+
+# passes <test name> <header substring> <mutation function> — the section must exist and report no FAIL.
+passes() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  NJOB=$((NJOB + 1))
+  (
+    damage_and_lint "$T/w$NJOB" "$3"
+    sec=$(section "$OUT" "$2")
+    if [[ -z "$sec" ]]; then
+      echo "FAIL: $1 — no section '$2' in the lint output" > "$T/r$NJOB"
+    elif grep -q '^FAIL:' <<<"$sec"; then
+      echo "FAIL: $1 — '$2' failed: $(head -3 <<<"$sec")" > "$T/r$NJOB"
+    else
+      echo PASS > "$T/r$NJOB"
+    fi
+    rm -rf "$T/w$NJOB"
+  ) &
+  if (( NJOB % JOBS == 0 )); then wait; fi
+}
+
+# passes_all <test name> <mutation function> — the whole lint must pass on the damaged copy.
+passes_all() {
+  if [[ -n "${ONLY:-}" && ! "$1" =~ $ONLY ]]; then return 0; fi
+  NJOB=$((NJOB + 1))
+  (
+    damage_and_lint "$T/w$NJOB" "$2"
+    if [[ "$OUT" == *"=== All checks passed ==="* ]]; then
+      echo PASS > "$T/r$NJOB"
+    else
+      echo "FAIL: $1 — the lint did not pass: $(grep -m3 '^FAIL:' <<<"$OUT")" > "$T/r$NJOB"
+    fi
+    rm -rf "$T/w$NJOB"
+  ) &
+  if (( NJOB % JOBS == 0 )); then wait; fi
 }
 
 collect() {
@@ -429,6 +465,266 @@ fence_cat_pipe_eof() { printf "\ncat <<'EOF' | bash\nexit 0\nEOF\n" >> "$SH/harn
 fence_plain_eof() { printf "\nbash <<'EOF'\nexit 0\nEOF\n" >> "$SH/harness-kit-enforcement.md"; }
 fence_other_delim_not_shell() { printf "\ncat <<'TC_X'\nhello\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
 none() { :; }
+
+# Template trees outside skills/scaffold (CONVENTIONS.md §1): the leaf skills/add/auth/nestjs.md owns
+# skills/add/auth/nestjs/template*/ and the template.manifest beside them.
+AT=add/auth/nestjs
+# plant_tree <dir under skills> <path inside it> [mode] [content] — one tree file and its manifest line.
+plant_tree() {
+  local d="$S/$1" rel=$2 mode=${3:-644}
+  mkdir -p "$d/$(dirname "$rel")"
+  printf '%s\n' "${4:-x}" > "$d/$rel"
+  if [[ "$mode" == 755 ]]; then chmod 755 "$d/$rel"; fi
+  printf '%s %s - -\n' "$rel" "$mode" >> "$d/template.manifest"
+}
+add_tree() { plant_tree "$AT" template/src/a.ts; }
+# A complete tree: a header-free .md, a nested path deeper than the nesting limit, a skill template and a script.
+add_tree_full() {
+  plant_tree "$AT" template/src/a.ts
+  plant_tree "$AT" template/docs/notes.md 644 'no header here'
+  plant_tree "$AT" template/a/b/c/d/e/deep.md 644 'deep'
+  plant_tree "$AT" template/.claude/skills/zz-verify/SKILL.md.tmpl
+  plant_tree "$AT" template/run.sh 755 '#!/usr/bin/env bash'
+  plant_tree "$AT" template-late/FUTURE.md
+}
+add_tree_unlisted() { add_tree; printf 'x\n' > "$S/$AT/template/src/zz-unlisted.ts"; }
+add_tree_manifest_ghost() { add_tree; printf 'template/src/ghost.ts 644 - -\n' >> "$S/$AT/template.manifest"; }
+add_tree_no_manifest() { add_tree; rm -f "$S/$AT/template.manifest"; }
+add_tree_manifest_alone() { add_tree; rm -rf "$S/$AT/template"; }
+add_tree_skill_md() { plant_tree "$AT" template/.claude/skills/zz/SKILL.md; }
+add_tree_other_prefix_skill_md() { plant_tree "$AT" template-late/.claude/skills/zz/SKILL.md; }
+add_tree_symlink() { add_tree; ln -s a.ts "$S/$AT/template/src/link.ts"; }
+add_tree_symlinked_dir() { add_tree; ln -s src "$S/$AT/template/linked"; }
+add_tree_empty_dir() { add_tree; mkdir -p "$S/$AT/template/zz-empty"; }
+add_tree_mode_lost() { plant_tree "$AT" template/run.sh 755 '#!/usr/bin/env bash'; chmod 644 "$S/$AT/template/run.sh"; }
+add_tree_tmpl_and_plain() { add_tree_full; printf 'template/.claude/skills/zz-verify/SKILL.md 644 - -\n' >> "$S/$AT/template.manifest"; }
+add_headerless_md_beside_tree() { add_tree; printf 'no header\n' > "$S/$AT/zz-note.md"; }
+add_headerless_md_named_template() { add_tree; printf 'no header\n' > "$S/add/auth/template-notes.md"; }
+add_deep_md_outside_tree() { add_tree; mkdir -p "$S/$AT/zz/a/b"; printf '<!-- ref: x -->\n' > "$S/$AT/zz/a/b/c.md"; }
+narration_in_add_tree() { plant_tree "$AT" template/run.sh 755 '# Added a retry loop'; }
+pin_in_add_tree() { plant_tree "$AT" template/.npmrc 644 'left-pad@1.3.0'; }
+secret_in_add_tree() { plant_tree "$AT" template/.npmrc 644 'password = "hunter2hunter2"'; }
+exact_pin_in_add_tree() { plant_tree "$AT" template/package.json 644 '{ "dependencies": {
+  "left-pad": "1.3.0" } }'; }
+bare_handler_in_add_tree() { plant_tree "$AT" template/src/app/api/health/route.ts 644 'export async function GET() {}'; }
+add_tree_hook() { plant_tree "$AT" template/.claude/hooks/zz-add-only-hook.sh 755 '#!/usr/bin/env bash'; }
+
+# The IAM pairs compare a fence on each side. A fence that lives in a template file is named in
+# tests/golden/fences/moved.d/*.tsv (check-fences.py's row format), and the lint resolves the side
+# through that row; these tests never patch the lint.
+# iam_move <markdown file under skills> <anchor> <fence language> <new file under skills> [indent] —
+# take the first fence of that language after the anchor out of the markdown, write its body (without
+# the indent) to the new file and map it in moved.d.
+iam_move() {
+  python3 - "$REPO_ROOT/scripts/check-fences.py" "$S" "$(dirname "$S")" "$@" <<'PY'
+import importlib.util, os, sys
+sys.dont_write_bytecode = True
+cf_path, skills, root, md, anchor, lang, new = sys.argv[1:8]
+indent = int(sys.argv[8]) if len(sys.argv) > 8 else 0
+spec = importlib.util.spec_from_file_location("cf", cf_path)
+cf = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cf)
+path = os.path.join(skills, md)
+lines = open(path, encoding="utf-8").read().split("\n")
+heading, at, counts, cur, found = "(top)", None, {}, None, None
+for n, line in enumerate(lines):
+    if cur is None:
+        h = cf.HEADING.match(line)
+        if h:
+            heading = h.group(1).replace("\t", " ")
+        if at is None and anchor in line:
+            at = n
+        m = cf.OPEN.match(line)
+        if m:
+            info = m.group(3).split()
+            cur = (n, heading, (info[0] if info else "-").lower(), m.group(2)[0], len(m.group(2)))
+    else:
+        s = line.strip()
+        if s and set(s) == {cur[3]} and len(s) >= cur[4]:
+            start, hd, flang, _, _ = cur
+            if flang not in cf.SHELL_TAGS:
+                idx = counts.get(hd, 0)
+                counts[hd] = idx + 1
+                if found is None and at is not None and start > at and flang == lang:
+                    found = (start, n, hd, idx)
+            cur = None
+start, end, hd, idx = found
+body = [l[len(cf.OPEN.match(lines[start]).group(1)):] for l in lines[start + 1:end]]
+dest = os.path.join(skills, new)
+os.makedirs(os.path.dirname(dest), exist_ok=True)
+open(dest, "w", encoding="utf-8").write("".join(l + "\n" for l in body))
+open(path, "w", encoding="utf-8").write("\n".join(lines[:start] + lines[end + 1:]))
+d = os.path.join(root, "tests", "golden", "fences", "moved.d")
+os.makedirs(d, exist_ok=True)
+row = "skills/%s\t%s\t%d\tskills/%s" % (md, hd, idx, new) + ("\tindent=%d" % indent if indent else "")
+with open(os.path.join(d, "zz-test.tsv"), "a", encoding="utf-8") as fh:
+    fh.write(row + "\n")
+PY
+}
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_A4=("add/database/python/sqlalchemy-iam.md" '### A4. Create `src/database/session.py`' python)
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+IAM_S2=("migrate/database/fastapi.md" '### Step 2 — Replace `src/database/session.py`' python)
+IAM_NEW_S=migrate/database/zz/template/session.py
+IAM_NEW_A=add/database/python/zz/template/session.py
+iam_copy_moved() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S"; }
+iam_canon_moved() { iam_move "${IAM_A4[@]}" "$IAM_NEW_A"; }
+iam_both_moved() { iam_canon_moved; iam_copy_moved; }
+iam_copy_moved_indented() { iam_move "${IAM_S2[@]}" "$IAM_NEW_S" 3; }
+# Indent the canonical fence by 3 spaces in the markdown: the opener, the body and the closer.
+iam_canon_fence_indented() { iam_canon_fence_indent 3; }
+# A fence indented by 4 or more spaces is not a fence to check-fences.py, so it is not one here.
+iam_canon_fence_indented_4() { iam_canon_fence_indent 4; }
+iam_canon_fence_indent() {
+  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" "$1" <<'PY'
+import sys
+p, anchor, n = sys.argv[1:4]
+lines = open(p, encoding="utf-8").read().split("\n")
+a = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```python"))
+j = next(j for j in range(i + 1, len(lines)) if lines[j].startswith("```"))
+for k in range(i, j + 1):
+    if lines[k]:
+        lines[k] = " " * int(n) + lines[k]
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+iam_moved_file_byte_diff() { iam_copy_moved; printf '# drift\n' >> "$S/$IAM_NEW_S"; }
+iam_moved_both_byte_diff() { iam_both_moved; printf '# drift\n' >> "$S/$IAM_NEW_A"; }
+iam_moved_file_no_trailing_newline() { iam_copy_moved; printf '%s' "$(cat "$S/$IAM_NEW_S")" > "$S/$IAM_NEW_S"; }
+iam_moved_file_deleted() { iam_copy_moved; rm -f "$S/$IAM_NEW_S"; }
+iam_canon_moved_file_deleted() { iam_canon_moved; rm -f "$S/$IAM_NEW_A"; }
+iam_moved_file_emptied() { iam_copy_moved; : > "$S/$IAM_NEW_S"; }
+iam_moved_file_symlinked() { iam_copy_moved; mv "$S/$IAM_NEW_S" "$S/$IAM_NEW_S.real"; ln -s session.py.real "$S/$IAM_NEW_S"; }
+iam_moved_outside_template() { iam_copy_moved; mkdir -p "$S/migrate/database/zz/plain"; mv "$S/$IAM_NEW_S" "$S/migrate/database/zz/plain/session.py"; iam_remap 4 skills/migrate/database/zz/plain/session.py; }
+# iam_remap <column> <value> — rewrite one column of the moved.d row.
+iam_remap() {
+  local f; f="$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv"
+  awk -F'\t' -v OFS='\t' -v c="$1" -v v="$2" '{ $c = v; print }' "$f" > "$f.new" && mv "$f.new" "$f"
+}
+# The fence is gone and no row maps it.
+iam_fence_gone_unmapped() { iam_copy_moved; rm -f "$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv"; }
+# The row names another fence, so this side has no mapping.
+iam_row_for_another_index() { iam_copy_moved; iam_remap 3 7; }
+# Fences that share a heading are mapped by index: moving one leaves its siblings live, and the
+# lint must still pair each side with the fence of its own index.
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+KY_ENV=("add/database/typescript/nestjs-kysely-iam.md" 'Add IAM fields to `envSchema`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+KY_MAP=("add/database/typescript/nestjs-kysely-iam.md" 'Then map the validated fields into `serviceConfig`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+S10_ENV=("migrate/database/nestjs.md" '### Step 10 — Update `src/config/env.config.ts`' typescript)
+# shellcheck disable=SC2016  # the anchors are literal text with backticks
+S10_MAP=("migrate/database/nestjs.md" 'Then map the validated fields into `serviceConfig`' typescript)
+IAM_NEW_KY=add/database/typescript/zz/template/env-schema.ts
+IAM_NEW_S10=migrate/database/zz/template/env-config.ts
+iam_ky_mid_moved() { iam_move "${KY_ENV[@]}" "$IAM_NEW_KY"; }
+iam_s10_first_moved() { iam_move "${S10_ENV[@]}" "$IAM_NEW_S10"; }
+# iam_touch <markdown file> <anchor> <fence language> — add a line to the first such fence after the anchor.
+iam_touch() {
+  python3 - "$S/$1" "$2" "$3" <<'PY'
+import sys
+p, anchor, lang = sys.argv[1:4]
+lines = open(p, encoding="utf-8").read().split("\n")
+a = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```" + lang))
+lines.insert(i + 1, "// drift")
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+iam_ky_moved_file_byte_diff() { iam_ky_mid_moved; printf '// drift\n' >> "$S/$IAM_NEW_KY"; }
+iam_ky_live_sibling_byte_diff() { iam_ky_mid_moved; iam_touch "${KY_MAP[@]}"; }
+# shellcheck disable=SC2016  # the anchor is literal text with backticks
+iam_ky_first_sibling_byte_diff() { iam_ky_mid_moved; iam_touch "add/database/typescript/nestjs-kysely-iam.md" 'Replace the entire contents of `kysely.service.ts` with:' typescript; }
+iam_s10_moved_file_byte_diff() { iam_s10_first_moved; printf '// drift\n' >> "$S/$IAM_NEW_S10"; }
+iam_s10_live_sibling_byte_diff() { iam_s10_first_moved; iam_touch "${S10_MAP[@]}"; }
+iam_moved_path_with_empty_segment() { iam_copy_moved; iam_remap 4 skills/migrate/database/zz//template/session.py; }
+# A fence inside a list item may be indented past 3 spaces: the list item's content column sets the limit.
+iam_canon_fence_in_list_item() {
+  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" <<'PY'
+import sys
+p, anchor = sys.argv[1:3]
+lines = open(p, encoding="utf-8").read().split("\n")
+a = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```python"))
+j = next(j for j in range(i + 1, len(lines)) if lines[j].startswith("```"))
+for k in range(i, j + 1):
+    if lines[k]:
+        lines[k] = "    " + lines[k]
+lines[i:i] = ["1. Replace the file:", ""]
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+iam_moved_file_crlf() { iam_copy_moved; sed -i.bak 's/$/\r/' "$S/$IAM_NEW_S"; rm -f "$S/$IAM_NEW_S.bak"; }
+iam_moved_file_not_utf8() { iam_copy_moved; printf '\377\376 not utf-8\n' > "$S/$IAM_NEW_S"; }
+# The row maps the fence but the fence is still in the markdown.
+iam_mapped_fence_still_live() {
+  cp "$S/${IAM_S2[0]}" "$S/${IAM_S2[0]}.orig"
+  iam_copy_moved
+  mv "$S/${IAM_S2[0]}.orig" "$S/${IAM_S2[0]}"
+}
+# The same fence is mapped by two moved.d files.
+iam_row_mapped_twice() { iam_copy_moved; cp "$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv" "$(dirname "$S")/tests/golden/fences/moved.d/zz-other.tsv"; }
+iam_fence_byte_diff() { strip_token 'create_engine(' 'create_engine (' "$S/migrate/database/fastapi.md"; }
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+iam_copy_anchor_deleted() { strip_token '### Step 2 — Replace `src/database/session.py`' '### Step 2 — Replace session' "$S/migrate/database/fastapi.md"; }
+# shellcheck disable=SC2016  # the anchors are literal heading text with backticks
+iam_canon_anchor_deleted() { strip_token '### A4. Create `src/database/session.py`' '### A4. Create session' "$S/add/database/python/sqlalchemy-iam.md"; }
+iam_fence_emptied() { python3 - "$S/migrate/database/fastapi.md" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("### Step 2 — Replace")
+i = t.index("```python\n", a) + len("```python\n")
+j = t.index("\n```", i)
+open(p, "w", encoding="utf-8").write(t[:i] + t[j + 1:])
+PY
+}
+iam_both_fences_emptied() { iam_fence_emptied; python3 - "$S/add/database/python/sqlalchemy-iam.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+a = t.index("### A4. Create")
+i = t.index("```python\n", a) + len("```python\n")
+j = t.index("\n```", i)
+open(p, "w", encoding="utf-8").write(t[:i] + t[j + 1:])
+PY
+}
+
+# check_security_seeds_present: a definition may live in the leaf's template tree.
+# seed_to_tree <stack> <definition regex> <file in the tree> — the definition line leaves the leaf and
+# lands in a tree file under add/auth/<stack>/.
+seed_to_tree() {
+  local leaf="$S/add/auth/$1.md" line
+  line=$(grep -m1 -E "$2" "$leaf")
+  python3 - "$leaf" "$line" <<'PY'
+import sys
+p, line = sys.argv[1], sys.argv[2]
+t = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(t.replace(line, "// moved: " + line.split("(")[0], 1))
+PY
+  plant_tree "add/auth/$1" "$3" 644 "$line"
+}
+seed_moved_roles_guard() { seed_to_tree nestjs '^export class RolesGuard ' template/src/auth/roles.guard.ts; }
+seed_moved_require_roles() { seed_to_tree fastapi '^def require_roles\(' template/src/auth/roles.py; }
+seed_moved_has_role() { seed_to_tree nextjs '^export function hasRole\(' template/src/lib/roles.ts; }
+seed_moved_to_wrong_leaf() { seed_to_tree nestjs '^export class RolesGuard ' template/src/auth/roles.guard.ts; mv "$S/add/auth/nestjs" "$S/add/auth/zz-other"; }
+seed_deleted_nest_with_tree() { strip_token 'export class RolesGuard ' 'export class Guard ' "$S/add/auth/nestjs.md"; plant_tree add/auth/nestjs template/src/auth/other.ts 644 'export class Other {}'; }
+seed_deleted_require_roles() { strip_token 'def require_roles(' 'def require_role_list(' "$S/add/auth/fastapi.md"; }
+
+# check_owasp_llm_sections_complete: the sections may be split into a ref file beside implementation.md.
+owasp_split_to_ref() {
+  python3 - "$S/add/ai-security/implementation.md" "$S/add/ai-security/zz-extra.md" <<'PY'
+import sys
+src, dst = sys.argv[1:3]
+t = open(src, encoding="utf-8").read()
+a = t.index("### LLM10")
+open(src, "w", encoding="utf-8").write(t[:a].rstrip("\n") + "\n")
+open(dst, "w", encoding="utf-8").write("<!-- ref: add/ai-security/zz-extra.md -->\n" + t[a:])
+PY
+}
+owasp_section_only_in_tree() { owasp_split_to_ref; mkdir -p "$S/add/ai-security/zz-extra/template"; mv "$S/add/ai-security/zz-extra.md" "$S/add/ai-security/zz-extra/template/zz.md"; }
+owasp_section_deleted() { strip_token '### LLM10' '### LLX10' "$S/add/ai-security/implementation.md"; }
 
 # ── baseline ─────────────────────────────────────────────────────────────────
 if [[ -z "${ONLY:-}" ]]; then
@@ -854,6 +1150,89 @@ fails fastapi_step0_fails_on_empty_match "Scaffold runs kit Step 0 before the fi
 fails fastapi_step0_fails_when_agents_copy_moves_before_the_gate "Scaffold runs kit Step 0 before the first install" fa_agents_before_gate "comes before the format/verification-gate step"
 fails fastapi_step0_fails_when_agents_copy_deleted "Scaffold runs kit Step 0 before the first install" fa_no_agents_line "no PART=agents instruction"
 fails fastapi_step0_fails_when_gate_heading_deleted "Scaffold runs kit Step 0 before the first install" fa_no_gate_heading "no format/verification-gate step for the PART=agents copy to follow"
+
+# ── template trees outside skills/scaffold (CONVENTIONS.md §1) ───────────────────────────────
+passes_all add_tree_full_passes_the_whole_lint add_tree_full
+passes add_tree_ref_headers_skip_files_in_the_tree "Ref file <!-- ref: --> headers" add_tree_full
+passes add_tree_nesting_depth_skips_files_in_the_tree "Nesting depth" add_tree_full
+fails_both add_tree_fails_when_file_unlisted "Template trees are complete" add_tree_unlisted "zz-unlisted.ts is in the tree but not listed"
+fails add_tree_fails_when_manifest_lists_missing_file "Template trees are complete" add_tree_manifest_ghost "lists template/src/ghost.ts, which is not in the tree"
+fails add_tree_fails_without_a_manifest "Template trees are complete" add_tree_no_manifest "template.manifest: file not found"
+fails add_tree_fails_when_only_the_manifest_is_left "Template trees are complete" add_tree_manifest_alone "which is not in the tree"
+fails add_tree_fails_on_a_symlinked_file "Template trees are complete" add_tree_symlink "link.ts: symlink in a template tree"
+fails add_tree_fails_on_a_symlinked_directory "Template trees are complete" add_tree_symlinked_dir "linked: symlink in a template tree"
+fails add_tree_fails_on_an_empty_directory "Template trees are complete" add_tree_empty_dir "empty directory in a template tree"
+fails add_tree_fails_when_exec_bit_lost "Template trees are complete" add_tree_mode_lost "is mode 644 but listed as 755"
+fails add_tree_fails_when_tmpl_and_plain_both_listed "Template trees are complete" add_tree_tmpl_and_plain "both copy to"
+fails add_tree_skill_md_fails "Template trees hold no file named SKILL.md" add_tree_skill_md "add/auth/nestjs/template/.claude/skills/zz/SKILL.md"
+fails add_tree_skill_md_fails_in_a_suffixed_tree "Template trees hold no file named SKILL.md" add_tree_other_prefix_skill_md "template-late/.claude/skills/zz/SKILL.md"
+fails add_ref_headers_still_check_a_file_beside_the_tree "Ref file <!-- ref: --> headers" add_headerless_md_beside_tree "add/auth/nestjs/zz-note.md"
+fails add_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" add_headerless_md_named_template "add/auth/template-notes.md"
+fails add_nesting_depth_still_checks_a_file_beside_the_tree "Nesting depth" add_deep_md_outside_tree "add/auth/nestjs/zz/a/b/c.md"
+fails add_tree_comment_narration_is_scanned "Change-narration comments" narration_in_add_tree "Added a retry loop"
+fails add_tree_version_pins_are_scanned "Version pins in skills" pin_in_add_tree "left-pad@1.3.0"
+fails add_tree_hardcoded_secrets_are_scanned "Hardcoded secrets" secret_in_add_tree "hunter2hunter2"
+fails add_tree_exact_dependency_pins_are_scanned "Template package.json dependencies use floors" exact_pin_in_add_tree "add/auth/nestjs/template/package.json"
+fails add_tree_bare_route_handlers_are_scanned "Bare Next.js route handler exports" bare_handler_in_add_tree "add/auth/nestjs/template/src/app/api/health/route.ts"
+passes add_tree_hook_does_not_enter_the_migrate_inventory "migrate hook inventory matches" add_tree_hook
+
+# ── check_duplicated_iam_blocks_match: a moved fence resolves through moved.d ────────────────
+IAMH="Duplicated IAM session/config blocks match"
+passes iam_pairs_pass_fence_vs_fence "$IAMH" none
+passes iam_pairs_pass_a_moved_copy_side "$IAMH" iam_copy_moved
+passes iam_pairs_pass_a_moved_canonical_side "$IAMH" iam_canon_moved
+passes iam_pairs_pass_when_both_sides_moved "$IAMH" iam_both_moved
+passes iam_pairs_pass_a_moved_side_with_an_indent_column "$IAMH" iam_copy_moved_indented
+passes iam_pairs_pass_an_indented_fence "$IAMH" iam_canon_fence_indented
+passes iam_pairs_pass_a_moved_middle_fence_with_typescript_siblings "$IAMH" iam_ky_mid_moved
+passes iam_pairs_pass_a_moved_first_fence_of_a_heading "$IAMH" iam_s10_first_moved
+fails iam_pairs_fail_on_a_byte_change_in_a_moved_middle_fence "$IAMH" iam_ky_moved_file_byte_diff "NestJS IAM envSchema fields: migrate/database/nestjs.md has drifted"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_after_the_moved_one "$IAMH" iam_ky_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_before_the_moved_one "$IAMH" iam_ky_first_sibling_byte_diff "NestJS IAM KyselyService"
+fails iam_pairs_fail_on_a_byte_change_in_a_moved_first_fence "$IAMH" iam_s10_moved_file_byte_diff "NestJS IAM envSchema fields"
+fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_of_a_moved_first_fence "$IAMH" iam_s10_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
+fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical add/database/python/sqlalchemy-iam.md holds 0 fence(s)"
+fails iam_pairs_fail_on_a_mapping_path_with_an_empty_segment "$IAMH" iam_moved_path_with_empty_segment "outside a template* directory"
+passes iam_pairs_pass_an_indented_fence_in_a_list_item "$IAMH" iam_canon_fence_in_list_item
+fails iam_pairs_fail_on_a_moved_file_with_crlf_line_endings "$IAMH" iam_moved_file_crlf "has drifted"
+fails iam_pairs_fail_on_a_moved_file_that_is_not_utf8 "$IAMH" iam_moved_file_not_utf8 "unreadable or not UTF-8"
+fails iam_pairs_fail_when_a_mapped_fence_is_still_in_the_markdown "$IAMH" iam_mapped_fence_still_live "a mapped fence still in the markdown"
+fails iam_pairs_fail_when_a_fence_is_mapped_twice "$IAMH" iam_row_mapped_twice "is mapped twice"
+fails iam_pairs_fail_on_a_fence_byte_diff "$IAMH" iam_fence_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
+fails iam_pairs_fail_on_a_moved_file_byte_diff "$IAMH" iam_moved_file_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
+fails iam_pairs_fail_on_two_moved_files_byte_diff "$IAMH" iam_moved_both_byte_diff "has drifted"
+fails iam_pairs_fail_when_a_moved_file_has_no_trailing_newline "$IAMH" iam_moved_file_no_trailing_newline "must end in a newline"
+fails iam_pairs_fail_when_the_mapped_copy_file_is_missing "$IAMH" iam_moved_file_deleted "copy mapped file skills/migrate/database/zz/template/session.py"
+fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon_moved_file_deleted "canonical mapped file skills/add/database/python/zz/template/session.py"
+fails iam_pairs_fail_on_an_empty_mapped_file "$IAMH" iam_moved_file_emptied "is empty"
+fails iam_pairs_fail_on_a_symlinked_mapped_file "$IAMH" iam_moved_file_symlinked "through a symlink"
+fails iam_pairs_fail_on_a_mapping_outside_a_template_directory "$IAMH" iam_moved_outside_template "outside a template* directory"
+fails iam_pairs_fail_when_the_fence_is_gone_and_unmapped "$IAMH" iam_fence_gone_unmapped "copy migrate/database/fastapi.md holds 0 fence(s)"
+fails iam_pairs_fail_when_the_row_names_another_fence "$IAMH" iam_row_for_another_index "no moved.d row"
+fails iam_pairs_fail_on_two_empty_fences "$IAMH" iam_both_fences_emptied "is empty"
+fails iam_pairs_fail_when_the_copy_anchor_is_deleted "$IAMH" iam_copy_anchor_deleted "copy anchor/fence not found in migrate/database/fastapi.md"
+fails iam_pairs_fail_when_the_canonical_anchor_is_deleted "$IAMH" iam_canon_anchor_deleted "canonical anchor/fence not found in add/database/python/sqlalchemy-iam.md"
+
+# ── manifest alone, and a symlinked tree root ─────────────────────────────────────────────────
+add_manifest_only_empty() { mkdir -p "$S/$AT"; : > "$S/$AT/template.manifest"; }
+add_manifest_only_comments() { mkdir -p "$S/$AT"; printf '# nothing yet\n' > "$S/$AT/template.manifest"; }
+add_tree_root_symlink() { add_tree; mv "$S/$AT/template" "$S/$AT/real-tree"; ln -s real-tree "$S/$AT/template"; }
+fails_both add_empty_manifest_without_a_tree_fails "Template trees are complete" add_manifest_only_empty "no template tree sits beside this manifest"
+fails add_comment_only_manifest_without_a_tree_fails "Template trees are complete" add_manifest_only_comments "no template tree sits beside this manifest"
+fails add_tree_fails_on_a_symlinked_tree_root "Template trees are complete" add_tree_root_symlink "template: symlink in a template tree"
+
+# ── check_security_seeds_present: the definition may live in the leaf's template tree ────────
+passes security_seed_moved_into_the_nestjs_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_roles_guard
+passes security_seed_moved_into_the_fastapi_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_require_roles
+passes security_seed_moved_into_the_nextjs_template_passes "Deps gate and deny-by-default authz seeds" seed_moved_has_role
+fails security_seed_fails_when_a_tree_holds_a_different_file "Deps gate and deny-by-default authz seeds" seed_deleted_nest_with_tree "RolesGuard"
+fails security_seed_fails_when_the_tree_belongs_to_another_leaf "Deps gate and deny-by-default authz seeds" seed_moved_to_wrong_leaf "RolesGuard"
+fails security_seed_fails_when_the_definition_is_deleted "Deps gate and deny-by-default authz seeds" seed_deleted_require_roles "require_roles"
+
+# ── check_owasp_llm_sections_complete ────────────────────────────────────────────────────────
+passes owasp_sections_may_be_split_into_a_ref_file "OWASP LLM Top 10 v2.0 completeness" owasp_split_to_ref
+fails owasp_sections_in_a_template_tree_do_not_count "OWASP LLM Top 10 v2.0 completeness" owasp_section_only_in_tree "LLM10"
+fails owasp_fails_when_a_section_is_deleted "OWASP LLM Top 10 v2.0 completeness" owasp_section_deleted "LLM10"
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
