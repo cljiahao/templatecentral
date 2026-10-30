@@ -1,0 +1,82 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.build/
+.swc/
+
+# Environment variables — never copy secrets into image
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing & coverage
+coverage/
+.nyc_output/
+test/
+test-results/
+*.spec.ts
+*.test.ts
+*.e2e-spec.ts
+
+# Cache
+.npm/
+.yarn/
+.pnpm/
+.eslintcache
+.cache/
+
+# Security — never copy certs or keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.secrets/
+
+# CI/CD config (not needed in image)
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Docs
+README*.md
+docs/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# ==============================================================================
+# EXCEPTIONS
+# ==============================================================================
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!nest-cli.json
+!tsconfig.json
+!tsconfig.build.json
+!.npmrc

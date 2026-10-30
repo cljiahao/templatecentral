@@ -281,7 +281,7 @@ When adding a new framework, define its detection signal clearly and add it to t
 | 2-level reference file | `<stack>.md` inside capability dir | `add/auth/fastapi.md` |
 | 3-level stack router | `<stack>.md` inside capability dir | `add/database/python.md` |
 | 3-level leaf file | `<variant>.md` (plain) or `<stack>-<variant>.md` (when multiple stacks share the subdirectory) inside subdir | `add/database/python/sqlalchemy.md` |
-| Scaffold reference files (existing pattern) | `source-files.md`, `config-files.md` | `scaffold/nestjs/source-files.md` |
+| Scaffold reference files (existing pattern) | `source-files.md` beside `template/`, `template-agents/`, `template-tail/`, `template.manifest` | `scaffold/nestjs/source-files.md` |
 
 ### Notes
 

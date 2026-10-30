@@ -1,0 +1,13 @@
+---
+name: nest-verify
+description: Run typecheck, lint, and tests for this NestJS project in one pass
+allowed-tools: Bash(pnpm *)
+---
+
+Run all quality checks in sequence (`pnpm check` already runs `tsc --noEmit` after format + lint):
+
+```bash
+pnpm check && pnpm test
+```
+
+Report failures with the exact error output. Fix before proceeding.

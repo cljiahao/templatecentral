@@ -1,0 +1,55 @@
+# Files the scaffold copies verbatim into a new nestjs project. One line per file: path mode placeholders seams
+# path          relative to skills/scaffold/nestjs/; the first segment names the tree
+#               (template: copied at scaffold Step 1; template-agents: copied at Step 6, after the
+#               verification gate, because prettier would reformat AGENTS.md if it existed earlier;
+#               template-tail: text appended to AGENTS.md on request, never copied as a file)
+#               A name ending in .tmpl is the source of the project file with that suffix removed
+#               (SKILL.md.tmpl becomes SKILL.md), so no skill loader registers a template skill; the
+#               manifest lists the source name, and the copy and the golden check strip the suffix
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template-agents/AGENTS.md 644 __TC_PROJECT_TITLE__ [[post-harness]]
+template-tail/task-management.md 644 - -
+template/.claude/skills/nest-verify/SKILL.md.tmpl 644 - -
+template/.dockerignore 644 - -
+template/.env.example 644 - -
+template/.gitignore 644 - -
+template/.npmrc 644 - -
+template/.prettierignore 644 - -
+template/.prettierrc 644 - -
+template/Dockerfile 644 - -
+template/docker-entrypoint.sh 755 - -
+template/eslint.config.mjs 644 - -
+template/nest-cli.json 644 - -
+template/package.json 644 __TC_PROJECT_NAME__ -
+template/pnpm-workspace.yaml 644 - -
+template/src/app.module.ts 644 - -
+template/src/common/constants/http.constants.ts 644 - -
+template/src/common/constants/index.ts 644 - -
+template/src/common/filters/http-exception.filter.ts 644 - -
+template/src/common/utils/date.utils.ts 644 - -
+template/src/common/utils/string.utils.ts 644 - -
+template/src/config/env.config.ts 644 - -
+template/src/config/index.ts 644 - -
+template/src/config/setups/security.setup.ts 644 - -
+template/src/config/setups/swagger.setup.ts 644 - -
+template/src/main.ts 644 - -
+template/src/modules/base/base.controller.ts 644 - -
+template/src/modules/base/base.module.ts 644 - -
+template/src/modules/base/base.service.ts 644 - -
+template/src/modules/example/example.controller.ts 644 - -
+template/src/modules/example/example.dto.ts 644 - -
+template/src/modules/example/example.module.ts 644 - -
+template/src/modules/example/example.repository.ts 644 - -
+template/src/modules/example/example.service.ts 644 - -
+template/src/modules/example/example.types.ts 644 - -
+template/src/modules/index.ts 644 - -
+template/test/app.e2e-spec.ts 644 - -
+template/test/config/security.setup.spec.ts 644 - -
+template/test/modules/base.controller.spec.ts 644 - -
+template/test/modules/example.controller.spec.ts 644 - -
+template/tsconfig.build.json 644 - -
+template/tsconfig.json 644 - -
+template/vitest.config.e2e.ts 644 - -
+template/vitest.config.ts 644 - -

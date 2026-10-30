@@ -76,7 +76,7 @@ have_python() { command -v python3 >/dev/null 2>&1; }
 
 # TEMPLATED_STACKS — the stacks whose verbatim files live in skills/scaffold/<stack>/template and
 # template-agents (listed in <stack>/template.manifest). Add a stack here once its files live in `template/`.
-TEMPLATED_STACKS=(nextjs vite-react fastapi)
+TEMPLATED_STACKS=(nextjs vite-react fastapi nestjs)
 # The trees the manifests list. template-tail files are appended to AGENTS.md, never copied as files.
 SHARED_TREES="template template-ts template-py template-ci template-settings-ts template-settings-py template-late template-tail"
 STACK_TREES="template template-agents template-tail"
@@ -782,7 +782,7 @@ check_skilldir_refs_resolve() {
   # Every concrete <skill-dir>/<path> reference must resolve to a real file, so the cat-routing
   # contract (CONVENTIONS §1/§8 "every reference file referenced in a cat command actually exists")
   # cannot silently break when a ref file is moved or renamed. Placeholder refs (containing <, >, or |
-  # — e.g. <skill-dir>/<stack>/config-files.md) are skipped. TIMELESS: this is the core load mechanism.
+  # — e.g. <skill-dir>/<stack>/source-files.md) are skipped. TIMELESS: this is the core load mechanism.
   header "<skill-dir> references resolve to real files"
   if ! have_python; then
     pass "skipped (python3 not available)"
@@ -821,6 +821,7 @@ need = {
     "scaffold/shared/harness-kit.md": ['cp -- "$SK/$t/$p" "$TGT/$dest"', "PART=base", 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"', "<skill-dir>/shared"],
     "scaffold/shared/harness-kit-enforcement.md": ["PART=ci", "CI=none", "PART=settings", "PART=late"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
+    "scaffold/nestjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nestjs", "<skill-dir>/nestjs/template.manifest", "<skill-dir>/nestjs/template-agents/"],
     "scaffold/vite-react/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=vite-react", "<skill-dir>/vite-react/template.manifest", "<skill-dir>/vite-react/template-agents/"],
     "scaffold/fastapi/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=fastapi", "<skill-dir>/fastapi/template.manifest", "<skill-dir>/fastapi/template-agents/"],
 }
@@ -1407,7 +1408,7 @@ check_step0_before_install() {
   # mentions. Every stack file must name its own STACK value on that line, because the Step 0 and
   # Step B3 fences derive the template trees from it. TIMELESS: the order is a property of the guard.
   header "Scaffold runs kit Step 0 before the first install"
-  local f bad="" fmt_name s0 step0 inst st vals step0_line h6b hnext templated base_line agents_line fmt_line inst_pat step_ad agents_step
+  local f bad="" fmt_name s0 step0 inst st vals step0_line h6b hnext base_line agents_line fmt_line step_ad agents_step
   for st in nestjs nextjs vite-react fastapi; do
     f="$SKILLS_DIR/scaffold/$st/source-files.md"
     if [[ ! -f "$f" ]]; then bad+="$f — file not found"$'\n'; continue; fi
@@ -1416,34 +1417,26 @@ check_step0_before_install() {
     step0_line=$(grep -m1 -E 'Step \*\*0\*\*' "$f" || true)
     [[ "$step0_line" == *"STACK=$st"* ]] || bad+="$f — must name STACK=$st on the Step 0 line"$'\n'
     step0=$(grep -nE 'Step \*\*0\*\*' "$f" | head -n 1 | cut -d: -f1 || true)
-    templated=0
-    for h6b in ${TEMPLATED_STACKS[@]+"${TEMPLATED_STACKS[@]}"}; do
-      if [[ "$h6b" == "$st" ]]; then templated=1; fi
-    done
-    # A templated stack runs kit Step 0 for PART=base, PART=stack and PART=agents; its install commands are
+    # Every stack runs kit Step 0 for PART=base, PART=stack and PART=agents; its install commands are
     # the ones on a line of their own (prose notes mention `pnpm install` too).
-    inst_pat='pnpm install|lefthook install'
-    if [[ "$templated" == 1 ]]; then inst_pat='^(pnpm install|lefthook install)'; fi
-    inst=$(grep -nE "$inst_pat" "$f" | head -n 1 | cut -d: -f1 || true)
-    if [[ "$templated" == 1 ]]; then
-      base_line=$(grep -nE 'STACK=.*PART=base|PART=base.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
-      agents_line=$(grep -nE 'STACK=.*PART=agents|PART=agents.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
-      fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
-      # FastAPI has no pnpm: its AGENTS.md copy must follow the verification-gate step instead.
-      fmt_name="pnpm format line"
-      if [[ "$st" == fastapi ]]; then fmt_name="format/verification-gate step"; fmt_line=$(grep -nE '^### [0-9]+[a-z]?\. Verification gate' "$f" | head -n 1 | cut -d: -f1 || true); fi
-      if [[ -z "$base_line" ]]; then
-        bad+="$f — no kit Step 0 instruction with STACK=$st and PART=base"$'\n'
-      elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
-        bad+="$f:$base_line — the PART=base copy comes after the first install (line $inst)"$'\n'
-      fi
-      if [[ -z "$agents_line" ]]; then
-        bad+="$f — no PART=agents instruction (the AGENTS.md copy must follow the ${fmt_name})"$'\n'
-      elif [[ -z "$fmt_line" ]]; then
-        bad+="$f — no ${fmt_name} for the PART=agents copy to follow"$'\n'
-      elif [[ "$agents_line" -le "$fmt_line" ]]; then
-        bad+="$f:$agents_line — the PART=agents copy comes before the ${fmt_name} ($fmt_line); the AGENTS.md copy must follow it"$'\n'
-      fi
+    inst=$(grep -nE '^(pnpm install|lefthook install)' "$f" | head -n 1 | cut -d: -f1 || true)
+    base_line=$(grep -nE 'STACK=.*PART=base|PART=base.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
+    agents_line=$(grep -nE 'STACK=.*PART=agents|PART=agents.*STACK=' "$f" | head -n 1 | cut -d: -f1 || true)
+    fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
+    # FastAPI has no pnpm: its AGENTS.md copy must follow the verification-gate step instead.
+    fmt_name="pnpm format line"
+    if [[ "$st" == fastapi ]]; then fmt_name="format/verification-gate step"; fmt_line=$(grep -nE '^### [0-9]+[a-z]?\. Verification gate' "$f" | head -n 1 | cut -d: -f1 || true); fi
+    if [[ -z "$base_line" ]]; then
+      bad+="$f — no kit Step 0 instruction with STACK=$st and PART=base"$'\n'
+    elif [[ -n "$inst" && "$base_line" -ge "$inst" ]]; then
+      bad+="$f:$base_line — the PART=base copy comes after the first install (line $inst)"$'\n'
+    fi
+    if [[ -z "$agents_line" ]]; then
+      bad+="$f — no PART=agents instruction (the AGENTS.md copy must follow the ${fmt_name})"$'\n'
+    elif [[ -z "$fmt_line" ]]; then
+      bad+="$f — no ${fmt_name} for the PART=agents copy to follow"$'\n'
+    elif [[ "$agents_line" -le "$fmt_line" ]]; then
+      bad+="$f:$agents_line — the PART=agents copy comes before the ${fmt_name} ($fmt_line); the AGENTS.md copy must follow it"$'\n'
     fi
     if [[ "$st" == fastapi && -n "$step0" ]]; then
       h6b=$(grep -nE '^### 6b\.' "$f" | head -n 1 | cut -d: -f1 || true)

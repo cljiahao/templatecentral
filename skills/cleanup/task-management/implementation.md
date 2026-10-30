@@ -6,7 +6,7 @@
 
 A structured workflow for complex, multi-step tasks. This protocol ensures the agent plans before acting, validates at each step, and leaves a trail for future agents.
 
-Task management is "enabled" when the project's `AGENTS.md` contains a `## Task Management` section referencing this protocol — appended at scaffold time if the user opts in, from the option block each stack's `scaffold/<stack>/source-files.md` carries.
+Task management is "enabled" when the project's `AGENTS.md` contains a `## Task Management` section referencing this protocol — appended at scaffold time if the user opts in, from `scaffold/<stack>/template-tail/task-management.md`.
 
 > **If `superpowers` is installed:** prefer its brainstorm → plan → execute workflow, which includes task tracking. Use this protocol only if superpowers is not available or the user explicitly requests it.
 
