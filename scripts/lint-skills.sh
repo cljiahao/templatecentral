@@ -1515,7 +1515,10 @@ check_copy_script_single() {
   local other
   # shellcheck disable=SC2016  # the anchors are literal script text
   # The paths are made relative first: the checkout's own path may contain "template".
-  other=$(cd "$SKILLS_DIR" && grep -rlF -e 'cp -- "$SK/$t/$p"' -e 'while IFS="$TAB" read -r mode t p' . 2>/dev/null | grep -v -e '^\./scaffold/shared/tc-copy\.sh$' -e '/template[^/]*/' | LC_ALL=C sort || true)
+  other=$(
+    cd "$SKILLS_DIR" || exit 0
+    grep -rlF -e 'cp -- "$SK/$t/$p"' -e 'while IFS="$TAB" read -r mode t p' . 2>/dev/null | grep -v -e '^\./scaffold/shared/tc-copy\.sh$' -e '/template[^/]*/' | LC_ALL=C sort
+  ) || true
   [[ -z "$other" ]] || bad+="another file carries the template copy loop: ${other//$'\n'/, }"$'\n'
   [[ "$copies" == "$script" ]] || bad+="skills/ must hold exactly one copy script, $script (found: ${copies:-none})"$'\n'
   if [[ -f "$script" && ! -x "$script" ]]; then bad+="$script — not executable"$'\n'; fi
