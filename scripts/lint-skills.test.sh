@@ -463,11 +463,12 @@ add_tree_hook() { plant_tree "$AT" template/.claude/hooks/zz-add-only-hook.sh 75
 # take the first fence of that language after the anchor out of the markdown, write its body (without
 # the indent) to the new file and map it in moved.d.
 iam_move() {
-  python3 - "$S" "$(dirname "$S")" "$@" <<'PY'
+  python3 - "$REPO_ROOT/scripts/check-fences.py" "$S" "$(dirname "$S")" "$@" <<'PY'
 import importlib.util, os, sys
-skills, root, md, anchor, lang, new = sys.argv[1:7]
-indent = int(sys.argv[7]) if len(sys.argv) > 7 else 0
-spec = importlib.util.spec_from_file_location("cf", "scripts/check-fences.py")
+sys.dont_write_bytecode = True
+cf_path, skills, root, md, anchor, lang, new = sys.argv[1:8]
+indent = int(sys.argv[8]) if len(sys.argv) > 8 else 0
+spec = importlib.util.spec_from_file_location("cf", cf_path)
 cf = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cf)
 path = os.path.join(skills, md)
@@ -552,8 +553,8 @@ iam_remap() {
 iam_fence_gone_unmapped() { iam_copy_moved; rm -f "$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv"; }
 # The row names another fence, so this side has no mapping.
 iam_row_for_another_index() { iam_copy_moved; iam_remap 3 7; }
-# Fences that share a heading: the kysely heading holds typescript fences 0-2 (and an env fence 3);
-# migrate Step 10 holds typescript fences 0 and 1. Moving one leaves its siblings live.
+# Fences that share a heading are mapped by index: moving one leaves its siblings live, and the
+# lint must still pair each side with the fence of its own index.
 # shellcheck disable=SC2016  # the anchors are literal text with backticks
 KY_ENV=("add/database/typescript/nestjs-kysely-iam.md" 'Add IAM fields to `envSchema`' typescript)
 # shellcheck disable=SC2016  # the anchors are literal text with backticks
@@ -585,6 +586,32 @@ iam_ky_first_sibling_byte_diff() { iam_ky_mid_moved; iam_touch "add/database/typ
 iam_s10_moved_file_byte_diff() { iam_s10_first_moved; printf '// drift\n' >> "$S/$IAM_NEW_S10"; }
 iam_s10_live_sibling_byte_diff() { iam_s10_first_moved; iam_touch "${S10_MAP[@]}"; }
 iam_moved_path_with_empty_segment() { iam_copy_moved; iam_remap 4 skills/migrate/database/zz//template/session.py; }
+# A fence inside a list item may be indented past 3 spaces: the list item's content column sets the limit.
+iam_canon_fence_in_list_item() {
+  python3 - "$S/${IAM_A4[0]}" "${IAM_A4[1]}" <<'PY'
+import sys
+p, anchor = sys.argv[1:3]
+lines = open(p, encoding="utf-8").read().split("\n")
+a = next(i for i, l in enumerate(lines) if anchor in l)
+i = next(i for i in range(a + 1, len(lines)) if lines[i].startswith("```python"))
+j = next(j for j in range(i + 1, len(lines)) if lines[j].startswith("```"))
+for k in range(i, j + 1):
+    if lines[k]:
+        lines[k] = "    " + lines[k]
+lines[i:i] = ["1. Replace the file:", ""]
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+}
+iam_moved_file_crlf() { iam_copy_moved; sed -i.bak 's/$/\r/' "$S/$IAM_NEW_S"; rm -f "$S/$IAM_NEW_S.bak"; }
+iam_moved_file_not_utf8() { iam_copy_moved; printf '\377\376 not utf-8\n' > "$S/$IAM_NEW_S"; }
+# The row maps the fence but the fence is still in the markdown.
+iam_mapped_fence_still_live() {
+  cp "$S/${IAM_S2[0]}" "$S/${IAM_S2[0]}.orig"
+  iam_copy_moved
+  mv "$S/${IAM_S2[0]}.orig" "$S/${IAM_S2[0]}"
+}
+# The same fence is mapped by two moved.d files.
+iam_row_mapped_twice() { iam_copy_moved; cp "$(dirname "$S")/tests/golden/fences/moved.d/zz-test.tsv" "$(dirname "$S")/tests/golden/fences/moved.d/zz-other.tsv"; }
 iam_fence_byte_diff() { strip_token 'create_engine(' 'create_engine (' "$S/migrate/database/fastapi.md"; }
 # shellcheck disable=SC2016  # the anchors are literal heading text with backticks
 iam_copy_anchor_deleted() { strip_token '### Step 2 — Replace `src/database/session.py`' '### Step 2 — Replace session' "$S/migrate/database/fastapi.md"; }
@@ -1074,8 +1101,13 @@ fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_after_the_moved_one "$IA
 fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_before_the_moved_one "$IAMH" iam_ky_first_sibling_byte_diff "NestJS IAM KyselyService"
 fails iam_pairs_fail_on_a_byte_change_in_a_moved_first_fence "$IAMH" iam_s10_moved_file_byte_diff "NestJS IAM envSchema fields"
 fails iam_pairs_fail_on_a_byte_change_in_a_live_sibling_of_a_moved_first_fence "$IAMH" iam_s10_live_sibling_byte_diff "NestJS IAM serviceConfig mapping"
-fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical anchor/fence not found"
+fails iam_pairs_fail_on_a_fence_indented_past_three_spaces "$IAMH" iam_canon_fence_indented_4 "canonical add/database/python/sqlalchemy-iam.md holds 0 fence(s)"
 fails iam_pairs_fail_on_a_mapping_path_with_an_empty_segment "$IAMH" iam_moved_path_with_empty_segment "outside a template* directory"
+passes iam_pairs_pass_an_indented_fence_in_a_list_item "$IAMH" iam_canon_fence_in_list_item
+fails iam_pairs_fail_on_a_moved_file_with_crlf_line_endings "$IAMH" iam_moved_file_crlf "has drifted"
+fails iam_pairs_fail_on_a_moved_file_that_is_not_utf8 "$IAMH" iam_moved_file_not_utf8 "unreadable or not UTF-8"
+fails iam_pairs_fail_when_a_mapped_fence_is_still_in_the_markdown "$IAMH" iam_mapped_fence_still_live "a mapped fence still in the markdown"
+fails iam_pairs_fail_when_a_fence_is_mapped_twice "$IAMH" iam_row_mapped_twice "is mapped twice"
 fails iam_pairs_fail_on_a_fence_byte_diff "$IAMH" iam_fence_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
 fails iam_pairs_fail_on_a_moved_file_byte_diff "$IAMH" iam_moved_file_byte_diff "FastAPI IAM session.py: migrate/database/fastapi.md has drifted"
 fails iam_pairs_fail_on_two_moved_files_byte_diff "$IAMH" iam_moved_both_byte_diff "has drifted"
@@ -1085,7 +1117,7 @@ fails iam_pairs_fail_when_the_mapped_canonical_file_is_missing "$IAMH" iam_canon
 fails iam_pairs_fail_on_an_empty_mapped_file "$IAMH" iam_moved_file_emptied "is empty"
 fails iam_pairs_fail_on_a_symlinked_mapped_file "$IAMH" iam_moved_file_symlinked "through a symlink"
 fails iam_pairs_fail_on_a_mapping_outside_a_template_directory "$IAMH" iam_moved_outside_template "outside a template* directory"
-fails iam_pairs_fail_when_the_fence_is_gone_and_unmapped "$IAMH" iam_fence_gone_unmapped "no moved.d row"
+fails iam_pairs_fail_when_the_fence_is_gone_and_unmapped "$IAMH" iam_fence_gone_unmapped "copy migrate/database/fastapi.md holds 0 fence(s)"
 fails iam_pairs_fail_when_the_row_names_another_fence "$IAMH" iam_row_for_another_index "no moved.d row"
 fails iam_pairs_fail_on_two_empty_fences "$IAMH" iam_both_fences_emptied "is empty"
 fails iam_pairs_fail_when_the_copy_anchor_is_deleted "$IAMH" iam_copy_anchor_deleted "copy anchor/fence not found in migrate/database/fastapi.md"

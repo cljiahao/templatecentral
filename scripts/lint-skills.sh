@@ -702,11 +702,14 @@ PAIRS = [
 ]
 
 def read_text(path):
+    """Return (text, problem): the file's text with its line endings kept, or why it could not be read."""
     try:
         with open(path, encoding="utf-8", newline="") as fh:
-            return fh.read()
+            return fh.read(), None
+    except FileNotFoundError:
+        return None, "not found"
     except (OSError, UnicodeDecodeError):
-        return None
+        return None, "unreadable or not UTF-8"
 
 def dedent(lines, n):
     return "".join((l[n:] if l[:n] == " " * n else l.lstrip(" ")) + "\n" for l in lines)
@@ -754,18 +757,23 @@ def fences(text):
 def resolve(side, moved):
     """Return (text, problem): the side's fence body without its indent, or why it could not be read."""
     md, anchor, lang, index = side
-    text = read_text(skills + "/" + md)
+    text, why = read_text(skills + "/" + md)
     if text is None:
-        return None, "%s not found" % md
+        return None, "%s %s" % (md, why)
     found, per_line, lines = fences(text)
     at = next((n for n, l in enumerate(lines) if anchor in l), None)
     if at is None:
         return None, "anchor/fence not found in %s (%r)" % (md, anchor)
     heading = per_line[at]
     row = moved.get(("skills/" + md, heading, index))
+    live = [f for f in found if f[0] == heading and f[3] not in cf.SHELL_TAGS]
+    mapped_idx = {i for (f, h, i) in moved if f == "skills/" + md and h == heading}
+    # The heading keeps exactly its unmapped snapshot fences; a mapped fence still in the markdown (or
+    # an added one) breaks that count.
+    want = snapshot.get(("skills/" + md, heading), 0) - len(mapped_idx)
+    if snapshot.get(("skills/" + md, heading)) and len(live) != want:
+        return None, "%s holds %d fence(s) under %r where the snapshot and moved.d leave %d (a mapped fence still in the markdown?)" % (md, len(live), heading, want)
     if row is None:
-        live = [f for f in found if f[0] == heading and f[3] not in cf.SHELL_TAGS]
-        mapped_idx = {i for (f, h, i) in moved if f == "skills/" + md and h == heading}
         unmapped = [i for i in range(len(live) + len(mapped_idx)) if i not in mapped_idx]
         if index not in unmapped or unmapped.index(index) >= len(live):
             return None, "anchor/fence not found in %s (%r): no fence under %r and no moved.d row for index %d" % (md, anchor, heading, index)
@@ -781,9 +789,9 @@ def resolve(side, moved):
         if cf.symlink_in_chain(root, tpl):
             return None, "moved.d row (%s) maps %s through a symlink" % (src, tpl)
         # The file holds the fence body without its indent; the row's indent=N only re-adds it for hashing.
-        data = read_text(os.path.join(root, tpl))
+        data, why = read_text(os.path.join(root, tpl))
         if data is None:
-            return None, "mapped file %s (moved.d row %s) not found" % (tpl, src)
+            return None, "mapped file %s (moved.d row %s) %s" % (tpl, src, why)
         if data and not data.endswith("\n"):
             return None, "mapped file %s must end in a newline" % tpl
         body = data
@@ -792,11 +800,20 @@ def resolve(side, moved):
         return None, "%s is empty" % md
     return body, None
 
+gdir = os.path.join(root, "tests", "golden", "fences")
+moved, snapshot = {}, {}
 try:
-    moved = {(f, h, i): (tpl, ind, src) for src, f, h, i, tpl, ind in cf.read_moved(os.path.join(root, "tests", "golden", "fences"))}
+    for src, f, h, i, tpl, ind in cf.read_moved(gdir):
+        if (f, h, i) in moved:
+            print("moved.d: %s :: %s :: %d is mapped twice (%s and %s)" % (f, h, i, moved[(f, h, i)][2], src))
+        moved[(f, h, i)] = (tpl, ind, src)
+    for skill in cf.SKILLS:
+        tsv = os.path.join(gdir, skill + ".tsv")
+        if os.path.isfile(tsv):
+            for _digest, f, h, _i, _lang in cf.read_rows(tsv, (5,)):
+                snapshot[(f, h)] = snapshot.get((f, h), 0) + 1
 except (OSError, ValueError) as e:
-    print("moved.d unreadable: %s" % e)
-    moved = {}
+    print("moved.d or the fence snapshot is unreadable: %s" % e)
 
 for label, canon, copy in PAIRS:
     a, pa = resolve(canon, moved)
