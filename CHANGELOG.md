@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [7.0.0] — 2026-10-30
+
 ### Changed
 - The copy script is a real file, `skills/scaffold/shared/tc-copy.sh`, instead of a `bash <<'TC_GUARD'` heredoc in `harness-kit.md` Step 0 (and `TC_TAIL` in Step G). The agent runs it with `TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash "<skill-dir>/shared/tc-copy.sh" "<target>"` and never reads its body. The inputs carry a `TC_` prefix so a caller's `CI=true` cannot reach it. It keeps every refusal, the `.tmpl` suffix stripping, the manifest modes and the `STOP:` line, follows a symlink to itself, refuses a non-bash shell, and refuses `/` and the home directory as a target. The seeded output is byte for byte what it was. `TC_PART=tail` appends the AGENTS.md tail, which migrate also runs from `<skill-dir>/../scaffold/shared/tc-copy.sh`. Scaffold load against v6.1.2 (`count-load.sh --base v6.1.2`): nextjs −55.5%, vite-react −54.4%, fastapi −52.9%, nestjs −52.3% (nestjs was −49.5% with the heredoc). `check_copy_script_single` requires exactly one copy script, bans every shell heredoc in the skills markdown and any other file carrying the copy loop; `test-template-copy.sh` and the CI `shell-lint` job run and shellcheck the real script.
 
