@@ -1269,7 +1269,7 @@ TAIL_FILE="$SHARED/template-tail/AGENTS-tail.md"
 check 1 "$(grep -c 'see delta table for stack command' "$TAIL_FILE")" "agents_tail: the tail file holds the marker exactly once"
 script_txt=$(<"$COPY_SCRIPT")
 # shellcheck disable=SC2016  # the anchors are literal script text
-tail_blk=${script_txt#*'if [ "$PART" = tail ]; then'}; tail_blk=${tail_blk%%$'\nfi\n'*}
+tail_blk=${script_txt#*$'\nif [ "$PART" = tail ]; then\n'}; tail_blk=${tail_blk%%$'\nfi\n'*}
 check 1 "$([[ "$tail_blk" == *'ENVIRON["TC"]'* && "$tail_blk" != *'sed '* ]] && echo 1 || echo 0)" "agents_tail: the script fills the marker from fixed values, with no sed pattern"
 run_tail() { # run_tail <stack> <project dir> [skill-dir for the script] — PART=tail on <project dir>
   (cd "$2" && TC_STACK=$1 TC_PART=tail TC_CI="" bash "${3:-$SK}/shared/tc-copy.sh" "$2" 2>&1)
@@ -1400,6 +1400,65 @@ out=$(TC_STACK=rails TC_PART=tail TC_CI="" bash "$COPY_SCRIPT" "$tgt" 2>&1)
 check 1 "$([[ "$out" == "Refusing to append the tail: "* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "tail_refusal_names_the_action ($out)"
 out=$(TC_STACK=nextjs TC_PART=tail TC_CI="" bash "$COPY_SCRIPT" "$tgt" 2>&1)
 check 1 "$([[ "$out" == "Refusing to append the tail: "*"AGENTS.md does not exist"* ]] && echo 1 || echo 0)" "tail_refusal_without_agents_names_the_action ($out)"
+
+# ── TC_PART=leaf: a leaf's own template trees under skills/add and skills/migrate ──
+alt_leaf() { # alt_leaf <name> — a writable skills tree with one fixture leaf, add/zz/leaf, holding two trees; echoes the skills dir
+  local d="$T/leaf-$1"; rm -rf "$d"; mkdir -p "$d"; cp -Rp "$SK/.." "$d/skills" 2>/dev/null || cp -Rp "$SK/.." "$d/skills"
+  local l="$d/skills/add/zz/leaf"; mkdir -p "$l/template/src/zz" "$l/template-test/test" "$l/template/.claude/skills/zz"
+  printf 'export const a = 1;\n' > "$l/template/src/zz/a.ts"; printf 'x\n' > "$l/template-test/test/a.spec.ts"; printf -- '---\nname: zz\n---\n' > "$l/template/.claude/skills/zz/SKILL.md.tmpl"
+  printf 'template/src/zz/a.ts 644 - -\ntemplate/.claude/skills/zz/SKILL.md.tmpl 644 - -\ntemplate-test/test/a.spec.ts 644 - -\n' > "$l/template.manifest"
+  echo "$d/skills"
+}
+leaf_run() { # leaf_run <skills dir> <target> [leaf] [tree]
+  TC_PART=leaf TC_LEAF="${3-add/zz/leaf}" TC_TREE="${4-}" bash "$1/scaffold/shared/tc-copy.sh" "$2" 2>&1
+}
+lsk=$(alt_leaf ok); mkdir -p "$T/lf1"
+out=$(leaf_run "$lsk" "$T/lf1"); ec=$?
+check 0 "$ec" "leaf_copies_every_tree ($out)"
+check 1 "$([[ -f "$T/lf1/src/zz/a.ts" && -f "$T/lf1/test/a.spec.ts" && -f "$T/lf1/.claude/skills/zz/SKILL.md" && ! -e "$T/lf1/.claude/skills/zz/SKILL.md.tmpl" ]] && echo 1 || echo 0)" "leaf_copies_every_tree: files landed, .tmpl stripped"
+mkdir -p "$T/lf2"; out=$(leaf_run "$lsk" "$T/lf2" add/zz/leaf template-test); ec=$?
+check 0 "$ec" "leaf_copies_one_tree ($out)"
+check 1 "$([[ -f "$T/lf2/test/a.spec.ts" && ! -e "$T/lf2/src" ]] && echo 1 || echo 0)" "leaf_copies_one_tree: only the named tree"
+out=$(leaf_run "$lsk" "$T/lf1"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"already exist"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "leaf_refuses_existing_path ($out)"
+# shellcheck disable=SC2016  # the dollar sign is part of the bad value
+for bad in "../../etc" "add/../migrate/x" "add//zz" "add/zz/leaf/" "add/z z/leaf" 'add/$x' "scaffold/shared" "standards/x" ""; do
+  mkdir -p "$T/lf3"; out=$(leaf_run "$lsk" "$T/lf3" "$bad"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "leaf_refuses_leaf_value[$bad] ($out)"
+done
+check . "$(snap "$T/lf3")" "leaf_refuses_leaf_value: nothing written"
+mkdir -p "$T/lf4"; out=$(leaf_run "$lsk" "$T/lf4" add/zz/missing); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"no leaf"* ]] && echo 1 || echo 0)" "leaf_refuses_a_missing_leaf ($out)"
+for tr in "tmpl" "template/" "template-" "template-A" "../template" "template-x/y"; do
+  out=$(leaf_run "$lsk" "$T/lf4" add/zz/leaf "$tr"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"unknown TC_TREE"* ]] && echo 1 || echo 0)" "leaf_refuses_tree_value[$tr] ($out)"
+done
+out=$(TC_PART=leaf TC_LEAF=add/zz/leaf TC_CI=github bash "$lsk/scaffold/shared/tc-copy.sh" "$T/lf4" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "leaf_refuses_ci"
+out=$(CI=true STACK=rails PART=bogus TC_PART=leaf TC_LEAF=add/zz/leaf bash "$lsk/scaffold/shared/tc-copy.sh" "$T/lf4" 2>&1); ec=$?
+check 0 "$ec" "leaf_ignores_the_callers_env ($out)"
+lsk=$(alt_leaf nomanifest); rm "$lsk/add/zz/leaf/template.manifest"; mkdir -p "$T/lf5"
+out=$(leaf_run "$lsk" "$T/lf5"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"template.manifest is missing or empty"* ]] && echo 1 || echo 0)" "leaf_refuses_a_missing_manifest ($out)"
+lsk=$(alt_leaf unlisted); printf 'x\n' > "$lsk/add/zz/leaf/template/src/zz/extra.ts"; mkdir -p "$T/lf6"
+out=$(leaf_run "$lsk" "$T/lf6"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"extra.ts"* ]] && echo 1 || echo 0)" "leaf_refuses_an_unlisted_file ($out)"
+check . "$(snap "$T/lf6")" "leaf_refuses_an_unlisted_file: nothing written"
+lsk=$(alt_leaf symlink); ln -s /etc/hosts "$lsk/add/zz/leaf/template/src/zz/link"; mkdir -p "$T/lf7"
+out=$(leaf_run "$lsk" "$T/lf7"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"symlink"* ]] && echo 1 || echo 0)" "leaf_refuses_a_symlink_in_a_tree ($out)"
+lsk=$(alt_leaf notrees); rm -rf "$lsk/add/zz/leaf/template" "$lsk/add/zz/leaf/template-test"; mkdir -p "$T/lf8"
+out=$(leaf_run "$lsk" "$T/lf8"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"no template tree"* ]] && echo 1 || echo 0)" "leaf_refuses_a_leaf_with_no_tree ($out)"
+lsk=$(alt_leaf symleaf); mv "$lsk/add/zz/leaf" "$lsk/add/zz/real"; ln -s real "$lsk/add/zz/leaf"; mkdir -p "$T/lf9"
+out=$(leaf_run "$lsk" "$T/lf9"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"symlink"* ]] && echo 1 || echo 0)" "leaf_refuses_a_symlinked_leaf_dir ($out)"
+if command -v zsh >/dev/null 2>&1; then
+  mkdir -p "$T/lf10"; out=$(zsh -c "TC_PART=leaf TC_LEAF=add/zz/leaf bash '$(alt_leaf zsh)/scaffold/shared/tc-copy.sh' '$T/lf10'" 2>&1); ec=$?
+  check 0 "$ec" "leaf_runs_from_zsh ($out)"
+fi
+mkdir -p "$T/lf11"; out=$(cd "$T/lf11" && TC_PART=leaf TC_LEAF=add/zz/leaf bash "$lsk/scaffold/shared/tc-copy.sh" . 2>&1)
+check 1 "$([[ "$out" == *"symlink"* || "$out" == *"STOP"* ]] && echo 1 || echo 0)" "leaf_relative_target_still_guarded"
 
 # ── dist_keeps_templates ─────────────────────────────────────────────────────
 dist="$T/dist/agents-skills"

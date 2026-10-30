@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `tc-copy.sh` takes `TC_PART=leaf` with `TC_LEAF=<add|migrate>/<leaf stem>` and optional `TC_TREE`, so an `add` or `migrate` leaf copies its own template trees per its `template.manifest` with every refusal of the scaffold parts (symlinks, unlisted files, clashes, `..` and odd characters in the leaf path). It is the copy mechanism for the 7.1 fence-to-file moves.
+
 ---
 
 ## [7.0.0] — 2026-10-30
