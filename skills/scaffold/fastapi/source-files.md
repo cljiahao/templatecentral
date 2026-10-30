@@ -20,13 +20,13 @@ The source files are real files in `<skill-dir>/fastapi/template/` (and `AGENTS.
 
 ### 1. Create target directory and copy the template files
 
-Create `<target-directory>/`, then load the kit index: its Step 0 fence is the copy script (later steps run it with other `PART` values).
+Create `<target>/`, then load the kit index: its Step 0 names the copy script `<skill-dir>/shared/tc-copy.sh` (later steps run it with other `PART` values).
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
 ```
 
-Run kit Step **0** now with `STACK=fastapi` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
+Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
 
 Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
@@ -81,7 +81,7 @@ python -m pyright src/     # zero type errors
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** again with `STACK=fastapi` in its fence and `PART=agents`: it copies `AGENTS.md` from `<skill-dir>/fastapi/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
+Run kit Step **0** again as `TC_STACK=fastapi TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/fastapi/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
 
 Afterwards, check that no placeholder is left anywhere in the project:
 
@@ -101,7 +101,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Execute kit Step **0** now with `STACK=fastapi` in its fence and `PART=base` (harness template trees), then Steps **A through D** (settings.json with `PART=settings`, hook notes, then FUTURE.md, CONSTITUTION.md and `/skill-audit` with `PART=late`, each with `STACK=fastapi`). The verify skill (6c) is already in place, which Step E requires.
+Execute kit Step **0** now as `TC_STACK=fastapi TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"` (harness template trees), then Steps **A through D** (settings.json with `TC_PART=settings`, hook notes, then FUTURE.md, CONSTITUTION.md and `/skill-audit` with `TC_PART=late`, each run of `tc-copy.sh` with `TC_STACK=fastapi`). The verify skill (6c) is already in place, which Step E requires.
 
 ### 6c. Project skill files (`.claude/skills/`)
 

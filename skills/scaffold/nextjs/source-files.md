@@ -32,13 +32,13 @@ The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.m
 
 ### 1. Create directory and files
 
-Create the target directory, then load the kit index: its Step 0 fence is the copy script (Step B3 runs it with `PART=ci`).
+Create the target directory, then load the kit index: its Step 0 names the copy script `<skill-dir>/shared/tc-copy.sh` (Step B3 runs it with `TC_PART=ci`).
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
 ```
 
-Run kit Step **0** now with `STACK=nextjs` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/nextjs/template/` into the project root per `<skill-dir>/nextjs/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
+Run kit Step **0** now as `TC_STACK=nextjs TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/nextjs/template/` into the project root per `<skill-dir>/nextjs/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
 
 Then set the project name in `package.json`. The name must match `^[a-z0-9][a-z0-9-]*$` (lowercase letters, digits and hyphens, starting with a letter or digit). If it does not (a quote, backslash, space or newline would break the JSON), stop and ask the user for a valid name; do not edit anything. Otherwise, with the Edit tool, replace `__TC_PROJECT_NAME__` in `package.json` with the name, then check that nothing was left unsubstituted and that the file still parses:
 
@@ -59,7 +59,7 @@ Both must print nothing.
 
 ### 3. Initialise git and install dependencies
 
-Before the first install, run kit Step **0** again with `STACK=nextjs` in its fence and `PART=base`: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
+Before the first install, run kit Step **0** again as `TC_STACK=nextjs TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
 
 ```bash
 git init
@@ -104,7 +104,7 @@ If check fails, a generated file violates the eslint or prettier config.
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** a third time with `STACK=nextjs` in its fence and `PART=agents`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
+Run kit Step **0** a third time as `TC_STACK=nextjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
 
 Afterwards, check that no placeholder is left anywhere in the project:
 
@@ -124,7 +124,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Kit Step **0** (`PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`, each run of the Step 0 script with `STACK=nextjs` in its fence). The verify skills (6c) are already in place, which Step E requires.
+Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `TC_PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `TC_PART=late`, each a run of `tc-copy.sh` with `TC_STACK=nextjs`). The verify skills (6c) are already in place, which Step E requires.
 
 ### 6c. Project skill files (`.claude/skills/`)
 
