@@ -1,24 +1,38 @@
 #!/usr/bin/env bash
 # tc-copy.sh — the one script that copies templateCentral's template trees into a project.
 #
-# Usage: STACK=<stack> PART=<part> [CI=<host>] bash tc-copy.sh <target>
-#   STACK  nestjs | nextjs | vite-react | fastapi
-#   PART   base | settings | ci | late | stack | agents | tail   (see skills/scaffold/shared/harness-kit.md, Step 0)
-#   CI     github | azure | none; required for PART=ci, empty for every other part
-#   target the project root; it must be an existing directory
+# Usage: TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash tc-copy.sh <target>
+#   TC_STACK  nestjs | nextjs | vite-react | fastapi
+#   TC_PART   base | settings | ci | late | stack | agents | tail   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
+#   target    the project root; it must be an existing directory
+# The inputs carry a TC_ prefix because CI, STACK and PART are common in a caller's environment (CI=true
+# is exported by most CI hosts and agent sandboxes).
 #
-# It finds the trees and manifests from its own location, so it works from the plugin directory and
-# from the dist layout that scripts/build-agents-dist.sh builds. A refusal writes nothing and ends
-# with a STOP: line.
-SH=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd) || SH=
-STACK=${STACK-}
-CI=${CI-}
-PART=${PART-}
+# It finds the trees and manifests from its own location (following a symlink to it), so it works from
+# the plugin directory and from the dist layout that scripts/build-agents-dist.sh builds. A refusal
+# writes nothing and ends with a STOP: line.
+[ -n "${BASH_VERSION-}" ] || { echo "tc-copy.sh: run with bash" >&2; exit 1; }
+STACK=${TC_STACK-}
+CI=${TC_CI-}
+PART=${TC_PART-}
 WHAT="scaffold"
+if [ "$PART" = tail ]; then WHAT="append the tail"; fi
 NL='
 '
 TAB=$(printf '\t')
 stop() { printf 'Refusing to %s: %s\nSTOP: do not rm or overwrite anything; report this to the user.\n' "$WHAT" "$1"; exit 1; }
+src=${BASH_SOURCE[0]:-$0}
+hops=0
+while [ -L "$src" ] && [ "$hops" -lt 40 ]; do
+  link=$(readlink -- "$src") || break
+  case "$link" in
+    /*) src=$link ;;
+    *) src=$(dirname -- "$src")/$link ;;
+  esac
+  hops=$((hops + 1))
+done
+SH=$(cd -- "$(dirname -- "$src")" 2>/dev/null && pwd) || SH=
 [ $# -eq 1 ] || stop "want exactly one argument, the target directory (got $#)"
 TGT=$1
 case "$TGT" in ''|*'<tar'"get>"*) stop "the target path is empty or was not substituted" ;; esac
@@ -31,6 +45,9 @@ case "$SH" in
 esac
 SK=$SH
 [ -d "$TGT" ] || stop "$TGT is not an existing directory"
+real=$(cd -- "$TGT" 2>/dev/null && pwd -P) || real=
+if [ "$real" = / ]; then stop "$TGT is the filesystem root, not a project directory"; fi
+if [ -n "${HOME-}" ] && [ "$real" = "$(cd -- "$HOME" 2>/dev/null && pwd -P)" ]; then stop "$TGT is your home directory, not a project directory"; fi
 case "$STACK" in
   nestjs|nextjs|vite-react) V=ts ;;
   fastapi) V=py ;;
@@ -38,11 +55,11 @@ case "$STACK" in
 esac
 case "$PART" in
   base)
-    [ -z "$CI" ] || stop "CI must stay empty in Step 0"
+    [ -z "$CI" ] || stop "TC_CI must stay empty in Step 0"
     SEL="template template-$V" ;;
   settings | late | tail)
-    [ -z "$CI" ] || stop "CI must stay empty for PART=$PART"
-    [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: PART=$PART runs after the stack's AGENTS.md step and its verification gate"
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
+    [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: TC_PART=$PART runs after the stack's AGENTS.md step and its verification gate"
     if [ "$PART" = settings ]; then SEL="template-settings-$V"; else SEL="template-late"; fi ;;
   ci)
     case "$CI" in
@@ -52,13 +69,12 @@ case "$PART" in
       *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
   stack | agents)
-    [ -z "$CI" ] || stop "CI must stay empty for PART=$PART"
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
     SK=${SH%/shared}/$STACK
     if [ "$PART" = stack ]; then SEL="template"; else SEL="template-agents"; fi ;;
   *) stop "unknown PART '$PART'" ;;
 esac
 if [ "$PART" = tail ]; then
-  WHAT="append the tail"
   case "$STACK" in
     fastapi) TC='python -m pyright src/' ;;
     *) TC='pnpm exec tsc --noEmit --incremental' ;;

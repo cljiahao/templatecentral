@@ -225,11 +225,11 @@ import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
 assert "PART=base" in t
-open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: STACK=nextjs PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
+open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: TC_STACK=nextjs TC_PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
 PY
 }
 nx_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NXD)/source-files.md"; }
-nx_agents_before_format() { printf 'Run kit Step 0: STACK=nextjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
+nx_agents_before_format() { printf 'Run kit Step 0: TC_STACK=nextjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(NXD)/source-files.md" > "$S/x" && mv "$S/x" "$(NXD)/source-files.md"; }
 nx_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(NXD)/source-files.md"; }
 # vite-react stack trees (skills/scaffold/vite-react/template, template-agents, template.manifest)
 VRD() { echo "$S/scaffold/vite-react"; }
@@ -259,11 +259,11 @@ import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
 assert "PART=base" in t
-open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: STACK=vite-react PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
+open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: TC_STACK=vite-react TC_PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
 PY
 }
 vr_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(VRD)/source-files.md"; }
-vr_agents_before_format() { printf 'Run kit Step 0: STACK=vite-react PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(VRD)/source-files.md" > "$S/x" && mv "$S/x" "$(VRD)/source-files.md"; }
+vr_agents_before_format() { printf 'Run kit Step 0: TC_STACK=vite-react TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(VRD)/source-files.md" > "$S/x" && mv "$S/x" "$(VRD)/source-files.md"; }
 vr_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(VRD)/source-files.md"; }
 exact_pin_in_vr_package() { python3 - "$(VRD)/template/package.json" <<'PY'
 import sys
@@ -317,11 +317,11 @@ import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
 assert "PART=base" in t
-open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: STACK=nestjs PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
+open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: TC_STACK=nestjs TC_PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
 PY2
 }
 ns_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(NSD)/source-files.md"; }
-ns_agents_before_format() { printf 'Run kit Step 0: STACK=nestjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(NSD)/source-files.md" > "$S/x" && mv "$S/x" "$(NSD)/source-files.md"; }
+ns_agents_before_format() { printf 'Run kit Step 0: TC_STACK=nestjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(NSD)/source-files.md" > "$S/x" && mv "$S/x" "$(NSD)/source-files.md"; }
 ns_no_format_line() { strip_token 'pnpm format' 'pnpm fmt' "$(NSD)/source-files.md"; }
 ns_symlinked_dir() { rm -rf "$(NSD)/template/src/config" && ln -s "$(NSD)/template/src/common" "$(NSD)/template/src/config"; }
 ns_symlinked_file() { rm "$(NSD)/template/.npmrc" && ln -s "$(NSD)/template/.prettierrc" "$(NSD)/template/.npmrc"; }
@@ -398,6 +398,16 @@ fence_dash_heredoc() { printf "\nbash <<-'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness
 fence_double_quoted() { printf '\nbash <<"TC_X"\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
 fence_unquoted() { printf '\nbash <<TC_X\nexit 0\nTC_X\n' >> "$SH/harness-kit-enforcement.md"; }
 fence_sh() { printf "\nsh <<'TC_X'\nexit 0\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
+ev_no_space() { printf '\nbash<<X\nexit 0\nX\n' >> "$SH/harness-kit-enforcement.md"; }
+ev_exec_bash() { printf '\nexec bash<<X\nexit 0\nX\n' >> "$SH/harness-kit-enforcement.md"; }
+ev_dash() { printf '\ndash <<X\nexit 0\nX\n' >> "$SH/harness-kit-enforcement.md"; }
+ev_ksh() { printf '\nksh <<X\nexit 0\nX\n' >> "$SH/harness-kit-enforcement.md"; }
+ev_abs_path() { printf '\n/opt/homebrew/bin/bash <<X\nexit 0\nX\n' >> "$SH/harness-kit-enforcement.md"; }
+ev_procsub() { printf '\nbash <(cat <<X\nexit 0\nX\n)\n' >> "$SH/harness-kit-enforcement.md"; }
+# shellcheck disable=SC2016  # the heredoc text is literal
+ev_eval() { printf '\neval "$(cat <<X\nexit 0\nX\n)"\n' >> "$SH/harness-kit-enforcement.md"; }
+# shellcheck disable=SC2016  # the copy line is literal text
+second_loop_script() { mkdir -p "$S/add/zz"; printf '#!/usr/bin/env bash\ncp -- "$SK/$t/$p" "$TGT/$dest"\n' > "$S/add/zz/other-copy.sh"; }
 guard_fence_returns() { printf "\n\`\`\`bash\nbash <<'TC_GUARD'\nexit 0\nTC_GUARD\n\`\`\`\n" >> "$SH/harness-kit.md"; }
 tail_fence_returns() { printf "\n\`\`\`bash\nbash <<'TC_TAIL'\nexit 0\nTC_TAIL\n\`\`\`\n" >> "$SH/harness-kit-finalize.md"; }
 kit_forgets_tail_part() { strip_token 'PART=tail' 'PART=tai' "$SH/harness-kit.md"; }
@@ -522,8 +532,8 @@ step0_stack_on_other_line() { python3 - "$S/scaffold/nextjs/source-files.md" <<'
 import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
-assert "STACK=nextjs PART=stack" in t
-open(p, "w", encoding="utf-8").write(t.replace("STACK=nextjs PART=stack", "PART=stack", 1) + "\nSTACK=nextjs\n")
+assert "TC_STACK=nextjs TC_PART=stack" in t
+open(p, "w", encoding="utf-8").write(t.replace("TC_STACK=nextjs TC_PART=stack", "TC_PART=stack", 1) + "\nSTACK=nextjs\n")
 PY
 }
 fails step0_stack_must_be_on_the_step0_line "Scaffold runs kit Step 0 before the first install" step0_stack_on_other_line "must name STACK=nextjs on the Step 0 line"
@@ -559,11 +569,11 @@ import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
 assert "PART=base" in t
-open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: STACK=fastapi PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
+open(p, "w", encoding="utf-8").write(t.replace("PART=base", "PART=bas") + "\nRun kit Step 0: TC_STACK=fastapi TC_PART=base bash \"<skill-dir>/shared/tc-copy.sh\" \"<target>\".\n")
 PY
 }
 fa_no_base_line() { strip_token 'PART=base' 'PART=bas' "$(FAD)/source-files.md"; }
-fa_agents_before_gate() { printf 'Run kit Step 0: STACK=fastapi PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(FAD)/source-files.md" > "$S/x" && mv "$S/x" "$(FAD)/source-files.md"; }
+fa_agents_before_gate() { printf 'Run kit Step 0: TC_STACK=fastapi TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>".\n' | cat - "$(FAD)/source-files.md" > "$S/x" && mv "$S/x" "$(FAD)/source-files.md"; }
 fa_no_agents_line() { strip_token 'PART=agents' 'PART=agent' "$(FAD)/source-files.md"; }
 nx_no_format_line() { strip_token 'pnpm format ' 'pnpm fmt ' "$(NXD)/source-files.md"; }
 vr_no_format_line() { strip_token 'pnpm format' 'pnpm fmt' "$(VRD)/source-files.md"; }
@@ -771,6 +781,14 @@ fails_both copy_script_fails_on_an_unquoted_delimiter "The copy script has exact
 fails_both copy_script_fails_on_a_sh_fence "The copy script has exactly one copy" fence_sh "a shell heredoc in"
 fails_both copy_script_fails_when_the_guard_heredoc_returns "The copy script has exactly one copy" guard_fence_returns "a shell heredoc in"
 fails_both copy_script_fails_when_the_tail_heredoc_returns "The copy script has exactly one copy" tail_fence_returns "a shell heredoc in"
+fails_both copy_script_fails_on_bash_without_a_space "The copy script has exactly one copy" ev_no_space "a shell heredoc in"
+fails_both copy_script_fails_on_exec_bash_without_a_space "The copy script has exactly one copy" ev_exec_bash "a shell heredoc in"
+fails_both copy_script_fails_on_dash "The copy script has exactly one copy" ev_dash "a shell heredoc in"
+fails_both copy_script_fails_on_ksh "The copy script has exactly one copy" ev_ksh "a shell heredoc in"
+fails_both copy_script_fails_on_a_homebrew_bash_path "The copy script has exactly one copy" ev_abs_path "a shell heredoc in"
+fails_both copy_script_fails_on_process_substitution "The copy script has exactly one copy" ev_procsub "a shell heredoc in"
+fails_both copy_script_fails_on_eval_of_a_heredoc "The copy script has exactly one copy" ev_eval "a shell heredoc in"
+fails_both copy_script_fails_on_a_second_script_with_the_copy_loop "The copy script has exactly one copy" second_loop_script "another file carries the template copy loop"
 fails scaffold_seeds_fails_when_the_script_is_gone "Scaffold/migrate templates seed the complete harness" no_copy_script "copy script not found"
 fails scaffold_seeds_fails_when_kit_forgets_the_tail_part "Scaffold/migrate templates seed the complete harness" kit_forgets_tail_part "harness-kit.md — Step 0 copy instruction missing: PART=tail"
 fails scaffold_seeds_fails_when_kit_forgets_the_call_line "Scaffold/migrate templates seed the complete harness" kit_forgets_call_line "Step 0 copy instruction missing: bash"

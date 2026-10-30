@@ -62,12 +62,12 @@ def q(p):
     return shlex.quote(p if p == "" or p.startswith("/") else "./" + p)
 out = []
 for line in sys.stdin.read().split("\n"):
-    if line.startswith("STACK="):
-        line = "STACK=" + shlex.quote(stack)
-    elif line.startswith("CI="):
-        line = "CI=" + shlex.quote(ci)
-    elif line.startswith("PART=") and part is not None:
-        line = "PART=" + shlex.quote(part)
+    if line.startswith("TC_STACK="):
+        line = "TC_STACK=" + shlex.quote(stack)
+    elif line.startswith("TC_CI="):
+        line = "TC_CI=" + shlex.quote(ci)
+    elif line.startswith("TC_PART=") and part is not None:
+        line = "TC_PART=" + shlex.quote(part)
     out.append(line)
 text = "\n".join(out)
 text = text.replace("\"<skill-dir>/shared/tc-copy.sh\"", q(sk + "/shared/tc-copy.sh")).replace("\"<target>\"", q(tgt))
@@ -92,13 +92,13 @@ render() {
 }
 
 # The call line every doc runs (harness-kit.md Step 0): the three variables in the environment, the target as the argument.
-STEP0='STACK=
-CI=
-PART=base
-export STACK CI PART
+STEP0='TC_STACK=
+TC_CI=
+TC_PART=base
+export TC_STACK TC_CI TC_PART
 bash "<skill-dir>/shared/tc-copy.sh" "<target>"'
 # Step B3 runs the same script with PART=ci.
-CI_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^PART=base$/PART=ci/')
+CI_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^TC_PART=base$/TC_PART=ci/')
 COPY_SCRIPT="$SHARED/tc-copy.sh"
 check 1 "$([[ -x "$COPY_SCRIPT" ]] && echo 1 || echo 0)" "the copy script exists and is executable"
 check 1 "$([[ "$(sed -n '/^## Step 0 /,/^## Per-stack/p' "$KIT_INDEX")" == *'bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "kit Step 0 shows the call line the tests run"
@@ -379,7 +379,7 @@ check 1 "$([[ -w "$tgt/.claude" && -w "$tgt/.claude/hooks" && -w "$tgt/.claude/h
 chmod -R u+w "$sk/shared"
 
 # the STACK, CI, PART and WHAT lines differ between runs; norm drops them so a text comparison sees the script alone
-norm() { printf '%s\n' "$1" | grep -v '^STACK=\|^CI=\|^PART=\|^WHAT=' ; }
+norm() { printf '%s\n' "$1" | grep -v '^TC_STACK=\|^TC_CI=\|^TC_PART=\|^WHAT=' ; }
 check 1 "$([[ "$(norm "$STEP0")" == "$(norm "$CI_SNIPPET")" ]] && echo 1 || echo 0)" "single_script: the PART=ci run is Step 0's call with the PART line set"
 
 # the PART=ci CI=none path leaves exactly what 6.x left: the golden tree minus ci-gates.sh and the CI file
@@ -706,13 +706,13 @@ SK=$saved
 # (AGENTS.md, copied at Step 6), listed in <stack>/template.manifest. The copy is kit Step 0's guard
 # run with PART=stack and PART=agents, so the stack fences are that fence with the PART line set.
 NX="$SK/nextjs"
-STACK_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^PART=base$/PART=stack/')
-AGENTS_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^PART=base$/PART=agents/')
-check 1 "$([[ "$STACK_SNIPPET" == *"PART=stack"* && "$AGENTS_SNIPPET" == *"PART=agents"* ]] && echo 1 || echo 0)" "stack copy fences derive from kit Step 0 (PART=stack, PART=agents)"
+STACK_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^TC_PART=base$/TC_PART=stack/')
+AGENTS_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^TC_PART=base$/TC_PART=agents/')
+check 1 "$([[ "$STACK_SNIPPET" == *"TC_PART=stack"* && "$AGENTS_SNIPPET" == *"TC_PART=agents"* ]] && echo 1 || echo 0)" "stack copy fences derive from kit Step 0 (PART=stack, PART=agents)"
 # the nextjs docs run kit Step 0 for each part, with the stack named
 nxdoc=$(cat "$NX/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$nxdoc" == *'STACK=nextjs PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'STACK=nextjs PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'STACK=nextjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$nxdoc" == *'TC_STACK=nextjs TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'TC_STACK=nextjs TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'TC_STACK=nextjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
 # the nextjs docs carry no copy of the guard: the kit index holds the only one
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NX/source-files.md" || true)" "nextjs_docs_hold_no_second_guard"
 run_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nextjs "")" 2>&1; }   # run_stack <target>
@@ -1080,7 +1080,7 @@ fi
 VR="$SK/vite-react"
 vrdoc=$(cat "$VR/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$vrdoc" == *'STACK=vite-react PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'STACK=vite-react PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'STACK=vite-react PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$vrdoc" == *'TC_STACK=vite-react TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'TC_STACK=vite-react TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'TC_STACK=vite-react TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$VR/source-files.md" || true)" "vite_react_docs_hold_no_second_guard"
 check 0 "$([[ -e "$VR/config-files.md" ]] && echo 1 || echo 0)" "vite_react_has_no_config_files_md"
 run_vr_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" vite-react "")" 2>&1; }
@@ -1272,7 +1272,7 @@ script_txt=$(<"$COPY_SCRIPT")
 tail_blk=${script_txt#*'if [ "$PART" = tail ]; then'}; tail_blk=${tail_blk%%$'\nfi\n'*}
 check 1 "$([[ "$tail_blk" == *'ENVIRON["TC"]'* && "$tail_blk" != *'sed '* ]] && echo 1 || echo 0)" "agents_tail: the script fills the marker from fixed values, with no sed pattern"
 run_tail() { # run_tail <stack> <project dir> [skill-dir for the script] — PART=tail on <project dir>
-  (cd "$2" && STACK=$1 PART=tail CI="" bash "${3:-$SK}/shared/tc-copy.sh" "$2" 2>&1)
+  (cd "$2" && TC_STACK=$1 TC_PART=tail TC_CI="" bash "${3:-$SK}/shared/tc-copy.sh" "$2" 2>&1)
 }
 for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec tsc --noEmit --incremental' nestjs:'pnpm exec tsc --noEmit --incremental' fastapi:'python -m pyright src/'; do
   st=${sc%%:*}; cmd=${sc#*:}
@@ -1307,7 +1307,7 @@ check "$before" "$(snap "$tgt")" "agents_tail_refuses_without_agents_md: no AGEN
 # the tail command behaves the same under zsh, and a refusal never kills the caller's shell
 if command -v zsh >/dev/null 2>&1; then
   zsh_tail() { # zsh_tail <stack> <project dir> — the documented call under zsh, then a marker line
-    (cd "$2" && zsh -c "STACK=$1 PART=tail CI="" bash '$SK/shared/tc-copy.sh' '$2'
+    (cd "$2" && zsh -c "TC_STACK=$1 TC_PART=tail TC_CI= bash '$SK/shared/tc-copy.sh' '$2'
 echo CALLER_SURVIVED" 2>&1)
   }
   tgt="$T/tail-zsh"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
@@ -1327,7 +1327,7 @@ else
 fi
 # migrate reads the tail from <skill-dir>/../scaffold/shared/..., with <skill-dir> the migrate directory
 tgt="$T/tail-migrate"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
-out=$(cd "$tgt" && STACK=nextjs PART=tail CI="" bash "$REPO_ROOT/skills/migrate/../scaffold/shared/tc-copy.sh" "$tgt" 2>&1); ec=$?
+out=$(cd "$tgt" && TC_STACK=nextjs TC_PART=tail TC_CI="" bash "$REPO_ROOT/skills/migrate/../scaffold/shared/tc-copy.sh" "$tgt" 2>&1); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_migrate_path: the path the migrate doc names resolves and appends ($out)"
 # the script path Step 4f-3 itself names (not another paragraph of the phase) resolves from the migrate directory
 step_4f3=$(awk '/^\*\*Step 4f-3[: ]/ { on = 1; next } /^\*\*Step / { on = 0 } on' "$REPO_ROOT/skills/migrate/general/phase-4-upgrade.md")
@@ -1347,13 +1347,67 @@ check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" ==
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')
 check "" "$bad" "template_sh_parses: bash -n over every template .sh and the copy script"
 
+# ── the caller's environment, symlinks, other shells, / and $HOME, the tail's refusals ──
+# CI=true is exported by most CI hosts and agent sandboxes; STACK and PART are common names too. None may reach the script.
+for part in base stack agents; do
+  clean="$T/envc-$part"; dirty="$T/envd-$part"; rm -rf "$clean" "$dirty"; mkdir -p "$clean" "$dirty"
+  out1=$(TC_STACK=nextjs TC_PART=$part TC_CI="" bash "$COPY_SCRIPT" "$clean" 2>&1); e1=$?
+  out2=$(CI=true STACK=rails PART=bogus TC_STACK=nextjs TC_PART=$part TC_CI="" bash "$COPY_SCRIPT" "$dirty" 2>&1); e2=$?
+  check "$e1" "$e2" "env_isolation[$part]: same exit with CI=true STACK=rails PART=bogus exported ($out1 / $out2)"
+  check "$(snap "$clean")" "$(snap "$dirty")" "env_isolation[$part]: same files with the junk exported"
+done
+mkdir -p "$T/envs-base"
+out=$(CI=true STACK=nextjs PART=base bash "$COPY_SCRIPT" "$T/envs-base" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"unknown STACK ''"* ]] && echo 1 || echo 0)" "env_isolation: unset TC_STACK refuses even with STACK=nextjs exported ($out)"
+for part in settings late ci_github ci_none tail; do
+  tgt="$T/envp-$part"; rm -rf "$tgt"; mkdir -p "$tgt"
+  TC_STACK=nextjs TC_PART=base TC_CI="" bash "$COPY_SCRIPT" "$tgt" >/dev/null 2>&1; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
+  case "$part" in ci_github) p=ci; c=github ;; ci_none) p=ci; c=none ;; *) p=$part; c="" ;; esac
+  out=$(CI=true STACK=rails PART=bogus TC_STACK=nextjs TC_PART=$p TC_CI=$c bash "$COPY_SCRIPT" "$tgt" 2>&1); ec=$?
+  check 0 "$ec" "env_isolation[$part]: exits 0 with CI=true STACK=rails PART=bogus exported ($out)"
+done
+# a symlink to the script resolves to the real shared directory
+mkdir -p "$T/lnk/bin" "$T/lnk/p" "$T/lnk/p2" "$T/lnk/rel"; ln -s "$COPY_SCRIPT" "$T/lnk/bin/tc"; ln -s "$T/lnk/bin/tc" "$T/lnk/bin/tc2"
+out=$(TC_STACK=fastapi TC_PART=base TC_CI="" bash "$T/lnk/bin/tc2" "$T/lnk/p" 2>&1); ec=$?
+check 0 "$ec" "symlinked_script: a link to a link resolves ($out)"
+check 1 "$([[ -f "$T/lnk/p/lefthook.yml" ]] && echo 1 || echo 0)" "symlinked_script: the base files arrived"
+ln -s "$COPY_SCRIPT" "$T/lnk/rel/real"; (cd "$T/lnk/rel" && ln -s real viarel)
+out=$(TC_STACK=fastapi TC_PART=base TC_CI="" bash "$T/lnk/rel/viarel" "$T/lnk/p2" 2>&1); ec=$?
+check 0 "$ec" "symlinked_script: a relative link resolves ($out)"
+# other shells refuse with one clear line, and write nothing
+if command -v zsh >/dev/null 2>&1; then
+  mkdir -p "$T/shz"; out=$(TC_STACK=nextjs TC_PART=base TC_CI="" zsh "$COPY_SCRIPT" "$T/shz" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"run with bash"* ]] && echo 1 || echo 0)" "run_with_zsh_refuses_clearly ($out)"
+  check . "$(snap "$T/shz")" "run_with_zsh_refuses_clearly: nothing written"
+fi
+if command -v dash >/dev/null 2>&1; then
+  mkdir -p "$T/shd"; out=$(TC_STACK=nextjs TC_PART=base TC_CI="" dash "$COPY_SCRIPT" "$T/shd" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"run with bash"* ]] && echo 1 || echo 0)" "run_with_dash_refuses_clearly ($out)"
+  check . "$(snap "$T/shd")" "run_with_dash_refuses_clearly: nothing written"
+fi
+# the project root must not be / or the home directory, by any spelling
+out=$(TC_STACK=nextjs TC_PART=base TC_CI="" bash "$COPY_SCRIPT" / 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"filesystem root"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "root_target_refused ($out)"
+mkdir -p "$T/fakehome/sub"; ln -s "$T/fakehome" "$T/homelink"
+for spelling in "$T/fakehome" "$T/homelink" "$T/fakehome/sub/.."; do
+  out=$(HOME="$T/fakehome" TC_STACK=nextjs TC_PART=base TC_CI="" bash "$COPY_SCRIPT" "$spelling" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"home directory"* ]] && echo 1 || echo 0)" "home_target_refused[$spelling] ($out)"
+done
+check 0 "$(find "$T/fakehome" -type f | wc -l | tr -d ' ')" "home_target_refused: nothing landed in the fake home"
+# the tail's refusals say what they refuse
+tgt="$T/tailwhat"; mkdir -p "$tgt"
+out=$(TC_STACK=rails TC_PART=tail TC_CI="" bash "$COPY_SCRIPT" "$tgt" 2>&1)
+check 1 "$([[ "$out" == "Refusing to append the tail: "* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "tail_refusal_names_the_action ($out)"
+out=$(TC_STACK=nextjs TC_PART=tail TC_CI="" bash "$COPY_SCRIPT" "$tgt" 2>&1)
+check 1 "$([[ "$out" == "Refusing to append the tail: "*"AGENTS.md does not exist"* ]] && echo 1 || echo 0)" "tail_refusal_without_agents_names_the_action ($out)"
+
 # ── dist_keeps_templates ─────────────────────────────────────────────────────
 dist="$T/dist/agents-skills"
 bash "$REPO_ROOT/scripts/build-agents-dist.sh" "$SK/.." "$dist" >/dev/null 2>&1
 check 0 $? "dist_keeps_templates: build-agents-dist.sh runs"
 check 1 "$([[ -x "$dist/scaffold/shared/tc-copy.sh" ]] && echo 1 || echo 0)" "dist_keeps_templates: the copy script keeps its exec bit"
 mkdir -p "$T/dist-run"
-out=$(STACK=fastapi PART=base CI="" bash "$dist/scaffold/shared/tc-copy.sh" "$T/dist-run" 2>&1); ec=$?
+out=$(TC_STACK=fastapi TC_PART=base TC_CI="" bash "$dist/scaffold/shared/tc-copy.sh" "$T/dist-run" 2>&1); ec=$?
 check 0 "$ec" "dist_keeps_templates: the copy script runs from the dist layout ($out)"
 check 1 "$([[ -f "$T/dist-run/lefthook.yml" && -x "$T/dist-run/.claude/hooks/session-context.sh" ]] && echo 1 || echo 0)" "dist_keeps_templates: the dist copy writes the base files"
 python3 - "$SHARED" "$dist/scaffold/shared" > "$T/dist.diff" <<'PY'
@@ -1442,7 +1496,7 @@ FN_AGENTS=$(count_files "$FA/template-agents")
 check 1 "$([[ "$FN_STACK" -gt 40 && "$FN_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "fastapi trees are not empty (template $FN_STACK files, template-agents $FN_AGENTS)"
 fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$fadoc" == *'STACK=fastapi PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'STACK=fastapi PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'STACK=fastapi PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$fadoc" == *'TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'TC_STACK=fastapi TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'TC_STACK=fastapi TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
 check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
@@ -1582,7 +1636,7 @@ check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count
 NS="$REPO_ROOT/skills/scaffold/nestjs"
 nsdoc=$(cat "$NS/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$nsdoc" == *'STACK=nestjs PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'STACK=nestjs PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'STACK=nestjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$nsdoc" == *'TC_STACK=nestjs TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'TC_STACK=nestjs TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'TC_STACK=nestjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
 check 0 "$(grep -c '^```' "$NS/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "nestjs_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$NS/config-files.md" ]] && echo 1 || echo 0)" "nestjs_has_no_config_files_md"

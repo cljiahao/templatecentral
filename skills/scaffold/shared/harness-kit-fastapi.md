@@ -10,7 +10,7 @@ Per-stack content for kit Steps A, B, B2, and B3 (FastAPI): notes on the `settin
 
 ## Step A — `.claude/settings.json` (FastAPI)
 
-`.claude/settings.json` — Step A copies it (`PART=settings` of `tc-copy.sh`) from `<skill-dir>/shared/template-settings-py/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
+`.claude/settings.json` — Step A copies it (`TC_PART=settings` of `tc-copy.sh`) from `<skill-dir>/shared/template-settings-py/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
 
 FastAPI: identical shape to the TS body; `UserPromptSubmit` runs `python3` on `user-prompt-guard.py` and the typecheck/test scripts use `pyright`/`pytest`.
 

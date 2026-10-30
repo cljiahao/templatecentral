@@ -10,7 +10,7 @@ Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-
 
 ## Step A — `.claude/settings.json` (TS stacks (nestjs / nextjs / vite-react))
 
-`.claude/settings.json` — Step A copies it (`PART=settings` of `tc-copy.sh`) from `<skill-dir>/shared/template-settings-ts/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
+`.claude/settings.json` — Step A copies it (`TC_PART=settings` of `tc-copy.sh`) from `<skill-dir>/shared/template-settings-ts/.claude/settings.json`; it already names the stack's `user-prompt-guard` runtime.
 
 ---
 

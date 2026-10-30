@@ -1347,9 +1347,12 @@ check_copy_script_single() {
   hits=$(find "$SKILLS_DIR" -name '*.md' -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 awk '
     {
       hit = 0
-      if ($0 ~ /(^|[^A-Za-z0-9_\/])(\/bin\/|\/usr\/bin\/env )?(ba|z)?sh([^A-Za-z0-9_]|$)[^<]*<</) hit = 1
+      # a shell word (any path, bash/sh/zsh/dash/ksh) then a heredoc, with or without a space before it
+      if ($0 ~ /(^|[^A-Za-z0-9_])(ba|z|da|k)?sh([^A-Za-z0-9_<]|$)([^<]*)<</ || $0 ~ /(^|[^A-Za-z0-9_])(ba|z|da|k)?sh[ \t]*<<[^<]/) hit = 1
+      if ($0 ~ /(^|[^A-Za-z0-9_])(ba|z|da|k)?sh[ \t]*<\([^)]*<</) hit = 1
+      if ($0 ~ /eval[^<]*<</) hit = 1
       if ($0 ~ /<<-?[ \t]*["\047\\]*TC_/) hit = 1
-      if ($0 ~ /<<[^|]*\|[ \t]*(\/bin\/|\/usr\/bin\/env )?(ba|z)?sh([^A-Za-z0-9_]|$)/) hit = 1
+      if ($0 ~ /<<[^|]*\|[ \t]*([^ \t|]*\/)?(env[ \t]+)?(ba|z|da|k)?sh([^A-Za-z0-9_]|$)/) hit = 1
       if (hit) print FILENAME ":" FNR ":" $0
     }' 2>/dev/null || true)
   while IFS= read -r line; do
@@ -1357,6 +1360,12 @@ check_copy_script_single() {
     bad+="a shell heredoc in $line — copying is done by $script, run with PART=...; a heredoc copy script drifts from it"$'\n'
   done <<<"$hits"
   copies=$(find "$SKILLS_DIR" -name 'tc-copy*.sh' 2>/dev/null | LC_ALL=C sort)
+  # No other script outside the template trees may carry the copy loop either, whatever its name.
+  local other
+  # shellcheck disable=SC2016  # the anchors are literal script text
+  # The paths are made relative first: the checkout's own path may contain "template".
+  other=$(cd "$SKILLS_DIR" && grep -rlF -e 'cp -- "$SK/$t/$p"' -e 'while IFS="$TAB" read -r mode t p' . 2>/dev/null | grep -v -e '^\./scaffold/shared/tc-copy\.sh$' -e '/template[^/]*/' | LC_ALL=C sort || true)
+  [[ -z "$other" ]] || bad+="another file carries the template copy loop: ${other//$'\n'/, }"$'\n'
   [[ "$copies" == "$script" ]] || bad+="skills/ must hold exactly one copy script, $script (found: ${copies:-none})"$'\n'
   if [[ -f "$script" && ! -x "$script" ]]; then bad+="$script — not executable"$'\n'; fi
   # Only the Step B3 section counts: the same words elsewhere in the file would satisfy a whole-file grep.
@@ -1403,8 +1412,8 @@ check_step0_before_install() {
     # Every stack runs kit Step 0 for PART=base, PART=stack and PART=agents; its install commands are
     # the ones on a line of their own (prose notes mention `pnpm install` too).
     inst=$(grep -nE '^(pnpm install|lefthook install)' "$f" | head -n 1 | cut -d: -f1 || true)
-    base_line=$(grep -nE 'tc-copy\.sh' "$f" | grep -E 'STACK=.*PART=base|PART=base.*STACK=' | head -n 1 | cut -d: -f1 || true)
-    agents_line=$(grep -nE 'tc-copy\.sh' "$f" | grep -E 'STACK=.*PART=agents|PART=agents.*STACK=' | head -n 1 | cut -d: -f1 || true)
+    base_line=$(grep -nE 'tc-copy\.sh' "$f" | grep -E 'TC_STACK=.*TC_PART=base|TC_PART=base.*TC_STACK=' | head -n 1 | cut -d: -f1 || true)
+    agents_line=$(grep -nE 'tc-copy\.sh' "$f" | grep -E 'TC_STACK=.*TC_PART=agents|TC_PART=agents.*TC_STACK=' | head -n 1 | cut -d: -f1 || true)
     fmt_line=$(grep -nE '^pnpm format' "$f" | head -n 1 | cut -d: -f1 || true)
     # FastAPI has no pnpm: its AGENTS.md copy must follow the verification-gate step instead.
     fmt_name="pnpm format line"
