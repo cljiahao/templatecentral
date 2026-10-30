@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # scripts/test-template-copy.sh — tests for the scaffold template trees and the copy
-# instruction that installs them (skills/scaffold/shared/harness-kit.md, Step 0).
+# script that installs them (skills/scaffold/shared/tc-copy.sh, run by harness-kit.md Step 0).
 #
 # Usage: bash scripts/test-template-copy.sh   (run from anywhere; needs git, python3)
 #
-# The copy and refuse-if-exists snippets are extracted from the kit markdown (and from the stack
-# source-files.md that copies a stack's own tree) and executed, so the tests exercise the instruction
-# an agent runs, not a copy of it.
+# The tests run the real script through the call line the docs give (STACK, CI and PART in the
+# environment, the target as its one argument), so they exercise what an agent runs, not a copy of it.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -51,23 +50,28 @@ sys.exit(4)
 PY
 }
 
-# render_sc <snippet-text> <target> <stack> <ci> [part] — substitute <skill-dir> and <target> byte for byte
-# (no sed, so any character in a path arrives untouched) and set the STACK and CI lines.
+# render_sc <snippet-text> <target> <stack> <ci> [part] — set the STACK, CI and PART lines and put the
+# script and target paths into the call line, each shell-quoted so any character in a path arrives
+# untouched. A relative path gets a ./ prefix so a leading dash is not read as an option.
 render_sc() {
   printf '%s\n' "$1" | python3 -c '
-import sys
+import shlex, sys
 sk, tgt, stack, ci = sys.argv[1:5]
 part = sys.argv[5] if len(sys.argv) > 5 else None
+def q(p):
+    return shlex.quote(p if p == "" or p.startswith("/") else "./" + p)
 out = []
 for line in sys.stdin.read().split("\n"):
     if line.startswith("STACK="):
-        line = "STACK=" + stack
+        line = "STACK=" + shlex.quote(stack)
     elif line.startswith("CI="):
-        line = "CI=" + ci
+        line = "CI=" + shlex.quote(ci)
     elif line.startswith("PART=") and part is not None:
-        line = "PART=" + part
+        line = "PART=" + shlex.quote(part)
     out.append(line)
-sys.stdout.write("\n".join(out).replace("<skill-dir>", sk).replace("<target>", tgt))
+text = "\n".join(out)
+text = text.replace("\"<skill-dir>/shared/tc-copy.sh\"", q(sk + "/shared/tc-copy.sh")).replace("\"<target>\"", q(tgt))
+sys.stdout.write(text)
 ' "$SK" "$2" "$3" "$4" ${5+"$5"}
 }
 
@@ -87,10 +91,17 @@ render() {
   render_sc "$1" "$2" "$stack" "$ci"
 }
 
-STEP0=$(snippet "$KIT_INDEX" '^## Step 0\b' 1) || STEP0=""
-# Step B3 runs Step 0's script with PART=ci: the CI and CI=none runs are that fence with its PART line set.
+# The call line every doc runs (harness-kit.md Step 0): the three variables in the environment, the target as the argument.
+STEP0='STACK=
+CI=
+PART=base
+export STACK CI PART
+bash "<skill-dir>/shared/tc-copy.sh" "<target>"'
+# Step B3 runs the same script with PART=ci.
 CI_SNIPPET=$(printf '%s\n' "$STEP0" | sed 's/^PART=base$/PART=ci/')
-check 1 "$([[ -n "$STEP0" ]] && echo 1 || echo 0)" "the copy script is found in the kit markdown (Step 0)"
+COPY_SCRIPT="$SHARED/tc-copy.sh"
+check 1 "$([[ -x "$COPY_SCRIPT" ]] && echo 1 || echo 0)" "the copy script exists and is executable"
+check 1 "$([[ "$(sed -n '/^## Step 0 /,/^## Per-stack/p' "$KIT_INDEX")" == *'bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "kit Step 0 shows the call line the tests run"
 
 stack_of() { if [[ "$1" == py ]]; then echo fastapi; else echo nextjs; fi; }
 run_step0() { # run_step0 <target> <variant ts|py>
@@ -205,17 +216,19 @@ run_ci "$T/refuse-ci-gh" ts github >/dev/null; check 0 $? "copy_refuses_existing
 # a clash on the other variant's hook does not block (only the chosen variant is seeded)
 tgt="$T/refuse-variant"; mkdir -p "$tgt/.claude/hooks"; printf 'mine\n' > "$tgt/.claude/hooks/user-prompt-guard.py"
 run_copy "$tgt" ts github >/dev/null; check 0 $? "copy_refuses_existing_path: other variant's file does not block"
+# alt_skill <name> — a writable copy of the shared trees; echoes its skill dir.
+alt_skill() { rm -rf "$T/alt-$1"; mkdir -p "$T/alt-$1/scaffold"; cp -Rp "$SHARED" "$T/alt-$1/scaffold/shared"; echo "$T/alt-$1/scaffold"; }
 # the refusal tests compare every path, so a directory created before the clash check shows up
 tgt="$T/refuse-snap"; mkdir -p "$tgt"; : > "$tgt/.gitleaks.toml"; before=$(snap "$tgt")
+sk=$(alt_skill mutclash); body=$(<"$sk/shared/tc-copy.sh")
 # shellcheck disable=SC2016  # the patterns are literal script text, not expansions
-mut=${STEP0/'[ -z "$clash" ] || stop'/'mkdir -p "$TGT/.zz"; [ -z "$clash" ] || stop'}
-check 1 "$([[ "$mut" != "$STEP0" ]] && echo 1 || echo 0)" "snap_catches_a_directory_made_before_the_clash_check: the mutation applies"
-bash -c "$(render "$mut" "$tgt" "template template-ts")" >/dev/null 2>&1
+mut=${body/'[ -z "$clash" ] || stop'/'mkdir -p "$TGT/.zz"; [ -z "$clash" ] || stop'}
+check 1 "$([[ "$mut" != "$body" ]] && echo 1 || echo 0)" "snap_catches_a_directory_made_before_the_clash_check: the mutation applies"
+printf '%s\n' "$mut" > "$sk/shared/tc-copy.sh"
+saved=$SK; SK=$sk; bash -c "$(render "$STEP0" "$tgt" "template template-ts")" >/dev/null 2>&1; SK=$saved
 check 1 "$([[ "$before" != "$(snap "$tgt")" ]] && echo 1 || echo 0)" "snap_catches_a_directory_made_before_the_clash_check: a file-only count would not"
 
 # ── the guard fails closed ───────────────────────────────────────────────────
-# alt_skill <name> — a writable copy of the shared trees; echoes its skill dir.
-alt_skill() { rm -rf "$T/alt-$1"; mkdir -p "$T/alt-$1/scaffold"; cp -Rp "$SHARED" "$T/alt-$1/scaffold/shared"; echo "$T/alt-$1/scaffold"; }
 # refuses <name> <skill-dir> <selector> <target> — Step 0 or CI snippet must exit nonzero and write nothing.
 refuses() {
   local name=$1 sk=$2 sel=$3 tgt=$4 snip=$STEP0 out ec saved=$SK
@@ -330,8 +343,16 @@ refuses_raw() { # refuses_raw <name> <snippet text> <expected message substring>
 }
 refuses_raw guard_refuses_empty_target "$(render "$STEP0" "" "template template-ts")" "target"
 refuses_raw guard_refuses_unsubstituted_target "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" "not substituted"
-refuses_raw guard_refuses_unsubstituted_skill_dir "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<target>", sys.argv[1]))' "$T/h")" "not substituted"
-refuses_raw guard_refuses_empty_skill_dir "$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>/shared", "").replace("<target>", sys.argv[1]))' "$T/h")" "skill"
+# a skill dir that is unsubstituted or empty names no script: bash cannot open it, so nothing runs
+guard_no_script() { # guard_no_script <name> <skill-dir text> — the call line with the script path replaced; bash must fail to open it and write nothing
+  local out ec before
+  before=$(snap "$T/h")
+  out=$(printf '%s\n' "$STEP0" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]).replace("<target>", sys.argv[2]))' "$2" "$T/h" | bash 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"No such file"* ]] && echo 1 || echo 0)" "$1: bash cannot open the script ($out)"
+  check "$before" "$(snap "$T/h")" "$1: nothing written"
+}
+guard_no_script guard_refuses_unsubstituted_skill_dir "<skill-dir>"
+guard_no_script guard_refuses_empty_skill_dir ""
 : > "$T/regular-file"
 refuses_raw guard_refuses_regular_file_target "$(render "$STEP0" "$T/regular-file" "template template-ts")" "existing directory"
 refuses_raw guard_refuses_missing_target "$(render "$STEP0" "$T/no/such/dir" "template template-ts")" "existing directory"
@@ -359,13 +380,13 @@ chmod -R u+w "$sk/shared"
 
 # the STACK, CI, PART and WHAT lines differ between runs; norm drops them so a text comparison sees the script alone
 norm() { printf '%s\n' "$1" | grep -v '^STACK=\|^CI=\|^PART=\|^WHAT=' ; }
-check 1 "$([[ "$(norm "$STEP0")" == "$(norm "$CI_SNIPPET")" ]] && echo 1 || echo 0)" "single_script: the PART=ci run is Step 0's script with the PART line set"
+check 1 "$([[ "$(norm "$STEP0")" == "$(norm "$CI_SNIPPET")" ]] && echo 1 || echo 0)" "single_script: the PART=ci run is Step 0's call with the PART line set"
 
 # the PART=ci CI=none path leaves exactly what 6.x left: the golden tree minus ci-gates.sh and the CI file
 NEITHER=$CI_SNIPPET
 tgt="$T/o4"; mkdir -p "$tgt"; run_step0 "$tgt" ts >/dev/null
 # shellcheck disable=SC2016  # the anchor is literal script text
-check 1 "$([[ "$NEITHER" == *'rm -f -- "$TGT/$gate"'* ]] && echo 1 || echo 0)" "ci_none: the removal branch exists in the Step 0 script"
+check 1 "$([[ "$(<"$COPY_SCRIPT")" == *'rm -f -- "$TGT/$gate"'* ]] && echo 1 || echo 0)" "ci_none: the removal branch exists in the copy script"
 bash -c "$(render_sc "$NEITHER" "$tgt" nextjs none)" >/dev/null 2>&1
 want=$(python3 - "$MANIFEST" "$REPO_ROOT/tests/golden/nextjs-github.sha256" <<'PY'
 import sys
@@ -613,8 +634,8 @@ for name in '-dash' '~'; do
 done
 
 # ── shipped STACK line is empty, and Step B3 must match Step 0 ────────────────
-raw_render() { # raw_render <snippet text> <target> — substitute only <skill-dir> and <target>; STACK, CI and PART stay as shipped
-  printf '%s\n' "$1" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]).replace("<target>", sys.argv[2]))' "$SK" "$2"
+raw_render() { # raw_render <snippet text> <target> — substitute only the script and target paths; STACK, CI and PART stay as shipped
+  printf '%s\n' "$1" | python3 -c 'import shlex, sys; print(sys.stdin.read().replace("\"<skill-dir>/shared/tc-copy.sh\"", shlex.quote(sys.argv[1] + "/shared/tc-copy.sh")).replace("\"<target>\"", shlex.quote(sys.argv[2])))' "$SK" "$2"
 }
 mkdir -p "$T/ship0" "$T/ship1"
 refuses_raw shipped_step0_fence_refuses_until_stack_is_set "$(raw_render "$STEP0" "$T/ship0")" "unknown STACK"
@@ -691,7 +712,7 @@ check 1 "$([[ "$STACK_SNIPPET" == *"PART=stack"* && "$AGENTS_SNIPPET" == *"PART=
 # the nextjs docs run kit Step 0 for each part, with the stack named
 nxdoc=$(cat "$NX/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=stack`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=base`'* && "$nxdoc" == *'`STACK=nextjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$nxdoc" == *'STACK=nextjs PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'STACK=nextjs PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nxdoc" == *'STACK=nextjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nextjs_docs_run_kit_step0_for_stack_base_and_agents"
 # the nextjs docs carry no copy of the guard: the kit index holds the only one
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NX/source-files.md" || true)" "nextjs_docs_hold_no_second_guard"
 run_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" nextjs "")" 2>&1; }   # run_stack <target>
@@ -702,7 +723,7 @@ N_AGENTS=$(count_files "$NX/template-agents")
 check 1 "$([[ "$N_STACK" -gt 50 && "$N_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "stack trees are not empty (template $N_STACK files, template-agents $N_AGENTS)"
 
 # alt_nx <name> — a writable skill dir with an empty shared/ and a copy of the nextjs trees; echoes it.
-alt_nx() { rm -rf "$T/altnx-$1"; mkdir -p "$T/altnx-$1/scaffold/shared"; cp -Rp "$NX" "$T/altnx-$1/scaffold/nextjs"; echo "$T/altnx-$1/scaffold"; }
+alt_nx() { rm -rf "$T/altnx-$1"; mkdir -p "$T/altnx-$1/scaffold/shared"; cp -p "$SHARED/tc-copy.sh" "$T/altnx-$1/scaffold/shared/"; cp -Rp "$NX" "$T/altnx-$1/scaffold/nextjs"; echo "$T/altnx-$1/scaffold"; }
 # refuses_nx <name> <skill dir> <snippet text> <target> [stack] — the stack fence must exit nonzero, write nothing, and end with the stop line.
 refuses_nx() {
   local name=$1 sk=$2 snip=$3 tgt=$4 stack=${5:-nextjs} out ec saved=$SK before
@@ -968,14 +989,15 @@ refuses_raw stack_empty_stack_refused "$(render_sc "$STACK_SNIPPET" "$T/nx-v2" "
 refuses_raw stack_ci_must_stay_empty "$(render_sc "$STACK_SNIPPET" "$T/nx-v3" nextjs github)" "CI must stay empty"
 refuses_raw agents_ci_must_stay_empty "$(render_sc "$AGENTS_SNIPPET" "$T/nx-v4" nextjs azure)" "CI must stay empty"
 refuses_raw stack_unknown_part_refused "$(render_sc "$STACK_SNIPPET" "$T/nx-v5" nextjs "" weird)" "unknown PART"
-sk=$(alt_nx notshared); mkdir -p "$sk/other"
+sk=$(alt_nx notshared); mkdir -p "$sk/other"; cp -p "$SHARED/tc-copy.sh" "$sk/other/tc-copy.sh"
 saved=$SK; SK=$sk
-refuses_raw stack_skill_dir_must_end_in_shared "$(render_sc "$STACK_SNIPPET" "$T/nx-v6" nextjs "" | python3 -c 'import sys; print(sys.stdin.read().replace(sys.argv[1] + "/shared", sys.argv[1] + "/other"))' "$sk")" "must end in /shared"
+refuses_raw stack_skill_dir_must_end_in_shared "$(render_sc "$STACK_SNIPPET" "$T/nx-v6" nextjs "" | python3 -c 'import sys; print(sys.stdin.read().replace(sys.argv[1] + "/shared", sys.argv[1] + "/other"))' "$sk")" "directory named shared"
 SK=$saved
 check ". . . . . ." "$(snap "$T/nx-v1") $(snap "$T/nx-v2") $(snap "$T/nx-v3") $(snap "$T/nx-v4") $(snap "$T/nx-v5") $(snap "$T/nx-v6")" "stack_guard_value_refusals: nothing copied"
 refuses_raw stack_empty_target_refused "$(render_sc "$STACK_SNIPPET" "" nextjs "")" "target"
 refuses_raw stack_unsubstituted_target_refused "$(printf '%s\n' "$STACK_SNIPPET" | python3 -c 'import sys; print(sys.stdin.read().replace("<skill-dir>", sys.argv[1]))' "$SK")" "not substituted"
-refuses_raw stack_unsubstituted_skill_dir_refused "$(printf '%s\n' "$STACK_SNIPPET" | python3 -c 'import sys; print(sys.stdin.read().replace("<target>", sys.argv[1]))' "$T/h")" "not substituted"
+out=$(printf '%s\n' "$STACK_SNIPPET" | python3 -c 'import sys; print(sys.stdin.read().replace("<target>", sys.argv[1]))' "$T/h" | bash 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"No such file"* ]] && echo 1 || echo 0)" "stack_unsubstituted_skill_dir_refused: bash cannot open the script ($out)"
 refuses_raw stack_missing_target_refused "$(render_sc "$STACK_SNIPPET" "$T/no/such/dir" nextjs "")" "existing directory"
 # hostile names for the target and the skill dir, through both stack fences
 run="$T/runnx"; mkdir -p "$run"
@@ -987,7 +1009,7 @@ for fence in stack agents; do
       if [[ $kind == TGT ]]; then
         tgt="$T/hmx/$name"; mkdir -p "$tgt"; sk=$SK
       else
-        sk="$T/hmx/$name"; mkdir -p "$sk/shared"; cp -Rp "$NX" "$sk/nextjs"; tgt="$T/hmx-tgt"; rm -rf "$tgt"; mkdir -p "$tgt"
+        sk="$T/hmx/$name"; mkdir -p "$sk/shared"; cp -p "$SHARED/tc-copy.sh" "$sk/shared/"; cp -Rp "$NX" "$sk/nextjs"; tgt="$T/hmx-tgt"; rm -rf "$tgt"; mkdir -p "$tgt"
       fi
       saved=$SK; SK=$sk
       out=$(cd "$run" && bash -c "$(render_sc "$snip" "$tgt" nextjs "")" 2>&1); ec=$?
@@ -1058,7 +1080,7 @@ fi
 VR="$SK/vite-react"
 vrdoc=$(cat "$VR/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=stack`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=base`'* && "$vrdoc" == *'`STACK=vite-react` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$vrdoc" == *'STACK=vite-react PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'STACK=vite-react PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$vrdoc" == *'STACK=vite-react PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "vite_react_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$VR/source-files.md" || true)" "vite_react_docs_hold_no_second_guard"
 check 0 "$([[ -e "$VR/config-files.md" ]] && echo 1 || echo 0)" "vite_react_has_no_config_files_md"
 run_vr_stack() { bash -c "$(render_sc "$STACK_SNIPPET" "$1" vite-react "")" 2>&1; }
@@ -1066,7 +1088,7 @@ run_vr_agents() { bash -c "$(render_sc "$AGENTS_SNIPPET" "$1" vite-react "")" 2>
 N_VR=$(count_files "$VR/template")
 N_VR_AGENTS=$(count_files "$VR/template-agents")
 check 1 "$([[ "$N_VR" -gt 50 && "$N_VR_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "vite_react_trees_are_not_empty (template $N_VR files, template-agents $N_VR_AGENTS)"
-alt_vr() { rm -rf "$T/altvr-$1"; mkdir -p "$T/altvr-$1/scaffold/shared"; cp -Rp "$VR" "$T/altvr-$1/scaffold/vite-react"; echo "$T/altvr-$1/scaffold"; }
+alt_vr() { rm -rf "$T/altvr-$1"; mkdir -p "$T/altvr-$1/scaffold/shared"; cp -p "$SHARED/tc-copy.sh" "$T/altvr-$1/scaffold/shared/"; cp -Rp "$VR" "$T/altvr-$1/scaffold/vite-react"; echo "$T/altvr-$1/scaffold"; }
 
 # vite_react_manifest_matches_tree
 check "" "$(stack_manifest_diff "$VR")" "vite_react_manifest_matches_tree"
@@ -1245,15 +1267,12 @@ check mine "$(cat "$tgt/.claude/settings.json")" "part_settings_refuses_existing
 # the AGENTS.md tail: one marker, fixed per-stack values, atomic append, and the migrate path
 TAIL_FILE="$SHARED/template-tail/AGENTS-tail.md"
 check 1 "$(grep -c 'see delta table for stack command' "$TAIL_FILE")" "agents_tail: the tail file holds the marker exactly once"
-TAIL_CMD=$(snippet "$SHARED/harness-kit-finalize.md" '^## Step G\b' 1)
-check 1 "$([[ "$TAIL_CMD" == *'ENVIRON["TC"]'* && "$TAIL_CMD" != *'sed '* ]] && echo 1 || echo 0)" "agents_tail: the command fills the marker from fixed values, with no sed pattern"
-run_tail() { # run_tail <stack> <project dir> [skill-dir text for the tail path] — the documented command in <project dir>
-  local body
-  body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
-t = sys.stdin.read().replace("STACK=\n", "STACK=" + sys.argv[1] + "\n", 1)
-t = t.replace("<skill-dir>/shared/template-tail", sys.argv[3] + "/template-tail" if len(sys.argv) > 3 else "<skill-dir>/shared/template-tail")
-print(t.replace("<skill-dir>", sys.argv[2]))' "$1" "$SK" ${3:+"$3"})
-  (cd "$2" && bash -c "$body" 2>&1)
+script_txt=$(<"$COPY_SCRIPT")
+# shellcheck disable=SC2016  # the anchors are literal script text
+tail_blk=${script_txt#*'if [ "$PART" = tail ]; then'}; tail_blk=${tail_blk%%$'\nfi\n'*}
+check 1 "$([[ "$tail_blk" == *'ENVIRON["TC"]'* && "$tail_blk" != *'sed '* ]] && echo 1 || echo 0)" "agents_tail: the script fills the marker from fixed values, with no sed pattern"
+run_tail() { # run_tail <stack> <project dir> [skill-dir for the script] — PART=tail on <project dir>
+  (cd "$2" && STACK=$1 PART=tail CI="" bash "${3:-$SK}/shared/tc-copy.sh" "$2" 2>&1)
 }
 for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec tsc --noEmit --incremental' nestjs:'pnpm exec tsc --noEmit --incremental' fastapi:'python -m pyright src/'; do
   st=${sc%%:*}; cmd=${sc#*:}
@@ -1277,7 +1296,8 @@ for bad in rails ''; do
   check 1 "$([[ $ec -ne 0 && "$(cat "$tgt/AGENTS.md")" == body ]] && echo 1 || echo 0)" "agents_tail_refuses_stack[$bad]: nonzero, AGENTS.md untouched ($out)"
 done
 tgt="$T/tail-nofile"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
-out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys; print(sys.stdin.read().replace("STACK=\n", "STACK=nextjs\n", 1).replace("<skill-dir>", sys.argv[1]))' "$T/no-such-skill")" 2>&1); ec=$?
+sk=$(alt_skill notail); rm -rf "$sk/shared/template-tail"
+out=$(run_tail nextjs "$tgt" "$sk"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$(cat "$tgt/AGENTS.md")" == body ]] && echo 1 || echo 0)" "agents_tail_is_atomic: a failed read appends nothing, not even the blank line ($out)"
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
@@ -1286,11 +1306,8 @@ check 1 "$([[ $ec -ne 0 && "$out" == *"AGENTS.md does not exist"* ]] && echo 1 |
 check "$before" "$(snap "$tgt")" "agents_tail_refuses_without_agents_md: no AGENTS.md was created"
 # the tail command behaves the same under zsh, and a refusal never kills the caller's shell
 if command -v zsh >/dev/null 2>&1; then
-  zsh_tail() { # zsh_tail <stack> <project dir> — the documented command under zsh, then a marker line
-    local body
-    body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
-print(sys.stdin.read().replace("STACK=\n", "STACK=" + sys.argv[1] + "\n", 1).replace("<skill-dir>", sys.argv[2]))' "$1" "$SK")
-    (cd "$2" && zsh -c "$body
+  zsh_tail() { # zsh_tail <stack> <project dir> — the documented call under zsh, then a marker line
+    (cd "$2" && zsh -c "STACK=$1 PART=tail CI="" bash '$SK/shared/tc-copy.sh' '$2'
 echo CALLER_SURVIVED" 2>&1)
   }
   tgt="$T/tail-zsh"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
@@ -1310,16 +1327,12 @@ else
 fi
 # migrate reads the tail from <skill-dir>/../scaffold/shared/..., with <skill-dir> the migrate directory
 tgt="$T/tail-migrate"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AGENTS.md"
-body=$(printf '%s\n' "$TAIL_CMD" | python3 -c 'import sys
-t = sys.stdin.read().replace("STACK=\n", "STACK=nextjs\n", 1)
-t = t.replace("<skill-dir>/shared/template-tail", "<skill-dir>/../scaffold/shared/template-tail")
-print(t.replace("<skill-dir>", sys.argv[1]))' "$REPO_ROOT/skills/migrate")
-out=$(cd "$tgt" && bash -c "$body" 2>&1); ec=$?
+out=$(cd "$tgt" && STACK=nextjs PART=tail CI="" bash "$REPO_ROOT/skills/migrate/../scaffold/shared/tc-copy.sh" "$tgt" 2>&1); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_migrate_path: the path the migrate doc names resolves and appends ($out)"
-# the path Step 4f-3 itself names (not another paragraph of the phase) resolves from the migrate directory
+# the script path Step 4f-3 itself names (not another paragraph of the phase) resolves from the migrate directory
 step_4f3=$(awk '/^\*\*Step 4f-3[: ]/ { on = 1; next } /^\*\*Step / { on = 0 } on' "$REPO_ROOT/skills/migrate/general/phase-4-upgrade.md")
-named=$(grep -o '<skill-dir>/\.\./scaffold/shared/template-tail/AGENTS-tail\.md' <<<"$step_4f3" | head -n 1)
-check 1 "$([[ -n "$named" ]] && echo 1 || echo 0)" "agents_tail_migrate_path: Step 4f-3 names the tail path"
+named=$(grep -o '<skill-dir>/\.\./scaffold/shared/tc-copy\.sh' <<<"$step_4f3" | head -n 1)
+check 1 "$([[ -n "$named" ]] && echo 1 || echo 0)" "agents_tail_migrate_path: Step 4f-3 names the copy script path"
 check 1 "$([[ -f "$REPO_ROOT/skills/migrate/${named#<skill-dir>/}" ]] && echo 1 || echo 0)" "agents_tail_migrate_path: the path Step 4f-3 names resolves to a file"
 # the task-management text appends with a plain command
 TM_CMD=$(snippet "$NX/source-files.md" '^### 7b\.' 1)
@@ -1331,13 +1344,18 @@ check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_
 check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -n '__TC_' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
 
 # every template .sh parses
-bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" -path '*/template*' -name '*.sh')
-check "" "$bad" "template_sh_parses: bash -n over every template .sh"
+bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')
+check "" "$bad" "template_sh_parses: bash -n over every template .sh and the copy script"
 
 # ── dist_keeps_templates ─────────────────────────────────────────────────────
 dist="$T/dist/agents-skills"
 bash "$REPO_ROOT/scripts/build-agents-dist.sh" "$SK/.." "$dist" >/dev/null 2>&1
 check 0 $? "dist_keeps_templates: build-agents-dist.sh runs"
+check 1 "$([[ -x "$dist/scaffold/shared/tc-copy.sh" ]] && echo 1 || echo 0)" "dist_keeps_templates: the copy script keeps its exec bit"
+mkdir -p "$T/dist-run"
+out=$(STACK=fastapi PART=base CI="" bash "$dist/scaffold/shared/tc-copy.sh" "$T/dist-run" 2>&1); ec=$?
+check 0 "$ec" "dist_keeps_templates: the copy script runs from the dist layout ($out)"
+check 1 "$([[ -f "$T/dist-run/lefthook.yml" && -x "$T/dist-run/.claude/hooks/session-context.sh" ]] && echo 1 || echo 0)" "dist_keeps_templates: the dist copy writes the base files"
 python3 - "$SHARED" "$dist/scaffold/shared" > "$T/dist.diff" <<'PY'
 import os, sys
 src, dist = sys.argv[1:]
@@ -1424,11 +1442,11 @@ FN_AGENTS=$(count_files "$FA/template-agents")
 check 1 "$([[ "$FN_STACK" -gt 40 && "$FN_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "fastapi trees are not empty (template $FN_STACK files, template-agents $FN_AGENTS)"
 fadoc=$(cat "$FA/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$fadoc" == *'`STACK=fastapi` in its fence and `PART=stack`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=base`'* && "$fadoc" == *'`STACK=fastapi` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$fadoc" == *'STACK=fastapi PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'STACK=fastapi PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$fadoc" == *'STACK=fastapi PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "fastapi_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$FA/source-files.md" || true)" "fastapi_docs_hold_no_second_guard"
 check 0 "$(grep -c '^```' "$FA/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "fastapi_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$FA/config-files.md" ]] && echo 1 || echo 0)" "fastapi_has_no_config_files_md"
-alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
+alt_fa() { rm -rf "$T/altfa-$1"; mkdir -p "$T/altfa-$1/scaffold/shared"; cp -p "$SHARED/tc-copy.sh" "$T/altfa-$1/scaffold/shared/"; cp -Rp "$FA" "$T/altfa-$1/scaffold/fastapi"; echo "$T/altfa-$1/scaffold"; }
 
 # fastapi_manifest_matches_tree
 check "" "$(stack_manifest_diff "$FA")" "fastapi_manifest_matches_tree"
@@ -1564,7 +1582,7 @@ check 1 "$([[ -f "$tgt/.gitignore" && -x "$tgt/docker-entrypoint.sh" && "$(count
 NS="$REPO_ROOT/skills/scaffold/nestjs"
 nsdoc=$(cat "$NS/source-files.md")
 # shellcheck disable=SC2016  # the backticks are literal text in the docs, not command substitution
-check 1 "$([[ "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=stack`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=base`'* && "$nsdoc" == *'`STACK=nestjs` in its fence and `PART=agents`'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
+check 1 "$([[ "$nsdoc" == *'STACK=nestjs PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'STACK=nestjs PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* && "$nsdoc" == *'STACK=nestjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"'* ]] && echo 1 || echo 0)" "nestjs_docs_run_kit_step0_for_stack_base_and_agents"
 check 0 "$(grep -cE "<<-? *['\"\\\\]?TC_GUARD" "$NS/source-files.md" || true)" "nestjs_docs_hold_no_second_guard"
 check 0 "$(grep -c '^```' "$NS/source-files.md" | awk '{ print ($1 > 16) ? 1 : 0 }')" "nestjs_docs_hold_no_verbatim_file_fences: only the command fences and the @AGENTS.md text fence remain"
 check 1 "$([[ ! -e "$NS/config-files.md" ]] && echo 1 || echo 0)" "nestjs_has_no_config_files_md"
@@ -1574,7 +1592,7 @@ NS_STACK=$(count_files "$NS/template")
 NS_AGENTS=$(count_files "$NS/template-agents")
 check 1 "$([[ "$NS_STACK" -gt 30 && "$NS_AGENTS" -eq 1 ]] && echo 1 || echo 0)" "nestjs stack trees are not empty (template $NS_STACK files, template-agents $NS_AGENTS)"
 # alt_ns <name> — a writable skill dir with an empty shared/ and a copy of the nestjs trees; echoes it.
-alt_ns() { rm -rf "$T/altns-$1"; mkdir -p "$T/altns-$1/scaffold/shared"; cp -Rp "$NS" "$T/altns-$1/scaffold/nestjs"; echo "$T/altns-$1/scaffold"; }
+alt_ns() { rm -rf "$T/altns-$1"; mkdir -p "$T/altns-$1/scaffold/shared"; cp -p "$SHARED/tc-copy.sh" "$T/altns-$1/scaffold/shared/"; cp -Rp "$NS" "$T/altns-$1/scaffold/nestjs"; echo "$T/altns-$1/scaffold"; }
 
 # nestjs_manifest_matches_tree
 check "" "$(stack_manifest_diff "$NS")" "nestjs_manifest_matches_tree"

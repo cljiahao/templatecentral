@@ -29,6 +29,8 @@ bash scripts/build-agents-dist.sh
 
 `dist/` is a gitignored build artifact. Re-run the script after pulling updates.
 
+The scaffold copies its template files with one real script, `scaffold/shared/tc-copy.sh`. It finds the template trees next to itself, so it runs the same from the plugin directory and from `dist/agents-skills/`, and it needs only `bash`, `awk`, `find`, `cp`, `cmp` and `comm`.
+
 ## Per-tool setup
 
 ### OpenCode / OpenChamber

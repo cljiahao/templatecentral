@@ -141,6 +141,14 @@ jobs:
         run: |
           shellcheck scripts/*.sh
           for f in scripts/*.sh; do bash -n "$f"; done
+      - name: Scaffold copy script is present, parses and passes shellcheck
+        run: |
+          set -euo pipefail
+          f=skills/scaffold/shared/tc-copy.sh
+          [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
+          [ "$(find skills -name 'tc-copy*.sh' | wc -l)" -eq 1 ] || { echo "skills/ must hold exactly one copy script"; exit 1; }
+          bash -n "$f"
+          shellcheck "$f"
       - name: Scaffold template scripts parse and pass shellcheck
         run: |
           set -euo pipefail

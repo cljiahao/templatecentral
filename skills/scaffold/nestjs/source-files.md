@@ -16,13 +16,13 @@ The config and source files are real files in `<skill-dir>/nestjs/template/` (`A
 
 ### 1. Create directory and files
 
-Create the target directory, then load the kit index (its Step 0 fence is the copy script).
+Create the target directory, then load the kit index (its Step 0 names the copy script `<skill-dir>/shared/tc-copy.sh`).
 
 ```bash
 cat "<skill-dir>/shared/harness-kit.md"
 ```
 
-Run kit Step **0** now with `STACK=nestjs` in its fence and `PART=stack` (leave `CI=` empty). It copies `<skill-dir>/nestjs/template/` into the project root per the manifest, and writes nothing, ending with a `STOP:` line, when a path is in the way.
+Run kit Step **0** now as `STACK=nestjs PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/nestjs/template/` into the project root per the manifest, and writes nothing, ending with a `STOP:` line, when a path is in the way.
 
 Then:
 - Create two empty files: `src/common/types/.gitkeep` and `src/database/.gitkeep`
@@ -46,7 +46,7 @@ In `src/config/env.config.ts`, set the `PROJECT_NAME` default (`'My Project'`) t
 
 ### 4. Install Dependencies
 
-Before the first install, run kit Step **0** again with `STACK=nestjs` in its fence and `PART=base`: it copies `lefthook.yml` and the other harness files, so the `prepare` script wires the git hooks instead of writing a stub config.
+Before the first install, run kit Step **0** again as `STACK=nestjs PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `lefthook.yml` and the other harness files, so the `prepare` script wires the git hooks instead of writing a stub config.
 
 ```bash
 git init
@@ -69,7 +69,7 @@ If any command fails, fix it before proceeding.
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** a third time with `STACK=nestjs` in its fence and `PART=agents`: it copies `AGENTS.md` from `template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing. Then check that no placeholder is left:
+Run kit Step **0** a third time as `STACK=nestjs PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing. Then check that no placeholder is left:
 
 ```bash
 grep -rn '__TC_' . --exclude-dir=node_modules --exclude-dir=.git
@@ -87,7 +87,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Kit Step **0** (`PART=base`) already ran. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`; each Step 0 run names `STACK=nestjs` in its fence).
+Kit Step **0** (`PART=base`) already ran. Execute kit Steps **A through D** now (settings.json with `PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `PART=late`; each run of `tc-copy.sh` names `STACK=nestjs`).
 
 ### 6c. Project skill file (`.claude/skills/`)
 

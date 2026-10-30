@@ -295,7 +295,7 @@ templatecentral/
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
 │   ├── validate-scaffold-configs.sh # Parses fenced JSON/JS config blocks in scaffold files
 │   ├── test-harness-kit.sh  # Regression suite for the hooks and gates under skills/scaffold/shared/template*/
-│   ├── test-template-copy.sh # Tests for the Step 0 / Step B3 copy fences and the template trees
+│   ├── test-template-copy.sh # Tests for the copy script (skills/scaffold/shared/tc-copy.sh) and the template trees
 │   ├── lint-skills.test.sh  # Negative tests for the lint checks that read the template trees
 │   ├── build-agents-dist.sh # Builds the namespace-free copy for other agent tools
 │   ├── pre-guard.sh         # Repo guard: blocks secret access, asks before instruction/CI edits
@@ -304,6 +304,7 @@ templatecentral/
 │   └── pre-guard.test.sh    # Tests for both repo guards
 ├── skills/                  # Shipped skills — nested reference file architecture
 │   ├── scaffold/shared/template*/ # Files the scaffold copies verbatim: hooks, gates, lefthook, CI (template/, template-ts/, template-py/, template-ci/)
+│   ├── scaffold/shared/tc-copy.sh # The one script that copies the template trees (and appends the AGENTS.md tail); the kit runs it, never reads it
 │   ├── scaffold/shared/template.manifest # Every template file with its mode
 │   ├── scaffold/shared/template-{settings-ts,settings-py,late,tail}/ # settings.json (copied at Step A), FUTURE.md + CONSTITUTION + /skill-audit (copied at Step C), and the AGENTS.md tail (appended at Step G, never copied)
 │   ├── scaffold/nextjs/template*/ # The Next.js files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nextjs/template.manifest

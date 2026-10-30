@@ -10,7 +10,7 @@ Every stack. Step order and the delta table are in `harness-kit.md`.
 
 ## Step C. Seed `FUTURE.md`, `docs/CONSTITUTION.md` and the `/skill-audit` skill
 
-Run the Step 0 script of `harness-kit.md` with `STACK=` as in Step 0 and `PART=late`, after the stack's verification gate and its format pass (prettier would reformat the two documents at an earlier pass). It copies three real files from `<skill-dir>/shared/template-late/` and refuses when any of them already exists:
+Run `tc-copy.sh` of `harness-kit.md` Step 0 as `STACK=<stack> PART=late bash "<skill-dir>/shared/tc-copy.sh" "<target>"` with the `STACK` of Step 0, after the stack's verification gate and its format pass (prettier would reformat the two documents at an earlier pass). It copies three real files from `<skill-dir>/shared/template-late/` and refuses when any of them already exists:
 
 - `FUTURE.md` — the design seams for AI collaboration patterns that are not yet activated.
 - `docs/CONSTITUTION.md` — the binding invariants document. It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
@@ -152,21 +152,10 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md` (a migration reads it at `<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md`: change only that path). The command below builds the whole text first and appends it only when that worked, so a failure appends nothing. Run it in the project root (the script appends to `./AGENTS.md` and refuses when that file does not exist); it runs in its own `bash`, so a refusal ends only that process. The model fills in only `STACK=`; the typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack in the script:
+**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md`, which the script reads (a migration runs `<skill-dir>/../scaffold/shared/tc-copy.sh`: change only that path). `tc-copy.sh` with `PART=tail` builds the whole text first and appends it only when that worked, so a failure appends nothing. It appends to `<target>/AGENTS.md` and refuses when that file does not exist. The typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack inside the script; only `STACK` is yours to set:
 
 ```bash
-bash <<'TC_TAIL'
-STACK=
-case "$STACK" in
-  nestjs | nextjs | vite-react) TC='pnpm exec tsc --noEmit --incremental' ;;
-  fastapi) TC='python -m pyright src/' ;;
-  *) echo "Refusing to append the tail: unknown STACK '$STACK'" >&2; exit 1 ;;
-esac
-out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "<skill-dir>/shared/template-tail/AGENTS-tail.md") || exit 1
-[ -n "$out" ] || { echo "Refusing to append the tail: the tail file is empty" >&2; exit 1; }
-[ -f AGENTS.md ] || { echo "Refusing to append the tail: AGENTS.md does not exist in $(pwd); run this in the project root" >&2; exit 1; }
-printf '\n%s\n' "$out" >> AGENTS.md
-TC_TAIL
+STACK=<stack> PART=tail bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
 **Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)

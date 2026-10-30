@@ -225,7 +225,7 @@ This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` disco
 
 **Step 4f-3: Finish the AGENTS.md tail and re-baseline**
 
-Execute kit **Step G** up to (not including) its post-scaffold utilities list: append the shared AGENTS.md tail fragment (in this phase `<skill-dir>` is the migrate directory, so the tail file is `<skill-dir>/../scaffold/shared/template-tail/AGENTS-tail.md`; use that path in the kit's command), then the re-baseline block. For the TS final format pass, run Prettier only on the files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md <each README.md written by Step E3>`), never `.` — an adopted codebase is not yours to reformat. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
+Execute kit **Step G** up to (not including) its post-scaffold utilities list: append the shared AGENTS.md tail fragment (in this phase `<skill-dir>` is the migrate directory, so the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `PART=tail` call), then the re-baseline block. For the TS final format pass, run Prettier only on the files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md <each README.md written by Step E3>`), never `.` — an adopted codebase is not yours to reformat. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
 **Step 4h: Print summary**
 
