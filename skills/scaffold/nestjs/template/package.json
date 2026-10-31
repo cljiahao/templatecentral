@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": "^24.15.0 || >=26.0.0"
+    "node": "^24.22.1 || >=26.12.1"
   },
   "scripts": {
     "build": "nest build",
