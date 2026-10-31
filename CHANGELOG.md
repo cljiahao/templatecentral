@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - `add/auth`: the 36 fences that create a new file now live as real files in template trees beside each leaf (`skills/add/auth/<stack>/template/`, plus `template-cookie/` for the nestjs and fastapi cookie mode), listed in a `template.manifest` and copied with `TC_PART=leaf`: nestjs 13, nextjs 11, fastapi 10, vite-react 2. Fences that edit or replace an existing project file stay inline. `tests/golden/fences/moved.d/add-auth.tsv` maps each moved fence to its file, and `check-fences` proves the bytes are unchanged.
 
+### Security
+- Scaffolded projects no longer run on a Node or certifi that still trusts the compromised eMudhra intermediate CAs (Oct 2026). The Next.js and Vite + React `engines.node` floor is `>=24.22.1`, NestJS is `^24.22.1 || >=26.12.1`, and the FastAPI scaffold installs `certifi>=2026.10.19`. The template Dockerfiles keep their floating tags (a pinned digest goes stale downstream) and now say so, with the `--pull --no-cache` rebuild needed to pick up trust-store fixes.
+
 ---
 
 ## [7.0.0] — 2026-10-30
