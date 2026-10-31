@@ -72,83 +72,15 @@ Token-based (JWT in an `Authorization` header) auth is not cookie-borne and ther
 
 #### 2. Create the CSRF Helper and Auth Service
 
+Run `TC_PART=leaf TC_LEAF=add/auth/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies both files below from `<skill-dir>/auth/vite-react/template/` per `<skill-dir>/auth/vite-react/template.manifest`, and writes nothing, ending with a `STOP:` line, when a path is in the way.
+
 `csrfHeader()` is the single source for the CSRF header. It lives in `src/lib/clients/` (not the auth feature) because `ApiClient` (Step 3) needs it and `lib/` never imports from `features/`:
 
-```typescript
-// src/lib/clients/csrf.ts
-/** Echoes the backend-issued XSRF-TOKEN cookie as X-CSRF-Token (signed double-submit); `{}` when absent. */
-export function csrfHeader(): Record<string, string> {
-  const token = document.cookie
-    .split('; ')
-    .find((c) => c.startsWith('XSRF-TOKEN='))
-    ?.slice('XSRF-TOKEN='.length);
-  return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
-}
-```
+`src/lib/clients/csrf.ts` is copied verbatim from `<skill-dir>/auth/vite-react/template/src/lib/clients/csrf.ts` by the copy step; do not re-type it.
 
-Create `src/features/auth/api/auth-service.ts` to handle backend communication:
+`src/features/auth/api/auth-service.ts` handles backend communication:
 
-```typescript
-import { csrfHeader } from '@/lib/clients/csrf';
-import { getApiBaseUrl } from '@/lib/constants/env';
-import { APIError } from '@/lib/errors';
-import { z } from 'zod';
-import type { AuthUser } from '../types';
-
-// Resolved per-request, never at module scope: getApiBaseUrl() throws when
-// VITE_API_BASE_URL is unset, and a module-scope throw kills bundle evaluation
-// before createRoot() runs — a blank page with no ErrorBoundary to catch it.
-const authBase = () => `${getApiBaseUrl()}/auth`;
-
-// Validate API response shapes at the boundary — mirrors the AuthUser type.
-const authUserSchema = z
-  .object({
-    id: z.string(),
-    // NestJS's /auth/me returns only the token claims (id, email) — fall back to email.
-    name: z.string().optional(),
-    email: z.email(),
-    // AuthUser has it — without this, parse() silently strips it
-    image: z.string().nullable().optional(),
-  })
-  .transform((u): AuthUser => ({ ...u, name: u.name ?? u.email }));
-
-// POST /auth/session is the backend's browser login (cookie mode): it sets the HttpOnly
-// session cookie plus XSRF-TOKEN and returns 204 — the JWT never reaches JavaScript.
-export async function loginWithCredentials(email: string, password: string): Promise<AuthUser> {
-  const res = await fetch(`${authBase()}/session`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-    credentials: 'include',
-  });
-
-  if (!res.ok) {
-    throw new APIError({
-      statusCode: res.status,
-      data: await res.json().catch(() => ({ message: 'Login failed' })),
-    });
-  }
-
-  const user = await fetchCurrentUser();
-  if (!user) throw new APIError({ statusCode: 401 });
-  return user;
-}
-
-export async function fetchCurrentUser(): Promise<AuthUser | null> {
-  const res = await fetch(`${authBase()}/me`, { credentials: 'include' });
-  if (!res.ok) return null;
-  return authUserSchema.parse(await res.json());
-}
-
-export async function logoutUser(): Promise<void> {
-  const res = await fetch(`${authBase()}/logout`, {
-    method: 'POST',
-    headers: csrfHeader(),
-    credentials: 'include',
-  });
-  if (!res.ok) throw new APIError({ statusCode: res.status });
-}
-```
+Copied verbatim from `<skill-dir>/auth/vite-react/template/src/features/auth/api/auth-service.ts` by the copy step; do not re-type it.
 
 #### 3. Send the Session and CSRF Token from `ApiClient`
 

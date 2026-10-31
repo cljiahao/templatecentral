@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - `tc-copy.sh` takes `TC_PART=leaf` with `TC_LEAF=<add|migrate>/<leaf stem>` and optional `TC_TREE`, so an `add` or `migrate` leaf copies its own template trees per its `template.manifest` with every refusal of the scaffold parts (symlinks, unlisted files, clashes, `..` and odd characters in the leaf path). It is the copy mechanism for the 7.1 fence-to-file moves.
 
+### Changed
+- `add/auth`: the 36 fences that create a new file now live as real files in template trees beside each leaf (`skills/add/auth/<stack>/template/`, plus `template-cookie/` for the nestjs and fastapi cookie mode), listed in a `template.manifest` and copied with `TC_PART=leaf`: nestjs 13, nextjs 11, fastapi 10, vite-react 2. Fences that edit or replace an existing project file stay inline. `tests/golden/fences/moved.d/add-auth.tsv` maps each moved fence to its file, and `check-fences` proves the bytes are unchanged.
+
 ---
 
 ## [7.0.0] — 2026-10-30

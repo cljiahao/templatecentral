@@ -181,14 +181,26 @@ def load_key(w):
     return tuple(sorted(w[0])) + ("|",) + tuple(sorted(w[1]))
 
 
+def is_router_dir(d):
+    """A <name>.md is a router when <name>/ holds markdown outside its template* trees."""
+    if not os.path.isdir(d):
+        return False
+    for dirpath, dirs, files in os.walk(d):
+        dirs[:] = [x for x in dirs if not x.startswith("template")]
+        if any(f.endswith(".md") for f in files):
+            return True
+    return False
+
+
 def entry_list(read, skill):
     """Every leaf of the skill as an entry name, plus one per stack where <stack> changes the load."""
     names = []
     base_dir = os.path.join(root, "skills", skill)
-    for dirpath, _dirs, files in os.walk(base_dir):
+    for dirpath, dirs, files in os.walk(base_dir):
+        dirs[:] = [d for d in dirs if not d.startswith("template")]
         for f in files:
             rel = os.path.relpath(os.path.join(dirpath, f), base_dir)
-            if rel == "SKILL.md" or not f.endswith(".md") or os.path.isdir(os.path.join(base_dir, rel[:-3])):
+            if rel == "SKILL.md" or not f.endswith(".md") or is_router_dir(os.path.join(base_dir, rel[:-3])):
                 continue
             names.append(rel[:-3])
     out = []

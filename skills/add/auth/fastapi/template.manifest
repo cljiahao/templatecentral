@@ -1,0 +1,16 @@
+# Files templatecentral:add copies verbatim for add/auth/fastapi (tc-copy.sh TC_PART=leaf). One line per file: path mode placeholders seams
+# path          relative to this directory; the first segment names the tree
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template-cookie/test/test_api/test_auth_cookie.py 644 - -
+template/src/api/dependencies/__init__.py 644 - -
+template/src/api/dependencies/auth.py 644 - -
+template/src/api/dependencies/authz.py 644 - -
+template/src/api/routers/auth.py 644 - -
+template/src/api/schemas/request/auth.py 644 - -
+template/src/api/schemas/response/auth.py 644 - -
+template/src/api/services/auth_service.py 644 - -
+template/src/core/security.py 644 - -
+template/test/test_api/test_auth.py 644 - -
+template/test/test_api/test_authz.py 644 - -

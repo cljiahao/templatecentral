@@ -33,58 +33,15 @@ the marker.
 
 #### 1. Add Auth Schemas
 
-Create request/response schemas for auth endpoints.
+First run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/fastapi/template/` into the project per `<skill-dir>/auth/fastapi/template.manifest` — the files of Steps 1, 3, 4, 5, 6, 8 and the two new test files of Step 11 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
+
+Request/response schemas for auth endpoints:
 
 **`src/api/schemas/request/auth.py`**:
-```python
-from pydantic import EmailStr, Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class RegisterRequest(BaseRequestSchema):
-    """Registration request."""
-
-    email: EmailStr = Field(description="User email address.")
-    password: str = Field(
-        min_length=12,
-        max_length=128,
-        description=(
-            "User password — 12-128 characters (OWASP minimum; the upper bound"
-            " caps argon2 hashing cost on this unauthenticated endpoint)."
-        ),
-    )
-    name: str = Field(description="User display name.")
-
-
-class LoginRequest(BaseRequestSchema):
-    """Login request."""
-
-    email: EmailStr = Field(description="User email address.")
-    password: str = Field(max_length=128, description="User password.")
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/schemas/request/auth.py` by the copy step; do not re-type it.
 
 **`src/api/schemas/response/auth.py`**:
-```python
-from pydantic import BaseModel, Field
-
-from api.schemas.base import BaseResponseSchema
-
-
-class TokenResponse(BaseModel):
-    """JWT token response — uses plain BaseModel to preserve OAuth2-standard snake_case (RFC 6749)."""
-
-    access_token: str = Field(description="JWT access token.")
-    token_type: str = Field(default="bearer", description="Token type.")
-
-
-class UserResponse(BaseResponseSchema):
-    """Authenticated user info."""
-
-    id: str = Field(description="User ID.")
-    email: str = Field(description="User email.")
-    name: str = Field(description="User display name.")
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/schemas/response/auth.py` by the copy step; do not re-type it.
 
 #### 2. Extend Config
 
@@ -123,142 +80,19 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 **`src/core/security.py`** — JWT token creation/verification and password hashing:
 
-```python
-from datetime import UTC, datetime, timedelta
-
-import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError
-
-from core.config import api_settings
-
-ALGORITHM = "HS256"
-
-# argon2id, t=3 / m=64 MiB / p=1 — above OWASP's minimums. Set explicitly because
-# argon2-cffi's defaults (RFC 9106 low-memory profile) use p=4.
-_ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
-# A named tuple, not `except A, B:` — that unparenthesized form (PEP 758) is a
-# SyntaxError before 3.14, and the Beanie path pins projects to 3.13.
-_VERIFY_ERRORS = (VerificationError, InvalidHashError)
-
-
-def hash_password(password: str) -> str:
-    return _ph.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return _ph.verify(hashed_password, plain_password)
-    except _VERIFY_ERRORS:
-        return False
-
-
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
-    """Create a JWT access token."""
-    now = datetime.now(UTC)
-    expire = now + (
-        expires_delta or timedelta(minutes=api_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    return jwt.encode(
-        {"sub": subject, "iat": now, "exp": expire},
-        api_settings.SECRET_KEY,
-        algorithm=ALGORITHM,
-    )
-
-
-def decode_access_token(token: str) -> str | None:
-    """Decode and validate a JWT token. Returns the subject or None."""
-    try:
-        # Pinned algorithm list blocks alg-confusion / "none"; require rejects tokens missing exp/sub.
-        payload = jwt.decode(
-            token,
-            api_settings.SECRET_KEY,
-            algorithms=[ALGORITHM],
-            options={"require": ["exp", "sub"]},
-        )
-        return payload.get("sub")
-    except jwt.PyJWTError:
-        return None
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/core/security.py` by the copy step; do not re-type it.
 
 #### 4. Create Auth Dependency
 
-Create **`src/api/dependencies/`** directory (does not exist in base template), then add both **`src/api/dependencies/__init__.py`** (empty, marks the directory as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
+The copy step created **`src/api/dependencies/`** (not in the base template) with an empty **`src/api/dependencies/__init__.py`** (marks it as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
 
-```python
-from typing import Annotated
-
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from core.security import decode_access_token
-
-bearer_scheme = HTTPBearer()
-
-
-def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
-) -> str:
-    """Extract and validate the current user from the JWT token."""
-    user_id = decode_access_token(credentials.credentials)
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token.",
-        )
-    return user_id
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/auth.py` by the copy step; do not re-type it.
 
 #### 5. Create Authorization Helpers
 
 **`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks. Authentication says who the caller is; these decide what the caller may touch:
 
-```python
-from collections.abc import Callable
-from typing import Annotated
-
-from fastapi import Depends, HTTPException, status
-
-from api.dependencies.auth import get_current_user
-
-
-def get_current_roles(
-    user_id: Annotated[str, Depends(get_current_user)],
-) -> frozenset[str]:
-    """Roles the current user holds. Grants none until a database lookup replaces it."""
-    # `user_id` is unused here but must stay: the dependency forces authentication, and the
-    # database lookup that replaces this body needs it.
-    # Roles are loaded per request, never read from the token, so revoking a role
-    # takes effect on the caller's next request rather than when the token expires.
-    return frozenset()
-
-
-def require_roles(*roles: str) -> Callable[..., str]:
-    """Dependency that admits a user holding any of `roles` and yields their id."""
-    if not roles:
-        raise ValueError("require_roles() needs at least one role.")
-    required = frozenset(roles)
-
-    def dependency(
-        user_id: Annotated[str, Depends(get_current_user)],
-        held: Annotated[frozenset[str], Depends(get_current_roles)],
-    ) -> str:
-        if held.isdisjoint(required):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions.",
-            )
-        return user_id
-
-    return dependency
-
-
-def ensure_owner(owner_id: str | None, user_id: str) -> None:
-    """404 unless `user_id` owns the record; pass None when the record does not exist."""
-    # 404 rather than 403, so a caller cannot probe which ids belong to other users.
-    if owner_id is None or owner_id != user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/authz.py` by the copy step; do not re-type it.
 
 Use `require_roles` in place of `get_current_user` on role-gated routes, and `ensure_owner` on record-by-id handlers (see Rules):
 
@@ -284,26 +118,7 @@ Once `templatecentral:add` (database) adds a users store, make `get_current_role
 
 **`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `templatecentral:add` (database).
 
-```python
-from fastapi import HTTPException, status
-
-from core.security import hash_password
-
-
-def register_user(email: str, password: str, name: str) -> dict:
-    """Register a new user. Persist to database after running `templatecentral:add` (database)."""
-    hashed = hash_password(password)
-    user_id = "generated-id"
-    return {"id": user_id, "email": email, "name": name, "hashed_password": hashed}
-
-
-def login_user(email: str, password: str) -> str:
-    """Authenticate user and return JWT. Implement DB lookup after running `templatecentral:add` (database)."""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Database integration required. Run `templatecentral:add` (database) to complete auth.",
-    )
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/services/auth_service.py` by the copy step; do not re-type it.
 
 #### 7. Add Auth Tag
 
@@ -319,31 +134,7 @@ class APITags(StrEnum):
 
 **`src/api/routers/auth.py`**:
 
-```python
-from fastapi import APIRouter
-
-from api.schemas.request.auth import LoginRequest, RegisterRequest
-from api.schemas.response.auth import TokenResponse, UserResponse
-from api.services.auth_service import login_user, register_user
-
-router = APIRouter(prefix="/auth")
-
-
-# Plain `def`: argon2 hashing is ~100 ms of CPU, and FastAPI runs sync handlers in its
-# threadpool instead of blocking the event loop.
-@router.post("/register", response_model=UserResponse)
-def register(body: RegisterRequest) -> UserResponse:
-    """Register a new user account."""
-    user = register_user(email=body.email, password=body.password, name=body.name)
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
-
-
-@router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest) -> TokenResponse:
-    """Authenticate and receive a JWT token."""
-    token = login_user(email=body.email, password=body.password)
-    return TokenResponse(access_token=token)
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/routers/auth.py` by the copy step; do not re-type it.
 
 #### 9. Register the Router
 
@@ -414,135 +205,11 @@ def auth_headers() -> dict[str, str]:
 
 **`test/test_api/test_auth.py`** — covers the parts that stay unchanged when `templatecentral:add` (database) completes the stubs:
 
-```python
-"""Tests for the JWT/password helpers and the bearer guard."""
-
-from datetime import timedelta
-
-import jwt
-import pytest
-from fastapi.testclient import TestClient
-
-from core.security import (
-    create_access_token,
-    decode_access_token,
-    hash_password,
-    verify_password,
-)
-
-
-@pytest.mark.unit
-def test_token_round_trips_subject() -> None:
-    """A freshly issued token decodes back to its subject."""
-    assert decode_access_token(create_access_token("user-1")) == "user-1"
-
-
-@pytest.mark.unit
-def test_expired_token_is_rejected() -> None:
-    """A token past its exp claim decodes to None."""
-    token = create_access_token("user-1", expires_delta=timedelta(seconds=-1))
-    assert decode_access_token(token) is None
-
-
-@pytest.mark.unit
-def test_unsigned_token_is_rejected() -> None:
-    """An alg=none token is rejected by the pinned algorithm list."""
-    token = jwt.encode({"sub": "user-1", "exp": 4102444800}, "", algorithm="none")
-    assert decode_access_token(token) is None
-
-
-@pytest.mark.unit
-def test_password_hash_verifies_only_the_original() -> None:
-    """verify_password accepts the hashed password and nothing else."""
-    hashed = hash_password("correct-horse-battery")
-    assert verify_password("correct-horse-battery", hashed)
-    assert not verify_password("wrong-horse-battery", hashed)
-
-
-@pytest.mark.unit
-def test_me_requires_bearer_token(client: TestClient) -> None:
-    """GET /auth/me without a token is 401."""
-    assert client.get("/auth/me").status_code == 401
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_auth.py` by the copy step; do not re-type it.
 
 **`test/test_api/test_authz.py`** — a probe app guards one route with the real dependencies, so the checks are tested apart from any feature router:
 
-```python
-"""Deny-by-default role and ownership checks."""
-
-from collections.abc import Generator
-from typing import Annotated
-
-import pytest
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.testclient import TestClient
-
-from api.dependencies.authz import ensure_owner, get_current_roles, require_roles
-
-probe = FastAPI()
-
-
-@probe.get("/_authz-probe")
-def _admin_only(
-    user_id: Annotated[str, Depends(require_roles("admin"))],
-) -> dict[str, str]:
-    return {"id": user_id}
-
-
-@pytest.fixture
-def client() -> Generator[TestClient]:
-    """Probe client; shadows the root fixture so no feature route is involved."""
-    with TestClient(probe) as client:
-        yield client
-    probe.dependency_overrides.clear()
-
-
-@pytest.mark.unit
-def test_require_roles_rejects_user_without_role(
-    client: TestClient, auth_headers: dict[str, str]
-) -> None:
-    """The default role lookup grants nothing, so a guarded route is 403."""
-    res = client.get("/_authz-probe", headers=auth_headers)
-    assert res.status_code == 403
-    assert res.json() == {"detail": "Insufficient permissions."}
-
-
-@pytest.mark.unit
-def test_require_roles_allows_user_with_role(
-    client: TestClient, auth_headers: dict[str, str]
-) -> None:
-    """A user holding the required role reaches the handler as themselves."""
-    probe.dependency_overrides[get_current_roles] = lambda: frozenset({"admin"})
-    res = client.get("/_authz-probe", headers=auth_headers)
-    assert res.status_code == 200
-    assert res.json() == {"id": "test-user"}
-
-
-@pytest.mark.unit
-def test_require_roles_without_roles_is_a_programming_error() -> None:
-    """An empty role list would admit nobody or everybody, so it fails at definition time."""
-    with pytest.raises(ValueError, match="at least one role"):
-        require_roles()
-
-
-@pytest.mark.unit
-def test_ensure_owner_hides_other_users_record() -> None:
-    with pytest.raises(HTTPException) as exc:
-        ensure_owner("u2", "u1")
-    assert exc.value.status_code == 404
-
-
-@pytest.mark.unit
-def test_ensure_owner_hides_missing_record() -> None:
-    with pytest.raises(HTTPException) as exc:
-        ensure_owner(None, "u1")
-    assert exc.value.status_code == 404
-
-
-@pytest.mark.unit
-def test_ensure_owner_allows_owner() -> None:
-    ensure_owner("u1", "u1")
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_authz.py` by the copy step; do not re-type it.
 
 ### Browser Client (Cookie Mode)
 
@@ -551,6 +218,8 @@ def test_ensure_owner_allows_owner() -> None:
 **Same-origin only:** the SPA must reach this API through a reverse proxy on its own origin (Vite `server.proxy` in dev, nginx `location /api/` in production, or a Next.js `rewrites()` path — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is a host-only cookie, so an SPA on another host cannot read it and every non-GET would 403.
 
 Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the server recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or lifted from another session fails. Bearer requests skip the check (browsers never attach `Authorization` on their own), so API clients keep working unchanged.
+
+Run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template-cookie bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` first: it writes `test/test_api/test_auth_cookie.py` (4) from `<skill-dir>/auth/fastapi/template-cookie/`.
 
 **1. `src/core/security.py`** — add `import hashlib`, `import hmac`, `import secrets` to the imports, change the config import to `from core.config import api_settings, common_settings`, and append:
 
@@ -713,120 +382,7 @@ No CORS change: the SPA's proxied requests are same-origin and never preflight.
 
 **4. `test/test_api/test_auth_cookie.py`** — a probe app isolates the cookie machinery from the login stub and from whichever database variant completes it:
 
-```python
-"""Cookie mode: session cookie attributes, CSRF on unsafe methods, Bearer fallback."""
-
-from typing import Annotated
-
-import pytest
-from fastapi import Depends, FastAPI, Response
-from fastapi.testclient import TestClient
-
-from api.dependencies.auth import get_current_user, set_session_cookies
-from core.security import (
-    COOKIE_SECURE,
-    CSRF_COOKIE,
-    CSRF_HEADER,
-    SESSION_COOKIE,
-    create_access_token,
-)
-
-probe = FastAPI()
-User = Annotated[str, Depends(get_current_user)]
-
-
-@probe.post("/login", status_code=204)
-def _login(response: Response, sub: str = "user-1") -> None:
-    set_session_cookies(response, create_access_token(sub))
-
-
-@probe.get("/me")
-def _me(user_id: User) -> dict[str, str]:
-    return {"id": user_id}
-
-
-@probe.post("/write")
-def _write(user_id: User) -> dict[str, str]:
-    return {"id": user_id}
-
-
-@pytest.fixture
-def browser() -> TestClient:
-    # https so the cookie jar returns Secure cookies when COOKIE_SECURE is on (non-dev).
-    client = TestClient(probe, base_url="https://testserver")
-    assert client.post("/login").status_code == 204
-    return client
-
-
-@pytest.mark.unit
-def test_login_sets_hardened_cookies() -> None:
-    res = TestClient(probe, base_url="https://testserver").post("/login")
-    headers = res.headers.get_list("set-cookie")
-    session = next(h for h in headers if h.startswith(f"{SESSION_COOKIE}="))
-    csrf = next(h for h in headers if h.startswith(f"{CSRF_COOKIE}="))
-    assert "HttpOnly" in session
-    assert "HttpOnly" not in csrf
-    for cookie in (session, csrf):
-        assert "SameSite=strict" in cookie
-        assert "Path=/" in cookie
-        assert ("Secure" in cookie) == COOKIE_SECURE
-
-
-@pytest.mark.unit
-def test_cookie_authenticates_safe_requests(browser: TestClient) -> None:
-    assert browser.get("/me").json() == {"id": "user-1"}
-
-
-@pytest.mark.unit
-def test_unsafe_request_needs_csrf_header(browser: TestClient) -> None:
-    assert browser.post("/write").status_code == 403
-    assert (
-        browser.post("/write", headers={CSRF_HEADER: "forged.token"}).status_code == 403
-    )
-    token = browser.cookies[CSRF_COOKIE]
-    assert browser.post("/write", headers={CSRF_HEADER: token}).status_code == 200
-
-
-@pytest.mark.unit
-def test_csrf_token_is_bound_to_its_session(browser: TestClient) -> None:
-    """A valid token from one session is rejected under another (cookie injection)."""
-    stolen = browser.cookies[CSRF_COOKIE]
-    other = TestClient(probe, base_url="https://testserver")
-    other.post("/login?sub=user-2")
-    other.cookies.set(CSRF_COOKIE, stolen)
-    assert other.post("/write", headers={CSRF_HEADER: stolen}).status_code == 403
-
-
-@pytest.mark.unit
-def test_bearer_needs_no_csrf() -> None:
-    headers = {"Authorization": f"Bearer {create_access_token('user-2')}"}
-    assert TestClient(probe).post("/write", headers=headers).json() == {"id": "user-2"}
-
-
-@pytest.mark.unit
-def test_no_credentials_is_401() -> None:
-    assert TestClient(probe).get("/me").status_code == 401
-
-
-@pytest.mark.unit
-def test_logout_clears_cookies(client: TestClient) -> None:
-    res = client.post("/auth/logout")
-    assert res.status_code == 204
-    cleared = res.headers.get_list("set-cookie")
-    assert any(h.startswith(f"{SESSION_COOKIE}=") and "Max-Age=0" in h for h in cleared)
-    assert any(h.startswith(f"{CSRF_COOKIE}=") and "Max-Age=0" in h for h in cleared)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("headers", [{}, {"Content-Type": "text/plain"}])
-def test_session_login_requires_json(
-    client: TestClient, headers: dict[str, str]
-) -> None:
-    """No Content-Type or text/plain (CORS-simple: no preflight) is refused before login."""
-    body = b'{"email": "a@example.com", "password": "correct-horse-battery"}'
-    res = client.post("/auth/session", content=body, headers=headers)
-    assert res.status_code == 415
-```
+Copied verbatim from `<skill-dir>/auth/fastapi/template-cookie/test/test_api/test_auth_cookie.py` by the copy step; do not re-type it.
 
 ### Rate Limiting (Required for Production)
 

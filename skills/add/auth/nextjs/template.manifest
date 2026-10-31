@@ -1,0 +1,16 @@
+# Files templatecentral:add copies verbatim for add/auth/nextjs (tc-copy.sh TC_PART=leaf). One line per file: path mode placeholders seams
+# path          relative to this directory; the first segment names the tree
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template/src/app/(public)/login/page.tsx 644 - -
+template/src/app/api/auth/[...all]/route.ts 644 - -
+template/src/features/auth/components/index.ts 644 - -
+template/src/features/auth/components/login-button.tsx 644 - -
+template/src/features/auth/components/login-card.tsx 644 - -
+template/src/features/auth/components/signout-button.tsx 644 - -
+template/src/features/auth/index.ts 644 - -
+template/src/lib/auth-client.ts 644 - -
+template/src/lib/auth.ts 644 - -
+template/src/lib/authz.ts 644 - -
+template/test/lib/authz.test.ts 644 - -

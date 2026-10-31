@@ -1,0 +1,37 @@
+# file	heading	index	template-path
+skills/add/auth/nestjs.md	2. Define DTOs	0	skills/add/auth/nestjs/template/src/modules/auth/auth.dto.ts
+skills/add/auth/nestjs.md	4. Create JWT Strategy	0	skills/add/auth/nestjs/template/src/modules/auth/jwt.strategy.ts
+skills/add/auth/nestjs.md	5. Create Auth Guard	0	skills/add/auth/nestjs/template/src/modules/auth/jwt-auth.guard.ts
+skills/add/auth/nestjs.md	6. Create Authorization Helpers	0	skills/add/auth/nestjs/template/src/modules/auth/roles.decorator.ts
+skills/add/auth/nestjs.md	6. Create Authorization Helpers	1	skills/add/auth/nestjs/template/src/modules/auth/roles.guard.ts
+skills/add/auth/nestjs.md	6. Create Authorization Helpers	2	skills/add/auth/nestjs/template/src/modules/auth/ownership.ts
+skills/add/auth/nestjs.md	7. Create Auth Service	0	skills/add/auth/nestjs/template/src/modules/auth/auth.service.ts
+skills/add/auth/nestjs.md	8. Create Auth Controller	0	skills/add/auth/nestjs/template/src/modules/auth/auth.controller.ts
+skills/add/auth/nestjs.md	9. Create Auth Module	0	skills/add/auth/nestjs/template/src/modules/auth/auth.module.ts
+skills/add/auth/nestjs.md	13. Test Env + Auth Tests	1	skills/add/auth/nestjs/template/test/auth.e2e-spec.ts
+skills/add/auth/nestjs.md	13. Test Env + Auth Tests	2	skills/add/auth/nestjs/template/test/modules/auth/authz.spec.ts
+skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	1	skills/add/auth/nestjs/template-cookie/src/modules/auth/auth.cookies.ts
+skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	5	skills/add/auth/nestjs/template-cookie/test/auth-cookie.e2e-spec.ts
+skills/add/auth/fastapi.md	1. Add Auth Schemas	0	skills/add/auth/fastapi/template/src/api/schemas/request/auth.py
+skills/add/auth/fastapi.md	1. Add Auth Schemas	1	skills/add/auth/fastapi/template/src/api/schemas/response/auth.py
+skills/add/auth/fastapi.md	3. Create Security Module	0	skills/add/auth/fastapi/template/src/core/security.py
+skills/add/auth/fastapi.md	4. Create Auth Dependency	0	skills/add/auth/fastapi/template/src/api/dependencies/auth.py
+skills/add/auth/fastapi.md	5. Create Authorization Helpers	0	skills/add/auth/fastapi/template/src/api/dependencies/authz.py
+skills/add/auth/fastapi.md	6. Create Auth Service	0	skills/add/auth/fastapi/template/src/api/services/auth_service.py
+skills/add/auth/fastapi.md	8. Create Auth Router	0	skills/add/auth/fastapi/template/src/api/routers/auth.py
+skills/add/auth/fastapi.md	11. Tests	1	skills/add/auth/fastapi/template/test/test_api/test_auth.py
+skills/add/auth/fastapi.md	11. Tests	2	skills/add/auth/fastapi/template/test/test_api/test_authz.py
+skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	3	skills/add/auth/fastapi/template-cookie/test/test_api/test_auth_cookie.py
+skills/add/auth/nextjs.md	2. Write `src/lib/auth.ts` (verbatim — do not generate)	0	skills/add/auth/nextjs/template/src/lib/auth.ts
+skills/add/auth/nextjs.md	3. Write `src/lib/auth-client.ts` (verbatim — do not generate)	0	skills/add/auth/nextjs/template/src/lib/auth-client.ts
+skills/add/auth/nextjs.md	5. Create `src/app/api/auth/[...all]/route.ts`	0	skills/add/auth/nextjs/template/src/app/api/auth/[...all]/route.ts
+skills/add/auth/nextjs.md	7. Create `src/app/(public)/login/page.tsx`	0	skills/add/auth/nextjs/template/src/app/(public)/login/page.tsx
+skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	0	skills/add/auth/nextjs/template/src/features/auth/components/login-button.tsx
+skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	1	skills/add/auth/nextjs/template/src/features/auth/components/signout-button.tsx
+skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	2	skills/add/auth/nextjs/template/src/features/auth/components/login-card.tsx
+skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	3	skills/add/auth/nextjs/template/src/features/auth/components/index.ts
+skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	4	skills/add/auth/nextjs/template/src/features/auth/index.ts
+skills/add/auth/nextjs.md	14. Authorization helpers	0	skills/add/auth/nextjs/template/src/lib/authz.ts
+skills/add/auth/nextjs.md	14. Authorization helpers	3	skills/add/auth/nextjs/template/test/lib/authz.test.ts
+skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	0	skills/add/auth/vite-react/template/src/lib/clients/csrf.ts
+skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	1	skills/add/auth/vite-react/template/src/features/auth/api/auth-service.ts
