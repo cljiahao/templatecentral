@@ -5,6 +5,8 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
+# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
+# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
 ARG PYTHON=python:3.14.8-slim
 ARG APP_UID=1001
 ARG APP_GID=1001

@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Security
+- Scaffolded projects no longer run on a Node or certifi that still trusts the compromised eMudhra intermediate CAs (Oct 2026). The Next.js and Vite + React `engines.node` floor is `>=24.22.1`, NestJS is `^24.22.1 || >=26.12.1`, and the FastAPI scaffold installs `certifi>=2026.10.19`. The template Dockerfiles keep their floating tags (a pinned digest goes stale downstream) and now say so, with the `--pull --no-cache` rebuild needed to pick up trust-store fixes.
+
 ---
 
 ## [7.0.0] — 2026-10-30

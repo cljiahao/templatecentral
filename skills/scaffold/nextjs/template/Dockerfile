@@ -1,3 +1,5 @@
+# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
+# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
 ARG NODE=node:24-alpine
 ARG NODE_BUILD=node:24-alpine
 ARG APP_UID=1001
