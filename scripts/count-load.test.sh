@@ -101,7 +101,7 @@ check yes "$(entry_check "$jf" migrate:stackdoc@fastapi '"skills/scaffold/fastap
 
 # --summary lists every leaf of the skill and no router
 for skill in add migrate standards; do
-  want=$(cd "$REPO_ROOT/skills/$skill" && find . -name '*.md' ! -path ./SKILL.md | while IFS= read -r f; do [[ -d "${f%.md}" ]] || echo "$f"; done | wc -l | tr -d ' ')
+  want=$(cd "$REPO_ROOT/skills/$skill" && find . -name 'template*' -prune -o -name '*.md' ! -path ./SKILL.md -print | while IFS= read -r f; do [[ -n "$(find "${f%.md}" -name 'template*' -prune -o -name '*.md' -print 2>/dev/null | head -n 1)" ]] || echo "$f"; done | wc -l | tr -d ' ')
   got=$(bash "$COUNT" --summary "$skill" 2>/dev/null | grep -c "^$skill:[^@ ]*[[:space:]]")
   check "$want" "$got" "summary lists every $skill leaf"
 done
