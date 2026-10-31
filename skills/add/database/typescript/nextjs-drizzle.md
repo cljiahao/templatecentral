@@ -39,69 +39,23 @@ Add to `package.json`:
 
 #### A3. Create Drizzle Config
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-drizzle bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-drizzle/template/` (listed in `<skill-dir>/database/typescript/nextjs-drizzle/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`drizzle.config.ts`** (project root):
 
-```ts
-import { existsSync } from 'node:fs';
-import { defineConfig } from 'drizzle-kit';
-
-// drizzle-kit does not read Next.js's .env.local. Load it locally when present; CI and
-// deploy jobs inject DATABASE_URL directly and have no such file (loadEnvFile would throw).
-if (existsSync('.env.local')) process.loadEnvFile('.env.local');
-
-export default defineConfig({
-  schema: './src/integrations/database/schema.ts',
-  out: './drizzle',
-  dialect: 'postgresql',
-  dbCredentials: { url: process.env.DATABASE_URL! },
-});
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/drizzle.config.ts` by the copy step; do not re-type it.
 
 #### A4. Define Schema
 
 **`src/integrations/database/schema.ts`**:
 
-```ts
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
-
-export const users = pgTable('users', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  email: text('email').notNull().unique(),
-  name: text('name').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdateFn(() => new Date()),
-});
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/schema.ts` by the copy step; do not re-type it.
 
 #### A5. Create Database Client
 
 **`src/integrations/database/db-client.ts`**:
 
-```ts
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-
-// v1's drizzle() generic is TRelations, not the schema; tables are passed per query.
-const globalForDb = globalThis as unknown as { db?: ReturnType<typeof drizzle> };
-
-export const db =
-  globalForDb.db ??
-  drizzle({
-    client: postgres(process.env.DATABASE_URL!, {
-      // postgres.js defaults to plaintext. Local Docker Postgres serves no TLS, so only
-      // `next dev` skips it; 'verify-full' checks the certificate chain and hostname.
-      ssl: process.env.NODE_ENV === 'production' ? 'verify-full' : false,
-    }),
-  });
-
-if (process.env.NODE_ENV !== 'production') globalForDb.db = db;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/db-client.ts` by the copy step; do not re-type it.
 
 > **TLS**: the `ssl` option is the enforcement point for the app (`next build`/`next start` run with `NODE_ENV=production`). `drizzle.config.ts` runs as a standalone CLI outside Next.js and uses only the URL — against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
@@ -111,10 +65,7 @@ if (process.env.NODE_ENV !== 'production') globalForDb.db = db;
 
 **`src/integrations/database/index.ts`**:
 
-```ts
-export { db } from './db-client';
-export * from './schema';
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
 
 #### A7. Add Factory Function
 

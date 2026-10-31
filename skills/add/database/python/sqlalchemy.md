@@ -19,15 +19,11 @@ Add a driver for the target database:
 
 ### A2. Create Database Base
 
+Run `TC_PART=leaf TC_LEAF=add/database/python/sqlalchemy bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/sqlalchemy/template/` (listed in `<skill-dir>/database/python/sqlalchemy/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/database/base.py`** (plus an empty `src/database/__init__.py`):
 
-```python
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-```
+Copied verbatim from `<skill-dir>/database/python/sqlalchemy/template/src/database/base.py` by the copy step; do not re-type it.
 
 ### A3. Add Configuration
 
@@ -58,39 +54,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 
 **`src/database/session.py`**:
 
-```python
-from collections.abc import Generator
-
-from typing import Any
-
-from sqlalchemy import create_engine, make_url
-from sqlalchemy.orm import Session, sessionmaker
-
-from core.config import api_settings, common_settings
-
-url = make_url(api_settings.DATABASE_URL)
-# libpq's default sslmode=prefer never verifies the server certificate and silently falls
-# back to plaintext. Local Docker Postgres serves no TLS, so only dev skips verify-full.
-# `system` = the OS CA store (libpq ≥ 16); a private CA (e.g. the RDS bundle) goes in the
-# URL as `?sslrootcert=/path/ca.pem`.
-connect_args: dict[str, Any] = {}
-if url.get_backend_name() == "postgresql" and common_settings.ENVIRONMENT != "dev":
-    connect_args = {
-        "sslmode": "verify-full",
-        "sslrootcert": url.query.get("sslrootcert", "system"),
-    }
-
-engine = create_engine(url, echo=False, connect_args=connect_args)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-
-
-def get_db() -> Generator[Session]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-```
+Copied verbatim from `<skill-dir>/database/python/sqlalchemy/template/src/database/session.py` by the copy step; do not re-type it.
 
 ### A5. Initialize Alembic
 

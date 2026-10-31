@@ -40,50 +40,11 @@ MONGODB_DB_NAME=mydb
 
 ### M3. Create the Client
 
+Run `TC_PART=leaf TC_LEAF=add/database/python/pymongo-async bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/pymongo-async/template/` (listed in `<skill-dir>/database/python/pymongo-async/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/database/mongo.py`** (plus an empty `src/database/__init__.py`):
 
-```python
-from typing import Annotated, Any
-
-from fastapi import Depends
-from pymongo import AsyncMongoClient
-from pymongo.asynchronous.database import AsyncDatabase
-
-from core.config import api_settings, common_settings
-
-_client: AsyncMongoClient[dict[str, Any]] | None = None
-
-
-async def init_mongo() -> None:
-    global _client
-    _client = AsyncMongoClient(
-        api_settings.MONGODB_URL.get_secret_value(),
-        # Outside dev, require TLS (overrides any tls=false in the URL): a non-TLS
-        # server fails the boot instead of receiving credentials in plaintext.
-        tls=common_settings.ENVIRONMENT != "dev",
-        # Surface an unreachable server in seconds, not the 30 s default per request.
-        serverSelectionTimeoutMS=5000,
-        tz_aware=True,
-    )
-    # The client connects lazily; ping so a bad URL fails the boot, not the first request.
-    await _client.admin.command("ping")
-
-
-async def close_mongo() -> None:
-    global _client
-    if _client is not None:
-        await _client.close()
-        _client = None
-
-
-def get_db() -> AsyncDatabase[dict[str, Any]]:
-    if _client is None:
-        raise RuntimeError("MongoDB client not initialised — is the lifespan wired?")
-    return _client[api_settings.MONGODB_DB_NAME]
-
-
-DbDep = Annotated[AsyncDatabase[dict[str, Any]], Depends(get_db)]
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/database/mongo.py` by the copy step; do not re-type it.
 
 ### M4. Create a Model
 
@@ -91,19 +52,7 @@ Domain models are plain Pydantic models in **`src/models/`** — `id` is the hex
 
 **`src/models/user.py`**:
 
-```python
-from datetime import UTC, datetime
-
-from pydantic import BaseModel, Field
-
-
-class User(BaseModel):
-    id: str | None = None
-    email: str
-    name: str
-    hashed_password: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/models/user.py` by the copy step; do not re-type it.
 
 ### M5. Create the Repositories
 
@@ -111,94 +60,11 @@ Create the `api/repositories/` directory (with an empty `__init__.py`) if it doe
 
 **`src/api/repositories/base.py`**:
 
-```python
-from collections.abc import Mapping
-from typing import Any
-
-from bson import ObjectId
-from pydantic import BaseModel
-from pymongo import ReturnDocument
-from pymongo.asynchronous.database import AsyncDatabase
-
-MAX_PAGE_SIZE = 100
-
-
-class BaseRepository[T: BaseModel]:
-    model: type[T]
-    collection_name: str
-    # update() writes only these keys, so a request body can never set
-    # hashed_password or smuggle a "$" operator into the update document.
-    updatable_fields: frozenset[str] = frozenset()
-
-    def __init__(self, db: AsyncDatabase[dict[str, Any]]) -> None:
-        self.collection = db[self.collection_name]
-
-    def _to_model(self, doc: dict[str, Any]) -> T:
-        doc["id"] = str(doc.pop("_id"))
-        return self.model.model_validate(doc)
-
-    async def find_by_id(self, id_: str) -> T | None:
-        # A malformed id is "not found", not a 500 from bson.errors.InvalidId.
-        if not ObjectId.is_valid(id_):
-            return None
-        doc = await self.collection.find_one({"_id": ObjectId(id_)})
-        return self._to_model(doc) if doc else None
-
-    async def find_many(self, *, limit: int = 20, skip: int = 0) -> list[T]:
-        # Clamped here too, so no caller can load the whole collection into memory.
-        limit = max(1, min(limit, MAX_PAGE_SIZE))
-        cursor = self.collection.find({}).sort("_id", 1).skip(max(0, skip)).limit(limit)
-        return [self._to_model(doc) async for doc in cursor]
-
-    async def insert(self, entity: T) -> T:
-        result = await self.collection.insert_one(
-            entity.model_dump(by_alias=True, exclude={"id"})
-        )
-        return entity.model_copy(update={"id": str(result.inserted_id)})
-
-    async def update(self, id_: str, changes: Mapping[str, Any]) -> T | None:
-        rejected = changes.keys() - self.updatable_fields
-        if rejected:
-            raise ValueError(f"Fields not updatable: {sorted(rejected)}")
-        if not ObjectId.is_valid(id_):
-            return None
-        if not changes:
-            return await self.find_by_id(id_)
-        doc = await self.collection.find_one_and_update(
-            {"_id": ObjectId(id_)},
-            {"$set": dict(changes)},
-            return_document=ReturnDocument.AFTER,
-        )
-        return self._to_model(doc) if doc else None
-
-    async def delete(self, id_: str) -> bool:
-        if not ObjectId.is_valid(id_):
-            return False
-        result = await self.collection.delete_one({"_id": ObjectId(id_)})
-        return result.deleted_count == 1
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/repositories/base.py` by the copy step; do not re-type it.
 
 **`src/api/repositories/user_repository.py`**:
 
-```python
-from api.repositories.base import BaseRepository
-from models.user import User
-
-
-class UserRepository(BaseRepository[User]):
-    model = User
-    collection_name = "users"
-    updatable_fields = frozenset({"name"})
-
-    async def find_by_email(self, email: str) -> User | None:
-        doc = await self.collection.find_one({"email": email})
-        return self._to_model(doc) if doc else None
-
-    async def ensure_indexes(self) -> None:
-        # The unique index, not a find-then-insert check, is what stops duplicate
-        # accounts under concurrent registrations.
-        await self.collection.create_index("email", unique=True)
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/repositories/user_repository.py` by the copy step; do not re-type it.
 
 > **NoSQL injection:** build filters only from typed scalars (`{"email": email}` where `email: str` came through a Pydantic schema). Never pass a request dict — or `request.query_params` — into `find`/`find_one`/`update_*`: `{"email": {"$ne": ""}}` matches every document.
 
@@ -233,92 +99,15 @@ app = FastAPI(lifespan=lifespan, title=common_settings.PROJECT_NAME, ...)
 
 **`src/api/schemas/request/user.py`**:
 
-```python
-from pydantic import EmailStr, Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class CreateUserRequest(BaseRequestSchema):
-    email: EmailStr = Field(description="User email address.")
-    name: str = Field(min_length=1, max_length=100, description="Display name.")
-    password: str = Field(
-        min_length=12, max_length=128, description="12-128 characters."
-    )
-
-
-class UpdateUserRequest(BaseRequestSchema):
-    name: str | None = Field(default=None, min_length=1, max_length=100)
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/schemas/request/user.py` by the copy step; do not re-type it.
 
 **`src/api/schemas/response/user.py`** — no `hashed_password` field; `model_validate(..., from_attributes=True)` copies only declared fields:
 
-```python
-from pydantic import Field
-
-from api.schemas.base import BaseResponseSchema
-
-
-class UserResponse(BaseResponseSchema):
-    id: str = Field(description="User ID.")
-    email: str = Field(description="User email.")
-    name: str = Field(description="Display name.")
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
 
 **`src/api/services/user_service.py`**:
 
-```python
-import asyncio
-from typing import Any
-
-from fastapi import HTTPException, status
-from pymongo.asynchronous.database import AsyncDatabase
-from pymongo.errors import DuplicateKeyError
-
-from api.repositories.user_repository import UserRepository
-from api.schemas.request.user import CreateUserRequest, UpdateUserRequest
-from core.security import hash_password
-from models.user import User
-
-type Db = AsyncDatabase[dict[str, Any]]
-
-
-async def list_users(db: Db, *, limit: int, skip: int) -> list[User]:
-    return await UserRepository(db).find_many(limit=limit, skip=skip)
-
-
-async def get_user(db: Db, user_id: str) -> User:
-    user = await UserRepository(db).find_by_id(user_id)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
-        )
-    return user
-
-
-async def create_user(db: Db, payload: CreateUserRequest) -> User:
-    # argon2 is ~100 ms of CPU: off the event loop, or it stalls every request.
-    hashed = await asyncio.to_thread(hash_password, payload.password)
-    user = User(email=payload.email, name=payload.name, hashed_password=hashed)
-    try:
-        return await UserRepository(db).insert(user)
-    except DuplicateKeyError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered."
-        ) from None
-
-
-async def update_user(db: Db, user_id: str, payload: UpdateUserRequest) -> User:
-    # exclude_none: an explicit `"name": null` would otherwise $set null and leave a
-    # document that no longer validates as User.
-    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
-    user = await UserRepository(db).update(user_id, changes)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
-        )
-    return user
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
 `core.security.hash_password` comes from `templatecentral:add` (auth). Without auth, create `src/core/security.py` with the argon2id `PasswordHasher` block from that guide (Step 3) and add `argon2-cffi` to `requirements.txt`.
 
@@ -416,140 +205,11 @@ def client() -> Generator[TestClient]:
 
 **`test/test_integration/conftest.py`** (plus an empty `__init__.py`):
 
-```python
-import os
-from collections.abc import AsyncIterator
-from typing import Any
-from uuid import uuid4
-
-import httpx2
-import pytest
-from pymongo import AsyncMongoClient
-from pymongo.asynchronous.database import AsyncDatabase
-from pymongo.errors import ServerSelectionTimeoutError
-
-from api.repositories.user_repository import UserRepository
-from app import app
-from database.mongo import get_db
-
-EXPLICIT_URL = os.environ.get("MONGODB_TEST_URL")
-
-
-@pytest.fixture
-async def mongo_db() -> AsyncIterator[AsyncDatabase[dict[str, Any]]]:
-    client: AsyncMongoClient[dict[str, Any]] = AsyncMongoClient(
-        EXPLICIT_URL or "mongodb://localhost:27017",
-        serverSelectionTimeoutMS=1000,  # localhost answers in ms; keeps skips fast
-        tz_aware=True,
-    )
-    try:
-        await client.admin.command("ping")
-    except ServerSelectionTimeoutError:
-        await client.close()
-        # Skip on a laptop without Mongo; an explicitly configured URL (CI) must work.
-        if EXPLICIT_URL:
-            raise
-        pytest.skip(
-            "MongoDB not reachable on localhost:27017 — run `docker compose up -d mongo`"
-        )
-    db = client[f"test_{uuid4().hex}"]  # throwaway database per test
-    await UserRepository(db).ensure_indexes()
-    yield db
-    await client.drop_database(db.name)
-    await client.close()
-
-
-@pytest.fixture
-async def api(
-    mongo_db: AsyncDatabase[dict[str, Any]],
-) -> AsyncIterator[httpx2.AsyncClient]:
-    # Same event loop as mongo_db (TestClient would run the app on another loop),
-    # and ASGITransport skips the lifespan so the app never opens its own client.
-    app.dependency_overrides[get_db] = lambda: mongo_db
-    transport = httpx2.ASGITransport(app=app)
-    async with httpx2.AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as client:
-        yield client
-    app.dependency_overrides.clear()
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/test/test_integration/conftest.py` by the copy step; do not re-type it.
 
 **`test/test_integration/test_users.py`**:
 
-```python
-from typing import Any
-
-import httpx2
-import pytest
-from pymongo.asynchronous.database import AsyncDatabase
-from pymongo.errors import DuplicateKeyError
-
-from api.repositories.user_repository import UserRepository
-from models.user import User
-
-pytestmark = pytest.mark.integration
-
-Db = AsyncDatabase[dict[str, Any]]
-FAKE_HASH = "placeholder-hash"  # repository tests never verify it
-
-
-def make_user(email: str = "ada@example.com") -> User:
-    return User(email=email, name="Ada", hashed_password=FAKE_HASH)
-
-
-async def test_insert_round_trips_id(mongo_db: Db) -> None:
-    repo = UserRepository(mongo_db)
-    created = await repo.insert(make_user())
-    found = await repo.find_by_id(created.id or "")
-    assert found is not None
-    assert (found.id, found.email) == (created.id, created.email)
-
-
-async def test_malformed_id_is_not_found(mongo_db: Db) -> None:
-    assert await UserRepository(mongo_db).find_by_id("not-an-object-id") is None
-
-
-async def test_duplicate_email_is_rejected(mongo_db: Db) -> None:
-    repo = UserRepository(mongo_db)
-    await repo.insert(make_user())
-    with pytest.raises(DuplicateKeyError):
-        await repo.insert(make_user())
-
-
-@pytest.mark.parametrize("field", ["hashed_password", "$where"])
-async def test_update_rejects_fields_outside_allow_list(
-    mongo_db: Db, field: str
-) -> None:
-    repo = UserRepository(mongo_db)
-    created = await repo.insert(make_user())
-    with pytest.raises(ValueError, match="not updatable"):
-        await repo.update(created.id or "", {field: "x"})
-
-
-async def test_find_many_pages(mongo_db: Db) -> None:
-    repo = UserRepository(mongo_db)
-    for i in range(3):
-        await repo.insert(make_user(f"u{i}@example.com"))
-    page = await repo.find_many(limit=2, skip=1)
-    assert [u.email for u in page] == ["u1@example.com", "u2@example.com"]
-
-
-async def test_create_user_hides_password_hash(api: httpx2.AsyncClient) -> None:
-    body = {
-        "email": "ada@example.com",
-        "name": "Ada",
-        "password": "correct-horse-battery",
-    }
-    r = await api.post("/users", json=body)
-    assert r.status_code == 201
-    assert set(r.json()) == {"id", "email", "name"}
-    assert (await api.post("/users", json=body)).status_code == 409
-
-
-async def test_get_user_validates_id(api: httpx2.AsyncClient) -> None:
-    assert (await api.get("/users/not-an-id")).status_code == 422
-    assert (await api.get("/users/" + "0" * 24)).status_code == 404
-```
+Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/test/test_integration/test_users.py` by the copy step; do not re-type it.
 
 CI runs these only if MongoDB is available: add a `mongo:8` service to the test job in `.github/workflows/ci.yml` and set `MONGODB_TEST_URL=mongodb://localhost:27017`. `ci.yml` is harness-seeded — recompute its `origin_hash` in `.claude/harness.json` (harness-kit-finalize.md Step E) so `verify-harness.sh` accepts the change.
 

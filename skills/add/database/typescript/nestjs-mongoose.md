@@ -13,32 +13,11 @@ pnpm add @nestjs/mongoose mongoose
 
 #### C2. Create DatabaseModule
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-mongoose bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-mongoose/template/` (listed in `<skill-dir>/database/typescript/nestjs-mongoose/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/database/database.module.ts`** (uses `serviceConfig` from `src/config/env.config.ts` — external service connections belong in `serviceConfig`, not `appConfig`):
 
-```typescript
-import { Global, Module, type OnModuleInit } from '@nestjs/common';
-import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
-import { type Connection } from 'mongoose';
-import { serviceConfig } from '../config/env.config';
-
-@Global()
-@Module({
-  imports: [
-    MongooseModule.forRoot(serviceConfig.MONGODB_URL),
-  ],
-})
-export class DatabaseModule implements OnModuleInit {
-  constructor(@InjectConnection() private readonly connection: Connection) {}
-
-  // Mongoose builds schema indexes in the background: on a fresh database, inserts
-  // made right after boot land before the unique index exists and duplicates get in.
-  // Awaiting init() holds the boot until every forFeature model's indexes are built
-  // (and fails it loudly if existing duplicates block a unique index).
-  async onModuleInit() {
-    await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
-  }
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-mongoose/template/src/database/database.module.ts` by the copy step; do not re-type it.
 
 Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
 

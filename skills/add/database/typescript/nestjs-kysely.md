@@ -30,50 +30,13 @@ Add a migration script to `package.json`:
 
 #### B2. Create KyselyService
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-kysely bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-kysely/template/` (listed in `<skill-dir>/database/typescript/nestjs-kysely/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 > **Complete B7 (Configure Environment) before this step** — `serviceConfig.DATABASE_URL` must be defined before creating the service.
 
 **`src/database/kysely.service.ts`**:
 
-```typescript
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { Kysely, PostgresDialect, sql } from 'kysely';
-import { Pool } from 'pg';
-
-import { appConfig, serviceConfig } from '../config/env.config';
-import type { Database } from './types';
-
-@Injectable()
-export class KyselyService extends Kysely<Database> implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(KyselyService.name);
-
-  constructor() {
-    const pool = new Pool({
-      connectionString: serviceConfig.DATABASE_URL,
-      max: 10,
-      // node-postgres does NOT negotiate TLS on its own. Without this the password and
-      // every row travel in plaintext. Local Docker Postgres serves no TLS, so it is
-      // disabled in dev only — never for a managed/remote database.
-      ssl: appConfig.ENVIRONMENT === 'dev' ? false : { rejectUnauthorized: true },
-    });
-
-    super({ dialect: new PostgresDialect({ pool }) });
-  }
-
-  async onModuleInit() {
-    try {
-      await sql`SELECT 1`.execute(this);
-      this.logger.log('Database connection verified');
-    } catch (error) {
-      this.logger.error('Database connection failed', error);
-      throw error;
-    }
-  }
-
-  async onModuleDestroy() {
-    await this.destroy();
-  }
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/kysely.service.ts` by the copy step; do not re-type it.
 
 > **TLS against a managed Postgres.** `rejectUnauthorized: true` verifies the server
 > certificate against Node's default trust store. Providers whose certs chain to a public
@@ -101,25 +64,7 @@ export class KyselyService extends Kysely<Database> implements OnModuleInit, OnM
 
 **`src/database/types.ts`**:
 
-```typescript
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
-
-export interface Database {
-  users: UsersTable;
-}
-
-export interface UsersTable {
-  id: Generated<string>;
-  email: string;
-  name: string;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export type User = Selectable<UsersTable>;
-export type NewUser = Insertable<UsersTable>;
-export type UserUpdate = Updateable<UsersTable>;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/types.ts` by the copy step; do not re-type it.
 
 > **Tip**: After the database exists, `pnpm dlx kysely-codegen` generates these types from the live schema. Run it ad hoc rather than as a devDependency — its `micromatch → braces` chain carries a High advisory with no fixed release, which fails `pnpm audit --audit-level=high`.
 
@@ -127,18 +72,7 @@ export type UserUpdate = Updateable<UsersTable>;
 
 **`src/database/database.module.ts`**:
 
-```typescript
-import { Global, Module } from '@nestjs/common';
-
-import { KyselyService } from './kysely.service';
-
-@Global()
-@Module({
-  providers: [KyselyService],
-  exports: [KyselyService],
-})
-export class DatabaseModule {}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/database.module.ts` by the copy step; do not re-type it.
 
 #### B5. Register in AppModule
 
@@ -160,82 +94,11 @@ export class AppModule {}
 
 **`src/database/migrations/001_initial.ts`**:
 
-```typescript
-import { type Kysely, sql } from 'kysely';
-
-export async function up(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .createTable('users')
-    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()::text`))
-    .addColumn('email', 'text', (col) => col.notNull().unique())
-    .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute();
-}
-
-export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('users').execute();
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/migrations/001_initial.ts` by the copy step; do not re-type it.
 
 Create a migration runner at **`src/database/migrate.ts`**:
 
-```typescript
-// Runs outside main.ts, so it must load .env itself before env.config validates.
-import 'dotenv/config';
-import path from 'node:path';
-import { promises as fs } from 'node:fs';
-import { Kysely, PostgresDialect } from 'kysely';
-// Migration classes live under the kysely/migration subpath — the root export's
-// FileMigrationProvider/Migrator are typed as compile-time redirects to this subpath.
-import { FileMigrationProvider, Migrator } from 'kysely/migration';
-import { Pool } from 'pg';
-
-import { appConfig, serviceConfig } from '../config/env.config';
-import type { Database } from './types';
-
-async function migrate() {
-  const db = new Kysely<Database>({
-    dialect: new PostgresDialect({
-      pool: new Pool({
-        connectionString: serviceConfig.DATABASE_URL,
-        // Same TLS policy as KyselyService — migrations carry credentials too.
-        ssl: appConfig.ENVIRONMENT === 'dev' ? false : { rejectUnauthorized: true },
-      }),
-    }),
-  });
-
-  const migrator = new Migrator({
-    db,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      migrationFolder: path.join(__dirname, 'migrations'),
-    }),
-  });
-
-  const { results, error } = await migrator.migrateToLatest();
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
-  }
-
-  await db.destroy();
-}
-
-// Without the catch, a rejected promise leaves the exit code at 0 and CI reports a
-// failed migration as a passing step.
-migrate().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/migrate.ts` by the copy step; do not re-type it.
 
 Run migrations with: `pnpm migrate`
 

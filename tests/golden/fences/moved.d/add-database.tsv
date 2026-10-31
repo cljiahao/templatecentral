@@ -1,0 +1,40 @@
+# file	heading	index	template-path
+skills/add/database/python/beanie.md	B2. Create MongoDB Connection	0	skills/add/database/python/beanie/template/src/database/mongo.py
+skills/add/database/python/beanie.md	B7. Usage	0	skills/add/database/python/beanie/template/src/api/schemas/request/user.py
+skills/add/database/python/beanie.md	B7. Usage	1	skills/add/database/python/beanie/template/src/api/schemas/response/user.py
+skills/add/database/python/beanie.md	B7. Usage	2	skills/add/database/python/beanie/template/src/api/services/user_service.py
+skills/add/database/python/pymongo-async.md	M3. Create the Client	0	skills/add/database/python/pymongo-async/template/src/database/mongo.py
+skills/add/database/python/pymongo-async.md	M4. Create a Model	0	skills/add/database/python/pymongo-async/template/src/models/user.py
+skills/add/database/python/pymongo-async.md	M5. Create the Repositories	0	skills/add/database/python/pymongo-async/template/src/api/repositories/base.py
+skills/add/database/python/pymongo-async.md	M5. Create the Repositories	1	skills/add/database/python/pymongo-async/template/src/api/repositories/user_repository.py
+skills/add/database/python/pymongo-async.md	M7. Schemas, Service, Router	0	skills/add/database/python/pymongo-async/template/src/api/schemas/request/user.py
+skills/add/database/python/pymongo-async.md	M7. Schemas, Service, Router	1	skills/add/database/python/pymongo-async/template/src/api/schemas/response/user.py
+skills/add/database/python/pymongo-async.md	M7. Schemas, Service, Router	2	skills/add/database/python/pymongo-async/template/src/api/services/user_service.py
+skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	2	skills/add/database/python/pymongo-async/template/test/test_integration/conftest.py
+skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	3	skills/add/database/python/pymongo-async/template/test/test_integration/test_users.py
+skills/add/database/python/sqlalchemy-iam.md	A2. Create Database Base	0	skills/add/database/python/sqlalchemy-iam/template/src/database/base.py
+skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	skills/add/database/python/sqlalchemy-iam/template/src/database/session.py
+skills/add/database/python/sqlalchemy.md	A2. Create Database Base	0	skills/add/database/python/sqlalchemy/template/src/database/base.py
+skills/add/database/python/sqlalchemy.md	A4. Create Database Session	0	skills/add/database/python/sqlalchemy/template/src/database/session.py
+skills/add/database/typescript/nestjs-drizzle.md	A3. Create Drizzle Config	0	skills/add/database/typescript/nestjs-drizzle/template/drizzle.config.ts
+skills/add/database/typescript/nestjs-drizzle.md	A4. Define Schema	0	skills/add/database/typescript/nestjs-drizzle/template/src/database/schema.ts
+skills/add/database/typescript/nestjs-drizzle.md	A5. Create DrizzleService	0	skills/add/database/typescript/nestjs-drizzle/template/src/database/drizzle.service.ts
+skills/add/database/typescript/nestjs-drizzle.md	A6. Create DatabaseModule	0	skills/add/database/typescript/nestjs-drizzle/template/src/database/database.module.ts
+skills/add/database/typescript/nestjs-kysely.md	B2. Create KyselyService	0	skills/add/database/typescript/nestjs-kysely/template/src/database/kysely.service.ts
+skills/add/database/typescript/nestjs-kysely.md	B3. Define Database Types	0	skills/add/database/typescript/nestjs-kysely/template/src/database/types.ts
+skills/add/database/typescript/nestjs-kysely.md	B4. Create DatabaseModule	0	skills/add/database/typescript/nestjs-kysely/template/src/database/database.module.ts
+skills/add/database/typescript/nestjs-kysely.md	B6. Create First Migration	0	skills/add/database/typescript/nestjs-kysely/template/src/database/migrations/001_initial.ts
+skills/add/database/typescript/nestjs-kysely.md	B6. Create First Migration	1	skills/add/database/typescript/nestjs-kysely/template/src/database/migrate.ts
+skills/add/database/typescript/nestjs-mongoose.md	C2. Create DatabaseModule	0	skills/add/database/typescript/nestjs-mongoose/template/src/database/database.module.ts
+skills/add/database/typescript/nextjs-drizzle.md	A3. Create Drizzle Config	0	skills/add/database/typescript/nextjs-drizzle/template/drizzle.config.ts
+skills/add/database/typescript/nextjs-drizzle.md	A4. Define Schema	0	skills/add/database/typescript/nextjs-drizzle/template/src/integrations/database/schema.ts
+skills/add/database/typescript/nextjs-drizzle.md	A5. Create Database Client	0	skills/add/database/typescript/nextjs-drizzle/template/src/integrations/database/db-client.ts
+skills/add/database/typescript/nextjs-drizzle.md	A6. Create Barrel Export	0	skills/add/database/typescript/nextjs-drizzle/template/src/integrations/database/index.ts
+skills/add/database/typescript/nextjs-kysely.md	B2. Create Database Client	0	skills/add/database/typescript/nextjs-kysely/template/src/integrations/database/kysely-client.ts
+skills/add/database/typescript/nextjs-kysely.md	B3. Define Database Types	0	skills/add/database/typescript/nextjs-kysely/template/src/integrations/database/types.ts
+skills/add/database/typescript/nextjs-kysely.md	B4. Create Barrel Export	0	skills/add/database/typescript/nextjs-kysely/template/src/integrations/database/index.ts
+skills/add/database/typescript/nextjs-kysely.md	B5. Create First Migration	0	skills/add/database/typescript/nextjs-kysely/template/src/integrations/database/migrations/001_initial.ts
+skills/add/database/typescript/nextjs-kysely.md	B5. Create First Migration	1	skills/add/database/typescript/nextjs-kysely/template/src/integrations/database/migrate.ts
+skills/add/database/typescript/nextjs-mongoose.md	C2. Create Mongoose Client Singleton	0	skills/add/database/typescript/nextjs-mongoose/template/src/integrations/database/mongoose-client.ts
+skills/add/database/typescript/nextjs-mongoose.md	C3. Create a Schema	0	skills/add/database/typescript/nextjs-mongoose/template/src/integrations/database/schemas/user.ts
+skills/add/database/typescript/nextjs-mongoose.md	C4. Create Barrel Export	0	skills/add/database/typescript/nextjs-mongoose/template/src/integrations/database/index.ts
