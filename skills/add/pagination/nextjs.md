@@ -31,63 +31,15 @@ export const paginationSchema = z.object({
 export type PaginationParams = z.infer<typeof paginationSchema>;
 ```
 
+Run `TC_PART=leaf TC_LEAF=add/pagination/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nextjs/template/` (listed in `<skill-dir>/pagination/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **2. Pagination Response Type**
 
-```ts
-// src/lib/types/pagination.ts
-export interface PaginationMetadata {
-  page: number;
-  limit: number;
-  total: number;
-  hasMore: boolean;
-}
-
-export interface PaginatedResponse<T> {
-  data: {
-    items: T[];
-    pagination: PaginationMetadata;
-  };
-}
-```
+Copied verbatim from `<skill-dir>/pagination/nextjs/template/src/lib/types/pagination.ts` by the copy step; do not re-type it.
 
 **3. Pagination Helpers (Business Logic)**
 
-```ts
-// src/lib/pagination/pagination-service.ts
-import type { PaginationMetadata } from '@/lib/types/pagination';
-
-export function calculateOffset(page: number, limit: number): number {
-  return (page - 1) * limit;
-}
-
-export function createMetadata(page: number, limit: number, total: number): PaginationMetadata {
-  return {
-    page,
-    limit,
-    total,
-    hasMore: page * limit < total,
-  };
-}
-
-// Returns null unless the field is allow-listed — the only gate between client input and orderBy.
-export function parseSortParam(
-  sort: string | undefined,
-  allowedFields: string[]
-): { field: string; direction: 'asc' | 'desc' } | null {
-  if (!sort) return null;
-
-  // Split on the first underscore only — field names may contain underscores.
-  const separatorIndex = sort.indexOf('_');
-  if (separatorIndex === -1) return null;
-  const direction = sort.slice(0, separatorIndex);
-  const field = sort.slice(separatorIndex + 1);
-  if (!allowedFields.includes(field) || !['asc', 'desc'].includes(direction)) {
-    return null;
-  }
-
-  return { field, direction: direction as 'asc' | 'desc' };
-}
-```
+Copied verbatim from `<skill-dir>/pagination/nextjs/template/src/lib/pagination/pagination-service.ts` by the copy step; do not re-type it.
 
 **4. Data Access + API Route**
 

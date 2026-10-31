@@ -469,9 +469,9 @@ fence_plain_eof() { printf "\nbash <<'EOF'\nexit 0\nEOF\n" >> "$SH/harness-kit-e
 fence_other_delim_not_shell() { printf "\ncat <<'TC_X'\nhello\nTC_X\n" >> "$SH/harness-kit-enforcement.md"; }
 none() { :; }
 
-# Template trees outside skills/scaffold (CONVENTIONS.md §1): the leaf skills/add/pagination/nestjs.md owns
-# skills/add/pagination/nestjs/template*/ and the template.manifest beside them; it ships no tree of its own.
-AT=add/pagination/nestjs
+# Template trees outside skills/scaffold (CONVENTIONS.md §1): the leaf skills/add/form/nextjs.md owns
+# skills/add/form/nextjs/template*/ and the template.manifest beside them; it ships no tree of its own.
+AT=add/form/nextjs
 # plant_tree <dir under skills> <path inside it> [mode] [content] — one tree file and its manifest line.
 plant_tree() {
   local d="$S/$1" rel=$2 mode=${3:-644}
@@ -1185,16 +1185,16 @@ fails add_tree_fails_on_a_symlinked_directory "Template trees are complete" add_
 fails add_tree_fails_on_an_empty_directory "Template trees are complete" add_tree_empty_dir "empty directory in a template tree"
 fails add_tree_fails_when_exec_bit_lost "Template trees are complete" add_tree_mode_lost "is mode 644 but listed as 755"
 fails add_tree_fails_when_tmpl_and_plain_both_listed "Template trees are complete" add_tree_tmpl_and_plain "both copy to"
-fails add_tree_skill_md_fails "Template trees hold no file named SKILL.md" add_tree_skill_md "add/pagination/nestjs/template/.claude/skills/zz/SKILL.md"
+fails add_tree_skill_md_fails "Template trees hold no file named SKILL.md" add_tree_skill_md "add/form/nextjs/template/.claude/skills/zz/SKILL.md"
 fails add_tree_skill_md_fails_in_a_suffixed_tree "Template trees hold no file named SKILL.md" add_tree_other_prefix_skill_md "template-late/.claude/skills/zz/SKILL.md"
-fails add_ref_headers_still_check_a_file_beside_the_tree "Ref file <!-- ref: --> headers" add_headerless_md_beside_tree "add/pagination/nestjs/zz-note.md"
+fails add_ref_headers_still_check_a_file_beside_the_tree "Ref file <!-- ref: --> headers" add_headerless_md_beside_tree "add/form/nextjs/zz-note.md"
 fails add_ref_headers_still_check_a_file_named_template "Ref file <!-- ref: --> headers" add_headerless_md_named_template "add/auth/template-notes.md"
-fails add_nesting_depth_still_checks_a_file_beside_the_tree "Nesting depth" add_deep_md_outside_tree "add/pagination/nestjs/zz/a/b/c.md"
+fails add_nesting_depth_still_checks_a_file_beside_the_tree "Nesting depth" add_deep_md_outside_tree "add/form/nextjs/zz/a/b/c.md"
 fails add_tree_comment_narration_is_scanned "Change-narration comments" narration_in_add_tree "Added a retry loop"
 fails add_tree_version_pins_are_scanned "Version pins in skills" pin_in_add_tree "left-pad@1.3.0"
 fails add_tree_hardcoded_secrets_are_scanned "Hardcoded secrets" secret_in_add_tree "hunter2hunter2"
-fails add_tree_exact_dependency_pins_are_scanned "Template package.json dependencies use floors" exact_pin_in_add_tree "add/pagination/nestjs/template/package.json"
-fails add_tree_bare_route_handlers_are_scanned "Bare Next.js route handler exports" bare_handler_in_add_tree "add/pagination/nestjs/template/src/app/api/health/route.ts"
+fails add_tree_exact_dependency_pins_are_scanned "Template package.json dependencies use floors" exact_pin_in_add_tree "add/form/nextjs/template/package.json"
+fails add_tree_bare_route_handlers_are_scanned "Bare Next.js route handler exports" bare_handler_in_add_tree "add/form/nextjs/template/src/app/api/health/route.ts"
 passes add_tree_hook_does_not_enter_the_migrate_inventory "migrate hook inventory matches" add_tree_hook
 
 # ── check_duplicated_iam_blocks_match: a moved fence resolves through moved.d ────────────────

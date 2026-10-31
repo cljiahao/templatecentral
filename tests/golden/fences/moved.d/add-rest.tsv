@@ -1,0 +1,22 @@
+# file	heading	index	template-path
+skills/add/error-handling/nextjs.md	Step 0 — Verify context	4	skills/add/error-handling/nextjs/template/src/components/layout/error-boundary.tsx
+skills/add/error-handling/nextjs.md	Step 0 — Verify context	5	skills/add/error-handling/nextjs/template/src/components/layout/error-boundary-async.tsx
+skills/add/error-handling/nextjs.md	Next.js Error Boundary Tests	0	skills/add/error-handling/nextjs/template/test/error-boundary.test.tsx
+skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	2	skills/add/logging/fastapi/template/src/utils/http_client.py
+skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	2	skills/add/logging/nextjs/template/src/integrations/clients/http-client.ts
+skills/add/logging/vite-react.md	1. Create `src/lib/logging/breadcrumbs.ts`	0	skills/add/logging/vite-react/template/src/lib/logging/breadcrumbs.ts
+skills/add/logging/vite-react.md	3. Create `src/lib/logging/log-batcher.ts`	0	skills/add/logging/vite-react/template/src/lib/logging/log-batcher.ts
+skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	0	skills/add/logging/vite-react/template/src/lib/logging/index.ts
+skills/add/mutation-testing/typescript.md	Step 1 — Create StrykerJS config	0	skills/add/mutation-testing/typescript/template/stryker.config.mjs
+skills/add/pagination/fastapi.md	Step 0 — Verify context	0	skills/add/pagination/fastapi/template/src/api/schemas/request/pagination.py
+skills/add/pagination/fastapi.md	Step 0 — Verify context	1	skills/add/pagination/fastapi/template/src/api/schemas/response/pagination.py
+skills/add/pagination/fastapi.md	Step 0 — Verify context	2	skills/add/pagination/fastapi/template/src/utils/pagination.py
+skills/add/pagination/nestjs.md	Step 0 — Verify context	0	skills/add/pagination/nestjs/template/src/common/dto/pagination.dto.ts
+skills/add/pagination/nestjs.md	Step 0 — Verify context	1	skills/add/pagination/nestjs/template/src/common/services/pagination.service.ts
+skills/add/pagination/nestjs.md	Tests	0	skills/add/pagination/nestjs/template/test/common/pagination.service.spec.ts
+skills/add/pagination/nextjs.md	Step 0 — Verify context	1	skills/add/pagination/nextjs/template/src/lib/types/pagination.ts
+skills/add/pagination/nextjs.md	Step 0 — Verify context	2	skills/add/pagination/nextjs/template/src/lib/pagination/pagination-service.ts
+skills/add/pagination/vite-react.md	Step 0 — Verify context	0	skills/add/pagination/vite-react/template/src/hooks/use-pagination.ts
+skills/add/redaction/hook-node.md	Part A — `PostToolUse` masking hook	0	skills/add/redaction/hook-node/template/.claude/hooks/redact-sensitive-output.cjs
+skills/add/redaction/hook-python.md	Part A — `PostToolUse` masking hook	0	skills/add/redaction/hook-python/template/.claude/hooks/redact_sensitive_output.py
+skills/add/redaction/implementation.md	Step 2 — Write `.claude/redaction-config.json`	0	skills/add/redaction/implementation/template/.claude/redaction-config.json

@@ -1,0 +1,4 @@
+{
+  "cidrs": ["172.18.161.0/24"],
+  "domains": ["corp.internal"]
+}

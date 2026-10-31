@@ -189,92 +189,15 @@ export function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
 }
 ```
 
+Run `TC_PART=leaf TC_LEAF=add/error-handling/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/error-handling/nextjs/template/` (listed in `<skill-dir>/error-handling/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 Class-based `ErrorBoundary` for catching synchronous React render errors:
 
-```tsx
-// src/components/layout/error-boundary.tsx
-'use client';
-
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { logError } from '@/lib/errors/error-log-handler';
-import { ErrorFallback } from './error-fallback';
-
-interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
-
-interface State {
-  error: Error | null;
-}
-
-export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): State {
-    return { error };
-  }
-
-  // getDerivedStateFromError only updates state — reporting belongs here, or every
-  // caught render error is swallowed and never reaches the logger.
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logError('ErrorBoundary caught an error', error);
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Component stack:', errorInfo.componentStack);
-    }
-  }
-
-  render() {
-    if (this.state.error) {
-      if (this.props.fallback) return this.props.fallback;
-
-      return (
-        <ErrorFallback error={this.state.error} onReset={() => window.location.reload()} />
-      );
-    }
-
-    return this.props.children;
-  }
-}
-```
+Copied verbatim from `<skill-dir>/error-handling/nextjs/template/src/components/layout/error-boundary.tsx` by the copy step; do not re-type it.
 
 Functional `AsyncErrorBoundary` for catching unhandled promise rejections:
 
-```tsx
-// src/components/layout/error-boundary-async.tsx
-'use client';
-
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { ErrorFallback } from './error-fallback';
-
-interface AsyncErrorBoundaryProps {
-  children: ReactNode;
-}
-
-export function AsyncErrorBoundary({ children }: AsyncErrorBoundaryProps) {
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const reason: unknown = event.reason;
-      setError(reason instanceof Error ? reason : new Error('An error occurred'));
-    };
-
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-  }, []);
-
-  if (error) {
-    return <ErrorFallback error={error} onReset={() => window.location.reload()} />;
-  }
-
-  return <>{children}</>;
-}
-```
+Copied verbatim from `<skill-dir>/error-handling/nextjs/template/src/components/layout/error-boundary-async.tsx` by the copy step; do not re-type it.
 
 ## Validate
 
@@ -292,33 +215,7 @@ pnpm build
 
 > **Deps not in scaffold**: run `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom` (or `templatecentral:add (test)`). The `@vitest-environment jsdom` docblock keeps the scaffold's `node` default for API tests.
 
-```typescript
-// test/error-boundary.test.tsx
-// @vitest-environment jsdom
-import '@testing-library/jest-dom/vitest';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { ErrorBoundary } from '@/components/layout/error-boundary';
-
-const Thrower = () => {
-  throw new Error('internal detail');
-};
-
-describe('ErrorBoundary', () => {
-  // Vitest runs with NODE_ENV=test, so the production (generic) message path is exercised.
-  it('renders the generic fallback without leaking the error message', () => {
-    render(
-      <ErrorBoundary>
-        <Thrower />
-      </ErrorBoundary>
-    );
-
-    expect(screen.getByText(/unexpected error/i)).toBeInTheDocument();
-    expect(screen.queryByText(/internal detail/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument();
-  });
-});
-```
+Copied verbatim from `<skill-dir>/error-handling/nextjs/template/test/error-boundary.test.tsx` by the copy step; do not re-type it.
 
 ## After Writing Code
 

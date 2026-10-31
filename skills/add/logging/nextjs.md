@@ -87,37 +87,11 @@ if (!hasSession) {
 }
 ```
 
+Run `TC_PART=leaf TC_LEAF=add/logging/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/nextjs/template/` (listed in `<skill-dir>/logging/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **Outbound HTTP calls** — create a fetch wrapper in `src/integrations/clients/`:
 
-```ts
-// src/integrations/clients/http-client.ts
-import { logger } from '@/lib/logger';
-
-// origin + path only: userinfo, query, and fragment can all carry credentials.
-function sanitizeUrl(url: string): string {
-  const { origin, pathname } = new URL(url);
-  return `${origin}${pathname}`;
-}
-
-export async function httpGet(url: string, options?: RequestInit): Promise<Response> {
-  const start = Date.now();
-  const safeUrl = sanitizeUrl(url);
-  try {
-    const res = await fetch(url, options);
-    logger.info(
-      { method: 'GET', url: safeUrl, status: res.status, duration_ms: Date.now() - start },
-      'Outbound HTTP'
-    );
-    return res;
-  } catch (err) {
-    logger.error(
-      { method: 'GET', url: safeUrl, duration_ms: Date.now() - start, error_type: (err as Error).name },
-      'Outbound HTTP error'
-    );
-    throw err;
-  }
-}
-```
+Copied verbatim from `<skill-dir>/logging/nextjs/template/src/integrations/clients/http-client.ts` by the copy step; do not re-type it.
 
 **Key domain events** — log where the state change happens:
 

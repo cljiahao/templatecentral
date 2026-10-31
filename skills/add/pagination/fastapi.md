@@ -16,87 +16,21 @@ the marker.
 
 > **Prerequisites**: FastAPI scaffold + `templatecentral:add (database)` with SQLAlchemy (sync `Session` from `src/database/session.py`). For `AsyncSession`, make the service and handler `async def` and `await` each `session.execute(...)`.
 
+Run `TC_PART=leaf TC_LEAF=add/pagination/fastapi bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/fastapi/template/` (listed in `<skill-dir>/pagination/fastapi/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **1. Request Schema**
 
-```python
-# src/api/schemas/request/pagination.py
-from pydantic import Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class PaginationParams(BaseRequestSchema):
-    """Shared query params for every paginated list endpoint."""
-
-    # le caps OFFSET cost — an unbounded page is a cheap DoS lever.
-    page: int = Field(
-        default=1, ge=1, le=10_000, description="Page number (1-indexed)."
-    )
-    limit: int = Field(default=10, ge=1, le=100, description="Items per page.")
-    sort: str | None = Field(
-        default=None,
-        max_length=64,
-        pattern=r"^(asc|desc)_\w+$",
-        description="asc_<field> or desc_<field>.",
-    )
-```
+Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/request/pagination.py` by the copy step; do not re-type it.
 
 **2. Response Schema**
 
-```python
-# src/api/schemas/response/pagination.py
-from api.schemas.base import BaseResponseSchema
-
-
-class PaginationMetadata(BaseResponseSchema):
-    page: int
-    limit: int
-    total: int
-    has_more: bool
-
-
-class PaginatedData[T](BaseResponseSchema):
-    items: list[T]
-    pagination: PaginationMetadata
-
-
-class PaginatedResponse[T](BaseResponseSchema):
-    data: PaginatedData[T]
-```
+Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/api/schemas/response/pagination.py` by the copy step; do not re-type it.
 
 `BaseResponseSchema` serializes `has_more` as `hasMore`, matching the other stacks' envelope.
 
 **3. Pagination Helpers**
 
-```python
-# src/utils/pagination.py
-from typing import Literal, cast
-
-from api.schemas.response.pagination import PaginationMetadata
-
-type SortDirection = Literal["asc", "desc"]
-
-
-def calculate_offset(page: int, limit: int) -> int:
-    return (page - 1) * limit
-
-
-def create_metadata(page: int, limit: int, total: int) -> PaginationMetadata:
-    return PaginationMetadata(page=page, limit=limit, total=total, has_more=page * limit < total)
-
-
-def parse_sort_param(
-    sort: str | None, allowed_fields: set[str]
-) -> tuple[str, SortDirection] | None:
-    """Return (field, direction) for an allow-listed `asc_<field>`/`desc_<field>`, else None."""
-    if not sort:
-        return None
-    # Split once: field names may themselves contain underscores.
-    direction, _, field = sort.partition("_")
-    if field not in allowed_fields or direction not in ("asc", "desc"):
-        return None
-    return field, cast(SortDirection, direction)
-```
+Copied verbatim from `<skill-dir>/pagination/fastapi/template/src/utils/pagination.py` by the copy step; do not re-type it.
 
 **4. Service + Router**
 

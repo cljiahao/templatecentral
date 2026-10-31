@@ -28,15 +28,12 @@ will refuse to mask rather than emit a value identical to the real one.
 
 ## Step 2 — Write `.claude/redaction-config.json`
 
+Run `TC_PART=leaf TC_LEAF=add/redaction/implementation bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/redaction/implementation/template/` (listed in `<skill-dir>/redaction/implementation/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 Substitute the user's real values for the example below (JSON, not YAML — both hook runtimes parse it
 with zero added dependencies):
 
-```json
-{
-  "cidrs": ["172.18.161.0/24"],
-  "domains": ["corp.internal"]
-}
-```
+Copied verbatim from `<skill-dir>/redaction/implementation/template/.claude/redaction-config.json` by the copy step; do not re-type it.
 
 The companion mapping file (`.claude/.redaction-map.json`, created on first mask) is gitignored in
 Step 7, so each teammate's machine allocates its own synthetic numbering independently — `masked0` and
