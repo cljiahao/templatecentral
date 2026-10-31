@@ -2,9 +2,13 @@
 # tc-copy.sh — the one script that copies templateCentral's template trees into a project.
 #
 # Usage: TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash tc-copy.sh <target>
-#   TC_STACK  nestjs | nextjs | vite-react | fastapi
-#   TC_PART   base | settings | ci | late | stack | agents | tail   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#        TC_PART=leaf TC_LEAF=<add|migrate>/<path/to/leaf-stem> [TC_TREE=<tree>] bash tc-copy.sh <target>
+#   TC_STACK  nestjs | nextjs | vite-react | fastapi (not used by TC_PART=leaf)
+#   TC_PART   base | settings | ci | late | stack | agents | tail | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
 #   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
+#   TC_LEAF   for leaf: the leaf's stem under skills/, e.g. add/auth/nestjs; its template trees and
+#             template.manifest sit in skills/<TC_LEAF>/
+#   TC_TREE   for leaf: copy only this tree (template or template-<suffix>); empty copies every tree
 #   target    the project root; it must be an existing directory
 # The inputs carry a TC_ prefix because CI, STACK and PART are common in a caller's environment (CI=true
 # is exported by most CI hosts and agent sandboxes).
@@ -16,6 +20,8 @@
 STACK=${TC_STACK-}
 CI=${TC_CI-}
 PART=${TC_PART-}
+LEAF=${TC_LEAF-}
+TREE=${TC_TREE-}
 WHAT="scaffold"
 if [ "$PART" = tail ]; then WHAT="append the tail"; fi
 NL='
@@ -48,12 +54,48 @@ SK=$SH
 real=$(cd -- "$TGT" 2>/dev/null && pwd -P) || real=
 if [ "$real" = / ]; then stop "$TGT is the filesystem root, not a project directory"; fi
 if [ -n "${HOME-}" ] && [ "$real" = "$(cd -- "$HOME" 2>/dev/null && pwd -P)" ]; then stop "$TGT is your home directory, not a project directory"; fi
-case "$STACK" in
-  nestjs|nextjs|vite-react) V=ts ;;
-  fastapi) V=py ;;
-  *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
-esac
+V=
+if [ "$PART" != leaf ]; then
+  case "$STACK" in
+    nestjs|nextjs|vite-react) V=ts ;;
+    fastapi) V=py ;;
+    *) stop "unknown STACK '$STACK' (want nestjs, nextjs, vite-react or fastapi)" ;;
+  esac
+fi
 case "$PART" in
+  leaf)
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=leaf"
+    case "$SH" in
+      */scaffold/shared) SKILLS=${SH%/scaffold/shared} ;;
+      *) stop "TC_PART=leaf needs the script in skills/scaffold/shared" ;;
+    esac
+    case "$LEAF" in
+      add/* | migrate/*) ;;
+      *) stop "unknown TC_LEAF '$LEAF' (want add/... or migrate/..., the leaf's stem under skills/)" ;;
+    esac
+    case "/$LEAF/" in
+      *//* | */./* | */../*) stop "TC_LEAF '$LEAF' holds an empty, . or .. path segment" ;;
+    esac
+    case "$LEAF" in
+      *[!A-Za-z0-9._/-]*) stop "TC_LEAF '$LEAF' holds a character outside A-Za-z0-9._/-" ;;
+    esac
+    SK=$SKILLS/$LEAF
+    [ -d "$SK" ] || stop "$SK is not a directory: no leaf '$LEAF'"
+    if [ -L "$SK" ]; then stop "$SK is a symlink"; fi
+    if [ -n "$TREE" ]; then
+      case "$TREE" in
+        template | template-[a-z0-9]*) ;;
+        *) stop "unknown TC_TREE '$TREE' (want template or template-<suffix>)" ;;
+      esac
+      case "$TREE" in
+        *[!a-z0-9-]*) stop "unknown TC_TREE '$TREE' (want template or template-<suffix>)" ;;
+      esac
+      SEL=$TREE
+    else
+      SEL=$(cd "$SK" && find . -maxdepth 1 -type d \( -name template -o -name 'template-*' \) | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')
+      SEL=${SEL% }
+      [ -n "$SEL" ] || stop "no template tree under $SK"
+    fi ;;
   base)
     [ -z "$CI" ] || stop "TC_CI must stay empty in Step 0"
     SEL="template template-$V" ;;
