@@ -1,0 +1,18 @@
+# Files templatecentral:add copies verbatim for add/auth/nestjs (tc-copy.sh TC_PART=leaf). One line per file: path mode placeholders seams
+# path          relative to this directory; the first segment names the tree
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template-cookie/src/modules/auth/auth.cookies.ts 644 - -
+template-cookie/test/auth-cookie.e2e-spec.ts 644 - -
+template/src/modules/auth/auth.controller.ts 644 - -
+template/src/modules/auth/auth.dto.ts 644 - -
+template/src/modules/auth/auth.module.ts 644 - -
+template/src/modules/auth/auth.service.ts 644 - -
+template/src/modules/auth/jwt-auth.guard.ts 644 - -
+template/src/modules/auth/jwt.strategy.ts 644 - -
+template/src/modules/auth/ownership.ts 644 - -
+template/src/modules/auth/roles.decorator.ts 644 - -
+template/src/modules/auth/roles.guard.ts 644 - -
+template/test/auth.e2e-spec.ts 644 - -
+template/test/modules/auth/authz.spec.ts 644 - -

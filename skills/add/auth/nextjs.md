@@ -73,79 +73,13 @@ the marker.
 pnpm add "better-auth@^1.7.7"
 ```
 
+Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nextjs/template/` into the project per `<skill-dir>/auth/nextjs/template.manifest` — the files of Steps 2, 3, 5, 7, 10 and 14 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
+
 > **Version floor:** better-auth ≥1.7.7 — two critical security advisories are fixed only in 1.7.7. If you later add the Drizzle adapter, regenerate the auth schema after upgrading (1.7 makes `Account.issuer` required and moves `experimental.joins` to `advanced.database.joins`).
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
-Security-critical file. Write exactly as shown.
-
-```ts
-import { randomBytes } from 'node:crypto';
-
-import { betterAuth } from 'better-auth';
-import { nextCookies } from 'better-auth/next-js';
-import { PHASE_PRODUCTION_BUILD } from 'next/constants';
-
-// `next build` evaluates this module while collecting page data, and build environments
-// (CI, the Docker builder stage) carry no runtime secrets — so enforce it at runtime only.
-const isBuild = process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
-if (!process.env.BETTER_AUTH_SECRET && !isBuild) {
-  throw new Error(
-    'BETTER_AUTH_SECRET environment variable is required — generate with: openssl rand -base64 32'
-  );
-}
-
-export const auth = betterAuth({
-  appName: process.env.NEXT_PUBLIC_APP_NAME ?? 'My App',
-  baseURL: process.env.BETTER_AUTH_URL,
-  // Throwaway random secret for `next build` only (silences better-auth's warnings); runtime requires the real one.
-  secret:
-    process.env.BETTER_AUTH_SECRET ?? (isBuild ? randomBytes(32).toString('base64') : undefined),
-
-  emailAndPassword: {
-    enabled: true,
-    // SSO only in prod; dev can sign up
-    disableSignUp: process.env.NODE_ENV === 'production',
-    // OWASP: without MFA, treat <15 chars as weak — this config has no MFA enabled
-    minPasswordLength: 15,
-    autoSignIn: true,
-  },
-
-  // SSO providers go here — see Step 15 for the per-provider config blocks.
-  socialProviders: {},
-
-  user: {
-    additionalFields: {
-      // input: false keeps `role` out of sign-up and update-user bodies, so no user can grant
-      // themselves a role. Change it only from trusted server code.
-      role: { type: 'string', defaultValue: 'user', input: false },
-    },
-  },
-
-  session: {
-    // Standard tier. Elevated: 12h + 30-min inactivity; high-assurance: 8h + 15-min inactivity (add `freshAge`, see note below).
-    expiresIn: 30 * 24 * 60 * 60,
-    updateAge: 24 * 60 * 60,
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60,
-    },
-  },
-
-  advanced: {
-    defaultCookieAttributes: {
-      sameSite: 'lax',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-    },
-  },
-
-  // nextCookies() must stay the last plugin so Server Actions can set cookies.
-  plugins: [nextCookies()],
-});
-
-export type Session = typeof auth.$Infer.Session;
-```
+Security-critical file. Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth.ts` by the copy step; do not re-type it.
 
 > `freshAge` (add under `session` for high-assurance flows) is measured from session `createdAt`, not last activity. With a short `freshAge` (e.g. `43200`), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
 
@@ -169,13 +103,7 @@ export type Session = typeof auth.$Infer.Session;
 
 #### 3. Write `src/lib/auth-client.ts` (verbatim — do not generate)
 
-```ts
-import { createAuthClient } from 'better-auth/react';
-
-export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-});
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth-client.ts` by the copy step; do not re-type it.
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
@@ -256,17 +184,7 @@ export const config = {
 
 Every handler is wrapped in `withLogging` — `pnpm check` (`scripts/check-route-logging.mjs`) rejects a destructured `export const { GET, POST } = toNextJsHandler(auth)`.
 
-```ts
-import { toNextJsHandler } from 'better-auth/next-js';
-
-import { auth } from '@/lib/auth';
-import { withLogging } from '@/lib/utils/with-logging';
-
-const handlers = toNextJsHandler(auth);
-
-export const GET = withLogging(handlers.GET);
-export const POST = withLogging(handlers.POST);
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/api/auth/[...all]/route.ts` by the copy step; do not re-type it.
 
 #### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
 
@@ -281,20 +199,7 @@ export const PAGE_ROUTES = {
 
 #### 7. Create `src/app/(public)/login/page.tsx`
 
-```tsx
-import { LoginCard } from '@/features/auth';
-
-// The (public) layout already renders <main>; a second one here is an a11y violation.
-// CardTitle renders a <div>, so the page's level-one heading is supplied here.
-export default function LoginPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center px-6">
-      <h1 className="sr-only">Sign in</h1>
-      <LoginCard />
-    </div>
-  );
-}
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/(public)/login/page.tsx` by the copy step; do not re-type it.
 
 #### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
@@ -352,143 +257,23 @@ export default function DashboardPage() {
 
 **`src/features/auth/components/login-button.tsx`** — SSO sign-in:
 
-```tsx
-'use client';
-
-import { authClient } from '@/lib/auth-client';
-import type { ComponentProps } from 'react';
-
-import { Button } from '@/components/ui/button';
-
-interface LoginButtonProps extends ComponentProps<typeof Button> {
-  provider: 'google' | 'github' | 'microsoft';
-  callbackURL?: string;
-  label?: string;
-}
-
-export function LoginButton({
-  provider,
-  callbackURL = '/dashboard',
-  label = 'Sign in',
-  ...buttonProps
-}: LoginButtonProps) {
-  return (
-    <Button
-      onClick={() => authClient.signIn.social({ provider, callbackURL })}
-      {...buttonProps}
-    >
-      {label}
-    </Button>
-  );
-}
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-button.tsx` by the copy step; do not re-type it.
 
 **`src/features/auth/components/signout-button.tsx`:**
 
-```tsx
-'use client';
-
-import { authClient } from '@/lib/auth-client';
-import { useRouter } from 'next/navigation';
-import type { ComponentProps } from 'react';
-
-import { Button } from '@/components/ui/button';
-
-interface SignOutButtonProps extends ComponentProps<typeof Button> {
-  redirectTo?: string;
-}
-
-export function SignOutButton({
-  redirectTo = '/',
-  children = 'Sign out',
-  ...buttonProps
-}: SignOutButtonProps) {
-  const router = useRouter();
-
-  async function handleSignOut() {
-    await authClient.signOut();
-    router.push(redirectTo);
-  }
-
-  return (
-    <Button onClick={handleSignOut} {...buttonProps}>
-      {children}
-    </Button>
-  );
-}
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/signout-button.tsx` by the copy step; do not re-type it.
 
 **`src/features/auth/components/login-card.tsx`:**
 
-```tsx
-'use client';
-
-import { authClient } from '@/lib/auth-client';
-import { isDev } from '@/lib/constants/env';
-import { PAGE_ROUTES } from '@/lib/constants/routes';
-import { useRouter } from 'next/navigation';
-
-import { Button } from '@/components/ui/button';
-import { CustomCard } from '@/components/widgets/custom-card';
-
-// better-auth's email validator rejects single-label domains — 'dev@local' fails with
-// INVALID_EMAIL on both sign-in and sign-up. Use a dotted domain.
-const DEV_EMAIL = 'dev@dev.local';
-const DEV_PASSWORD = 'dev-password-local';
-
-export function LoginCard() {
-  const router = useRouter();
-
-  async function handleDevLogin() {
-    const { error } = await authClient.signIn.email({
-      email: DEV_EMAIL,
-      password: DEV_PASSWORD,
-    });
-
-    if (error) {
-      // First run: account does not exist yet — create it (autoSignIn: true signs in immediately)
-      const { error: signUpError } = await authClient.signUp.email({
-        email: DEV_EMAIL,
-        password: DEV_PASSWORD,
-        name: 'Dev User',
-      });
-      if (signUpError) {
-        console.error('Dev login failed:', signUpError.message);
-        return;
-      }
-    }
-
-    router.push(PAGE_ROUTES.DASHBOARD);
-  }
-
-  return (
-    <CustomCard header="Sign in" className="w-full max-w-sm">
-      <div className="flex flex-col gap-3">
-        {/* Add SSO provider buttons here — import LoginButton and render one per provider */}
-        {isDev && (
-          <Button onClick={handleDevLogin} variant="outline">
-            Dev login (bypass auth)
-          </Button>
-        )}
-      </div>
-    </CustomCard>
-  );
-}
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-card.tsx` by the copy step; do not re-type it.
 
 **`src/features/auth/components/index.ts`:**
 
-```ts
-export { LoginButton } from './login-button';
-export { LoginCard } from './login-card';
-export { SignOutButton } from './signout-button';
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/index.ts` by the copy step; do not re-type it.
 
 **`src/features/auth/index.ts`:**
 
-```ts
-export * from './components';
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/index.ts` by the copy step; do not re-type it.
 
 #### 11. Update `.env.example` and `.env.local`
 
@@ -579,23 +364,7 @@ A session says who the caller is; these decide what the caller may touch. Both d
 
 **`src/lib/authz.ts`**:
 
-```ts
-import type { Session } from '@/lib/auth';
-
-/**
- * True only when a signed-in user holds `role`; narrows `session` to `Session` when true.
- * Check for a null session first: the false branch also covers a missing session, so it
- * does not mean "signed in without the role" and must not be narrowed as if it did.
- */
-export function hasRole(session: Session | null, role: string): session is Session {
-  return session?.user.role === role;
-}
-
-/** True only when the record exists and belongs to `userId`. */
-export function isOwner(ownerId: string | null | undefined, userId: string): boolean {
-  return ownerId != null && ownerId === userId;
-}
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/authz.ts` by the copy step; do not re-type it.
 
 Use `isOwner` on record-by-id pages, actions and handlers (see Rules). A record owned by someone else gets the same 404 as one that does not exist, so a caller cannot probe which ids belong to other users:
 
@@ -616,45 +385,7 @@ if (!isOwner(item?.ownerId, session.user.id)) return new Response(null, { status
 
 **`test/lib/authz.test.ts`**:
 
-```ts
-import { describe, expect, it } from 'vitest';
-
-import type { Session } from '@/lib/auth';
-import { hasRole, isOwner } from '@/lib/authz';
-
-// Only `user.role` matters to hasRole; the cast skips building a full better-auth session.
-function sessionWithRole(role: string): Session {
-  return { user: { role } } as unknown as Session;
-}
-
-describe('hasRole', () => {
-  it('hasRole is false without a session', () => {
-    expect(hasRole(null, 'admin')).toBe(false);
-  });
-
-  it('hasRole is false for another role', () => {
-    expect(hasRole(sessionWithRole('user'), 'admin')).toBe(false);
-  });
-
-  it('hasRole is true for the held role', () => {
-    expect(hasRole(sessionWithRole('admin'), 'admin')).toBe(true);
-  });
-});
-
-describe('isOwner', () => {
-  it('isOwner is false for a missing owner', () => {
-    expect(isOwner(undefined, 'u1')).toBe(false);
-  });
-
-  it('isOwner is false for another owner', () => {
-    expect(isOwner('u2', 'u1')).toBe(false);
-  });
-
-  it('isOwner is true for the owner', () => {
-    expect(isOwner('u1', 'u1')).toBe(true);
-  });
-});
-```
+Copied verbatim from `<skill-dir>/auth/nextjs/template/test/lib/authz.test.ts` by the copy step; do not re-type it.
 
 #### 15. Adding an SSO provider
 

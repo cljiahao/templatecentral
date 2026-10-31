@@ -1,0 +1,7 @@
+# Files templatecentral:add copies verbatim for add/auth/vite-react (tc-copy.sh TC_PART=leaf). One line per file: path mode placeholders seams
+# path          relative to this directory; the first segment names the tree
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template/src/features/auth/api/auth-service.ts 644 - -
+template/src/lib/clients/csrf.ts 644 - -
