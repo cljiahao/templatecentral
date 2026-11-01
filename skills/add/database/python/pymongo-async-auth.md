@@ -1,6 +1,6 @@
 <!-- ref: add/database/python/pymongo-async-auth.md
      loaded-by: add/database/python.md → add/SKILL.md
-     prereq: Stack = FastAPI, DB = MongoDB via PyMongo async, auth stubs from templatecentral:add (auth) present (`src/api/services/auth_service.py` exists). Loaded alongside pymongo-async.md (M4 `User`, M5 `UserRepository`, M6 unique email index must exist). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
+     prereq: Stack = FastAPI, DB = MongoDB via PyMongo async, auth stubs from templatecentral:add (auth) present (`src/api/services/auth_service.py` exists). Loaded alongside pymongo-async.md (M4 `User`, M5 `UserRepository`, the M6 lifespan that creates the unique email index must exist). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Completing Auth Integration (PyMongo)
 
 > Replaces the 501 stubs from `templatecentral:add` (auth), reusing `pymongo-async.md`'s `User` (M4), `UserRepository` (M5) and unique email index (M6).
@@ -68,7 +68,7 @@ async def get_user(db: Db, user_id: str) -> dict:
 
 ### Step B — Replace `src/api/routers/auth.py`
 
-Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added:
+Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added. If the cookie-mode handlers from the auth guide's Browser Client section (`POST /auth/session`, `POST /auth/logout`) are in the file, keep them: make `/auth/session` `async` and `await login_user(...)` as `/auth/login` does below. The rest of the file:
 
 ```python
 from typing import Annotated

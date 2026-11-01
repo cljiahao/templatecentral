@@ -1,11 +1,11 @@
 <!-- ref: scaffold/nestjs/source-files.md
      loaded-by: scaffold/SKILL.md
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
-## Part B — Config and Source Files
+## Template notes — config and source files
 
 The config and source files are real files in `<skill-dir>/nestjs/template/` (`AGENTS.md` in `<skill-dir>/nestjs/template-agents/`), listed in `<skill-dir>/nestjs/template.manifest`. Steps 1, 4 and 6 copy them (stack, base and agents parts); do not re-type or modify them. Notes:
 
-- `package.json` — Step 1 sets `"name"`. Versions are caret floors aligned with `.claude/rules/nestjs.md`; `pnpm install` resolves the newest compatible; extra test tooling is omitted (`templatecentral:add (test)` adds it). Freshen pins post-scaffold with the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`). `engines.node` (`^24.15.0 || >=26.0.0`) is the `@nestjs/schematics` 12 CLI floor for `nest generate`; the app runtime alone needs less (see `.claude/rules/nestjs.md`). The project stays CommonJS (no `"type": "module"`) and loads the ESM Nest 12 packages through `require(esm)`, so no `.js` import suffixes are needed. The unmet-peer **warning** for `nestjs-zod` is expected and safe to ignore.
+- `package.json` — Step 1 sets `"name"`. Versions are caret floors aligned with the plugin's `<skill-dir>/../../.claude/rules/nestjs.md`; `pnpm install` resolves the newest compatible; extra test tooling is omitted (`templatecentral:add (test)` adds it). Freshen pins post-scaffold with the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`). `engines.node` (`^24.15.0 || >=26.0.0`) is the `@nestjs/schematics` 12 CLI floor for `nest generate`; the app runtime alone needs less (see `.claude/rules/nestjs.md`). The project stays CommonJS (no `"type": "module"`) and loads the ESM Nest 12 packages through `require(esm)`, so no `.js` import suffixes are needed. The unmet-peer **warning** for `nestjs-zod` is expected and safe to ignore.
 - `pnpm-workspace.yaml` — If `pnpm install` reports `ERR_PNPM_IGNORED_BUILDS` or rewrites it with unexpected entries, set each listed package under `allowBuilds` to `true` or `false` and re-run `pnpm install`.
 - `eslint.config.mjs` — Every block touching sonarjs rules reuses the one `sonarjsPlugin` reference (a second `plugins: { sonarjs }` throws `Cannot redefine plugin "sonarjs"`). `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret) and identical across the nextjs, nestjs and vite-react scaffolds, because its rule set changes across minor versions. Bump all three together and re-verify. For `linterOptions` and the `eslint-comments` directive hygiene see `templatecentral:standards` code-standards/comments.md.
 - `tsconfig.build.json` — `rootDir: "./src"` is build-only so `nest build` emits `dist/main.js` (what `start:prod` and the Dockerfile expect); do not move it into `tsconfig.json`, whose `rootDir: "./"` lets `tsc --noEmit` still typecheck `test/`. `incremental: false` here overrides the base `incremental: true`, which stays for the fast `tsc --noEmit` path: with it on, a second `nest build` with no source change emits an empty `dist/`, despite `deleteOutDir: true`.
@@ -55,7 +55,7 @@ pnpm install
 
 ### 5. Verification Gate
 
-**Do NOT generate AGENTS.md until `pnpm format` has run and the four checks after it pass** (Prettier drift on newly generated files fails `pnpm check`):
+**Generate AGENTS.md only after `pnpm format` has run and the four checks after it pass** (Prettier drift on newly generated files fails `pnpm check`):
 
 ```bash
 pnpm format
@@ -69,7 +69,7 @@ If any command fails, fix it before proceeding.
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** a third time as `TC_STACK=nestjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing. Then check that no placeholder is left:
+Run kit Step **0** a third time as `TC_STACK=nestjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project title. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing. Then check that no placeholder is left:
 
 ```bash
 grep -rn '__TC_' . --exclude-dir=node_modules --exclude-dir=.git
@@ -97,8 +97,6 @@ Kit Step **0** (`TC_PART=base`) already ran. Execute kit Steps **A through D** n
 
 Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates: `nest-migrate` (DB migration with a safety gate, if Drizzle/Kysely is wired up) and `nest-module` (a new feature module: controller + service + DTO + test). If yes, create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
-Now execute kit Steps **E through H** using the **nestjs** row: harness.json (E, with the `nest-verify` hash), base snapshot (E2), per-folder docs (E3), `.agents` symlink (F), AGENTS.md tail (G, with the nestjs `PostToolUse` line) and plugins (H).
-
 ### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Skip if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLAUDE.md` at the project root with exactly one line:
@@ -107,7 +105,7 @@ Skip if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLA
 @AGENTS.md
 ```
 
-Do not duplicate commands or conventions here — everything lives in `AGENTS.md`. Add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
+Do not duplicate commands or conventions here — everything lives in `AGENTS.md`. Step E hashes it into `seeded_files` (it runs next).md Step E).
 
 ### 7b. Optional: Task management
 
@@ -118,6 +116,8 @@ printf '\n' >> AGENTS.md
 cat "<skill-dir>/nestjs/template-tail/task-management.md" >> AGENTS.md
 ```
 
+Then execute kit Steps **E through H** using the **nestjs** row: harness.json (E, with the `nest-verify` hash), base snapshot (E2), per-folder docs (E3), `.agents` symlink (F), AGENTS.md tail (G, with the nestjs `PostToolUse` line) and plugins (H).
+
 ### 8. Remove Example Code (Optional)
 
 Once the user confirms the project runs, use the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`). NestJS-specific steps: delete `src/modules/example/` and `test/modules/example.controller.spec.ts`, and remove `ExampleModule` from `src/modules/index.ts` and the `imports` array in `src/app.module.ts`.
@@ -126,8 +126,8 @@ Once the user confirms the project runs, use the cleanup utility (`cat "<skill-d
 
 - Global pipes and filters go in `app.module.ts`; auth guards at controller/route level (not global, so health checks remain unprotected)
 - Verify the API starts and Swagger docs at `/docs` render before handing off to the user
-- NEVER commit real secrets or paste JWT/DB credentials into `AGENTS.md` / `CLAUDE.md`
-- NEVER copy `node_modules/`, `dist/` or `.env` when scaffolding
-- NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
-- NEVER remove the `base/` module (health check) or the `test/` directory structure
-- NEVER install packages globally — always use pnpm within the project
+- Do not commit real secrets or put JWT/DB credentials in `AGENTS.md` / `CLAUDE.md`; both are committed and read by every agent
+- Leave `node_modules/`, `dist/` and `.env` out of the scaffold; they are installed, built or local
+- The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off
+- Keep the `base/` module (health check) and the `test/` directory structure; CI and the e2e tests depend on them
+- Install packages with pnpm inside the project, not globally

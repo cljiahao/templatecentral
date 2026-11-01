@@ -33,12 +33,12 @@ All files use **kebab-case**. Exceptions: Next.js special files (`layout.tsx`, `
 **shadcn/ui primitives** (`src/components/ui/`) — add via CLI, never recreate:
 `accordion` · `avatar` · `button` · `card` · `checkbox` · `dialog` · `dropdown-menu` · `form` · `input` · `label` · `select` · `separator` · `skeleton` · `sonner` · `tabs` · `textarea`
 
-To add a shadcn primitive: `npx shadcn@latest add <name>` — NEVER install `@radix-ui/*` manually.
+To add a shadcn primitive: `npx shadcn@latest add <name>` ; do not install `@radix-ui/*` by hand.
 
 **Widgets** (`src/components/widgets/`) — available patterns, add only when the project uses them:
 `brand-logo` · `brand-text` · `custom-card` · `custom-dialog` · `custom-form-field` · `link-list` · `media-card` · `pill` · `theme-toggle-button` · `floating-shape`
 
-A project's widget index exports only what that project contains — NEVER pre-populate with unused widgets.
+A project's widget index exports only what that project contains ; do not pre-populate it with unused widgets.
 
 **Layout** (`src/components/layout/`): `navbar` · `site-footer` · `providers` · `theme-provider`
 
@@ -53,7 +53,7 @@ A project's widget index exports only what that project contains — NEVER pre-p
 
 ### Performance
 
-Do NOT use `React.memo`, `useCallback`, `useMemo` by default — only after profiling. Exception: Context providers must stabilize `value` objects.
+Reach for `React.memo`, `useCallback` and `useMemo` only after profiling shows a need. Exception: Context providers must stabilize `value` objects.
 
 ### Utility Classes
 
@@ -81,19 +81,19 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 ### Security (Next.js)
 
 **Environment Variables**
-- Server secrets: `process.env.SECRET_NAME` — NEVER use `NEXT_PUBLIC_` prefix for secrets
+- Server secrets: `process.env.SECRET_NAME`; a `NEXT_PUBLIC_` prefix ships the value to every browser, so never use it for secrets
 - Client-safe values only in `NEXT_PUBLIC_*`
 
 **Input Validation**
 - Validate all request bodies with Zod `safeParse()` — return 400 on failure
 
 **Auth & Route Protection** (after `templatecentral:add` (auth) is run)
-- `proxy.ts`: NEVER return JSON for unauthorized requests — `new Response(null, { status: 401 })` only
+- `proxy.ts` answers unauthorized requests with `new Response(null, { status: 401 })`, not JSON (a JSON body discloses information)
 - API routes independently call `auth.api.getSession()` — defense in depth
 
 **Least Privilege**
-- Return only the fields the client needs — NEVER send full DB records to the browser
-- NEVER log tokens, passwords, or PII
+- Return only the fields the client needs, not full DB records
+- Do not log tokens, passwords or PII
 
 **Request APIs (Next.js 16)**
 - `cookies()`, `headers()`, route `params` and `searchParams` return Promises — always `await` them.

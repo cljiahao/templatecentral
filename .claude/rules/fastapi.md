@@ -9,10 +9,10 @@ Stack: FastAPI 0.136+ (current stable 0.143.x), Python 3.14 (Docker `python:3.14
 
 ## Boundaries
 
-- NEVER violate dependency flow: `api/` (routers → services) → `models/` (never reversed)
-- NEVER pass Pydantic schemas into domain models directly — convert in the service layer
-- NEVER use `Optional[X]` or `List[X]` — use `X | None` and `list[X]`
-- NEVER skip `response_model` on route decorators
+- Keep the dependency flow `api/` (routers → services) → `models/`; never reverse it
+- Convert Pydantic schemas to domain models in the service layer, not by passing them in directly
+- Use `X | None` and `list[X]`, not `Optional[X]` or `List[X]`
+- Set `response_model` on every route decorator
 - Browser SPA clients authenticate via the auth skill's cookie mode (HttpOnly `__Host-session` + session-bound `XSRF-TOKEN`/`X-CSRF-Token`, `POST /auth/session`/`/auth/logout`) — keep Vite's auth service, `add/auth/fastapi.md`, and `standards/full-stack-pairing` aligned on these names
 
 ## Architecture

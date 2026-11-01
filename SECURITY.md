@@ -4,10 +4,10 @@
 
 | Version | Supported |
 |---------|-----------|
-| 6.x     | Yes — fixes ship in the next 6.x release (current: see `.claude-plugin/plugin.json`); there are no backport branches, so upgrade to the latest 6.x |
-| < 6.0   | No        |
+| 7.x     | Yes — fixes ship in the next 7.x release (current: see `.claude-plugin/plugin.json`); there are no backport branches, so upgrade to the latest 7.x |
+| < 7.0   | No        |
 
-Versions here are **plugin** versions. The `<!-- templateCentral: <stack>@6.0.0 -->` marker in a scaffolded project's `AGENTS.md` is the harness *schema* version, not a plugin release.
+Versions here are **plugin** versions. The `<!-- templateCentral: <stack>@6.0.0 -->` marker in a scaffolded project's `AGENTS.md` is the harness *schema* version, not a plugin release: 7.x plugins still write schema 6.0.0.
 
 ## Reporting a Vulnerability
 

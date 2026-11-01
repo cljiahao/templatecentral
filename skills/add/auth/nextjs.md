@@ -5,7 +5,7 @@
 
 Adds **better-auth** (typed, SSO + email/password) to a templateCentral Next.js project.
 
-> **Security requirement**: verify `package.json` → `next` meets the floor in `.claude/rules/nextjs.md` before proceeding. Older versions carry `proxy.ts` auth-bypass advisories that silently defeat this skill.
+> **Security requirement**: verify `package.json` → `next` meets the floor in the plugin's `<skill-dir>/../../.claude/rules/nextjs.md` before proceeding. Older versions carry `proxy.ts` auth-bypass advisories that silently defeat this skill.
 
 ### Files this skill creates
 
@@ -64,7 +64,7 @@ pnpm add "better-auth@^1.7.7"
 
 Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nextjs/template/` into the project per `<skill-dir>/auth/nextjs/template.manifest` — the files of Steps 2, 3, 5, 7, 10 and 14 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
 
-> **Version floor:** see `.claude/rules/nextjs.md` (security advisories, and the schema regeneration the Drizzle adapter needs after upgrading).
+> **Version floor:** see the plugin's `<skill-dir>/../../.claude/rules/nextjs.md` (security advisories, and the schema regeneration the Drizzle adapter needs after upgrading).
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
@@ -96,7 +96,7 @@ Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth-client.ts` b
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
-Security-critical. Write exactly as shown; it replaces the scaffold's `src/proxy.ts`. Every response still passes through `applyFrameProtection`, so CSP and anti-clickjacking headers stay on (`/api/external/*` keeps the backend's headers).
+Security-critical. Replace the scaffold's `src/proxy.ts` with exactly this file. It is the one verbatim file the copy step does not write, because the copy refuses to overwrite an existing path. Every response still passes through `applyFrameProtection`, so CSP and anti-clickjacking headers stay on (`/api/external/*` keeps the backend's headers).
 
 ```ts
 import { getSessionCookie } from 'better-auth/cookies';
@@ -474,13 +474,13 @@ Single instance: the built-in limiter suffices — `rateLimit: { storage: 'datab
 
 ### Security Rules
 
-- NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })` (JSON leaks information).
-- NEVER remove `disableSignUp: process.env.NODE_ENV === 'production'` unless open registration is intended.
-- NEVER remove the `isDev` guard on the dev login button.
-- NEVER hardcode secrets.
-- NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
+- Do not return JSON from `proxy.ts` for unauthorized API routes; use `new Response(null, { status: 401 })`, because a JSON body leaks information.
+- Keep `disableSignUp: process.env.NODE_ENV === 'production'` unless open registration is intended; removing it lets anyone create an account in production.
+- Keep the `isDev` guard on the dev login button; without it the bypass ships to production.
+- Do not hardcode secrets; read them from the environment.
+- Do not expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars; those are sent to every browser.
 - Every page, Server Action and handler that touches a record by id checks `isOwner` (or filters by owner) first; another user's record → same 404 as missing.
-- NEVER accept `role` from client input — keep `input: false` on the `role` field and change roles only from trusted server code.
+- Do not accept `role` from client input; keep `input: false` on the `role` field and change roles only from trusted server code.
 - Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
 - Rate limiting on auth endpoints is mandatory before production.
 - Override the scrypt default with argon2id (Step 2) — the project standard.

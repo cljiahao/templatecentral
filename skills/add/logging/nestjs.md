@@ -29,7 +29,7 @@ LoggerModule.forRoot({
 }),
 ```
 
-> Do NOT derive `user_id` in `pinoHttp.customProps`: it runs before any guard and again at the end,
+> Do not derive `user_id` in `pinoHttp.customProps`: it runs before any guard and again at the end,
 > so handler logs carry `user_id: null` and the completion line has the key twice
 > (`"user_id":null,"user_id":"u-123"`) — backends keeping the first show null.
 > `assign()` adds the field once, to the in-handler logs and the completion line.
@@ -37,7 +37,7 @@ LoggerModule.forRoot({
 > Add the key; do not replace the config object. Replacing it wholesale silently drops the
 > scaffold's `redact` block, and every request then logs its bearer JWT and cookies.
 
-Unhandled exceptions — do NOT re-copy the `HttpExceptionFilter` here. Check `src/common/filters/http-exception.filter.ts` first:
+Unhandled exceptions: do not re-copy the `HttpExceptionFilter` here. Check `src/common/filters/http-exception.filter.ts` first:
 
 - **`templatecentral:add (error-handling)` already applied** (the filter has an `else` branch calling `this.logger.warn(...)`): it already logs 5xx at `error` and 4xx at `warn` — skip this step.
 - **Scaffold filter only** (a lone `if (isServerError) this.logger.error(...)`): replace that one `if` with the block below so 4xx are logged too — never add it alongside, or every 5xx logs twice. Keep the generic client message for 5xx unchanged:

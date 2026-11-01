@@ -63,7 +63,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 > Run `openssl rand -hex 32` and paste the output as `SECRET_KEY`.
 
-> **Security**: `SECRET_KEY` has no default, so startup fails when it is unset. NEVER give a secret a hardcoded default like `"change-me"`.
+> **Security**: `SECRET_KEY` has no default, so startup fails when it is unset. Do not give a secret a hardcoded default like `"change-me"`; a default lets the app start with a guessable key.
 
 #### 3. Create Security Module
 
@@ -365,7 +365,7 @@ def logout(response: Response) -> None:
     clear_session_cookies(response)
 ```
 
-`/session` needs no CSRF token: `require_json` answers 415 to anything but `Content-Type: application/json` (FastAPI would otherwise parse a body with *no* Content-Type as JSON — a CORS-simple request that skips preflight), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). Rate-limit it like `/login` (see Rate Limiting).
+`/session` needs no CSRF token: `require_json` answers 415 to anything but `Content-Type: application/json` (FastAPI would otherwise parse a body with *no* Content-Type as JSON — a CORS-simple request that skips preflight), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). Rate-limit it like `/login` (see Rate Limiting). When `templatecentral:add (database)` completes the stubs, `/session` changes the way `/login` does: it takes the same `db` parameter, and with the async MongoDB guides (PyMongo async, Beanie) it becomes `async` and awaits `login_user`.
 
 No CORS change: the SPA's proxied requests are same-origin and never preflight.
 

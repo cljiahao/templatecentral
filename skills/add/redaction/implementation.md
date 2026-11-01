@@ -102,14 +102,14 @@ Add this line to `.gitignore` if not already present:
 .claude/.redaction-map.json
 ```
 
-`.claude/redaction-config.json` is NOT gitignored — commit it so the team shares the policy; only the
+`.claude/redaction-config.json` is not gitignored — commit it so the team shares the policy; only the
 mapping stays local.
 
 ## Step 8 — Re-bless the harness-integrity baseline
 
 `verify-harness.sh` (CI gate and pre-push hook) hashes the edited `.claude/settings.json` and
 `.claude/hooks/*` against `.claude/harness.json`, so every push fails until the baseline is refreshed.
-Tell the user (do NOT run it yourself — re-blessing is a human act, gated by `protect-files.sh`):
+Tell the user (do not run it yourself — re-blessing is a human act, gated by `protect-files.sh`):
 
 > Run `bash .claude/regen-harness.sh` yourself, review the diff, and commit it. While doing so, add
 > `.claude/hooks/redact-sensitive-output.cjs` (or `.claude/hooks/redact_sensitive_output.py`) to
@@ -141,7 +141,7 @@ Capability is complete once all five checks pass.
 
 - **Tool coverage.** The `Bash|Read|Grep|Glob` matcher is the v1 scope boundary, deliberately chosen
   because those four are where infra data surfaces in practice. `WebFetch`, MCP tool results, and
-  subagent/`Task` output are NOT masked — treat them as unprotected surfaces, not as an oversight.
+  subagent/`Task` output are not masked — treat them as unprotected surfaces, not as an oversight.
 - **Range sizing.** A declared real range that covers an entire synthetic space has no disjoint block to
   map onto; the hook emits a named warning (as a user-facing `systemMessage`) and passes the output through unmasked rather than
   emitting a "mask" identical to the input. Declare narrower ranges (see Step 1).

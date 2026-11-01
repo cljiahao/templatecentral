@@ -12,7 +12,14 @@
       "Read(**/*.pem)",
       "Read(**/*.key)",
       "Read(./secrets/**)",
-      "Read(./.secrets/**)"
+      "Read(./.secrets/**)",
+      "Read(./**/.venv/**)",
+      "Read(./**/__pycache__/**)",
+      "Read(./**/.pytest_cache/**)",
+      "Read(./**/.ruff_cache/**)",
+      "Read(./**/.mypy_cache/**)",
+      "Read(./**/htmlcov/**)",
+      "Read(./**/dist/**)"
     ]
   },
   "hooks": {

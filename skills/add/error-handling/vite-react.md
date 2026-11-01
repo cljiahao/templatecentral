@@ -9,7 +9,7 @@ Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `
 
 **1. Error Boundary (Already Wired by the Scaffold — No Changes Required)**
 
-The scaffold already ships `src/components/layout/error-boundary.tsx`, which imports `logError` from `@/lib/errors` and calls `logError('react.error-boundary', error)` in `componentDidCatch(error: Error)`. Do NOT rewrite it and do NOT add a second `logError` import.
+The scaffold already ships `src/components/layout/error-boundary.tsx`, which imports `logError` from `@/lib/errors` and calls `logError('react.error-boundary', error)` in `componentDidCatch(error: Error)`. Do not rewrite it, and do not add a second `logError` import.
 
 Optional — dev-only component-stack logging: add `type ErrorInfo` to the existing `react` import and the `errorInfo` parameter, keeping the existing `logError` call:
 

@@ -1,17 +1,17 @@
 <!-- ref: scaffold/nextjs/source-files.md
      loaded-by: scaffold/SKILL.md
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
-## Part B — Config Files
+## Template notes — config files
 
 The config files are real files in `<skill-dir>/nextjs/template/`, listed in `<skill-dir>/nextjs/template.manifest`. Step 1 below copies them; do not re-type them. Notes on the ones that need context:
 
-- `package.json` — Step 1 replaces `__TC_PROJECT_NAME__` in `"name"` with the project name (kebab-case) before `pnpm install`. Versions are caret floors aligned with `.claude/rules/nextjs.md`. shadcn/ui Radix primitives and `@testing-library/*` are omitted — `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` add them. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
+- `package.json` — Step 1 replaces `__TC_PROJECT_NAME__` in `"name"` with the project name (kebab-case) before `pnpm install`. Versions are caret floors aligned with the plugin's `<skill-dir>/../../.claude/rules/nextjs.md`. shadcn/ui Radix primitives and `@testing-library/*` are omitted — `npx shadcn@latest add` (Step 4) and `templatecentral:add (test)` add them. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
   - **ESLint 10**: `eslint-config-next`'s transitive `eslint-plugin-react` / `eslint-plugin-import` / `eslint-plugin-jsx-a11y` still declare peers up to `^9`, so `pnpm install` prints an "unmet peer eslint" warning. It is non-fatal and their rules fire under ESLint 10. Do not add `--legacy-peer-deps`/peer overrides to silence it.
 - `scripts/check-route-logging.mjs` — App Router has no global request-logging layer, so this check fails `pnpm check` (local, lefthook, CI) if any API handler ships unwrapped. See `add/logging/nextjs.md`.
 - `eslint.config.mjs` — `eslint-config-next` ships native flat configs; `FlatCompat` crashes with circular JSON. Import and spread the flat config objects. `pnpm check` runs `eslint .`, so this file must exist.
   - `sonarjs.configs.recommended` enables most of the plugin's rules at `error` — see `templatecentral:standards` code-standards notes for the two scoping overrides. Every block touching sonarjs rules reuses the one `sonarjsPlugin` reference (a second `plugins: { sonarjs }` throws `Cannot redefine plugin "sonarjs"`). `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret) and identical across the nextjs, nestjs and vite-react scaffolds, because its rule set changes across minor versions; bump all three together and re-verify. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
 
-## Part C — Source Files
+## Template notes — source files
 
 The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.md` in `<skill-dir>/nextjs/template-agents/`), listed in `<skill-dir>/nextjs/template.manifest`. Steps 1 and 6 below copy them; do not re-type or modify them. Notes on the ones that need context:
 
@@ -101,7 +101,7 @@ If check fails, a generated file violates the eslint or prettier config.
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** a third time as `TC_STACK=nextjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing.
+Run kit Step **0** a third time as `TC_STACK=nextjs TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/nextjs/template-agents/` and refuses when one exists. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project title. The title must be one line: if it contains a newline, stop, ask for a one-line title and edit nothing.
 
 Afterwards, check that no placeholder is left anywhere in the project:
 
@@ -127,11 +127,9 @@ Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Step
 
 `.claude/skills/next-migrate/SKILL.md` and `.claude/skills/next-verify/SKILL.md` were copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored.
 
-Execute kit Steps **E through H** using the **nextjs** row (Step E includes both `next-verify` and `next-migrate` hashes).
-
 ### 6d. Seed additional project skills
 
-After all dispatch agents complete, ask the user: "Do you want to create project-scoped skills for any workflows you'll run regularly in this project?"
+Ask the user: "Do you want to create project-scoped skills for any workflows you'll run regularly in this project?"
 
 If yes — or if the user ran any workflow more than once during the scaffold process — create skills in `.claude/skills/`. Common candidates for new projects:
 
@@ -153,7 +151,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 @AGENTS.md
 ```
 
-After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
+Step E hashes it into `seeded_files` (it runs next).
 
 ### 7b. Optional: Task management
 
@@ -163,6 +161,8 @@ Ask whether the user wants structured task management for complex features. If y
 printf '\n' >> AGENTS.md
 cat "<skill-dir>/nextjs/template-tail/task-management.md" >> AGENTS.md
 ```
+
+Then execute kit Steps **E through H** using the **nextjs** row (Step E includes both `next-verify` and `next-migrate` hashes).
 
 ### 8. Remove example code (optional)
 

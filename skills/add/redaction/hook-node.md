@@ -9,7 +9,7 @@
 
 Run `TC_PART=leaf TC_LEAF=add/redaction/hook-node bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/redaction/hook-node/template/` (listed in `<skill-dir>/redaction/hook-node/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**For TS stacks (nestjs / nextjs / vite-react)** — write `.claude/hooks/redact-sensitive-output.cjs`:
+The hook for TS stacks (nestjs / nextjs / vite-react) is `.claude/hooks/redact-sensitive-output.cjs` (copied above):
 
 Copied verbatim from `<skill-dir>/redaction/hook-node/template/.claude/hooks/redact-sensitive-output.cjs` by the copy step; do not re-type it.
 

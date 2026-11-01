@@ -9,13 +9,13 @@ Stack: Next.js ≥16.3.8 (current 16.4.x; 16.3.8 fixes critical unauthenticated 
 
 ## Boundaries
 
-- App Router only — NEVER use `pages/` router
-- Source lives under `src/` — App Router entry is `src/app/`, NOT a bare `app/` at the root
-- NEVER put secrets or API keys in `NEXT_PUBLIC_*` — exposed to every browser
+- App Router only; do not use the `pages/` router
+- Source lives under `src/` — App Router entry is `src/app/`, not a bare `app/` at the root
+- Do not put secrets or API keys in `NEXT_PUBLIC_*`; it is exposed to every browser
 - Server components by default — add `'use client'` only for interactivity
-- Use `npx shadcn@latest add` for UI primitives — NEVER install manually
-- Pages compose from features — NEVER put data-fetching in page components
-- `src/proxy.ts` applies `applyFrameProtection` (frame headers from `APPCENTRAL_PORTAL_ORIGIN`) to every response; `templatecentral:add (auth)` extends it with route protection, which must NEVER return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
+- Add UI primitives with `npx shadcn@latest add`, not by hand
+- Pages compose from features; data fetching does not go in page components
+- `src/proxy.ts` applies `applyFrameProtection` (frame headers from `APPCENTRAL_PORTAL_ORIGIN`) to every response; `templatecentral:add (auth)` extends it with route protection, which must not return JSON for unauthorized requests — use `new Response(null, { status: 401 })`. JSON responses from proxy create information-disclosure vectors
 
 ## Architecture
 

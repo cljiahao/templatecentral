@@ -170,7 +170,9 @@ An ordinary harness writes the rules down. templatecentral enforces them, checks
 |:---|:---|
 | Harness kit regression suite (`scripts/test-harness-kit.sh`) | 768 tests pass |
 | OpenCode adapter hook matrix | 157 tests pass |
-| Repo guard tests (`scripts/pre-guard.test.sh`) | 67 tests pass |
+| Repo guard tests (`scripts/pre-guard.test.sh`) | 131 tests pass |
+| Copy script and template trees (`scripts/test-template-copy.sh`) | 1128 tests pass |
+| Lint negative tests (`scripts/lint-skills.test.sh`) | 395 tests pass |
 | Branch-guard rewrite | Checked against the previous hook over 248 command × folder combinations; nothing it blocked became allowed |
 | End-to-end sweeps | A real project per stack, built from the skill files: install, format, lint, typecheck, tests with coverage, harness and hook checks all pass |
 | Dependency audit with real tools | pnpm, pip-audit and uv: clean scaffolds pass; a known advisory such as `lodash: GHSA-35jh-r3h4-6jhm (high)` fails and is named |
@@ -293,15 +295,17 @@ templatecentral/
 ├── scripts/
 │   ├── lint-skills.sh       # Mechanical pattern checks for all skill files
 │   ├── validate-manifest.sh # Validates plugin.json + marketplace.json before publish
-│   ├── validate-scaffold-configs.sh # Parses fenced JSON/JS config blocks in scaffold files
+│   ├── validate-scaffold-configs.sh # Parses the JSON/JS config files under skills/scaffold/<stack>/template/ and the shared settings trees
 │   ├── test-harness-kit.sh  # Regression suite for the hooks and gates under skills/scaffold/shared/template*/
 │   ├── test-template-copy.sh # Tests for the copy script (skills/scaffold/shared/tc-copy.sh) and the template trees
 │   ├── lint-skills.test.sh  # Negative tests for the lint checks that read the template trees
 │   ├── check-fences.py/.sh  # Fence snapshot: every copy-verbatim fence, or the template file that replaced it, matches tests/golden/fences/
 │   ├── check-fences-frozen.sh # Fails a PR that edits the fence snapshot (label `fence-snapshot-change` to allow)
-│   ├── check-golden.sh      # Seeded scaffold output matches tests/golden/*.sha256
-│   ├── count-load.sh        # Token load per scaffold stack and per add/migrate/standards entry
-│   ├── extract-fences.py    # Extracts scaffold fences into a file tree (golden and hook tests)
+│   ├── check-fences.test.sh, check-fences-frozen.test.sh # Tests for the two fence checks
+│   ├── check-golden.sh      # Seeded scaffold output matches tests/golden/*.sha256 (check-golden.test.sh tests it)
+│   ├── count-load.sh        # Token load per scaffold stack and per add/migrate/standards entry (count-load.test.sh tests it)
+│   ├── extract-fences.py    # Extracts scaffold fences into a file tree (golden and hook tests; extract-fences.test.sh tests it)
+│   ├── check-research-content.py # Validates the ecosystem-refresh output before its PR opens (check-research-content.test.sh tests it)
 │   ├── build-agents-dist.sh # Builds the namespace-free copy for other agent tools
 │   ├── pre-guard.sh         # Repo guard: blocks secret access, asks before instruction/CI edits
 │   ├── bash-guard.sh        # Repo guard: blocks shell reads/writes of secret files
@@ -329,6 +333,8 @@ templatecentral/
 │   └── cleanup/             # (de-registered utility) remove example code / task scaffolding
 ├── adapters/opencode/       # OpenCode plugin porting the in-agent guards
 ├── docs/CROSS-TOOL.md       # Running the skills outside Claude Code
+├── tests/golden/            # Golden sha256 manifests per stack x CI host, and the fence snapshot (fences/, fences/moved.d/)
+├── .claude/rules/           # Per-stack version floors and boundaries (the floor of record)
 ├── .claude/skills/          # Repo-internal contributor skills (NOT shipped to installs)
 │   ├── tc-audit/            # /tc-audit — full ecosystem + accuracy audit
 │   └── tc-write-skill/      # /tc-write-skill — skill authoring checklist

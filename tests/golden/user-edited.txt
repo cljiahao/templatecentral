@@ -1,0 +1,17 @@
+# Files the scaffold copies and then tells the agent to customise for the project.
+# `check-golden.sh --tree` requires each of these to exist in a generated project but does not
+# compare its content: the guide's branding / settings step and kit Step D rewrite them by design.
+# The default and --from-templates modes still hash them byte for byte.
+# Format: <stack|*> <path>   # <the step that edits it>
+* docs/CONSTITUTION.md   # harness-kit-finalize.md Step D fills the [...] sections
+nextjs src/app/layout.tsx   # nextjs/source-files.md Step 2 (metadata)
+nextjs src/app/(public)/page.tsx   # nextjs/source-files.md Step 2 (heading)
+nextjs src/components/layout/site-footer.tsx   # nextjs/source-files.md Step 2 (credit)
+nextjs src/components/widgets/brand-text.tsx   # nextjs/source-files.md Step 2 (brand text)
+vite-react index.html   # vite-react/source-files.md Step 2 (title)
+vite-react src/components/layout/navbar.tsx   # vite-react/source-files.md Step 2
+vite-react src/components/layout/site-footer.tsx   # vite-react/source-files.md Step 2
+vite-react src/pages/home.tsx   # vite-react/source-files.md Step 2 (heading)
+nestjs src/config/env.config.ts   # nestjs/source-files.md Step 2 (PROJECT_NAME default)
+nestjs .env.example   # nestjs/source-files.md Step 2 (PROJECT_NAME)
+fastapi src/core/config.py   # fastapi/source-files.md Step 2 (CommonSettings defaults)

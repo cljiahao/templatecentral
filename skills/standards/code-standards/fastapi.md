@@ -68,8 +68,8 @@
 - **Ruff** — linting + isort (line-length 88, target version configured in `pyproject.toml` under `[tool.ruff]`).
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
-- NEVER use `@app.on_event("startup")` / `@app.on_event("shutdown")` — removed in Starlette 1.0. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
-- **Starlette floor** (`.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.
+- Do not use `@app.on_event("startup")` / `@app.on_event("shutdown")`: Starlette 1.0 removed them. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
+- **Starlette floor** (the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.
 
 ### Backend Testing (mandatory)
 
@@ -95,13 +95,13 @@ api/           →  models/
 ### Security (FastAPI)
 
 **Environment & Secrets**
-- All config via Pydantic `BaseSettings` — env vars are loaded via `pydantic-settings`, which reads `src/.env` directly (works under both the direct `python src/main.py` and the Docker `uvicorn app:app --app-dir src` entry paths); NEVER use `os.environ` directly
-- Secrets (`SECRET_KEY`, `DATABASE_URL`, API keys) go in `src/.env` — NEVER commit or hardcode
+- All config via Pydantic `BaseSettings` — env vars are loaded via `pydantic-settings`, which reads `src/.env` directly (works under both the direct `python src/main.py` and the Docker `uvicorn app:app --app-dir src` entry paths); do not read `os.environ` directly
+- Secrets (`SECRET_KEY`, `DATABASE_URL`, API keys) go in `src/.env`; do not commit or hardcode them
 - Use `src/.env.default` for non-sensitive defaults only; secrets must be blank or absent
 
 **Input Validation**
 - All request bodies validated by Pydantic schemas with `extra="forbid"`
-- NEVER skip `response_model` — it filters outgoing data
+- Set `response_model` on every route; it filters outgoing data
 - Validate path/query params with FastAPI's type annotations
 
 **CORS**
@@ -111,8 +111,8 @@ api/           →  models/
 **Auth**
 - Hash passwords with `argon2id` (`argon2-cffi` package) — never store plaintext. Do not use `passlib` (unmaintained).
 - JWT tokens: short expiry; use refresh tokens for long sessions
-- NEVER return password hashes or internal IDs in API responses
+- Do not return password hashes or internal IDs in API responses
 
 **Least Privilege**
-- Services return Pydantic `response_model` objects — NEVER return raw ORM objects
-- NEVER log full request bodies that may contain passwords or PII
+- Services return Pydantic `response_model` objects, not raw ORM objects (which can leak columns)
+- Do not log full request bodies; they may contain passwords or PII

@@ -165,7 +165,7 @@ export default function ContactPage() {
 - Set `defaultValues` for every field.
 - Use `toast.success()` / `toast.error()` from Sonner for user feedback.
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
-- **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler MUST re-parse the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
+- **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler re-parses the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
 - Add `'use client'` directive — forms are inherently interactive.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
 

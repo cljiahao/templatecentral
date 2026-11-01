@@ -118,7 +118,7 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`) and `.claude/comment-hygiene-patterns.txt` (read by the hook, lefthook and CI), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
 - **Step B3** — CI quality gates (by hand, per the scaffold-only note above): `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). The kit's Step B3 rules for existing Azure pipelines apply (skip, or add only the `deps` step).
-- **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`); it MUST be seeded (Phase 5d and pre-push call it).
+- **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`); seed it, because Phase 5d and pre-push call it.
 - **Step B5** — the `/skill-audit` project skill, from `template-late/`.
 - **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name).
 
@@ -212,7 +212,9 @@ ln -s .claude .agents
 
 Execute kit **Step G** up to its post-scaffold utilities list: append the AGENTS.md tail (here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
-**Step 4h: Print summary**
+**Step 4g: Print summary**
+
+In the first line, `v6.0` is the harness schema; print the plugin release instead, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
 
 ```
 ✓ Upgraded to templateCentral v6.0.

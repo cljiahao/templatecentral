@@ -247,7 +247,7 @@ Confirm all tests pass.
 
 > **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
-Repository, service and router wiring is **identical** to standard SQLAlchemy (only A2–A6 differ). Load `cat "<skill-dir>/database/python/sqlalchemy.md"` and apply its "Completing Auth Integration" steps exactly:
+Repository, service and router wiring is **identical** to standard SQLAlchemy (only A2–A6 differ). Load `cat "<skill-dir>/database/python/sqlalchemy.md"` and apply only its "Completing Auth Integration" steps, exactly as written. Skip its A1–A9 and do not run its copy step: this leaf already wrote `src/database/`, and the standard `session.py` would replace the IAM one.
 
 - **Step A** — Create `src/models/user.py`
 - **Step B** — Create `src/api/repositories/user_repository.py`
@@ -261,7 +261,7 @@ Repository, service and router wiring is **identical** to standard SQLAlchemy (o
 - **Opt-in only** — add a database only on request.
 - Place ORM models in `src/models/` — not in `api/`.
 - `database/` holds infrastructure only (Base, session, engine) — no business logic.
-- Keep IAM fields (`DATABASE_HOST`, `DATABASE_USER`, etc.) in `src/.env` — NEVER hardcode production credentials.
+- Keep IAM fields (`DATABASE_HOST`, `DATABASE_USER`, etc.) in `src/.env` ; do not hardcode production credentials.
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
 - IAM tokens are short-lived — `do_connect` fetches a fresh one per connection.
 - **PostgreSQL only** for IAM auth.

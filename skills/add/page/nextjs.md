@@ -27,7 +27,7 @@ Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `temp
 
 > **Dashboard pages require auth.** No `src/app/dashboard/` yet → run `templatecentral:add` (auth) first; it creates the route group.
 
-> `proxy.ts` only gates routing on cookie presence — it is NOT the authoritative check. Every protected route group must additionally `await auth.api.getSession({ headers: await headers() })` in its `layout.tsx` and `redirect()` when null — see `templatecentral:add (auth)` Step 8.
+> `proxy.ts` only gates routing on cookie presence — it is not the authoritative check. Every protected route group must additionally `await auth.api.getSession({ headers: await headers() })` in its `layout.tsx` and `redirect()` when null — see `templatecentral:add (auth)` Step 8.
 
 > For API endpoints, use `templatecentral:add (endpoint)`.
 
@@ -144,7 +144,7 @@ Build passes; for a data-fetching page, the loading state renders in the browser
 - Add `loading.tsx` to data-fetching routes
 - One layout per concern
 - Use route groups `(name)/` for shared layouts without URL impact
-- NEVER use `'use client'` in `page.tsx` components — prefer server components. Note: `error.tsx` requires `'use client'` (Next.js constraint)
+- Keep `page.tsx` components server components, without `'use client'`. Note: `error.tsx` requires `'use client'` (Next.js constraint)
 - Keep pages in the `(public)/` or `dashboard/` route groups
 
 ## After Writing Code

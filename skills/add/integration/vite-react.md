@@ -94,7 +94,7 @@ export const ENV = {
 } as const;
 ```
 
-> **Security**: NEVER put API tokens or secrets in `VITE_*` variables — they ship in the client bundle. For authenticated APIs, proxy through a backend endpoint that adds the auth header; `VITE_*` is for non-sensitive config only.
+> **Security**: do not put API tokens or secrets in `VITE_*` variables; they ship in the client bundle. For authenticated APIs, proxy through a backend endpoint that adds the auth header; `VITE_*` is for non-sensitive config only.
 
 #### 5. Consume via React Query Hook
 
@@ -126,11 +126,11 @@ Build and tests pass; the integration works end-to-end in the browser.
 
 ### Rules
 
-- NEVER put business logic in clients; client methods return `unknown`
-- NEVER skip Zod validation of external responses
-- NEVER hardcode API URLs or secrets — centralize in `src/lib/constants/env.ts`
-- Throw `APIError` for HTTP failures — NEVER throw generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
-- NEVER consume integrations directly in components — go through React Query hooks in features
+- Keep business logic out of clients; client methods return `unknown`
+- Zod-validate every external response
+- Do not hardcode API URLs or secrets; centralize in `src/lib/constants/env.ts`
+- Throw `APIError` for HTTP failures, not a generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
+- Components reach integrations through React Query hooks in features
 
 ### After Writing Code
 

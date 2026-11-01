@@ -4,3 +4,4 @@ pytest-cov
 httpx2
 ruff
 pyright
+lefthook

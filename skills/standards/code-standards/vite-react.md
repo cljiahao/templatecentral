@@ -29,7 +29,7 @@ All files use **kebab-case**, no exceptions.
 ### Component Best Practices
 
 - Keep components thin — delegate logic to hooks/services. Extract on the second consumer.
-- Add shadcn/ui primitives via the CLI (`npx shadcn@latest add <name>`) — NEVER install `@radix-ui/*` manually or recreate primitives.
+- Add shadcn/ui primitives via the CLI (`npx shadcn@latest add <name>`) ; do not install `@radix-ui/*` by hand or recreate primitives.
 - Prefer composition (children) over boolean flag props for variants.
 
 **Widgets** (`src/components/widgets/`): `brand-text` · `custom-card` · `custom-dialog` · `custom-form-field` · `link-list` · `media-card` · `pill`
@@ -49,15 +49,15 @@ All files use **kebab-case**, no exceptions.
 
 Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and `getApiBaseUrl()`.
 
-- Every `import.meta.env.VITE_*` read lives there — NEVER inline `import.meta.env`, NEVER `process.env`.
-- Use `getApiBaseUrl()` in services — NEVER `ENV.API_BASE_URL ?? ''` (a silent request to the wrong origin).
+- Every `import.meta.env.VITE_*` read lives there ; nothing else reads `import.meta.env`, and `process.env` does not exist in the browser.
+- Use `getApiBaseUrl()` in services , not `ENV.API_BASE_URL ?? ''` (a silent request to the wrong origin).
 - Call `getApiBaseUrl()` **inside** each request function, never at module top level — it throws when unset, and a module-scope throw blanks the page before any ErrorBoundary mounts.
 - `ENV` and `getApiBaseUrl` are both re-exported from `@/lib/constants` — import from the barrel.
-- NEVER put secrets in `VITE_*` — they are embedded in the client bundle.
+- Do not put secrets in `VITE_*`; they are embedded in the client bundle.
 
 ### Testing
 
-- **Vitest** — NEVER use Jest in Vite projects.
+- **Vitest** — not Jest; Vitest shares the Vite config.
 - **Testing Library** (`@testing-library/react`) for component tests.
 - Co-locate tests next to source: `example-service.test.ts`, `example-card.test.tsx`.
 - Globals enabled — `describe`, `it`, `expect` available without imports.
@@ -75,7 +75,7 @@ Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and
 ### Security (Vite + React)
 
 **Environment Variables**
-- `VITE_*` is embedded in the client bundle — NEVER put API keys, tokens, or secrets there
+- `VITE_*` is embedded in the client bundle, so API keys, tokens and secrets do not go there
 - Proxy through the backend for APIs requiring auth
 
 **Input Validation**
@@ -84,9 +84,9 @@ Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and
 
 **Auth & Route Protection**
 - Protected routes wrapped with `<ProtectedRoute />` in `src/router.tsx`
-- NEVER store tokens in `localStorage` — use `httpOnly` cookies from the backend
-- NEVER make authorization decisions in the SPA
+- Do not store tokens in `localStorage` (any script can read it); use `httpOnly` cookies from the backend
+- Make authorization decisions on the backend, not in the SPA (the client can be modified)
 
 **Least Privilege**
-- NEVER store sensitive data in React state, URL params, or `sessionStorage`
-- NEVER log tokens, credentials, or PII to the browser console
+- Do not keep sensitive data in React state, URL params or `sessionStorage`
+- Do not log tokens, credentials or PII to the browser console

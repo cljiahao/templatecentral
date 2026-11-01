@@ -172,8 +172,8 @@ After creating all files:
 - **Services contain business logic** — parse schemas → process → serialize response.
 - **One service function per endpoint**.
 - **Apply auth by default when the project has it** — if `src/api/dependencies/auth.py` exists, add the project's auth dependency (`user_id: Annotated[str, Depends(get_current_user)]` — Ruff `FAST002` rejects the bare `= Depends(...)` default) to new endpoints unless the route is deliberately public. Use `status_code=201` on create endpoints.
-- NEVER use raw `dict` or unvalidated data in services — always use Pydantic schemas or domain models
-- NEVER forget to register the router in `src/api/routes.py` and add the tag to `src/api/tags.py`
+- Services take Pydantic schemas or domain models, not raw `dict` or unvalidated data
+- Register the router in `src/api/routes.py` and add its tag to `src/api/tags.py`
 
 ## After Writing Code
 

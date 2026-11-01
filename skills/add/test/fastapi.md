@@ -166,10 +166,10 @@ python -m pytest test/test_api/           # API tests only
 
 ### Rules
 
-- NEVER share mutable state between tests
-- NEVER use `unittest.mock.patch` when `monkeypatch` is available — prefer pytest idioms
-- NEVER mock what you own — use factories; mock only network, filesystem, time
-- NEVER depend on test order
+- Tests do not share mutable state
+- Prefer pytest's `monkeypatch` over `unittest.mock.patch`
+- Use factories for what you own; mock only network, filesystem and time
+- Tests pass in any order
 
 ## After Writing Code
 

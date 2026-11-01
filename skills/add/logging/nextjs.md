@@ -82,7 +82,7 @@ if (!hasSession) {
 
 Run `TC_PART=leaf TC_LEAF=add/logging/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/nextjs/template/` (listed in `<skill-dir>/logging/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**Outbound HTTP calls** — create a fetch wrapper in `src/integrations/clients/`:
+**Outbound HTTP calls** — the fetch wrapper is `src/integrations/clients/http-client.ts` (copied above):
 
 Copied verbatim from `<skill-dir>/logging/nextjs/template/src/integrations/clients/http-client.ts` by the copy step; do not re-type it.
 

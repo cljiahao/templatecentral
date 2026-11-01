@@ -8,7 +8,7 @@ description: Use when adopting or upgrading a project, switching its DB access l
 | Type | Path |
 |---|---|
 | **Adopt / upgrade** — retrofit the harness, or upgrade a templateCentral project | `general/implementation.md` |
-| **DB access layer** — fastapi: SQLAlchemy password → AWS IAM auth; nestjs/nextjs: Drizzle → Kysely | `database/<fastapi\|nestjs\|nextjs>.md` |
+| **DB access layer** — fastapi: SQLAlchemy password → AWS IAM auth; nestjs/nextjs: Drizzle → Kysely (vite-react has no database layer: tell the user and stop) | `database/<fastapi\|nestjs\|nextjs>.md` |
 | **Backend extraction** — Next.js API routes → NestJS or FastAPI service | `nextjs-backend-extraction.md` |
 | **Portal framing** — pre-6.2.0 app framed only by its appCentral portal (`APPCENTRAL_PORTAL_ORIGIN`) | `portal-frame-ancestors.md` |
 

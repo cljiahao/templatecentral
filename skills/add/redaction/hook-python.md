@@ -9,7 +9,7 @@
 
 Run `TC_PART=leaf TC_LEAF=add/redaction/hook-python bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/redaction/hook-python/template/` (listed in `<skill-dir>/redaction/hook-python/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**For FastAPI** — write `.claude/hooks/redact_sensitive_output.py`:
+The hook for FastAPI is `.claude/hooks/redact_sensitive_output.py` (copied above):
 
 Copied verbatim from `<skill-dir>/redaction/hook-python/template/.claude/hooks/redact_sensitive_output.py` by the copy step; do not re-type it.
 

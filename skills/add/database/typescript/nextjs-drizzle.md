@@ -180,8 +180,8 @@ Confirm the migration file was generated and the build succeeds with no type err
 - **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
+- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---

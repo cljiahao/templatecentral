@@ -20,7 +20,7 @@ Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late ba
 
 ## Step D. Fill in `docs/CONSTITUTION.md`
 
-With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project name. The name must be a single line: if it holds a newline, stop and ask the user for a one-line name and edit nothing. Fill in the other `[...]` placeholders (Architecture Invariants, project-specific protected files) with the actual project values, and use the **quality-gate line** from the per-stack delta table in §6 Behavioural rules. Then check that no placeholder is left:
+With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project title. The title must be a single line: if it holds a newline, stop and ask the user for a one-line title and edit nothing. Fill in the other `[...]` placeholders (Architecture Invariants, project-specific protected files) with the actual project values, and use the **quality-gate line** from the per-stack delta table in §6 Behavioural rules. Then check that no placeholder is left:
 
 ```bash
 grep -n '__TC_' docs/CONSTITUTION.md
@@ -156,7 +156,7 @@ ln -s .claude .agents
 TC_STACK=<stack> TC_PART=tail bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-**Final format pass (TS stacks only — run before the utilities below):** Steps C/D, E3 and the tail wrote files after the first format pass, so run `pnpm exec prettier --write .` once now, or `pnpm run check` and CI's `quality` job fail on files nobody edited. (FastAPI: not needed — ruff touches only `*.py`.)
+**Final format pass (TS stacks only — run before the utilities below):** Steps C/D, E3 and the tail wrote files after the first format pass, so run `pnpm format` once now (the project script formats exactly what `pnpm run check` checks), or `pnpm run check` and CI's `quality` job fail on files nobody edited. (FastAPI: not needed — ruff touches only `*.py`.)
 
 **Re-baseline the manifest (all stacks — after the tail append and the format pass, before the utilities below):** the tail and the format pass changed seeded files, so recompute every `origin_hash` and refresh the base snapshot. Part of seeding, not a drift blessing — once, before the first commit:
 ```bash
@@ -185,7 +185,7 @@ Then run these agent skills in order. They are **on by default** — skipping re
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 
-**If any agent reports failures:** Stop immediately — do NOT run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
+**If any agent reports failures:** Stop there and do not run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
 ---
 

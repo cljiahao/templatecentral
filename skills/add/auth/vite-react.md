@@ -53,7 +53,7 @@ Auth lives in a backend API. Common patterns:
 | Call | Endpoint | Notes |
 |------|----------|-------|
 | Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body (`/auth/login` still returns the JWT for API clients) |
-| Current user | `GET /auth/me` | cookie-authenticated; FastAPI returns `{ id, email, name }`, NestJS `{ id, email }` |
+| Current user | `GET /auth/me` | cookie-authenticated; FastAPI returns `{ id, email, name }`, NestJS `{ id, email, roles }` |
 | Logout | `POST /auth/logout` | 204, clears both cookies |
 | Any other non-GET | — | must send `X-CSRF-Token` (`csrfHeader()`, sent for you by `ApiClient` — Step 3) or the backend answers 403 |
 
@@ -65,9 +65,11 @@ Run `TC_PART=leaf TC_LEAF=add/auth/vite-react bash "<skill-dir>/../scaffold/shar
 
 `csrfHeader()` is the single source for the CSRF header. It lives in `src/lib/clients/` (not the auth feature) because `ApiClient` (Step 3) needs it and `lib/` never imports from `features/`:
 
-`src/lib/clients/csrf.ts` is copied verbatim from `<skill-dir>/auth/vite-react/template/src/lib/clients/csrf.ts` by the copy step; do not re-type it.
+`src/lib/clients/csrf.ts`:
 
-`src/features/auth/api/auth-service.ts` handles backend communication:
+Copied verbatim from `<skill-dir>/auth/vite-react/template/src/lib/clients/csrf.ts` by the copy step; do not re-type it.
+
+`src/features/auth/api/auth-service.ts` (backend communication):
 
 Copied verbatim from `<skill-dir>/auth/vite-react/template/src/features/auth/api/auth-service.ts` by the copy step; do not re-type it.
 
@@ -252,7 +254,7 @@ export function LoginCard() {
 
 #### 6. Add Protected Routes
 
-In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute` — edit only inside the existing `<Routes>`; do NOT replace the file:
+In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute` — edit only inside the existing `<Routes>` and keep the rest of the file:
 
 ```tsx
 import { ProtectedRoute } from '@/features/auth';
@@ -333,9 +335,9 @@ src/
 
 ### Rules
 
-- NEVER store tokens in `localStorage` — use HttpOnly cookies (set by the backend) or in-memory state
-- NEVER remove the `ENV.IS_DEV` guard on the dev bypass — it must only exist in development
-- NEVER put auth logic directly in page components — use the `useAuth()` hook
+- Do not store tokens in `localStorage`, where any injected script can read them; use HttpOnly cookies (set by the backend) or in-memory state
+- Keep the `ENV.IS_DEV` guard on the dev bypass so it exists only in development
+- Keep auth logic out of page components; use the `useAuth()` hook
 - Call the backend through `ApiClient` subclasses (Step 3), never a raw `fetch` — it is the one place that sends `credentials: 'include'` and, on every non-GET, `X-CSRF-Token`. The auth service's own three calls are the only exception
 - Redirect to `/login` on 401 — `ProtectedRoute` covers navigation; API calls must handle 401 too
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button

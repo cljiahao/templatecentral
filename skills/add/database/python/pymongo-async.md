@@ -42,7 +42,7 @@ MONGODB_DB_NAME=mydb
 
 Run `TC_PART=leaf TC_LEAF=add/database/python/pymongo-async bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/pymongo-async/template/` (listed in `<skill-dir>/database/python/pymongo-async/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**`src/database/mongo.py`** (plus an empty `src/database/__init__.py`):
+**`src/database/mongo.py`** (the copy also writes an empty `src/database/__init__.py`):
 
 Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/database/mongo.py` by the copy step; do not re-type it.
 
@@ -109,7 +109,7 @@ Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api
 
 Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
-`core.security.hash_password` comes from `templatecentral:add` (auth). Without auth, create `src/core/security.py` with the argon2id `PasswordHasher` block from that guide (Step 3) and add `argon2-cffi` to `requirements.txt`.
+`core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.txt`.
 
 **`src/api/routers/users.py`** (register it in `src/api/routes.py` and add a `USERS` tag to `APITags`). It has no auth of its own — keep it off any deployed environment until `pymongo-async-auth.md` Step C (or your own guard) protects it:
 
@@ -203,7 +203,7 @@ def client() -> Generator[TestClient]:
     client.close()
 ```
 
-**`test/test_integration/conftest.py`** (plus an empty `__init__.py`):
+**`test/test_integration/conftest.py`** (the copy also writes an empty `__init__.py` beside it):
 
 Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/test/test_integration/conftest.py` by the copy step; do not re-type it.
 
@@ -231,7 +231,7 @@ Confirm all tests pass and the integration tests ran (not skipped).
 - **Opt-in only** — add a database only on request.
 - Never add Motor (deprecated) or mongomock (no async PyMongo support).
 - Domain models in `src/models/`, data access in `src/api/repositories/`, `database/` holds connection infrastructure only.
-- Keep `MONGODB_URL` in `src/.env` — NEVER hardcode credentials; leave TLS on outside dev.
+- Keep `MONGODB_URL` in `src/.env` ; do not hardcode credentials, and leave TLS on outside dev.
 - Never pass request dicts or query params into Mongo filters or update documents — typed scalars and `updatable_fields` only.
 - Every list query is bounded (`find_many` clamps to `MAX_PAGE_SIZE`); paginate further with `templatecentral:add` (pagination).
 - Create indexes in the lifespan (idempotent); uniqueness lives in the index, not in a find-then-insert check.

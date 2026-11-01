@@ -110,9 +110,9 @@ Append these to `## Project-Specific Notes` in the project's `AGENTS.md` under a
 
 ## Rules
 
-- NEVER start coding before the plan is confirmed by the user — if the user has already approved proceeding (e.g., "go ahead", "just do it", "use your judgment"), treat that as implicit confirmation
-- NEVER skip the validation step — always build/lint/test after changes
-- NEVER leave open questions unresolved — ask before assuming
+- Start coding only once the user has confirmed the plan — if the user has already approved proceeding (e.g., "go ahead", "just do it", "use your judgment"), treat that as implicit confirmation
+- Build, lint and test after every change; that is the validation step
+- Resolve open questions by asking before you assume
 - Keep plans concise — the plan is a communication tool, not documentation
 - Track progress visibly — the user should always know where you are
 - Update project memory only with decisions that future agents need — not implementation details

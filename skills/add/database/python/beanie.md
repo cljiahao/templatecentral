@@ -7,7 +7,7 @@
 
 The default is PyMongo async (`cat "<skill-dir>/database/python/pymongo-async.md"`, stays on Python 3.14). Continue only if the user explicitly wants Beanie **and** accepts a Python 3.13 pin.
 
-Beanie declares `Requires-Python <3.14` (see `.claude/rules/fastapi.md`). Never bypass it with `--ignore-requires-python`. Check whether a newer release lifted the cap:
+Beanie declares `Requires-Python <3.14` (see the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`). Never bypass it with `--ignore-requires-python`. Check whether a newer release lifted the cap:
 
 ```bash
 python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/beanie/json'))['info']['requires_python'])"
@@ -18,7 +18,7 @@ python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('ht
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt` (why these floors: `.claude/rules/fastapi.md`):
+Add to `requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`):
 
 ```
 beanie>=2.2,<3
@@ -132,7 +132,7 @@ Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schema
 
 Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
 
-**`src/api/services/user_service.py`**:
+**`src/api/services/user_service.py`** — `core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.txt`.
 
 Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
@@ -305,7 +305,7 @@ async def get_user(user_id: str) -> dict:
 
 ### Step C — Replace `src/api/routers/auth.py`
 
-No session dependency — the lifespan owns the connection. Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added:
+No session dependency — the lifespan owns the connection. Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added. If the cookie-mode handlers from the auth guide's Browser Client section (`POST /auth/session`, `POST /auth/logout`) are in the file, keep them: make `/auth/session` `async` and `await login_user(...)` as `/auth/login` does below. The rest of the file:
 
 ```python
 from typing import Annotated
@@ -359,7 +359,7 @@ Scope `get_user` to the caller's own id, or gate it on an admin role, before exp
 - Place document models in `src/models/` — not in `api/`.
 - Never put `from __future__ import annotations` in a Beanie model module — it silently breaks `Optional[Link["X"]]` and `BackLink` detection on every Python version.
 - `database/` holds infrastructure only (connection, init/close functions) — no business logic.
-- Keep `MONGODB_URL` in `src/.env` — NEVER hardcode production credentials.
+- Keep `MONGODB_URL` in `src/.env` ; do not hardcode production credentials.
 - Always register document models in `DOCUMENT_MODELS` and call `init_beanie()` in the lifespan event.
 - Beanie uses Pydantic v2 natively — leverage field validators and computed fields.
 - Never return raw Beanie documents — always map to a Pydantic response schema.

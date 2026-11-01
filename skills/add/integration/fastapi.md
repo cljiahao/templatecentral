@@ -88,7 +88,7 @@ class GithubClient:
 
 **`src/integrations/<name>_schemas.py`**:
 
-Do NOT inherit `BaseResponseSchema` (`extra="forbid"` rejects unknown upstream fields; camelCase aliases rename them). Use plain `BaseModel` with `extra="ignore"`:
+Do not inherit `BaseResponseSchema` (`extra="forbid"` rejects unknown upstream fields; camelCase aliases rename them). Use plain `BaseModel` with `extra="ignore"`:
 
 ```python
 from pydantic import BaseModel, ConfigDict, Field

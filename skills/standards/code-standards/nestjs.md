@@ -91,7 +91,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 - **ESLint 10** — flat config (`eslint.config.mjs`, `sourceType: 'module'`) with typescript-eslint + prettier.
 - **Prettier** — single quotes, trailing commas.
 - **Vitest** — testing framework.
-- **Fastify `app.inject()`** — HTTP assertions for e2e tests (NEVER use Supertest with Fastify).
+- **Fastify `app.inject()`** — HTTP assertions for e2e tests (Supertest does not work with the Fastify adapter).
 
 ### Backend Testing (mandatory)
 
@@ -110,28 +110,28 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 ### Security (NestJS)
 
 **Environment & Secrets**
-- All config via `src/config/env.config.ts` — NEVER scatter `process.env` calls across services
-- Secrets (`JWT_SECRET`, `DATABASE_URL`) in `.env` — NEVER hardcode fallback secrets like `'change-me'`
+- All config via `src/config/env.config.ts`; services do not read `process.env` directly
+- Secrets (`JWT_SECRET`, `DATABASE_URL`) in `.env`; give them no hardcoded fallback like `'change-me'`, so boot fails when one is missing
 
 **Request Validation**
-- Global `ZodValidationPipe` validates all DTOs — NEVER skip DTO typing on `@Body()` or `@Query()`
-- Use `z.string().min(1)` and length constraints — NEVER accept unbounded strings
+- Global `ZodValidationPipe` validates all DTOs, so type every `@Body()` and `@Query()` with a DTO
+- Use `z.string().min(1)` and length constraints; do not accept unbounded strings
 
 **Security Headers**
-- `helmet` in `security.setup.ts` — NEVER remove or weaken CSP, HSTS, or frame-ancestors
-- `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); NEVER loosen its regex
+- `helmet` in `security.setup.ts`; do not remove or weaken CSP, HSTS or frame-ancestors
+- `frame-ancestors` is `'none'` + `frameguard: deny` unless `portalFrameAncestor()` accepts `APPCENTRAL_PORTAL_ORIGIN` (one https origin, never `*` or a list); do not loosen its regex
 
 **CORS**
-- Origins restricted to `CLIENT_URL` — NEVER use `origin: '*'` in production
+- Origins restricted to `CLIENT_URL`; do not use `origin: '*'` in production
 
 **Rate Limiting & Proxy Trust**
 - Auth and other abuse-prone routes are rate-limited with `@nestjs/throttler`, and `TRUST_PROXY` must be set correctly whenever the app sits behind a load balancer or reverse proxy — otherwise every client shares the proxy's IP and the limiter is either useless or spoofable via `X-Forwarded-For`. Both are mandatory; see `templatecentral:add (auth)` for the configuration.
 
 **Auth**
 - Guard-based (Passport.js + JWT) — apply at controller or route level, not globally
-- NEVER return password hashes, JWT secrets, or sensitive internal fields
+- Do not return password hashes, JWT secrets or sensitive internal fields
 - Use short-lived JWTs; add refresh tokens when sessions must outlive the access-token TTL
 
 **Least Privilege**
 - Controllers return DTOs, not raw entities
-- NEVER log tokens, passwords, or PII
+- Do not log tokens, passwords or PII

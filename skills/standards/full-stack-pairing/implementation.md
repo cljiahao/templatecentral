@@ -256,6 +256,6 @@ The `rewrites` from Step 2 already run in production; set `BACKEND_URL` in the b
 ## Rules
 
 - Keep the backend address in environment variables (`BACKEND_URL`) — never hardcode it.
-- NEVER put the backend address in `NEXT_PUBLIC_*` / `VITE_*` — Next.js needs no public backend variable at all.
+- Do not put the backend address in `NEXT_PUBLIC_*` / `VITE_*`; Next.js needs no public backend variable at all.
 - Client-side code never calls the backend by hostname — always the same-origin proxy path (`/api` on Vite, `/api/external` on Next.js).
 - Next.js server components / route handlers call `BACKEND_URL` directly (server-only), forwarding the user's cookies when acting for them.

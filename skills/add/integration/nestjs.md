@@ -145,7 +145,7 @@ GITHUB_API_URL=https://api.github.com
 GITHUB_TOKEN=your_github_token_here
 ```
 
-NEVER use a fallback like `?? ''` for tokens — fail fast at startup instead.
+Do not use a fallback like `?? ''` for tokens; fail fast at startup instead.
 
 Vitest does not load `.env` — add `GITHUB_TOKEN: 'test'` to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts`, or every suite importing `AppModule` fails the env check.
 
@@ -254,7 +254,7 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 - Convert upstream failures to `BadGatewayException` / `GatewayTimeoutException`; log status and path only, never the raw error
 - Configure `HttpModule.register()` with `baseURL`, auth headers, `timeout`, and `maxRedirects: 0`. No automatic retries — add them only for idempotent GETs, with backoff
 - Export the service from the integration module so other modules can import it
-- Keep API tokens in environment variables — NEVER hardcode
+- Keep API tokens in environment variables; do not hardcode them
 - Integration modules are self-contained — each has its own module, service, and schemas
 
 ### After Writing Code

@@ -184,7 +184,7 @@ Confirm the migration file was generated and every command passes.
 - **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `DrizzleService` and `DatabaseModule` in `src/database/`.
-- NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
+- Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---
