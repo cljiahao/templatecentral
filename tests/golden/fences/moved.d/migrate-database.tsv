@@ -1,0 +1,5 @@
+# file	heading	index	template-path
+skills/migrate/database/nestjs.md	Step 4 — Create `src/database/kysely.service.ts` (IAM variant)	0	skills/migrate/database/nestjs/template/src/database/kysely.service.ts
+skills/migrate/database/nestjs.md	Step 7 — Create `src/database/migrate.ts`	0	skills/migrate/database/nestjs/template/src/database/migrate.ts
+skills/migrate/database/nextjs.md	Step 4 — Create `src/integrations/database/kysely-client.ts` (IAM variant)	0	skills/migrate/database/nextjs/template/src/integrations/database/kysely-client.ts
+skills/migrate/database/nextjs.md	Step 6 — Create `src/integrations/database/migrate.ts`	0	skills/migrate/database/nextjs/template/src/integrations/database/migrate.ts

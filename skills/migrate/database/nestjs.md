@@ -53,65 +53,13 @@ curl -fsSL -o certs/rds-global-bundle.pem \
   https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 ```
 
+Run `TC_PART=leaf TC_LEAF=migrate/database/nestjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/nestjs/template/` (listed in `<skill-dir>/database/nestjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 Commit `certs/rds-global-bundle.pem` (it is a public certificate, not a secret) or bake it
 into the Docker image; `RDS_CA_BUNDLE_PATH` is set in Step 10. In a container, `NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem`
 is an equivalent process-wide alternative to the explicit `ca` option below.
 
-```typescript
-import { readFileSync } from 'node:fs';
-
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { Kysely, PostgresDialect, sql } from 'kysely';
-import { Signer } from '@aws-sdk/rds-signer';
-import { Pool } from 'pg';
-
-import { serviceConfig } from '../config/env.config';
-import type { Database } from './types';
-
-@Injectable()
-export class KyselyService extends Kysely<Database> implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(KyselyService.name);
-
-  constructor() {
-    const signer = new Signer({
-      hostname: serviceConfig.DATABASE_HOST,
-      port: serviceConfig.DATABASE_PORT,
-      username: serviceConfig.DATABASE_USER,
-    });
-
-    const pool = new Pool({
-      host: serviceConfig.DATABASE_HOST,
-      port: serviceConfig.DATABASE_PORT,
-      user: serviceConfig.DATABASE_USER,
-      database: serviceConfig.DATABASE_NAME,
-      password: () => signer.getAuthToken(),
-      // The `ca` is required: without the Amazon RDS root CA, `rejectUnauthorized: true`
-      // cannot build a chain and every connection fails with SELF_SIGNED_CERT_IN_CHAIN.
-      ssl: {
-        rejectUnauthorized: true,
-        ca: readFileSync(serviceConfig.RDS_CA_BUNDLE_PATH, 'utf8'),
-      },
-      max: 10,
-    });
-
-    super({ dialect: new PostgresDialect({ pool }) });
-  }
-
-  async onModuleInit() {
-    try {
-      await sql`SELECT 1`.execute(this);
-      this.logger.log('Database connection verified');
-    } catch (error) {
-      this.logger.error('Database connection failed', error);
-      throw error;
-    }
-  }
-
-  async onModuleDestroy() {
-    await this.destroy();
-  }
-}
-```
+Copied verbatim from `<skill-dir>/database/nestjs/template/src/database/kysely.service.ts` by the copy step; do not re-type it.
 
 ### Step 5 — Create `src/database/types.ts`
 
@@ -135,74 +83,7 @@ export class DatabaseModule {}
 
 ### Step 7 — Create `src/database/migrate.ts`
 
-```typescript
-// Runs outside main.ts, so it must load .env itself before env.config validates.
-import 'dotenv/config';
-import path from 'node:path';
-import { promises as fs, readFileSync } from 'node:fs';
-import { Kysely, PostgresDialect } from 'kysely';
-// kysely ≥0.29 types the root-export Migrator/FileMigrationProvider as errors pointing here.
-import { FileMigrationProvider, Migrator } from 'kysely/migration';
-import { Signer } from '@aws-sdk/rds-signer';
-import { Pool } from 'pg';
-
-import { serviceConfig } from '../config/env.config';
-import type { Database } from './types';
-
-async function migrate() {
-  const signer = new Signer({
-    hostname: serviceConfig.DATABASE_HOST,
-    port: serviceConfig.DATABASE_PORT,
-    username: serviceConfig.DATABASE_USER,
-  });
-
-  const db = new Kysely<Database>({
-    dialect: new PostgresDialect({
-      pool: new Pool({
-        host: serviceConfig.DATABASE_HOST,
-        port: serviceConfig.DATABASE_PORT,
-        user: serviceConfig.DATABASE_USER,
-        database: serviceConfig.DATABASE_NAME,
-        password: () => signer.getAuthToken(),
-        ssl: {
-          rejectUnauthorized: true,
-          ca: readFileSync(serviceConfig.RDS_CA_BUNDLE_PATH, 'utf8'),
-        },
-      }),
-    }),
-  });
-
-  const migrator = new Migrator({
-    db,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      migrationFolder: path.join(__dirname, 'migrations'),
-    }),
-  });
-
-  const { results, error } = await migrator.migrateToLatest();
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    await db.destroy();
-    process.exit(1);
-  }
-
-  await db.destroy();
-}
-
-// Without the catch, a rejected promise leaves the exit code at 0 and CI reports a
-// failed migration as a passing step.
-migrate().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
-```
+Copied verbatim from `<skill-dir>/database/nestjs/template/src/database/migrate.ts` by the copy step; do not re-type it.
 
 ### Step 8 — Write first Kysely migration
 

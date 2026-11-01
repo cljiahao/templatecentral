@@ -11,56 +11,11 @@ pnpm add mongoose
 
 #### C2. Create Mongoose Client Singleton
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-mongoose bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-mongoose/template/` (listed in `<skill-dir>/database/typescript/nextjs-mongoose/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/integrations/database/mongoose-client.ts`**:
 
-```ts
-import mongoose from 'mongoose';
-
-const MONGODB_URL = process.env.MONGODB_URL;
-
-if (!MONGODB_URL) {
-  throw new Error('MONGODB_URL environment variable is not defined');
-}
-
-interface MongooseCache {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
-}
-
-const globalForMongoose = globalThis as unknown as { mongoose: MongooseCache };
-
-const cached: MongooseCache = globalForMongoose.mongoose ?? { conn: null, promise: null };
-
-if (!globalForMongoose.mongoose) {
-  globalForMongoose.mongoose = cached;
-}
-
-export async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) return cached.conn;
-
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URL, {
-      // Fail fast instead of holding a serverless invocation open for the 30s default
-      serverSelectionTimeoutMS: 5_000,
-      // Each serverless instance keeps its own pool — a small cap avoids exhausting
-      // the cluster's connection limit as instances scale out
-      maxPoolSize: 10,
-    });
-  }
-
-  try {
-    const conn = await cached.promise;
-    // Mongoose builds indexes in the background; wait so unique constraints exist before the first write.
-    await Promise.all(conn.modelNames().map((name) => conn.model(name).init()));
-    cached.conn = conn;
-  } catch (error) {
-    // Drop the rejected promise so the next request retries instead of failing forever.
-    cached.promise = null;
-    throw error;
-  }
-  return cached.conn;
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/mongoose-client.ts` by the copy step; do not re-type it.
 
 > **Why the cached pattern**: Next.js hot-reloads modules in development. The `globalThis` cache prevents opening duplicate MongoDB connections.
 
@@ -110,28 +65,7 @@ MONGODB_DB_NAME=mydb
 
 **`src/integrations/database/schemas/user.ts`**:
 
-```ts
-import mongoose, { type Model } from 'mongoose';
-
-// Plain interface — Mongoose discourages extending `Document` for schema types.
-export interface IUser {
-  email: string;
-  name: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const userSchema = new mongoose.Schema<IUser>(
-  {
-    email: { type: String, required: true, unique: true },
-    name: { type: String, required: true },
-  },
-  { timestamps: true },
-);
-
-export const User =
-  (mongoose.models.User as Model<IUser> | undefined) ?? mongoose.model<IUser>('User', userSchema);
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/schemas/user.ts` by the copy step; do not re-type it.
 
 > **Why `mongoose.models.User ??`**: Prevents the "Cannot overwrite model once compiled" error during hot-reload in development.
 >
@@ -141,9 +75,7 @@ export const User =
 
 **`src/integrations/database/index.ts`**:
 
-```ts
-export { connectDB } from './mongoose-client';
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
 
 #### C5. Configure Environment
 

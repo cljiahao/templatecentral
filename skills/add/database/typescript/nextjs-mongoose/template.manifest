@@ -1,0 +1,8 @@
+# Files templatecentral:add copies verbatim for add/database/typescript/nextjs-mongoose (tc-copy.sh TC_PART=leaf). One line per file: path mode placeholders seams
+# path          relative to this directory; the first segment names the tree
+# mode          octal file mode, equal to the git mode (644 or 755)
+# placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
+# seams         comma-separated [[post-harness]] markers the file carries, or - for none
+template/src/integrations/database/index.ts 644 - -
+template/src/integrations/database/mongoose-client.ts 644 - -
+template/src/integrations/database/schemas/user.ts 644 - -

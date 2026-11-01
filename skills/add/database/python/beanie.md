@@ -29,40 +29,11 @@ pymongo>=4.13
 
 ### B2. Create MongoDB Connection
 
+Run `TC_PART=leaf TC_LEAF=add/database/python/beanie bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/beanie/template/` (listed in `<skill-dir>/database/python/beanie/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/database/mongo.py`**:
 
-```python
-from beanie import init_beanie
-from pymongo import AsyncMongoClient
-
-from core.config import api_settings, common_settings
-
-mongo_client: AsyncMongoClient | None = None
-
-
-async def init_mongo() -> None:
-    global mongo_client
-    mongo_client = AsyncMongoClient(
-        api_settings.MONGODB_URL.get_secret_value(),
-        # Outside dev, require TLS (overrides any tls=false in the URL): a non-TLS
-        # server fails the boot instead of receiving credentials in plaintext.
-        tls=common_settings.ENVIRONMENT != "dev",
-        serverSelectionTimeoutMS=5000,
-        tz_aware=True,
-    )
-    db = mongo_client[api_settings.MONGODB_DB_NAME]
-
-    from models import DOCUMENT_MODELS
-
-    await init_beanie(database=db, document_models=DOCUMENT_MODELS)
-
-
-async def close_mongo() -> None:
-    global mongo_client
-    if mongo_client:
-        await mongo_client.close()
-        mongo_client = None
-```
+Copied verbatim from `<skill-dir>/database/python/beanie/template/src/database/mongo.py` by the copy step; do not re-type it.
 
 ### B3. Add Configuration
 
@@ -155,67 +126,15 @@ Beanie documents are used directly — no session injection needed. Keep constru
 
 **`src/api/schemas/request/user.py`**:
 
-```python
-from pydantic import EmailStr, Field
-
-from api.schemas.base import BaseRequestSchema
-
-
-class CreateUserRequest(BaseRequestSchema):
-    email: EmailStr = Field(description="User email address.")
-    name: str = Field(min_length=1, max_length=100, description="Display name.")
-    password: str = Field(
-        min_length=12, max_length=128, description="12-128 characters."
-    )
-```
+Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/request/user.py` by the copy step; do not re-type it.
 
 **`src/api/schemas/response/user.py`** — no `hashed_password` field:
 
-```python
-from pydantic import Field
-
-from api.schemas.base import BaseResponseSchema
-
-
-class UserResponse(BaseResponseSchema):
-    id: str = Field(description="User ID.")
-    email: str = Field(description="User email.")
-    name: str = Field(description="Display name.")
-```
+Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
 
 **`src/api/services/user_service.py`**:
 
-```python
-import asyncio
-
-from beanie import PydanticObjectId
-from fastapi import HTTPException, status
-from pymongo.errors import DuplicateKeyError
-
-from api.schemas.request.user import CreateUserRequest
-from core.security import hash_password
-from models.user import User
-
-
-async def list_users() -> list[User]:
-    return await User.find().to_list()
-
-
-async def get_user(user_id: PydanticObjectId) -> User | None:
-    return await User.get(user_id)
-
-
-async def create_user(payload: CreateUserRequest) -> User:
-    # argon2 is ~100 ms of CPU: off the event loop, or it stalls every request.
-    hashed = await asyncio.to_thread(hash_password, payload.password)
-    user = User(email=payload.email, name=payload.name, hashed_password=hashed)
-    try:
-        return await user.insert()
-    except DuplicateKeyError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered."
-        ) from None
-```
+Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
 **`src/api/routers/users.py`** (register it in `src/api/routes.py` with a `USERS` tag). It has no auth of its own — keep it off deployed environments until Step D below (or your own guard) protects it:
 

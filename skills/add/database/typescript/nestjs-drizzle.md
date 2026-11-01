@@ -39,20 +39,11 @@ Add to `package.json`:
 
 #### A3. Create Drizzle Config
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-drizzle bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-drizzle/template/` (listed in `<skill-dir>/database/typescript/nestjs-drizzle/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`drizzle.config.ts`** (project root):
 
-```ts
-// drizzle-kit runs outside main.ts and does not read .env on its own.
-import 'dotenv/config';
-import { defineConfig } from 'drizzle-kit';
-
-export default defineConfig({
-  schema: './src/database/schema.ts',
-  out: './drizzle',
-  dialect: 'postgresql',
-  dbCredentials: { url: process.env.DATABASE_URL! },
-});
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/drizzle.config.ts` by the copy step; do not re-type it.
 
 > `drizzle.config.ts` reads `process.env` directly — it runs as a standalone CLI command outside NestJS, so it cannot use `serviceConfig`. Against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
@@ -60,85 +51,19 @@ export default defineConfig({
 
 **`src/database/schema.ts`**:
 
-```typescript
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
-
-export const users = pgTable('users', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  email: text('email').notNull().unique(),
-  name: text('name').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdateFn(() => new Date()),
-});
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/schema.ts` by the copy step; do not re-type it.
 
 #### A5. Create DrizzleService
 
 **`src/database/drizzle.service.ts`**:
 
-```typescript
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
-
-import { appConfig, serviceConfig } from '../config/env.config';
-
-@Injectable()
-export class DrizzleService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(DrizzleService.name);
-  private readonly client: ReturnType<typeof postgres>;
-  // In v1 the first type parameter of `drizzle` is TRelations, not the schema —
-  // tables are passed per query (`.from(users)`), so no schema generic is needed.
-  readonly db: ReturnType<typeof drizzle>;
-
-  constructor() {
-    this.client = postgres(serviceConfig.DATABASE_URL, {
-      // postgres.js defaults to plaintext. Local Docker Postgres serves no TLS, so only dev
-      // skips it; 'verify-full' checks the certificate chain and hostname.
-      ssl: appConfig.ENVIRONMENT === 'dev' ? false : 'verify-full',
-    });
-    this.db = drizzle({ client: this.client });
-  }
-
-  async onModuleInit() {
-    try {
-      await this.db.execute(sql`SELECT 1`);
-      this.logger.log('Database connection verified');
-    } catch (error) {
-      this.logger.error('Database connection failed', error);
-      throw error;
-    }
-  }
-
-  async onModuleDestroy() {
-    await this.client.end();
-  }
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/drizzle.service.ts` by the copy step; do not re-type it.
 
 #### A6. Create DatabaseModule
 
 **`src/database/database.module.ts`**:
 
-```typescript
-import { Global, Module } from '@nestjs/common';
-
-import { DrizzleService } from './drizzle.service';
-
-@Global()
-@Module({
-  providers: [DrizzleService],
-  exports: [DrizzleService],
-})
-export class DatabaseModule {}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nestjs-drizzle/template/src/database/database.module.ts` by the copy step; do not re-type it.
 
 #### A7. Register in AppModule
 

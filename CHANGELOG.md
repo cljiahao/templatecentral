@@ -13,6 +13,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - `add/auth`: the 36 fences that create a new file now live as real files in template trees beside each leaf (`skills/add/auth/<stack>/template/`, plus `template-cookie/` for the nestjs and fastapi cookie mode), listed in a `template.manifest` and copied with `TC_PART=leaf`: nestjs 13, nextjs 11, fastapi 10, vite-react 2. Fences that edit or replace an existing project file stay inline. `tests/golden/fences/moved.d/add-auth.tsv` maps each moved fence to its file, and `check-fences` proves the bytes are unchanged.
+- `add/database`: 38 new-file fences across the 10 install leaves moved the same way into `skills/add/database/<lang>/<leaf>/template/` (plus the empty package `__init__.py` files the sqlalchemy and pymongo-async leaves create). `moved.d/add-database.tsv` maps them. The sqlalchemy-iam `session.py` stays inline: it is the canonical side of the IAM drift check.
+- The other `add` leaves: 20 fences that write a fixed-name utility file moved the same way (error-handling/nextjs error boundaries, logging HTTP wrappers and the Vite logging module, the StrykerJS config, the pagination helpers, and the redaction hooks). Fences that show a renamed example (`my_thing`, `projects`, `github`) or edit an existing file stay inline. `moved.d/add-rest.tsv` maps them.
+- `migrate/database`: the 4 new files of the Drizzle-to-Kysely flows (nestjs `kysely.service.ts` and `migrate.ts`, nextjs `kysely-client.ts` and `migrate.ts`) moved into `skills/migrate/database/<stack>/template/`; the IAM-block drift check still pairs them with their `add` canonical. The `nextjs-backend-extraction` fences are per-resource templates to adapt and stay inline.
 
 ---
 

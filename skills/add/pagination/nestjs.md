@@ -14,92 +14,15 @@ the marker.
 - Marker now present → proceed to Step 1.
 - Still absent (user chose to stop) → exit. Do not generate any files.
 
+Run `TC_PART=leaf TC_LEAF=add/pagination/nestjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nestjs/template/` (listed in `<skill-dir>/pagination/nestjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **1. Pagination Query DTO** (shared — every paginated module reuses it)
 
-```ts
-// src/common/dto/pagination.dto.ts
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-export const paginationSchema = z.object({
-  // Capped: OFFSET cost grows with page, so an unbounded page is a cheap DoS lever.
-  page: z.coerce.number().int().min(1, 'Page must be 1 or greater').max(10_000).default(1),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1, 'Limit must be 1 or greater')
-    .max(100, 'Limit must be 100 or less')
-    .default(10),
-  sort: z
-    .string()
-    .max(64)
-    .regex(/^(asc|desc)_\w+$/, 'Invalid sort format: use asc_fieldName or desc_fieldName')
-    .optional(),
-});
-
-export class PaginationDto extends createZodDto(paginationSchema) {}
-
-export type PaginationParams = z.infer<typeof paginationSchema>;
-
-export interface PaginationMetadata {
-  page: number;
-  limit: number;
-  total: number;
-  hasMore: boolean;
-}
-
-export interface PaginatedResponse<T> {
-  data: {
-    items: T[];
-    pagination: PaginationMetadata;
-  };
-}
-```
+Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/dto/pagination.dto.ts` by the copy step; do not re-type it.
 
 **2. Pagination Service**
 
-```ts
-// src/common/services/pagination.service.ts
-import { BadRequestException, Injectable } from '@nestjs/common';
-import type { PaginationMetadata } from '../dto/pagination.dto';
-
-export interface SortParam<F extends string> {
-  field: F;
-  direction: 'asc' | 'desc';
-}
-
-@Injectable()
-export class PaginationService {
-  calculateOffset(page: number, limit: number): number {
-    return (page - 1) * limit;
-  }
-
-  createMetadata(page: number, limit: number, total: number): PaginationMetadata {
-    return { page, limit, total, hasMore: page * limit < total };
-  }
-
-  /** Parses `asc_field` / `desc_field`; throws 400 listing the allowed fields when invalid. */
-  parseSortParam<F extends string>(
-    sort: string | undefined,
-    allowedFields: readonly F[]
-  ): SortParam<F> | null {
-    if (!sort) return null;
-
-    // Split on the FIRST underscore only — field names may be snake_case (e.g. asc_created_at).
-    const separatorIndex = sort.indexOf('_');
-    const direction = sort.slice(0, separatorIndex);
-    const field = sort.slice(separatorIndex + 1) as F;
-    if (allowedFields.includes(field) && (direction === 'asc' || direction === 'desc')) {
-      return { field, direction };
-    }
-    // Pre-built in the error-handling filter's ErrorResponse shape so the allowed list survives it.
-    throw new BadRequestException({
-      error: 'Invalid sort field',
-      details: { fieldErrors: { sort: [`Must be one of: ${allowedFields.join(', ')}`] } },
-    });
-  }
-}
-```
+Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/services/pagination.service.ts` by the copy step; do not re-type it.
 
 `PaginationService` has no module of its own — register it in each feature module that uses it. Then export the module from `src/modules/index.ts` (`export * from './projects/projects.module';`) and append `ProjectsModule` to the existing `imports` array in `src/app.module.ts` — never replace that array:
 
@@ -341,34 +264,7 @@ The route is public as written — apply the authorization decision from `templa
 
 ## Tests
 
-```ts
-// test/common/pagination.service.spec.ts
-import { BadRequestException } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
-import { PaginationService } from '../../src/common/services/pagination.service';
-
-describe('PaginationService', () => {
-  const service = new PaginationService();
-
-  it('computes offset and hasMore', () => {
-    expect(service.calculateOffset(3, 10)).toBe(20);
-    expect(service.createMetadata(2, 10, 25).hasMore).toBe(true);
-    expect(service.createMetadata(3, 10, 25).hasMore).toBe(false);
-  });
-
-  it('parses an allowed sort, splitting on the first underscore', () => {
-    expect(service.parseSortParam('desc_created_at', ['created_at'])).toEqual({
-      field: 'created_at',
-      direction: 'desc',
-    });
-    expect(service.parseSortParam(undefined, ['name'])).toBeNull();
-  });
-
-  it('rejects a field outside the allow-list', () => {
-    expect(() => service.parseSortParam('asc_password', ['name'])).toThrow(BadRequestException);
-  });
-});
-```
+Copied verbatim from `<skill-dir>/pagination/nestjs/template/test/common/pagination.service.spec.ts` by the copy step; do not re-type it.
 
 ## Validate
 

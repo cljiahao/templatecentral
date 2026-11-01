@@ -18,15 +18,11 @@ psycopg[binary]
 
 ### A2. Create Database Base
 
+Run `TC_PART=leaf TC_LEAF=add/database/python/sqlalchemy-iam bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/python/sqlalchemy-iam/template/` (listed in `<skill-dir>/database/python/sqlalchemy-iam/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/database/base.py`**:
 
-```python
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-```
+Copied verbatim from `<skill-dir>/database/python/sqlalchemy-iam/template/src/database/base.py` by the copy step; do not re-type it.
 
 ### A3. Initialize Alembic (same as standard)
 

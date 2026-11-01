@@ -22,31 +22,11 @@ Add a migration script to `package.json`:
 
 #### B2. Create Database Client
 
+Run `TC_PART=leaf TC_LEAF=add/database/typescript/nextjs-kysely bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nextjs-kysely/template/` (listed in `<skill-dir>/database/typescript/nextjs-kysely/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
+
 **`src/integrations/database/kysely-client.ts`**:
 
-```ts
-import { Kysely, PostgresDialect } from 'kysely';
-import { Pool } from 'pg';
-
-import type { Database } from './types';
-
-function createPool() {
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-    // TLS is required for any non-local database. Verify the server certificate —
-    // `rejectUnauthorized: false` accepts a MITM proxy silently.
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
-    max: 10,
-  });
-}
-
-const globalForKysely = globalThis as unknown as { db?: Kysely<Database> };
-
-export const db =
-  globalForKysely.db ?? new Kysely<Database>({ dialect: new PostgresDialect({ pool: createPool() }) });
-
-if (process.env.NODE_ENV !== 'production') globalForKysely.db = db;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/kysely-client.ts` by the copy step; do not re-type it.
 
 > **Why the singleton**: Next.js hot-reloads modules in development; caching the Kysely instance (and the pool created inside it) on `globalThis` prevents connection exhaustion.
 
@@ -121,25 +101,7 @@ RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 
 **`src/integrations/database/types.ts`**:
 
-```ts
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely';
-
-export interface Database {
-  users: UsersTable;
-}
-
-export interface UsersTable {
-  id: Generated<string>;
-  email: string;
-  name: string;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export type User = Selectable<UsersTable>;
-export type NewUser = Insertable<UsersTable>;
-export type UserUpdate = Updateable<UsersTable>;
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/types.ts` by the copy step; do not re-type it.
 
 > **Tip**: After the database exists, run `pnpm exec kysely-codegen` to auto-generate types from the live schema instead of maintaining them manually.
 
@@ -147,74 +109,17 @@ export type UserUpdate = Updateable<UsersTable>;
 
 **`src/integrations/database/index.ts`**:
 
-```ts
-export { db } from './kysely-client';
-export type { Database, User, NewUser, UserUpdate } from './types';
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/index.ts` by the copy step; do not re-type it.
 
 #### B5. Create First Migration
 
 **`src/integrations/database/migrations/001_initial.ts`**:
 
-```ts
-import { type Kysely, sql } from 'kysely';
-
-export async function up(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .createTable('users')
-    .addColumn('id', 'text', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()::text`))
-    .addColumn('email', 'text', (col) => col.notNull().unique())
-    .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('created_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamptz', (col) => col.notNull().defaultTo(sql`now()`))
-    .execute();
-}
-
-export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('users').execute();
-}
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrations/001_initial.ts` by the copy step; do not re-type it.
 
 Create a migration runner script at **`src/integrations/database/migrate.ts`**:
 
-```ts
-import path from 'node:path';
-import { promises as fs } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { FileMigrationProvider, Migrator } from 'kysely/migration';
-
-import { db } from './kysely-client';
-
-async function migrate() {
-  const migrator = new Migrator({
-    db,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      // ESM project ("type": "module") — __dirname does not exist
-      migrationFolder: path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations'),
-    }),
-  });
-
-  const { results, error } = await migrator.migrateToLatest();
-  results?.forEach((r) => {
-    if (r.status === 'Success') console.log(`Migration "${r.migrationName}" executed successfully`);
-    else if (r.status === 'Error') console.error(`Migration "${r.migrationName}" failed`);
-  });
-
-  if (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
-  }
-
-  await db.destroy();
-}
-
-migrate().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
-```
+Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrate.ts` by the copy step; do not re-type it.
 
 Run migrations with: `pnpm migrate`
 
