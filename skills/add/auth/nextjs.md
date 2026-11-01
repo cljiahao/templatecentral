@@ -75,7 +75,7 @@ pnpm add "better-auth@^1.7.7"
 
 Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nextjs/template/` into the project per `<skill-dir>/auth/nextjs/template.manifest` — the files of Steps 2, 3, 5, 7, 10 and 14 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
 
-> **Version floor:** better-auth ≥1.7.7 — two critical security advisories are fixed only in 1.7.7. If you later add the Drizzle adapter, regenerate the auth schema after upgrading (1.7 makes `Account.issuer` required and moves `experimental.joins` to `advanced.database.joins`).
+> **Version floor:** see `.claude/rules/nextjs.md` (security advisories, and the schema regeneration the Drizzle adapter needs after upgrading).
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 

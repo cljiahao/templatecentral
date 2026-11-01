@@ -19,7 +19,7 @@ Add to `requirements-dev.txt` (create the file if absent):
 mutmut>=3.6.0
 ```
 
-> `>=3.6.0` is the floor for the `source_paths` key used in Step 1 — 3.5.x only reads the older `paths_to_mutate` (3.6+ still accepts it but warns it is deprecated). Verified against mutmut 3.8.0 (current).
+> The floor and why it is there: `.claude/rules/fastapi.md`.
 
 Install:
 

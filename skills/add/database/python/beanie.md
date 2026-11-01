@@ -18,7 +18,7 @@ python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('ht
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt`. The `beanie` floor makes a 3.14 venv fail loudly instead of silently resolving 2.0.0 (the only uncapped 2.x); `AsyncMongoClient` needs `pymongo>=4.13`.
+Add to `requirements.txt` (why these floors: `.claude/rules/fastapi.md`):
 
 ```
 beanie>=2.2,<3
