@@ -2,7 +2,7 @@
 **One prompt. Four stacks. Production-ready every time.**
 
 [![GitHub Stars](https://img.shields.io/github/stars/cljiahao/templatecentral?style=flat-square&logo=github)](https://github.com/cljiahao/templatecentral/stargazers)
-[![Version](https://img.shields.io/badge/version-7.0.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
+[![Version](https://img.shields.io/badge/version-7.2.0-blue?style=flat-square)](https://github.com/cljiahao/templatecentral)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?style=flat-square)](https://github.com/cljiahao/templatecentral)
 
 <!-- DEMO: Replace this comment block with a GIF once you have a recording.
@@ -297,6 +297,11 @@ templatecentral/
 │   ├── test-harness-kit.sh  # Regression suite for the hooks and gates under skills/scaffold/shared/template*/
 │   ├── test-template-copy.sh # Tests for the copy script (skills/scaffold/shared/tc-copy.sh) and the template trees
 │   ├── lint-skills.test.sh  # Negative tests for the lint checks that read the template trees
+│   ├── check-fences.py/.sh  # Fence snapshot: every copy-verbatim fence, or the template file that replaced it, matches tests/golden/fences/
+│   ├── check-fences-frozen.sh # Fails a PR that edits the fence snapshot (label `fence-snapshot-change` to allow)
+│   ├── check-golden.sh      # Seeded scaffold output matches tests/golden/*.sha256
+│   ├── count-load.sh        # Token load per scaffold stack and per add/migrate/standards entry
+│   ├── extract-fences.py    # Extracts scaffold fences into a file tree (golden and hook tests)
 │   ├── build-agents-dist.sh # Builds the namespace-free copy for other agent tools
 │   ├── pre-guard.sh         # Repo guard: blocks secret access, asks before instruction/CI edits
 │   ├── bash-guard.sh        # Repo guard: blocks shell reads/writes of secret files
@@ -304,13 +309,15 @@ templatecentral/
 │   └── pre-guard.test.sh    # Tests for both repo guards
 ├── skills/                  # Shipped skills — nested reference file architecture
 │   ├── scaffold/shared/template*/ # Files the scaffold copies verbatim: hooks, gates, lefthook, CI (template/, template-ts/, template-py/, template-ci/)
-│   ├── scaffold/shared/tc-copy.sh # The one script that copies the template trees (and appends the AGENTS.md tail); the kit runs it, never reads it
+│   ├── scaffold/shared/tc-copy.sh # The one script that copies the template trees (and appends the AGENTS.md tail); the kit runs it, never reads it. add/migrate leaves run it with TC_PART=leaf
 │   ├── scaffold/shared/template.manifest # Every template file with its mode
 │   ├── scaffold/shared/template-{settings-ts,settings-py,late,tail}/ # settings.json (copied at Step A), FUTURE.md + CONSTITUTION + /skill-audit (copied at Step C), and the AGENTS.md tail (appended at Step G, never copied)
 │   ├── scaffold/nextjs/template*/ # The Next.js files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nextjs/template.manifest
 │   ├── scaffold/nestjs/template*/ # The NestJS files the scaffold copies verbatim (template/, template-agents/ = AGENTS.md, template-tail/ = text appended on request) plus scaffold/nestjs/template.manifest
 │   ├── scaffold/fastapi/template*/ # The FastAPI files the scaffold copies verbatim (same three trees) plus scaffold/fastapi/template.manifest
 │   ├── scaffold/vite-react/template*/ # The same trees for Vite + React, plus scaffold/vite-react/template.manifest
+│   ├── add/<capability>/<leaf>/template*/ # Files an add leaf copies verbatim (e.g. add/auth/nestjs/template/, template-cookie/), plus the leaf's template.manifest
+│   ├── migrate/database/<stack>/template/ # Files a migrate leaf copies verbatim, plus its template.manifest
 │   ├── CONVENTIONS.md       # Single source of truth for skill authoring rules
 │   ├── scaffold/SKILL.md    # Router → skills/scaffold/<stack>/
 │   ├── add/SKILL.md         # Router → skills/add/<capability>/<stack>.md

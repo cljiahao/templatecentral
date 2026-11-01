@@ -34,6 +34,13 @@ A leaf that tells the agent to write a file verbatim keeps that file as a real f
 - **Not reference files:** files inside a tree are shipped content, so they carry no `<!-- ref: -->` header and are exempt from the nesting-depth limit (§2). Every content scan (version pins, secrets, change narration, bare route handlers) still reads them. A file merely *named* `template-*.md` outside a tree directory is an ordinary reference file and needs its header.
 - **A file standing in for a fence:** when a template file replaces a code fence of a leaf, its content is the fence body byte for byte (dedented when the fence was indented) and it ends in a newline. A body with no final newline does not match. `tests/golden/fences/moved.d/*.tsv` records which fence each file replaces.
 - **Leaf prose stays:** the leaf keeps the steps, the decisions and the pointer to the tree. Only the copy-verbatim content moves.
+- **Copying an add or migrate tree:** after its Step 0 check, the leaf runs `TC_PART=leaf TC_LEAF=<add|migrate>/<leaf stem> bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` (add `TC_TREE=template-<suffix>` to copy one tree at the step that needs it). Each moved fence becomes one line, `Copied verbatim from \`<skill-dir>/<path to the file>\` by the copy step; do not re-type it.` The script refuses, writes nothing and prints a `STOP:` line when a target path already exists.
+- **What stays inline:** only a fence that creates a new file with fixed content moves. A fence that edits or replaces an existing project file, an example the agent adapts or renames (`my_thing`, `projects`), a value the agent fills in from the user, and the canonical side of a drift-checked pair stay in the markdown.
+- **Snapshot rule:** a slice that moves fences adds rows to its own `tests/golden/fences/moved.d/<slice>.tsv` and never edits `tests/golden/fences/<skill>.tsv`. `python3 scripts/check-fences.py --root .` must pass.
+
+### Version floors
+
+Version floors and the reasons for them live only in `.claude/rules/<stack>.md`. Skill prose points there instead of restating a floor. Install commands and requirement lines keep their floors, in a fence or in inline code. Lint-enforced: a `≥X.Y` in skill prose outside fences and inline code fails.
 
 ---
 

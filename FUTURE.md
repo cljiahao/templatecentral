@@ -39,6 +39,8 @@ Promote the post-harness seams in scaffolded projects from documentation stubs t
 
 Superseded by the 7.0.0 template plan: copy-verbatim code moves out of the markdown into `template/` files that the scaffold copies, which removes the bulk that phase-splitting would only have deferred.
 
+The `add` and `migrate` leaves follow the same plan: a fence that creates a new file with fixed content lives in a template tree beside its leaf and is copied with `tc-copy.sh TC_PART=leaf`.
+
 Original proposal: Each scaffold `source-files.md` exceeds the 5,000-token skill re-attach budget. Split into phases (phase-1-core.md, phase-2-auth-hooks.md, etc.) so post-compaction recovery loads only the needed phase. (The shared harness kit has been split into per-concern `scaffold/shared/harness-kit-*.md` files; the per-stack `source-files.md` files have not.)
 
 ### 2. New `templatecentral:add` capabilities under evaluation

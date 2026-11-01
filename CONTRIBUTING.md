@@ -42,12 +42,13 @@ Skills are auto-discovered. `plugin.json` already points to `"skills": "./skills
 ## Pull Request Checklist
 
 - [ ] `SKILL.md` has valid `name` and `description` frontmatter
-- [ ] Version floors in skill files agree with `.claude/rules/*.md` (the floor of record)
+- [ ] Version floors and their reasons live in `.claude/rules/*.md`; skill prose points there, and only install lines in a fence or inline code carry a floor (`skills/CONVENTIONS.md` §1)
+- [ ] A fence that creates a new file with fixed content lives as a file in the leaf's template tree, copied with `TC_PART=leaf`, with a row in `tests/golden/fences/moved.d/<slice>.tsv`; `python3 scripts/check-fences.py --root .` passes
 - [ ] `bash scripts/lint-skills.sh skills/` passes locally
 - [ ] `bash scripts/validate-manifest.sh` passes locally (validates `plugin.json` and `marketplace.json`)
 - [ ] `bash scripts/validate-scaffold-configs.sh` passes locally if anything under `skills/scaffold/*/template/` was touched (validates the template JSON/JS files)
 - [ ] `bash scripts/test-harness-kit.sh` passes locally if any `skills/scaffold/shared/harness-kit*.md` file or anything under `skills/scaffold/shared/template*/` was touched
-- [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`), a `template.manifest` (shared or `<stack>/template.manifest`), the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
+- [ ] `bash scripts/test-template-copy.sh` and `bash scripts/lint-skills.test.sh` pass locally if the template trees (`skills/scaffold/shared/template*`, `skills/scaffold/<stack>/template*`, or an add/migrate leaf's `template*`), a `template.manifest`, the Step 0 / Step B3 copy fences (including the `PART=stack` and `PART=agents` runs in a stack's `source-files.md`) or `scripts/lint-skills.sh` were touched
 - [ ] `bash scripts/pre-guard.test.sh` passes locally if a repo guard script was touched
 - [ ] README updated if the skill count, capability list, or stack list changed
 - [ ] CHANGELOG.md updated under `[Unreleased]`
