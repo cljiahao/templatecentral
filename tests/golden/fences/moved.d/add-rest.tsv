@@ -19,4 +19,3 @@ skills/add/pagination/nextjs.md	Step 0 — Verify context	2	skills/add/paginatio
 skills/add/pagination/vite-react.md	Step 0 — Verify context	0	skills/add/pagination/vite-react/template/src/hooks/use-pagination.ts
 skills/add/redaction/hook-node.md	Part A — `PostToolUse` masking hook	0	skills/add/redaction/hook-node/template/.claude/hooks/redact-sensitive-output.cjs
 skills/add/redaction/hook-python.md	Part A — `PostToolUse` masking hook	0	skills/add/redaction/hook-python/template/.claude/hooks/redact_sensitive_output.py
-skills/add/redaction/implementation.md	Step 2 — Write `.claude/redaction-config.json`	0	skills/add/redaction/implementation/template/.claude/redaction-config.json

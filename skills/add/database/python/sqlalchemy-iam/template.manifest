@@ -4,4 +4,3 @@
 # placeholders  comma-separated __TC_<NAME>__ tokens the file carries, or - for none
 # seams         comma-separated [[post-harness]] markers the file carries, or - for none
 template/src/database/base.py 644 - -
-template/src/database/session.py 644 - -

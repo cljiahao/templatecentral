@@ -13,7 +13,6 @@ skills/add/database/python/pymongo-async.md	M7. Schemas, Service, Router	2	skill
 skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	2	skills/add/database/python/pymongo-async/template/test/test_integration/conftest.py
 skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	3	skills/add/database/python/pymongo-async/template/test/test_integration/test_users.py
 skills/add/database/python/sqlalchemy-iam.md	A2. Create Database Base	0	skills/add/database/python/sqlalchemy-iam/template/src/database/base.py
-skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	skills/add/database/python/sqlalchemy-iam/template/src/database/session.py
 skills/add/database/python/sqlalchemy.md	A2. Create Database Base	0	skills/add/database/python/sqlalchemy/template/src/database/base.py
 skills/add/database/python/sqlalchemy.md	A4. Create Database Session	0	skills/add/database/python/sqlalchemy/template/src/database/session.py
 skills/add/database/typescript/nestjs-drizzle.md	A3. Create Drizzle Config	0	skills/add/database/typescript/nestjs-drizzle/template/drizzle.config.ts
