@@ -133,12 +133,12 @@ Build passes; the integration works end-to-end.
 
 ### Rules
 
-- NEVER put business logic in clients; NEVER skip Zod validation of external responses
+- Keep business logic out of clients, and Zod-validate every external response
 - Retry only idempotent GETs, with backoff — FetchClient does not retry
-- Always throw `APIError` for HTTP failures (imported from `@/integrations/error`) — NEVER throw generic `Error`
-- Env vars go in `.env.local` via `process.env`, with commented placeholders in `.env.example` — NEVER hardcode API URLs or secrets.
-- NEVER put API keys or tokens in `NEXT_PUBLIC_*` — exposed to every browser. For browser calls needing auth, proxy through a Next.js API route.
-- NEVER import integrations into client components or feature `api/` services — consume them server-side; `import 'server-only'` in `factories.ts` enforces this
+- Throw `APIError` for HTTP failures (imported from `@/integrations/error`), not a generic `Error`
+- Env vars go in `.env.local` via `process.env`, with commented placeholders in `.env.example` ; do not hardcode API URLs or secrets.
+- Do not put API keys or tokens in `NEXT_PUBLIC_*`; those are sent to every browser. For browser calls needing auth, proxy through a Next.js API route.
+- Do not import integrations into client components or feature `api/` services; consume them server-side; `import 'server-only'` in `factories.ts` enforces this
 - For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
 - For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
 

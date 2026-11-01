@@ -33,4 +33,6 @@ Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`
 | AWS IAM auth required (DocumentDB / Atlas) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-iam.md"` |
 | `src/modules/auth/auth.service.ts` exists | `cat "<skill-dir>/database/typescript/nestjs-mongoose-auth.md"` |
 
+NestJS + Drizzle carries its own auth and IAM sections, so it has no add-on files. The Next.js guides need no auth add-on: better-auth keeps its own session store.
+
 Run the chosen `cat`(s); follow the guide(s) exactly.

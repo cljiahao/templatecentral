@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: .claude/hooks/session-context.sh no longer prints head -30 AGENTS.md (the @AGENTS.md import loads it).
 # Format: <sha256>  <path>
-c6b444042f8447edf6e1872ebf3b9278b40650725823c9d95bfd2b825473abf8  .claude/ci-gates.sh
+ef60c7d0537d710454d979f526c101b1145d158f6a6946a4c0539ed2d8e88341  .claude/ci-gates.sh
 61e448dd1b798c211ec37f4efc9667275a0eaea0ba3be2217d4d187d15cbf078  .claude/comment-hygiene-patterns.txt
 14d1dd0cf0c4bfdbd8f344383841aca6509d9c68ed912f7ed2940b8a8514038d  .claude/harness.json
 4e8c487ba1584fd936c48ca2e94e828bd2802e14d87e32f940f7ffb1e3e6b348  .claude/hooks/block-no-verify.sh
@@ -15,14 +15,14 @@ f45ed1afb1581f5af473003f2b249d480b6c574dd488afc44d1676a64c627b08  .claude/hooks/
 48d0784d1cca1174cb9877d7b9d8579f3585ca53dc927d3e463ca1fdde24922d  .claude/hooks/subagent-stop.sh
 2e6b3e41ba479851ec6b6f3d295f6a60dab8ece65c2898fab5b6f7a46f51b235  .claude/hooks/user-prompt-guard.cjs
 d1eaab5f71b0952ba54dffdb89c4aca278bc83d974c47458480d5e7e8623701a  .claude/regen-harness.sh
-c497d38131dd4252df35791d86261d856b9d13dac640a199812fb581b1dad0bd  .claude/settings.json
+25dff2f0d9ddf1c077664658b7081ebba215100ffd72b5c76f30c7131059cb18  .claude/settings.json
 66eaf32dab2335f6a69c5f51e8155cacbe2bb9d85cc4701de0225e675d4032c2  .claude/skills/nest-verify/SKILL.md
 de500da1818c1726c4276be0911b1f1ffc5b7132926c82f4f46ba9d47d74d254  .claude/skills/skill-audit/SKILL.md
 baa2e52f283b0400bc96ea494ea0d088493372184975bc5a955b5e4a5b5ab7c4  .claude/verify-harness.sh
 dcf7f166300f51b18591329d7cc911f03e75ece443605995d7ecc856d0956d2b  .dockerignore
 9434348d0043ab8529db79617703a927926fa2f78b0ae373b3c93d711fd0070b  .env.example
 dda64a4f63fac155a0ffaadc932d86cb106cc7ffbe3c4c2a15f7d17ef6fb2745  .github/workflows/ci.yml
-396127dcb99430ff290b04ffce20beeba4145548695a06a7dd8742182fdc3667  .gitignore
+69465adb146e67006da4cfde557e2f0347daed4990a34b2fa8537cea232b1a6c  .gitignore
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 c66dad01d734dacc5092b980035b9901ec518e1ecbfb5db270a35d39750a27f0  .lefthook/commit-msg.sh
 c431cd3a17b89ad7c35e3f6ff0ef1b2f9eea613c0d26fc101fe56e743db2c2d7  .npmrc

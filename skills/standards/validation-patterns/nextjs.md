@@ -233,7 +233,7 @@ export const GET = withLogging(async (request) => {
 
 - **Cap size before buffering.** `await request.formData()` buffers the whole body, so a later `file.size` check cannot stop a memory DoS. Reject on `Content-Length` first and set the same ceiling at the platform edge (`next.config.ts` body limit / CDN / reverse proxy).
 - **Verify content.** Sniff the buffer's magic bytes and match them to the allowed type before storing or serving.
-- **Make the filename safe.** NEVER derive a storage key or path from `file.name` (`../`, null bytes, collisions). Generate the key (e.g. a UUID); keep the name as metadata only.
+- **Make the filename safe.** Do not derive a storage key or path from `file.name` (`../`, null bytes, collisions). Generate the key (e.g. a UUID); keep the name as metadata only.
 
 ```ts
 // src/app/api/upload/route.ts
@@ -356,12 +356,12 @@ export async function fetchGithubUser(username: string) {
 
 ## Rules
 
-- Schemas live in `schemas/` — NEVER define or export a schema from a component file
+- Schemas live in `schemas/`, not in component files
 - Always re-validate on the server; the client-side resolver is UX only and a crafted request skips it entirely
 - Always validate route params / query values with Zod before use, and `encodeURIComponent` any value interpolated into a path
-- Route failures go through `handleApiError` — NEVER hand-roll the error body, or the error contract drifts per route
+- Route failures go through `handleApiError`; a hand-rolled error body makes the error contract drift per route
 - Throw `APIError`, never a generic `Error` — and never embed validation field detail in the thrown message
-- NEVER render a backend error string to the user — log it, show a fixed generic message
+- Do not render a backend error string to the user; log it and show a fixed generic message
 - Every input needs `aria-invalid` and an `aria-describedby` pointing at its `role="alert"` error node
 
 ## Testing / Verification

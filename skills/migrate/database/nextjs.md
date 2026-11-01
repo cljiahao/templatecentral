@@ -9,6 +9,10 @@
 cat "<skill-dir>/database/drizzle-to-kysely.md"
 ```
 
+**Before Step 1**, create a migration branch so every change below (packages, scripts, deletions) is reviewable and revertible as one unit:
+
+`git checkout -b migrate/drizzle-to-kysely`
+
 ---
 
 ### Step 2 — Update `package.json` scripts
@@ -25,7 +29,7 @@ Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add:
 
 ### Step 3 — Delete Drizzle files
 
-> **STOP — confirm with the user before running any of these deletions.** `drizzle/` holds the applied-migration journal and generated SQL; deleting it is irreversible and destroys the record of what has already run against every environment's database. Do not proceed until:
+> **Confirm with the user before running any of these deletions.** `drizzle/` holds the applied-migration journal and generated SQL; deleting it is irreversible and destroys the record of what has already run against every environment's database. Do not proceed until:
 > 1. The working tree is committed (or `drizzle/` is archived outside the repo), so the migration history is recoverable from git.
 > 2. The user has explicitly confirmed these paths should be removed.
 >
@@ -38,17 +42,19 @@ rm drizzle.config.ts
 rm -rf drizzle/
 ```
 
+If the user declined, `db-client.ts`, `schema.ts` and `drizzle.config.ts` stay as dead code once Steps 7 and 9 switch every import to Kysely; tell the user they can be removed later.
+
 ### Step 4 — Create `src/integrations/database/kysely-client.ts` (IAM variant)
 
 Download the CA bundle first — the Amazon RDS root CA is not in Node's default trust store, so `rejectUnauthorized: true` without `ca` fails with `SELF_SIGNED_CERT_IN_CHAIN` (and `rejectUnauthorized: false` is never the fix). Commit it (public certificate) or bake it into the image:
-
-Run `TC_PART=leaf TC_LEAF=migrate/database/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/nextjs/template/` (listed in `<skill-dir>/database/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
 ```bash
 mkdir -p certs
 curl -fsSL -o certs/rds-global-bundle.pem \
   https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 ```
+
+Run `TC_PART=leaf TC_LEAF=migrate/database/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/nextjs/template/` (listed in `<skill-dir>/database/nextjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
 Copied verbatim from `<skill-dir>/database/nextjs/template/src/integrations/database/kysely-client.ts` by the copy step; do not re-type it.
 

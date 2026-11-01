@@ -22,7 +22,7 @@ cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 ```bash
 cat "<skill-dir>/general/phase-5-health-check.md"
 ```
-On an approved 5d re-sync, load the same five kit files as Phase 4 (everything after its first line).
+On an approved 5d re-sync, load the five kit files that Phase 4 loads after `phase-4-upgrade.md` (the four harness-kit files and `documentation-kit.md`).
 
 "The Step 4b marker update" means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
 
@@ -46,7 +46,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   ```
   Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
 
-- **`.claude/harness.json` does NOT exist** → a light adoption wrote the marker but never seeded
+- **`.claude/harness.json` does not exist** → a light adoption wrote the marker but never seeded
   the harness. Do **not** exit. Skip Phases 1–3 and present:
   ```
   ℹ️ This project carries a templateCentral <version> marker but has no harness

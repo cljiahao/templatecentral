@@ -207,6 +207,20 @@ check 1 "$ec" "tree_extra_hook_fails: exit"
 check "EXTRA fastapi-github .claude/hooks/extra-hook.sh
 EXTRA fastapi-github .lefthook/extra.sh" "$(grep '^EXTRA' <<< "$out")" "tree_extra_hook_fails: EXTRA lines (hooks/local is the project's own and is not reported)"
 
+# a file the guide customises (user-edited.txt) may differ but must exist; a seeded file still may not
+scaffold_tree fastapi github "$T/utree"
+printf 'customised\n' > "$T/utree/src/core/config.py"
+out=$(bash "$CHECK" --tree "$T/utree" fastapi-github 2>&1); ec=$?
+check 0 "$ec" "tree_user_edited_file_may_differ ($out)"
+rm "$T/utree/src/core/config.py"
+out=$(bash "$CHECK" --tree "$T/utree" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_user_edited_file_must_exist: exit"
+check "MISSING fastapi-github src/core/config.py" "$(grep '^MISSING' <<< "$out")" "tree_user_edited_file_must_exist: MISSING line"
+scaffold_tree fastapi github "$T/u2tree"
+printf '# drift\n' >> "$T/u2tree/.claude/settings.json"
+out=$(bash "$CHECK" --tree "$T/u2tree" fastapi-github 2>&1); ec=$?
+check 1 "$ec" "tree_seeded_file_still_compared: exit"
+
 # a symlinked directory is as bad as a symlinked file
 scaffold_tree fastapi github "$T/dtree1"; mkdir -p "$T/outside"; ln -s "$T/outside" "$T/dtree1/.claude/hooks/evil"
 out=$(bash "$CHECK" --tree "$T/dtree1" fastapi-github 2>&1); ec=$?

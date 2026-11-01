@@ -15,4 +15,4 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 | `ai-security`, `documentation` (`docs`, `readme`), `redaction` (`masking`, `dlp`) | all | `<capability>/implementation.md` |
 
 2. Run `cat "<skill-dir>/<path>"` — `<skill-dir>` is this skill's "Base directory for this skill" (an absolute path, **not** a shell variable).
-3. Follow the loaded guide exactly; for `database` it names the next `cat`.
+3. Follow the loaded guide exactly; for `database` it names the next `cat`. In the guides, `<target>` is the project root: the directory whose `AGENTS.md` carries the templateCentral marker.

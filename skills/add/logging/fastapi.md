@@ -11,7 +11,7 @@ Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `tem
 - `structlog` in the installed dependencies (`requirements.txt`)
 - `src/core/logging.py` — structlog configured for stdlib interop: JSON in prod/uat, colored console in dev, daily-rotating JSON files in dev, plus a key-based redaction processor (`password`, `token`, `authorization`, `cookie`, …)
 - Import via `from core.logging import logger` — a structlog bound logger
-- **Call convention:** pass structured fields as kwargs — `logger.info("Event", key=value)` — NOT stdlib's `extra={...}`. Bind request-scoped context once with `structlog.contextvars.bind_contextvars(...)` and it flows to every subsequent line automatically (across `async`/`await`).
+- **Call convention:** pass structured fields as kwargs — `logger.info("Event", key=value)` , not stdlib's `extra={...}`. Bind request-scoped context once with `structlog.contextvars.bind_contextvars(...)` and it flows to every subsequent line automatically (across `async`/`await`).
 
 #### Tier 1 — Base
 
@@ -167,7 +167,7 @@ Use as `Depends(require_role("admin"))`.
 
 Run `TC_PART=leaf TC_LEAF=add/logging/fastapi bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/fastapi/template/` (listed in `<skill-dir>/logging/fastapi/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-**Outbound HTTP calls** — create a wrapper in `src/utils/http_client.py`:
+**Outbound HTTP calls** — the wrapper is `src/utils/http_client.py` (copied above):
 
 Copied verbatim from `<skill-dir>/logging/fastapi/template/src/utils/http_client.py` by the copy step; do not re-type it.
 

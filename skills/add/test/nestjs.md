@@ -188,12 +188,12 @@ pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 - Descriptive names — `it('should throw NotFoundException for missing item')`
 - Mock at boundaries — mock repositories in service tests, not internals
 - Use NestJS testing module — `Test.createTestingModule()` for proper DI
-- E2E tests use Fastify — `app.inject()` for HTTP assertions; NEVER use `supertest` with Fastify
-- NEVER test implementation details — test behavior and outcomes
-- NEVER share mutable state between tests — each `beforeEach` creates a fresh module
-- NEVER mock the service in controller tests unless testing error handling paths
+- E2E tests use Fastify — `app.inject()` for HTTP assertions, not `supertest`
+- Test behavior and outcomes, not implementation details
+- Tests do not share mutable state; each `beforeEach` creates a fresh module
+- Mock the service in controller tests only to exercise error paths
 - Always `afterAll(() => app.close())` in e2e tests
-- NEVER depend on test order
+- Tests pass in any order
 
 ## After Writing Code
 

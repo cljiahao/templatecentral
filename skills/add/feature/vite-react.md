@@ -45,7 +45,7 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Put all static data here — NOT in components:
+Put all static data here, not in components:
 
 ```ts
 // Values use the backend `sort` format (`asc_<field>` / `desc_<field>`).
@@ -182,10 +182,10 @@ Build and tests pass; `import { X } from '@/features/<name>'` resolves from outs
 ## Rules
 
 - **Direct imports** OK within the same feature
-- NEVER import across features — promote shared code (used by 2+) to `components/widgets/` or `lib/`
+- Do not import across features; promote shared code (used by 2+) to `components/widgets/` or `lib/`
 - The barrel exports only the public API
 - Write `types.ts` before components
-- Call the backend through an `ApiClient` subclass — NEVER raw `fetch` or a hardcoded URL (it would skip the session cookie and CSRF header)
+- Call the backend through an `ApiClient` subclass, not raw `fetch` or a hardcoded URL (those skip the session cookie and CSRF header)
 
 ## Standalone Components
 
@@ -209,8 +209,8 @@ npx shadcn@latest add <component-name>
 It installs into `src/components/ui/`; never hand-create primitives there.
 
 Rules:
-- NEVER add boolean flag props to configure variants — prefer composition with children
-- Always add to barrel `index.ts` when creating in shared folders — NEVER omit the barrel export
+- Prefer composition with children over boolean flag props for variants
+- Add each new file in a shared folder to its barrel `index.ts`
 
 ## After Writing Code
 

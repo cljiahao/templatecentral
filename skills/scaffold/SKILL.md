@@ -14,7 +14,12 @@ description: Use when creating a new FastAPI, NestJS, Next.js, or Vite+React pro
 
 Full-stack → scaffold frontend and backend as two separate runs.
 
-**Step 1** — Identify the stack: `fastapi`, `nestjs`, `nextjs`, or `vite-react`.
+**Step 1** — Identify the stack: `fastapi`, `nestjs`, `nextjs`, or `vite-react`. Then settle the inputs every guide uses, asking only for what the user has not given:
+- `<target>` — the project directory. If it exists and is not empty, confirm with the user before writing anything into it.
+- project name — lowercase, matching `^[a-z0-9][a-z0-9-]*$` (used for `package.json` / settings).
+- project title — one line, for headings and `__TC_PROJECT_TITLE__` (defaults to the name).
+- one-sentence description.
+- CI host — GitHub Actions or Azure DevOps.
 
 **Step 2** — Load the guide. Replace `<skill-dir>` with this skill's own directory — Claude Code prints it as **"Base directory for this skill"** when the skill loads; substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill's directory the same way.
 

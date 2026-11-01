@@ -19,7 +19,7 @@ All other tasks and skill authors must follow these conventions exactly.
 - **Definition:** Markdown files that carry the actual implementation instructions.
 - **Never registered:** Reference files are never listed as skills. Claude only reads them when a registered SKILL.md explicitly `cat`s them.
 - **Loaded at runtime:** A registered SKILL.md detects context and issues a `cat` command pointing to the correct reference file.
-- **Reference paths use the `<skill-dir>` placeholder** — this skill's own directory, which the tool provides at invocation (Claude Code prints it as **"Base directory for this skill"**). The agent substitutes the literal path. Within-skill: `cat "<skill-dir>/<path>"`. Sibling skill: `cat "<skill-dir>/../<other-skill>/<path>"`. Plugin root: `<skill-dir>/../../`. **Do NOT** hardcode `$HOME/.claude/plugins/...` (install-location-specific; breaks outside Claude Code) and **do NOT** use `${CLAUDE_SKILL_DIR}` (empty in agent-run bash — it only populates for CC `!`-injection, not the agent-run `cat` blocks here). Lint-enforced.
+- **Reference paths use the `<skill-dir>` placeholder** — this skill's own directory, which the tool provides at invocation (Claude Code prints it as **"Base directory for this skill"**). The agent substitutes the literal path. Within-skill: `cat "<skill-dir>/<path>"`. Sibling skill: `cat "<skill-dir>/../<other-skill>/<path>"`. Plugin root: `<skill-dir>/../../`. Do not hardcode `$HOME/.claude/plugins/...` (install-location-specific; breaks outside Claude Code) and do not use `${CLAUDE_SKILL_DIR}` (empty in agent-run bash — it only populates for CC `!`-injection, not the agent-run `cat` blocks here). Lint-enforced.
 - **Location:** Live inside skill directories, alongside or beneath the SKILL.md that loads them.
 
 **Rule:** If a file has implementation steps in it, it is a reference file. If a file detects context and issues `cat` commands, it is a registered skill. These two roles must never be combined in a single file.
@@ -141,7 +141,7 @@ The body must contain only:
 3. `cat` commands pointing to reference files
 4. A brief "Prerequisites" note if needed (e.g., "Requires a project scaffolded with templatecentral:scaffold. See Step 0.")
 
-It must NOT contain: code blocks with implementation steps, file content templates, numbered how-to instructions, or prose duplicated from another skill.
+It must not contain: code blocks with implementation steps, file content templates, numbered how-to instructions, or prose duplicated from another skill.
 
 ---
 
@@ -201,14 +201,14 @@ Reference files belonging to de-registered agent utilities (build/test/review/cl
 Use when <trigger verb phrase> — <stack list>.
 ```
 
-- **Max 150 characters** (Unicode character count, not byte count — enforced by `/tc-audit`).
+- **Max 150 characters** (Unicode character count, not byte count — lint-enforced by `scripts/lint-skills.sh`).
 - **Front-load the trigger action.** The reader needs to know the "when" immediately.
 - **Stack list after the em-dash** (—). Only include stacks that are actually supported.
 - **Stack order:** FastAPI, NestJS, Next.js, Vite + React.
 
 ### Forbidden Words
 
-Never use these words in a description: `covers`, `provides`, `ensures`, `delivers`, `helps with`.
+Never use these words in a description: `covers`, `provides`, `ensures`, `delivers`, `helps with`. (Checked by `/tc-audit`, not by the lint.)
 
 ### Bad vs Good Examples
 
@@ -232,7 +232,7 @@ Never use these words in a description: `covers`, `provides`, `ensures`, `delive
 
 This section describes the canonical process for adding a new framework (e.g., Django) to the templateCentral skill system.
 
-> **Critical rule:** Do NOT create `django-add-auth`, `django-add-database`, or similar registered skills. New frameworks are added as reference files inside existing registered skills under the new nested structure.
+> **Rule:** do not create `django-add-auth`, `django-add-database`, or similar registered skills. New frameworks are added as reference files inside existing registered skills under the new nested structure.
 
 ### Step-by-Step: Adding Django
 
@@ -274,7 +274,7 @@ If Django will have more than 2 database variants, convert the skill to 3-level 
 
 **5. Run `/tc-audit` to verify all constraints pass.**
 
-The audit will check headers, line counts, description length, and nesting depth.
+Run `bash scripts/lint-skills.sh skills/` first: it checks headers, description length, nesting depth, template trees against their manifests, the fence snapshot and version floors. The audit then adds line counts and the checks the lint does not cover.
 
 **6. Update CONVENTIONS.md Section 6 with the new framework's detection signal.**
 
@@ -285,7 +285,7 @@ Add to the stack detection signals table below.
 | Framework | Detection Signal |
 |---|---|
 | FastAPI | `requirements.txt` contains `fastapi` |
-| NestJS | `nest-cli.json` exists |
+| NestJS | `nest-cli.json` exists, or `@nestjs/core` in `package.json` |
 | Next.js | `next.config.ts` or `next.config.js` or `next.config.mjs` exists |
 | Vite + React | `vite.config.ts` or `vite.config.js` exists AND no `next.config.*` |
 
@@ -308,14 +308,14 @@ When adding a new framework, define its detection signal clearly and add it to t
 - Stack names in file paths use lowercase with hyphens: `fastapi`, `nestjs`, `nextjs`, `vite-react`.
 - Variant names in leaf file paths use lowercase with hyphens: `sqlalchemy`, `drizzle`, `mongoose`.
 - When a single subdir is shared by multiple stacks (e.g., `typescript/` serves both NestJS and Next.js), prefix with the stack name to disambiguate: `nestjs-drizzle.md`, `nextjs-drizzle.md`.
-- Do not use `index.md` as a filename — every file should have a descriptive name.
+- Do not use `index.md` as a filename — every file should have a descriptive name. (Checked by `/tc-audit`, not by the lint.)
 - Scaffold reference files (`scaffold/<stack>/`, `scaffold/shared/`) follow their own internal structure; they are not subject to the shared-skill naming rule.
 
 ---
 
 ## Section 8: Audit Checklist (Manual Reference)
 
-This checklist matches what `/tc-audit` enforces automatically. Use it for manual spot-checks before committing.
+This checklist matches what `/tc-audit` checks; `scripts/lint-skills.sh` enforces a subset mechanically (description length, ref headers, nesting depth, template trees and manifests, fence snapshot, version floors). Use it for manual spot-checks before committing.
 
 ### Registered SKILL.md Files
 

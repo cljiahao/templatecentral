@@ -3,7 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### NestJS (TypeScript + Zod via nestjs-zod)
 
-The global `ZodValidationPipe` (`APP_PIPE`) validates every `createZodDto` `@Body()`/`@Query()` type. Plain-typed params (`@Param('id') id: string`) are NOT — give them an explicit pipe.
+The global `ZodValidationPipe` (`APP_PIPE`) validates every `createZodDto` `@Body()`/`@Query()` type. Plain-typed params (`@Param('id') id: string`) are not validated, so give them an explicit pipe.
 
 **1. DTOs**
 

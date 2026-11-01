@@ -158,7 +158,7 @@ export function ContactPage() {
 - Wrap in `Form` from `@/components/ui/form` (re-exports `FormProvider`; `CustomFormField` uses `useFormContext()`).
 - Set `defaultValues` for all fields.
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
-- **Client-side validation is UX, not security** — the backend endpoint MUST re-validate the same payload.
+- **Client-side validation is UX, not security** — the backend endpoint has to re-validate the same payload.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
 
 ## Validate

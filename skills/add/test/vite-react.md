@@ -243,14 +243,14 @@ Confirm the build succeeds and all tests pass.
 ### Rules
 
 - One behavior per `it()`
-- Mock only boundaries (`fetch`, service modules, integration clients) — NEVER internal utilities or React internals
+- Mock only boundaries (`fetch`, service modules, integration clients), not internal utilities or React internals
 - Query by role/text (`getByRole`, `getByText`, `getByLabelText`); `querySelector` or test IDs only when nothing semantic fits
 - Prefer `userEvent.setup()` over `fireEvent`
 - Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
-- Fresh `QueryClient` per test — NEVER share one
-- NEVER test implementation details — test what the user sees or the caller gets
-- NEVER test third-party behavior — only your use of it
-- NEVER share mutable state between tests
+- Fresh `QueryClient` per test
+- Test what the user sees or the caller gets, not implementation details
+- Test your use of third-party code, not its behavior
+- Tests do not share mutable state
 
 ## After Writing Code
 

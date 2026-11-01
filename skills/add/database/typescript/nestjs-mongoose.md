@@ -180,7 +180,7 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 - **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `DatabaseModule` in `src/database/`.
-- NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
+- Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
 - **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use the IAM `DatabaseModule` from `nestjs-mongoose-iam.md` (`MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties`); schema and query code are unchanged.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-mongoose-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 

@@ -45,7 +45,7 @@ export interface ProjectItem {
 
 ### 3. Create `constants.ts`
 
-Static data goes here — NOT in components:
+Static data goes here, not in components:
 
 ```ts
 // Values use the API `sort` format (`asc_<field>` / `desc_<field>`).
@@ -226,7 +226,7 @@ After creating all files:
 ## Rules
 
 - **Direct imports** OK within the same feature
-- NEVER import across features — promote shared code (used by 2+) to `components/widgets/` or `lib/`
+- Do not import across features; promote shared code (used by 2+) to `components/widgets/` or `lib/`
 - The barrel exports only the public API
 - Write `types.ts` before components
 
@@ -252,7 +252,7 @@ npx shadcn@latest add <component-name>
 It installs into `src/components/ui/`; never hand-create primitives there.
 
 Rules:
-- NEVER add boolean flag props to configure variants — prefer composition with children
+- Prefer composition with children over boolean flag props for variants
 - Add exports to the folder's `index.ts` barrel
 
 ## After Writing Code

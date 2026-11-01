@@ -86,7 +86,7 @@ export function CreateProjectForm() {
 }
 ```
 
-`CustomFormField` (`src/components/widgets/custom-form-field.tsx`) takes `name`, `label`, optional `description`, and a single input child — it wires the Controller, label, and error message internally via `useFormContext()`. Do NOT wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it.
+`CustomFormField` (`src/components/widgets/custom-form-field.tsx`) takes `name`, `label`, optional `description`, and a single input child — it wires the Controller, label, and error message internally via `useFormContext()`. Do not wrap it in `FormField`/`FormControl`/`FormItem` or spread `{...field}` onto it.
 
 **3. File Upload with Server-Side Validation (Critical)**
 
@@ -252,11 +252,11 @@ export async function fetchProject(id: string): Promise<Project> {
 
 ## Rules
 
-- Schemas live in `schemas/` — NEVER define or export a schema from a component file
-- Call the backend through an `ApiClient` subclass — NEVER raw `fetch` or a hardcoded `/api/...` path
+- Schemas live in `schemas/`, not in component files
+- Call the backend through an `ApiClient` subclass, not raw `fetch` or a hardcoded `/api/...` path
 - Always validate route params / query values with Zod before use, and `encodeURIComponent` any value interpolated into a path
 - Throw `APIError`, never a generic `Error` — and never embed validation field detail in the thrown message
-- NEVER render a backend error string to the user — log it, show a fixed generic message
+- Do not render a backend error string to the user; log it and show a fixed generic message
 
 ## Testing / Verification
 

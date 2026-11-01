@@ -9,6 +9,10 @@
 cat "<skill-dir>/database/drizzle-to-kysely.md"
 ```
 
+**Before Step 1**, create a migration branch so every change below (packages, scripts, deletions) is reviewable and revertible as one unit:
+
+`git checkout -b migrate/drizzle-to-kysely`
+
 ---
 
 ### Step 2 — Update `package.json` scripts
@@ -25,7 +29,7 @@ Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add:
 
 ### Step 3 — Delete Drizzle files
 
-> **Gate — these are user files.** Create a migration branch and get explicit user confirmation before running the deletions below; never delete user code without it.
+> **Gate — these are user files.** Get explicit user confirmation before running the deletions below; never delete user code without it. The migration branch already exists (created before Step 1), so skip the first line if you are on it.
 
 ```bash
 git checkout -b migrate/drizzle-to-kysely   # then confirm with the user before the rm commands

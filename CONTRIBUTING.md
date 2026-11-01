@@ -66,7 +66,7 @@ docs(readme): update skills table
 
 ## Scheduled loops
 
-Two monthly GitHub Actions workflows run automatically on the 1st of each month. Both require Anthropic credentials: either the `ANTHROPIC_API_KEY` repository secret (API) or `CLAUDE_CODE_OAUTH_TOKEN` (Claude subscription — generate with `claude setup-token`). If neither secret is configured, scheduled runs **skip gracefully** with a notice instead of failing. Either workflow can also be triggered manually via **Actions → Run workflow**.
+Two loop workflows exist. `scaffold-verify.yml` runs on the 1st of each month; `ecosystem-refresh.yml` keeps its schedule in the file but is disabled in the repository's Actions settings, so it runs only when a maintainer enables it or triggers it by hand. Both require Anthropic credentials: either the `ANTHROPIC_API_KEY` repository secret (API) or `CLAUDE_CODE_OAUTH_TOKEN` (Claude subscription — generate with `claude setup-token`). If neither secret is configured, scheduled runs **skip gracefully** with a notice instead of failing. Either workflow can also be triggered manually via **Actions → Run workflow**.
 
 | Workflow | Schedule | What it does |
 |---|---|---|

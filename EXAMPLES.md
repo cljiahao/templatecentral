@@ -39,7 +39,7 @@ User: add a settings page
 
 ---
 
-## FastAPI (Python 3.13 + Pydantic v2)
+## FastAPI (Python 3.14 + Pydantic v2)
 
 ```
 User: scaffold a FastAPI backend called "api"

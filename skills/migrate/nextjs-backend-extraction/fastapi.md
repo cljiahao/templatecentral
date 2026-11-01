@@ -12,7 +12,7 @@ Moves `src/app/api/` and the integrations it uses into a sibling FastAPI project
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 FastAPI deltas:** In 1d, the TS base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved (Phase 5 uses `httpx`). Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → PyMongo async / None detected]`.
+**Phase 1 FastAPI deltas:** In 1d, the TS base clients (`fetch-client.ts`, `axios-client.ts`) are not moved (Phase 5 uses `httpx`). Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → PyMongo async / None detected]`.
 
 ---
 

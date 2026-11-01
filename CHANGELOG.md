@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- A real scaffold of all four stacks, run by an agent that followed the skills as written, passed every project gate (install, lint, typecheck, build, tests, `verify-harness.sh`) but failed `check-golden.sh --tree`. Three causes, all fixed:
+  - Edits the kit told the agent to make by hand now ship in the templates: the build-artefact `Read` denies in both `settings.json` variants, `.claude/skill-usage.log` in each stack `.gitignore`, and `lefthook` in the FastAPI `requirements-dev.txt`.
+  - `check-golden.sh --tree` now requires, but does not compare, the files the guides tell the agent to customise (branding, project settings, `docs/CONSTITUTION.md`), listed in `tests/golden/user-edited.txt`.
+  - The documentation kit and the `readme` CI gate skip `.lefthook/`, so no README lands in the git-hook folder.
+- Scaffold flow: `templatecentral:scaffold` settles the target, name, title, description and CI host up front; `CLAUDE.md` and task management run before kit Step E so the manifest hashes them; nextjs 6d runs before Steps E–H like the other stacks; `__TC_PROJECT_TITLE__` takes the project title; the TS final format pass uses `pnpm format`; the nextjs `.prettierignore` skips the governance markdown; FastAPI runs `lefthook install` after Step 0.
+- `add` database guides that replace `src/api/routers/auth.py` keep the cookie-mode `/auth/session` and `/auth/logout` routes; the pymongo and Beanie guides name where `security.py` comes from; sqlalchemy-iam reuses only sqlalchemy's auth section; `add/SKILL.md` defines `<target>`.
+- `migrate`: the migration branch is cut before any change, a stack with no database leaf stops cleanly, and the phase-4 step after 4f-3 is 4g.
+- Docs: SECURITY supported versions (7.x), README scripts tree and test counts, the scheduled-loop wording, the Python 3.14 example heading, and CONVENTIONS enforcement claims.
+
+### Changed
+- Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files and code fences are unchanged.
+
 ---
 
 ## [7.2.0] — 2026-11-01

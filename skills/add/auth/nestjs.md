@@ -33,8 +33,7 @@ Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `temp
 
 #### 1. Create Auth Module Directory
 
-Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nestjs/template/` into the project per `<skill-dir>/auth/nestjs/template.manifest`, and writes nothing, ending with a `STOP:` line, when a path is in the way. It creates `src/modules/auth/` (flat — no subdirectories, matching the template's module structure) and the two test files of Step 13:
-- module, controller, service, dto, `jwt.strategy`, `jwt-auth.guard`, `roles.decorator`, `roles.guard`, `ownership` (`.ts`)
+Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nestjs/template/` into the project per `<skill-dir>/auth/nestjs/template.manifest`, and writes nothing, ending with a `STOP:` line, when a path is in the way. It creates `src/modules/auth/` (flat — no subdirectories, matching the template's module structure) with the files of Steps 2 and 4–9, and the two test files of Step 13.
 
 #### 2. Define DTOs
 
@@ -76,7 +75,7 @@ JWT_SECRET=<generate with: openssl rand -hex 32>
 JWT_EXPIRES_IN_SECONDS=1800
 ```
 
-NEVER use a fallback like `?? ''` or `|| 'change-me'` for secrets.
+Do not use a fallback like `?? ''` or `|| 'change-me'` for secrets; a missing secret should stop the app at boot.
 
 #### 4. Create JWT Strategy
 
@@ -291,7 +290,7 @@ Target: cap auth attempts at roughly 3 per 15 minutes per IP. Install `@nestjs/t
 pnpm add @nestjs/throttler
 ```
 
-Register globally in `AppModule` (import + guard) with a generous default — the global `ThrottlerGuard` applies this limit to EVERY endpoint, so the strict auth limit must NOT live here:
+Register globally in `AppModule` (import + guard) with a generous default — the global `ThrottlerGuard` applies this limit to every endpoint, so the strict auth limit does not belong here:
 
 ```typescript
 import { ThrottlerModule, ThrottlerGuard, minutes } from '@nestjs/throttler';

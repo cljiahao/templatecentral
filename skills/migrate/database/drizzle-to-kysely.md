@@ -4,6 +4,8 @@
 
 ## Shared Steps — Drizzle to Kysely Migration
 
+Steps 2, 3, 4, 6 and 7 are stack-specific and live in the stack leaf (`nestjs.md` or `nextjs.md`); this file holds the steps both stacks share.
+
 ### Step 1 — Swap packages
 
 ```bash

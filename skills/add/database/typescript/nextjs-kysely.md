@@ -117,7 +117,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src
 
 Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrations/001_initial.ts` by the copy step; do not re-type it.
 
-Create a migration runner script at **`src/integrations/database/migrate.ts`**:
+Migration runner script, **`src/integrations/database/migrate.ts`** (copied above):
 
 Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src/integrations/database/migrate.ts` by the copy step; do not re-type it.
 
@@ -202,8 +202,8 @@ Confirm the build succeeds with no type errors.
 - **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
+- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config; query code is unchanged.
 
 ---

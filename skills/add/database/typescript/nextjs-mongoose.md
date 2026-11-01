@@ -135,8 +135,8 @@ Confirm the build succeeds with no type errors.
 - **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
-- NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
+- Import database code only on the server, never in client components (`'use server'`, API routes, Server Components).
 - **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism; schema and query code are unchanged.
 
 ---

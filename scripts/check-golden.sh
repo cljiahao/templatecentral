@@ -20,6 +20,8 @@
 #     text on one line; AGENTS.md may carry appended text; package.json may carry added deps;
 #   - a file listed in tests/golden/formatter-owned.txt is compared after running its formatter
 #     over both sides, and fails if the formatter is unavailable.
+#   - a file listed in tests/golden/user-edited.txt must exist, but its content is not compared:
+#     the guide tells the agent to customise it (branding, project settings, CONSTITUTION).
 #   Skipped as generated at runtime: see tests/golden/exceptions.txt.
 #   File modes are not compared: the golden records content hashes only, and a checkout can change
 #   modes (umask, a Windows working tree). The exec bits of the template scripts are checked against
@@ -191,7 +193,7 @@ excepted() {
 
 # compare_tree <combo> <expected-tree> <generated-tree> — prints MISSING/MISMATCH lines.
 compare_tree() {
-  python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" "$GOLDEN_DIR/$1.sha256" <<'PY'
+  python3 - "$1" "$2" "$3" "$GOLDEN_DIR/formatter-owned.txt" "$GOLDEN_DIR/$1.sha256" "$GOLDEN_DIR/user-edited.txt" <<'PY'
 import hashlib, json, os, re, subprocess, sys, traceback
 
 
@@ -203,7 +205,24 @@ def crash(kind, value, tb):
 # Exit 1 means differences were reported; any other nonzero exit is a crash and never an OK.
 sys.excepthook = crash
 
-combo, want, got, owned_file, golden_file = sys.argv[1:]
+combo, want, got, owned_file, golden_file, edited_file = sys.argv[1:]
+
+
+def user_edited():
+    """Paths the guide tells the agent to customise: they must exist, their content is not compared."""
+    stack, paths = combo.rsplit("-", 1)[0], set()
+    if os.path.isfile(edited_file):
+        for line in open(edited_file, encoding="utf-8"):
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            scope, path = line.split(None, 1)
+            if scope in ("*", stack):
+                paths.add(path.strip())
+    return paths
+
+
+EDITED = user_edited()
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
 PLACEHOLDER = re.compile(r"PROJECT_NAME_PLACEHOLDER|\[Project Name\]|__TC_[A-Z0-9_]+__")
 APPENDED = {"AGENTS.md"}
@@ -322,7 +341,7 @@ for rel, sha in sorted(golden.items()):
         report_symlink(rel); continue
     if not os.path.isfile(other):
         print(f"MISSING {combo} {rel}"); bad = 1; continue
-    if not os.path.isfile(full):
+    if not os.path.isfile(full) or rel in EDITED:
         continue
     a, b = open(full, "rb").read(), open(other, "rb").read()
     if a.rstrip(b"\n") == b.rstrip(b"\n"):

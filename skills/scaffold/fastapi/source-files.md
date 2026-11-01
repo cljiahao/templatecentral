@@ -1,14 +1,14 @@
 <!-- ref: scaffold/fastapi/source-files.md
      loaded-by: scaffold/SKILL.md
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:scaffold skill. -->
-## Part B — Config Files
+## Template notes — config files
 
 The config files are real files in `<skill-dir>/fastapi/template/`, listed in `<skill-dir>/fastapi/template.manifest`. Step 1 below copies them; do not re-type them. Notes on the ones that need context:
 
 - `requirements-dev.txt` — Dev-only dependencies, not installed in production Docker stages. `pytest-cov` is required by the seeded CI coverage gate (`pytest --cov=src --cov-report=xml`, harness-kit Step B3) — the FastAPI counterpart to the TS stacks' `@vitest/coverage-v8`.
 - `pyrightconfig.json` — Pins pyright to `.venv`, so `python -m pyright src/` resolves imports when the venv is not active.
 
-## Part C — Source Files
+## Template notes — source files
 
 The source files are real files in `<skill-dir>/fastapi/template/` (and `AGENTS.md` in `<skill-dir>/fastapi/template-agents/`), listed in `<skill-dir>/fastapi/template.manifest`. Steps 1 and 6 below copy them; do not re-type or modify them. Notes on the ones that need context:
 
@@ -30,7 +30,7 @@ Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shar
 
 Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
-Do NOT create `requirements.txt` yet — it is produced by `pip freeze` in Step 4.
+Do not create `requirements.txt` yet: Step 4 produces it with `pip freeze`.
 
 ### 2. Update project settings
 
@@ -81,7 +81,7 @@ python -m pyright src/     # zero type errors
 
 ### 6. Write project AGENTS.md
 
-Run kit Step **0** again as `TC_STACK=fastapi TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/fastapi/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project name. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
+Run kit Step **0** again as `TC_STACK=fastapi TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/fastapi/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project title. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
 
 Afterwards, check that no placeholder is left anywhere in the project:
 
@@ -101,7 +101,7 @@ cat "<skill-dir>/shared/harness-kit-enforcement.md"
 cat "<skill-dir>/shared/harness-kit-finalize.md"
 ```
 
-Execute kit Step **0** now as `TC_STACK=fastapi TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"` (harness template trees), then Steps **A through D** (settings.json with `TC_PART=settings`, hook notes, then FUTURE.md, CONSTITUTION.md and `/skill-audit` with `TC_PART=late`, each run of `tc-copy.sh` with `TC_STACK=fastapi`). The verify skill (6c) is already in place, which Step E requires.
+Execute kit Step **0** now as `TC_STACK=fastapi TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"` (harness template trees), then Steps **A through D** (settings.json with `TC_PART=settings`, hook notes, then FUTURE.md, CONSTITUTION.md and `/skill-audit` with `TC_PART=late`, each run of `tc-copy.sh` with `TC_STACK=fastapi`). The verify skill (6c) is already in place, which Step E requires. FastAPI runs `TC_PART=base` here rather than before the install: it has no `prepare` script for lefthook to hook into, so nothing at install time needs `lefthook.yml`. Once Step 0 has copied `lefthook.yml`, run `lefthook install` inside the venv (`requirements-dev.txt` already installed it) so the git hooks are active.
 
 ### 6c. Project skill files (`.claude/skills/`)
 
@@ -114,8 +114,6 @@ Ask whether any repeated workflow should become a project skill. Candidates:
 - `api-endpoint` — scaffold a new router + schema + service method
 
 If yes, create them in `.claude/skills/` and add a row to the `AGENTS.md` Skills table.
-
-Now execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E — includes the `api-verify` skill hash), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the fastapi `PostToolUse` line), and plugin install (Step H).
 
 ---
 
@@ -131,7 +129,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` into every Claude Code session; keep everything else in `AGENTS.md`.
 
-After creating it, add a `CLAUDE.md` entry to `seeded_files` in `.claude/harness.json` with its SHA-256 hash (see harness-kit-finalize.md Step E).
+Step E hashes it into `seeded_files` (it runs next).
 
 ### 8. Task management (optional)
 
@@ -141,6 +139,8 @@ Ask whether the user wants structured task management for complex features. If y
 printf '\n' >> AGENTS.md
 cat "<skill-dir>/fastapi/template-tail/task-management.md" >> AGENTS.md
 ```
+
+Then execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E — includes the `api-verify` skill hash), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the fastapi `PostToolUse` line), and plugin install (Step H).
 
 ### 9. Remove example code (optional)
 
@@ -155,9 +155,9 @@ FastAPI-specific steps (the skill covers these):
 
 ## Rules
 
-- Always create a virtual environment before installing dependencies; NEVER install packages globally
+- Install dependencies inside the project virtual environment, not globally, so the project stays isolated
 - **Never** commit `src/.env` or put secrets in generated `AGENTS.md` / `CLAUDE.md`
 - Verify the API starts and Swagger docs render before handing off; remove example code only after the user confirms the project runs
-- NEVER include `__pycache__/`, `log/`, `src/.env`, or `.venv/` when writing project files
-- NEVER consider scaffolding complete without a project `AGENTS.md` — verify it exists before handing off to the user
-- NEVER remove `conftest.py` or `factories/` when cleaning up example code — they're shared test infrastructure
+- Leave `__pycache__/`, `log/`, `src/.env` and `.venv/` out of the files you write; they are local artefacts
+- The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off
+- Keep `conftest.py` and `factories/` when removing example code; they are shared test infrastructure

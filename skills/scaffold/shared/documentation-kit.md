@@ -182,11 +182,12 @@ find . \( \
     -name secrets -o \
     -name .secrets -o \
     -name .claude -o \
+    -name .lefthook -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print
 ```
 
-**CI, secrets and `.claude` folders are pruned** because `protect-files.sh` blocks or asks on writes there; the `readme-freshness` gate never demands a README in them.
+**CI, secrets, `.claude` and `.lefthook` folders are pruned** because `protect-files.sh` blocks or asks on writes there; the `readme-freshness` gate never demands a README in them.
 
 **Respect the project's own `.gitignore` too.** After the `find`, drop any entry the project ignores. Without a git repository yet, the check below keeps everything:
 

@@ -139,7 +139,7 @@ export { logEvent } from './error-log-handler';
 
 ## No-PII Rule
 
-NEVER log passwords, tokens, email addresses, or other personal data.
+Do not log passwords, tokens, email addresses or other personal data; logs leave the user's control.
 
 ```bash
 # Grep check — run before committing

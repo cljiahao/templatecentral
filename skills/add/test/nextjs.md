@@ -253,10 +253,10 @@ function makeParams<T extends Record<string, string>>(values: T) {
 - Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
 - Call `vi.resetAllMocks()` in `afterEach` (or set `mockReset: true` in `vitest.config.ts`). `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test.
 - Descriptive names — `it('should return 404 when project not found')`
-- NEVER test implementation details — assert status and body
-- NEVER share mutable state between tests
-- NEVER skip error path tests — always test what happens when services throw, and assert the 500 body does not echo the internal error message
-- NEVER hardcode URLs in assertions — test the response shape and status code
+- Assert status and body, not implementation details
+- Tests do not share mutable state
+- Test the error paths: what happens when services throw, and assert the 500 body does not echo the internal error message
+- Assert the response shape and status code, not hardcoded URLs
 
 ## After Writing Code
 

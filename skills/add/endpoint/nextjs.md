@@ -33,7 +33,7 @@ src/app/api/
 
 Keep route handlers thin — delegate to server-side data access:
 
-> **Important**: handlers access data via `integrations/` — NOT the feature's `api/` services, which `fetch('/api/...')` and would call the route itself. Data access below is a **placeholder** for the database or integration capability.
+> Handlers access data via `integrations/`, not the feature's `api/` services, which `fetch('/api/...')` and would call the route itself. Data access below is a **placeholder** for the database or integration capability.
 
 > **Wrap every handler in `withLogging`** — Next.js has no global request logging, and `pnpm check` fails on any unwrapped route.
 
@@ -176,13 +176,13 @@ Build and tests pass; the route answers correctly via `curl` or the browser.
 ## Rules
 
 - **Tests are mandatory** — never add or change `src/app/api/**` without new or updated tests under `test/api/` in the same change.
-- Keep handlers thin — NEVER put business logic in them
-- Use `handleApiError()` for errors — NEVER return raw errors or stack traces
+- Keep handlers thin; business logic lives elsewhere
+- Use `handleApiError()` for errors; do not return raw errors or stack traces
 - Use `NextResponse.json()` for all responses
 - Use dynamic segments `[id]` for resource IDs
 - **Authenticate in the handler.** `src/proxy.ts` (after `templatecentral:add` (auth)) only checks session-cookie *presence* — it does not validate the session. Every non-public handler must call `const session = await auth.api.getSession({ headers: request.headers })` and return `new Response(null, { status: 401 })` when it is `null`, then enforce ownership/role checks. Without auth added, every API route is public — run `templatecentral:add` (auth) first
-- NEVER use `request.json()` unvalidated — Zod-parse, 400 on failure
-- NEVER expose internal error details
+- Zod-parse `request.json()` and return 400 on failure; do not use it unvalidated
+- Do not expose internal error details
 - Add every new API route to `src/lib/constants/routes.ts`
 
 ## After Writing Code

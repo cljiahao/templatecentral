@@ -17,5 +17,6 @@
 #   src/components/ui/ (shadcn output), .claude/harness.json (seeded_at, origin_hash),
 #   .claude/.harness-base/ (snapshot of the seeded files).
 # Also relaxed in --tree mode: a placeholder matches one line of text, AGENTS.md may carry
-#   appended sections, package.json may carry added dependencies, and the files in
-#   tests/golden/formatter-owned.txt are compared after their formatter runs.
+#   appended sections, package.json may carry added dependencies, the files in
+#   tests/golden/formatter-owned.txt are compared after their formatter runs, and the files in
+#   tests/golden/user-edited.txt must exist but are not compared (the guide customises them).

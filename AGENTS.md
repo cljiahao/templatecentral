@@ -1,7 +1,7 @@
 <!-- templateCentral: plugin@6.0.0 -->
 # AGENTS.md — templateCentral
 
-templateCentral is a Claude Code plugin — a skill library for scaffolding production-ready apps. This is NOT an application itself.
+templateCentral is a Claude Code plugin — a skill library for scaffolding production-ready apps. It is not an application itself.
 
 ## Stack Detection
 
@@ -67,7 +67,7 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 **Claude Code is the primary, non-negotiable target** (marketplace install + full `.claude/hooks/` harness). Beyond that, templateCentral rides two cross-vendor open standards so its skills also work in OpenCode, Codex, and Antigravity unchanged — keep contributions on-standard:
 
-- **SKILL.md is portable.** Reference bundled/sibling files only via the `<skill-dir>` placeholder — the skill's own directory, which every compliant tool surfaces to the agent at invocation (CC/OpenCode print "Base directory for this skill", Codex injects the skill's `(file: …)` path). NEVER hardcode `$HOME/.claude/plugins/…` and NEVER use `${CLAUDE_SKILL_DIR}` (empty in agent-run ```bash``` blocks — CC only fills it for `!`-injection). Lint-enforced. See `skills/CONVENTIONS.md` §1.
+- **SKILL.md is portable.** Reference bundled/sibling files only via the `<skill-dir>` placeholder — the skill's own directory, which every compliant tool surfaces to the agent at invocation (CC/OpenCode print "Base directory for this skill", Codex injects the skill's `(file: …)` path). Do not hardcode `$HOME/.claude/plugins/…` and do not use `${CLAUDE_SKILL_DIR}` (empty in agent-run ```bash``` blocks — CC only fills it for `!`-injection). Lint-enforced. See `skills/CONVENTIONS.md` §1.
 - **AGENTS.md is the universal layer** (Linux Foundation / Agentic AI Foundation standard) — read natively by Codex/Antigravity and by Claude Code via the `CLAUDE.md = @AGENTS.md` import. Push durable routing/constraints here, not into CC-only surfaces.
 - **What stays CC-specific:** the in-agent live guards (`.claude/hooks/` + `settings.json`). The git-hook/CI half of the harness (lefthook + gitleaks + CI) is already tool-agnostic. Cross-tool support is strictly additive — it must never regress the Claude Code experience. Full analysis + per-tool adapter roadmap: `FUTURE.md` §6.
 
@@ -80,9 +80,9 @@ templateCentral seeds project-scoped skills into every scaffolded project. Under
 
 ## Rules
 
-- NEVER commit, push, or deploy without explicit user instruction
-- NEVER delete user code without confirmation
-- NEVER remove or ignore lockfiles without explicit user approval
-- NEVER scaffold into a non-empty target directory without explicit user confirmation
-- NEVER modify `.claude/`, `~/.claude/`, or shell config outside this repo
+- Commit, push or deploy only on explicit user instruction
+- Delete user code only after the user confirms
+- Remove or ignore lockfiles only with explicit user approval
+- Scaffold into a non-empty target directory only after explicit user confirmation
+- Do not modify `.claude/`, `~/.claude/` or shell config outside this repo
 - Trace capture stays OFF by default everywhere

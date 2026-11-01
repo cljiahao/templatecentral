@@ -12,3 +12,11 @@ pnpm-lock.yaml
 lefthook.yml
 .github/
 .gitleaks.toml
+
+# Governance markdown — human-approved (protect-files.sh gates AGENTS.md) and
+# alignment-sensitive. Prettier reflows headings and collapses the padded
+# file-layout tables, silently drifting them from the approved content.
+AGENTS.md
+CLAUDE.md
+docs/CONSTITUTION.md
+FUTURE.md

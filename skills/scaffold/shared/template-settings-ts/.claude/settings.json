@@ -12,7 +12,13 @@
       "Read(**/*.pem)",
       "Read(**/*.key)",
       "Read(./secrets/**)",
-      "Read(./.secrets/**)"
+      "Read(./.secrets/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/.next/**)",
+      "Read(./**/dist/**)",
+      "Read(./**/coverage/**)",
+      "Read(./**/.turbo/**)",
+      "Read(./**/*.tsbuildinfo)"
     ]
   },
   "hooks": {

@@ -86,7 +86,7 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` ([BACKEND]), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
-If yes → require a clean tree first. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (NEVER commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
+If yes → require a clean tree first. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (do not commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
 ```bash
 git rev-parse HEAD
 ```
