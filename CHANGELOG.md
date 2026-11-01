@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [7.2.0] — 2026-11-01
+
+Covers the 7.1 work (add and migrate fences become real template files) and the 7.2 work (prose prune, version floors only in `.claude/rules`); 7.1 had no separate release. appCentral products re-sync the harness once, at this release.
+
 ### Added
 - `tc-copy.sh` takes `TC_PART=leaf` with `TC_LEAF=<add|migrate>/<leaf stem>` and optional `TC_TREE`, so an `add` or `migrate` leaf copies its own template trees per its `template.manifest` with every refusal of the scaffold parts (symlinks, unlisted files, clashes, `..` and odd characters in the leaf path). It is the copy mechanism for the 7.1 fence-to-file moves.
 
