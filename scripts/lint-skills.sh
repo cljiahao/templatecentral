@@ -1138,6 +1138,23 @@ check_no_version_pins() {
   report "$pins" \
     "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs is the only exact pin)" \
     "Template package.json dependencies use floors (eslint-plugin-sonarjs exact by design)"
+
+  # A floor written as prose (≥X.Y outside a fence and outside inline code) restates a rule that
+  # .claude/rules/*.md owns, and drifts when the floor moves. Install commands and requirement lines
+  # sit in a fence or in backticks and are not matched.
+  header "Version floors in skill prose (SSOT: .claude/rules)"
+  local prose
+  # shellcheck disable=SC2016  # the awk program is single-quoted on purpose
+  prose=$(find "$SKILLS_DIR" -name '*.md' ! -path '*/template/*' ! -path '*/template-*/*' -print0 2>/dev/null \
+    | xargs -0 awk '
+        FNR == 1 { infence = 0 }
+        /^ {0,3}(```|~~~)/ { infence = !infence; next }
+        infence { next }
+        { line = $0; gsub(/`[^`]*`/, "", line); if (line ~ /≥ ?[0-9]+\.[0-9]+/) print FILENAME ":" FNR ": " $0 }
+      ' 2>/dev/null || true)
+  report "$prose" \
+    "Version floor in skill prose — state it in .claude/rules/<stack>.md and point there (install lines in a fence or backticks are fine)" \
+    "No version floors in skill prose"
 }
 
 check_no_bcrypt() {

@@ -1255,6 +1255,13 @@ passes owasp_sections_may_be_split_into_a_ref_file "OWASP LLM Top 10 v2.0 comple
 fails owasp_sections_in_a_template_tree_do_not_count "OWASP LLM Top 10 v2.0 completeness" owasp_section_only_in_tree "LLM10"
 fails owasp_fails_when_a_section_is_deleted "OWASP LLM Top 10 v2.0 completeness" owasp_section_deleted "LLM10"
 
+# ── check_no_version_pins: a ≥ floor in prose fails; one in a fence or inline code does not ────
+floor_in_prose() { printf '\nNeeds zz-lib ≥9.9 for this.\n' >> "$S/add/form/nextjs.md"; }
+# shellcheck disable=SC2016  # literal backticks are fixture text
+floor_in_code() { printf '\nInstall `zz-lib ≥9.9` first.\n\n```text\nzz-lib ≥9.9\n```\n' >> "$S/add/form/nextjs.md"; }
+fails prose_floor_fails "Version floors in skill prose" floor_in_prose "zz-lib ≥9.9"
+passes prose_floor_in_code_passes "Version floors in skill prose" floor_in_code
+
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
