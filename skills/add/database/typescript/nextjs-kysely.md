@@ -34,7 +34,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-kysely/template/src
 
 ##### IAM Auth Variant
 
-If the user requires AWS IAM authentication, install the additional package:
+For AWS IAM auth, also install:
 
 ```bash
 pnpm add @aws-sdk/rds-signer
@@ -198,18 +198,16 @@ Confirm the build succeeds with no type errors.
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- Database client and schemas live in `src/integrations/database/` — consistent with the integration layer pattern.
-- Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- Client and schemas live in `src/integrations/database/`.
+- Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config — no query code changes needed.
+- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config; query code is unchanged.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -5,7 +5,7 @@
 
 > **Add-on to `nestjs-kysely.md`** (the router loads both). Work through that guide's B1–B10, but use the `KyselyService` below instead of its standard B2 service and the IAM env fields below instead of its B7 `DATABASE_URL`; then run its **After Writing Code** steps.
 
-If the user requires AWS IAM authentication, install the additional package:
+For AWS IAM auth, also install:
 
 ```bash
 pnpm add @aws-sdk/rds-signer
@@ -74,7 +74,7 @@ export class KyselyService extends Kysely<Database> implements OnModuleInit, OnM
 
 > **IAM fields replace `DATABASE_URL`** — remove `DATABASE_URL` from both `envSchema` and `serviceConfig` when using IAM auth.
 
-Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if a required field is missing instead of surfacing as a runtime `undefined`:
+Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when a field is missing:
 
 ```typescript
 const envSchema = z.object({

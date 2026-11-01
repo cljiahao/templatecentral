@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **What already exists in the template:**
 - `structlog` in the installed dependencies (`requirements.txt`)
@@ -28,7 +21,7 @@ the marker.
 pip install "asgi-correlation-id>=4.3" && pip freeze > requirements.txt
 ```
 
-Define the middleware as a module-level function — `app` does not exist at import time (the scaffold builds it inside `start_application()`), so a top-level `@app.middleware("http")` decorator raises `NameError`.
+Define the middleware as a module-level function — `app` is built inside `start_application()`, so a top-level `@app.middleware("http")` raises `NameError`.
 
 ```python
 # src/app.py
@@ -64,9 +57,9 @@ async def log_requests(
     return response
 ```
 
-Keep `CorrelationIdMiddleware`'s default UUID validator — it discards a malformed inbound `X-Request-ID` and generates a fresh one, so a client cannot inject arbitrary text (newlines, fake fields) into every log line via the header.
+Keep `CorrelationIdMiddleware`'s default UUID validator — it replaces a malformed `X-Request-ID`, so clients cannot inject text (newlines, fake fields) into log lines.
 
-Register both middlewares inside `start_application()`, the same way the scaffold's `configure_*` helpers register things. Middleware registration is LIFO — the **last** registered runs outermost — and `CorrelationIdMiddleware` must wrap the request logger so the correlation id contextvar is already set when `log_requests` reads it. So register `log_requests` **first** and `CorrelationIdMiddleware` **last**:
+Register both inside `start_application()`. Registration is LIFO (last runs outermost), and `CorrelationIdMiddleware` must wrap the logger so the id is set when `log_requests` reads it — so register `log_requests` **first** and `CorrelationIdMiddleware` **last**:
 
 ```python
 # src/app.py — inside start_application(), after the other configure_*(app) calls
@@ -102,9 +95,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=lifespan, title=common_settings.PROJECT_NAME, ...)
 ```
 
-`user_id` is `None` until authentication is wired — after `templatecentral:add` (auth), add a `request: Request` parameter to `get_current_user` and set `request.state.user_id = user_id` before returning. `log_requests` reads `request.state` only after `await call_next(request)` completes (which runs the full dependency chain), so it picks up the value automatically with no other change needed.
+`user_id` is `None` until authentication is wired — after `templatecentral:add` (auth), add a `request: Request` parameter to `get_current_user` and set `request.state.user_id = user_id` before returning. `log_requests` reads `request.state` after `await call_next(request)`, so it picks the value up with no other change.
 
-Unhandled exceptions are already logged via the `Exception` handler in `src/error_handler.py` (`logger.exception`). No extra wiring for Tier 1.
+Unhandled exceptions are already logged by the `Exception` handler in `src/error_handler.py`; Tier 1 needs no wiring.
 
 #### Tier 2 — Standard (+ Tier 1)
 
@@ -137,9 +130,9 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
     return TokenResponse(access_token=token)
 ```
 
-Add the equivalent `try`/`except` + `logger.info`/`logger.warning` pair to `/auth/register` and any other auth endpoint you add (e.g. logout, token refresh) once it exists — none of those beyond `/login` and `/register` are part of the base `add (auth)` skill.
+Add the same `try`/`except` + `logger.info`/`logger.warning` pair to `/auth/register` and any later auth endpoint (logout, token refresh).
 
-Access denied — log in your auth dependency once you've added role-based access control (roles are illustrative here; the base `get_current_user` has no concept of roles until you add a database-backed user model):
+Access denied — log in your auth dependency once roles exist (illustrative; base `get_current_user` has no roles until a database-backed user model):
 
 ```python
 # src/api/dependencies/auth.py  (example — adapt once you have a User model with roles)
@@ -285,6 +278,4 @@ grep -i "password\|secret\|token\|authorization\|cookie" <log-output>
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

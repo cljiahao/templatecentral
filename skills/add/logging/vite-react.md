@@ -7,33 +7,26 @@
 - `src/lib/errors/error-log-handler.ts` — `logError(label, error)` (console-JSON output, typed for `APIError` / `Error` / unknown)
 - `src/lib/errors/api-error.ts` — `APIError` with `statusCode` and `data`
 - `src/components/layout/error-boundary.tsx` — class component with `componentDidCatch` (render-phase errors)
-- `src/lib/errors/global-handlers.ts` — `registerGlobalErrorHandlers()` wiring `window.onerror` + `unhandledrejection`, registered in `main.tsx`. Together with the ErrorBoundary this is full client-side error coverage: render-phase (boundary) + async/event/promise (global handlers).
+- `src/lib/errors/global-handlers.ts` — `registerGlobalErrorHandlers()` wiring `window.onerror` + `unhandledrejection`, registered in `main.tsx`. With the ErrorBoundary this covers render-phase and async/event/promise errors.
 - `src/lib/errors/index.ts` — barrel re-exporting `logError` and `registerGlobalErrorHandlers`
 
 > **Coverage rule (the client analogue of "wrap every route"):** every uncaught error must reach `logError`, and every API call should flow through one logged client (`src/lib/clients/`) rather than a raw `fetch`. The ErrorBoundary + global handlers cover the first; the second is `FetchClient`: backend calls go through `ApiClient` subclasses (`templatecentral:add (feature)`, `(pagination)`, `standards (validation-patterns)`, the batcher below) and external APIs through `FetchClient` subclasses (`templatecentral:add (integration)`). The one deliberate raw-`fetch` exception is the auth service's three session calls (`templatecentral:add (auth)`).
 
-> **Production upgrade path:** the homegrown console-JSON + batcher below is vendor-free and right for a scaffold default. For production error tracking, the community standard is **Sentry** (`@sentry/react`) — it auto-installs the ErrorBoundary wrapper + `window.onerror` + `unhandledrejection`, and adds source-map symbolication, breadcrumbs, release tracking, and PII scrubbing (`beforeSend`). Adopt it when you have a DSN; it supersedes the manual handlers above. OpenTelemetry's browser SDK is still experimental — not a client error-tracking replacement yet.
+> **Production upgrade path:** the vendor-free batcher below is the default. With a DSN, adopt **Sentry** (`@sentry/react`) — it installs the boundary and global handlers and adds symbolication, breadcrumbs, releases and PII scrubbing (`beforeSend`), superseding the manual handlers. OpenTelemetry's browser SDK is still experimental.
 
-This skill extends `logError` with a `logEvent` companion, adds a breadcrumb buffer, and wires batched delivery to a backend `/logs` endpoint (or console-JSON fallback in dev).
+This adds `logEvent` beside `logError`, a breadcrumb buffer, and batched delivery to a backend `/logs` endpoint (console-JSON in dev).
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-> **Step order matters.** `error-log-handler.ts` imports from `@/lib/logging/breadcrumbs`, so the breadcrumb module (Step 1) must exist before the handler is extended (Step 2). Executing these out of order leaves a broken import and a failing `pnpm build`.
+> **Step order matters.** `error-log-handler.ts` imports `@/lib/logging/breadcrumbs`, so Step 1 must precede Step 2 or `pnpm build` fails.
 
 ### 1. Create `src/lib/logging/breadcrumbs.ts`
 
 Run `TC_PART=leaf TC_LEAF=add/logging/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/logging/vite-react/template/` (listed in `<skill-dir>/logging/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-An in-memory ring buffer (last 20 entries) attached to every error report. Labels are **scrubbed on the way in**, not on the way out — a breadcrumb is written once and read on every subsequent error report, so redacting at the entry point is the only place the guarantee holds:
+An in-memory ring buffer (last 20 entries) attached to every error report. Labels are **scrubbed on the way in** — a breadcrumb is written once and read by every later report, so entry is the only place redaction holds:
 
 Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/breadcrumbs.ts` by the copy step; do not re-type it.
 
@@ -54,7 +47,7 @@ export const logEvent = (name: string, data?: Record<string, unknown>): void => 
 };
 ```
 
-Then attach breadcrumbs to error logs. `error.data` is the **raw, unfiltered response body** from the backend — it can contain the submitted payload, a session identifier, or an internal stack trace, and none of that should be shipped off-device. Keep it in the dev console only; send just `statusCode` + `message` onward:
+Then attach breadcrumbs to error logs. `error.data` is the **raw backend response body** (payloads, session ids, stack traces) — keep it in the dev console only and send just `statusCode` + `message` onward:
 
 ```ts
 import { addBreadcrumb, getBreadcrumbs } from '@/lib/logging/breadcrumbs';
@@ -82,7 +75,7 @@ Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/lo
 
 Wire `enqueueLog` into `logError` and `logEvent`:
 
-Only allowlisted fields cross this boundary — `enqueueLog` POSTs to a backend, so anything passed here leaves the browser. Pass `statusCode` and the error `message`; never `error.data`, never the caught error object itself:
+Only allowlisted fields cross this boundary — `enqueueLog` POSTs off the browser. Pass `statusCode` and `message`; never `error.data` or the error object:
 
 ```ts
 // src/lib/errors/error-log-handler.ts — add at the end of each branch
@@ -153,9 +146,9 @@ NEVER log passwords, tokens, email addresses, or other personal data.
 grep -rn "password\|secret\|token\|api_key\|email\|phone\|address\|credit_card" src/lib/logging/ src/lib/errors/
 ```
 
-Review every match: hits in comments and in `redactLabel` are expected; a hit in a value passed to `logEvent` / `enqueueLog` must be removed before the code ships.
+Hits in comments and `redactLabel` are expected; remove any in a value passed to `logEvent` / `enqueueLog`.
 
-**The grep is necessary but not sufficient.** It scans source text for literal keywords; it cannot see what a value actually holds at runtime. The two payloads that carry PII in this design contain no such keyword anywhere in the source:
+**The grep is necessary but not sufficient** — it sees source keywords, not runtime values. The two PII carriers here contain no such keyword:
 
 | Runtime payload | Why grep misses it | Required control |
 |-----------------|--------------------|------------------|
@@ -183,6 +176,4 @@ Manually verify in dev mode (`pnpm dev`):
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

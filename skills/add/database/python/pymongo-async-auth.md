@@ -68,7 +68,7 @@ async def get_user(db: Db, user_id: str) -> dict:
 
 ### Step B — Replace `src/api/routers/auth.py`
 
-If rate limiting was added by the auth skill, preserve any existing `@limiter.limit` decorators and `request: Request` parameters when replacing this file:
+Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added:
 
 ```python
 from typing import Annotated
@@ -113,7 +113,7 @@ async def get_me(
 
 ### Step C — Lock down `src/api/routers/users.py`
 
-`POST /auth/register` now creates users, so remove `create_user` from the users router (and its service function and test) unless admins need a separate create path. Require a logged-in user on the rest — unauthenticated, `GET /users` lists every account's email:
+`POST /auth/register` now creates users — remove `create_user` from the router, service and tests unless admins need it, and require login on the rest (unauthenticated, `GET /users` lists every email):
 
 ```python
 router = APIRouter(prefix="/users", dependencies=[Depends(get_current_user)])

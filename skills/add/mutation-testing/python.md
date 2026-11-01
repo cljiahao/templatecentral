@@ -3,13 +3,9 @@
      prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Mutation Testing (mutmut)
 
-Add report-only mutation testing to a FastAPI project scaffolded from templateCentral. Uses mutmut (the `requirements-dev.txt` floor below resolves the current major).
+Report-only mutation testing with mutmut.
 
 > **Report-only by default.** The CI job uses `continue-on-error: true` — results appear in output without failing the build. To enforce a floor, run `mutmut export-cicd-stats` and threshold `killed / (total - skipped)` from `mutants/mutmut-cicd-stats.json` (`mutmut results` only lists surviving mutants).
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Dependencies
 
@@ -19,7 +15,7 @@ Add to `requirements-dev.txt` (create the file if absent):
 mutmut>=3.6.0
 ```
 
-> `>=3.6.0` is the floor for the `source_paths` key used in Step 1 — 3.5.x only reads the older `paths_to_mutate` (3.6+ still accepts it but warns it is deprecated). Verified against mutmut 3.8.0 (current).
+> The floor and why it is there: `.claude/rules/fastapi.md`.
 
 Install:
 
@@ -31,13 +27,7 @@ pip install -r requirements-dev.txt
 
 #### Step 0 — Verify context
 
-Check `AGENTS.md` line 1 for `<!-- templateCentral: fastapi@`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### Step 1 — Add mutmut configuration
 
@@ -90,6 +80,4 @@ mutmut results   # lists surviving (and untested) mutants — `mutmut show <name
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — confirm no errors after config addition
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check config correctness
+Then `cat "<skill-dir>/../build/SKILL.md"` (confirm no errors after config addition), then `cat "<skill-dir>/../review/SKILL.md"` (check config correctness).

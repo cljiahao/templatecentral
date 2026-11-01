@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **What already exists in the template:**
 - `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `main.ts`)
@@ -36,11 +29,9 @@ LoggerModule.forRoot({
 }),
 ```
 
-> Do NOT derive `user_id` in `pinoHttp.customProps`. pino-http evaluates `customProps` when the
-> request starts — before any guard runs — and again when the response finishes, so (verified on
-> NestJS 12.1 + `@nestjs/platform-fastify` + nestjs-pino 5.3 / pino-http 11) every log written
-> inside the handler carries `user_id: null`, and the "request completed" line carries the key
-> twice (`"user_id":null,"user_id":"u-123"`) — log backends that keep the first duplicate show null.
+> Do NOT derive `user_id` in `pinoHttp.customProps`: it runs before any guard and again at the end,
+> so handler logs carry `user_id: null` and the completion line has the key twice
+> (`"user_id":null,"user_id":"u-123"`) — backends keeping the first show null.
 > `assign()` adds the field once, to the in-handler logs and the completion line.
 
 > Add the key; do not replace the config object. Replacing it wholesale silently drops the
@@ -60,7 +51,7 @@ if (isServerError) {
 }
 ```
 
-App startup is already logged by the scaffold's `bootstrap()`. nestjs-pino's `Logger` keeps Nest's `(message, context)` signature — a second string argument becomes the context, so interpolate values into the message.
+Startup is already logged by `bootstrap()`. nestjs-pino's `Logger` keeps Nest's `(message, context)` signature — interpolate values into the message, since a second string becomes the context.
 
 #### Tier 2 — Standard (+ Tier 1)
 
@@ -124,7 +115,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 For Mongoose, the id is `user._id.toString()`. Log logout/refresh the same way if you add those endpoints.
 
-**Outbound HTTP calls** — go through an `@nestjs/axios` integration (`templatecentral:add (integration)`), whose service already logs failures with status + path only. To also log successes, time the `firstValueFrom(...)` call in that service and log `{ path, status_code, duration_ms }` — never the URL query, headers, or raw `AxiosError` (its `config.headers` carries the bearer token).
+**Outbound HTTP calls** — the `@nestjs/axios` integration service already logs failures (status + path). For successes, time `firstValueFrom(...)` and log `{ path, status_code, duration_ms }` — never the query, headers or raw `AxiosError` (its `config.headers` holds the bearer token).
 
 **Key domain events** — log in service methods for state changes (`this.logger` is an injected `PinoLogger`, as in the auth examples above):
 
@@ -227,10 +218,8 @@ grep -iE '"(password|secret|token|access_token|api_key|authorization|cookie|emai
 
 ## Production Requirement
 
-Ship logs to a separate, tamper-evident system (e.g. AWS CloudWatch, Datadog, OpenSearch Ingestion) — writing to local disk only is not sufficient; production log storage must be isolated from the application host.
+Ship logs to a separate, tamper-evident system (CloudWatch, Datadog, OpenSearch Ingestion) — production logs must not live only on the app host.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

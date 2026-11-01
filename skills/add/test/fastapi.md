@@ -3,33 +3,16 @@
      prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI
 
-Guide for writing tests in a FastAPI project scaffolded from templateCentral.
-
 **Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`).
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-If found → proceed to context check below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to context check below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-**Context check:** Confirm `src/api/routers/` contains at least one `.py` file.
-
-If not found → ⛔ STOP. Tell the user: "No routers found. Run
+**Context check:** Confirm `src/api/routers/` contains at least one `.py` file. If not, ⛔ STOP and tell the user: "No routers found. Run
 `templatecentral:add` (endpoint) first, then return here."
-
-If found → proceed to the sections below.
 
 ### Test Structure
 
@@ -145,11 +128,10 @@ def create_example_request(
     return {"name": name, "repeatCount": repeat_count}
 ```
 
-> **Why camelCase keys**: `BaseSchema` uses `alias_generator=to_camel`, so the API expects camelCase JSON. Factory return values must use camelCase keys (e.g., `"repeatCount"`) even though Python params use snake_case.
+> **camelCase keys**: `BaseSchema` uses `alias_generator=to_camel`, so factory return values use camelCase keys (`"repeatCount"`) though Python params are snake_case.
 
 Rules:
-- Sensible defaults; composable; use real constants where appropriate.
-- Create new factories when objects have many fields or are reused with variations.
+- Sensible, composable defaults; add a factory when an object has many fields or many variants.
 - Always use **camelCase keys** in factory dicts — they represent the API's JSON contract.
 
 ### Assertions
@@ -173,7 +155,6 @@ def test_is_eligible(age: int, expected: bool) -> None:
     assert is_eligible(age) == expected
 ```
 
-
 ### Running Tests
 
 ```bash
@@ -185,13 +166,11 @@ python -m pytest test/test_api/           # API tests only
 
 ### Rules
 
-- NEVER share mutable state between tests — each test constructs its own data
+- NEVER share mutable state between tests
 - NEVER use `unittest.mock.patch` when `monkeypatch` is available — prefer pytest idioms
-- NEVER mock what you own — use real objects via factories; mock only uncontrollable side effects (network, filesystem, time)
-- NEVER depend on test execution order — tests must pass in any order or in isolation
+- NEVER mock what you own — use factories; mock only network, filesystem, time
+- NEVER depend on test order
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

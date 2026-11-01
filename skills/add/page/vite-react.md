@@ -4,12 +4,6 @@
 
 # Add a Page
 
-Create a new page/route in a Vite + React project scaffolded from templateCentral.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ## Inputs
 
 - **Route path** — The URL path (e.g., `/settings`, `/dashboard/analytics`)
@@ -19,14 +13,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Create the Page Component
 
@@ -182,6 +169,4 @@ Confirm the build succeeds with no type errors and all tests pass.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

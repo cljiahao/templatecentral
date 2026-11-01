@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Kysely, auth stubs from templatecentral:add (auth) present (`src/modules/auth/auth.service.ts` exists). Loaded alongside nestjs-kysely.md (B3 types + B6 migrations must exist). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Completing Auth Integration
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
 **Step A — Update `src/database/types.ts` and add migration**
 
@@ -32,7 +32,7 @@ export type UserUpdate = Updateable<UsersTable>;
 
 **If `001_initial.ts` has not been applied yet:** add `hashed_password text NOT NULL` directly to the `createTable` call in `001_initial.ts`.
 
-**If `001_initial.ts` was already applied** (users table exists in the DB), create `src/database/migrations/NNN_add_auth.ts`, where `NNN` is the next unused number in that directory (e.g. `002` if only `001_initial.ts` exists, `003` if `002_projects.ts` is already there) — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed, so never reuse or back-fill a number:
+**If `001_initial.ts` was already applied**, create `src/database/migrations/NNN_add_auth.ts` with the next unused number (e.g. `002` after `001_initial.ts`, `003` if `002_projects.ts` is already there) — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed, so never reuse or back-fill a number:
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -120,6 +120,6 @@ export class AuthService {
 
 **Step C — `src/modules/auth/auth.module.ts` requires no changes**
 
-`KyselyService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`.
+`KyselyService` comes from the `@Global()` `DatabaseModule` — no need to list it in `AuthModule.providers`.
 
 Then run the **After Writing Code** steps of `nestjs-kysely.md` (build, then review).

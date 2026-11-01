@@ -4,16 +4,14 @@
 
 # TypeScript Database Stack Router
 
-Detect intent and ask for database type. If migration intent detected ("migrate/upgrade to IAM"), exit and say "Run `templatecentral:migrate`."
+Migration intent ("migrate/upgrade to IAM") → stop and say "Run `templatecentral:migrate`."
 
-Identify stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask: *"SQL (PostgreSQL) or MongoDB?"* — skip if user named a library.
+Stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask *"SQL (PostgreSQL) or MongoDB?"* unless the user named a library.
 
-For SQL and MongoDB, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. The Drizzle and Kysely leaf guides are PostgreSQL-only — if the user needs MySQL or SQLite, say so and adapt the guide's driver/dialect and schema imports manually.
-
-> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
+Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. Drizzle and Kysely guides are PostgreSQL-only; for MySQL or SQLite, say so and adapt driver, dialect and schema imports.
 
 | Stack | Library | Load |
-|-------|---------|------|
+|---|---|---|
 | NestJS | Drizzle | `cat "<skill-dir>/database/typescript/nestjs-drizzle.md"` |
 | NestJS | Kysely | `cat "<skill-dir>/database/typescript/nestjs-kysely.md"` |
 | NestJS | Mongoose | `cat "<skill-dir>/database/typescript/nestjs-mongoose.md"` |
@@ -21,18 +19,18 @@ For SQL and MongoDB, detect high-security signals (`regulated`, `iam`, `no-passw
 | Next.js | Kysely | `cat "<skill-dir>/database/typescript/nextjs-kysely.md"` |
 | Next.js | Mongoose | `cat "<skill-dir>/database/typescript/nextjs-mongoose.md"` |
 
-**NestJS + Kysely add-ons** — load alongside `nestjs-kysely.md` only when they apply (each is a sibling leaf; never skip the base guide):
+**NestJS + Kysely add-ons** — load with `nestjs-kysely.md` only when they apply (never skip the base guide):
 
 | Condition | Also load |
-|-----------|-----------|
-| AWS IAM auth required (high-security signal above) | `cat "<skill-dir>/database/typescript/nestjs-kysely-iam.md"` |
-| `src/modules/auth/auth.service.ts` exists (auth stubs from `templatecentral:add` auth) | `cat "<skill-dir>/database/typescript/nestjs-kysely-auth.md"` |
+|---|---|
+| AWS IAM auth required | `cat "<skill-dir>/database/typescript/nestjs-kysely-iam.md"` |
+| `src/modules/auth/auth.service.ts` exists | `cat "<skill-dir>/database/typescript/nestjs-kysely-auth.md"` |
 
-**NestJS + Mongoose add-ons** — load alongside `nestjs-mongoose.md` only when they apply (same rule):
+**NestJS + Mongoose add-ons** — same rule, with `nestjs-mongoose.md`:
 
 | Condition | Also load |
-|-----------|-----------|
-| AWS IAM auth required (high-security signal above — DocumentDB / Atlas with AWS IAM) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-iam.md"` |
-| `src/modules/auth/auth.service.ts` exists (auth stubs from `templatecentral:add` auth) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-auth.md"` |
+|---|---|
+| AWS IAM auth required (DocumentDB / Atlas) | `cat "<skill-dir>/database/typescript/nestjs-mongoose-iam.md"` |
+| `src/modules/auth/auth.service.ts` exists | `cat "<skill-dir>/database/typescript/nestjs-mongoose-auth.md"` |
 
-Run the chosen command(s) and follow the loaded guide(s) exactly.
+Run the chosen `cat`(s); follow the guide(s) exactly.

@@ -5,18 +5,11 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **1. Enhanced HTTP Exception Filter**
 
-This replaces the base scaffold's `HttpExceptionFilter` entirely — the response body shape changes from `{ statusCode, message }` to `{ error, details? }`. Update any existing client code, tests, or Swagger consumers written against the base shape; this is not an additive change.
+This replaces the scaffold's `HttpExceptionFilter`: the body changes from `{ statusCode, message }` to `{ error, details? }`. Update clients, tests and Swagger consumers of the old shape — it is a breaking change.
 
 ```ts
 // src/common/filters/http-exception.filter.ts
@@ -133,6 +126,4 @@ Any test asserting the old `{ statusCode, message }` body must be updated in the
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

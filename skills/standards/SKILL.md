@@ -3,7 +3,7 @@ name: templatecentral:standards
 description: Use when reviewing code quality, naming conventions, validation patterns, drift, or full-stack type contracts in a templateCentral project.
 ---
 
-**Step 1** — Identify the operation and stack from `AGENTS.md` and the user's request.
+**Step 1** — From `AGENTS.md` and the request, identify the operation and stack.
 
 | Operation | Description | Path |
 |---|---|---|
@@ -14,9 +14,6 @@ description: Use when reviewing code quality, naming conventions, validation pat
 
 Stacks: `fastapi`, `nestjs`, `nextjs`, `vite-react`
 
-**Step 2** — Cat the reference file:
-> `<skill-dir>` = this skill directory; Claude Code shows it as "Base directory for this skill" when the skill loads — substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill directory the same way.
-
-`cat "<skill-dir>/<path>"`
+**Step 2** — Run `cat "<skill-dir>/<path>"`. `<skill-dir>` is this skill's directory, shown as "Base directory for this skill" when it loads; substitute the absolute path (it is **not** a shell variable).
 
 **Step 3** — Follow the loaded guide exactly.

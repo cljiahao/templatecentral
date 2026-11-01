@@ -5,21 +5,17 @@
 
 The config files are real files in `<skill-dir>/vite-react/template/`, listed in `<skill-dir>/vite-react/template.manifest`. Step 1 below copies them; do not re-type them. Notes on the ones that need context:
 
-- `package.json` — Step 1 replaces `__TC_PROJECT_NAME__` in `"name"` with the project name (kebab-case) before `pnpm install`. Dependency versions use caret floors aligned with `.claude/rules/vite-react.md` and the current stable; `pnpm install` resolves the newest compatible. shadcn/ui Radix primitives and `@hookform/resolvers` are intentionally omitted — they are added by `npx shadcn@latest add` (Step 4) and `npx shadcn@latest add form` respectively. `@testing-library/jest-dom` and `@testing-library/react` are included in devDependencies; only `@testing-library/user-event` is added later by `templatecentral:add (test)`. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
-  - **ESLint 10** (`eslint ^10.12.0` + `@eslint/js ^10.0.1` — move them together; `@eslint/js` 10 peer-requires `eslint ^10`). Every plugin here peer-supports `^10` (`typescript-eslint` 8.x, `eslint-plugin-react-hooks` 7.1.1, `eslint-plugin-sonarjs` 4.x, `@eslint-community/eslint-plugin-eslint-comments` 4.8). ESLint 10's `js.configs.recommended` adds `no-unassigned-vars`, `no-useless-assignment`, and `preserve-caught-error` — rethrowing inside `catch` must pass `{ cause: err }` (`throw new Error('msg', { cause: err })`). Run the review utility (update mode) to move the whole lint toolchain forward as one unit.
-- `eslint.config.mjs` — `sonarjs.configs.recommended` enables ~230 of the plugin's 295 rules at `error` (bugs, code smell, tests, React/JSX). `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret), identical to the nextjs and nestjs scaffolds — the recommended rule set changes across minor versions, so bump all three together and re-verify. This is a client-only SPA (no secrets, cookies, or JWTs ever live here per the "NEVER put secrets in `VITE_*`" boundary), so the server-focused security tier is inert here and not called out separately — it stays on for any accidental server-shaped code (e.g. `no-clear-text-protocols`) but nothing is scoped for it. Mixing `sonarjs.configs.recommended` with a separate `plugins: { sonarjs }` block throws `Cannot redefine plugin "sonarjs"`; every block touching sonarjs rules must reuse the same `sonarjsPlugin` reference. Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
-- `docker/15-frame-protection.envsh` — The nginx image's entrypoint sources `/docker-entrypoint.d/*.envsh` (executable) before it renders `/etc/nginx/templates/` with envsubst, so the variables exported here reach `nginx.conf.template`. envsubst leaves an undefined `${VAR}` in place and nginx then refuses to start, so this script always exports both variables. It is sourced — never `exit` from it.
+- `package.json` — Step 1 replaces `__TC_PROJECT_NAME__` in `"name"` with the project name (kebab-case) before `pnpm install`. Versions are caret floors aligned with `.claude/rules/vite-react.md`. shadcn/ui Radix primitives and `@hookform/resolvers` are omitted — `npx shadcn@latest add` (Step 4) and `npx shadcn@latest add form` add them; `templatecentral:add (test)` adds `@testing-library/user-event`. Run the review utility (update mode — `cat "<skill-dir>/../review/SKILL.md"`) post-scaffold to freshen pins.
+  - **ESLint 10** (`eslint ^10.12.0` + `@eslint/js ^10.0.1` — move them together; `@eslint/js` 10 peer-requires `eslint ^10`). ESLint 10's `js.configs.recommended` adds `no-unassigned-vars`, `no-useless-assignment`, and `preserve-caught-error` — rethrowing inside `catch` must pass `{ cause: err }` (`throw new Error('msg', { cause: err })`). Run the review utility (update mode) to move the whole lint toolchain forward as one unit.
+- `eslint.config.mjs` — `eslint-plugin-sonarjs` is pinned exact (`4.2.2`, no caret), identical to the nextjs and nestjs scaffolds; its rule set changes across minor versions, so bump all three together and re-verify. Every block touching sonarjs rules reuses the one `sonarjsPlugin` reference (a second `plugins: { sonarjs }` throws `Cannot redefine plugin "sonarjs"`). Directive hygiene (`linterOptions` + `@eslint-community/eslint-plugin-eslint-comments`) keeps every `eslint-disable` scoped, described, and actually needed — see `templatecentral:standards` code-standards/comments.md.
+- `docker/15-frame-protection.envsh` — Sourced by the nginx entrypoint before envsubst renders `nginx.conf.template`. An undefined `${VAR}` stops nginx from starting, so it always exports both variables. Never `exit` from it.
 - `src/lib/constants/env.ts` — All env vars use `import.meta.env.VITE_*` — NEVER `process.env`.
 
 ## Part C — Source Files
 
 The source files are real files in `<skill-dir>/vite-react/template/` (and `AGENTS.md` in `<skill-dir>/vite-react/template-agents/`), listed in `<skill-dir>/vite-react/template.manifest`. Steps 1 and 7 below copy them; do not re-type or modify them. Notes on the ones that need context:
 
-- `src/features/example/schemas/index.ts` — Empty file: placeholder for Zod schemas added by the `templatecentral:add` (feature) skill.
-- `index.html` — Step 2 updates the `<title>` to the project name.
-- `src/pages/home.tsx` — Step 2 updates the `"Vite + React Template"` heading to the project name.
-- `src/components/layout/navbar.tsx` — Step 2 replaces `templateCentral` with the project name.
-- `src/components/layout/site-footer.tsx` — Step 2 updates the `creditText` default to project-appropriate text.
+- `src/features/example/schemas/index.ts` — Empty placeholder for Zod schemas added by `templatecentral:add` (feature).
 
 ---
 
@@ -76,7 +72,7 @@ npx shadcn@latest add accordion avatar button button-group card checkbox dialog 
 
 `button-group`, `field`, and `input-group` are registry components — the CLI owns them, so never hand-write or hand-edit those files. `src/components/widgets/custom-form-field.tsx` imports from `@/components/ui/field`, so the `field` install must succeed before the verification gate.
 
-shadcn ≥4.21 emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
+Current shadcn emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
 
 ### 6. Verification gate
 
@@ -117,7 +113,7 @@ Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Step
 
 ### 7c. Project skill files (`.claude/skills/`)
 
-`.claude/skills/vite-verify/SKILL.md` was copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored by Claude Code (flat files work only under `.claude/commands/`).
+`.claude/skills/vite-verify/SKILL.md` was copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored.
 
 ### 7d. Seed additional project skills
 

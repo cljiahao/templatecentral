@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 > **Migration note — response format change**
 > This skill replaces FastAPI's default error format (`{"detail": "..."}` / `{"detail": [...]}`)
@@ -201,7 +194,7 @@ async def get_project(project_id: str) -> ProjectResponse:
 
 Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
 
-**2b. Wiring** — already present: the scaffold's `start_application()` in `src/app.py` calls `configure_exceptions(app)`. Only replace the handler bodies; do NOT add a second `FastAPI(...)` or `configure_exceptions` call.
+**2b. Wiring** — `start_application()` already calls `configure_exceptions(app)`. Replace only the handler bodies; do NOT add a second `FastAPI(...)` or `configure_exceptions` call.
 
 ## Validate
 
@@ -215,6 +208,4 @@ python -m pytest test/ -v
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

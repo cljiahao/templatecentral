@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **1. Global Error Handler (Already Present)**
 
@@ -156,7 +149,7 @@ export const GET = withLogging<RouteContext<{ id: string }>>(async (request, { p
 
 **3. Error Boundary Components**
 
-Route-segment render errors are already handled by `src/app/error.tsx` (scaffold) and per-route `error.tsx` (`templatecentral:add (page)`). Add the boundaries below only for component-level isolation inside a page or for unhandled promise rejections. Both share one fallback:
+`error.tsx` files already handle route-segment render errors. Add these boundaries only to isolate a component inside a page or catch unhandled promise rejections. Both share one fallback:
 
 ```tsx
 // src/components/layout/error-fallback.tsx
@@ -213,12 +206,10 @@ pnpm build
 
 ### Next.js Error Boundary Tests
 
-> **Deps not in scaffold**: run `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom` (or `templatecentral:add (test)`). The `@vitest-environment jsdom` docblock keeps the scaffold's `node` default for API tests.
+> **Deps not in scaffold**: `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom`. The `@vitest-environment jsdom` docblock keeps `node` as the default for API tests.
 
 Copied verbatim from `<skill-dir>/error-handling/nextjs/template/test/error-boundary.test.tsx` by the copy step; do not re-type it.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -10,10 +10,10 @@ Every stack. Step order and the delta table are in `harness-kit.md`.
 
 ## Step C. Seed `FUTURE.md`, `docs/CONSTITUTION.md` and the `/skill-audit` skill
 
-Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late bash "<skill-dir>/shared/tc-copy.sh" "<target>"` with the `STACK` of Step 0, after the stack's verification gate and its format pass (prettier would reformat the two documents at an earlier pass). It copies three real files from `<skill-dir>/shared/template-late/` and refuses when any of them already exists:
+Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late bash "<skill-dir>/shared/tc-copy.sh" "<target>"` with the `STACK` of Step 0, after the stack's verification gate and its format pass. It copies three files from `<skill-dir>/shared/template-late/` and refuses when any already exists:
 
-- `FUTURE.md` — the design seams for AI collaboration patterns that are not yet activated.
-- `docs/CONSTITUTION.md` — the binding invariants document. It takes precedence over `AGENTS.md` and all skill guidance when there is a conflict.
+- `FUTURE.md` — design seams for AI collaboration patterns not yet activated.
+- `docs/CONSTITUTION.md` — binding invariants; wins over `AGENTS.md` and all skill guidance.
 - `.claude/skills/skill-audit/SKILL.md` — the Step B5 skill.
 
 ---
@@ -32,9 +32,9 @@ It must print nothing.
 
 ## Step E. Create `.claude/harness.json`
 
-**Prerequisites:** Run this step only after the verify skills (and `next-migrate` for nextjs) have been created in `.claude/skills/` — these are seeded by the stack file's verify-skill step (6c for fastapi/nestjs/nextjs, 7c for vite-react), which runs between the kit's Steps D and E. Do not run Step E before that step.
+**Prerequisites:** run only after the stack file's verify-skill step (6c for fastapi/nestjs/nextjs, 7c for vite-react) has created the verify skills (and `next-migrate` for nextjs).
 
-Compute SHA-256 hashes and write `.claude/harness.json`. CLAUDE.md is created in a later optional step — hash it conditionally.
+Compute SHA-256 hashes and write `.claude/harness.json`. Hash `CLAUDE.md` only if it exists.
 
 ```bash
 # Portable SHA-256: macOS ships shasum, minimal Linux images ship sha256sum.
@@ -99,7 +99,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 
 > `user-prompt-guard.<ext>` is `.cjs` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI. The kit seeds **9** hook scripts — one `seeded_files` entry each (`<sha256_hook_1>`…`<sha256_hook_9>`); `verify-harness.sh` exits 2 while any `<…>` placeholder remains.
 > The `AGENTS.md` (and `CLAUDE.md`) hashes written here are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`.
-> Omit the `CLAUDE.md` entry if `CLAUDE.md` does not exist yet — it is created in Step G (optional). If you create it there, append its entry to `seeded_files` with the hash at that point.
+> Omit the `CLAUDE.md` entry if it does not exist yet; Step G adds it if created there.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
 > On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml` — or omit both CI entries and the `ci-gates.sh` entry when Step B3 seeded neither because the project's pipelines already cover them. Add one entry per `.claude/hooks/local/*` script the loop above prints.
 
@@ -107,7 +107,7 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 
 ## Step E2. Seed the base snapshot (enables safe day-2 re-sync)
 
-Copy every seeded file into `.claude/.harness-base/` — a committed snapshot of the **as-seeded** content. This is the merge *base* that `templatecentral:migrate` Phase 5 uses to **3-way-merge** harness updates into the project without clobbering the user's edits (templateCentral can't re-render an old version like cruft/copier, so the base is snapshotted at seed time).
+Copy every seeded file into `.claude/.harness-base/` — a committed snapshot of the **as-seeded** content, the merge *base* `templatecentral:migrate` Phase 5 uses to **3-way-merge** harness updates without clobbering the user's edits.
 
 ```bash
 mkdir -p .claude/.harness-base
@@ -120,47 +120,45 @@ for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.c
 done
 ```
 
-**Commit** `.claude/.harness-base/` — it travels with the repo so collaborators and CI share the same merge base. It is tamper-protected by `protect-files.sh` (editing the base would poison a future re-sync merge); the harness verifier ignores it (it is the base, not a live enforcement file).
+**Commit** `.claude/.harness-base/`. `protect-files.sh` guards it; the harness verifier ignores it.
 
 ---
 
 ## Step E3. Generate per-folder documentation
 
-Seed the structural per-folder README convention (and, if the project opts in, Azure DevOps Code Wiki `.order` files) now that every source file, harness file, and project skill exists on disk:
+Seed the per-folder README convention (and opt-in Azure DevOps Code Wiki `.order` files) now that every file exists:
 
 ```bash
 cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 ```
 
-Follow it exactly — it determines the ADO Code Wiki and rich-content opt-ins (each asked once, then persisted in `.claude/harness.json`), enumerates every folder in the project, and writes or refreshes each folder's `README.md` (and `.order` files, if opted in).
+Follow it exactly.
 
 ---
 
 ## Step F. Create `.agents` symlink
 
-Create the cross-vendor symlink so the project works with any agent framework that resolves from `.agents/`:
+Create the cross-vendor symlink for tools that resolve from `.agents/`:
 
 ```bash
 ln -s .claude .agents
 ```
 
-This makes `AGENTS.md`, `settings.json`, `rules/`, `skills/`, and `hooks/` discoverable by Claude Code (`.claude/`) and any other tool that looks in `.agents/` — one source of truth, zero duplication.
-
-**Never commit the symlink** — the scaffold's `.gitignore` already lists `.agents`; verify the entry exists (add it if migrating an older project). A git-tracked symlink breaks Windows CI build agents (e.g. "Unable to load symbolic/hard linked file" on Azure DevOps hosted runners). The symlink is per-machine convenience; recreate it locally (or via a postinstall script) instead of tracking it.
+**Never commit the symlink** — verify `.gitignore` lists `.agents` (add it when migrating). A tracked symlink breaks Windows CI agents ("Unable to load symbolic/hard linked file" on Azure DevOps hosted runners).
 
 ---
 
 ## Step G. Post-scaffold agent workflow
 
-**AGENTS.md tail — always appended, single source:** None of the four stack templates or the two migrate templates embed the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail — this step is the *only* place it comes from, so it can never drift out of sync with what is actually shipped. After the stack-specific AGENTS.md is written, unconditionally append it, for a fresh scaffold and for a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md`, which the script reads (a migration runs `<skill-dir>/../scaffold/shared/tc-copy.sh`: change only that path). `tc-copy.sh` with `TC_PART=tail` builds the whole text first and appends it only when that worked, so a failure appends nothing. It appends to `<target>/AGENTS.md` and refuses when that file does not exist. The typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack inside the script; only `STACK` is yours to set:
+**AGENTS.md tail — always appended, single source:** the `## AI Harness` / `## Skills Security` / `## Git Workflow` / `## Skill capture` tail comes only from this step. After the stack-specific AGENTS.md is written, append it unconditionally, for a fresh scaffold and a migrate re-seed. The tail is the real file `<skill-dir>/shared/template-tail/AGENTS-tail.md`, which the script reads (a migration runs `<skill-dir>/../scaffold/shared/tc-copy.sh`: change only that path). `TC_PART=tail` builds the whole text first, so a failure appends nothing, and refuses when `<target>/AGENTS.md` does not exist. The typecheck command that replaces the marker `see delta table for stack command` (inside its parentheses) is fixed per stack inside the script; only `STACK` is yours to set:
 
 ```bash
 TC_STACK=<stack> TC_PART=tail bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-**Final format pass (TS stacks only — run before the utilities below):** every source/config file was formatted once early in the scaffold flow, but `FUTURE.md`, `docs/CONSTITUTION.md` (Steps C/D), every per-folder `README.md` (Step E3), and the AGENTS.md tail just appended above were all written *after* that pass — an untouched, byte-for-byte-correct scaffold otherwise fails its own `pnpm run check` (and CI's `quality` job) on files nobody edited. Run `pnpm exec prettier --write .` once now, over the whole project, before continuing. (FastAPI: not needed — `ruff format`/`ruff check` only ever touch `*.py`, and README/CONSTITUTION/FUTURE content is never `.py`.)
+**Final format pass (TS stacks only — run before the utilities below):** Steps C/D, E3 and the tail wrote files after the first format pass, so run `pnpm exec prettier --write .` once now, or `pnpm run check` and CI's `quality` job fail on files nobody edited. (FastAPI: not needed — ruff touches only `*.py`.)
 
-**Re-baseline the manifest (all stacks — after the tail append and the format pass, before the utilities below):** Step E hashed `AGENTS.md` before this step appended its tail, and the format pass may have rewritten other seeded files, so recompute every `origin_hash` from the files as they now stand and refresh the base snapshot. This is part of seeding, not a drift blessing — it runs once, here, before the first commit:
+**Re-baseline the manifest (all stacks — after the tail append and the format pass, before the utilities below):** the tail and the format pass changed seeded files, so recompute every `origin_hash` and refresh the base snapshot. Part of seeding, not a drift blessing — once, before the first commit:
 ```bash
 if command -v node >/dev/null 2>&1; then
   node -e 'const fs=require("fs"),cr=require("crypto"),f=".claude/harness.json",j=JSON.parse(fs.readFileSync(f,"utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(f,JSON.stringify(j,null,2)+"\n")'
@@ -178,7 +176,7 @@ bash .claude/verify-harness.sh
 ```
 If `CLAUDE.md` is created in this step, add its `seeded_files` entry before running the re-baseline.
 
-After the stack-specific AGENTS.md is written (with the shared tail fragment appended per above), the final format pass, and the re-baseline above, run the following agent skills in order. These are **on by default** — skipping requires explicit user confirmation and is not recommended.
+Then run these agent skills in order. They are **on by default** — skipping requires explicit user confirmation.
 
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
@@ -193,7 +191,7 @@ After the stack-specific AGENTS.md is written (with the shared tail fragment app
 
 ## Step H. Install Claude Code plugins
 
-**Claude Code users only.** Register the marketplaces, then install the plugins from them — `marketplace add` only registers a source, it does not install anything. These are **on by default** — skip only if the user explicitly opts out. Plugin installs are user-scoped, not project-directory-scoped.
+**Claude Code users only.** `marketplace add` only registers a source; then install. **On by default** — skip only if the user opts out. Installs are user-scoped.
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman

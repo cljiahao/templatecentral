@@ -3,18 +3,15 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 ## FastAPI Database Migration
 
-Migrates an existing SQLAlchemy (password auth) setup to SQLAlchemy + AWS IAM authentication.
-
-On the application side this is a **config-only change** — no schema or query code changes needed. The AWS-side prerequisites in Step 0 are not optional: without them the app fails at connect time with an opaque `PAM authentication failed` error.
+Moves SQLAlchemy password auth to AWS IAM auth. The app side is **config-only** (no schema or query changes). The Step 0 AWS prerequisites are not optional: without them connect fails with an opaque `PAM authentication failed`.
 
 > **Canonical source**: the session module (Step 2) and `alembic/env.py` block (Step 4) below
-> are duplicated verbatim from `add/database/python/sqlalchemy-iam.md` — treat that file as
-> canonical. `scripts/lint-skills.sh` fails the build if the two copies drift, so re-copy
-> rather than hand-editing here; the `sslmode` / `sslrootcert` connect args are the reason.
+> are duplicated verbatim from `add/database/python/sqlalchemy-iam.md` (canonical). The lint
+> fails if they drift: re-copy, never hand-edit, because they carry the `sslmode` / `sslrootcert` args.
 
 ### Step 0 — Prerequisites (AWS side, before any code change)
 
-Confirm all four with the user — this skill cannot do any of them:
+Confirm all four with the user; this skill cannot do them:
 
 1. **IAM database authentication is enabled on the RDS instance** — `aws rds modify-db-instance --db-instance-identifier <id> --enable-iam-database-authentication --apply-immediately` (Aurora: `modify-db-cluster`).
 2. **The database user is IAM-enabled** — connect as a master user and run `GRANT rds_iam TO <user>;` (PostgreSQL). A user without the `rds_iam` role will reject every IAM token.
@@ -158,7 +155,7 @@ RDS_CA_BUNDLE_PATH=/path/to/global-bundle.pem
 python -m pytest test/ -q
 ```
 
-All tests should pass. If the app starts and connects, the migration is complete.
+All tests pass and the app connects.
 
 ## After Writing Code
 

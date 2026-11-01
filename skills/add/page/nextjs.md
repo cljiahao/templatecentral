@@ -4,12 +4,6 @@
 
 # Add a Page
 
-Create a new page/route in a Next.js project scaffolded from templateCentral.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ## Inputs
 
 - **Route path** — The URL path (e.g., `/settings`, `/dashboard/analytics`)
@@ -20,14 +14,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Determine the Route Location
 
@@ -38,7 +25,7 @@ the marker.
 
 > **Public pages with auth installed:** `src/proxy.ts` redirects every path not in `PUBLIC_PATHS` to `/login`, route group or not. Add the new `PAGE_ROUTES` constant (Step 6) to `PUBLIC_PATHS` there, or the "public" page is login-gated.
 
-> **Dashboard pages require auth.** If `src/app/dashboard/` does not exist yet, run the `templatecentral:add` (auth) skill first — it creates the dashboard route group along with the full auth stack.
+> **Dashboard pages require auth.** No `src/app/dashboard/` yet → run `templatecentral:add` (auth) first; it creates the route group.
 
 > `proxy.ts` only gates routing on cookie presence — it is NOT the authoritative check. Every protected route group must additionally `await auth.api.getSession({ headers: await headers() })` in its `layout.tsx` and `redirect()` when null — see `templatecentral:add (auth)` Step 8.
 
@@ -150,18 +137,16 @@ export const PAGE_ROUTES = {
 pnpm build
 ```
 
-Confirm the build succeeds with no type errors. If adding a data-fetching page, verify the loading state renders correctly in the browser.
+Build passes; for a data-fetching page, the loading state renders in the browser.
 
 ## Rules
 
-- Always add `loading.tsx` for data-fetching routes — omitting causes a blank screen
-- One layout per concern — NEVER nest multiple layouts unless each serves a distinct purpose
+- Add `loading.tsx` to data-fetching routes
+- One layout per concern
 - Use route groups `(name)/` for shared layouts without URL impact
 - NEVER use `'use client'` in `page.tsx` components — prefer server components. Note: `error.tsx` requires `'use client'` (Next.js constraint)
-- NEVER create pages outside the established route groups (`(public)/` or `dashboard/`) without reason
+- Keep pages in the `(public)/` or `dashboard/` route groups
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

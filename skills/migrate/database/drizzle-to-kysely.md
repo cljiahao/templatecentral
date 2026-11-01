@@ -14,7 +14,7 @@ pnpm add -D kysely-codegen @types/pg tsx
 
 ### Step 2 — Update `package.json` scripts
 
-Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add the `migrate` script — the path differs per stack (see the leaf file for the exact path).
+Remove `db:generate`, `db:migrate`, `db:push`, `db:studio`. Add the `migrate` script (path per leaf).
 
 ### Step 5 — Create `types.ts`
 
@@ -41,11 +41,11 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 ```
 
-> **Tip**: Run `npx kysely-codegen` after connecting to generate types automatically from the live schema. Note it connects via a `DATABASE_URL` with password auth — which this migration removes — so point it at a temporary password-auth connection string for the run (e.g. `DATABASE_URL=postgresql://user:pass@host:5432/db npx kysely-codegen`).
+> **Tip**: `npx kysely-codegen` generates types from the live schema. It needs a password-auth `DATABASE_URL`, which this migration removes, so pass a temporary one for the run (e.g. `DATABASE_URL=postgresql://user:pass@host:5432/db npx kysely-codegen`).
 
 ### Step 8 — Write first Kysely migration for existing tables
 
-The file path differs per stack (see leaf file); the body is the same:
+Same body for both stacks (path per leaf):
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -72,7 +72,6 @@ export async function down(_db: Kysely<unknown>): Promise<void> {
 
 ### Step 9 — Query translation reference
 
-Drizzle → Kysely query translation reference:
 
 | Drizzle | Kysely |
 |---|---|
@@ -103,7 +102,7 @@ RDS_CA_BUNDLE_PATH=certs/rds-global-bundle.pem
 pnpm build
 ```
 
-Build must succeed with zero TypeScript errors. NestJS also runs `pnpm test` — all tests must pass.
+Build passes with zero TypeScript errors; NestJS also passes `pnpm test`.
 
 ## After Writing Code
 

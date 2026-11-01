@@ -3,7 +3,7 @@
      prereq: Stack = FastAPI, DB = MongoDB via PyMongo's native async driver (default MongoDB path). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + MongoDB (PyMongo async)
 
-PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer — no ODM, so the project stays on the scaffold's Python 3.14. Auth-stub completion lives in the sibling add-on `pymongo-async-auth.md`, which the router loads alongside this guide only when `templatecentral:add` (auth) ran first.
+PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer — no ODM, so the project stays on Python 3.14. Auth-stub completion is the sibling add-on `pymongo-async-auth.md`.
 
 ### M1. Install Dependencies
 
@@ -29,9 +29,9 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(description="MongoDB database name")
 ```
 
-Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
+Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
 
-Ask the user to add both to `src/.env` (agent edits to `.env` files are hook-blocked by design); document the placeholders in `src/.env.default`:
+Ask the user to add both to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 
 ```
 MONGODB_URL=mongodb://localhost:27017
@@ -161,7 +161,7 @@ async def update_user(
 
 ### M8. Local MongoDB and Tests
 
-mongomock does not support PyMongo's async API, so data-access tests run against a real MongoDB. Add a dev-only service to **`docker-compose.yml`** (bound to loopback — this instance has no auth):
+mongomock has no async API, so data-access tests use a real MongoDB. Add a dev-only service to **`docker-compose.yml`** (bound to loopback — this instance has no auth):
 
 ```yaml
 services:
@@ -178,7 +178,7 @@ volumes:
 
 Add `"integration: needs a running MongoDB"` to `markers` in `pyproject.toml`.
 
-**`test/conftest.py`** — settings are read at import and CI has no `src/.env`, so seed placeholders, and build the client without `with` so unit tests never open a MongoDB connection. Merge, don't overwrite: keep any seeding and fixtures already there (`SECRET_KEY` and `auth_headers` from `templatecentral:add` (auth)):
+**`test/conftest.py`** — seed placeholder settings (CI has no `src/.env`) and build the client without `with` so unit tests never connect. Merge, keeping existing seeding and fixtures (`SECRET_KEY` and `auth_headers` from `templatecentral:add` (auth)):
 
 ```python
 """Root conftest — shared fixtures available to all tests."""
@@ -228,7 +228,7 @@ Confirm all tests pass and the integration tests ran (not skipped).
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Opt-in only** — add a database only on request.
 - Never add Motor (deprecated) or mongomock (no async PyMongo support).
 - Domain models in `src/models/`, data access in `src/api/repositories/`, `database/` holds connection infrastructure only.
 - Keep `MONGODB_URL` in `src/.env` — NEVER hardcode credentials; leave TLS on outside dev.
@@ -239,6 +239,4 @@ Confirm all tests pass and the integration tests ran (not skipped).
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -4,26 +4,15 @@
 
 # Add a FastAPI Endpoint
 
-Guide for adding a new API endpoint following the router → service architecture.
+An API endpoint: router → service.
 
-> **Placeholder names**: All examples use a single resource stem, `my_thing` — schema, service, and router files are all `my_thing.py` in their respective directories, with classes `MyThingRequest` / `MyThingResponse`. Replace the stem with your actual resource name throughout (e.g., for a `task` resource: `task.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+> **Placeholder names**: examples use the stem `my_thing` (`my_thing.py` in each directory, `MyThingRequest` / `MyThingResponse`). Replace it throughout (a `task` resource: `task.py`, `TaskRequest`, `run_task_service`). The import name must match the filename (e.g., `tasks.py` → `from api.routers import tasks`).
 
 ## Steps
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Define Request/Response Schemas
 
@@ -188,6 +177,4 @@ After creating all files:
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate the server starts and tests pass
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.

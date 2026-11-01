@@ -14,11 +14,7 @@
 | Constants | `UPPER_SNAKE_CASE` | `HTTP_STATUS_MESSAGES` |
 | Files | `kebab-case` (dot-separated) | `example.controller.ts` |
 | Directories | `kebab-case` | `common/` |
-| DTOs | `PascalCase` + `Dto` suffix | `CreateExampleDto` |
-| Modules | `PascalCase` + `Module` suffix | `ExampleModule` |
-| Controllers | `PascalCase` + `Controller` suffix | `ExampleController` |
-| Services | `PascalCase` + `Service` suffix | `ExampleService` |
-| Repositories | `PascalCase` + `Repository` suffix | `ExampleRepository` |
+| DTOs, modules, controllers, services, repositories | `PascalCase` + role suffix | `CreateExampleDto`, `ExampleModule`, `ExampleRepository` |
 | Tests | `<name>.spec.ts` / `<name>.e2e-spec.ts` | `example.controller.spec.ts` |
 
 ### Module Structure
@@ -38,14 +34,11 @@ Each feature is a self-contained module under `src/modules/<name>/`:
 
 ### Dependency Injection
 
-- Use constructor injection — NestJS resolves dependencies automatically.
-- Mark all injectables with `@Injectable()`.
-- Use `@Module({ exports: [MyService] })` to share services between modules.
+- Constructor injection; mark injectables `@Injectable()`; share via `@Module({ exports: [MyService] })`.
 
 ### DTOs and Validation
 
-- Use `nestjs-zod` with `createZodDto` for all DTOs. The global `ZodValidationPipe` validates all incoming requests automatically.
-- Use `.partial()` for update DTOs.
+- `nestjs-zod` `createZodDto` for all DTOs (the global `ZodValidationPipe` validates them); `.partial()` for update DTOs.
 
 ```typescript
 import { createZodDto } from 'nestjs-zod';
@@ -62,9 +55,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Controllers
 
-- Keep controllers thin — delegate to service, return response.
-- Use `@ApiTags()` and `@ApiOperation()` for Swagger.
-- Use `@HttpCode()` when the default status code is wrong.
+- Thin — delegate to the service. `@HttpCode()` when the default status is wrong.
 
 ### Services
 
@@ -75,7 +66,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 ### Error Handling
 
 - Use NestJS built-in exceptions: `NotFoundException`, `BadRequestException`, etc.
-- The global `HttpExceptionFilter` is registered with `@Catch(HttpException)` — it formats `HttpException` subclasses only. Non-`HttpException` throws (a raw `Error`, a `ZodError` escaping a manual `.parse()`, a driver error) bypass it and fall through to Nest's built-in handler as an unformatted 500. Convert those to an `HttpException` at the boundary rather than letting them escape.
+- The global `HttpExceptionFilter` (`@Catch(HttpException)`) formats `HttpException` subclasses only; a raw `Error`, escaping `ZodError` or driver error becomes an unformatted 500. Convert those to an `HttpException` at the boundary.
 - For domain-specific errors, extend `HttpException`.
 - Uniqueness is enforced by the database index: catch the duplicate-key error (Postgres `23505` — on `error.cause` under Drizzle v1 — or Mongo `11000`) and throw `ConflictException`; a SELECT-then-INSERT pre-check races under concurrent requests.
 
@@ -87,10 +78,7 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 
 ### Swagger
 
-- Every controller gets `@ApiTags()`.
-- Every endpoint gets `@ApiOperation({ summary: '...' })`.
-- Use `@ApiParam()` and `@ApiBody()` for parameter documentation.
-- DTOs from `nestjs-zod` generate Swagger schemas automatically.
+- `@ApiTags()` on every controller, `@ApiOperation({ summary: '...' })` on every endpoint, `@ApiParam()`/`@ApiBody()` for parameters; `nestjs-zod` DTOs generate schemas.
 
 ### Type Annotations
 
@@ -111,13 +99,13 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 
 ### Comments
 
-- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- Follow `code-standards/comments.md`.
 - JSDoc on exported providers/controllers/DTOs describes the contract — not the implementation.
-- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Directive hygiene is gated too: `linterOptions.reportUnusedDisableDirectives`/`reportUnusedInlineConfigs: 'error'`, `@eslint-community/eslint-comments` (`recommended` + `require-description`), and typescript-eslint's `ban-ts-comment` (via `recommended`) — every suppression must be scoped, used, and carry a `-- reason`. `sonarjs/todo-tag`/`fixme-tag` are downgraded to `warn` — TODO/FIXME with context is allowed. See `comments.md` → Enforcement.
+- `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
 ### Static Analysis (`eslint-plugin-sonarjs`)
 
-`eslint.config.mjs` extends `sonarjs.configs.recommended` (~230 of the plugin's 295 rules at the pinned 4.2.2, at `error`) covering bugs, hardcoded secrets/weak crypto/insecure JWT/cookies, and code smells — this is the tier that matters most here since NestJS owns request validation and auth. Test files (`test/**`, `**/*.spec.ts`, `**/*.e2e-spec.ts`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols` so fake fixtures don't false-positive. `no-duplicate-string` and `max-switch-cases` are left at the plugin's own defaults, not hand-tuned.
+`eslint.config.mjs` extends `sonarjs.configs.recommended` at `error` (bugs, security, code smells). Test files (`test/**`, `**/*.spec.ts`, `**/*.e2e-spec.ts`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols`.
 
 ### Security (NestJS)
 

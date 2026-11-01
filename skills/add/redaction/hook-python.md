@@ -3,7 +3,7 @@
      prereq: Stack is FastAPI (Python hook runtime); add (redaction) Steps 0–2 done. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Redaction hooks — Python runtime (FastAPI)
 
-Contents: **Part A** — the `PostToolUse` masking hook (implementation.md Step 3). **Part B** — the `user-prompt-guard` companion warning (implementation.md Step 6). Apply Part A now, then continue implementation.md at Step 4; apply Part B when it reaches Step 6.
+**Part A** (masking hook) applies at implementation.md Step 3; **Part B** (`user-prompt-guard` warning) at Step 6.
 
 ### Part A — `PostToolUse` masking hook
 

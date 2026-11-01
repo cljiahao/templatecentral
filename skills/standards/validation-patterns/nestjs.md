@@ -3,7 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### NestJS (TypeScript + Zod via nestjs-zod)
 
-The scaffold registers `ZodValidationPipe` globally (`APP_PIPE`), so any `createZodDto` class used as a `@Body()`/`@Query()` type is validated automatically. Plain-typed params (`@Param('id') id: string`) are NOT — give them an explicit pipe.
+The global `ZodValidationPipe` (`APP_PIPE`) validates every `createZodDto` `@Body()`/`@Query()` type. Plain-typed params (`@Param('id') id: string`) are NOT — give them an explicit pipe.
 
 **1. DTOs**
 
@@ -174,5 +174,5 @@ pnpm test
 ## After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards

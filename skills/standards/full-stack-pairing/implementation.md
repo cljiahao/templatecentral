@@ -4,11 +4,11 @@
 
 # Full-Stack Pairing Guide
 
-Connect a templateCentral frontend to a templateCentral backend.
+Connect a templateCentral frontend to a templateCentral backend through a same-origin proxy.
 
 ## Inputs
 
-Locate both projects by scanning the current directory and its immediate subdirectories for an `AGENTS.md` whose line 1 is a `<!-- templateCentral: <stack>@` marker. The stack in each marker tells you which is frontend and which is backend. Ask only if this finds zero or more than one candidate for either side.
+Scan the current directory and its immediate subdirectories for `AGENTS.md` files whose line 1 is a `<!-- templateCentral: <stack>@` marker; the stack says which is frontend and backend. Ask only if either side has zero or several candidates.
 
 ## Supported Pairings
 
@@ -34,7 +34,7 @@ the marker.
 
 ### 1. Backend CORS — Not Needed for the Paired Frontend
 
-Every pairing below is **same-origin**: the browser only ever calls its own origin (`/api` or `/api/external`), and the proxy (Step 2 in dev, Step 6 in production) forwards to the backend server-side. Same-origin requests never preflight, so the frontend's origin does **not** go into the backend's CORS list. Cookie auth (Step 5) *requires* this layout. Leave `CORS_ORIGINS` (FastAPI, `src/.env`) / `CLIENT_URL` (NestJS, `.env`) as they are — they only matter for other browser origins that call the API directly with Bearer tokens.
+Every pairing is **same-origin**: the browser calls its own origin (`/api` or `/api/external`) and the proxy (Step 2 dev, Step 6 prod) forwards server-side, so the frontend's origin does **not** go into the backend's CORS list. Cookie auth (Step 5) *requires* this. Leave `CORS_ORIGINS` (FastAPI, `src/.env`) / `CLIENT_URL` (NestJS, `.env`) as they are.
 
 ### 2. Configure Frontend Proxy (Development)
 
@@ -85,17 +85,17 @@ export const API_ROUTES = {
 } as const;
 ```
 
-What the rewrite does (observed on Next 16.4 with `next build && next start` against a stub backend):
+What the rewrite does:
 
-- **`proxy.ts` runs first.** Next checks `headers` → `redirects` → `proxy.ts` → rewrites, so the auth proxy gates `/api/external/*` before anything is forwarded: its `isApiRoute` branch returns 401 when there's no session cookie, and the backend never sees the request. Add the backend's unauthenticated endpoints to `proxy.ts` as **exact paths** (`/api/external/auth/session`, `/api/external/health`), not as `PUBLIC_API_PREFIXES` entries. A prefix like `/api/external/auth/session` also matches `/api/external/auth/sessionX` and `…/auth/session/..%2Fx`. The backend's own check is still the one that counts
-- **Passed through unchanged:** the request's `Cookie`, `Authorization`, `X-CSRF-Token` and body, plus the response status and `Set-Cookie`. The backend sets no `Domain`, so the browser keeps the cookies for the Next origin, and `document.cookie` there can read `XSRF-TOKEN`. Every cookie on the Next origin goes to the backend, so only rewrite to a backend you own
-- **Rewritten:** `Host` is set to the backend's host. `X-Forwarded-Host` becomes Next's own host (anything the client sent is dropped), and `X-Forwarded-Proto`/`-Port` are set. `X-Forwarded-For` is a problem: if the client sends one, Next forwards it **as-is**; if not, Next fills in the socket address. So list Next in the backend's `TRUST_PROXY` only when an ingress in front of Next overwrites `X-Forwarded-For`. Otherwise any client can pick its own rate-limit key
-- **Not applied:** neither `headers()` in `next.config.ts` nor the CSP / `X-Frame-Options` from `applyFrameProtection` (`src/lib/security/frame-protection.ts`, called by `proxy.ts`) reach proxied responses — `applyFrameProtection` skips `/api/external` and `/api/external/*` so it never replaces the backend's stricter `default-src 'none'` CSP. The browser gets the backend's own headers instead (FastAPI `SecurityHeadersMiddleware`, NestJS `@fastify/helmet`), so leave those on. If you rename `API_ROUTES.BACKEND`, change `BACKEND_PROXY_PATH` in `frame-protection.ts` with it
-- **Fixed at build time:** if you change `BACKEND_URL` at `next start`, the rewrite target stays the same
+- **`proxy.ts` runs first**, so the auth proxy gates `/api/external/*` (401 without a session cookie) before anything is forwarded. Add the backend's unauthenticated endpoints to `proxy.ts` as **exact paths** (`/api/external/auth/session`, `/api/external/health`), never `PUBLIC_API_PREFIXES` entries (a prefix also matches `…/auth/sessionX` and `…/auth/session/..%2Fx`). The backend's own check is the one that counts
+- **Passed through unchanged:** `Cookie`, `Authorization`, `X-CSRF-Token`, body, response status and `Set-Cookie` (no `Domain`, so cookies stay on the Next origin where `XSRF-TOKEN` is readable). Every Next-origin cookie reaches the backend, so only rewrite to a backend you own
+- **Rewritten:** `Host` (backend), `X-Forwarded-Host` (Next's host), `X-Forwarded-Proto`/`-Port`. A client-sent `X-Forwarded-For` is forwarded **as-is**, so list Next in the backend's `TRUST_PROXY` only when an ingress in front of Next overwrites it — otherwise any client picks its own rate-limit key
+- **Not applied:** `headers()` and `applyFrameProtection` (`src/lib/security/frame-protection.ts`) skip `/api/external` and `/api/external/*`, keeping the backend's stricter `default-src 'none'` CSP — leave the backend's own headers on (FastAPI `SecurityHeadersMiddleware`, NestJS `@fastify/helmet`). Renaming `API_ROUTES.BACKEND` means changing `BACKEND_PROXY_PATH` in `frame-protection.ts` too
+- **Fixed at build time:** changing `BACKEND_URL` at `next start` does not move the rewrite
 
 ### 3. Environment Variables
 
-Ask the user to set these in the `.env` files (agent edits to `.env` files are hook-blocked by design); document placeholders in `.env.example`/`.env.default`.
+Ask the user to set these in the `.env` files (agent edits are hook-blocked); document placeholders in `.env.example`/`.env.default`.
 
 #### Frontend `.env`
 
@@ -117,7 +117,7 @@ Both templates ship an abstract `FetchClient` whose `request()` is `protected` �
 
 #### Vite + React
 
-`ApiClient` is the **one** backend client class in the SPA — this is its only definition. Feature services extend it with their own typed endpoint methods (`templatecentral:add (feature)`) instead of piling every endpoint into this file. `templatecentral:add (auth)` adds two members to it (cookie `credentials` + `X-CSRF-Token` on non-GET), so every subclass inherits browser auth.
+`ApiClient` is the **one** backend client class in the SPA — this is its only definition. Feature services extend it (`templatecentral:add (feature)`); `templatecentral:add (auth)` adds cookie `credentials` + `X-CSRF-Token` on non-GET, so every subclass inherits browser auth.
 
 ```typescript
 // src/lib/clients/api-client.ts
@@ -166,7 +166,7 @@ export function getBackendClient(): BackendClient {
 }
 ```
 
-**Server calls on behalf of the signed-in user.** Server code has no cookie jar of its own, so forward the browser's cookies yourself. The backend answers 401 to an anonymous call, and it requires `X-CSRF-Token` on a cookie-authenticated non-GET, which you can fill by echoing the `XSRF-TOKEN` cookie:
+**Server calls on behalf of the signed-in user** forward the browser's cookies, and echo the `XSRF-TOKEN` cookie as `X-CSRF-Token` on a non-GET:
 
 ```typescript
 // src/lib/session.ts — server-only (server components, layouts, route handlers)
@@ -185,7 +185,7 @@ export async function getCurrentUser(): Promise<{ id: string | number; email: st
 }
 ```
 
-**Client components** call the same-origin path. `FetchClient` builds its URLs with `new URL()` and is meant for server use, so browser code gets this small helper instead. `fetch` defaults to `credentials: 'same-origin'`, so the session cookie rides along without extra options:
+**Client components** call the same-origin path with this helper (`FetchClient` is server-only); `fetch`'s default `credentials: 'same-origin'` sends the session cookie:
 
 ```typescript
 // src/lib/clients/backend-browser.ts — 'use client' callers only
@@ -211,25 +211,25 @@ export function backendFetch(path: string, init: RequestInit = {}): Promise<Resp
 
 ### 5. Browser Auth: Enable Backend Cookie Mode
 
-Backend auth (`templatecentral:add (auth)` on FastAPI/NestJS) reads only `Authorization: Bearer` by default, while the Vite auth skill sends the session cookie (`credentials: 'include'`) plus `X-CSRF-Token` and never holds a token. **When auth exists on both sides, apply the backend auth skill's "Browser Client (Cookie Mode)" section** — otherwise every guarded route returns 401 to the SPA:
+Backend auth reads only `Authorization: Bearer` by default; the Vite auth skill sends the session cookie plus `X-CSRF-Token`. **When auth exists on both sides, apply the backend auth skill's "Browser Client (Cookie Mode)" section** — otherwise every guarded route returns 401 to the SPA:
 
 | Frontend | Enable cookie mode on the backend? |
 |----------|-----------------------------------|
 | Vite + React | **Always** (once both sides have auth) |
 | Next.js | When the backend owns the user session: client components then call it with that session through `API_ROUTES.BACKEND` (`backendFetch`, Step 4), and server code forwards the same cookies (`getCurrentUser`). Not needed if Next keeps its own auth and makes only service-to-service calls to `BACKEND_URL` |
 
-Cookie mode gives the contract the Vite auth service targets: `POST /auth/session` (login → 204 + cookies), `GET /auth/me`, `POST /auth/logout`, with `X-CSRF-Token` required on every other cookie-authenticated non-GET. It sets the session cookie `HttpOnly`, `Secure` (off only in dev), `SameSite=Strict`, `Path=/`, and `__Host-` prefixed outside dev. The CSRF token is HMAC-signed and bound to the session (OWASP signed double-submit; RFC 10017 cookie rules). Bearer keeps working for non-browser clients. Then:
+Cookie mode gives the contract the Vite auth service targets: `POST /auth/session` (204 + cookies), `GET /auth/me`, `POST /auth/logout`, with `X-CSRF-Token` required on every other cookie-authenticated non-GET. The session cookie is `HttpOnly`, `Secure` (off only in dev), `SameSite=Strict`, `Path=/`, `__Host-` outside dev; the CSRF token is HMAC-signed and session-bound. Bearer keeps working. Then:
 
-- **Same-origin is required, not just recommended** (RFC 10017 BFF pattern; OWASP): the SPA calls `VITE_API_BASE_URL=/api` and the Vite proxy (Step 2) / nginx (Step 6) forwards it; a Next.js app calls `/api/external`, and its rewrite (Step 2) forwards it. The backend sets `XSRF-TOKEN` as a host-only cookie on whatever host answered, so an SPA calling `api.example.com` from `app.example.com` can never read it — every non-GET 403s. Do not "fix" that with `SameSite=None`, a `Domain` attribute or credentialed CORS; route through the proxy instead
+- **Same-origin is required:** the SPA calls `VITE_API_BASE_URL=/api` (Vite proxy / nginx forwards); a Next.js app calls `/api/external` (rewrite forwards). `XSRF-TOKEN` is host-only, so a cross-host SPA cannot read it and every non-GET 403s. Do not "fix" that with `SameSite=None`, a `Domain` attribute or credentialed CORS
 - Every SPA call goes through `ApiClient` (Step 4); the Vite auth skill makes it send `credentials: 'include'` and, on every non-GET, `X-CSRF-Token` from `csrfHeader()`. A raw `fetch` that bypasses it gets 401/403
 
 ### 6. Production Deployment
 
-Dev proxies don't exist in production: route `/api` to the backend from the frontend's own origin.
+Route `/api` to the backend from the frontend's own origin.
 
 #### Vite + React — `nginx.conf.template`
 
-Add inside the `server` block, next to `location /` (the scaffold marks the spot). The template runs through the nginx image's `envsubst`, which only replaces variables defined in the container environment — set `BACKEND_URL` (e.g. `http://api:8000`, no trailing slash) on the frontend container; nginx refuses to start if it is missing:
+Add inside the `server` block, next to `location /` (the scaffold marks the spot). Set `BACKEND_URL` (e.g. `http://api:8000`, no trailing slash) on the frontend container; nginx refuses to start without it:
 
 ```nginx
     # Same-origin API (required by cookie auth): /api/x → ${BACKEND_URL}/x.
@@ -247,7 +247,7 @@ Add inside the `server` block, next to `location /` (the scaffold marks the spot
     }
 ```
 
-nginx is now one more proxy hop in front of the backend: add its IP/CIDR to the backend's `TRUST_PROXY` (FastAPI: uvicorn forwarded-allow-ips + `X-Forwarded-Host` rewrite; NestJS: Fastify `trustProxy` — see each scaffold's `TRUST_PROXY` docs), or rate limits and logs see nginx's address for every client.
+Add nginx's IP/CIDR to the backend's `TRUST_PROXY`, or rate limits and logs see nginx's address for every client.
 
 #### Next.js
 

@@ -4,9 +4,9 @@
 
 # Shared Documentation Kit
 
-This file is the single source of truth for the per-folder `README.md` structure and its generation algorithm, plus the optional per-folder `.order` file that makes an Azure DevOps Code Wiki render correctly. It is stack-agnostic — the same five steps run unmodified whether the caller is `templatecentral:scaffold`, `templatecentral:migrate`, or `templatecentral:add (documentation)`.
+Single source of truth for the per-folder `README.md` structure and generation, plus the optional per-folder `.order` file for an Azure DevOps Code Wiki. Stack-agnostic: the same five steps run for `templatecentral:scaffold`, `templatecentral:migrate` and `templatecentral:add (documentation)`.
 
-**Scope:** content generation only. Enforcement (the `readme-coupling` lefthook check and the `readme-freshness` CI job) lives in the harness kit (`scaffold/shared/harness-kit*.md`, Steps B2/B3), not here.
+**Scope:** content only. Enforcement (`readme-coupling` lefthook check, `readme-freshness` CI job) lives in `scaffold/shared/harness-kit*.md` Steps B2/B3.
 
 Execute all five numbered steps below, in order.
 
@@ -14,11 +14,11 @@ Execute all five numbered steps below, in order.
 
 ## Step 1. Determine per-project opt-ins
 
-**Guard first:** if `.claude/harness.json` does not exist yet, skip Step 1 (1a and 1b) and Step 4 entirely — proceed directly to Step 2 and Step 3, treating both `adoWiki` and `richReadme` as `false` for this run. This should not normally happen, since this kit is loaded after `harness.json` is created, but the guard keeps the kit safe to invoke standalone (e.g. a future `templatecentral:add (documentation)` run against a project whose harness hasn't landed yet).
+**Guard first:** if `.claude/harness.json` does not exist yet, skip Step 1 (1a and 1b) and Step 4 — go to Steps 2 and 3 with `adoWiki` and `richReadme` both `false`.
 
 ### Step 1a. Azure DevOps Code Wiki opt-in (`adoWiki`)
 
-Read the top-level `adoWiki` field from `.claude/harness.json`. This field lives at the top level of the manifest, as a **sibling** of `seeded_files` — never inside it:
+Read the top-level `adoWiki` field from `.claude/harness.json` — a **sibling** of `seeded_files`, never inside it:
 
 ```json
 {
@@ -80,18 +80,18 @@ open(p,"w").write(json.dumps(j,indent=2)+"\n")'
 **Decision logic:**
 
 1. `existing=$(read_adowiki)`
-2. If `$existing` is `true` or `false`, use it. Do not ask the user again — the field already records their answer.
-3. If `$existing` is empty (field unset — first time this kit runs on this project) **and an interactive user is available to ask**, ask exactly once, worded around:
+2. If `$existing` is `true` or `false`, use it. Do not ask again.
+3. If `$existing` is empty **and an interactive user is available**, ask exactly once, worded around:
 
    > Does this project publish its repo to an Azure DevOps Code Wiki? If yes, I'll also maintain a `.order` file per folder (so the wiki tree renders correctly) and a `<folder-name>.md` sibling file next to each folder (so that folder's own wiki page shows real content instead of a blank cover page) — this works whether you consume it via native "Publish code as wiki" or a manual/provisioned-wiki import. (yes/no)
 
-   **No interactive user available** (a headless/automated invocation — e.g. a CI-driven scaffold, or an agent run with no human to answer): default to `false` and note the assumption in the Step 5 report (e.g. `adoWiki: defaulted to false — no interactive session available`), rather than hanging or guessing silently.
+   **No interactive user** (headless run): default to `false` and note it in the Step 5 report.
 
-4. Persist the answer immediately with `write_adowiki "true"` or `write_adowiki "false"` so future runs (this session or a later one) read it back in step 2 instead of asking again.
+4. Persist the answer immediately with `write_adowiki "true"` or `write_adowiki "false"`.
 
 ### Step 1b. Rich per-file content opt-in (`richReadme`)
 
-Read the top-level `richReadme` field from `.claude/harness.json`, the same way as `adoWiki` — a **sibling** of `seeded_files`, never inside it (see the schema in Step 1a).
+Read the top-level `richReadme` field from `.claude/harness.json` — a **sibling** of `seeded_files`, never inside it.
 
 **Read function** (portable: jq → node → python3 fallback). Prints `true`, `false`, or an empty string if the field is unset:
 
@@ -143,20 +143,20 @@ open(p,"w").write(json.dumps(j,indent=2)+"\n")'
 **Decision logic:**
 
 1. `existing=$(read_rich_readme)`
-2. If `$existing` is `true` or `false`, use it. Do not ask the user again — the field already records their answer.
-3. If `$existing` is empty (field unset — first time this kit runs on this project) **and an interactive user is available to ask**, ask exactly once, worded around:
+2. If `$existing` is `true` or `false`, use it. Do not ask again.
+3. If `$existing` is empty **and an interactive user is available**, ask exactly once, worded around:
 
    > Do you want per-folder READMEs to carry rich content — a `Contents` bullet per file with a real one-line description of what it does (its actual exported functions/components/constants, schemas, route handlers, or other genuinely defining behavior — read from the file, not guessed), and a `Connectivity` section with no length cap? This is more useful to read but only stays accurate as long as you keep `readme-coupling`/`readme-freshness` enforcement active — a rich description silently goes stale the moment the file changes without its README following. If no, I'll keep Contents to a plain filename manifest and Connectivity capped at 2-4 sentences. (yes/no)
 
-   **No interactive user available** (a headless/automated invocation — e.g. a CI-driven scaffold, or an agent run with no human to answer): default to `false` and note the assumption in the Step 5 report (e.g. `richReadme: defaulted to false — no interactive session available`), rather than hanging or guessing silently.
+   **No interactive user** (headless run): default to `false` and note it in the Step 5 report.
 
-4. Persist the answer immediately with `write_rich_readme "true"` or `write_rich_readme "false"` so future runs (this session or a later one) read it back in step 2 instead of asking again.
+4. Persist the answer immediately with `write_rich_readme "true"` or `write_rich_readme "false"`.
 
 ---
 
 ## Step 2. Enumerate folders
 
-Enumerate every project directory with a single portable `find` command, pruning dependency/build output, VCS/harness-internal directories, and every path the harness itself protects, so generated or vendored trees are never touched and the kit never tries to write a file `protect-files.sh` hard-blocks:
+Enumerate project directories with one portable `find`, pruning dependency/build output, VCS/harness-internal directories, and every path the harness protects:
 
 ```bash
 find . \( \
@@ -186,9 +186,9 @@ find . \( \
   \) -prune -o -type d -print
 ```
 
-**Why CI, secrets, and `.claude` folders are pruned:** `protect-files.sh` hard-blocks (exit 2) any write under `secrets/` and `.secrets/`, and asks for human approval before any write to CI definitions (`.github/workflows/`, `.github/actions/`, `.azuredevops/`, `azure-pipelines/`) or most of `.claude/`. A README there would need that approval on every scaffold, so the kit skips those folders and the `readme-freshness` gate never demands one.
+**CI, secrets and `.claude` folders are pruned** because `protect-files.sh` blocks or asks on writes there; the `readme-freshness` gate never demands a README in them.
 
-**Respect the project's own `.gitignore` too.** The prune list above only covers well-known dependency/build directories common across templateCentral's own scaffolds — it cannot anticipate every project-specific ignore pattern (e.g. a custom `log/` directory). After the `find` above, drop any remaining entry that the project itself ignores, so this kit never writes a `README.md` that's invisible to git, CI, and teammates. If no git repository exists yet (very early in a fresh scaffold, before `git init` has run), skip this filter entirely and rely on the hardcoded prune list alone — the check below degrades to a no-op filter (keeps everything) in that case, which is safe:
+**Respect the project's own `.gitignore` too.** After the `find`, drop any entry the project ignores. Without a git repository yet, the check below keeps everything:
 
 ```bash
 tmp=$(mktemp)
@@ -214,23 +214,21 @@ fi
 rm -f "$tmp"
 ```
 
-`$working_set` (one folder path per line) is the final list — use it for Step 3 and, when `adoWiki` is true, Step 4.
-
-This is the working set for Step 3 (one `README.md` decision per directory it prints, including `.` — the repo root) and, when `adoWiki` is true, for Step 4.
+`$working_set` (one folder per line, including `.` — the repo root) is the working set for Step 3 and, when `adoWiki` is true, Step 4.
 
 ---
 
 ## Step 3. Write or refresh README.md per folder
 
-**Read before you write.** For every folder in the Step 2 working set, actually list its immediate children (`ls`) and look at what they are before writing `Purpose` or `Connectivity`. Never invent behavior, a component's role, or a subfolder's relationship to its siblings — if it isn't visible from the folder's actual contents (file names, a couple of representative file bodies if genuinely ambiguous), don't assert it. **When `richReadme` is true** (determined in Step 1b), this applies to every child file too: open and actually read each one before writing its `Contents` bullet — never infer what a file does from its name alone. This is one read pass, not two — if a file was already opened above to resolve a `Purpose`/`Connectivity` ambiguity, reuse that same read for its `Contents` bullet instead of opening it again.
+**Read before you write.** For every folder in the working set, `ls` its immediate children before writing `Purpose` or `Connectivity`. Never invent behavior, a component's role, or a subfolder's relationship — if it isn't visible from the contents (file names, a few file bodies if ambiguous), don't assert it. **When `richReadme` is true**, read every child file before writing its `Contents` bullet — never infer from the name. One read pass: reuse a file already opened for `Purpose`/`Connectivity`.
 
 ### Repo root — special case
 
-The root folder's `README.md` is a human-facing project readme (title, badges, quickstart, etc. — whatever already exists there). **That prose must never be overwritten.** Only a missing `## Structure` section may be added to it:
+The root `README.md` is the human-facing project readme. **That prose must never be overwritten.** Only a missing `## Structure` section may be added:
 
-1. **If no root `README.md` exists at all** (nothing upstream of this kit created one — this can happen on `templatecentral:add (documentation)`/`templatecentral:migrate` light-adoption against a project with no README, or a scaffold whose stack template doesn't seed one): create a minimal one first — a `# <project-name>` title line (derived from the directory name or `package.json`/`pyproject.toml`'s `name` field if present), nothing else — then proceed to step 2 below as if it always existed.
+1. **If no root `README.md` exists:** create one holding only a `# <project-name>` title (from `package.json`/`pyproject.toml` `name`, else the directory name), then continue.
 2. Check whether the (now-existing) root `README.md` already has a `## Structure` heading. If it does, leave the file untouched.
-3. If it does not, append a `## Structure` section at the end, generated the same way as `Contents` + `Connectivity` below — but nested one level down, as `### Contents` and `### Connectivity` subheadings under `## Structure` (the root always has subfolders, so `### Connectivity` is always included there). Do not touch any text above the appended section.
+3. If not, append `## Structure` at the end with `### Contents` and `### Connectivity` subheadings, generated like the sections below. Do not touch any text above it.
 
 ### Every other folder — full template
 
@@ -254,35 +252,35 @@ For every non-root folder, create or fully regenerate its `README.md` from this 
 [<parent-folder-name>](../README.md)
 ```
 
-`## Parent` is omitted at the repo root (there is no parent to link to) — this branch only applies to non-root folders, which always have one.
+`## Parent` never appears at the repo root.
 
 **Section rules:**
 
 - **Purpose** — 1-2 lines. What the folder holds and why it exists as its own unit.
-- **Contents** — one bullet per immediate child (file or subfolder), derived directly from `ls`, sorted alphabetically (not raw `ls` order) so an unchanged folder produces byte-identical output run to run — this is what makes the "leave unchanged if accurate" freshness check below deterministic. **Exclude any child that matches the Step 2 prune list** (`node_modules`, `dist`, `.git`, etc.) or is itself gitignored, the same way Step 2 excludes them from the folder working set — otherwise the root's own `Contents` would list `node_modules/`, `.git`, build artifacts, and similar noise as if they were real project structure. Subfolders get a trailing `/` (e.g. `components/`); files don't — so a reader can tell them apart at a glance.
-  - **`richReadme` false (default):** mechanical, not narrative — a manifest, not a summary. Do not add descriptive prose per bullet beyond the child's own name.
-  - **`richReadme` true:** each bullet becomes `` `<child>` — <real one-line description> `` — the child's actual exported functions/components/constants, schemas, route handlers, or other genuinely defining behavior, taken from actually reading the file (per the Step 3 intro's read-before-you-write rule), never a restatement of the filename. Subfolders still just get their name (a subfolder's own `Purpose` covers it) — this only enriches file bullets. **Exception:** known lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `poetry.lock`, `Cargo.lock`, etc.) and binary files (images, fonts, and other non-text formats) get a brief generic description (e.g. "locked dependency versions") without opening them — reading a multi-thousand-line lockfile or a binary asset cover-to-cover for one bullet isn't worth the cost.
-- **Connectivity** — included only for folders that contain subfolders. Say how the subfolders relate to each other and to the parent (data flow, layering, dependency direction) — not what each one does individually (that's each subfolder's own `Purpose`).
-  - **`richReadme` false (default):** capped at 2-4 sentences. The risk this cap manages is staleness: a detailed claim about what subfolders do or how they relate goes silently wrong the moment the code changes without the README following — exactly what the `readme-coupling` lefthook check and `readme-freshness` CI job (`scaffold/shared/harness-kit.md`) exist to catch. Capping the default keeps that risk low for projects that may not keep that enforcement airtight.
-  - **`richReadme` true:** no sentence cap — write real cross-file relationships, as deep as genuinely useful. Still relational information only (how subfolders connect), not restating each child's own `Purpose`. This is the escape hatch for projects that do keep `readme-coupling`/`readme-freshness` enforcement active and want documentation-kit's on-demand per-folder READMEs to carry more than a structural skim.
-- **Parent** — a relative link to the immediate parent's `README.md` (always `../README.md`, since Parent is always one level up).
+- **Contents** — one bullet per immediate child, sorted alphabetically so an unchanged folder regenerates byte-identical. **Exclude any child that matches the Step 2 prune list** or is gitignored. Subfolders get a trailing `/` (e.g. `components/`); files don't.
+  - **`richReadme` false (default):** a manifest — no prose beyond the child's own name.
+  - **`richReadme` true:** each bullet becomes `` `<child>` — <real one-line description> `` — the file's real exports, schemas, route handlers or other defining behavior, read from the file, never a restatement of the filename. Subfolders keep just their name. **Exception:** lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `poetry.lock`, `Cargo.lock`, etc.) and binary files get a brief generic description (e.g. "locked dependency versions") without opening them.
+- **Connectivity** — only for folders with subfolders. How the subfolders relate to each other and the parent (data flow, layering, dependency direction), not what each does.
+  - **`richReadme` false (default):** capped at 2-4 sentences, to limit staleness.
+  - **`richReadme` true:** no cap; still relational only.
+- **Parent** — `../README.md`.
 
-If a `README.md` already exists for a non-root folder and its structural sections are already accurate against the folder's current contents, leave it unchanged rather than rewriting an identical file. **When `richReadme` is true**, don't expect byte-identical regeneration the way the mechanical `Contents` listing guarantees — judge "accurate" by whether the existing descriptions still hold for the file's current contents, not by exact-string comparison; only rewrite what's actually stale.
+If an existing non-root `README.md` is already accurate, leave it unchanged. **When `richReadme` is true**, judge accuracy by whether the descriptions still hold, not by exact-string comparison; rewrite only what is stale.
 
 ---
 
 ## Step 4. `.order` files and wiki-page promotion files (only if adoWiki is true)
 
-**Gate:** run this step only when `read_adowiki` returns `true`. If it returns `false` (or the Step 1 guard skipped Step 1 entirely because `.claude/harness.json` didn't exist), skip Step 4 in its entirety — do not write, update, or delete any `.order` file or promotion file.
+**Gate:** run this step only when `read_adowiki` returns `true`. Otherwise do not write, update, or delete any `.order` file or promotion file.
 
-This step produces two kinds of artifact, both needed because Azure DevOps Wiki has more than one way to consume a repo, and they don't behave the same way:
+Two artifacts, because Azure DevOps consumes a repo two ways:
 
-- **Native "Publish code as wiki"** auto-generates a page for every folder from the repo's actual structure — `.order` alone is enough to fix sibling ordering and stop an empty parent folder (subfolders only, no file of its own) from rendering blank.
-- **A manual or provisioned-wiki import** (e.g. copying pages in one at a time, or a third-party upload tool) does not auto-nest from folder structure. To make a folder's own page show real content — under either consumption path — Azure DevOps needs a Markdown file with the **same name as the folder**, sitting as its **sibling** in the parent directory, not a file inside it. `README.md` living inside `components/` satisfies the first path but not this one.
+- **Native "Publish code as wiki"** builds a page per folder; `.order` fixes sibling order and keeps an empty parent folder from rendering blank.
+- **A manual or provisioned-wiki import** does not nest from folder structure: a folder's page needs a Markdown file **named like the folder**, as its **sibling** in the parent directory.
 
 ### 4a. `.order` files
 
-Write a `.order` file into every folder from the Step 2 working set (including the repo root). **Contents, one entry per line, extension stripped:**
+Write a `.order` file into every working-set folder (including the repo root). **One entry per line, extension stripped:**
 
 1. `README` first (always — it is the folder's own wiki page).
 2. Every other immediate child (file or subfolder) next, in alphabetical order, with its extension stripped (`architecture.md` → `architecture`, `utils/` → `utils`).
@@ -298,13 +296,13 @@ utils
 
 ### 4b. Folder-promotion files
 
-For every **non-root** folder in the Step 2 working set, write `<folder-name>.md` as a sibling of that folder (i.e. inside the *parent* directory, next to the folder — not inside it). Its content is a **byte-identical copy** of that folder's own `README.md` (written in Step 3) — no separate template, no independent drift, since it's a straight copy of content that's already accurate.
+For every **non-root** working-set folder, write `<folder-name>.md` in the *parent* directory, next to the folder: a **byte-identical copy** of that folder's `README.md`.
 
-**Collision safety:** if `<folder-name>.md` already exists at that sibling path and its content is neither an exact copy of the folder's current `README.md` nor a copy from a prior run of this step, treat it as foreign, human-authored content — do not overwrite it. Skip and flag it in the Step 5 report instead, the same soft-protect posture the rest of this convention takes toward existing content.
+**Collision safety:** if `<folder-name>.md` exists and is neither a copy of the current `README.md` nor of a prior run's, it is human-authored — do not overwrite it; flag it in the Step 5 report.
 
-The repo root has no parent directory to sit beside, so it never gets a promotion file — only Step 4a's root `.order` applies there.
+The repo root gets no promotion file.
 
-Regenerate both `.order` (4a) and the promotion-file copy (4b) alongside their folder's `README.md` in Step 3 (same pass) so none of the three ever drift out of sync with the folder's actual current contents.
+Regenerate `.order` (4a) and the promotion copy (4b) in the same pass as the folder's `README.md`.
 
 ---
 
@@ -316,7 +314,7 @@ Print a one-line summary of what happened:
 README.md: N created, M updated, K unchanged
 ```
 
-If `richReadme` is true, append `(rich mode)` to that same line instead of printing it plain:
+If `richReadme` is true, append `(rich mode)` to that line:
 
 ```
 README.md: N created, M updated, K unchanged (rich mode)
@@ -332,13 +330,13 @@ Import with Repos → Wikis → Publish code as wiki pointed at this branch/root
 
 Omit the `(Q skipped — ...)` clause when no conflicts were found. Omit all `.order`/promotion-file/usage-note lines entirely when `adoWiki` is false or Step 4 was skipped.
 
-If Step 1a defaulted `adoWiki` to `false` because no interactive user was available, append a line noting the assumption:
+If Step 1a defaulted `adoWiki` to `false` (no interactive user), append:
 
 ```
 adoWiki: defaulted to false — no interactive session available
 ```
 
-If Step 1b defaulted `richReadme` to `false` because no interactive user was available, append a line noting the assumption:
+If Step 1b defaulted `richReadme` to `false` (no interactive user), append:
 
 ```
 richReadme: defaulted to false — no interactive session available

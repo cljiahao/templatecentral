@@ -3,13 +3,7 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS
 
-Create a new third-party API integration in a NestJS project scaffolded from templateCentral.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
-> **Placeholder names**: All examples use `github` as the integration name. Replace `github`/`Github` throughout with your actual service name (e.g., `stripe`/`Stripe`, `openai`/`Openai`). File names, class names, and imports must all match.
+> **Placeholder names**: replace `github`/`Github` throughout with your service name (e.g. `stripe`/`Stripe`); file names, class names and imports must match.
 
 ### Dependencies
 
@@ -21,14 +15,7 @@ pnpm add @nestjs/axios axios
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Create Integration Module Directory
 
@@ -126,7 +113,7 @@ export class GithubIntegrationService {
 }
 ```
 
-> **When a malformed row is not skippable** — for example a payment or balance response
+> **When a malformed row is not skippable** — e.g. a payment or balance response
 > where a partial list is worse than an error — throw instead:
 > `throw new BadGatewayException('Upstream returned an unexpected shape.')`. Never rethrow
 > the `ZodError` itself and never put its `issues` in the response body; the paths leak
@@ -160,7 +147,7 @@ GITHUB_TOKEN=your_github_token_here
 
 NEVER use a fallback like `?? ''` for tokens — fail fast at startup instead.
 
-Vitest does not load `.env`, so add `GITHUB_TOKEN: 'test'` to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create it under `test:` if absent) — otherwise every suite importing `AppModule` fails at the env check.
+Vitest does not load `.env` — add `GITHUB_TOKEN: 'test'` to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts`, or every suite importing `AppModule` fails the env check.
 
 #### 5. Create the Module
 
@@ -272,6 +259,4 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

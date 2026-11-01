@@ -4,15 +4,15 @@
 
 # Next.js → FastAPI Backend Extraction
 
-Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients from a Next.js project into a sibling FastAPI project. Next.js becomes a pure frontend.
+Moves `src/app/api/` and the integrations it uses into a sibling FastAPI project; Next.js becomes a pure frontend.
 
-**Read `common.md` first.** Phases 1, 2, the Phase 3 skeleton, and Phases 8–10 live in common.md; stack-specific Phases 3–7 are below. Variable substitutions: `[BACKEND]` = FastAPI, `[DEV_PORT]` = 8000, `[CORS_VAR]` = `CORS_ORIGINS`.
+**Read `common.md` first** (Phases 1, 2, the Phase 3 skeleton, 8–10); Phases 3–7 are below.
 
 ```bash
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 FastAPI deltas:** In 1d, TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved — replaced by `httpx` wrappers in Phase 5. Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → PyMongo async / None detected]`.
+**Phase 1 FastAPI deltas:** In 1d, the TS base clients (`fetch-client.ts`, `axios-client.ts`) are NOT moved (Phase 5 uses `httpx`). Assessment Database line: `[✓ Drizzle / ✓ Kysely (both require an ORM choice at Phase 6) / ✓ Mongoose → PyMongo async / None detected]`.
 
 ---
 
@@ -28,7 +28,7 @@ Set `PROJECT_NAME` in `src/.env.default`.
 
 ## Phase 4 — Migrate API Routes (autonomous)
 
-For each `route.ts` file identified in Phase 1c, create the corresponding FastAPI router.
+Create a FastAPI router for each Phase 1c `route.ts`.
 
 **Mapping:**
 
@@ -40,11 +40,11 @@ For each `route.ts` file identified in Phase 1c, create the corresponding FastAP
 | `export async function PUT(request, { params })` | `@router.put("/<resource>/{id}")` |
 | `export async function PATCH(request, { params })` | `@router.patch("/<resource>/{id}")` |
 | `export async function DELETE(_, { params })` | `@router.delete("/<resource>/{id}")` |
-| `handleApiError(label, error)` / error `NextResponse` | Service raises `NoResultsFound` (404) / `InvalidInputError` (400) from `core.exceptions`; `src/error_handler.py` renders them |
+| `handleApiError(label, error)` / error `NextResponse` | Service raises `NoResultsFound` (404) / `InvalidInputError` (400) from `core.exceptions` |
 | Dynamic segment `[id]/route.ts` | `/{id}` path parameter on the same router |
-| Zod `safeParse` validation | Pydantic model as function parameter (FastAPI validates automatically) |
+| Zod `safeParse` validation | Pydantic model as function parameter |
 
-The scaffold uses a layered architecture: **router → service → schemas**. Do not put business logic in the router file.
+Layers: **router → service → schemas**. No business logic in the router.
 
 **Router template** (adapt for each resource):
 
@@ -88,7 +88,7 @@ class CreateUserRequest(BaseRequestSchema):
     email: EmailStr
 ```
 
-Port every constraint from the route's Zod schema — a bare `str` silently drops the old validation. `EmailStr` needs `email-validator` in `requirements.txt`. Fields are `snake_case`; `BaseRequestSchema`'s `to_camel` alias generator accepts both key styles.
+Port every Zod constraint — a bare `str` silently drops the validation. `EmailStr` needs `email-validator` in `requirements.txt`. Fields are `snake_case`; `BaseRequestSchema`'s `to_camel` alias accepts both key styles.
 
 **Response schema template:**
 
@@ -103,7 +103,7 @@ class UserResponse(BaseResponseSchema):
     email: str
 ```
 
-**Service** — `src/api/services/users.py`: `UsersService` with `find_all()`, `find_one(user_id)` (raises `NoResultsFound` when absent), and `create(body: CreateUserRequest)`, each taking over the route handler's body.
+**Service** — `src/api/services/users.py`: `UsersService` whose `find_all()`, `find_one(user_id)` (raises `NoResultsFound` when absent) and `create(body: CreateUserRequest)` take over the handler bodies.
 
 **Register each new router in `../[project-name]-api/src/api/routes.py`:**
 
@@ -117,7 +117,7 @@ from api.tags import APITags
 router.include_router(users.router, tags=[APITags.USERS])
 ```
 
-**Remove the scaffold's example placeholder:** After adding all resource routers, clean up the example boilerplate that ships with the scaffold:
+**Remove the scaffold's example** after adding all routers:
 - Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`
 - Remove the `example` import and its `include_router(example.router, ...)` line from `src/api/routes.py`
 - Remove `EXAMPLE` from `APITags` in `src/api/tags.py`
@@ -126,7 +126,7 @@ router.include_router(users.router, tags=[APITags.USERS])
 
 ## Phase 5 — Migrate Integrations (autonomous)
 
-For each integration file identified in Phase 1d (API-route-imported):
+For each Phase 1d integration:
 
 **TypeScript FetchClient/AxiosClient subclass → Python httpx wrapper:**
 
@@ -160,9 +160,9 @@ def get_github_client() -> GithubClient:
     return GithubClient()
 ```
 
-`github_settings` is a `pydantic-settings` class added to `src/core/config.py` alongside `APISettings` (`GITHUB_API_URL: str`, `GITHUB_TOKEN: SecretStr`), so a missing value fails at boot. Resolve the client on the route with `Annotated[GithubClient, Depends(get_github_client)]` and pass it to the service — the router stays thin.
+`github_settings` is a `pydantic-settings` class beside `APISettings` in `src/core/config.py` (`GITHUB_API_URL: str`, `GITHUB_TOKEN: SecretStr`), so a missing value fails at boot. Inject the client with `Annotated[GithubClient, Depends(get_github_client)]` and pass it to the service.
 
-Do not copy the TypeScript base clients (`fetch-client.ts`, `axios-client.ts`) — the `httpx` wrapper replaces them. Then apply the Phase 5 cleanup in `common.md`.
+Then apply the Phase 5 cleanup in `common.md`.
 
 ---
 
@@ -177,7 +177,7 @@ Ask:
 > - SQLAlchemy — relational databases (PostgreSQL, MySQL, SQLite)
 > - PyMongo async — MongoDB (Pydantic models + repositories; Beanie ODM only on explicit request — it pins Python 3.13)"
 
-After the user answers, load and follow the corresponding skill:
+Then load and follow the matching skill:
 ```bash
 # If SQLAlchemy
 cat "<skill-dir>/../add/database/python/sqlalchemy.md"
@@ -186,18 +186,16 @@ cat "<skill-dir>/../add/database/python/sqlalchemy.md"
 cat "<skill-dir>/../add/database/python/pymongo-async.md"
 ```
 
-The database skill scaffolds only the connection layer. Port each Drizzle table / Kysely `types.ts` interface to a SQLAlchemy model or a Pydantic model + repository and present the ported schemas to the user for review before Phase 7.
-
-After the user confirms, delete `src/integrations/database/` (and `drizzle.config.ts`, if present) from the Next.js project.
+It scaffolds only the connection layer. Port each Drizzle table / Kysely `types.ts` interface to a SQLAlchemy model or a Pydantic model + repository, and have the user review the ported schemas before Phase 7. After they confirm, delete `src/integrations/database/` (and any `drizzle.config.ts`) from Next.js.
 
 **FastAPI + Mongoose:**
 
-Load and follow the PyMongo async skill (Pydantic models + repositories on PyMongo's `AsyncMongoClient`; use `beanie.md` instead only if the user explicitly wants an ODM — it pins Python 3.13):
+Load and follow the PyMongo async skill (`beanie.md` only if the user explicitly wants an ODM — it pins Python 3.13):
 ```bash
 cat "<skill-dir>/../add/database/python/pymongo-async.md"
 ```
 
-Port Mongoose schemas to Pydantic models in `src/models/` with a `BaseRepository` subclass each (carry unique indexes into `ensure_indexes`). Delete `src/integrations/database/` from the Next.js project.
+Port each Mongoose schema to a Pydantic model in `src/models/` plus a `BaseRepository` subclass (unique indexes go into `ensure_indexes`). Delete `src/integrations/database/` from Next.js.
 
 ---
 
@@ -210,7 +208,7 @@ Load and follow the FastAPI auth skill in `../[project-name]-api`:
 cat "<skill-dir>/../add/auth/fastapi.md"
 ```
 
-If Phase 6 migrated a database, the auth skill's `auth_service.py` is a 501 stub. Phase 6 ran before these stubs existed, so its auth section was skipped — replace the stubs with the database-backed implementation now:
+If Phase 6 migrated a database, `auth_service.py` is still a 501 stub (Phase 6 ran first). Replace it now:
 
 | Phase 6 database | Follow |
 |---|---|
@@ -224,9 +222,9 @@ Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ## Phases 8–10 — FastAPI-specific details
 
-**Phase 8, step 0 CORS:** none. Browser calls arrive same-origin through the Next.js `/api/external` rewrite, so cookie mode needs no CORS change. Do not set `allow_credentials=True` for the frontend's origin.
+**Phase 8, step 0 CORS:** none (same-origin through the `/api/external` rewrite). Do not set `allow_credentials=True` for the frontend's origin.
 
-**Phase 9 — FastAPI CORS config:** no change. The Next.js frontend is same-origin through its rewrite, so `CORS_ORIGINS` (from `src/.env.default`) only matters for other browser origins calling with Bearer tokens. No separate `.env.example` — `src/.env.default` is the single source of truth for default env values.
+**Phase 9 — FastAPI CORS config:** no change. `CORS_ORIGINS` (in `src/.env.default`, the only env-defaults file) matters only for other browser origins using Bearer tokens.
 
 **Phase 10 — Verify commands:**
 ```bash
@@ -239,4 +237,4 @@ cd [original-project-path]
 pnpm build && pnpm test
 ```
 
-For phase 8 steps 1–6, phase 9 AGENTS.md/Next.js updates, and the phase 10 success message, see `common.md`.
+The rest of Phases 8–10 is in `common.md`.

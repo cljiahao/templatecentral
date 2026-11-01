@@ -3,13 +3,9 @@
      prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js
 
-Add authentication to a Next.js project scaffolded from templateCentral. Uses **better-auth** — a TypeScript-first auth library with full type safety, SSO, and email/password support.
+Adds **better-auth** (typed, SSO + email/password) to a templateCentral Next.js project.
 
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
-> **Security requirement**: meet the Next.js floor in `.claude/rules/nextjs.md` — two separate high-severity advisories have shipped fixes for Turbopack `proxy.ts`/middleware auth bypasses (an RSC prefetch bypass, and a July 2026 single-locale middleware bypass), so an outdated pin can silently defeat the auth this skill sets up. Verify `package.json` → `next` before proceeding.
+> **Security requirement**: verify `package.json` → `next` meets the floor in `.claude/rules/nextjs.md` before proceeding. Older versions carry `proxy.ts` auth-bypass advisories that silently defeat this skill.
 
 ### Files this skill creates
 
@@ -52,20 +48,13 @@ src/lib/constants/routes.ts          ← adds PAGE_ROUTES.LOGIN (HOME and DASHBO
 AGENTS.md                            ← adds auth architecture notes
 ```
 
-> **`providers.tsx` does NOT need modification** — better-auth manages session state via `authClient.useSession()`; no `SessionProvider` wrapper is required.
+> **`providers.tsx` needs no change** — `authClient.useSession()` holds session state; no `SessionProvider`.
 
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Install better-auth
 
@@ -75,17 +64,17 @@ pnpm add "better-auth@^1.7.7"
 
 Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nextjs/template/` into the project per `<skill-dir>/auth/nextjs/template.manifest` — the files of Steps 2, 3, 5, 7, 10 and 14 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
 
-> **Version floor:** better-auth ≥1.7.7 — two critical security advisories are fixed only in 1.7.7. If you later add the Drizzle adapter, regenerate the auth schema after upgrading (1.7 makes `Account.issuer` required and moves `experimental.joins` to `advanced.database.joins`).
+> **Version floor:** see `.claude/rules/nextjs.md` (security advisories, and the schema regeneration the Drizzle adapter needs after upgrading).
 
 #### 2. Write `src/lib/auth.ts` (verbatim — do not generate)
 
 Security-critical file. Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth.ts` by the copy step; do not re-type it.
 
-> `freshAge` (add under `session` for high-assurance flows) is measured from session `createdAt`, not last activity. With a short `freshAge` (e.g. `43200`), users must re-authenticate after that period regardless of activity — this is the intended behavior for high-security flows.
+> `freshAge` (under `session`, for high-assurance flows) counts from session `createdAt`, not last activity: with `43200`, users re-authenticate after 12 h regardless of activity.
 
-> **Database**: Without a `database` option, better-auth falls back to an in-memory adapter — accounts and sessions live in server process memory only. This is **not** a persistent stateless-cookie mode: everything is lost on every restart/redeploy, and it does not work across multiple instances (serverless, multi-replica deployments). The HMAC-signed `cookieCache` (default `strategy: 'compact'`) is only a short-lived (5-minute) read-through cache in front of this store, not a replacement for it. Add a database adapter after running `templatecentral:add` (database) before anything beyond quick local prototyping. With Drizzle v1, follow `add/database/typescript/nextjs-drizzle.md` Step A9b — it uses the adapter's Relations v2 entry point; the default `better-auth/adapters/drizzle` entry generates code Drizzle v1 cannot compile. See [better-auth database docs](https://www.better-auth.com/docs/concepts/database).
+> **Database**: with no `database` option, better-auth keeps accounts and sessions in process memory — lost on every restart, and broken across instances (serverless, replicas). `cookieCache` is only a 5-minute read-through cache, not storage. Add an adapter via `templatecentral:add` (database) before anything beyond local prototyping. With Drizzle v1, use `add/database/typescript/nextjs-drizzle.md` Step A9b (Relations v2 entry point); the default `better-auth/adapters/drizzle` output does not compile on Drizzle v1.
 
-> **Password hashing**: better-auth's default hasher is scrypt, not argon2id. To use argon2id instead, install `@node-rs/argon2` and override `emailAndPassword.password.hash`/`.verify`:
+> **Password hashing**: the default is scrypt. For argon2id, install `@node-rs/argon2` and override `emailAndPassword.password.hash`/`.verify`:
 > ```ts
 > import { hash, verify, type Options } from '@node-rs/argon2';
 >
@@ -107,7 +96,7 @@ Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/auth-client.ts` b
 
 #### 4. Write `src/proxy.ts` (verbatim — do not generate)
 
-Security-critical file. Write exactly as shown. It replaces the scaffold's `src/proxy.ts`; every response it returns still goes through `applyFrameProtection` (`src/lib/security/frame-protection.ts`, from the scaffold), so the CSP and anti-clickjacking headers stay on. Responses on `/api/external/*` (the backend rewrite) keep the backend's own headers.
+Security-critical. Write exactly as shown; it replaces the scaffold's `src/proxy.ts`. Every response still passes through `applyFrameProtection`, so CSP and anti-clickjacking headers stay on (`/api/external/*` keeps the backend's headers).
 
 ```ts
 import { getSessionCookie } from 'better-auth/cookies';
@@ -182,13 +171,13 @@ export const config = {
 
 #### 5. Create `src/app/api/auth/[...all]/route.ts`
 
-Every handler is wrapped in `withLogging` — `pnpm check` (`scripts/check-route-logging.mjs`) rejects a destructured `export const { GET, POST } = toNextJsHandler(auth)`.
+Handlers are wrapped in `withLogging`; `pnpm check` rejects a bare `export const { GET, POST } = toNextJsHandler(auth)`.
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/api/auth/[...all]/route.ts` by the copy step; do not re-type it.
 
 #### 6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`
 
-Add `LOGIN` to the existing `PAGE_ROUTES` object. `HOME` and `DASHBOARD` are already present from the scaffold — do not add them again:
+Add `LOGIN` to `PAGE_ROUTES` (`HOME` and `DASHBOARD` already exist — do not add them again):
 
 ```ts
 export const PAGE_ROUTES = {
@@ -203,7 +192,7 @@ Copied verbatim from `<skill-dir>/auth/nextjs/template/src/app/(public)/login/pa
 
 #### 8. Create `src/app/dashboard/layout.tsx` (skip if already exists)
 
-> If `src/app/dashboard/layout.tsx` already exists (present when scaffolded with templateCentral), **add the authoritative session check below to it** — do not rely on `proxy.ts` alone. The proxy does only an optimistic cookie-presence check (no session validation); `/dashboard` is genuinely protected only once this server-side check is in the layout. Every protected route group needs one.
+> If the layout exists (scaffolded projects), **add the session check below to it** — do not rely on `proxy.ts`, which only checks that a cookie is present. `/dashboard` is protected only once this server-side check is in the layout; every protected route group needs one.
 
 ```tsx
 import { auth } from '@/lib/auth';
@@ -239,7 +228,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
 #### 9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)
 
-> **Skip this step** if `src/app/dashboard/(overview)/page.tsx` already exists — present when the project was scaffolded with templateCentral. The existing page shows the `ExampleList` component; the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`) cleans it up when the user is ready.
+> **Skip** if the page exists (scaffolded projects); the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`) removes its `ExampleList` later.
 
 If creating fresh (non-scaffold project):
 
@@ -259,19 +248,19 @@ export default function DashboardPage() {
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-button.tsx` by the copy step; do not re-type it.
 
-**`src/features/auth/components/signout-button.tsx`:**
+**`src/features/auth/components/signout-button.tsx`**:
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/signout-button.tsx` by the copy step; do not re-type it.
 
-**`src/features/auth/components/login-card.tsx`:**
+**`src/features/auth/components/login-card.tsx`**:
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/login-card.tsx` by the copy step; do not re-type it.
 
-**`src/features/auth/components/index.ts`:**
+**`src/features/auth/components/index.ts`**:
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/components/index.ts` by the copy step; do not re-type it.
 
-**`src/features/auth/index.ts`:**
+**`src/features/auth/index.ts`**:
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/features/auth/index.ts` by the copy step; do not re-type it.
 
@@ -360,13 +349,13 @@ export function UserAvatar() {
 
 #### 14. Authorization helpers
 
-A session says who the caller is; these decide what the caller may touch. Both deny by default. The role comes from `user.role` (Step 2), which better-auth stores server-side and never accepts from the client. With a database adapter, regenerate the auth schema so the user table gains the `role` column. If the session cookie cache is enabled, a role revocation can take up to its max age to reach `hasRole`.
+These decide what the caller may touch; both deny by default. `user.role` (Step 2) is stored server-side and never accepted from the client. With a database adapter, regenerate the auth schema to add the `role` column. With the cookie cache on, a revoked role reaches `hasRole` only after the cache max age.
 
 **`src/lib/authz.ts`**:
 
 Copied verbatim from `<skill-dir>/auth/nextjs/template/src/lib/authz.ts` by the copy step; do not re-type it.
 
-Use `isOwner` on record-by-id pages, actions and handlers (see Rules). A record owned by someone else gets the same 404 as one that does not exist, so a caller cannot probe which ids belong to other users:
+Use `isOwner` on record-by-id pages, actions and handlers. Another user's record gets the same 404 as a missing one, so ids cannot be probed:
 
 ```tsx
 // Server Component page
@@ -389,7 +378,7 @@ Copied verbatim from `<skill-dir>/auth/nextjs/template/test/lib/authz.test.ts` b
 
 #### 15. Adding an SSO provider
 
-Add the provider to `socialProviders` in `src/lib/auth.ts`, put its credentials in `.env.local`, then render a `<LoginButton provider="..." />` in `src/features/auth/components/login-card.tsx`:
+Add it to `socialProviders` in `src/lib/auth.ts`, credentials to `.env.local`, and a `<LoginButton provider="..." />` to `login-card.tsx`:
 
 ```ts
 socialProviders: {
@@ -412,19 +401,19 @@ socialProviders: {
 | GitHub | `github` | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `/api/auth/callback/github` |
 | Microsoft | `microsoft` | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | `/api/auth/callback/microsoft` |
 
-Full provider list: https://www.better-auth.com/docs/authentication/social-sign-on
+All providers: https://www.better-auth.com/docs/authentication/social-sign-on
 
-> **OIDC provider (token issuer)**: If your project needs to act as an OIDC provider (issuing tokens to third-party clients), use `@better-auth/oauth-provider` — the `oidcProvider` plugin was removed in better-auth 1.7. (MCP support likewise moved to `@better-auth/mcp`; generic OAuth providers are configured via `signIn.social` with PKCE on by default.) See: https://www.better-auth.com/docs/plugins/oauth-provider
+> **Acting as an OIDC provider** (issuing tokens to third parties): use `@better-auth/oauth-provider`; MCP is `@better-auth/mcp`; generic OAuth goes through `signIn.social` (PKCE on). The `oidcProvider` plugin was removed in better-auth 1.7. See https://www.better-auth.com/docs/plugins/oauth-provider.
 
 ### Rate Limiting (Required for Production)
 
-Target: max 3 credential attempts per 15 minutes. better-auth's built-in limiter (`rateLimit`) is on in production only, defaults to in-memory storage (per-instance — useless across replicas), and keys on `advanced.ipAddress.ipAddressHeaders`, which is client-forgeable without a trusted proxy. For multi-instance deployments, enforce the limit at the infrastructure layer (CDN/WAF/API Gateway) or in `proxy.ts` with `@upstash/ratelimit` (Redis-backed, edge-compatible):
+Target: max 3 credential attempts per 15 minutes. better-auth's `rateLimit` runs in production only, stores in memory (per instance), and keys on a header clients can forge without a trusted proxy. For multiple instances, limit at the CDN/WAF/API Gateway or in `proxy.ts` with `@upstash/ratelimit` (Redis, edge-compatible):
 
 ```bash
 pnpm add @upstash/ratelimit @upstash/redis
 ```
 
-In `src/proxy.ts`, add a rate-limit check at the **top of `route()`**, before the public-route short-circuit. Placement matters: every `/api/auth/*` endpoint matches `PUBLIC_API_PREFIXES` (`/api/auth`), so the short-circuit returns `NextResponse.next()` before the auth call ever runs — a limiter placed after it would be unreachable.
+Put the check at the **top of `route()`** in `src/proxy.ts`, before the public-route short-circuit: `/api/auth/*` matches `PUBLIC_API_PREFIXES`, so a limiter placed after it never runs.
 
 ```typescript
 import { Ratelimit } from '@upstash/ratelimit';
@@ -479,28 +468,26 @@ if (RATE_LIMITED_AUTH_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {
 }
 ```
 
-> **TRUST_PROXY required**: Only trust `X-Forwarded-For` if your deployment topology has a controlled reverse proxy (ALB, Traefik). Without a proxy, any client can forge `X-Forwarded-For` to bypass rate limits. Set `TRUST_PROXY` to the number of trusted proxy hops — `TRUST_PROXY=1` for one-hop (ALB → App), `TRUST_PROXY=2` for two-hop (ALB → Traefik → App); leave it empty/unset when there is no proxy (headers not trusted). See the scaffold's `src/lib/utils/request-origin.ts` for the same convention.
+> **TRUST_PROXY required**: trust `X-Forwarded-For` only behind a controlled reverse proxy (ALB, Traefik); otherwise clients forge it to bypass the limit. Set `TRUST_PROXY` to the trusted hop count (`1` for ALB → App, `2` for ALB → Traefik → App); leave it unset with no proxy. Same convention as `src/lib/utils/request-origin.ts`.
 
-Single-instance deployments can rely on better-auth's built-in limiter instead: set `rateLimit: { storage: 'database', customRules: { '/sign-in/*': { window: 900, max: 3 } } }` (paths are relative to `/api/auth`).
+Single instance: the built-in limiter suffices — `rateLimit: { storage: 'database', customRules: { '/sign-in/*': { window: 900, max: 3 } } }` (paths are relative to `/api/auth`).
 
 ### Security Rules
 
-- NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })`. JSON responses create information-disclosure vectors.
-- NEVER remove `disableSignUp: process.env.NODE_ENV === 'production'` — open registration in production is a security risk unless intentional.
-- NEVER remove the `isDev` guard on the dev login button — it must only render in development.
-- NEVER hardcode secrets — always environment variables.
+- NEVER return JSON from `proxy.ts` for unauthorized API routes — use `new Response(null, { status: 401 })` (JSON leaks information).
+- NEVER remove `disableSignUp: process.env.NODE_ENV === 'production'` unless open registration is intended.
+- NEVER remove the `isDev` guard on the dev login button.
+- NEVER hardcode secrets.
 - NEVER expose `BETTER_AUTH_SECRET` in `NEXT_PUBLIC_*` vars — exposed to every browser.
-- Every page, Server Action and route handler that reads or writes a record by id checks `isOwner` (or filters the query by owner) first. Another user's record gets the same 404 as a missing one.
+- Every page, Server Action and handler that touches a record by id checks `isOwner` (or filters by owner) first; another user's record → same 404 as missing.
 - NEVER accept `role` from client input — keep `input: false` on the `role` field and change roles only from trusted server code.
-- Always generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` — never use a weak or predictable value.
-- **Rate limiting is mandatory for production** — add rate limiting on auth endpoints before going live.
-- **Password hashing**: better-auth's default hasher is scrypt, not argon2id — override `emailAndPassword.password.hash`/`.verify` with `@node-rs/argon2` (see Step 2) to match this project's argon2id-everywhere standard.
-- **Breached-password check**: current password-hygiene guidance recommends rejecting passwords found in known-breach lists at creation/change time, in addition to the length floor — check candidates against a blocklist (e.g. the Have I Been Pwned k-anonymity range API) in the sign-up flow before calling `authClient.signUp.email()`.
+- Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
+- Rate limiting on auth endpoints is mandatory before production.
+- Override the scrypt default with argon2id (Step 2) — the project standard.
+- Reject breached passwords at sign-up/change (e.g. the Have I Been Pwned k-anonymity range API) before `authClient.signUp.email()`, in addition to the length floor.
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
 
 ---

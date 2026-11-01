@@ -3,33 +3,16 @@
      prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS
 
-Guide for adding unit tests and e2e tests to a NestJS project scaffolded from templateCentral.
-
 **Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-If found → proceed to context check below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to context check below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-**Context check:** Confirm `src/modules/` exists and contains at least one subdirectory.
-
-If not found → ⛔ STOP. Tell the user: "No modules found. Run
+**Context check:** Confirm `src/modules/` exists and contains at least one subdirectory. If not, ⛔ STOP and tell the user: "No modules found. Run
 `templatecentral:add` (module) first, then return here."
-
-If found → proceed to the sections below.
 
 ### Unit Tests
 
@@ -120,7 +103,7 @@ The example assumes `add (auth)` (guarded routes → signed token) and `add (dat
 
 E2E tests go in `test/app.e2e-spec.ts` or `test/<name>.e2e-spec.ts`.
 
-> **Placeholder names**: All examples use `My*`, `/my-items`, etc. Replace these with your actual module name and route path (e.g., for a `task` module with `@Controller('tasks')`: `TaskController`, `/tasks`).
+> **Placeholder names**: replace `My*` and `/my-items` with your module and route (`task` with `@Controller('tasks')` → `TaskController`, `/tasks`).
 
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -201,7 +184,7 @@ pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 
 ### Rules
 
-- One concept per test — test a single behavior in each `it()` block
+- One behavior per `it()`
 - Descriptive names — `it('should throw NotFoundException for missing item')`
 - Mock at boundaries — mock repositories in service tests, not internals
 - Use NestJS testing module — `Test.createTestingModule()` for proper DI
@@ -209,11 +192,9 @@ pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 - NEVER test implementation details — test behavior and outcomes
 - NEVER share mutable state between tests — each `beforeEach` creates a fresh module
 - NEVER mock the service in controller tests unless testing error handling paths
-- NEVER skip `afterAll(() => app.close())` in e2e tests — Fastify connections must be closed
-- NEVER write tests that depend on execution order — each test must be independent
+- Always `afterAll(() => app.close())` in e2e tests
+- NEVER depend on test order
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -3,12 +3,6 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI
 
-Create a new third-party API integration in a FastAPI project scaffolded from templateCentral.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 > **Placeholder names**: `<name>` in the file paths below and `github`/`Github`/`GITHUB` in the code are the same integration name in three casings. Substitute your actual service name for all of them (e.g. `stripe`/`Stripe`/`STRIPE`) — writing a literal `<name>_client.py` while the imports still say `integrations.github_client` breaks every import in this skill.
 
 ### Architecture
@@ -31,18 +25,11 @@ Add to `requirements.txt`:
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Create Integration Directories
 
-The base template does not include `src/integrations/` or `src/api/dependencies/`. Create them now:
+Create `src/integrations/` and `src/api/dependencies/` (not in the template):
 
 ```bash
 mkdir -p src/integrations src/api/dependencies
@@ -192,13 +179,13 @@ class APISettings(BaseSettings):
     GITHUB_TOKEN: SecretStr
 ```
 
-Seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (CI has no `src/.env`; see `templatecentral:add` (auth) Step 11 for the conftest shape):
+Seed a placeholder in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (CI has no `src/.env`; conftest shape: add (auth) Step 11):
 
 ```python
 os.environ.setdefault("GITHUB_TOKEN", "test-placeholder")
 ```
 
-Ask the user to add `GITHUB_TOKEN` to `src/.env` (real token — never commit; agent edits to `.env` files are hook-blocked by design):
+Ask the user to add `GITHUB_TOKEN` to `src/.env` (real token, never committed; agent `.env` edits are hook-blocked):
 ```
 GITHUB_TOKEN=
 ```
@@ -280,7 +267,7 @@ Mandatory — the router is unreachable until registered.
 
 #### 9. Tests
 
-**`test/test_integrations/test_github_service.py`** (plus an empty `__init__.py`) — `httpx.MockTransport` stands in for the network, so the error mapping is tested without calling GitHub:
+**`test/test_integrations/test_github_service.py`** (plus an empty `__init__.py`) — `httpx.MockTransport` replaces the network:
 
 ```python
 """Tests for GithubService upstream-error mapping."""
@@ -326,15 +313,15 @@ async def test_upstream_failure_maps_to_502(status: int, body: object) -> None:
 
 ### Rules
 
-- Use `httpx.AsyncClient` for async HTTP — not `requests`.
-- Validate all external responses with Pydantic schemas before returning to callers.
+- Use `httpx.AsyncClient`, not `requests`.
+- Validate every external response with Pydantic.
 - Client handles HTTP only — no business logic.
 - URL-encode every caller-supplied path segment with `quote(value, safe="")`.
 - Map `httpx.HTTPStatusError`, `httpx.RequestError`, and `ValidationError` in the service — never return upstream error bodies or validation details to the client.
 - Keep the 30 s timeout and `follow_redirects=False`. No automatic retries — add them only for idempotent GETs, with backoff.
-- Use FastAPI dependencies for lifecycle management (create → yield → close).
+- Manage client lifecycle with a FastAPI dependency (create → yield → close).
 - Keep API tokens in environment variables / config — never hardcode.
-- Place integration files in `src/integrations/` — not in `api/`.
+- Integration files go in `src/integrations/`, not `api/`.
 
 ### Validate
 
@@ -346,6 +333,4 @@ python -m pyright src/
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate the server starts and tests pass
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.

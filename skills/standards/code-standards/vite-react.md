@@ -5,7 +5,7 @@
 
 ### File Naming
 
-All files use **kebab-case**. No exceptions (unlike Next.js, Vite has no special file conventions).
+All files use **kebab-case**, no exceptions.
 
 ### Exports & Variable Naming
 
@@ -22,18 +22,15 @@ All files use **kebab-case**. No exceptions (unlike Next.js, Vite has no special
 
 | Pattern | When to use |
 |---------|-------------|
-| `export function Foo() {}` | Default — most components |
-| `export const Foo = memo(function Foo() {})` | Components needing memoization (`import { memo } from 'react'` — this scaffold uses named React imports, there is no default `React` import anywhere) |
+| `export function Foo() {}` | Default |
+| `export const Foo = memo(function Foo() {})` | Components needing memoization (`import { memo } from 'react'` — named React imports only) |
 | `const foo = () => {}` | Hooks, utilities, helpers, internal sub-components |
 
 ### Component Best Practices
 
-- Keep components thin — delegate logic to hooks/services.
-- Extract when there's a second consumer — don't prematurely extract.
+- Keep components thin — delegate logic to hooks/services. Extract on the second consumer.
 - Add shadcn/ui primitives via the CLI (`npx shadcn@latest add <name>`) — NEVER install `@radix-ui/*` manually or recreate primitives.
 - Prefer composition (children) over boolean flag props for variants.
-
-Stack-specific component library:
 
 **Widgets** (`src/components/widgets/`): `brand-text` · `custom-card` · `custom-dialog` · `custom-form-field` · `link-list` · `media-card` · `pill`
 
@@ -50,11 +47,11 @@ Stack-specific component library:
 
 ### Environment Variables
 
-Centralized in `src/lib/constants/env.ts` — read that file for the authoritative shape of `ENV` and `getApiBaseUrl()`. It is not restated here: a second copy drifts from the real one the moment a key is added.
+Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and `getApiBaseUrl()`.
 
-- Every `import.meta.env.VITE_*` read goes in that file and nowhere else — NEVER `import.meta.env` inline in a component or service, and NEVER `process.env` (it does not exist in the browser).
-- Use `getApiBaseUrl()` in services — NEVER `ENV.API_BASE_URL ?? ''`, which turns a missing-config error into a silent request to the wrong origin.
-- Call `getApiBaseUrl()` **inside** each request function, never at module top level — it throws when the var is unset, and a module-scope throw aborts bundle evaluation before `createRoot()` runs, producing a blank page no ErrorBoundary can catch.
+- Every `import.meta.env.VITE_*` read lives there — NEVER inline `import.meta.env`, NEVER `process.env`.
+- Use `getApiBaseUrl()` in services — NEVER `ENV.API_BASE_URL ?? ''` (a silent request to the wrong origin).
+- Call `getApiBaseUrl()` **inside** each request function, never at module top level — it throws when unset, and a module-scope throw blanks the page before any ErrorBoundary mounts.
 - `ENV` and `getApiBaseUrl` are both re-exported from `@/lib/constants` — import from the barrel.
 - NEVER put secrets in `VITE_*` — they are embedded in the client bundle.
 
@@ -67,13 +64,13 @@ Centralized in `src/lib/constants/env.ts` — read that file for the authoritati
 
 ### Comments
 
-- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- Follow `code-standards/comments.md`.
 - JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
-- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Directive hygiene is gated too: `linterOptions.reportUnusedDisableDirectives`/`reportUnusedInlineConfigs: 'error'`, `@eslint-community/eslint-comments` (`recommended` + `require-description`), and typescript-eslint's `ban-ts-comment` (via `recommended`) — every suppression must be scoped, used, and carry a `-- reason`. `sonarjs/todo-tag`/`fixme-tag` are downgraded to `warn` — TODO/FIXME with context is allowed. See `comments.md` → Enforcement.
+- `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
 ### Static Analysis (`eslint-plugin-sonarjs`)
 
-`eslint.config.mjs` extends `sonarjs.configs.recommended` (~230 of the plugin's 295 rules at the pinned 4.2.2, at `error`) covering bugs, code smells, test hygiene, and React/JSX rules (`jsx-no-leaked-render`, `no-uniq-key`, `prefer-read-only-props`). This is a client-only SPA, so the server-focused security rules (hardcoded secrets, weak crypto, insecure cookies/JWT) stay on but are inert — no server code exists here to trip them. `src/components/ui/**` (generated shadcn primitives) turns off `prefer-read-only-props`, and test files (`src/**/*.{test,spec}.{ts,tsx}`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols` so fake fixtures don't false-positive.
+`eslint.config.mjs` extends `sonarjs.configs.recommended` at `error` (bugs, code smells, tests, React/JSX). Overrides: `src/components/ui/**` (generated shadcn) turns off `prefer-read-only-props`; test files (`src/**/*.{test,spec}.{ts,tsx}`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols`.
 
 ### Security (Vite + React)
 

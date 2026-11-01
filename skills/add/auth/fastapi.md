@@ -3,13 +3,9 @@
      prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI
 
-Add JWT-based authentication to a FastAPI project scaffolded from templateCentral.
+Adds JWT authentication to a templateCentral FastAPI project.
 
-> **Stub notice:** The auth service created here is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+> **Stub notice:** the auth service is intentionally incomplete — `register_user` stores nothing and `login_user` raises HTTP 501 until `templatecentral:add` (database) completes it.
 
 ### Dependencies
 
@@ -22,14 +18,7 @@ Add to `requirements.txt`:
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Add Auth Schemas
 
@@ -56,11 +45,11 @@ class APISettings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
 ```
 
-Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
+Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
 
 > `TRUST_PROXY` already exists in the scaffold's `APISettings` (`src/core/config.py`) and `src/.env.default` — do not re-add it.
 
-Ask the user to add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `src/.env` (real value — never commit; agent edits to `.env` files are hook-blocked by design):
+Ask the user to add these to `src/.env` (real value, never committed; agent `.env` edits are hook-blocked):
 ```
 SECRET_KEY=
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -74,7 +63,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 > Run `openssl rand -hex 32` and paste the output as `SECRET_KEY`.
 
-> **Security**: `SECRET_KEY` has no default — Pydantic will raise a validation error at startup if unset, which is the correct behavior. NEVER use a hardcoded default like `"change-me"` for secrets.
+> **Security**: `SECRET_KEY` has no default, so startup fails when it is unset. NEVER give a secret a hardcoded default like `"change-me"`.
 
 #### 3. Create Security Module
 
@@ -84,13 +73,13 @@ Copied verbatim from `<skill-dir>/auth/fastapi/template/src/core/security.py` by
 
 #### 4. Create Auth Dependency
 
-The copy step created **`src/api/dependencies/`** (not in the base template) with an empty **`src/api/dependencies/__init__.py`** (marks it as a Python package) and **`src/api/dependencies/auth.py`** — `get_current_user` dependency for protecting routes:
+The copy step created the **`src/api/dependencies/`** package (empty `__init__.py`) and **`auth.py`** — the `get_current_user` route guard:
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/auth.py` by the copy step; do not re-type it.
 
 #### 5. Create Authorization Helpers
 
-**`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks. Authentication says who the caller is; these decide what the caller may touch:
+**`src/api/dependencies/authz.py`** — deny-by-default role and ownership checks:
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/dependencies/authz.py` by the copy step; do not re-type it.
 
@@ -116,7 +105,7 @@ Once `templatecentral:add` (database) adds a users store, make `get_current_role
 
 #### 6. Create Auth Service
 
-**`src/api/services/auth_service.py`** — orchestrates registration and login. This is a stub; complete it after running `templatecentral:add` (database).
+**`src/api/services/auth_service.py`** — registration and login stub (completed by the database capability).
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template/src/api/services/auth_service.py` by the copy step; do not re-type it.
 
@@ -149,7 +138,7 @@ router.include_router(auth.router, tags=[APITags.AUTH])
 
 #### 10. Protect Routes
 
-Use the `get_current_user` dependency on any endpoint that requires auth — starting with this `/me` stub in `src/api/routers/auth.py` (merge the imports into that file's block):
+Guard endpoints with `get_current_user` — first this `/me` stub in `src/api/routers/auth.py` (merge the imports):
 
 ```python
 from typing import Annotated
@@ -171,7 +160,7 @@ async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResp
 
 #### 11. Tests
 
-Settings load at import and CI has no `src/.env`, so seed a throwaway key before the app is imported — replace **`test/conftest.py`** (the import moves into the fixture for the same reason):
+Settings load at import and CI has no `src/.env` — replace **`test/conftest.py`** so it seeds a throwaway key and imports the app inside the fixture:
 
 ```python
 """Root conftest — shared fixtures available to all tests."""
@@ -207,17 +196,17 @@ def auth_headers() -> dict[str, str]:
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_auth.py` by the copy step; do not re-type it.
 
-**`test/test_api/test_authz.py`** — a probe app guards one route with the real dependencies, so the checks are tested apart from any feature router:
+**`test/test_api/test_authz.py`** — a probe app tests the real dependencies apart from any feature router:
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template/test/test_api/test_authz.py` by the copy step; do not re-type it.
 
 ### Browser Client (Cookie Mode)
 
-**Apply when a browser SPA calls this API** — a Vite + React frontend (`templatecentral:add (auth)` on Vite sends `credentials: 'include'` + `X-CSRF-Token`, never a Bearer header), or Next.js client components calling the backend. `templatecentral:standards (full-stack-pairing)` points here. Without it every guarded route answers that SPA with 401.
+**Apply when a browser SPA calls this API** — Vite + React auth (sends `credentials: 'include'` + `X-CSRF-Token`, never Bearer) or Next.js client components. Without it every guarded route answers that SPA with 401.
 
-**Same-origin only:** the SPA must reach this API through a reverse proxy on its own origin (Vite `server.proxy` in dev, nginx `location /api/` in production, or a Next.js `rewrites()` path — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is a host-only cookie, so an SPA on another host cannot read it and every non-GET would 403.
+**Same-origin only:** the SPA reaches this API through a reverse proxy on its own origin (Vite `server.proxy`, nginx `location /api/`, or Next.js `rewrites()` — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is host-only, so from another host every non-GET 403s.
 
-Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the server recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or lifted from another session fails. Bearer requests skip the check (browsers never attach `Authorization` on their own), so API clients keep working unchanged.
+Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the server recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or another session fails. Bearer requests skip the check (browsers never attach `Authorization` themselves), so API clients are unaffected.
 
 Run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template-cookie bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` first: it writes `test/test_api/test_auth_cookie.py` (4) from `<skill-dir>/auth/fastapi/template-cookie/`.
 
@@ -354,7 +343,7 @@ def clear_session_cookies(response: Response) -> None:
         )
 ```
 
-**3. `src/api/routers/auth.py`** — add the browser login and logout (merge `Response`, `status`, `require_json` and the two cookie helpers into the imports). `/auth/login` keeps returning the token for API clients; `/auth/session` returns 204 so the JWT never reaches JavaScript, and minting a fresh session + CSRF pair on every login also defeats session fixation:
+**3. `src/api/routers/auth.py`** — add the browser login and logout (merge `Response`, `status`, `require_json` and the two cookie helpers into the imports). `/auth/login` still returns the token for API clients; `/auth/session` returns 204 so the JWT never reaches JavaScript, and a fresh session + CSRF pair per login defeats session fixation:
 
 ```python
 @router.post(
@@ -376,11 +365,11 @@ def logout(response: Response) -> None:
     clear_session_cookies(response)
 ```
 
-`/session` needs no CSRF token: `require_json` answers 415 to anything but `Content-Type: application/json` (FastAPI would otherwise parse a body with *no* Content-Type as JSON — a CORS-simple request that skips preflight), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects — the custom-request-header defense OWASP lists for API endpoints. Rate-limit it like `/login` (see Rate Limiting).
+`/session` needs no CSRF token: `require_json` answers 415 to anything but `Content-Type: application/json` (FastAPI would otherwise parse a body with *no* Content-Type as JSON — a CORS-simple request that skips preflight), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). Rate-limit it like `/login` (see Rate Limiting).
 
 No CORS change: the SPA's proxied requests are same-origin and never preflight.
 
-**4. `test/test_api/test_auth_cookie.py`** — a probe app isolates the cookie machinery from the login stub and from whichever database variant completes it:
+**4. `test/test_api/test_auth_cookie.py`** — a probe app tests the cookie machinery apart from the login stub:
 
 Copied verbatim from `<skill-dir>/auth/fastapi/template-cookie/test/test_api/test_auth_cookie.py` by the copy step; do not re-type it.
 
@@ -427,16 +416,16 @@ def create_session(request: Request, body: LoginRequest, response: Response) -> 
 
 ### Rules
 
-- **SECRET_KEY must be kept secret** — never commit to version control. Add to `src/.env` and `.gitignore`.
+- Never commit `SECRET_KEY` — add it to `src/.env` and make sure `src/.env` is in `.gitignore`.
 - Use `HTTPBearer` scheme so Swagger UI gets the "Authorize" button.
-- Browser SPA clients get cookie mode (above), never a token in `localStorage` — Bearer stays for non-browser clients.
-- Always hash passwords with argon2id (`argon2-cffi` package) — never store plaintext. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation).
-- `get_current_user` returns the user ID (subject). Extend it to return a full user object once you have a database.
-- Every handler that loads a record by id calls `ensure_owner` (or filters the query by owner) before returning or changing it.
+- Browser SPAs use cookie mode, never a `localStorage` token; Bearer is for non-browser clients.
+- Hash passwords with argon2id (`argon2-cffi`) — never store plaintext.
+- `get_current_user` returns the user ID; return a full user once a database exists.
+- Every record-by-id handler calls `ensure_owner` (or filters by owner) first.
 - Role-gated routes depend on `require_roles(...)`. Roles come from `get_current_roles`, never from the token, so a revoked role stops working on the next request.
 - When completing `login_user`, return the same 401 for unknown email and wrong password, and run `verify_password` against a dummy hash when the user is missing — otherwise response timing reveals which emails are registered.
-- **Rate limiting is mandatory for production** — add `slowapi` before going live.
-- **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it, the proxy's IP is the apparent client, making rate limiting shared across all users (ineffective).
+- Rate limiting (`slowapi`) is mandatory before production.
+- **TRUST_PROXY must be set when behind a reverse proxy** — `get_remote_address` reads `request.client.host`. Set `TRUST_PROXY` to your VPC CIDR (single-hop: ALB → App) or `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12` (two-hop: ALB → Traefik → App). Without it every user shares the proxy's IP and one rate-limit bucket.
 
 ### Validate
 
@@ -448,8 +437,6 @@ python -m pyright src/        # zero type errors
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate the server starts and tests pass
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.
 
 ---

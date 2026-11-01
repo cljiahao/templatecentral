@@ -3,33 +3,18 @@
      prereq: Stack = Next.js. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js
 
-Guide for writing tests for API route handlers in a Next.js project scaffolded from templateCentral. Tests cover server-side API logic only — not frontend components.
+Tests for Next.js API route handlers only — not frontend components.
 
 **Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-If found → proceed to context check below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to context check below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-**Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file.
-
-If not found → ⛔ STOP. Tell the user: "No API routes found. Run
+**Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file. If not, ⛔ STOP and tell the user: "No API routes found. Run
 `templatecentral:add` (api-route) first, then return here."
-
-If found → proceed to the sections below.
 
 ### Test Structure
 
@@ -53,9 +38,9 @@ Import route handler functions directly and call them with `NextRequest` objects
 
 > **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) must get its own 401 test.
 
-> **Always pass a `NextRequest`, never a plain `Request`.** `withLogging`-wrapped handlers are typed against `NextRequest` (it adds `nextUrl` and `cookies`), so a plain `Request` — or a zero-argument `GET()` call — fails `pnpm check` with a type error even though it would run fine at runtime.
+> **Always pass a `NextRequest`, never a plain `Request`.** `withLogging` handlers are typed against `NextRequest`, so a plain `Request` or a zero-argument `GET()` fails `pnpm check`.
 
-> **Note**: `ProjectService` in the examples below is a **placeholder** — the template's `src/integrations/factories.ts` starts empty. Replace it with whatever data access layer you've added via the `templatecentral:add (database)` or `templatecentral:add (integration)` skill. The mock pattern shown (module-level `vi.mock`, `vi.mocked` for type-safety) applies to any service you create.
+> **Note**: `ProjectService` below is a **placeholder** (`src/integrations/factories.ts` starts empty) — use your database or integration layer. The mock pattern (module-level `vi.mock`, `vi.mocked`) applies to any service.
 
 #### 1. Create the Test File
 
@@ -262,19 +247,17 @@ function makeParams<T extends Record<string, string>>(values: T) {
 
 ### Rules
 
-- Test API route handlers only — NEVER write frontend component tests in this pattern
-- One concept per test — test a single behavior in each `it()` block
+- API route handlers only — no component tests here
+- One behavior per `it()`
 - Mock at boundaries — mock integration-layer services/clients (`src/integrations/`), not internal utilities
 - Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
-- Always call `vi.resetAllMocks()` in `afterEach` — prevent mock leakage between tests. `vi.restoreAllMocks()` is not enough: it only restores `vi.spyOn` spies, so a `mockResolvedValue` queued on a `vi.fn()` from a `vi.mock` factory (the pattern used above) survives into the next test. Setting `mockReset: true` in `vitest.config.ts` achieves the same thing globally.
-- Use descriptive test names — `it('should return 404 when project not found')`
-- NEVER test implementation details — test the HTTP status and response body, not how the handler calls services internally
-- NEVER share mutable state between tests — each test sets up its own mocks
+- Call `vi.resetAllMocks()` in `afterEach` (or set `mockReset: true` in `vitest.config.ts`). `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test.
+- Descriptive names — `it('should return 404 when project not found')`
+- NEVER test implementation details — assert status and body
+- NEVER share mutable state between tests
 - NEVER skip error path tests — always test what happens when services throw, and assert the 500 body does not echo the internal error message
 - NEVER hardcode URLs in assertions — test the response shape and status code
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/nestjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nestjs/template/` (listed in `<skill-dir>/pagination/nestjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
@@ -24,7 +17,7 @@ Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/dto/pagi
 
 Copied verbatim from `<skill-dir>/pagination/nestjs/template/src/common/services/pagination.service.ts` by the copy step; do not re-type it.
 
-`PaginationService` has no module of its own — register it in each feature module that uses it. Then export the module from `src/modules/index.ts` (`export * from './projects/projects.module';`) and append `ProjectsModule` to the existing `imports` array in `src/app.module.ts` — never replace that array:
+`PaginationService` has no module — register it in each feature module that uses it. Export the module from `src/modules/index.ts` and append `ProjectsModule` to the `imports` array in `src/app.module.ts` (never replace the array):
 
 ```ts
 // src/modules/projects/projects.module.ts
@@ -160,7 +153,7 @@ export class ProjectsService {
 }
 ```
 
-**Kysely** — add `projects: ProjectsTable;` to `Database` in `src/database/types.ts`, plus the table interface and a migration, then `pnpm migrate`. Name the migration `NNN_projects.ts` with the next unused number in `src/database/migrations/` — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed (e.g. `002_add_auth.ts` from add (auth)):
+**Kysely** — add `projects: ProjectsTable;` to `Database` in `src/database/types.ts`, plus the table interface and a migration, then `pnpm migrate`. Name it `NNN_projects.ts` with the next unused number in `src/database/migrations/` — Kysely fails on a file that sorts before an executed one (e.g. `002_add_auth.ts`):
 
 ```ts
 export interface ProjectsTable {
@@ -277,6 +270,4 @@ curl 'http://localhost:3000/projects?page=-1'                         # 400 VALI
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

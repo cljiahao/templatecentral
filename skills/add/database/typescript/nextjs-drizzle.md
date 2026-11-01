@@ -7,16 +7,16 @@
 
 #### A1. Install Dependencies
 
-Read the exact RC from the plugin's version SSOT — `cat "<skill-dir>/../../.claude/rules/nextjs.md"` (the scaffolded project has no copy) — and install it exactly; never the floating `@rc` tag, which resolves to a different RC on every install:
+Read the exact RC from `cat "<skill-dir>/../../.claude/rules/nextjs.md"` (projects have no copy) and install it exactly, never the floating `@rc` tag:
 
 ```bash
 pnpm add --save-exact drizzle-orm@<exact-rc-from-rules> postgres
 pnpm add -D --save-exact drizzle-kit@<exact-rc-from-rules>
 ```
 
-Both packages must be on the same RC — a `drizzle-kit` that disagrees with `drizzle-orm` generates migrations the runtime cannot read.
+Keep both on the same RC — a mismatched `drizzle-kit` writes migrations the runtime cannot read.
 
-`drizzle-kit` pulls in `esbuild`, whose install script pnpm 12 blocks — `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS` until you record a decision. Its platform binary ships as an optional dependency, so the script is not needed; add under `allowBuilds:` in `pnpm-workspace.yaml`:
+`drizzle-kit` pulls in `esbuild`, whose install script pnpm 12 blocks — `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS` until you record a decision. Its binary ships as an optional dependency, so deny the script under `allowBuilds:` in `pnpm-workspace.yaml`:
 
 ```yaml
   esbuild: false
@@ -59,7 +59,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-drizzle/template/sr
 
 > **TLS**: the `ssl` option is the enforcement point for the app (`next build`/`next start` run with `NODE_ENV=production`). `drizzle.config.ts` runs as a standalone CLI outside Next.js and uses only the URL — against any non-local database, end that `DATABASE_URL` with `?sslmode=verify-full` so `drizzle-kit migrate` verifies the server certificate (`require` encrypts without verifying identity).
 
-> **Why the singleton**: Next.js hot-reloads in development, which creates new connection pools on every reload. The `globalThis` cache prevents connection exhaustion.
+> **Why the singleton**: dev hot reload would open a new pool each time; the `globalThis` cache prevents connection exhaustion.
 
 #### A6. Create Barrel Export
 
@@ -94,7 +94,7 @@ pnpm db:generate
 pnpm db:migrate
 ```
 
-For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
+`pnpm db:push` applies the schema without migration files — dev only, never production.
 
 #### A9b. Persist better-auth sessions (only if `src/lib/auth.ts` exists)
 
@@ -170,24 +170,22 @@ pnpm db:generate && pnpm build
 
 Confirm the migration file was generated and the build succeeds with no type errors.
 
-> **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
+> High compliance later: `templatecentral:migrate` (database) switches to Kysely + AWS IAM.
 
 ---
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- Database client and schemas live in `src/integrations/database/` — consistent with the integration layer pattern.
-- Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- Client and schemas live in `src/integrations/database/`.
+- Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -5,16 +5,9 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
-
-**1. Reusable Pagination Schema** (canonical copy: `templatecentral:standards` → `validation-patterns/patterns.md`; reuse it if `src/lib/validation/schemas.ts` already exists)
+**1. Reusable Pagination Schema** (canonical: `validation-patterns/patterns.md`; reuse an existing `src/lib/validation/schemas.ts`)
 
 ```ts
 // src/lib/validation/schemas.ts
@@ -129,7 +122,7 @@ export const GET = withLogging(async (request) => {
 
 **5. Paginated UI (feature schema → service → hook → component)**
 
-**Update, don't overwrite**: if `templatecentral:add (feature)` already created `project.schema.ts`, keep its `projectItemSchema` and add only `paginatedProjectsSchema`. Likewise, if `api/project-service.ts` exists, add `fetchProjects` and remove `ProjectService.getAll` (the list route no longer returns `{ data: ProjectItem[] }`; update its callers) instead of overwriting the file; replace the existing `useProjects` hook rather than adding a second one.
+**Update, don't overwrite**: if add (feature) created `project.schema.ts`, keep `projectItemSchema` and add only `paginatedProjectsSchema`. In an existing `api/project-service.ts`, add `fetchProjects` and remove `ProjectService.getAll` (update its callers); replace the existing `useProjects` hook, never add a second.
 
 ```ts
 // src/features/project/schemas/project.schema.ts
@@ -266,7 +259,7 @@ pnpm build
 
 ## Rules
 
-- Always set `placeholderData: keepPreviousData` on a paginated query — without it every page click blanks the list
+- Set `placeholderData: keepPreviousData` on paginated queries, or each page click blanks the list
 - Drive loading/disabled UI off `isFetching` for page changes; `isPending` covers only the first load
 - Validate the response with Zod `safeParse` and derive the row type from the schema — never re-declare the row shape
 - Client code throws `APIError` from `@/integrations/error` (not `@/lib/errors`), never a generic `Error`
@@ -276,13 +269,11 @@ pnpm build
 
 ## See Also
 
-- `templatecentral:add` (error-handling) — Pagination errors use unified error response schema
+- `templatecentral:add` (error-handling) — unified error responses
 - `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod
 - `templatecentral:add (endpoint)` — Add pagination to new list endpoints
-- Stack-specific `code-standards` — Database indexing best practices for sort fields
+- Stack `code-standards` — index sort fields
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -3,17 +3,13 @@
      prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS
 
-Add JWT-based authentication to a NestJS project scaffolded from templateCentral using Passport.js.
+Adds JWT authentication (Passport.js) to a templateCentral NestJS project.
 
-> **Stub notice:** The `AuthService` created here is intentionally incomplete — both `register` and `login` throw `NotImplementedException` (501) until a database is available. Run `templatecentral:add` (database) after this skill to complete the integration.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+> **Stub notice:** `AuthService` is intentionally incomplete — `register` and `login` throw `NotImplementedException` (501) until `templatecentral:add` (database) completes them.
 
 ### Dependencies
 
-`argon2` is a native Node addon — pnpm blocks native builds by default. Before installing, uncomment the `# argon2: true` line already present under `allowBuilds:` in `pnpm-workspace.yaml` (do not add a second top-level `allowBuilds:` key — YAML silently drops earlier duplicate keys, which would remove the existing `lefthook`/`@scarf/scarf` entries):
+`argon2` is a native addon pnpm blocks by default. Uncomment the existing `# argon2: true` under `allowBuilds:` in `pnpm-workspace.yaml` — do not add a second `allowBuilds:` key (YAML drops the earlier one, losing the `lefthook`/`@scarf/scarf` entries):
 
 ```yaml
 allowBuilds:
@@ -33,27 +29,12 @@ pnpm add -D @types/passport-jwt
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Create Auth Module Directory
 
 Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nestjs/template/` into the project per `<skill-dir>/auth/nestjs/template.manifest`, and writes nothing, ending with a `STOP:` line, when a path is in the way. It creates `src/modules/auth/` (flat — no subdirectories, matching the template's module structure) and the two test files of Step 13:
-- `auth.module.ts`
-- `auth.controller.ts`
-- `auth.service.ts`
-- `auth.dto.ts`
-- `jwt.strategy.ts`
-- `jwt-auth.guard.ts`
-- `roles.decorator.ts`
-- `roles.guard.ts`
-- `ownership.ts`
+- module, controller, service, dto, `jwt.strategy`, `jwt-auth.guard`, `roles.decorator`, `roles.guard`, `ownership` (`.ts`)
 
 #### 2. Define DTOs
 
@@ -63,7 +44,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template/src/modules/auth/auth.dto
 
 #### 3. Add Config
 
-Add `JWT_SECRET` and `JWT_EXPIRES_IN_SECONDS` to `envSchema` in **`src/config/env.config.ts`** — validated at import time, so a missing/short secret fails boot loudly instead of surfacing as a runtime `undefined`:
+Add `JWT_SECRET` and `JWT_EXPIRES_IN_SECONDS` to `envSchema` in **`src/config/env.config.ts`** — validated at import, so a missing or short secret fails boot:
 
 ```typescript
 const envSchema = z.object({
@@ -208,7 +189,7 @@ For a single endpoint, put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on th
 
 #### 13. Test Env + Auth Tests
 
-Vitest does not load `.env`, and `env.config.ts` now throws at import without `JWT_SECRET` — so every suite importing `AppModule` fails until the test configs supply one. In **both** `vitest.config.ts` and `vitest.config.e2e.ts`, add under `test:`:
+Vitest does not load `.env`, and `env.config.ts` now throws without `JWT_SECRET`. In **both** `vitest.config.ts` and `vitest.config.e2e.ts`, add under `test:`:
 
 ```typescript
     // Vitest does not load .env, and env.config.ts rejects missing required values at import.
@@ -225,11 +206,11 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template/test/modules/auth/authz.s
 
 ### Browser Client (Cookie Mode)
 
-**Apply when a browser SPA calls this API** — a Vite + React frontend (`templatecentral:add (auth)` on Vite sends `credentials: 'include'` + `X-CSRF-Token`, never a Bearer header), or Next.js client components calling the backend. `templatecentral:standards (full-stack-pairing)` points here. Without it every `JwtAuthGuard` route answers that SPA with 401.
+**Apply when a browser SPA calls this API** — Vite + React auth (sends `credentials: 'include'` + `X-CSRF-Token`, never Bearer) or Next.js client components. Without it every `JwtAuthGuard` route answers that SPA with 401.
 
-**Same-origin only:** the SPA must reach this API through a reverse proxy on its own origin (Vite `server.proxy` in dev, nginx `location /api/` in production, or a Next.js `rewrites()` path — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is a host-only cookie, so an SPA on another host cannot read it and every non-GET would 403.
+**Same-origin only:** the SPA reaches this API through a reverse proxy on its own origin (Vite `server.proxy`, nginx `location /api/`, or Next.js `rewrites()` — snippets in `templatecentral:standards (full-stack-pairing)`); `XSRF-TOKEN` is host-only, so from another host every non-GET 403s.
 
-Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the guard recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or lifted from another session fails. Bearer requests skip the check (browsers never attach `Authorization` on their own), so API clients keep working unchanged. Hand-rolled on `node:crypto` rather than `@fastify/csrf-protection`, whose `onRequest`-hook model does not compose with Nest guards.
+Design (OWASP CSRF + Session Management cheat sheets, RFC 10017 *OAuth 2.0 for Browser-Based Applications* §6.1 cookie rules): the JWT rides in an `HttpOnly; Secure; SameSite=Strict; Path=/` cookie named `__Host-session` (`session` in dev, where `Secure` is off for plain-http localhost) — never in JS-readable storage. Unsafe methods carry a **signed double-submit** CSRF token: the readable `XSRF-TOKEN` cookie holds `nonce.HMAC(key, session, nonce)`, the SPA echoes it in `X-CSRF-Token`, and the guard recomputes the HMAC against the session cookie — so a token injected from a sibling subdomain or another session fails. Bearer requests skip the check (browsers never attach `Authorization` themselves), so API clients are unaffected. Hand-rolled on `node:crypto` rather than `@fastify/csrf-protection`, whose `onRequest`-hook model does not compose with Nest guards.
 
 Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template-cookie bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` first: it writes `src/modules/auth/auth.cookies.ts` (3) and `test/auth-cookie.e2e-spec.ts` (7) from `<skill-dir>/auth/nestjs/template-cookie/`.
 
@@ -239,7 +220,7 @@ Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template-cookie bash "<skill-d
 pnpm add @fastify/cookie
 ```
 
-**2. `src/config/setups/security.setup.ts`** — register the plugin at the top of `setupSecurity()` (before Helmet). `setupCors()` stays as is: the SPA reaches this API same-origin through its proxy, so its requests never preflight:
+**2. `src/config/setups/security.setup.ts`** — register the plugin at the top of `setupSecurity()` (before Helmet); `setupCors()` is unchanged (same-origin requests never preflight):
 
 ```typescript
 import fastifyCookie from '@fastify/cookie';
@@ -271,7 +252,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/a
   }
 ```
 
-**6. `src/modules/auth/auth.controller.ts`** — add the browser login and logout (merge `Res`, `ApiCookieAuth`, `ApiNoContentResponse`, `type FastifyReply`, `Throttle`/`minutes` and the two cookie helpers into the imports; add `@ApiCookieAuth()` next to `@ApiBearerAuth()` on `me`). `/auth/login` keeps returning the token for API clients; `/auth/session` returns 204 so the JWT never reaches JavaScript, and minting a fresh session + CSRF pair on every login also defeats session fixation:
+**6. `src/modules/auth/auth.controller.ts`** — add the browser login and logout (merge `Res`, `ApiCookieAuth`, `ApiNoContentResponse`, `type FastifyReply`, `Throttle`/`minutes` and the two cookie helpers into the imports; add `@ApiCookieAuth()` next to `@ApiBearerAuth()` on `me`). `/auth/login` still returns the token for API clients; `/auth/session` returns 204 so the JWT never reaches JavaScript, and a fresh session + CSRF pair per login defeats session fixation:
 
 ```typescript
   @Post('session')
@@ -296,7 +277,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/a
   }
 ```
 
-`/session` needs no CSRF token: its body must be JSON (Fastify answers 415 to a body with no Content-Type and hands `text/plain` to Zod as a string → 400 — the e2e test pins both), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects — the custom-request-header defense OWASP lists for API endpoints. `@Throttle` applies once the Rate Limiting step below installs `@nestjs/throttler`.
+`/session` needs no CSRF token: its body must be JSON (Fastify answers 415 to a body with no Content-Type and hands `text/plain` to Zod as a string → 400 — the e2e test pins both), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). `@Throttle` applies once the Rate Limiting step below installs `@nestjs/throttler`.
 
 **7. `test/auth-cookie.e2e-spec.ts`** — calls `setupSecurity`/`setupCors` like `main.ts` (suites that skip them still get a clean 401 from the guard):
 
@@ -330,18 +311,18 @@ Then tighten only the auth endpoints: in `auth.controller.ts`, import `{ Throttl
   @Throttle({ default: { ttl: minutes(15), limit: 3 } })
 ```
 
-> **`@Throttle` counts every request, not just failures.** A successful login consumes the same budget as a rejected one, so `limit: 3` means three total `/login` calls per IP per 15 minutes. Users behind a shared office NAT or mobile CGNAT share one bucket and will lock each other out — raise the limit for NAT-heavy audiences. To count only failures, subclass `ThrottlerGuard` and override `handleRequest` so the attempt is recorded after the handler resolves to a 401 rather than before it runs.
+> **`@Throttle` counts every request, not just failures** — `limit: 3` is three `/login` calls per IP per 15 minutes, and users behind a shared NAT/CGNAT share one bucket (raise it for such audiences). To count only failures, subclass `ThrottlerGuard` and record the attempt in `handleRequest` after the handler resolves to a 401, not before it runs.
 
 ### Rules
 
-- **JWT_SECRET must be kept secret** — never commit to version control; document only as a placeholder in `.env.example`.
-- Always hash passwords with argon2id — never store plaintext. Use the `argon2` npm package. Memory-hard and resistant to GPU-based brute-force (OWASP recommendation; industry-standard minimum 12-character passwords).
-- Browser SPA clients get cookie mode (above), never a token in `localStorage` — Bearer stays for non-browser clients.
-- The `JwtStrategy.validate()` return value becomes `req.user` — extend it to return a full user object once you have a database.
+- Never commit `JWT_SECRET` — only a placeholder in `.env.example`.
+- Hash passwords with argon2id (`argon2` package) — never store plaintext; minimum 12-character passwords.
+- Browser SPAs use cookie mode, never a `localStorage` token; Bearer is for non-browser clients.
+- `JwtStrategy.validate()`'s return becomes `req.user`; return a full user once a database exists.
 - `JwtStrategy.validate()` returns `roles: []`, so every `RolesGuard` route denies until roles are loaded. Once a database is added, load the user's roles from it there, never from the token.
-- Every handler that loads a record by id calls `assertOwner` (or filters the query by owner) before returning or changing it.
-- **Rate limiting is mandatory for production** — add `@nestjs/throttler` before going live.
-- **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` uses `req.ip`, which Fastify only patches from `X-Forwarded-For` when `trustProxy` is active (set via `TRUST_PROXY` in the scaffold). Without it, all proxied requests share the proxy's IP and hit the same rate bucket. Set it to the trusted proxy IPs/CIDRs, comma-separated — one-hop: the ALB's VPC CIDR; two-hop: both the Traefik and ALB CIDRs. Fastify no longer accepts a numeric hop count (a number trusts nothing).
+- Every record-by-id handler calls `assertOwner` (or filters by owner) first.
+- Rate limiting (`@nestjs/throttler`) is mandatory before production.
+- **TRUST_PROXY must be set when behind a reverse proxy** — `ThrottlerGuard` reads `req.ip`, which Fastify takes from `X-Forwarded-For` only with `trustProxy` (`TRUST_PROXY`); otherwise all requests share one bucket. Set comma-separated trusted CIDRs — one hop: the ALB's VPC CIDR; two hops: Traefik and ALB CIDRs. A numeric hop count trusts nothing.
 
 ### Validate
 
@@ -351,8 +332,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
 
 ---

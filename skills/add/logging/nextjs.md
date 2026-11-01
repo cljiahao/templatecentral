@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **What already exists in the template:**
 - `pino` in `package.json` dependencies
@@ -22,7 +15,7 @@ the marker.
 
 #### Tier 1 — Base
 
-Wrap every route handler with `withLogging`. It logs `method`, `path`, `status`, `duration_ms`, and `requestId` per request, and catches unhandled exceptions automatically.
+Wrap every route handler with `withLogging` — it logs `method`, `path`, `status`, `duration_ms`, `requestId` and catches unhandled exceptions.
 
 ```ts
 // Apply this pattern to every route handler in src/app/api/
@@ -49,7 +42,7 @@ export async function register() {
 }
 ```
 
-Unhandled exceptions are already captured by `logError` in `src/lib/errors/error-log-handler.ts`. No extra wiring needed for Tier 1.
+Unhandled exceptions already reach `logError`; Tier 1 needs no wiring.
 
 #### Tier 2 — Standard (+ Tier 1)
 
@@ -190,6 +183,4 @@ has `"[Redacted]"` as its value.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
