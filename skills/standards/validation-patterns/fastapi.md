@@ -70,7 +70,7 @@ class PaginationQuery(BaseRequestSchema):
 
 **2. Router validates, service decides**
 
-Request bodies, query models, and `UploadFile` are validated by FastAPI before the handler runs; a failure raises `RequestValidationError`, which `src/error_handler.py` turns into a sanitized 422. Routers stay thin — every check beyond the schema lives in `api/services/`.
+FastAPI validates bodies, query models and `UploadFile` before the handler; `src/error_handler.py` turns `RequestValidationError` into a sanitized 422. Every check beyond the schema lives in `api/services/`.
 
 ```python
 # src/api/routers/projects.py
@@ -145,7 +145,7 @@ async def store_project_file(file: UploadFile) -> str:
 
 **3. Form Data Validation**
 
-Annotate a Pydantic model with `Form()` — FastAPI validates form bodies against the model natively (model form data since 0.113, `extra="forbid"` support since 0.114). A failure goes through the same sanitized 422 handler, so the submitted password is never echoed.
+Annotate a Pydantic model with `Form()`; FastAPI validates it natively, and a failure goes through the same sanitized 422 handler, so the password is never echoed.
 
 ```python
 # src/api/routers/auth.py
@@ -225,5 +225,5 @@ python -m pytest test/ -v
 ## After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards

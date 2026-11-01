@@ -22,14 +22,13 @@ All files use **kebab-case**. Exceptions: Next.js special files (`layout.tsx`, `
 
 | Pattern | When to use |
 |---------|-------------|
-| `export function Foo() {}` | Default — most components |
+| `export function Foo() {}` | Default |
 | `export const Foo = React.memo(function Foo() {})` | Components needing memoization |
 | `const foo = () => {}` | Hooks, utilities, helpers, internal sub-components |
 
 ### Component Best Practices
 
-- Keep components thin — delegate logic to hooks/services.
-- Extract when there's a second consumer — don't prematurely extract.
+- Keep components thin — delegate logic to hooks/services. Extract on the second consumer.
 
 **shadcn/ui primitives** (`src/components/ui/`) — add via CLI, never recreate:
 `accordion` · `avatar` · `button` · `card` · `checkbox` · `dialog` · `dropdown-menu` · `form` · `input` · `label` · `select` · `separator` · `skeleton` · `sonner` · `tabs` · `textarea`
@@ -71,13 +70,13 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 
 ### Comments
 
-- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- Follow `code-standards/comments.md`.
 - JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
-- The comment gate is seeded as a hard gate (`error`, not a warning) in `eslint.config.mjs`: `no-inline-comments: 'error'` (with an `ignorePattern` for `eslint-`/`@ts-`/`prettier-`/coverage directives) enforces own-line comments, and `sonarjs/no-commented-code: 'error'` blocks commented-out code. Directive hygiene is gated too: `linterOptions.reportUnusedDisableDirectives`/`reportUnusedInlineConfigs: 'error'`, `@eslint-community/eslint-comments` (`recommended` + `require-description`), and typescript-eslint's `ban-ts-comment` (via `recommended`) — every suppression must be scoped, used, and carry a `-- reason`. `sonarjs/todo-tag`/`fixme-tag` are downgraded to `warn` — TODO/FIXME with context is allowed. See `comments.md` → Enforcement.
+- `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
 ### Static Analysis (`eslint-plugin-sonarjs`)
 
-`eslint.config.mjs` extends `sonarjs.configs.recommended` (~230 of the plugin's 295 rules at the pinned 4.2.2, at `error`) covering bugs, hardcoded secrets/weak crypto/insecure JWT/cookies, code smells, test hygiene (`no-skipped-tests`, `assertions-in-tests`), and React/JSX rules (`jsx-no-leaked-render`, `no-uniq-key`, `prefer-read-only-props`). Two scoped overrides sit on top: `src/components/ui/**` (generated shadcn primitives) turns off `prefer-read-only-props`, and test files (`test/**`, `**/*.test.{ts,tsx}`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols` so fake fixtures don't false-positive. `no-duplicate-string` and `max-switch-cases` are left at the plugin's own defaults, not hand-tuned.
+`eslint.config.mjs` extends `sonarjs.configs.recommended` at `error` (bugs, security, code smells, tests, React/JSX). Two overrides: `src/components/ui/**` (generated shadcn) turns off `prefer-read-only-props`; test files (`test/**`, `**/*.test.{ts,tsx}`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols`.
 
 ### Security (Next.js)
 
@@ -97,4 +96,4 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 - NEVER log tokens, passwords, or PII
 
 **Request APIs (Next.js 16)**
-- All Next.js Request APIs (`cookies()`, `headers()`, route `params`, and `searchParams`) return Promises in Next.js 16 — always `await` them. Sync access is a TypeScript error and runtime failure.
+- `cookies()`, `headers()`, route `params` and `searchParams` return Promises — always `await` them.

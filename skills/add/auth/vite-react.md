@@ -3,11 +3,7 @@
      prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React
 
-Configure authentication in a Vite + React SPA scaffolded from templateCentral. The template ships with a generic `AuthProvider` context — this skill covers integrating real auth backends, customizing the login UI, and protecting routes.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+Wires the template's generic `AuthProvider` to a real backend, adds the login UI and protects routes in a templateCentral Vite + React SPA.
 
 ### What the Template Already Provides
 
@@ -30,18 +26,11 @@ In **development mode** (`ENV.IS_DEV`), the user is auto-authenticated as a dev 
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Choose an Auth Strategy
 
-Since Vite + React is a client-side SPA, authentication is handled by a backend API. Common patterns:
+Auth lives in a backend API. Common patterns:
 
 | Strategy | How it works |
 |----------|-------------|
@@ -49,26 +38,26 @@ Since Vite + React is a client-side SPA, authentication is handled by a backend 
 | **Cookie-based (session)** | Backend sets an HttpOnly cookie; SPA relies on cookies for API calls |
 | **OAuth redirect** | SPA redirects to provider (Google, Azure); backend handles callback and sets session |
 
-The `AuthProvider` is provider-agnostic — it manages local state. You wire it to your backend's auth endpoints.
+`AuthProvider` is provider-agnostic local state; wire it to the backend's endpoints.
 
-**Cookie sessions need CSRF protection.** The moment the browser attaches the session cookie automatically (which is exactly what `credentials: 'include'` buys you), any other origin can trigger an authenticated state-changing request. Cookies are still the right choice — they keep the token out of JS reach — but they must be paired with all three of:
+**Cookie sessions need CSRF protection.** Once the browser attaches the session cookie automatically (`credentials: 'include'`), any origin can trigger an authenticated state change. Cookies still win — they keep the token out of JS — but need all three of:
 
 - **`SameSite=Strict`** (`Lax` at minimum) on the session cookie, backend-set alongside `HttpOnly` and `Secure`.
-- **A CSRF token** on every non-GET request — the backend issues it as a readable `XSRF-TOKEN` cookie, the SPA echoes it back in an `X-CSRF-Token` header, and the backend rejects any mismatch. The attacker's page can make the browser send the session cookie but cannot read the token to echo it. The templateCentral backends sign the token with an HMAC bound to the session (OWASP signed double-submit), so an injected or stale token fails too.
+- **A CSRF token** on every non-GET request — the backend issues it as a readable `XSRF-TOKEN` cookie, the SPA echoes it back in an `X-CSRF-Token` header, and the backend rejects any mismatch. An attacker's page can send the cookie but cannot read the token. The templateCentral backends HMAC-bind the token to the session (OWASP signed double-submit), so injected or stale tokens fail too.
 - **A strict CORS allowlist** on the backend — never `Access-Control-Allow-Origin: *` together with credentials.
 
 **Same-origin only:** cookie mode requires the SPA to reach the API through a reverse proxy on its own origin (`VITE_API_BASE_URL=/api` → Vite `server.proxy` in dev, nginx `location /api/` in production — snippets in `templatecentral:standards (full-stack-pairing)`); the backend's `XSRF-TOKEN` cookie is host-only, so a direct call to an API on another host leaves `csrfHeader()` empty and every non-GET 403s.
 
-**Backend contract.** The FastAPI and NestJS auth skills implement all three in their **Browser Client (Cookie Mode)** section — enable it on the backend (`templatecentral:add (auth)` there; `templatecentral:standards (full-stack-pairing)` says when). Their stock auth reads only `Authorization: Bearer`, so without cookie mode every guarded call from this SPA is a 401. The service below targets exactly these endpoints (under `VITE_API_BASE_URL`):
+**Backend contract.** The FastAPI and NestJS auth skills implement all three in their **Browser Client (Cookie Mode)** section — enable it on the backend (`templatecentral:add (auth)` there; `templatecentral:standards (full-stack-pairing)` says when). Without it their auth reads only `Authorization: Bearer`, so every guarded call from this SPA is a 401. The service below targets these endpoints (under `VITE_API_BASE_URL`):
 
 | Call | Endpoint | Notes |
 |------|----------|-------|
-| Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body. It is separate from `/auth/login`, which still returns the JWT for API clients, so the token never reaches browser JavaScript |
+| Login | `POST /auth/session` | JSON `{ email, password }` → 204 + `Set-Cookie` (HttpOnly session + `XSRF-TOKEN`); no token in the body (`/auth/login` still returns the JWT for API clients) |
 | Current user | `GET /auth/me` | cookie-authenticated; FastAPI returns `{ id, email, name }`, NestJS `{ id, email }` |
 | Logout | `POST /auth/logout` | 204, clears both cookies |
 | Any other non-GET | — | must send `X-CSRF-Token` (`csrfHeader()`, sent for you by `ApiClient` — Step 3) or the backend answers 403 |
 
-Token-based (JWT in an `Authorization` header) auth is not cookie-borne and therefore not CSRF-exposed — but it forfeits `HttpOnly`, so the token must live in memory only (see the `localStorage` rule below).
+Bearer-token auth is not CSRF-exposed but forfeits `HttpOnly`, so the token lives in memory only (see the `localStorage` rule).
 
 #### 2. Create the CSRF Helper and Auth Service
 
@@ -84,7 +73,7 @@ Copied verbatim from `<skill-dir>/auth/vite-react/template/src/features/auth/api
 
 #### 3. Send the Session and CSRF Token from `ApiClient`
 
-Every other backend call goes through `ApiClient` (`src/lib/clients/api-client.ts`, defined once in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client — create it from there first if it is missing). Add these two members to that class — do not redefine it; every feature client that extends it inherits them:
+Every other backend call goes through `ApiClient` (`src/lib/clients/api-client.ts`; create it from `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client if missing). Add these two members — do not redefine the class; subclasses inherit them:
 
 ```typescript
 // src/lib/clients/api-client.ts — add to the existing ApiClient class
@@ -263,7 +252,7 @@ export function LoginCard() {
 
 #### 6. Add Protected Routes
 
-In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute`. The template already has `<BrowserRouter>` wrapping the route tree — edit only inside the existing `<Routes>`:
+In `src/router.tsx`, wrap authenticated routes with `ProtectedRoute` — edit only inside the existing `<Routes>`; do NOT replace the file:
 
 ```tsx
 import { ProtectedRoute } from '@/features/auth';
@@ -283,8 +272,6 @@ import { ProtectedRoute } from '@/features/auth';
   <Route path="*" element={<NotFoundPage />} />
 </Route>
 ```
-
-Do NOT replace the entire `router.tsx` — only modify the route definitions inside the existing `<BrowserRouter>` and `<Routes>` wrappers.
 
 #### 7. Add a Sign-Out Button
 
@@ -316,7 +303,7 @@ export function SignOutButton() {
 
 ### Dev Bypass Behavior
 
-When `ENV.IS_DEV` is `true` (`import.meta.env.DEV`), the `AuthProvider` initializes with a pre-authenticated dev user and skips the backend session check. The "Dev login" button is also only rendered in dev mode. In production builds, Vite tree-shakes these code paths entirely.
+When `ENV.IS_DEV` (`import.meta.env.DEV`) is true, `AuthProvider` starts with a dev user and skips the session check, and the "Dev login" button renders. Production builds tree-shake both.
 
 ### Architecture
 
@@ -350,12 +337,10 @@ src/
 - NEVER remove the `ENV.IS_DEV` guard on the dev bypass — it must only exist in development
 - NEVER put auth logic directly in page components — use the `useAuth()` hook
 - Call the backend through `ApiClient` subclasses (Step 3), never a raw `fetch` — it is the one place that sends `credentials: 'include'` and, on every non-GET, `X-CSRF-Token`. The auth service's own three calls are the only exception
-- Always redirect to `/login` on 401 responses — the `ProtectedRoute` handles this for navigation, but API calls should also handle 401s gracefully
+- Redirect to `/login` on 401 — `ProtectedRoute` covers navigation; API calls must handle 401 too
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 - Role and ownership checks in the SPA only hide UI. The API must enforce them on every request
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

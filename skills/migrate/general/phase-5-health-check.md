@@ -4,15 +4,13 @@
 
 # Migrate — Phase 5 (harness health check + safe re-sync)
 
-Loaded from `implementation.md` Phase 0. Phase 4 (full seed) is `phase-4-upgrade.md`.
+Phase 4 (full seed) is `phase-4-upgrade.md`.
 
 ---
 
 ## Phase 5 — Harness Health Check
 
-Run when `templatecentral:migrate` is invoked on a project that already has `<!-- templateCentral: <stack>@6.0.0 -->` on line 1 (i.e., Phase 0 reports "no migration needed") **and** `.claude/harness.json` exists — or when Phase 0 routes a `@5.x` project here for its hook re-sync.
-
-This phase checks whether seeded files have drifted from their recorded origin hashes. It never auto-repairs — it reports only.
+Run when line 1 has `<!-- templateCentral: <stack>@6.0.0 -->` **and** `.claude/harness.json` exists, or for a `@5.x` hook re-sync. Reports drift from the origin hashes; never auto-repairs.
 
 **Step 5a: Read `.claude/harness.json`**
 
@@ -54,7 +52,7 @@ If all files are `UNCHANGED`, `templatecentral_version` equals the current plugi
 ✓ All harness files match their templateCentral origin and are up to date. No action needed.
 ```
 
-If `CLAUDE.md` exists and the import is missing (the import-present rule in `phase-4-upgrade.md` Step 4c), print a warning; Step 5d offers the fix:
+If `CLAUDE.md` lacks the import (rule in `phase-4-upgrade.md` Step 4c), warn; Step 5d offers the fix:
 ```
 ⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
   Step 5d can append it on approval.
@@ -68,13 +66,11 @@ If any file is `MISSING`, print a warning:
 
 **Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
 
-Canonical content for the re-sync comes from the template files (`phase-4-upgrade.md` Step 4d, "Template files") and, for the rules around `settings.json` (its body is `<skill-dir>/../scaffold/shared/template-settings-ts/` or `template-settings-py/`), the harness kit — load the kit for the project's stack (the same files Phase 4 Step 4d loads). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one variant file, never both.
+Canonical content comes from the template files (`phase-4-upgrade.md` Step 4d) and the harness kit loaded by `implementation.md`.
 
-These four files (`harness-kit.md`, the variant file, `harness-kit-enforcement.md`, `harness-kit-finalize.md`) are loaded by the phase table in `implementation.md` — if they are not in context, load them from there.
+Offer this when there is something to apply: a `MODIFIED`/`MISSING` file, a missing `AGENTS.md` import, or a `harness.json.templatecentral_version` older than the plugin. **Never write without explicit user approval.** Present a dry-run plan (per file: action + diff preview), then on approval apply per **file class**:
 
-Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, a missing `AGENTS.md` import (Step 5c), or the project's `harness.json.templatecentral_version` is older than the current plugin version (newer seeded defaults exist). **Never write without explicit user approval.** First present a dry-run plan (per file: the action + a diff preview), then on approval apply per **file class**:
-
-- **Enforcement layer** (`.claude/hooks/*` except `.claude/hooks/local/`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.claude/ci-gates.sh`, the host's CI file — `.github/workflows/ci.yml` or `azure-pipelines/templatecentral-gates.yml`, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): **overwrite** with the current canonical file from `<skill-dir>/../scaffold/shared/template/`, `<skill-dir>/../scaffold/shared/template-ts/` or `<skill-dir>/../scaffold/shared/template-py/` (the stack's variant), or for the CI file `<skill-dir>/../scaffold/shared/template-ci/github-ts/`, `<skill-dir>/../scaffold/shared/template-ci/github-py/` or `<skill-dir>/../scaffold/shared/template-ci/azure/` — the manifest `<skill-dir>/../scaffold/shared/template.manifest` lists them; the re-sync overwrites file by file, never with a bulk `cp -R`, and the merge itself stays a model step. The `TC_PART=ci` runs of the copy script are scaffold-only; a re-sync of the CI file is done by hand under the same rules. These are not meant to be hand-edited (the verifier flags them); a re-sync resets them to canonical. CI files and hooks need human approval per write (`protect-files.sh` asks), so show their diffs in the dry-run plan. Warn if one was `MODIFIED` — and before overwriting, check whether the difference came from a `templatecentral:add` capability that extends a canonical hook (e.g. `add (redaction)` splices a companion block into `user-prompt-guard`); if so, tell the user which capability to re-apply afterwards. Any other local edit to a canonical hook (an extra protected branch, credential pattern or approval prompt) moves into a `.claude/hooks/local/` script with its own `settings.json` entry (kit Step A, "Project-local guards") in the same re-sync, so the rule survives the overwrite.
+- **Enforcement layer** (`.claude/hooks/*` except `local/`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.claude/ci-gates.sh`, the host's CI file, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): these are not meant to be hand-edited (the verifier flags them), and a re-sync resets them to canonical. **Overwrite** file by file (never a bulk `cp -R`) with the canonical file from `<skill-dir>/../scaffold/shared/template/`, `template-ts/` or `template-py/`, or `template-ci/` for the CI file, as `<skill-dir>/../scaffold/shared/template.manifest` lists. The `TC_PART=ci` runs of the copy script are scaffold-only; re-sync the CI file by hand under the same rules. `protect-files.sh` asks per write, so show these diffs in the dry-run plan. If one was `MODIFIED`, warn, and check whether a `templatecentral:add` capability extended it (e.g. `add (redaction)` in `user-prompt-guard`); if so, name the capability to re-apply. Any other local edit to a canonical hook moves into a `.claude/hooks/local/` script with its own `settings.json` entry (kit Step A, "Project-local guards") in the same re-sync, so the rule survives.
 - **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`, `.claude/skills/skill-audit/SKILL.md`, nextjs `next-migrate`):
   - `UNCHANGED` → overwrite with the new canonical.
   - `MODIFIED` → **3-way merge** against the base snapshot:
@@ -94,13 +90,13 @@ Offer this when there is something to apply — any `MODIFIED`/`MISSING` file, a
       diff -u "$f" "$new" || true
     fi
     ```
-    `git merge-file` cleanly combines edits separated by unchanged context and leaves conflict markers only where your edit and the upstream change overlap (standard `git merge` behaviour). Resolve any markers by hand.
-- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Instead merge structurally — add any new seeded `hooks`/`permissions.deny` entries into the existing object without removing the user's (merge, never clobber). **Replace** (do not keep alongside) any entry pointing at a `.claude/hooks/` script whose `command` is a JSON array or whose path lacks `${CLAUDE_PROJECT_DIR}` — pre-6.0.0 forms that never ran. Remove `Edit`/`Write` denies on CI or governance paths (`.claude/settings*.json`, `.claude/hooks/**`, `.github/workflows/**`, `azure-pipelines/**`): a deny outranks the hook's ask, so it blocks the human-approved edit too. Keep every entry pointing at `.claude/hooks/local/`. Remove the `PostToolUseFailure` → `post-tool-failure.sh` entry; list `.claude/hooks/post-tool-failure.sh` and its `harness.json` entry for deletion in the dry-run plan (no longer seeded — Claude already sees tool errors).
+    Conflict markers appear only where the user's edit and the upstream change overlap; resolve them by hand.
+- **`.claude/settings.json`** (co-owned, JSON): do **not** raw-text-merge (a conflict marker breaks the JSON). Merge structurally: add new seeded `hooks`/`permissions.deny` entries without removing the user's. **Replace** (not keep alongside) any `.claude/hooks/` entry whose `command` is a JSON array or lacks `${CLAUDE_PROJECT_DIR}` (pre-6.0.0, never ran). Remove `Edit`/`Write` denies on CI or governance paths (`.claude/settings*.json`, `.claude/hooks/**`, `.github/workflows/**`, `azure-pipelines/**`): a deny outranks the hook's ask and blocks human-approved edits. Keep every entry pointing at `.claude/hooks/local/`. Remove the `PostToolUseFailure` → `post-tool-failure.sh` entry; list `.claude/hooks/post-tool-failure.sh` and its `harness.json` entry for deletion in the dry-run plan.
 - `MISSING` → reseed (write the current canonical content).
-- **Unwired Azure gates** — if `azure-pipelines/templatecentral-gates.yml` exists but no pipeline includes it (grep the repo's pipeline YAML for `templatecentral-gates`), and the pipelines already run gitleaks, the harness check **and** a dependency audit that fails on high/critical advisories: list it, `.claude/ci-gates.sh`, their `harness.json` entries and `.claude/.harness-base/` copies for deletion in the dry-run plan, and drop the CI line's template wording from AGENTS.md. Wire it in instead when the pipelines lack any of those three checks (kit Step B3). Never list `.claude/ci-gates.sh` for deletion while the pipelines lack a dependency audit.
-- **Azure pipelines without a dependency audit** — if the project is on Azure DevOps, the pipelines run gitleaks and the harness check but no dependency audit that fails on high/critical advisories, and `.claude/ci-gates.sh` is absent or has no `deps` gate: list seeding `.claude/ci-gates.sh` and adding a `bash .claude/ci-gates.sh deps` step to the existing pipeline in the dry-run plan (kit Step B3). The step needs `pnpm` or `uv` and `pipx` on the agent after the install steps. It is a pipeline edit, so `protect-files.sh` asks the human first.
+- **Unwired Azure gates** — if no pipeline includes `azure-pipelines/templatecentral-gates.yml` (grep the pipeline YAML for `templatecentral-gates`) and the pipelines already run gitleaks, the harness check **and** a high/critical dependency audit: list it, `.claude/ci-gates.sh`, their `harness.json` entries and base copies for deletion, and drop the CI line's template wording from AGENTS.md. If any of the three checks is missing, wire it in instead (kit Step B3). Never list `.claude/ci-gates.sh` for deletion while the pipelines lack a dependency audit.
+- **Azure pipelines without a dependency audit** — if they run gitleaks and the harness check but no high/critical dependency audit, and `.claude/ci-gates.sh` is absent or has no `deps` gate: list seeding it and adding a `bash .claude/ci-gates.sh deps` step in the dry-run plan (kit Step B3). The step needs `pnpm` or `uv` and `pipx` after the install steps; `protect-files.sh` asks the human first.
 
-- **Missing `AGENTS.md` import** — if Step 5c flagged it, list the append in the dry-run plan regardless of `CLAUDE.md`'s classification (`UNCHANGED`, `MODIFIED` or untracked). On approval append `@AGENTS.md` exactly as `phase-4-upgrade.md` Step 4c does, leave every other line alone, and skip the 3-way merge for that line (a merge would keep a deleted import). If `harness.json` tracks `CLAUDE.md`, count it as a written file below so its `origin_hash` and `.harness-base/CLAUDE.md` copy are refreshed; if it does not track it, make neither.
+- **Missing `AGENTS.md` import** — if Step 5c flagged it, list the append whatever `CLAUDE.md`'s class. On approval append `@AGENTS.md` as `phase-4-upgrade.md` Step 4c does, touch no other line, and skip the 3-way merge for it (a merge would keep a deleted import). If `harness.json` tracks `CLAUDE.md`, count it as written below so its hash and base copy refresh; otherwise create neither.
 
 **After applying** (only the files actually written):
 ```bash
@@ -110,8 +106,6 @@ for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; c
 bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
 ```
 
-If any `MISSING` file reseeded above required creating a directory that did not previously exist **outside** the paths documentation-kit.md Step 2 prunes (so `.lefthook/` or `docs/` count; anything under `.claude/`, `.github/`, or a secrets directory does not), re-run the documentation kit so that new folder gets a `README.md` too:
-`documentation-kit.md` is loaded by the phase table in `implementation.md` — if it is not in context, load it from there.
-Skip this re-run if nothing reseeded created a new directory.
+If a reseed created a new directory outside the paths documentation-kit.md Step 2 prunes (`.lefthook/` or `docs/` count; `.claude/`, `.github/` and secrets directories do not), re-run the documentation kit for it (loaded by the phase table in `implementation.md`).
 
 Then re-run Step 5b/5c and confirm everything is `UNCHANGED` and up to date.

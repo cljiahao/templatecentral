@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Mongoose (MongoDB). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Mongoose (MongoDB)
 
-AWS IAM auth and auth-stub completion live in sibling add-ons (`nestjs-mongoose-iam.md`, `nestjs-mongoose-auth.md`) that the router loads alongside this guide only when needed.
+IAM auth and auth-stub completion are sibling add-ons (`nestjs-mongoose-iam.md`, `nestjs-mongoose-auth.md`).
 
 #### C1. Install Dependencies
 
@@ -19,7 +19,7 @@ Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-mongoose bash "<skill-d
 
 Copied verbatim from `<skill-dir>/database/typescript/nestjs-mongoose/template/src/database/database.module.ts` by the copy step; do not re-type it.
 
-Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
+Add `MONGODB_URL` to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when it is missing:
 
 ```typescript
 const envSchema = z.object({
@@ -137,7 +137,7 @@ MONGODB_URL=mongodb://localhost:27017/mydb
 
 #### C8. Keep Tests Runnable Without a Database
 
-`env.config.ts` now throws at import without `MONGODB_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+Vitest does not load `.env`, and `env.config.ts` now throws without `MONGODB_URL` — add it to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if needed):
 
 ```typescript
     // `test.env` overwrites the shell/CI value, so fall back only when none is set.
@@ -176,18 +176,16 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ## Rules
 
-- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use the IAM `DatabaseModule` from `nestjs-mongoose-iam.md` (`MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties`) — no schema or query code changes needed.
+- **Mongoose**: Schemas live inside feature modules at `src/modules/<feature>/schemas/`. Register schemas with `MongooseModule.forFeature()` in the feature module — not globally. For IAM auth, install `@aws-sdk/credential-providers` and use the IAM `DatabaseModule` from `nestjs-mongoose-iam.md` (`MongooseModule.forRoot` with `AWS_CREDENTIAL_PROVIDER` in `authMechanismProperties`); schema and query code are unchanged.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-mongoose-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

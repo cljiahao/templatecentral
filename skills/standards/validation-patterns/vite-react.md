@@ -5,7 +5,7 @@
 
 **1. Schemas live in `schemas/`, never in the component file**
 
-Keeping the schema in its own module lets a service, a test, and a form validate against one definition:
+One definition for the service, the test and the form:
 
 ```ts
 // src/features/projects/schemas/create-project.schema.ts
@@ -177,9 +177,9 @@ export function FileUploadForm() {
 
 **4. Service through `ApiClient`, with Response Validation**
 
-Both forms above and the read below call the backend through `ApiClient` (`src/lib/clients/api-client.ts` — the SPA's one backend client, defined in `templatecentral:standards (full-stack-pairing)`). It maps non-2xx to `APIError`, passes `FormData` through with the browser's multipart boundary, and — with `templatecentral:add (auth)` applied — sends the session cookie plus `X-CSRF-Token` on the POSTs. No paired backend means no `ApiClient`: these examples need one.
+Every call goes through `ApiClient` (`src/lib/clients/api-client.ts`, defined in `templatecentral:standards (full-stack-pairing)`): it maps non-2xx to `APIError`, passes `FormData` through, and — with `templatecentral:add (auth)` — sends the session cookie plus `X-CSRF-Token` on POSTs. These examples need a paired backend.
 
-`id` arrives from `useParams` — it is user input, so it is validated before it is used and encoded before it is interpolated into a path. Validation rejects the wrong *kind* of value; `encodeURIComponent` stops a `/` or `?` in the value from rewriting the URL.
+`id` from `useParams` is user input: validate it, then `encodeURIComponent` it so a `/` or `?` cannot rewrite the URL.
 
 ```ts
 // src/features/projects/api/project-service.ts
@@ -267,13 +267,10 @@ pnpm test
 
 ## See Also
 
-- `templatecentral:add` (error-handling) — Transform validation errors to consistent response format
-- `templatecentral:add` (logging) — Log validation failures with context
-- Stack-specific `code-standards` — Type annotation and schema standards
-- `templatecentral:add (endpoint)` / `templatecentral:add (form)` — Use validation patterns in new routes/forms
+`templatecentral:add` (error-handling, logging, endpoint, form) and the stack's `code-standards`.
 
 ## After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards

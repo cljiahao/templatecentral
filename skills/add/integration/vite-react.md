@@ -3,12 +3,6 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React
 
-Create a new third-party API integration in a Vite + React project scaffolded from templateCentral.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ### Architecture
 
 ```
@@ -19,20 +13,13 @@ ENV → services/ → { clients/, schemas/ }
 - **schemas/** — Zod schemas for validating external responses
 - **services/** — Business logic wrapping the client
 
-Create `src/integrations/` on first integration — this directory does not exist in the base template. The base `FetchClient` lives in `src/lib/clients/fetch-client.ts`.
+Create `src/integrations/` on first use (not in the template); the base `FetchClient` is `src/lib/clients/fetch-client.ts`.
 
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Create Zod Schemas
 
@@ -107,11 +94,11 @@ export const ENV = {
 } as const;
 ```
 
-> **Security**: NEVER put API tokens or secrets in `VITE_*` environment variables — they are embedded in the client bundle and visible to users. For APIs requiring authentication, route requests through your backend (add the API as a NestJS or FastAPI endpoint, then proxy from the SPA) and have the backend add the auth header. Only use `VITE_*` for non-sensitive config like API base URLs.
+> **Security**: NEVER put API tokens or secrets in `VITE_*` variables — they ship in the client bundle. For authenticated APIs, proxy through a backend endpoint that adds the auth header; `VITE_*` is for non-sensitive config only.
 
 #### 5. Consume via React Query Hook
 
-Create the consumer feature first using the `templatecentral:add (feature)` skill (e.g., `repos`), then add the hook inside it:
+Create the consumer feature first (`templatecentral:add (feature)`, e.g. `repos`), then add the hook:
 
 ```ts
 // src/features/repos/hooks/use-repos.query.ts
@@ -135,7 +122,7 @@ Export from the feature's barrel (`hooks/index.ts` → `index.ts`) so consumers 
 pnpm build && pnpm test
 ```
 
-Confirm the build succeeds with no type errors and all tests pass. Verify the integration works end-to-end in the browser.
+Build and tests pass; the integration works end-to-end in the browser.
 
 ### Rules
 
@@ -147,6 +134,4 @@ Confirm the build succeeds with no type errors and all tests pass. Verify the in
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

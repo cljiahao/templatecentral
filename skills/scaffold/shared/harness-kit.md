@@ -4,13 +4,13 @@
 
 # Shared Harness Kit
 
-This file is the index of the single source of truth for the Claude Code agent harness seeded into every scaffolded project. Read the **Per-stack delta table** first, then execute ALL steps in the **Step order** below using the row matching the current stack.
+Index of the agent harness seeded into every project. Read the **Per-stack delta table** first, then execute ALL steps in the **Step order** below with the current stack's row.
 
 ---
 
 ## Kit files
 
-The kit is split by stack so a run never loads the other stack's script bodies. The loader (a scaffold stack file or a migrate phase file) cats this index plus exactly three part files — the stack's **one** variant file and both shared files:
+The loader cats this index plus exactly three part files — the stack's **one** variant file and both shared files:
 
 | File | Holds | Load for |
 |---|---|---|
@@ -64,7 +64,7 @@ A template file named `<name>.tmpl` is copied to `<name>` (the manifest lists th
 
 Substitute `<skill-dir>` and `<target>` as plain text inside the double quotes. A path that holds `"`, `$`, a backtick or a backslash needs that character escaped (or single quotes around the whole path); the script itself never expands a path. A path must not contain a newline: if one does, stop and ask the user for another directory before substituting.
 
-The script writes nothing when a check fails: an empty or unsubstituted target; a target that is not an existing directory; a tree holding a symlink or an empty directory; a manifest that is missing, empty or disagrees with the trees (it names the differing files, such as a stray `.DS_Store`); a file it would write that already exists; a symlink or non-directory where it needs a directory; an existing directory that is not writable, or a source file that is not readable (all checked before the first write). It then creates only the missing parent directories and copies each listed file with `cp`, setting the manifest mode; it never copies attributes onto the project root or an existing directory and never changes a mode it did not create. A `No such file or directory` error for `tc-copy.sh` (an unsubstituted or wrong `<skill-dir>`) also means stop: report it, do not look for the script elsewhere. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user (a failed copy also lists the files already written). The script runs in its own `bash`, so it behaves the same from bash or zsh and a refusal ends only that process, never the caller's shell.
+The script checks everything before the first write and writes nothing when a check fails (bad target, symlink or empty directory in a tree, manifest disagreeing with the trees, a path that already exists, an unwritable directory). It creates only missing parent directories and copies each listed file with its manifest mode; it never copies attributes onto the project root or an existing directory and never changes a mode it did not create. A `No such file or directory` error for `tc-copy.sh` (an unsubstituted or wrong `<skill-dir>`) also means stop: report it, do not look for the script elsewhere. Every refusal and every failed copy ends with a `STOP:` line: do not `rm` or overwrite anything, and report it to the user (a failed copy also lists the files already written). A refusal ends only the script's own `bash`, never the caller's shell.
 
 The CI file is not part of this copy: Step B3 picks the host and copies it. Every later step in this kit that mentions one of these files works on the copy now in `<target>`.
 
@@ -80,8 +80,8 @@ The CI file is not part of this copy: Step B3 picks the host and copies it. Ever
 | **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `pnpm test` | `vite-verify` | `pnpm check` |
 
 **Additional per-stack notes:**
-- `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js` — the scaffold's `package.json` sets `"type": "module"` for Next.js/Vite+React, which makes plain `.js` load as ESM and `require()` throw; `.cjs` forces CommonJS regardless of that field).
+- `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js`: `"type": "module"` would load `.js` as ESM and break `require()`).
 - `user-prompt-guard` settings.json invocation: `"command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-guard.py"]` (fastapi) vs `"command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-guard.cjs"]` (TS stacks).
 - `harness.json` `"stack"` value: use the lowercase stack name (`fastapi` / `nestjs` / `nextjs` / `vite-react`).
 - `harness.json` verify-skill path: use the stack's verify-skill name(s) from the table above (next.js has two skills).
-- CLAUDE.md hash in `harness.json`: all stacks use the conditional form `[ -f CLAUDE.md ] && sha256_claude=$(...)` — CLAUDE.md is created in a later optional step.
+- CLAUDE.md hash in `harness.json`: conditional form `[ -f CLAUDE.md ] && sha256_claude=$(...)` on all stacks.

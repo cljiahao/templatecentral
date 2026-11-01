@@ -23,7 +23,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nextjs-mongoose/template/s
 
 ##### IAM Auth Variant
 
-If the user requires AWS IAM authentication (e.g., connecting to Amazon DocumentDB or MongoDB Atlas with AWS IAM), install the additional package:
+For AWS IAM auth (DocumentDB, Atlas), also install:
 
 ```bash
 pnpm add @aws-sdk/credential-providers
@@ -59,7 +59,7 @@ MONGODB_HOST=your-cluster.region.docdb.amazonaws.com
 MONGODB_DB_NAME=mydb
 ```
 
-> The MongoDB driver's `AWS_CREDENTIAL_PROVIDER` delegates credential resolution to the driver itself, which handles automatic token rotation on reconnect. The `@aws-sdk/credential-providers` package resolves IAM credentials from the EC2/ECS instance role, environment variables, or SSO profile. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
+> With `AWS_CREDENTIAL_PROVIDER` the driver resolves credentials (instance role, env vars or SSO profile via `@aws-sdk/credential-providers`) and rotates tokens on reconnect. For Atlas, use `mongodb+srv://` without the port and `&tls=true`.
 
 #### C3. Create a Schema
 
@@ -131,18 +131,16 @@ Confirm the build succeeds with no type errors.
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- Database client and schemas live in `src/integrations/database/` — consistent with the integration layer pattern.
-- Always use the singleton/cached pattern to prevent connection exhaustion during hot-reload.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- Client and schemas live in `src/integrations/database/`.
+- Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - NEVER hardcode credentials — keep connection config in `.env` / `.env.local` and document in `.env.example`.
-- NEVER import database code in client components — database access is server-only (`'use server'`, API routes, Server Components).
-- **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism — no schema or query code changes needed.
+- NEVER import database code in client components — server-only (`'use server'`, API routes, Server Components).
+- **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism; schema and query code are unchanged.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

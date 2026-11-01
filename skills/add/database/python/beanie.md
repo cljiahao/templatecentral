@@ -5,9 +5,9 @@
 
 ### B0. Opt-in gate — Beanie pins the project to Python 3.13
 
-The default MongoDB path is PyMongo async — `cat "<skill-dir>/database/python/pymongo-async.md"` — which stays on the scaffold's Python 3.14. Continue only if the user explicitly wants the Beanie ODM **and** accepts a Python 3.13 pin.
+The default is PyMongo async (`cat "<skill-dir>/database/python/pymongo-async.md"`, stays on Python 3.14). Continue only if the user explicitly wants Beanie **and** accepts a Python 3.13 pin.
 
-Beanie 2.0.1–2.2.0 declare `Requires-Python <3.14` — a maintainer decision pending v3 (BeanieODM/beanie#1257, #1362, #1373), not a reproduced failure. Never bypass it with `--ignore-requires-python`. Check whether a newer release lifted the cap:
+Beanie declares `Requires-Python <3.14` (see `.claude/rules/fastapi.md`). Never bypass it with `--ignore-requires-python`. Check whether a newer release lifted the cap:
 
 ```bash
 python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/beanie/json'))['info']['requires_python'])"
@@ -49,9 +49,9 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(description="MongoDB database name")
 ```
 
-Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
+Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
 
-Ask the user to add `MONGODB_URL` and `MONGODB_DB_NAME` to `src/.env` (agent edits to `.env` files are hook-blocked by design); document the placeholders in `src/.env.default`:
+Ask the user to add `MONGODB_URL` and `MONGODB_DB_NAME` to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 ```
 MONGODB_URL=mongodb://localhost:27017
 MONGODB_DB_NAME=mydb
@@ -122,7 +122,7 @@ This list is imported by `database/mongo.py` during `init_beanie()`.
 
 ### B7. Usage
 
-Beanie documents are used directly — no session injection needed. Keep construction and hashing in a service, and let the router only map HTTP to it.
+Documents are used directly (no session injection); construction and hashing live in a service, the router only maps HTTP.
 
 **`src/api/schemas/request/user.py`**:
 
@@ -179,13 +179,13 @@ async def create_user(payload: CreateUserRequest) -> UserResponse:
     return to_response(await user_service.create_user(payload))
 ```
 
-> **Unbounded query**: `User.find().to_list()` loads the entire collection into memory. Paginate it for real use — run `templatecentral:add` (pagination).
+> **Unbounded query**: `User.find().to_list()` loads the whole collection — paginate for real use (`templatecentral:add` (pagination)).
 >
-> **Important**: Never return raw Beanie documents directly — always map to a Pydantic response schema (declared as the return annotation) to control serialization and avoid leaking internal fields like `hashed_password`.
+> **Important**: never return raw Beanie documents — map to a Pydantic response schema (the return annotation) so fields like `hashed_password` never leak.
 
 ### B8. Tests and Validate
 
-The lifespan connects to MongoDB, so a `with TestClient(app)` fixture fails every test on a machine or CI runner without one. In **`test/conftest.py`**, seed the settings (CI has no `src/.env`) and build the client without `with` — merge, keeping any seeding and fixtures already there (`SECRET_KEY`, `auth_headers` from `templatecentral:add` (auth)):
+The lifespan connects to MongoDB, so a `with TestClient(app)` fixture fails without one. In **`test/conftest.py`**, seed settings (CI has no `src/.env`) and build the client without `with` — merge, keeping existing seeding and fixtures (`SECRET_KEY`, `auth_headers`):
 
 ```python
 os.environ.setdefault("MONGODB_URL", "mongodb://localhost:27017")
@@ -202,7 +202,7 @@ def client() -> Generator[TestClient]:
     client.close()
 ```
 
-Data-access tests need a real MongoDB (mongomock has no async API) — follow the `docker-compose.yml` service and skip-if-unreachable fixture pattern in `pymongo-async.md` M8, calling `init_beanie(database=..., document_models=DOCUMENT_MODELS)` on the throwaway database instead of `ensure_indexes()`.
+Data-access tests need a real MongoDB — use `pymongo-async.md` M8's `docker-compose.yml` service and skip-if-unreachable fixture, calling `init_beanie(database=..., document_models=DOCUMENT_MODELS)` instead of `ensure_indexes()`.
 
 ```bash
 ruff check src/ test/
@@ -214,7 +214,7 @@ python -m pytest test/ -q
 
 ## Completing Auth Integration (Beanie)
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
 ### Step A — Update `src/models/user.py` and register it
 
@@ -305,7 +305,7 @@ async def get_user(user_id: str) -> dict:
 
 ### Step C — Replace `src/api/routers/auth.py`
 
-No session dependency is needed — Beanie manages its own connection via the lifespan event. If rate limiting was added by the auth skill, preserve any existing `@limiter.limit` decorators and `request: Request` parameters when replacing this file:
+No session dependency — the lifespan owns the connection. Keep any `@limiter.limit` decorators and `request: Request` parameters the auth skill added:
 
 ```python
 from typing import Annotated
@@ -343,7 +343,7 @@ async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResp
 
 ### Step D — Lock down `src/api/routers/users.py`
 
-`POST /auth/register` now creates users, so drop `create_user` from the users router (and service) unless admins need it, and require a login on the rest — unauthenticated, `GET /users` lists every account's email:
+`POST /auth/register` now creates users — drop `create_user` from the users router and service unless admins need it, and require login on the rest (unauthenticated, `GET /users` lists every email):
 
 ```python
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -355,7 +355,7 @@ Scope `get_user` to the caller's own id, or gate it on an admin role, before exp
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Opt-in only** — add a database only on request.
 - Place document models in `src/models/` — not in `api/`.
 - Never put `from __future__ import annotations` in a Beanie model module — it silently breaks `Optional[Link["X"]]` and `BackLink` detection on every Python version.
 - `database/` holds infrastructure only (connection, init/close functions) — no business logic.
@@ -366,6 +366,4 @@ Scope `get_user` to the caller's own id, or gate it on an admin role, before exp
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

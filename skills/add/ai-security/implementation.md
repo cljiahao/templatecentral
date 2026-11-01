@@ -3,14 +3,7 @@
      prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Step 0 — Verify context
 
-Look for `<!-- templateCentral:` on line 1 of `AGENTS.md`.
-
-If found → proceed to the stack-specific implementation below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ---
 
@@ -118,7 +111,7 @@ For open-source / self-hosted models: verify checksums against the provider's pu
 
 ### LLM04 — Data and Model Poisoning
 
-Training data, fine-tuning sets, and retrieval corpora are attack surfaces. Compromised data introduces backdoors, biased outputs, or degraded reliability without visible model changes.
+Training data, fine-tuning sets and retrieval corpora are attack surfaces: poisoned data adds backdoors or bias with no visible model change.
 
 **For application developers using hosted models** (the common case):
 - Validate and sanitize any data you feed into fine-tuning pipelines or RAG corpora
@@ -273,7 +266,7 @@ if (steps >= MAX_AGENT_STEPS) {
 
 ### LLM07 — System Prompt Leakage
 
-The system prompt may be extractable through adversarial user inputs. Treat it as semi-public: never embed credentials, business logic that would be compromised if known, or instructions that rely on secrecy to function.
+The system prompt can be extracted by adversarial input — treat it as semi-public: never embed credentials, sensitive business logic, or instructions that rely on secrecy.
 
 ```ts
 // ❌ Never embed secrets or security-by-obscurity logic
@@ -317,7 +310,7 @@ const docs = await vectorDB.query(embedding, {
 
 ### LLM09 — Misinformation
 
-AI systems produce plausible but false information (hallucination). Never surface raw model output as verified fact without grounding or human review.
+Models hallucinate. Never present raw output as verified fact without grounding or human review.
 
 ```ts
 // Always instruct the model to cite context and admit uncertainty
@@ -384,13 +377,11 @@ Regardless of capability or environment, **never**:
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate the project still compiles
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards and security patterns
+Then load `cat "<skill-dir>/../build/SKILL.md"` (validate the project still compiles), then `cat "<skill-dir>/../review/SKILL.md"` (code standards and security patterns).
 
 ## Responsible AI Checklist
 
-Cloud providers publish responsible-AI checklists for evaluating production AI systems — e.g. the AWS Responsible AI Lens, which defines 10 dimensions; use your cloud provider's equivalent. Run one alongside OWASP LLM Top 10 for pre-launch reviews:
+For pre-launch reviews, also run a cloud responsible-AI checklist (e.g. the AWS Responsible AI Lens, 10 dimensions, or your provider's equivalent):
 
 - **Controllability** — ability to override, retrain, or shut down the model
 - **Privacy** — data minimization, consent, and PII handling
@@ -403,7 +394,7 @@ Cloud providers publish responsible-AI checklists for evaluating production AI s
 - **Transparency** — disclosure of AI involvement to end users
 - **Governance** — audit trails, policy enforcement, accountability
 
-No single framework covers everything — OWASP LLM Top 10 focuses on attack vectors; the Responsible AI Lens focuses on systemic trustworthiness. Run both checklists before shipping AI features to production.
+OWASP LLM Top 10 covers attack vectors; the Responsible AI Lens covers systemic trustworthiness. Run both before shipping AI features.
 
 For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (ASI prefix codes)** — a separate framework covering multi-agent orchestration risks:
 
@@ -420,7 +411,7 @@ For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Ap
 | ASI09 | Human-Agent Trust Exploitation | Scope confirmations to specific actions; reject open-ended authority grants |
 | ASI10 | Rogue Agents | Hard-code objective boundaries; monitor for goal drift in long-running agents |
 
-The overarching design principle is **Least Agency**: grant each agent only the minimum permissions and tool access required for its specific task — scope both credentials and tool allowlists per-agent, not globally. The LLM Top 10 covers model-layer risks; the Agentic Top 10 covers orchestration-layer risks that emerge when agents chain actions autonomously.
+Design principle: **Least Agency** — give each agent only the permissions and tools its task needs; scope credentials and tool allowlists per agent, not globally.
 
 ## Rules
 

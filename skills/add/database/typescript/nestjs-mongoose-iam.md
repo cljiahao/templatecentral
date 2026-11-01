@@ -5,7 +5,7 @@
 
 > **Add-on to `nestjs-mongoose.md`** (the router loads both). Work through that guide's C1–C9, but use the `DatabaseModule` below instead of its standard C2 module, and the IAM env fields below instead of its `MONGODB_URL` (C2 `envSchema`/`serviceConfig`, C7 `.env`, and C8 `test.env` — `MONGODB_HOST: process.env.MONGODB_HOST ?? '127.0.0.1', MONGODB_DB_NAME: process.env.MONGODB_DB_NAME ?? 'test'`); then run its **After Writing Code** steps.
 
-If the user requires AWS IAM authentication (e.g., connecting to Amazon DocumentDB or MongoDB Atlas with AWS IAM), install the additional package:
+For AWS IAM auth (DocumentDB, Atlas), also install:
 
 ```bash
 pnpm add @aws-sdk/credential-providers
@@ -44,7 +44,7 @@ export class DatabaseModule implements OnModuleInit {
 }
 ```
 
-Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if a required field is missing instead of surfacing as a runtime `undefined`:
+Add IAM fields to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when a field is missing:
 
 ```typescript
 const envSchema = z.object({
@@ -69,4 +69,4 @@ MONGODB_HOST=your-cluster.region.docdb.amazonaws.com
 MONGODB_DB_NAME=mydb
 ```
 
-> The MongoDB driver's `AWS_CREDENTIAL_PROVIDER` delegates credential resolution to the driver itself, which handles automatic token rotation on reconnect. The `@aws-sdk/credential-providers` package resolves IAM credentials from the EC2/ECS instance role, environment variables, or SSO profile. For MongoDB Atlas, replace `mongodb://` with `mongodb+srv://` and remove the port and `&tls=true`.
+> With `AWS_CREDENTIAL_PROVIDER` the driver resolves credentials (instance role, env vars or SSO profile via `@aws-sdk/credential-providers`) and rotates tokens on reconnect. For Atlas, use `mongodb+srv://` without the port and `&tls=true`.

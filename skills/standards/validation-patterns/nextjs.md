@@ -3,7 +3,7 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ### Next.js (TypeScript + React + Zod)
 
-Shared schemas (`emailSchema`, `paginationSchema`, `fileUploadSchema`, …) come from `src/lib/validation/schemas.ts` in `patterns.md` — import them, don't redefine. The route examples rely on the `ZodError` branch of `handleApiError` (400 + `fieldErrors` + `VALIDATION_ERROR`), which `templatecentral:add (error-handling)` installs; the scaffold-default handler maps a `ZodError` to a generic 500.
+Import shared schemas (`emailSchema`, `paginationSchema`, `fileUploadSchema`, …) from `src/lib/validation/schemas.ts` (`patterns.md`). The routes rely on `handleApiError`'s `ZodError` branch (400 + `fieldErrors` + `VALIDATION_ERROR`) from `templatecentral:add (error-handling)`; the scaffold default maps a `ZodError` to 500.
 
 **1. Form Schema with Client & Server Validation**
 
@@ -160,7 +160,7 @@ export async function loginAction(formData: unknown) {
 
 **4. API Route with Request Body Validation**
 
-> **Never name a route segment under `/api/auth/`.** With `templatecentral:add (auth)` installed, better-auth owns the catch-all at `src/app/api/auth/[...all]/route.ts`. A static sibling like `src/app/api/auth/login/route.ts` takes precedence over the catch-all and would silently bypass better-auth's own handling and rate limiting for that path. This example uses `/api/sessions` for that reason.
+> **Never name a route segment under `/api/auth/`.** better-auth (`templatecentral:add (auth)`) owns the catch-all `src/app/api/auth/[...all]/route.ts`; a static sibling there would bypass its handling and rate limiting. Hence `/api/sessions`.
 
 ```ts
 // src/app/api/sessions/route.ts
@@ -225,15 +225,15 @@ export const GET = withLogging(async (request) => {
 });
 ```
 
-> `sort` must be checked against a field whitelist before it reaches an ORM `orderBy` — a bare string here is not yet safe to interpolate into a query. `templatecentral:add (pagination)` provides `parseSortParam` for exactly this.
+> Check `sort` against a field whitelist before it reaches an ORM `orderBy` (`templatecentral:add (pagination)` provides `parseSortParam`).
 
 **6. File Upload Validation**
 
-`file.name` and `file.type` are attacker-controlled strings, not facts about the bytes. Schema validation of them is a usability filter, never the security control. Three things the schema cannot do for you:
+`file.name` and `file.type` are attacker-controlled; validating them is a usability filter, not the security control. The schema cannot:
 
-- **Enforce a size ceiling before buffering.** `await request.formData()` pulls the whole body into memory; checking `file.size` afterwards is too late to stop a memory-exhaustion DoS. Reject on `Content-Length` first, and configure the same ceiling at the platform edge (`next.config.ts` body size limit / CDN / reverse proxy), which is the only limit an attacker cannot skip.
-- **Verify the content is what it claims.** A `.pdf` name with `application/pdf` in `file.type` can carry arbitrary bytes. Sniff the magic bytes of the buffer and confirm they match the allowed type before storing or serving the file.
-- **Make the filename safe.** NEVER derive a storage key or filesystem path from `file.name` — it can contain `../`, null bytes, or a name that collides with an existing object. Generate the storage key yourself (e.g. a UUID) and keep the original name as metadata only.
+- **Cap size before buffering.** `await request.formData()` buffers the whole body, so a later `file.size` check cannot stop a memory DoS. Reject on `Content-Length` first and set the same ceiling at the platform edge (`next.config.ts` body limit / CDN / reverse proxy).
+- **Verify content.** Sniff the buffer's magic bytes and match them to the allowed type before storing or serving.
+- **Make the filename safe.** NEVER derive a storage key or path from `file.name` (`../`, null bytes, collisions). Generate the key (e.g. a UUID); keep the name as metadata only.
 
 ```ts
 // src/app/api/upload/route.ts
@@ -310,7 +310,7 @@ export const POST = withLogging(async (request) => {
 
 **7. External API Response Validation**
 
-The validation shape below is what matters here. For the full integration layer — client, service, factory, and env wiring — use `templatecentral:add (integration)`, which owns `src/integrations/services/github-service.ts`.
+The validation shape is the point here; the full integration layer comes from `templatecentral:add (integration)`, which owns `src/integrations/services/github-service.ts`.
 
 ```ts
 // src/integrations/services/github-user.ts
@@ -382,13 +382,10 @@ pnpm test
 
 ## See Also
 
-- `templatecentral:add` (error-handling) — Transform validation errors to consistent response format
-- `templatecentral:add` (logging) — Log validation failures with context
-- Stack-specific `code-standards` — Type annotation and schema standards
-- `templatecentral:add (endpoint)` / `templatecentral:add (form)` — Use validation patterns in new routes/forms
+`templatecentral:add` (error-handling, logging, endpoint, form) and the stack's `code-standards`.
 
 ## After Writing Code
 
 Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+1. build utility (`cat "<skill-dir>/../build/SKILL.md"`) — validate compilation
+2. review utility (`cat "<skill-dir>/../review/SKILL.md"`) — check code standards

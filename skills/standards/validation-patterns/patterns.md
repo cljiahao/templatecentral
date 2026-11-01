@@ -3,7 +3,7 @@
      prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the templatecentral:standards skill. -->
 ## Zod Pattern Library (Reusable)
 
-Shared Zod 4 schemas for the TypeScript stacks (Next.js, Vite+React; NestJS wraps them with `createZodDto`). FastAPI uses the Pydantic equivalents in `fastapi.md`; the **Rules** at the bottom apply to every stack.
+Shared Zod 4 schemas for the TS stacks (NestJS wraps them with `createZodDto`); FastAPI's Pydantic equivalents are in `fastapi.md`. The **Rules** apply to every stack.
 
 ```ts
 // src/lib/validation/schemas.ts
@@ -126,13 +126,12 @@ Zod 4: use top-level `z.flattenError(err)` for field errors and `err.issues` for
 
 ## Rules
 
-1. **All user input must be validated** — Forms (client + server), API body, query params, path params, file uploads
-2. **Validation error must be field-level** — Map to form field names, not schema paths
-3. **Server always validates independently** — Never trust client validation
-4. **Never trust `request.json()`, `form.data`, or query params** — Always parse with Zod/Pydantic first
+1. **Validate all user input** — forms (client + server), body, query, path params, file uploads; parse `request.json()`, `form.data` and query params with Zod/Pydantic first
+2. **Field-level errors** — mapped to form field names, not schema paths
+3. **Server validates independently** — never trust client validation
+4. **Validate before business logic** — at the route/controller entry point
 5. **File uploads: cap, whitelist, sniff, rename** — Cap body size before buffering, whitelist type/extension, verify magic bytes, and generate the storage key server-side (never a path from the client filename)
-6. **External API responses must be validated** — Use Zod `safeParse()` to handle API changes
-7. **Validation happens before business logic** — Parse at route/controller entry point
-8. **Errors are user-friendly** — Field-level messages, no raw validation paths or user input echoed back
-9. **ORM queries use parameterization** — Never concatenate user input into SQL
-10. **JSX auto-escapes** — React JSX prevents XSS; only use `dangerouslySetInnerHTML` for trusted content
+6. **Validate external API responses** — Zod `safeParse()`
+7. **User-friendly errors** — no raw validation paths or user input echoed back
+8. **Parameterized ORM queries** — never concatenate user input into SQL
+9. **`dangerouslySetInnerHTML` only for trusted content** — JSX otherwise auto-escapes

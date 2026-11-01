@@ -19,10 +19,7 @@
 
 ### Type Annotations
 
-- Annotate all public function parameters and return types.
-- Use Python 3.10+ union syntax: `int | None` (not `Optional[int]`).
-- Use built-in generics: `list[str]`, `dict[str, int]`.
-- Use `TypeAlias` for complex reusable types.
+- Annotate all public parameters and return types; `int | None` (not `Optional[int]`), built-in generics (`list[str]`), `TypeAlias` for complex reusable types.
 
 ### Dataclasses
 
@@ -32,15 +29,12 @@
 
 ### Function Design
 
-- Prefer pure functions: inputs → outputs, no side effects.
-- Isolate side effects; keep mutation in functions with `-> None`.
-- Keep functions small and single-purpose.
-- Use dict dispatch instead of long `if/elif` for key-based branching.
+- Prefer small, pure, single-purpose functions; isolate mutation in `-> None` functions.
+- Dict dispatch over long `if/elif` for key-based branching.
 
 ### Error Handling
 
-- Use built-in exceptions with descriptive messages.
-- `ValueError` for invalid values; `TypeError` for wrong types.
+- Built-in exceptions with descriptive messages (`ValueError` for values, `TypeError` for types).
 - Chain exceptions with `from` to preserve traceback.
 - Avoid bare `except:` or broad `except Exception:` except at boundaries.
 - Custom exceptions (`InvalidInputError`, `NoResultsFound`) for crossing layer boundaries.
@@ -55,13 +49,13 @@
 
 ### Comments & Docstrings
 
-- Follow the shared comment doctrine in `code-standards/comments.md` (why-not-what, no commented-out code, no change-narration).
+- Follow `code-standards/comments.md`.
 - Docstrings: one-line for simple functions, short paragraph for complex ones; describe the contract (args, returns, behavior), not the implementation.
-- Ruff enforces the mechanical tenets — `ERA` (commented-out code), `PGH003`/`PGH004` (blanket `# type: ignore` / `# noqa`), `RUF100` (unused `noqa`), `TD005` (bare `TODO` with no description). Keep them in `pyproject.toml`; see `comments.md` → Enforcement.
+- Keep Ruff's comment rules in `pyproject.toml` (`comments.md` → Enforcement).
 
 ### Static Analysis (`ruff`)
 
-`pyproject.toml` pins `[tool.ruff.lint] select` (not `extend-select` — current ruff enables ~413 rules by default) to a deliberate, per-tier list: `E4`/`E7`/`E9`/`F` (ruff's pre-0.16 default set), `I` (isort), bugs (`B`), security (`S` — hardcoded secrets, weak crypto, unsafe eval/exec), FastAPI-specific (`FAST` — e.g. redundant `response_model`), code smells (`SIM`/`C4`/`RET`), test style (`PT`), misc bug-prone patterns (`PIE`), modernization (`UP`), and comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`). A per-file-ignore turns off `S101`/`S105` (assert-use, "hardcoded password") under `test/**` — pytest's own idioms and fixture literals trip both without being real findings. Deliberately not enabled: `PL` (mixes real findings with stylistic import-placement opinions), `ANN` (project-wide annotation retrofit), `ARG` (false-positives on framework-mandated callback signatures like exception handlers), `TRY`/`EM` (opinionated exception-message formatting), `DTZ` (single-rule tier); `FIX` and `TD001`–`TD004`/`TD006`/`TD007` (ban or over-format TODO/FIXME, which the comment doctrine allows with context).
+`pyproject.toml` pins `[tool.ruff.lint] select` (not `extend-select`, which would add to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, and comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`). `S101`/`S105` are off under `test/**`. Not enabled: `PL`, `ANN`, `ARG` (framework callback signatures), `TRY`/`EM`, `DTZ`, `FIX`, `TD001`–`TD004`/`TD006`/`TD007`.
 
 ### Constants
 
@@ -75,7 +69,7 @@
 - **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 - NEVER use `@app.on_event("startup")` / `@app.on_event("shutdown")` — removed in Starlette 1.0. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
-- **Starlette floor.** A published security advisory (BadHost) lets malformed `Host` headers make `request.url.path` return incorrect values in older Starlette, enabling auth bypass in middleware-based path matching — the templateCentral plugin's `.claude/rules/fastapi.md` tracks the required Starlette floor. Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes; `scope["path"]` is safe if you must read the path in middleware.
+- **Starlette floor** (`.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.
 
 ### Backend Testing (mandatory)
 

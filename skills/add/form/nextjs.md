@@ -4,11 +4,7 @@
 
 # Add a Form to Next.js
 
-Create a validated form in a Next.js project scaffolded from templateCentral using React Hook Form, Zod, and the existing `CustomFormField` widget.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+Validated form with React Hook Form, Zod and the existing `CustomFormField` widget.
 
 ## What the Template Already Provides
 
@@ -31,18 +27,11 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Define the Zod Schema
 
-`sonner` and a single `<Toaster />` are already mounted in `providers.tsx` — call `toast.*` directly. (Non-scaffold project without it: `npx shadcn@latest add sonner`, then mount exactly one `<Toaster />` in `Providers`.)
+`sonner` and one `<Toaster />` are already mounted in `providers.tsx` — call `toast.*` directly (otherwise `npx shadcn@latest add sonner` and mount exactly one `<Toaster />`).
 
 **`src/features/<feature>/schemas/<form-name>.schema.ts`**:
 
@@ -65,7 +54,7 @@ export const contactFormSchema = z.object({
 export type ContactFormValues = z.input<typeof contactFormSchema>;
 ```
 
-> **Zod v4 note**: Use `z.input` (not `z.infer`) for form value types. `z.input` gives the **input** type (what the user types), while `z.infer` gives the **output** type (after transforms like `.default()`, `.coerce`). `useForm` works with input types.
+> **Zod v4 note**: type form values with `z.input` (what the user types), not `z.infer` (the post-transform output); `useForm` works with input types.
 
 ### 2. Create the Form Component
 
@@ -170,15 +159,15 @@ export default function ContactPage() {
 
 ## Rules
 
-- Always define the Zod schema in a separate file under `schemas/` — not inline in the component.
-- Use `CustomFormField` for all fields — it handles label, error display, and Controller wiring automatically.
-- Use `Form` from `@/components/ui/form` to wrap the form — it re-exports `FormProvider` and `CustomFormField` uses `useFormContext()`.
-- Set `defaultValues` for all fields to avoid uncontrolled-to-controlled warnings.
+- Zod schemas live in `schemas/`, never inline.
+- Use `CustomFormField` for every field (label, errors, Controller wiring).
+- Wrap in `Form` from `@/components/ui/form` (re-exports `FormProvider`; `CustomFormField` uses `useFormContext()`).
+- Set `defaultValues` for every field.
 - Use `toast.success()` / `toast.error()` from Sonner for user feedback.
 - For server actions (Next.js), handle submission in an async `onSubmit` that calls the server action directly.
 - **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler MUST re-parse the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
 - Add `'use client'` directive — forms are inherently interactive.
-- For complex validation (file uploads, password rules, OWASP/CWE compliance): use `templatecentral:standards` (validation-patterns).
+- Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
 
 ## Validate
 
@@ -188,6 +177,4 @@ pnpm build
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

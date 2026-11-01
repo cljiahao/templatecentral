@@ -37,9 +37,9 @@ class APISettings(BaseSettings):
     )
 ```
 
-Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
+Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
 
-Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
+Add to `src/.env` (never commit) and document in `src/.env.default`:
 ```
 DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
 ```
@@ -96,11 +96,11 @@ def run_migrations_online():
             context.run_migrations()
 ```
 
-> **Important**: All `alembic` commands (`alembic revision`, `alembic upgrade`, etc.) must be run from the **repo root** (where `alembic.ini` lives), not from `src/`.
+> **Important**: run every `alembic` command from the **repo root** (where `alembic.ini` lives), not `src/`.
 
 ### A6. Create a Model
 
-**`src/models/project.py`** (example — a generic entity; the `User` model is defined separately in the auth integration section below):
+**`src/models/project.py`** (example entity; `User` comes from the auth section below):
 
 ```python
 from datetime import datetime
@@ -138,7 +138,7 @@ alembic upgrade head
 
 ### A8. Usage
 
-Inject the session via `Annotated[Session, Depends(get_db)]` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
+Inject `Annotated[Session, Depends(get_db)]` and serialize through a `response_model` (`ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
@@ -159,9 +159,9 @@ def list_projects(db: Annotated[Session, Depends(get_db)]) -> Sequence[Project]:
     return db.scalars(stmt).all()
 ```
 
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool. An `async def` handler calling sync SQLAlchemy blocks the event loop for every query (only the `get_db` dependency runs in the thread pool, not the handler body).
+> **Sync vs async**: handlers using sync SQLAlchemy are `def`, not `async def` — FastAPI runs `def` in a thread pool, while an `async def` body blocks the event loop on every query.
 >
-> **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema. This ensures serialization and prevents leaking internal fields.
+> **Important**: never return raw ORM objects — use `response_model` with a Pydantic schema so internal fields never leak.
 
 ### A9. Validate
 
@@ -171,13 +171,13 @@ python -m pytest test/ -q
 
 Confirm all tests pass.
 
-> **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to AWS IAM authentication.
+> High compliance later: `templatecentral:migrate` (database) switches to AWS IAM auth.
 
 ---
 
 ## Completing Auth Integration (SQLAlchemy)
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
 ### Step A — Create `src/models/user.py`
 
@@ -348,17 +348,15 @@ def get_me(
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Opt-in only** — add a database only on request.
 - Place ORM models in `src/models/` — not in `api/`.
 - `database/` holds infrastructure only (Base, session, engine) — no business logic.
 - Keep `DATABASE_URL` in `src/.env` — NEVER hardcode production credentials.
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
 - The `get_db` dependency ensures sessions are properly closed.
 - For async SQLAlchemy, use `create_async_engine` + `AsyncSession` from `sqlalchemy.ext.asyncio`.
-- **Default to standard (password) auth** — only use IAM auth when the user explicitly requires it for compliance.
+- **Default to password auth** — IAM only when the user requires it.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

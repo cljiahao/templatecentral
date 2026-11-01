@@ -4,12 +4,6 @@
 
 # Add a Feature Module
 
-Create a new self-contained feature module in a Vite + React project scaffolded from templateCentral.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ## Inputs
 
 - **Feature name** — The domain name (e.g., `project`, `auth`, `dashboard`)
@@ -18,14 +12,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Create the Feature Directory Structure
 
@@ -88,7 +75,7 @@ export const projectItemSchema = z.object({
 
 Export from barrel: `schemas/index.ts`
 
-Then the client and service. Call the backend through `ApiClient` (`src/lib/clients/api-client.ts`) — the SPA's one backend client, defined in `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client; create it from there if it is missing. It owns the base URL, timeout and `APIError` mapping, and once `templatecentral:add (auth)` is applied it also sends the session cookie and, on non-GET, `X-CSRF-Token` — so feature code never touches `fetch`, credentials or CSRF:
+Then the client and service. Call the backend through `ApiClient` (`src/lib/clients/api-client.ts`; create it from `templatecentral:standards (full-stack-pairing)` → Frontend HTTP Client if missing). It owns base URL, timeout, `APIError` mapping and, with auth, the session cookie and `X-CSRF-Token` — feature code never touches `fetch`, credentials or CSRF:
 
 ```ts
 // api/project-service.ts
@@ -125,13 +112,13 @@ export const ProjectService = {
 };
 ```
 
-`getAll` assumes an unpaginated `GET /projects` returning a bare array. Once `templatecentral:add (pagination)` is applied to the backend, that endpoint returns `{ data: { items, pagination } }` — update the service there rather than keeping both shapes.
+`getAll` assumes an unpaginated `GET /projects` returning a bare array. Once `templatecentral:add (pagination)` is applied to the backend, that endpoint returns `{ data: { items, pagination } }`; update the service then, never keep both shapes.
 
 Export from barrel: `api/index.ts`
 
 ### 5. Create Components (in `components/`)
 
-**Before writing any UI, check the template's component library** (`templatecentral:standards` → `code-standards/vite-react.md` → *Component Best Practices*). Prefer existing shadcn primitives (`button`, `card`, `dialog`, `form`, `input`, `select`, `tabs`, etc.) and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, etc.) over writing new ones from scratch.
+**Check the component library before writing UI** (`templatecentral:standards` → `code-standards/vite-react.md` → *Component Best Practices*). Prefer existing shadcn primitives and widgets (`custom-card`, `custom-dialog`, `custom-form-field`, `media-card`, `pill`, …) over new ones.
 
 Feature-specific components. Use `function` declarations:
 
@@ -182,7 +169,7 @@ export * from './constants';
 export type { ProjectItem } from './types';
 ```
 
-Export constants that consumers need (e.g., static data for rendering). Export types for typed props or state. Only export what consumers outside the feature need.
+Export only what consumers outside the feature need (constants, types).
 
 ### 8. Validate
 
@@ -190,19 +177,19 @@ Export constants that consumers need (e.g., static data for rendering). Export t
 pnpm build && pnpm test
 ```
 
-Confirm the build succeeds with no TypeScript errors and all tests pass. Verify imports resolve: `import { X } from '@/features/<name>'` works from outside the feature.
+Build and tests pass; `import { X } from '@/features/<name>'` resolves from outside the feature.
 
 ## Rules
 
 - **Direct imports** OK within the same feature
-- NEVER import from one feature into another — promote shared code to `components/widgets/` (only once 2+ features use it) or `lib/`
-- NEVER export internal implementation details from the barrel — only the public API
-- NEVER skip creating `types.ts` — define interfaces before building components
+- NEVER import across features — promote shared code (used by 2+) to `components/widgets/` or `lib/`
+- The barrel exports only the public API
+- Write `types.ts` before components
 - Call the backend through an `ApiClient` subclass — NEVER raw `fetch` or a hardcoded URL (it would skip the session cookie and CSRF header)
 
 ## Standalone Components
 
-Use this section when adding a component that is not tied to a specific feature module.
+For a component not tied to a feature module.
 
 First determine where it belongs:
 
@@ -219,7 +206,7 @@ For low-level UI primitives, always use the shadcn CLI — never hand-install (`
 npx shadcn@latest add <component-name>
 ```
 
-This installs into `src/components/ui/`. Do not manually create UI primitives there.
+It installs into `src/components/ui/`; never hand-create primitives there.
 
 Rules:
 - NEVER add boolean flag props to configure variants — prefer composition with children
@@ -227,6 +214,4 @@ Rules:
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

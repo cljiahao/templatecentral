@@ -6,13 +6,13 @@
 The config files are real files in `<skill-dir>/fastapi/template/`, listed in `<skill-dir>/fastapi/template.manifest`. Step 1 below copies them; do not re-type them. Notes on the ones that need context:
 
 - `requirements-dev.txt` — Dev-only dependencies, not installed in production Docker stages. `pytest-cov` is required by the seeded CI coverage gate (`pytest --cov=src --cov-report=xml`, harness-kit Step B3) — the FastAPI counterpart to the TS stacks' `@vitest/coverage-v8`.
-- `pyrightconfig.json` — Pins pyright to the project venv so `python -m pyright src/` resolves imports from `.venv` even when the venv is not the active shell. Without it, pyright falls back to the system Python and reports every dependency as a missing import.
+- `pyrightconfig.json` — Pins pyright to `.venv`, so `python -m pyright src/` resolves imports when the venv is not active.
 
 ## Part C — Source Files
 
 The source files are real files in `<skill-dir>/fastapi/template/` (and `AGENTS.md` in `<skill-dir>/fastapi/template-agents/`), listed in `<skill-dir>/fastapi/template.manifest`. Steps 1 and 6 below copy them; do not re-type or modify them. Notes on the ones that need context:
 
-- `src/core/uvicorn_log_config.json` — Passed to the `uvicorn` CLI via `--log-config` in `docker-entrypoint.sh` (the CLI bypasses `main.py`, so `uvicorn.run(..., log_config=None)` there doesn't apply). uvicorn's own default logging config installs handlers directly on the `uvicorn`/`uvicorn.access` loggers with `propagate: false`, which bypasses the root handler `setup_logging()` configures — this file clears those handlers and re-enables propagation so uvicorn's startup/access logs go through the same structlog JSON formatting as app-level `logger.info(...)` calls.
+- `src/core/uvicorn_log_config.json` — Passed to the `uvicorn` CLI via `--log-config` in `docker-entrypoint.sh`. It clears uvicorn's own handlers and re-enables propagation, so uvicorn's startup/access logs get the same structlog JSON formatting as the app.
 
 ---
 
@@ -26,7 +26,7 @@ Create `<target>/`, then load the kit index: its Step 0 names the copy script `<
 cat "<skill-dir>/shared/harness-kit.md"
 ```
 
-Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`, with the kit's path rules and refusals: it writes nothing and ends with a `STOP:` line when a path is in the way.
+Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`: it writes nothing and ends with a `STOP:` line when a path is in the way.
 
 Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 

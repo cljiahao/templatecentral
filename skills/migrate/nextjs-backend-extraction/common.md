@@ -4,7 +4,7 @@
 
 # Next.js Backend Extraction — Shared Phases
 
-Read this file alongside the target-specific leaf (fastapi.md or nestjs.md). Phases execute in numeric order: 1, 2, [3–7 from leaf], 8, 9, 10.
+Read with the target leaf (fastapi.md or nestjs.md). Phase order: 1, 2, [3–7 from leaf], 8, 9, 10.
 
 Variable values by target:
 | Variable | FastAPI | NestJS |
@@ -17,7 +17,7 @@ Variable values by target:
 
 ## Phase 1 — Assessment (autonomous)
 
-Scan the Next.js project root. Run each check in order.
+Run each check in order from the Next.js project root.
 
 **1a. Verify templateCentral marker**
 
@@ -26,19 +26,19 @@ Read `AGENTS.md`. If `<!-- templateCentral: nextjs@` is not on line 1, exit:
 
 **1b. Read project name**
 
-Read `package.json` → `name` field. This becomes `[project-name]`. The [BACKEND] project will be created at `../[project-name]-api`.
+`package.json` `name` is `[project-name]`; [BACKEND] goes in `../[project-name]-api`.
 
 **1c. Inventory API routes**
 
-List all `src/app/api/**/route.ts` files. For each, read the exported function names to determine HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`).
+List every `src/app/api/**/route.ts` and its exported HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`).
 
 **1d. Identify integrations to move**
 
-For each `route.ts` file, scan import statements for any path starting with `@/integrations/` or `../integrations/`. Collect the unique set. See the leaf file for stack-specific base-client handling.
+Collect the unique `@/integrations/` or `../integrations/` imports of every `route.ts`. The leaf covers base-client handling.
 
 **1e. Identify integrations staying in Next.js**
 
-List all files under `src/integrations/` that were NOT collected in 1d.
+List every file under `src/integrations/` not collected in 1d.
 
 **1f. Detect database**
 
@@ -52,7 +52,7 @@ Record the first match (these are the files `templatecentral:add (database)` cre
 
 **1g. Detect auth**
 
-Check whether `proxy.ts` or `src/proxy.ts` exists **and** imports from `better-auth` (`getSessionCookie`). Record presence. A proxy that only calls `applyFrameProtection` (the scaffold default, before `templatecentral:add (auth)`) is not auth.
+Auth is present when `proxy.ts` or `src/proxy.ts` imports from `better-auth` (`getSessionCookie`). A proxy that only calls `applyFrameProtection` (the scaffold default) is not auth.
 
 **Print the assessment:**
 
@@ -86,7 +86,7 @@ Do not proceed until the user responds. Ask:
 
 > "This will create `../[project-name]-api` ([BACKEND]), migrate the items listed above, and rewire Next.js as a pure frontend. This cannot be automatically undone. Proceed? (yes / no)"
 
-If yes → require a clean tree before making any changes. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (NEVER commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
+If yes → require a clean tree first. If `git status --porcelain` is non-empty, stop and ask the user to commit or stash their work themselves (NEVER commit on their behalf without an explicit instruction), then re-check. Once clean, record and print the restore point:
 ```bash
 git rev-parse HEAD
 ```
@@ -97,9 +97,7 @@ If no → print "No changes made." and exit.
 
 ## Phase 3 — shared skeleton (the leaf adds stack specifics)
 
-Determine the sibling path: `../[project-name]-api`.
-
-Load and follow the [BACKEND] scaffold steps — see the leaf file for the exact `cat` paths (fastapi or nestjs scaffold dirs differ). Work from `../[project-name]-api` as the project root.
+Follow the [BACKEND] scaffold steps (the leaf gives the `cat` paths) with `../[project-name]-api` as the project root.
 
 **Do not run post-scaffold agents** (build, test, update, review) — verification happens in Phase 10.
 
@@ -107,28 +105,28 @@ Load and follow the [BACKEND] scaffold steps — see the leaf file for the exact
 
 ## Shared rules for leaf Phases 5 and 7
 
-- **Phase 5 cleanup** — in the Next.js project, delete each integration file that moved. Delete `src/integrations/` only if nothing frontend-only remains in it.
-- **Phase 7 `proxy.ts`** — it stays in the Next.js project and keeps protecting frontend routes. Point any hardcoded `/api/auth/...` calls in it at `process.env.BACKEND_URL` (server-only). Phase 8 step 0 swaps its session check.
+- **Phase 5 cleanup** — delete each moved integration file from Next.js; delete `src/integrations/` only if nothing frontend-only remains.
+- **Phase 7 `proxy.ts`** — stays in Next.js, protecting frontend routes. Point hardcoded `/api/auth/...` calls at `process.env.BACKEND_URL`. Phase 8 step 0 swaps its session check.
 
 ---
 
 ## Phase 8 — Rewire Next.js Frontend (autonomous)
 
-The browser never calls [BACKEND] directly. Client components call the same-origin path `/api/external/*`, which a Next.js `rewrites()` entry forwards to `BACKEND_URL`. Server components, layouts and `proxy.ts` call `BACKEND_URL` directly. That variable is server-only, and the frontend has **no** `NEXT_PUBLIC_*` backend variable. Cookie mode depends on this same-origin layout. The rewrite, the browser/server clients and the caveats live in one place, and this phase applies them rather than restating them:
+The browser never calls [BACKEND] directly: client components call same-origin `/api/external/*`, which a `rewrites()` entry forwards to `BACKEND_URL`; server components, layouts and `proxy.ts` call the server-only `BACKEND_URL`. There is **no** `NEXT_PUBLIC_*` backend variable. Cookie mode depends on this layout, defined in:
 ```bash
 cat "<skill-dir>/../standards/full-stack-pairing/implementation.md"
 ```
 
-0. **Rewire auth before deleting routes** (only if Phase 1g detected auth). `src/app/api/` contains the better-auth handler (`src/app/api/auth/[...all]/route.ts`). The Phase 7 backend issues its own JWT and does not speak the better-auth protocol, so pointing the better-auth client at it will not work. Before deleting the handler:
-   - **Enable the backend's cookie mode**: the "Browser Client (Cookie Mode)" section of the [BACKEND] auth skill. The browser logs in with `POST /api/external/auth/session` and never holds a token. Never go cross-origin with `SameSite=None` or credentialed CORS
-   - **Replace** `lib/auth-client.ts` (the better-auth client) with calls through full-stack-pairing's `backendFetch` (Step 4) to `auth/session`, `auth/me` and `auth/logout`, then update the `features/auth/` consumers
+0. **Rewire auth before deleting routes** (only if Phase 1g detected auth). The Phase 7 backend issues its own JWT and does not speak the better-auth protocol, so before deleting `src/app/api/auth/[...all]/route.ts`:
+   - **Enable the backend's cookie mode** ("Browser Client (Cookie Mode)" in the [BACKEND] auth skill): the browser logs in with `POST /api/external/auth/session` and never holds a token. Never go cross-origin with `SameSite=None` or credentialed CORS
+   - **Replace** the better-auth client `lib/auth-client.ts` with full-stack-pairing's `backendFetch` (Step 4) calls to `auth/session`, `auth/me` and `auth/logout`; update the `features/auth/` consumers
    - **`proxy.ts`**: drop `getSessionCookie` (it looks for better-auth's cookie name) and use `const hasSession = req.cookies.has('__Host-session') || req.cookies.has('session');`. Add `/api/external/auth/session` and `/api/external/health` as **exact** public paths (full-stack-pairing Step 2 explains why prefixes are unsafe)
-   - **Protected layouts**: replace `auth.api.getSession(...)` with full-stack-pairing's `getCurrentUser()`, which calls `BACKEND_URL/auth/me` and forwards the cookies, and `redirect(PAGE_ROUTES.LOGIN)` when it returns `null`. Then remove `lib/auth.ts` and the `better-auth` dependency
+   - **Protected layouts**: replace `auth.api.getSession(...)` with full-stack-pairing's `getCurrentUser()` (calls `BACKEND_URL/auth/me` with the cookies) and `redirect(PAGE_ROUTES.LOGIN)` on `null`. Then remove `lib/auth.ts` and the `better-auth` dependency
    - Verify the flow end-to-end before proceeding: login → 204 + `Set-Cookie`, `/dashboard` renders, a non-GET without `X-CSRF-Token` → 403
 
-1. **Delete `src/app/api/`, except `src/app/api/health/route.ts`**: every other route handler has moved to [BACKEND]. The health route is the Next container's own liveness probe. The Dockerfile `HEALTHCHECK` and `test/api/health.test.ts` hit it, and `proxy.ts` lists it as public.
+1. **Delete `src/app/api/`, except `src/app/api/health/route.ts`**: the health route is the Next container's liveness probe (Dockerfile `HEALTHCHECK`, `test/api/health.test.ts`, a public path in `proxy.ts`).
 
-2. **Add the rewrite and the browser path**: the `rewrites()` entry in full-stack-pairing Step 2 goes into `next.config.ts`, next to the existing `headers()` with a destination of `${BACKEND_URL}/:path*`. Add `API_ROUTES.BACKEND` (`/api/external`) to `src/lib/constants/routes.ts`, next to the existing `HEALTH` entry.
+2. **Add the rewrite and the browser path**: put full-stack-pairing Step 2's `rewrites()` entry (destination `${BACKEND_URL}/:path*`) beside `headers()` in `next.config.ts`, and `API_ROUTES.BACKEND` (`/api/external`) beside `HEALTH` in `src/lib/constants/routes.ts`.
 
 3. **Update the callers**. Every `fetch('/api/...')` under `src/features/` changes:
 
@@ -154,7 +152,7 @@ BACKEND_URL=http://localhost:[DEV_PORT]
 
 5. **`.env.local`**: ask the user to add the same line (agent edits to `.env*` files are hook-blocked by design).
 
-6. **Clean up `src/integrations/`**: after the Phase 5 cleanup, delete any remaining entry that nothing in the Next.js codebase imports any more, then delete the directory if it is empty. `backend-client.ts` imports `clients/base/`, so that stays whenever server code uses it.
+6. **Clean up `src/integrations/`**: delete any remaining entry nothing imports, then the directory if empty. `clients/base/` stays while `backend-client.ts` uses it.
 
 ---
 
@@ -162,7 +160,7 @@ BACKEND_URL=http://localhost:[DEV_PORT]
 
 **[BACKEND] project (`../[project-name]-api`):** apply the leaf file's CORS config step.
 
-Phases 4–7 created new module/router/service folders after the Phase 3 scaffold's one-time README pass, so those folders have no `README.md` yet. Re-run the documentation kit over `../[project-name]-api` now, before Phase 10 verification:
+Phases 4–7 created folders after the Phase 3 README pass. Re-run the documentation kit over `../[project-name]-api` before Phase 10:
 ```bash
 cd ../[project-name]-api
 cat "<skill-dir>/../scaffold/shared/documentation-kit.md"

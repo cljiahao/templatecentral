@@ -4,15 +4,15 @@
 
 # Next.js → NestJS Backend Extraction
 
-Extracts `src/app/api/` route handlers and relevant `src/integrations/` clients from a Next.js project into a sibling NestJS project. Next.js becomes a pure frontend.
+Moves `src/app/api/` and the integrations it uses into a sibling NestJS project; Next.js becomes a pure frontend.
 
-**Read `common.md` first.** Phases 1, 2, the Phase 3 skeleton, and Phases 8–10 live in common.md; stack-specific Phases 3–7 are below. Variable substitutions: `[BACKEND]` = NestJS, `[DEV_PORT]` = 3001, `[CORS_VAR]` = `CLIENT_URL`.
+**Read `common.md` first** (Phases 1, 2, the Phase 3 skeleton, 8–10); Phases 3–7 are below.
 
 ```bash
 cat "<skill-dir>/nextjs-backend-extraction/common.md"
 ```
 
-**Phase 1 NestJS deltas:** In 1d, also always include `src/integrations/clients/base/fetch-client.ts` and `src/integrations/clients/base/axios-client.ts` if they exist. Assessment Database line: `[✓ Drizzle / ✓ Mongoose / None detected]`.
+**Phase 1 NestJS deltas:** In 1d, always include `src/integrations/clients/base/fetch-client.ts` and `axios-client.ts` if they exist. Assessment Database line: `[✓ Drizzle / ✓ Mongoose / None detected]`.
 
 ---
 
@@ -22,29 +22,29 @@ cat "<skill-dir>/nextjs-backend-extraction/common.md"
 cat "<skill-dir>/../scaffold/nestjs/source-files.md"
 ```
 
-The scaffold files are real files in `<skill-dir>/../scaffold/nestjs/template/`; scaffold Step 1 copies them. Set the project name to `[project-name]-api` in `package.json`.
+Scaffold Step 1 copies `<skill-dir>/../scaffold/nestjs/template/`. Set the `package.json` name to `[project-name]-api`.
 
 ---
 
 ## Phase 4 — Migrate API Routes (autonomous)
 
-For each `route.ts` file identified in Phase 1c, create the corresponding NestJS module.
+Create a NestJS module for each Phase 1c `route.ts`.
 
 **Mapping:**
 
 | Next.js | NestJS |
 |---|---|
 | `src/app/api/<resource>/route.ts` | `src/modules/<resource>/<resource>.controller.ts` + `.service.ts` + `.module.ts` in `../[project-name]-api` |
-| `export async function GET()` | `@Get()` on controller method; logic moved to service |
-| `export async function POST(request: Request)` | `@Post()` on controller; validate body with `nestjs-zod` DTO |
+| `export async function GET()` | `@Get()`; logic in the service |
+| `export async function POST(request: Request)` | `@Post()` with a `nestjs-zod` DTO body |
 | `export async function PUT(request, { params })` | `@Put(':id')` with `@Param('id')` |
 | `export async function DELETE(_, { params })` | `@Delete(':id')` with `@Param('id')` |
-| `handleApiError(label, error)` | Re-throw as `HttpException`; the global filter in the scaffold catches it |
-| `NextResponse.json(data, { status: 201 })` | Return plain object; set status with `@HttpCode(201)` |
+| `handleApiError(label, error)` | Re-throw as `HttpException` (the scaffold's global filter catches it) |
+| `NextResponse.json(data, { status: 201 })` | Return the object; `@HttpCode(201)` |
 | `return NextResponse.json({ error: 'Not found' }, { status: 404 })` | `throw new HttpException('Not found', HttpStatus.NOT_FOUND)` |
 | Dynamic segment `[id]/route.ts` | Single controller method with `@Param('id')` |
 
-**Controller template** (adapt for each resource). The import list carries only what this template uses — add `Put`, `Delete`, `HttpException`, and `HttpStatus` as the mapping table above calls for them, since the scaffold's ESLint fails the build on an unused import:
+**Controller template** (adapt for each resource). Add `Put`, `Delete`, `HttpException` and `HttpStatus` imports only when used: ESLint fails the build on an unused import:
 
 ```typescript
 // src/modules/users/users.controller.ts
@@ -79,7 +79,7 @@ export class UsersController {
 }
 ```
 
-**Service** — `src/modules/users/users.service.ts`: an `@Injectable()` class whose methods (`findAll`, `findOne(id)`, `create(dto: CreateUserDto)`) take over each route handler's body verbatim, minus the `NextResponse`/`handleApiError` wrapping. Throw `NotFoundException` / `BadRequestException` where the handler returned 404/400.
+**Service** — `src/modules/users/users.service.ts`: an `@Injectable()` class whose `findAll`, `findOne(id)` and `create(dto: CreateUserDto)` take over the handler bodies without the `NextResponse`/`handleApiError` wrapping. Throw `NotFoundException` / `BadRequestException` where the handler returned 404/400.
 
 **Module template:**
 
@@ -111,7 +111,7 @@ const CreateUserSchema = z.object({
 export class CreateUserDto extends createZodDto(CreateUserSchema) {}
 ```
 
-After creating all module files, register each new module in `AppModule` in `../[project-name]-api/src/app.module.ts`:
+Register each new module in `AppModule` (`../[project-name]-api/src/app.module.ts`):
 
 ```typescript
 import { UsersModule } from './modules/users/users.module';
@@ -129,7 +129,7 @@ export class AppModule {}
 
 ## Phase 5 — Migrate Integrations (autonomous)
 
-For each integration file identified in Phase 1d (API-route-imported + base clients):
+For each Phase 1d integration and base client:
 
 **FetchClient subclass → NestJS injectable service:**
 
@@ -162,7 +162,7 @@ Copy base client files (`fetch-client.ts`, `axios-client.ts`, `https-agent.ts`) 
 
 Copy schemas alongside the service they belong to.
 
-Register each service as a provider in the relevant feature module (or in a shared `IntegrationsModule` if used by multiple modules). Then apply the Phase 5 cleanup in `common.md`.
+Register each service as a provider in its feature module (or a shared `IntegrationsModule`). Then apply the Phase 5 cleanup in `common.md`.
 
 ---
 
@@ -187,7 +187,7 @@ cat "<skill-dir>/../add/database/typescript/nestjs-drizzle.md"
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-mongoose.md"
 ```
-   If the Next.js project uses AWS IAM auth for MongoDB (`@aws-sdk/credential-providers` in its `package.json`), also load the IAM add-on and apply it in place of the standard C2/C7 steps:
+   If the Next.js project uses MongoDB IAM auth (`@aws-sdk/credential-providers` in `package.json`), also apply the IAM add-on in place of C2/C7:
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-iam.md"
 ```
@@ -200,7 +200,7 @@ cat "<skill-dir>/../add/database/typescript/nestjs-mongoose-iam.md"
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-kysely.md"
 ```
-   If the Next.js project uses AWS IAM auth (`@aws-sdk/rds-signer` in its `package.json`), also load the IAM add-on and apply it in place of the standard B2/B7 steps:
+   If it uses RDS IAM auth (`@aws-sdk/rds-signer` in `package.json`), also apply the IAM add-on in place of B2/B7:
 ```bash
 cat "<skill-dir>/../add/database/typescript/nestjs-kysely-iam.md"
 ```
@@ -217,7 +217,7 @@ Load and follow the NestJS auth skill in `../[project-name]-api`:
 cat "<skill-dir>/../add/auth/nestjs.md"
 ```
 
-If Phase 6 migrated a database, the auth skill's `AuthService` is a 501 stub. Phase 6 ran before these stubs existed, so its auth section was skipped — replace the stubs with the database-backed implementation now:
+If Phase 6 migrated a database, `AuthService` is still a 501 stub (Phase 6 ran first). Replace it now:
 
 | Phase 6 database | Follow |
 |---|---|
@@ -231,9 +231,9 @@ Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 
 ## Phases 8–10 — NestJS-specific details
 
-**Phase 8, step 0 CORS:** none. Browser calls arrive same-origin through the Next.js `/api/external` rewrite, so cookie mode needs no CORS change. Do not set `credentials: true` for the frontend's origin.
+**Phase 8, step 0 CORS:** none (same-origin through the `/api/external` rewrite). Do not set `credentials: true` for the frontend's origin.
 
-**Phase 9 — NestJS CORS config:** no change. The scaffold's `CLIENT_URL` (`serviceConfig.CLIENT_URL` → `setupCors`) only matters for other browser origins that call with Bearer tokens. The Next.js frontend is same-origin through its rewrite, so leave `CLIENT_URL` at its scaffold default.
+**Phase 9 — NestJS CORS config:** no change. Leave `CLIENT_URL` at its scaffold default; it matters only for other browser origins using Bearer tokens.
 
 **Phase 10 — Verify commands:**
 ```bash
@@ -246,4 +246,4 @@ cd [original-project-path]
 pnpm build && pnpm test
 ```
 
-For phase 8 steps 1–6, phase 9 AGENTS.md/Next.js updates, and the phase 10 success message, see `common.md`.
+The rest of Phases 8–10 is in `common.md`.

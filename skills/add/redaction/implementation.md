@@ -4,10 +4,8 @@
 
 ## Step 0 — Verify context
 
-Confirm `.claude/settings.json` and `.claude/hooks/user-prompt-guard.cjs` (TS stacks) or
-`.claude/hooks/user-prompt-guard.py` (FastAPI) already exist — this capability extends the existing
-harness rather than creating one from scratch. If they don't exist, invoke `templatecentral:migrate`
-first (Project-migration path), then re-check.
+Confirm `.claude/settings.json` and `.claude/hooks/user-prompt-guard.cjs` (TS) or `.py` (FastAPI)
+exist — this extends the harness. If not, run `templatecentral:migrate` (Project-migration path) first, then re-check.
 
 ## Step 1 — Collect real values from the user
 
@@ -16,15 +14,12 @@ Ask the user for their project's real infrastructure values:
 1. Real internal CIDR range(s) they want masked, e.g. `172.18.161.0/24`. IPv4 only.
 2. Real internal domain suffix(es) they want masked, e.g. `corp.internal`.
 
-At least one CIDR or one domain suffix is required — if the user has neither yet (a brand-new project
-with no deployed infra), tell them to come back and run this capability once they do; there's nothing
-to configure yet.
+At least one CIDR or domain suffix is required; with neither (no deployed infra yet), stop and tell the
+user to come back later.
 
-Ask for the **narrowest** ranges that actually cover their infra (the `/16`s or `/24`s in use), not a
-blanket supernet. Masking works by mapping each real range onto a same-sized synthetic block drawn from
-a reserved space that must stay disjoint from every declared real range; a range large enough to swallow
-an entire synthetic space (a full `10.0.0.0/8`, say) leaves no disjoint block to map onto, and the hook
-will refuse to mask rather than emit a value identical to the real one.
+Ask for the **narrowest** ranges in use (`/16`s or `/24`s), not a supernet: each real range maps onto a
+same-sized synthetic block disjoint from all real ranges, so one that swallows a whole synthetic space
+(a full `10.0.0.0/8`) cannot be masked and the hook refuses.
 
 ## Step 2 — Write `.claude/redaction-config.json`
 
@@ -38,16 +33,13 @@ with zero added dependencies):
 }
 ```
 
-The companion mapping file (`.claude/.redaction-map.json`, created on first mask) is gitignored in
-Step 7, so each teammate's machine allocates its own synthetic numbering independently — `masked0` and
-`10.0.0.x` mean the same real value within one checkout, not across a team.
+The mapping file (`.claude/.redaction-map.json`, created on first mask) is gitignored (Step 7), so
+synthetic values are stable within one checkout, not across a team.
 
 ## Step 3 — Seed the `PostToolUse` hook
 
 The hook code is runtime-specific — load **only** the file for this stack and follow its **Part A**
 (it also carries the Step 6 companion snippet as **Part B**, so keep it in context):
-
-> `<skill-dir>` = the add skill directory (Claude Code shows it as "Base directory for this skill") — substitute that absolute path.
 
 | Stack | Hook runtime | Load |
 |---|---|---|
@@ -82,14 +74,10 @@ Also merge these two entries into `permissions.deny` (do not remove existing ent
 "Read(.claude/.redaction-map.json)"
 ```
 
-This is load-bearing: the config/map files contain the real values in plaintext. If the agent can read
-them directly, the hook's masking is pointless — the agent already has the real values from the config
-file itself.
+Load-bearing: both files hold the real values in plaintext, so an agent that reads them defeats the masking.
 
-Scope of that deny: it covers the `Read` tool and the file-reading Bash commands Claude Code recognises
-(`cat`, `head`, `tail`, …), but not an arbitrary subprocess that happens to read the file
-(`python -c`, `node -e`, a script). Treat it as a strong deterrent against casual access, not an
-OS-level guarantee.
+The deny covers `Read` and recognised file-reading Bash commands (`cat`, `head`, `tail`, …), not an
+arbitrary subprocess (`python -c`, `node -e`) — a deterrent, not an OS-level guarantee.
 
 ## Step 5 — Extend `protect-files.sh`
 
@@ -114,16 +102,14 @@ Add this line to `.gitignore` if not already present:
 .claude/.redaction-map.json
 ```
 
-The config file (`.claude/redaction-config.json`) is NOT gitignored — it's meant to be committed so the
-team shares the same masking policy; only the accumulated real→synthetic mapping is local/sensitive
-enough to exclude from history.
+`.claude/redaction-config.json` is NOT gitignored — commit it so the team shares the policy; only the
+mapping stays local.
 
 ## Step 8 — Re-bless the harness-integrity baseline
 
-This capability edits `.claude/settings.json` and `.claude/hooks/*`, both of which `verify-harness.sh`
-hashes against `.claude/harness.json` — a hard CI gate and a pre-push lefthook hook. Until the baseline
-is refreshed, every push will fail on drift. Tell the user (do NOT run it as the agent — re-blessing is
-a human act, and `protect-files.sh` gates `harness.json` for exactly this reason):
+`verify-harness.sh` (CI gate and pre-push hook) hashes the edited `.claude/settings.json` and
+`.claude/hooks/*` against `.claude/harness.json`, so every push fails until the baseline is refreshed.
+Tell the user (do NOT run it yourself — re-blessing is a human act, gated by `protect-files.sh`):
 
 > Run `bash .claude/regen-harness.sh` yourself, review the diff, and commit it. While doing so, add
 > `.claude/hooks/redact-sensitive-output.cjs` (or `.claude/hooks/redact_sensitive_output.py`) to
@@ -147,8 +133,7 @@ echo '{"tool_response":{"stdout":"host at <a real IP from the configured range>"
 ```
 
 The last check must print an `updatedToolOutput` **object** (`{"stdout":...,"stderr":"","interrupted":false,"isImage":false}`)
-with the real IP replaced — a flat string there would be silently discarded by Claude Code for built-in
-tools, leaving the output unmasked.
+with the real IP replaced — Claude Code silently drops a flat string for built-in tools.
 
 Capability is complete once all five checks pass.
 

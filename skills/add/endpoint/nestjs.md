@@ -4,11 +4,7 @@
 
 # Add an Endpoint (NestJS module)
 
-Guide for adding a new feature module following the controller → service → repository architecture.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
+A feature module: controller → service → repository.
 
 ## Naming Convention
 
@@ -26,14 +22,7 @@ Replace `<name>` throughout using these rules:
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nestjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Create Module Directory
 
@@ -197,9 +186,8 @@ export class TaskController {
 
 #### Authorization — decide before moving on
 
-The controller above is **fully public**: anyone who can reach the service can create,
-update, and delete records. That is almost never what a generated CRUD module should ship
-as, so treat authorization as a required decision, not an optional extra.
+The controller above is **fully public** — anyone can create, update and delete records.
+Treat authorization as a required decision, not an extra.
 
 - **If `src/modules/auth/` exists** (the project ran `templatecentral:add` (auth)), apply
   the project's guard by default. Put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on
@@ -248,7 +236,7 @@ export class TaskModule {}
 
 ### 8. Register the Module
 
-In `src/modules/index.ts`, add (replace `<name>` with the module name, e.g., `task`):
+In `src/modules/index.ts`, add (`<name>` = module name, e.g. `task`):
 
 ```typescript
 export * from './task/task.module';
@@ -267,7 +255,7 @@ import { BaseModule, ExampleModule, TaskModule } from './modules';
 
 ### 9. Add Tests
 
-Create `test/modules/<name>.controller.spec.ts` (replace `<name>` with the actual module name, e.g., `task`):
+Create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
 
 ```typescript
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -313,10 +301,8 @@ After creating all files:
 ## Rules
 
 - **Tests are mandatory** — never add or change a module's HTTP surface (controller/service/repository) without new or updated Vitest tests in `test/` in the same change.
-- NEVER forget to register the module in `app.module.ts` and export from `modules/index.ts`
+- Register the module in `app.module.ts` and export it from `modules/index.ts`
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

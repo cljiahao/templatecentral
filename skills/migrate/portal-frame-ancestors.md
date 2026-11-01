@@ -20,15 +20,14 @@ Dev behaviour does not change: the stacks that skip anti-clickjacking in dev sti
 
 ## Step 1 — Detect the stack and check the current headers
 
-Detect the stack (AGENTS.md "Stack Detection"). Confirm the project still sends the 6.1 defaults:
-`X-Frame-Options: DENY` and `frame-ancestors 'none'` in the file listed for its stack below. If
-the project has customised either, stop and show the user the current lines before changing them.
+Detect the stack (AGENTS.md "Stack Detection"). Confirm the stack's file below still sends the 6.1 defaults
+(`X-Frame-Options: DENY`, `frame-ancestors 'none'`). If either is customised, stop and show the user the current lines before changing them.
 
 ## Step 2 — Apply the stack's change
 
-Read the stack's current scaffold files and copy the named sections from them **verbatim**.
+Read the stack's scaffold files and copy the named sections **verbatim**.
 
-For FastAPI the scaffold files are real files; read the ones the steps below name:
+FastAPI:
 
 ```bash
 cat "<skill-dir>/../scaffold/fastapi/template/src/core/config.py"
@@ -36,7 +35,7 @@ cat "<skill-dir>/../scaffold/fastapi/template/src/core/security_headers.py"
 cat "<skill-dir>/../scaffold/fastapi/template/test/test_utils/test_security_headers.py"
 ```
 
-For Next.js the scaffold files are real files; read the ones the steps below name:
+Next.js:
 
 ```bash
 cat "<skill-dir>/../scaffold/nextjs/template/src/lib/security/frame-protection.ts"
@@ -45,7 +44,7 @@ cat "<skill-dir>/../scaffold/nextjs/template/src/proxy.ts"
 cat "<skill-dir>/../scaffold/nextjs/template/next.config.ts"
 ```
 
-For NestJS, read:
+NestJS:
 
 ```bash
 cat "<skill-dir>/../scaffold/nestjs/template/src/config/env.config.ts"
@@ -53,7 +52,7 @@ cat "<skill-dir>/../scaffold/nestjs/template/src/config/setups/security.setup.ts
 cat "<skill-dir>/../scaffold/nestjs/template/test/config/security.setup.spec.ts"
 ```
 
-For Vite + React, read:
+Vite + React:
 
 ```bash
 cat "<skill-dir>/../scaffold/vite-react/template/docker/15-frame-protection.envsh"
@@ -61,8 +60,7 @@ cat "<skill-dir>/../scaffold/vite-react/template/Dockerfile"
 cat "<skill-dir>/../scaffold/vite-react/template/nginx.conf.template"
 ```
 
-**Next.js** — `next.config.ts` `headers()` is resolved at build time, so the CSP and frame headers
-move to the runtime proxy, which becomes the only place the CSP is set.
+**Next.js** — `headers()` resolves at build time, so the CSP and frame headers move to the runtime proxy, the only place the CSP is set.
 1. Add `src/lib/security/frame-protection.ts` and `test/lib/frame-protection.test.ts` (the first two files above).
    If the project's `next.config.ts` CSP has directives beyond the 6.1 baseline
    (`frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`), move them into
@@ -70,10 +68,9 @@ move to the runtime proxy, which becomes the only place the CSP is set.
    If the backend rewrite path is not `/api/external`, set `BACKEND_PROXY_PATH` to it.
 2. In `next.config.ts` `headers()` (the scaffold's `next.config.ts` above): remove the `X-Frame-Options` and
    `Content-Security-Policy` entries. Leave every other header unchanged.
-3. Find the proxy: `src/proxy.ts`, or `proxy.ts` at the project root. Next.js runs it only from
-   the same level as the `app/` directory: `src/proxy.ts` for `src/app/`, root `proxy.ts` for a
-   root `app/`. A root `proxy.ts` next to `src/app/` never runs — report it to the user instead of
-   relying on it. Edit the file Next.js runs, in place. Put `frame-protection.ts` (and its test
+3. Find the proxy Next.js runs: it sits at the `app/` level (`src/proxy.ts` for `src/app/`, root
+   `proxy.ts` for a root `app/`). A root `proxy.ts` next to `src/app/` never runs — report it to the
+   user instead of relying on it. Edit the file Next.js runs, in place. Put `frame-protection.ts` (and its test
    import) where that project's `@/*` path alias points — `src/lib/…` for `@/*` → `./src/*`,
    `lib/…` for `@/*` → `./*`.
    - **Neither exists:** add the scaffold's `src/proxy.ts` (above), at the `app/` level.
@@ -85,8 +82,7 @@ move to the runtime proxy, which becomes the only place the CSP is set.
      `export async function proxy(req: NextRequest) { return applyFrameProtection(req.nextUrl.pathname, await route(req)); }`
      — the shape in `add/auth/nextjs.md` step 4. Keep its matcher.
 
-**Vite + React** — nginx `envsubst` leaves an undefined `${VAR}` in place, and nginx then refuses
-to start, so a sourced entrypoint script always exports both values.
+**Vite + React** — nginx refuses to start on an undefined `${VAR}`, so a sourced entrypoint script always exports both values.
 1. Add `docker/15-frame-protection.envsh` (the first Vite file above).
 2. In `Dockerfile` prod stage (the second Vite file above), add the `COPY --chmod=755 ./docker/15-frame-protection.envsh …` line
    after the `nginx.conf.template` copy.
@@ -105,7 +101,7 @@ to start, so a sourced entrypoint script always exports both values.
    `'frame-ancestors': isDev ? null : [portal ?? "'none'"]` and
    `frameguard: isDev || portal ? false : { action: 'deny' }`. Add `test/config/security.setup.spec.ts` (the three files above).
 
-Next.js, NestJS and FastAPI: add the commented `APPCENTRAL_PORTAL_ORIGIN` line to `.env.example` (FastAPI: `src/.env.default`). Vite + React reads it only in the nginx container, so its `.env.example` (build-time `VITE_*`) does not change.
+Next.js, NestJS and FastAPI: add the commented `APPCENTRAL_PORTAL_ORIGIN` line to `.env.example` (FastAPI: `src/.env.default`). Vite + React reads it only in nginx; its `.env.example` does not change.
 
 ## Step 3 — Verify
 

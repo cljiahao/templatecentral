@@ -4,12 +4,9 @@
 
 # Migrate or Adopt Project
 
-Reached via the Skill Routing table (adopting an existing project, retrofitting the
-harness, a DB migration, or a framework upgrade), or when another skill's Step 0
-directs here. Detects the project stack, presents a choice to the user, and executes
-autonomously after the decision.
+Detects the stack, asks the user once, then runs autonomously.
 
-**Phase files.** Phases 0–3 are below. Phases 4 and 5 are sibling files in this directory — load one only when Phase 0 routes to it. The shared kits are loaded **here**, alongside the phase file, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+**Phase files.** Phases 0–3 are below. Load Phase 4 or 5 only when Phase 0 routes to it. The shared kits load **here**, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
 
 **Phase 4** — full harness seed / v4–v6 upgrade:
 ```bash
@@ -27,7 +24,7 @@ cat "<skill-dir>/general/phase-5-health-check.md"
 ```
 On an approved 5d re-sync, load the same five kit files as Phase 4 (everything after its first line).
 
-`<skill-dir>` is this skill's directory, as in `migrate/SKILL.md`. "The Step 4b marker update" (cited by the `@5.x` route below) means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
+"The Step 4b marker update" means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
 
 ---
 
@@ -49,9 +46,8 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   ```
   Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
 
-- **`.claude/harness.json` does NOT exist** → the marker was written without the harness ever
-  being seeded (a Phase 3 light adoption writes the marker and nothing else). Do **not** exit.
-  Skip Phases 1–3 and present:
+- **`.claude/harness.json` does NOT exist** → a light adoption wrote the marker but never seeded
+  the harness. Do **not** exit. Skip Phases 1–3 and present:
   ```
   ℹ️ This project carries a templateCentral <version> marker but has no harness
      (.claude/harness.json is absent — it was adopted, not fully seeded).
@@ -66,11 +62,10 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   User A → proceed to Phase 4.
   User B → print "No changes made." Exit.
 
-**If marker present, version `@5.0.0` through `@5.x`** → the project's hooks are inert. Harness
-schemas before 6.0.0 wrote every `settings.json` hook with an array-valued `command` (a JSON list, not a string), which
-Claude Code silently skips — none of those hooks (the `.env` guard, `--no-verify` block, Stop tests,
-…) ever ran. They must be re-seeded in the exec form (`"command": "<bin>", "args":
-["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`) from the harness kit. Skip Phases 1–3 and present:
+**If marker present, version `@5.0.0` through `@5.x`** → the hooks are inert: pre-6.0.0 schemas wrote
+each `settings.json` hook with an array-valued `command`, which Claude Code silently skips. Re-seed
+them in exec form (`"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`)
+from the harness kit. Skip Phases 1–3 and present:
 ```
 ⚠ This project was scaffolded with templateCentral <version>.
 
@@ -83,10 +78,9 @@ v6.0 re-seeds the enforcement layer from the harness kit:
 
 Re-sync? (A) Yes  (B) Skip
 ```
-User A → first set the line-1 marker to `@6.0.0` (the Step 4b marker update) — before anything
-hashes `AGENTS.md`, or its `origin_hash` goes stale. Then, if `.claude/harness.json` exists, run
-Phase 5 (5a–5c report) then Step 5d re-sync — the settings.json rule there replaces inert
-array-form entries. If it does not exist, proceed to Phase 4 (full seed).
+User A → first do the Step 4b marker update, before anything hashes `AGENTS.md` (or its
+`origin_hash` goes stale). Then, if `.claude/harness.json` exists, run Phase 5 (5a–5c) and the
+Step 5d re-sync, which replaces the array-form entries; otherwise proceed to Phase 4.
 User B → print "No changes made — hooks remain inert until re-synced." Exit.
 
 **If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:
@@ -128,15 +122,14 @@ Scan the current directory for stack signals:
 | `requirements.txt` contains `fastapi` | FastAPI |
 | `nest-cli.json` present, or `@nestjs/core` in `package.json` | NestJS |
 
-If multiple signals found (likely a mono repo root) → ask the user: "Which project
+If multiple signals found (likely a monorepo root) → ask the user: "Which project
 should be adopted first — frontend or backend? Please provide the subdirectory path."
-Then re-run detection from that subdirectory. All subsequent steps (Phase 2 and Phase 3) operate relative to that subdirectory, not the original working directory.
+Re-run detection there; Phases 2 and 3 then work in that subdirectory, not the original working directory.
 
 If no signals found → tell the user: "No recognised stack detected in this directory.
 Please run this skill from a project directory, not a parent folder." Exit.
 
-If ambiguous (e.g. vite.config.ts without React plugin) → ask the user to confirm
-the stack before proceeding.
+If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
 
 ---
 
@@ -173,15 +166,12 @@ Which would you prefer? (A / B)
 
 **Step A1: Write the marker**
 
-Check whether `AGENTS.md` exists at the current directory:
-- Exists → read its contents, then rewrite it with `<!-- templateCentral: <stack>@6.0.0 -->`
-  as the first line, followed by the original content.
-- Does not exist → create `AGENTS.md` with `<!-- templateCentral: <stack>@6.0.0 -->`
-  as the only line.
+Make `<!-- templateCentral: <stack>@6.0.0 -->` the first line of `AGENTS.md`, above the original
+content; if the file does not exist, create it with that line only.
 
 **Step A2: Scan for structural gaps**
 
-Check for the following per detected stack. List any that are absent.
+List any that are absent for the detected stack.
 
 **Next.js gaps:**
 - `src/app/` directory
@@ -218,13 +208,12 @@ where your project structure differs from templateCentral conventions):
 Returning to the skill that invoked me — proceeding from Step 1.
 ```
 
-Return control to the invoking skill. The invoking skill continues from Step 1.
+Return control; the invoking skill continues from Step 1.
 
 ### If B — Stop
 
 Print: "No changes made."
 
-Return control to the invoking skill. The invoking skill must exit without generating
-any files.
+Return control; the invoking skill must exit without generating any files.
 
 ---

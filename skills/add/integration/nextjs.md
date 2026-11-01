@@ -3,12 +3,6 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js
 
-Create a new third-party API integration in a Next.js project scaffolded from templateCentral.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ### Architecture
 
 ```
@@ -25,14 +19,7 @@ Environment → factories.ts → clients/ → services/ → schemas/
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### 1. Create Zod Schemas
 
@@ -122,7 +109,7 @@ export function Github() {
 }
 ```
 
-> **Naming convention**: Factory functions use PascalCase matching the integration name: `Github()`, `Stripe()`, `SSM()`. Database clients use the `templatecentral:add (database)` skill, not `templatecentral:add (integration)`.
+> **Naming**: factories are PascalCase integration names (`Github()`, `Stripe()`, `SSM()`); database clients come from the database capability.
 
 > **Alternative: Axios-based client** — For server-side integrations needing mTLS, API key headers, or request/response logging, use `createAxiosClient` from `src/integrations/clients/base/axios-client.ts` instead of extending `FetchClient`.
 
@@ -142,21 +129,19 @@ const repos = await Github().getRepos();
 pnpm build
 ```
 
-Confirm the build succeeds with no type errors. Verify the integration works end-to-end in the browser or via API route.
+Build passes; the integration works end-to-end.
 
 ### Rules
 
 - NEVER put business logic in clients; NEVER skip Zod validation of external responses
 - Retry only idempotent GETs, with backoff — FetchClient does not retry
 - Always throw `APIError` for HTTP failures (imported from `@/integrations/error`) — NEVER throw generic `Error`
-- Environment variables go in `.env.local`, referenced via `process.env` — NEVER hardcode API URLs or secrets. Add commented placeholders to `.env.example` so other developers know what's needed.
-- NEVER put API keys or tokens in `NEXT_PUBLIC_*` — they are exposed to every browser. Server-side integrations use `process.env` without the prefix. For APIs requiring auth from the browser, proxy through a Next.js API route.
+- Env vars go in `.env.local` via `process.env`, with commented placeholders in `.env.example` — NEVER hardcode API URLs or secrets.
+- NEVER put API keys or tokens in `NEXT_PUBLIC_*` — exposed to every browser. For browser calls needing auth, proxy through a Next.js API route.
 - NEVER import integrations into client components or feature `api/` services — consume them server-side; `import 'server-only'` in `factories.ts` enforces this
 - For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
 - For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

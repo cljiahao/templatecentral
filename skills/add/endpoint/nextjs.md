@@ -4,12 +4,6 @@
 
 # Add an API Route
 
-Create a new API route handler in a Next.js project scaffolded from templateCentral.
-
-## Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ## Inputs
 
 - **Resource name** — The API resource (e.g., `projects`, `users`)
@@ -19,14 +13,7 @@ Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: nextjs@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Create the Route File
 
@@ -46,9 +33,9 @@ src/app/api/
 
 Keep route handlers thin — delegate to server-side data access:
 
-> **Important**: Route handlers access data via `integrations/` (clients, services, factories) — NOT the feature's `api/` services, which `fetch('/api/...')` and would make the route call itself. Data access below is a **placeholder** — wire it via `templatecentral:add (database)` or `templatecentral:add (integration)`.
+> **Important**: handlers access data via `integrations/` — NOT the feature's `api/` services, which `fetch('/api/...')` and would call the route itself. Data access below is a **placeholder** for the database or integration capability.
 
-> **Wrap every handler in `withLogging`.** Next.js has no global request-logging layer, so each handler must be wrapped — and `pnpm check` fails the build on any unwrapped route (`scripts/check-route-logging.mjs`). See `add/logging/nextjs.md`.
+> **Wrap every handler in `withLogging`** — Next.js has no global request logging, and `pnpm check` fails on any unwrapped route.
 
 ```ts
 // src/app/api/projects/route.ts
@@ -168,7 +155,7 @@ describe('POST /api/projects', () => {
 });
 ```
 
-Cover success paths and validation/error paths you implemented. Run `pnpm test` before handing off.
+Cover success and every validation/error path; run `pnpm test`.
 
 ### 6. Validate
 
@@ -177,7 +164,7 @@ pnpm build
 pnpm test
 ```
 
-Confirm the build succeeds with no type errors, all tests pass, and the route responds correctly using `curl` or the browser.
+Build and tests pass; the route answers correctly via `curl` or the browser.
 
 ## Response Conventions
 
@@ -189,17 +176,15 @@ Confirm the build succeeds with no type errors, all tests pass, and the route re
 ## Rules
 
 - **Tests are mandatory** — never add or change `src/app/api/**` without new or updated tests under `test/api/` in the same change.
-- Keep route handlers thin — delegate to services. NEVER put business logic in route handlers
-- Always use `handleApiError()` for error responses — NEVER return raw error objects or stack traces
+- Keep handlers thin — NEVER put business logic in them
+- Use `handleApiError()` for errors — NEVER return raw errors or stack traces
 - Use `NextResponse.json()` for all responses
 - Use dynamic segments `[id]` for resource IDs
 - **Authenticate in the handler.** `src/proxy.ts` (after `templatecentral:add` (auth)) only checks session-cookie *presence* — it does not validate the session. Every non-public handler must call `const session = await auth.api.getSession({ headers: request.headers })` and return `new Response(null, { status: 401 })` when it is `null`, then enforce ownership/role checks. Without auth added, every API route is public — run `templatecentral:add` (auth) first
-- NEVER use `request.json()` without validation — parse with Zod and return 400 on failure
-- NEVER expose internal error details in responses — rely on `handleApiError()` for generic messages
-- NEVER skip the routes constant — always add new API routes to `src/lib/constants/routes.ts`
+- NEVER use `request.json()` unvalidated — Zod-parse, 400 on failure
+- NEVER expose internal error details
+- Add every new API route to `src/lib/constants/routes.ts`
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

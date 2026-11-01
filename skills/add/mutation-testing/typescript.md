@@ -3,7 +3,7 @@
      prereq: Stack identified as Next.js, NestJS, or Vite+React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## TypeScript Stacks — Mutation Testing (StrykerJS)
 
-Add report-only mutation testing to a TypeScript project scaffolded from templateCentral. Uses StrykerJS + the Vitest runner (install resolves the current major).
+Report-only mutation testing with StrykerJS + the Vitest runner.
 
 > **Report-only by default.** `thresholds.break` is `null` — results appear in CI output and `stryker-report.html` without failing the build. To enforce a floor, change `break` to a number (e.g., `70`).
 
@@ -25,13 +25,7 @@ pnpm add -D @stryker-mutator/core @stryker-mutator/vitest-runner
 
 #### Step 0 — Verify context
 
-Check `AGENTS.md` line 1 for `<!-- templateCentral:`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### Step 1 — Create StrykerJS config
 
@@ -41,7 +35,7 @@ Create `stryker.config.mjs` at the project root:
 
 Copied verbatim from `<skill-dir>/mutation-testing/typescript/template/stryker.config.mjs` by the copy step; do not re-type it.
 
-Set `mutate` to match what your stack's test policy actually covers:
+Set `mutate` to match what your stack's test policy covers:
 
 | Stack | `mutate` |
 |---|---|
@@ -97,6 +91,4 @@ pnpm mutation    # runs StrykerJS; kill-rate score in terminal; HTML report at s
 
 ### After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — confirm no compile errors after config addition
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check config correctness
+Then `cat "<skill-dir>/../build/SKILL.md"` (confirm no compile errors after config addition), then `cat "<skill-dir>/../review/SKILL.md"` (check config correctness).

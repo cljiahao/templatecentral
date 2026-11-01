@@ -38,14 +38,12 @@ rm -rf drizzle/
 ### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)
 
 > **Canonical source**: the `KyselyService` block below and the `serviceConfig` block in
-> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely-iam.md`
-> (the IAM Auth Variant add-on leaf) — treat that file as canonical. `scripts/lint-skills.sh`
-> fails the build if the two copies drift, so re-copy rather than hand-editing here.
+> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely-iam.md` (canonical).
+> The lint fails if they drift: re-copy, never hand-edit.
 
-**Download the AWS RDS CA bundle first.** RDS server certificates chain to the Amazon RDS
-root CA, which is not in Node's default trust store — without the bundle, TLS verification
-fails with `SELF_SIGNED_CERT_IN_CHAIN` and the tempting "fix" (`rejectUnauthorized: false`)
-silently downgrades the connection to unauthenticated TLS.
+**Download the AWS RDS CA bundle first.** The Amazon RDS root CA is not in Node's default trust
+store, so without the bundle TLS fails with `SELF_SIGNED_CERT_IN_CHAIN`. Never "fix" it with
+`rejectUnauthorized: false`: that silently downgrades to unauthenticated TLS.
 
 ```bash
 mkdir -p certs

@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: fastapi@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 > **Prerequisites**: FastAPI scaffold + `templatecentral:add (database)` with SQLAlchemy (sync `Session` from `src/database/session.py`). For `AsyncSession`, make the service and handler `async def` and `await` each `session.execute(...)`.
 
@@ -115,7 +108,7 @@ def get_projects(
     return list_projects(session, params)
 ```
 
-If `src/api/routers/projects.py` already exists (e.g. from `templatecentral:add` (error-handling)), add this handler and its imports to it instead of replacing the file. Register with an `APITags` tag in `src/api/routes.py` and, when `src/api/dependencies/auth.py` exists, add the auth dependency (see `add/endpoint/fastapi.md` Rules).
+If `src/api/routers/projects.py` exists, add this handler and its imports to it — do not replace the file. Register with an `APITags` tag in `src/api/routes.py` and, when `src/api/dependencies/auth.py` exists, add the auth dependency (see `add/endpoint/fastapi.md` Rules).
 
 ## Validate
 
@@ -131,6 +124,4 @@ python -m pytest test/ -v
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -4,11 +4,8 @@
 
 # Next.js Backend Extraction — Target Router
 
-Determine which backend the user wants to migrate to, then load the full migration guide.
-
 ## Step 1 — Identify the target backend
 
-Read the user's request for clues:
 - "NestJS" or "Nest" → target: **NestJS**
 - "FastAPI", "fastapi", or "Python" → target: **FastAPI**
 
@@ -21,7 +18,7 @@ If the target is unclear, ask:
 |---|---|
 | NestJS | `cat "<skill-dir>/nextjs-backend-extraction/nestjs.md"` |
 | FastAPI | `cat "<skill-dir>/nextjs-backend-extraction/fastapi.md"` |
-| Other | Respond: "Not yet supported. Supported targets: NestJS, FastAPI." Exit without changes. |
+| Other | Respond: "Not yet supported. Supported targets: NestJS, FastAPI." Exit, no changes. |
 
 ## Step 3 — Execute
 

@@ -3,7 +3,7 @@
      prereq: Stack = FastAPI, DB = SQLAlchemy + AWS IAM (high compliance, PostgreSQL only). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI + SQLAlchemy + AWS IAM (High Compliance)
 
-> **Supported databases:** PostgreSQL only (the engine uses the `psycopg` (psycopg 3) driver with boto3-signed tokens — MySQL with IAM requires a different driver and SSL setup not covered here).
+> **PostgreSQL only** — `psycopg` 3 with boto3-signed tokens; MySQL IAM needs a different driver and is not covered.
 
 ### A1. Install Dependencies
 
@@ -39,7 +39,7 @@ prepend_sys_path = src
 sqlalchemy.url =
 ```
 
-> **Important**: All `alembic` commands must be run from the **repo root** (where `alembic.ini` lives), not from `src/`.
+> **Important**: run every `alembic` command from the **repo root**, not `src/`.
 
 ### A4. Create `src/database/session.py` (IAM variant)
 
@@ -113,9 +113,9 @@ class APISettings(BaseSettings):
     )
 ```
 
-Required fields make pyright flag `api_settings = APISettings()` (it cannot see pydantic-settings read them from the environment) — the scaffold's line already carries `# pyright: ignore[reportCallIssue]`; add it if missing.
+Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
 
-Add to `src/.env` (local secrets — never commit) and document in `src/.env.default`:
+Add to `src/.env` (never commit) and document in `src/.env.default`:
 
 ```
 DATABASE_HOST=your-rds-instance.region.rds.amazonaws.com
@@ -128,7 +128,7 @@ AWS_REGION=us-east-1
 RDS_CA_BUNDLE_PATH=/path/to/global-bundle.pem
 ```
 
-CI has no `src/.env` and `session.py` builds the engine at import, so seed placeholders in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (see `templatecentral:add` (auth) Step 11 for the conftest shape). Tests override `get_db`, so nothing connects:
+CI has no `src/.env` and `session.py` builds the engine at import, so seed placeholders in **`test/conftest.py`** next to the other `os.environ.setdefault` lines (conftest shape: add (auth) Step 11). Tests override `get_db`, so nothing connects:
 
 ```python
 for key in ("DATABASE_HOST", "DATABASE_USER", "DATABASE_NAME", "RDS_CA_BUNDLE_PATH"):
@@ -170,7 +170,7 @@ def run_migrations_online():
 
 ### A7. Create a Model
 
-**`src/models/project.py`** (example — a generic entity; the `User` model comes from Step A of the auth integration section below):
+**`src/models/project.py`** (example entity; `User` comes from the auth section below):
 
 ```python
 from datetime import datetime
@@ -208,7 +208,7 @@ alembic upgrade head
 
 ### A9. Usage
 
-Inject the session via `Annotated[Session, Depends(get_db)]` and serialize through a Pydantic `response_model` (create `ProjectResponse` in `api/schemas/response/`):
+Inject `Annotated[Session, Depends(get_db)]` and serialize through a `response_model` (`ProjectResponse` in `api/schemas/response/`):
 
 ```python
 from collections.abc import Sequence
@@ -229,9 +229,9 @@ def list_projects(db: Annotated[Session, Depends(get_db)]) -> Sequence[Project]:
     return db.scalars(stmt).all()
 ```
 
-> **Sync vs async**: Use `def` (not `async def`) for handlers that use sync SQLAlchemy — FastAPI runs `def` handlers in a thread pool; an `async def` handler would block the event loop on every query.
+> **Sync vs async**: handlers using sync SQLAlchemy are `def`, not `async def` — an `async def` body blocks the event loop on every query.
 >
-> **Important**: Never return raw ORM objects directly — always use `response_model` with a Pydantic schema.
+> **Important**: never return raw ORM objects — use `response_model`.
 
 ### A10. Validate
 
@@ -245,9 +245,9 @@ Confirm all tests pass.
 
 ## Completing Auth Integration (SQLAlchemy + IAM)
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
-The repository, service, and router wiring is **identical** to the standard SQLAlchemy path — only the session/config setup differs (sections A2–A6 above). Load `cat "<skill-dir>/database/python/sqlalchemy.md"` and apply its "Completing Auth Integration" steps exactly as written:
+Repository, service and router wiring is **identical** to standard SQLAlchemy (only A2–A6 differ). Load `cat "<skill-dir>/database/python/sqlalchemy.md"` and apply its "Completing Auth Integration" steps exactly:
 
 - **Step A** — Create `src/models/user.py`
 - **Step B** — Create `src/api/repositories/user_repository.py`
@@ -258,16 +258,14 @@ The repository, service, and router wiring is **identical** to the standard SQLA
 
 ## Rules
 
-- **Opt-in only** — the base template has no database. Only add when explicitly requested.
+- **Opt-in only** — add a database only on request.
 - Place ORM models in `src/models/` — not in `api/`.
 - `database/` holds infrastructure only (Base, session, engine) — no business logic.
 - Keep IAM fields (`DATABASE_HOST`, `DATABASE_USER`, etc.) in `src/.env` — NEVER hardcode production credentials.
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
-- IAM tokens are short-lived — the `do_connect` event listener ensures a fresh token is fetched for each new connection.
-- **PostgreSQL only** for IAM auth — SQLite and MySQL require different approaches not covered here.
+- IAM tokens are short-lived — `do_connect` fetches a fresh one per connection.
+- **PostgreSQL only** for IAM auth.
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

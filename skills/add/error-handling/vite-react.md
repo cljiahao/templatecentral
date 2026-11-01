@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **1. Error Boundary (Already Wired by the Scaffold — No Changes Required)**
 
@@ -36,11 +29,11 @@ Everything else (state, fallback rendering, retry button) stays as scaffolded.
 
 **2. Async Errors (Complete As Scaffolded — No Changes)**
 
-Async error coverage needs no work. `src/lib/errors/global-handlers.ts` already listens for both `window.onerror` and `unhandledrejection` and already routes each through `logError`, and `registerGlobalErrorHandlers()` is already called in `main.tsx`. Leave the file and the `main.tsx` wiring alone — adding a second listener or a second bootstrap call double-logs every async error.
+Async errors are already covered: `src/lib/errors/global-handlers.ts` routes `window.onerror` and `unhandledrejection` through `logError`, registered in `main.tsx`. Leave both alone — a second listener or bootstrap call double-logs every async error.
 
 **3. React Query Error Handler**
 
-> `defaultOptions` match the scaffolded `providers.tsx` client — only the cache handlers are new. This singleton replaces the one `providers.tsx` created, so tune options here only.
+> `defaultOptions` match `providers.tsx`; only the cache handlers are new. This singleton replaces that client, so tune options here only.
 
 ```ts
 // src/lib/clients/query-client.ts
@@ -114,6 +107,4 @@ pnpm build
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -3,11 +3,11 @@
      prereq: Stack = NestJS, ORM = Kysely (SQL, supports standard + AWS IAM auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Kysely (SQL)
 
-Kysely is a type-safe SQL query builder with full SQL control and minimal overhead. It defaults to standard password authentication. AWS IAM auth and auth-stub completion live in sibling add-ons (`nestjs-kysely-iam.md`, `nestjs-kysely-auth.md`) that the router loads alongside this guide only when needed.
+Kysely: a type-safe SQL query builder, password auth by default. IAM auth and auth-stub completion are sibling add-ons (`nestjs-kysely-iam.md`, `nestjs-kysely-auth.md`).
 
 #### B1. Install Dependencies
 
-`tsx` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its platform binary ships as an optional dependency, so the script is not needed — add under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
+`tsx` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its binary ships as an optional dependency, so deny the script under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
 
 ```yaml
   esbuild: false
@@ -66,7 +66,7 @@ Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src
 
 Copied verbatim from `<skill-dir>/database/typescript/nestjs-kysely/template/src/database/types.ts` by the copy step; do not re-type it.
 
-> **Tip**: After the database exists, `pnpm dlx kysely-codegen` generates these types from the live schema. Run it ad hoc rather than as a devDependency — its `micromatch → braces` chain carries a High advisory with no fixed release, which fails `pnpm audit --audit-level=high`.
+> **Tip**: `pnpm dlx kysely-codegen` generates these types from a live database. Run it ad hoc, not as a devDependency — its `micromatch → braces` chain has an unfixed High advisory that fails `pnpm audit --audit-level=high`.
 
 #### B4. Create DatabaseModule
 
@@ -104,7 +104,7 @@ Run migrations with: `pnpm migrate`
 
 #### B7. Configure Environment
 
-Add `DATABASE_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
+Add `DATABASE_URL` to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when it is missing:
 
 ```typescript
 const envSchema = z.object({
@@ -166,7 +166,7 @@ export class UserService {
 
 #### B9. Keep Tests Runnable Without a Database
 
-`env.config.ts` now throws at import without `DATABASE_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_URL` — add it to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if needed):
 
 ```typescript
     // pg connects lazily, so this placeholder is never dialled unless a test queries.
@@ -185,7 +185,7 @@ import { KyselyService } from '../src/database/kysely.service';
       .compile();
 ```
 
-Suites that exercise real queries run against a disposable Postgres (CI service container) with `DATABASE_URL` set in the job env, which `test.env` does not override.
+Suites with real queries use a disposable Postgres (CI service container); the job's `DATABASE_URL` wins over `test.env`.
 
 #### B10. Validate
 
@@ -197,18 +197,16 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 ## Rules
 
-- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `KyselyService` and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs migrations in name order and, by default, fails when a new file sorts before one already executed. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor from `nestjs-kysely-iam.md` — no query code changes needed.
+- **Kysely**: Write manual `up`/`down` migration files in `src/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant constructor from `nestjs-kysely-iam.md`; query code is unchanged.
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-kysely-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

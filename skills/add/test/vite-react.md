@@ -3,33 +3,16 @@
      prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React
 
-Guide for writing tests in a Vite + React project scaffolded from templateCentral.
-
-### Prerequisites
-
-Requires a project scaffolded with `templatecentral:scaffold`. See Step 0.
-
 ### Steps
 
 #### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to context check below.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to context check below.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **Context check:** Confirm `src/features/` or `src/components/` contains at least
-one `.tsx` file.
-
-If not found → ⛔ STOP. Tell the user: "No components or features found. Add some
+one `.tsx` file. If not, ⛔ STOP and tell the user: "No components or features found. Add some
 using `templatecentral:add` (feature) or `templatecentral:add` (component)
 first, then return here."
-
-If found → proceed to the sections below.
 
 ### Test Structure
 
@@ -62,7 +45,7 @@ The template has a setup file at `src/test/setup.ts` that:
 - Imports `@testing-library/jest-dom/vitest` (adds DOM matchers like `toBeInTheDocument`)
 - Runs `cleanup()` after each test (unmounts rendered components)
 
-Vitest is configured with `globals: true` — `describe`, `it`, `expect` are available without imports, but explicit imports are also fine.
+Vitest has `globals: true` — `describe`, `it`, `expect` need no import (explicit imports also work).
 
 ### Component Tests
 
@@ -217,7 +200,7 @@ describe('useProjects', () => {
 
 ### Integration Service Tests (External APIs)
 
-If you've added external API integrations via the `templatecentral:add (integration)` skill, services live under `src/integrations/services/` and receive their client via constructor injection — test them by instantiating the service with a stub client object (no module mocking needed):
+Integration services (`src/integrations/services/`) take their client by constructor injection — test them with a stub client, no module mocking:
 
 ```ts
 // src/integrations/services/github-service.test.ts
@@ -259,18 +242,16 @@ Confirm the build succeeds and all tests pass.
 
 ### Rules
 
-- One concept per test — test a single behavior in each `it()` block
-- Mock at boundaries — mock `fetch`, service modules, or integration clients; NEVER mock internal utilities or React internals
-- Use Testing Library queries by role/text — `getByRole`, `getByText`, `getByLabelText`; NEVER use `querySelector` or test IDs unless no semantic alternative exists
-- Use `userEvent` over `fireEvent` — `userEvent.setup()` simulates real user behavior
-- Always clear mocks and globals in `afterEach` — but pick the right reset. `vi.restoreAllMocks()` only undoes `vi.spyOn` spies; it does **nothing** to a standalone `vi.fn()` or to the `vi.fn()`s inside a `vi.mock` factory, so queued `mockResolvedValue`s leak into the next test. Use `vi.resetAllMocks()` whenever the file uses `vi.fn()` / `vi.mock`, `vi.restoreAllMocks()` when it uses `vi.spyOn`, and always pair with `vi.unstubAllGlobals()` if you called `vi.stubGlobal`
-- Create a fresh `QueryClient` per test — NEVER share a client across tests (stale cache causes flakes)
-- NEVER test implementation details — test what the user sees (components) or what the caller gets (services)
-- NEVER test third-party library behavior — test YOUR code's usage of it
-- NEVER share mutable state between tests — each test sets up its own data
+- One behavior per `it()`
+- Mock only boundaries (`fetch`, service modules, integration clients) — NEVER internal utilities or React internals
+- Query by role/text (`getByRole`, `getByText`, `getByLabelText`); `querySelector` or test IDs only when nothing semantic fits
+- Prefer `userEvent.setup()` over `fireEvent`
+- Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
+- Fresh `QueryClient` per test — NEVER share one
+- NEVER test implementation details — test what the user sees or the caller gets
+- NEVER test third-party behavior — only your use of it
+- NEVER share mutable state between tests
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

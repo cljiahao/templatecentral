@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Mongoose (MongoDB), auth stubs from templatecentral:add (auth) present (`src/modules/auth/auth.service.ts` exists). Loaded alongside nestjs-mongoose.md (C2 DatabaseModule must exist). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Completing Auth Integration
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
 **Step A — Create `src/modules/auth/schemas/user.schema.ts`**
 

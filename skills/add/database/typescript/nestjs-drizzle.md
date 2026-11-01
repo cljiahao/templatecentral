@@ -3,20 +3,20 @@
      prereq: Stack = NestJS, ORM = Drizzle (SQL, standard auth). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Drizzle (SQL)
 
-> **Drizzle ORM v1**: v1.0 is still pre-release (RC stage) — pin the RC exactly. The `casing` option was removed from the `drizzle()` instance in v1; casing is now applied at the schema level via imported `snakeCase`/`camelCase` helpers — see the [Drizzle v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide) if upgrading from 0.x.
+> **Drizzle ORM v1** is pre-release — pin the RC exactly. v1 moved `casing` from `drizzle()` to schema-level `snakeCase`/`camelCase` helpers ([v1 migration guide](https://orm.drizzle.team/docs/v1-migration-guide)).
 
 #### A1. Install Dependencies
 
-Read the exact RC from the plugin's version SSOT — `cat "<skill-dir>/../../.claude/rules/nestjs.md"` (the scaffolded project has no copy) — and install it exactly; never the floating `@rc` tag, which resolves to a different RC on every install:
+Read the exact RC from `cat "<skill-dir>/../../.claude/rules/nestjs.md"` (projects have no copy) and install it exactly, never the floating `@rc` tag:
 
 ```bash
 pnpm add --save-exact drizzle-orm@<exact-rc-from-rules> postgres
 pnpm add -D --save-exact drizzle-kit@<exact-rc-from-rules>
 ```
 
-Both packages must be on the same RC — a `drizzle-kit` that disagrees with `drizzle-orm` generates migrations the runtime cannot read.
+Keep both on the same RC — a mismatched `drizzle-kit` writes migrations the runtime cannot read.
 
-`drizzle-kit` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its platform binary ships as an optional dependency, so the script is not needed — add under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
+`drizzle-kit` pulls in `esbuild`, whose install script pnpm 12 blocks (`ERR_PNPM_IGNORED_BUILDS`). Its binary ships as an optional dependency, so deny the script under the existing `allowBuilds:` in `pnpm-workspace.yaml`:
 
 ```yaml
   esbuild: false
@@ -83,7 +83,7 @@ export class AppModule {}
 
 #### A8. Configure Environment
 
-Add `DATABASE_URL` to `envSchema` in `src/config/env.config.ts` — validated at import time, so boot fails loudly if it's missing instead of surfacing as a runtime `undefined`:
+Add `DATABASE_URL` to `envSchema` in `src/config/env.config.ts` — validated at import, so boot fails when it is missing:
 
 ```typescript
 const envSchema = z.object({
@@ -112,7 +112,7 @@ pnpm db:generate
 pnpm db:migrate
 ```
 
-For rapid local iteration, `pnpm db:push` applies the schema directly without migration files (dev only — never use against production).
+`pnpm db:push` applies the schema without migration files — dev only, never production.
 
 #### A10. Usage
 
@@ -145,7 +145,7 @@ export class UserService {
 
 #### A11. Keep Tests Runnable Without a Database
 
-`env.config.ts` now throws at import without `DATABASE_URL`, and Vitest does not load `.env`. Add it to the `test.env` object in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if `add (auth)` has not):
+Vitest does not load `.env`, and `env.config.ts` now throws without `DATABASE_URL` — add it to `test.env` in **both** `vitest.config.ts` and `vitest.config.e2e.ts` (create the object if needed):
 
 ```typescript
     // postgres.js connects lazily, so this placeholder is never dialled unless a test queries.
@@ -164,7 +164,7 @@ import { DrizzleService } from '../src/database/drizzle.service';
       .compile();
 ```
 
-Suites that exercise real queries run against a disposable Postgres (CI service container) with `DATABASE_URL` set in the job env, which `test.env` does not override.
+Suites with real queries use a disposable Postgres (CI service container); the job's `DATABASE_URL` wins over `test.env`.
 
 #### A12. Validate
 
@@ -174,24 +174,24 @@ pnpm db:generate && pnpm check && pnpm build && pnpm test && pnpm test:e2e
 
 Confirm the migration file was generated and every command passes.
 
-> **Need to upgrade to high compliance later?** Tell me *"migrate database to compliance"* and I'll handle the switch to Kysely + AWS IAM.
+> High compliance later: `templatecentral:migrate` (database) switches to Kysely + AWS IAM.
 
 ---
 
 ## Rules
 
-- **Opt-in only** — the base template has no real database connection. Only add when explicitly requested.
-- **Default to standard (password) auth** — only install AWS SDK packages and use IAM auth variants when the user explicitly requires AWS IAM authentication for compliance.
-- `DatabaseModule` must be `@Global()` so database access is available everywhere without re-importing.
+- **Opt-in only** — add a database only on request.
+- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
+- `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `DrizzleService` and `DatabaseModule` in `src/database/`.
 - NEVER hardcode credentials — keep connection config in `.env` and document in `.env.example`.
-- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. Use `pnpm db:push` in development only — never against production. Migration files live in `drizzle/` at the project root; commit them to version control. Does not include a native IAM token-fetching variant — use Kysely if IAM auth is required.
+- **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---
 
 ## Completing Auth Integration
 
-> **Only apply this section if `templatecentral:add` (auth) was run before this skill.** It replaces the 501 stubs with real database-backed implementations.
+> **Only if `templatecentral:add` (auth) ran first** — replaces its 501 stubs with database-backed code.
 
 **Step A — Add `hashedPassword` to `src/database/schema.ts`**
 
@@ -287,12 +287,10 @@ export class AuthService {
 
 **Step C — `src/modules/auth/auth.module.ts` requires no changes**
 
-`DrizzleService` is exported by the `@Global()` `DatabaseModule` and is injectable throughout the application without listing it in `AuthModule.providers`. Confirm `DatabaseModule` is registered in `AppModule` (the scaffold handles this).
+`DrizzleService` comes from the `@Global()` `DatabaseModule` — no need to list it in `AuthModule.providers`; confirm `DatabaseModule` is in `AppModule`.
 
 ---
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

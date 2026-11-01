@@ -5,14 +5,7 @@
 
 ### Step 0 — Verify context
 
-Look for `<!-- templateCentral: vite-react@` on line 1 of `AGENTS.md`.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
+Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/vite-react/template/` (listed in `<skill-dir>/pagination/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
@@ -29,7 +22,7 @@ export { usePagination, type Paginated } from './use-pagination';
 
 **3. Schema + API Service**
 
-The FastAPI and NestJS pagination endpoints (`templatecentral:add (pagination)` on the backend) both return `{ data: { items, pagination: { page, limit, total, hasMore } } }` — the one wrapped shape; their non-list endpoints return bare bodies. Validate it as-is.
+The FastAPI and NestJS pagination endpoints return `{ data: { items, pagination: { page, limit, total, hasMore } } }` (non-list endpoints return bare bodies). Validate it as-is.
 
 **Update, don't overwrite**: if `templatecentral:add (feature)` already created `project.schema.ts`, keep its `projectItemSchema` and add only `paginatedProjectsSchema`; if `types.ts` already declares `ProjectItem`, skip the `ProjectItem` export below and import the type from `../types`. Create the file as shown only when it is absent.
 
@@ -150,7 +143,7 @@ Run `pnpm test`, then `pnpm dev` and confirm: Previous is disabled on page 1, Ne
 
 ## Rules
 
-- Always set `placeholderData: keepPreviousData` on a paginated query — without it every page click blanks the list
+- Set `placeholderData: keepPreviousData` on paginated queries, or each page click blanks the list
 - Drive loading/disabled UI off `isFetching` for page changes; `isPending` covers only the first load
 - Always throw `APIError`, never a generic `Error` — never put validation details in the thrown message
 - Always add the hook to the `src/hooks/index.ts` barrel
@@ -158,13 +151,11 @@ Run `pnpm test`, then `pnpm dev` and confirm: Previous is disabled on page 1, Ne
 
 ## See Also
 
-- `templatecentral:add` (error-handling) — Pagination errors use unified error response schema
+- `templatecentral:add` (error-handling) — unified error responses
 - `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod/Pydantic
 - `templatecentral:add (endpoint)` — Add pagination to new list endpoints
-- Stack-specific `code-standards` — Database indexing best practices for sort fields
+- Stack `code-standards` — index sort fields
 
 ## After Writing Code
 
-Dispatch in order:
-1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — validate compilation
-2. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — check code standards
+Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
