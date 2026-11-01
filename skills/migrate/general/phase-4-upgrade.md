@@ -117,7 +117,7 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step A** — `settings.json` from the template-settings tree (`permissions.deny` secret-*Read* block, `skillListingBudgetFraction`, 6 hook events).
 - **Step B** — all **9** `.claude/hooks/` scripts (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`) and `.claude/comment-hygiene-patterns.txt` (read by the hook, lefthook and CI), then `chmod +x .claude/hooks/*.sh`.
 - **Step B2** — git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`).
-- **Step B3** — CI quality gates, by hand: `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). The kit's Step B3 rules for existing Azure pipelines apply (skip, or add only the `deps` step).
+- **Step B3** — CI quality gates (by hand, per the scaffold-only note above): `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). The kit's Step B3 rules for existing Azure pipelines apply (skip, or add only the `deps` step).
 - **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`); it MUST be seeded (Phase 5d and pre-push call it).
 - **Step B5** — the `/skill-audit` project skill, from `template-late/`.
 - **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name).
