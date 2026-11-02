@@ -269,7 +269,7 @@ check_readme_badge_matches_plugin() {
   local root pv readme badge
   root="$(_repo_root)"; pv="$(_plugin_version)"; readme="$root/README.md"
   [[ -f "$readme" && -n "$pv" ]] || { pass "README.md or version absent — skipping"; return; }
-  badge=$(grep -oE 'badge/version-[0-9]+\.[0-9]+\.[0-9]+' "$readme" | head -1 | sed 's/badge\/version-//')
+  badge=$(grep -oE 'badge/version-[0-9]+\.[0-9]+\.[0-9]+' "$readme" | head -1 | sed 's/badge\/version-//' || true)
   if [[ -z "$badge" ]]; then
     pass "No version badge found in README — skipping"
   elif [[ "$badge" == "$pv" ]]; then
