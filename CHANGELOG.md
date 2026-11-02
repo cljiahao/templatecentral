@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [7.2.2] — 2026-11-03
+
+### Added
+- `scripts/deploy-smoke.sh` scaffolds a stack, then installs, builds, lints, typechecks and tests it, builds its Docker image, checks HTTP (`/health`, `/api/health`, `/`) and runs `verify-harness.sh`. It takes an optional `DEPLOY_SMOKE_CA_FILE` for networks that re-sign TLS. All four stacks passed.
+
+### Changed
+- README redesign: 371 lines down to about 201, with light and dark banners and a release badge that updates itself. The detail moved to `docs/HARNESS.md` and `docs/REPOSITORY.md`.
+
+### Fixed
+- `validate-manifest.sh` no longer fails on a README that has no static version badge.
+
+### Security
+- Scaffolded projects no longer run on a Node or certifi that still trusts the compromised eMudhra intermediate CAs (Oct 2026). The Next.js and Vite + React `engines.node` floor is `>=24.22.1`, NestJS is `^24.22.1 || >=26.12.1`, and the FastAPI scaffold installs `certifi>=2026.10.19`. The template Dockerfiles keep their floating tags (a pinned digest goes stale downstream) and now say so, with the `--pull --no-cache` rebuild needed to pick up trust-store fixes.
+
+---
+
 ## [7.2.1] — 2026-11-02
 
 ### Fixed
@@ -55,9 +71,6 @@ Covers the 7.1 work (add and migrate fences become real template files) and the 
 - `migrate/database`: the 4 new files of the Drizzle-to-Kysely flows (nestjs `kysely.service.ts` and `migrate.ts`, nextjs `kysely-client.ts` and `migrate.ts`) moved into `skills/migrate/database/<stack>/template/`; the IAM-block drift check still pairs them with their `add` canonical. The `nextjs-backend-extraction` fences are per-resource templates to adapt and stay inline.
 - Prose prune: skill markdown is about 15% shorter with every instruction, gate, warning and fence kept. Per area (`count-load` skill tokens): add 161,962 → about 137,700, migrate 48,568 → about 41,300, standards 41,171 → about 35,000; all 80 entries 251,701 → 214,145 (−14.9%). The scaffold load per stack drops from about 24,000–25,500 to about 19,900–20,600 tokens (−17% to −19%). Single-line `Prerequisites` sections that only pointed at Step 0 are gone, and the code-standards Comments blocks point at `comments.md` instead of repeating it.
 - Version-floor rationale lives only in `.claude/rules/<stack>.md`; skill prose points there, and install lines keep their floors. mutmut's floor joins the fastapi rules. A new lint check fails on a `≥X.Y` floor written in skill prose outside fences and inline code.
-
-### Security
-- Scaffolded projects no longer run on a Node or certifi that still trusts the compromised eMudhra intermediate CAs (Oct 2026). The Next.js and Vite + React `engines.node` floor is `>=24.22.1`, NestJS is `^24.22.1 || >=26.12.1`, and the FastAPI scaffold installs `certifi>=2026.10.19`. The template Dockerfiles keep their floating tags (a pinned digest goes stale downstream) and now say so, with the `--pull --no-cache` rebuild needed to pick up trust-store fixes.
 
 ---
 
