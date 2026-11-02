@@ -54,7 +54,7 @@ cp -R "$SRC/." "$OUT/"
 # (a real project), so a run never overwrites rules it does not own.
 ROOT=$(cd "$(dirname "$SRC")" && pwd -P)
 PARENT=$(cd "$(dirname "$OUT")" && pwd -P)
-HOME_REAL=$(cd "$HOME" 2>/dev/null && pwd -P || true)
+HOME_REAL=$(cd "$HOME" 2>/dev/null && pwd -P) || HOME_REAL=
 if [[ "$PARENT" == "$ROOT" || "$PARENT" == "$HOME_REAL" || -e "$PARENT/.claude/settings.json" ]]; then
   echo "note: plugin-root files not copied next to $OUT; <skill-dir>/../../ reads will not resolve there" >&2
 else
