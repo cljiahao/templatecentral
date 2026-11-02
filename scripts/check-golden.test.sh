@@ -26,7 +26,7 @@ scaffold_tree() {
   for d in "$REPO_ROOT/skills/scaffold/shared/template" "$REPO_ROOT/skills/scaffold/shared/template-$ts" \
     "$REPO_ROOT/skills/scaffold/shared/template-settings-$ts" "$REPO_ROOT/skills/scaffold/shared/template-late" \
     "$REPO_ROOT/skills/scaffold/shared/template-ci/$ci_dir" "$REPO_ROOT/skills/scaffold/$1/template" \
-    "$REPO_ROOT/skills/scaffold/$1/template-agents"; do
+    "$REPO_ROOT/skills/scaffold/$1/template-agents" "$REPO_ROOT/skills/scaffold/shared/template-ci/$([[ "$2" == azure ]] && echo "azure-$ts" || echo none)"; do
     [[ -d "$d" ]] && cp -Rp "$d/." "$3/"
   done
   # a <name>.tmpl source is the project file <name>

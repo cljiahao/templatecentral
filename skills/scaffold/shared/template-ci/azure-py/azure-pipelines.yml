@@ -1,0 +1,33 @@
+# PR and main-branch pipeline for Azure DevOps (FastAPI). The harness merge gates live in the
+# included azure-pipelines/templatecentral-gates.yml; this file adds install, lint, typecheck and tests.
+trigger:
+  branches: { include: [main] }
+pr:
+  branches: { include: [main, uat, develop] }
+pool:
+  vmImage: ubuntu-latest
+jobs:
+  - job: quality
+    timeoutInMinutes: 20
+    steps:
+      - checkout: self
+        fetchDepth: 0    # diff-cover and the PR-only gates need full history
+      - task: UsePythonVersion@0
+        inputs: { versionSpec: "3.14" }
+        displayName: Python 3.14
+      - bash: |
+          python -m pip install -r requirements.txt
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+          if [ -f uv.lock ]; then python -m pip install uv; fi    # the deps gate exports uv.lock with uv
+        displayName: Install deps
+      - template: azure-pipelines/templatecentral-gates.yml
+      - bash: ruff check src/ && ruff format --check src/
+        displayName: Lint and format check
+      - bash: python -m pyright src/
+        displayName: Typecheck
+      - bash: python -m pytest test/ --cov=src --cov-report=xml -q    # writes coverage.xml
+        displayName: Tests with coverage
+      - bash: |
+          target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
+          pipx run diff-cover coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+        displayName: Changed-line coverage (>= 80%)
