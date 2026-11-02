@@ -56,6 +56,9 @@ Covers the 7.1 work (add and migrate fences become real template files) and the 
 - Prose prune: skill markdown is about 15% shorter with every instruction, gate, warning and fence kept. Per area (`count-load` skill tokens): add 161,962 → about 137,700, migrate 48,568 → about 41,300, standards 41,171 → about 35,000; all 80 entries 251,701 → 214,145 (−14.9%). The scaffold load per stack drops from about 24,000–25,500 to about 19,900–20,600 tokens (−17% to −19%). Single-line `Prerequisites` sections that only pointed at Step 0 are gone, and the code-standards Comments blocks point at `comments.md` instead of repeating it.
 - Version-floor rationale lives only in `.claude/rules/<stack>.md`; skill prose points there, and install lines keep their floors. mutmut's floor joins the fastapi rules. A new lint check fails on a `≥X.Y` floor written in skill prose outside fences and inline code.
 
+### Security
+- Scaffolded projects no longer run on a Node or certifi that still trusts the compromised eMudhra intermediate CAs (Oct 2026). The Next.js and Vite + React `engines.node` floor is `>=24.22.1`, NestJS is `^24.22.1 || >=26.12.1`, and the FastAPI scaffold installs `certifi>=2026.10.19`. The template Dockerfiles keep their floating tags (a pinned digest goes stale downstream) and now say so, with the `--pull --no-cache` rebuild needed to pick up trust-store fixes.
+
 ---
 
 ## [7.0.0] — 2026-10-30
