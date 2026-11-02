@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [7.2.1] — 2026-11-02
+
 ### Fixed
 - A fresh Azure DevOps scaffold now ships wired: `TC_CI=azure` also copies a starter `azure-pipelines.yml` (from `template-ci/azure-ts/` or `template-ci/azure-py/` by stack) that installs, includes `azure-pipelines/templatecentral-gates.yml`, then lints, typechecks, tests and gates changed-line coverage, mirroring the GitHub `quality` job. Before, the gates template was seeded with no pipeline calling it. `lint-skills.sh` checks that both starters include the template.
 - The vite-react template `package.json` drops `@radix-ui/react-slot`, which nothing imports (current shadcn uses the `radix-ui` package).
