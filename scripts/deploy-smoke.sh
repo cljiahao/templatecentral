@@ -35,7 +35,7 @@ mkdir -p "$P" "$LOGS"
 NAME="tcsmoke-$STACK"
 IMG="$NAME:smoke"
 CID=""
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 cleanup() {
   [[ -n "$CID" ]] && docker rm -f "$CID" > /dev/null 2>&1
   docker image rm -f "$IMG" > /dev/null 2>&1
