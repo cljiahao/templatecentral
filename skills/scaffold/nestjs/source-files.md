@@ -97,11 +97,11 @@ Kit Step **0** (`TC_PART=base`) already ran. Execute kit Steps **A through D** n
 
 ### 6d. Seed additional project skills
 
-Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates: `nest-migrate` (DB migration with a safety gate, if Drizzle/Kysely is wired up) and `nest-module` (a new feature module: controller + service + DTO + test). If yes, create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Common candidates: `nest-migrate` (DB migration with a safety gate, if Drizzle/Kysely is wired up) and `nest-module` (a new feature module: controller + service + DTO + test). For each workflow the user named, create a skill in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
 ### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
-Skip if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLAUDE.md` at the project root with exactly one line:
+Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLAUDE.md` at the project root with exactly one line:
 
 ```
 @AGENTS.md
@@ -111,7 +111,7 @@ Do not duplicate commands or conventions here — everything lives in `AGENTS.md
 
 ### 7b. Optional: Task management
 
-If the user wants structured task management, append the task-management section to `AGENTS.md`:
+Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to `AGENTS.md`:
 
 ```bash
 printf '\n' >> AGENTS.md
@@ -124,7 +124,7 @@ Execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E
 
 ### 8. Remove Example Code (Optional)
 
-Once the user confirms the project runs, use the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`). NestJS-specific steps: delete `src/modules/example/` and `test/modules/example.controller.spec.ts`, and remove `ExampleModule` from `src/modules/index.ts` and the `imports` array in `src/app.module.ts`.
+Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the user confirms the project runs, use the cleanup utility (`cat "<skill-dir>/../cleanup/SKILL.md"`). NestJS-specific steps: delete `src/modules/example/` and `test/modules/example.controller.spec.ts`, and remove `ExampleModule` from `src/modules/index.ts` and the `imports` array in `src/app.module.ts`.
 
 ## Rules
 

@@ -14,6 +14,8 @@ Execute all five numbered steps below, in order.
 
 ## Step 1. Determine per-project opt-ins
 
+In a scaffold, the user answered both opt-ins in scaffold Step 1, and harness-kit-finalize.md Step E wrote those answers into `.claude/harness.json`, so the read functions below return them and nothing is asked. The ask and write logic below serves `templatecentral:migrate` and `templatecentral:add (documentation)`, which have no scaffold Step 1, and any project whose manifest lacks the fields.
+
 **Guard first:** if `.claude/harness.json` does not exist yet, skip Step 1 (1a and 1b) and Step 4 — go to Steps 2 and 3 with `adoWiki` and `richReadme` both `false`.
 
 ### Step 1a. Azure DevOps Code Wiki opt-in (`adoWiki`)

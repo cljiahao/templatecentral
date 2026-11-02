@@ -119,17 +119,17 @@ Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Step
 
 ### 7d. Seed additional project skills
 
-Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
+Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Common candidates:
 - `vite-feature` — scaffold a new feature module (components + query hook + page)
 - `vite-component` — scaffold a reusable widget component with props + story
 
-If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+For each workflow the user named, create a skill in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
 ---
 
 ### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
 
-Skip if the user does not use Claude Code.
+Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code.
 
 Create `CLAUDE.md` at the project root with exactly one line:
 
@@ -143,7 +143,7 @@ Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 9. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
+Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
 ```bash
 printf '\n' >> AGENTS.md
@@ -156,7 +156,7 @@ Execute kit Steps **E through H** using the **vite-react** row: harness.json (St
 
 ### 10. Optional: Remove example code
 
-Once the project is verified and the user confirms it runs, optionally remove example code:
+Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the project is verified and the user confirms it runs, remove the example code:
 
 - Delete `src/features/example/` directory
 - Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
