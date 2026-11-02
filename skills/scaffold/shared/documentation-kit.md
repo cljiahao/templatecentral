@@ -199,7 +199,7 @@ find . \( \
     -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .pyright -o \
     -name htmlcov -o -name .stryker-tmp -o -name .mutmut-cache -o \
     -name .github -o -name .azuredevops -o -name azure-pipelines -o \
-    -name secrets -o -name .secrets -o -name .claude -o \
+    -name secrets -o -name .secrets -o -name .claude -o -name .lefthook -o \
     -path './.claude/.harness-base' \
   \) -prune -o -type d -print > "$tmp"
 

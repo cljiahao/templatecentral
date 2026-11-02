@@ -1341,7 +1341,7 @@ out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TM_CMD" | python3 -c 'import sys; 
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Task Management$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "task_management_append: the documented command appends the section ($out)"
 # Step D fills the title with the Edit tool: no script and no heredoc carries the name
 check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_name_heredoc"
-check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -n '__TC_' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
+check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')

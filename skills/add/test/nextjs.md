@@ -13,7 +13,7 @@ Tests for Next.js API route handlers only — not frontend components.
 
 Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-**Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file. If not, ⛔ STOP and tell the user: "No API routes found. Run
+**Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file. If not, stop and tell the user: "No API routes found. Run
 `templatecentral:add` (api-route) first, then return here."
 
 ### Test Structure

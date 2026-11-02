@@ -11,7 +11,7 @@
 
 Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-**Context check:** Confirm `src/modules/` exists and contains at least one subdirectory. If not, ⛔ STOP and tell the user: "No modules found. Run
+**Context check:** Confirm `src/modules/` exists and contains at least one subdirectory. If not, stop and tell the user: "No modules found. Run
 `templatecentral:add` (module) first, then return here."
 
 ### Unit Tests

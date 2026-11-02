@@ -20,10 +20,10 @@ Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late ba
 
 ## Step D. Fill in `docs/CONSTITUTION.md`
 
-With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project title. The title must be a single line: if it holds a newline, stop and ask the user for a one-line title and edit nothing. Fill in the other `[...]` placeholders (Architecture Invariants, project-specific protected files) with the actual project values, and use the **quality-gate line** from the per-stack delta table in §6 Behavioural rules. Then check that no placeholder is left:
+With the Edit tool, replace `__TC_PROJECT_TITLE__` in `docs/CONSTITUTION.md` with the project title. The title must be a single line: if it holds a newline, stop and ask the user for a one-line title and edit nothing. Replace each `[Fill in: …]` line with the project's real value, or delete it where it says so. The §6 quality gate is the **quality-gate line** from the per-stack delta table. Then check that no placeholder is left:
 
 ```bash
-grep -n '__TC_' docs/CONSTITUTION.md
+grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md
 ```
 
 It must print nothing.
@@ -42,8 +42,8 @@ sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else s
 sha256_agents=$(sha256 AGENTS.md)   # provisional — Step G appends the tail + formats, then re-hashes
 # Every enforcement hook script is a high-value tamper target — hash each for drift detection.
 # Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
-for h in .claude/hooks/* .claude/hooks/local/*; do [ -f "$h" ] && printf '%s  %s\n' "$(sha256 "$h")" "$h"; done
-# CLAUDE.md is optional (Step G) — hash it only if it already exists
+find .claude/hooks -type f | sort | while IFS= read -r h; do printf '%s  %s\n' "$(sha256 "$h")" "$h"; done
+# CLAUDE.md is optional (the stack's CLAUDE.md step) — hash it only if it exists
 [ -f CLAUDE.md ] && sha256_claude=$(sha256 CLAUDE.md)
 sha256_settings=$(sha256 .claude/settings.json)
 # Hash the verify skill (substitute `<stack>-verify` with the verify-skill name from the delta table, e.g. `next-verify` for nextjs):
@@ -76,15 +76,15 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
     ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
     ".claude/skills/<stack>-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify/SKILL.md" },
     ".claude/skills/skill-audit/SKILL.md": { "origin_hash": "<sha256_skillaudit>", "path": ".claude/skills/skill-audit/SKILL.md" },
-    ".claude/hooks/protect-files.sh": { "origin_hash": "<sha256_hook_1>", "path": ".claude/hooks/protect-files.sh" },
-    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<sha256_hook_2>", "path": ".claude/hooks/block-no-verify.sh" },
-    ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<sha256_hook_3>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
-    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<sha256_hook_4>", "path": ".claude/hooks/post-edit-typecheck.sh" },
-    ".claude/hooks/stop-checks.sh": { "origin_hash": "<sha256_hook_5>", "path": ".claude/hooks/stop-checks.sh" },
-    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<sha256_hook_6>", "path": ".claude/hooks/subagent-stop.sh" },
-    ".claude/hooks/session-context.sh": { "origin_hash": "<sha256_hook_7>", "path": ".claude/hooks/session-context.sh" },
-    ".claude/hooks/skill-usage-log.sh": { "origin_hash": "<sha256_hook_8>", "path": ".claude/hooks/skill-usage-log.sh" },
-    ".claude/hooks/post-edit-comment-check.sh": { "origin_hash": "<sha256_hook_9>", "path": ".claude/hooks/post-edit-comment-check.sh" },
+    ".claude/hooks/protect-files.sh": { "origin_hash": "<hash printed for .claude/hooks/protect-files.sh>", "path": ".claude/hooks/protect-files.sh" },
+    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<hash printed for .claude/hooks/block-no-verify.sh>", "path": ".claude/hooks/block-no-verify.sh" },
+    ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<hash printed for .claude/hooks/user-prompt-guard.<ext>>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
+    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<hash printed for .claude/hooks/post-edit-typecheck.sh>", "path": ".claude/hooks/post-edit-typecheck.sh" },
+    ".claude/hooks/stop-checks.sh": { "origin_hash": "<hash printed for .claude/hooks/stop-checks.sh>", "path": ".claude/hooks/stop-checks.sh" },
+    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<hash printed for .claude/hooks/subagent-stop.sh>", "path": ".claude/hooks/subagent-stop.sh" },
+    ".claude/hooks/session-context.sh": { "origin_hash": "<hash printed for .claude/hooks/session-context.sh>", "path": ".claude/hooks/session-context.sh" },
+    ".claude/hooks/skill-usage-log.sh": { "origin_hash": "<hash printed for .claude/hooks/skill-usage-log.sh>", "path": ".claude/hooks/skill-usage-log.sh" },
+    ".claude/hooks/post-edit-comment-check.sh": { "origin_hash": "<hash printed for .claude/hooks/post-edit-comment-check.sh>", "path": ".claude/hooks/post-edit-comment-check.sh" },
     "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
     ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
     ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
@@ -97,9 +97,9 @@ sha256_regenh=$(sha256 .claude/regen-harness.sh)
 }
 ```
 
-> `user-prompt-guard.<ext>` is `.cjs` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI. The kit seeds **9** hook scripts — one `seeded_files` entry each (`<sha256_hook_1>`…`<sha256_hook_9>`); `verify-harness.sh` exits 2 while any `<…>` placeholder remains.
+> `user-prompt-guard.<ext>` is `.cjs` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI. The kit seeds **9** hook scripts — one `seeded_files` entry each, holding the hash the loop printed next to that file's path; `verify-harness.sh` exits 2 while any `<…>` placeholder remains.
 > The `AGENTS.md` (and `CLAUDE.md`) hashes written here are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`.
-> Omit the `CLAUDE.md` entry if it does not exist yet; Step G adds it if created there.
+> Omit the `CLAUDE.md` entry if the stack's CLAUDE.md step did not create it.
 > For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
 > On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml` — or omit both CI entries and the `ci-gates.sh` entry when Step B3 seeded neither because the project's pipelines already cover them. Add one entry per `.claude/hooks/local/*` script the loop above prints.
 
@@ -120,7 +120,7 @@ for p in $(python3 -c "import json;[print(v['path']) for v in json.load(open('.c
 done
 ```
 
-**Commit** `.claude/.harness-base/`. `protect-files.sh` guards it; the harness verifier ignores it.
+Keep `.claude/.harness-base/` tracked: it goes in with the project's first commit. `protect-files.sh` guards it; the harness verifier ignores it.
 
 ---
 
@@ -129,7 +129,7 @@ done
 Seed the per-folder README convention (and opt-in Azure DevOps Code Wiki `.order` files) now that every file exists:
 
 ```bash
-cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
+cat "<skill-dir>/shared/documentation-kit.md"   # migrate: <skill-dir>/../scaffold/shared/documentation-kit.md
 ```
 
 Follow it exactly.
@@ -181,7 +181,7 @@ Then run these agent skills in order. They are **on by default** — skipping re
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
 3. the review utility (update operation) — load it with: `cat "<skill-dir>/../review/SKILL.md"` — freshen any deps that have newer compatible versions
-4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — run the first full code review; writes `.claude/review-baseline.md` so future reviews only check files changed since this point
+4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — run the first full code review over the whole project; it writes `.claude/review-baseline.md` only once the project has a commit
 
 **If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 

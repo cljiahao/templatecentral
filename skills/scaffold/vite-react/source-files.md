@@ -42,16 +42,18 @@ Both must print nothing.
 
 ### 2. Update project name and branding
 
-- `index.html`: update `<title>` to the project name
-- `src/components/layout/navbar.tsx`: replace `templateCentral` with the project name
-- `src/components/layout/site-footer.tsx`: replace `'Built with templateCentral'` default with project-appropriate text
-- `src/pages/home.tsx`: replace `"Vite + React Template"` heading with the project name
+- `index.html`: update `<title>` to the project title
+- `src/components/layout/navbar.tsx`: replace `templateCentral` with the project title
+- `src/components/layout/site-footer.tsx`: replace the `'Built with templateCentral'` default with the project description
+- `src/pages/home.tsx`: replace the `"Vite + React Template"` heading with the project title
 
 ### 3. Copy `.env.example` to `.env`
 
 ```bash
 cp .env.example .env
 ```
+
+If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
 ### 4. Initialize git and install dependencies
 
@@ -137,7 +139,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
-Step E hashes it into `seeded_files` (it runs next).
+Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 9. Optional: Task management
 
@@ -148,9 +150,9 @@ printf '\n' >> AGENTS.md
 cat "<skill-dir>/vite-react/template-tail/task-management.md" >> AGENTS.md
 ```
 
-If no, skip.
+#### Finish the harness (required, whatever the answer above)
 
-Then execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E — includes the `vite-verify` skill hash), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the vite-react `PostToolUse` line), and plugin install (Step H).
+Execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E, with the `vite-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
 
 ### 10. Optional: Remove example code
 
@@ -171,7 +173,7 @@ Or use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.
 - Update the `index.html` title; it is the browser tab name
 - Routes are defined in `src/router.tsx`, not by filesystem convention
 - Read env only through `import.meta.env.VITE_*` in `src/lib/constants/env.ts`; `process.env` is undefined in the browser
-- Verify `pnpm build`, `pnpm typecheck`, and `pnpm test` all pass before generating `AGENTS.md`
+- Pass the Step 6 gate (`pnpm format`, `pnpm build`, `pnpm check`, `pnpm test`) before generating `AGENTS.md`
 - Remove example code only after the user confirms the project runs
 - Leave `node_modules/` and `dist/` out of the scaffold; they are installed or built
 - The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off

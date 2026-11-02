@@ -313,6 +313,12 @@ probe python_dedent .claude/hooks/user-prompt-guard.py "t.replace('\n    ', '\n'
 probe double_space_exit .claude/hooks/block-no-verify.sh "t.replace('exit 2', 'exit  2', 1)"
 probe split_flag .claude/hooks/block-no-verify.sh "t.replace('--no-verify', '--no -verify', 1)"
 
+# optional_claude_md: an absent CLAUDE.md passes, an edited one fails
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; rm -f "$T/pt/CLAUDE.md"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "optional_claude_md_absent_passes"
+rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf 'extra\n' >> "$T/pt/CLAUDE.md"
+bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 1 $? "optional_claude_md_edited_fails"
+
 # trailing_newline_passes
 rm -rf "$T/pt"; cp -R "$ptree" "$T/pt"; printf '\n\n' >> "$T/pt/.claude/ci-gates.sh"
 bash "$CHECK" --tree "$T/pt" "$PCOMBO" > /dev/null; check 0 $? "trailing_newline_passes"

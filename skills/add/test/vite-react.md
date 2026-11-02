@@ -10,7 +10,7 @@
 Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **Context check:** Confirm `src/features/` or `src/components/` contains at least
-one `.tsx` file. If not, ⛔ STOP and tell the user: "No components or features found. Add some
+one `.tsx` file. If not, stop and tell the user: "No components or features found. Add some
 using `templatecentral:add` (feature) or `templatecentral:add` (component)
 first, then return here."
 

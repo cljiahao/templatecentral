@@ -44,6 +44,8 @@ In `src/config/env.config.ts`, set the `PROJECT_NAME` default (`'My Project'`) t
 
 `cp .env.example .env`
 
+If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
+
 ### 4. Install Dependencies
 
 Before the first install, run kit Step **0** again as `TC_STACK=nestjs TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `lefthook.yml` and the other harness files, so the `prepare` script wires the git hooks instead of writing a stub config.
@@ -105,7 +107,7 @@ Skip if the user does not use Claude Code — `AGENTS.md` is enough. Create `CLA
 @AGENTS.md
 ```
 
-Do not duplicate commands or conventions here — everything lives in `AGENTS.md`. Step E hashes it into `seeded_files` (it runs next).md Step E).
+Do not duplicate commands or conventions here — everything lives in `AGENTS.md`. Step E hashes it into `seeded_files`.
 
 ### 7b. Optional: Task management
 
@@ -116,7 +118,9 @@ printf '\n' >> AGENTS.md
 cat "<skill-dir>/nestjs/template-tail/task-management.md" >> AGENTS.md
 ```
 
-Then execute kit Steps **E through H** using the **nestjs** row: harness.json (E, with the `nest-verify` hash), base snapshot (E2), per-folder docs (E3), `.agents` symlink (F), AGENTS.md tail (G, with the nestjs `PostToolUse` line) and plugins (H).
+#### Finish the harness (required, whatever the answer above)
+
+Execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E, with the `nest-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
 
 ### 8. Remove Example Code (Optional)
 

@@ -28,7 +28,7 @@ cat "<skill-dir>/shared/harness-kit.md"
 
 Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/fastapi/template/` into the project root per `<skill-dir>/fastapi/template.manifest`: it writes nothing and ends with a `STOP:` line when a path is in the way.
 
-Then write `README.md`: name, the one-sentence description from Step 2, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
+Then write `README.md`: name, the one-sentence description from scaffold Step 1, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
 Do not create `requirements.txt` yet: Step 4 produces it with `pip freeze`.
 
@@ -39,13 +39,17 @@ In `src/core/config.py`, update the `CommonSettings` defaults:
 - `PROJECT_DESCRIPTION` — Set to a relevant one-sentence description
 - `PROJECT_VERSION` — Set to `"v0.1.0"` (or user's preferred version)
 
+`CommonSettings` loads `src/.env`, whose values win over these defaults, so set the same `PROJECT_NAME` and `PROJECT_VERSION` in `src/.env.default` too. Step 3 copies that file to `src/.env`; agents do not edit `src/.env` itself.
+
 ### 3. Create environment file
 
 ```bash
 cp src/.env.default src/.env
 ```
 
-`CommonSettings`/`APISettings` load `src/.env` directly (`SettingsConfigDict(env_file="src/.env")`), which takes priority over the class defaults edited in Step 2 — update `PROJECT_NAME`/`PROJECT_VERSION`/`PROJECT_DESCRIPTION` in `src/.env` to match Step 2's values now, or Step 2's edits are silently overridden at runtime. Never commit `src/.env`.
+If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
+
+Never commit `src/.env`.
 
 ### 4. Set up virtual environment and install dependencies
 
@@ -68,14 +72,14 @@ pip install -r requirements-dev.txt
 ### 5. Verification gate (do not proceed until this passes)
 
 ```bash
-python src/main.py &       # starts server; confirm http://localhost:8000 responds
+ruff format src/           # format fresh files once, so the format check below passes
+python -m uvicorn --app-dir src app:app --port 8000 & server=$!   # no --reload: $server is the server itself
+curl -fsS --retry 10 --retry-connrefused --retry-delay 1 http://localhost:8000/health; kill "$server"
 python -m pytest test/ -v  # all tests must pass
 ruff check src/            # zero lint errors
 ruff format --check src/   # zero formatting drift
 python -m pyright src/     # zero type errors
 ```
-
-> Run `ruff format src/` once first if this is a fresh scaffold — formatting drift on newly generated files will cause the format check to fail until formatted.
 
 **Do not generate AGENTS.md until all checks pass.**
 
@@ -129,7 +133,7 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` into every Claude Code session; keep everything else in `AGENTS.md`.
 
-Step E hashes it into `seeded_files` (it runs next).
+Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 8. Task management (optional)
 
@@ -140,7 +144,9 @@ printf '\n' >> AGENTS.md
 cat "<skill-dir>/fastapi/template-tail/task-management.md" >> AGENTS.md
 ```
 
-Then execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E — includes the `api-verify` skill hash), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the fastapi `PostToolUse` line), and plugin install (Step H).
+#### Finish the harness (required, whatever the answer above)
+
+Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E, with the `api-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
 
 ### 9. Remove example code (optional)
 

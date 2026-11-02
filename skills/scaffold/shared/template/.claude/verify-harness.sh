@@ -4,6 +4,7 @@
 # on drift (1) or on an unreadable/unfilled manifest (2). Wired into CI and lefthook pre-push.
 # Bless intentional changes with regen-harness.sh.
 set -euo pipefail
+cd "$(dirname "$0")/.."   # paths below are project-relative, wherever this is run from
 manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 

@@ -9,35 +9,9 @@ Adds **better-auth** (typed, SSO + email/password) to a templateCentral Next.js 
 
 ### Files this skill creates
 
-```
-src/
-├── lib/
-│   ├── auth.ts                                        ← better-auth server config (verbatim — do not generate)
-│   ├── auth-client.ts                                 ← better-auth client config (verbatim — do not generate)
-│   └── authz.ts                                       ← hasRole / isOwner checks
-├── proxy.ts                                           ← route protection middleware (verbatim — do not generate)
-└── app/
-    ├── api/
-    │   └── auth/
-    │       └── [...all]/
-    │           └── route.ts
-    ├── (public)/
-    │   └── login/
-    │       └── page.tsx
-    └── dashboard/           ← only if not already created by scaffold
-        ├── layout.tsx
-        └── (overview)/
-            └── page.tsx
-test/lib/authz.test.ts
-src/features/
-└── auth/
-    ├── components/
-    │   ├── login-card.tsx
-    │   ├── login-button.tsx
-    │   ├── signout-button.tsx
-    │   └── index.ts
-    └── index.ts
-```
+- The copy step (Step 1) writes the files listed in `<skill-dir>/auth/nextjs/template.manifest`: `src/lib/auth.ts`, `src/lib/auth-client.ts`, `src/lib/authz.ts`, `src/app/api/auth/[...all]/route.ts`, `src/app/(public)/login/page.tsx`, the `src/features/auth/` components and `test/lib/authz.test.ts`.
+- Step 4 replaces `src/proxy.ts` (route protection).
+- Steps 8 and 9 write `src/app/dashboard/layout.tsx` and `src/app/dashboard/(overview)/page.tsx` only when the scaffold has not created them.
 
 ### Files this skill modifies
 

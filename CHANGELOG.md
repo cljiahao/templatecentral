@@ -17,9 +17,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `add` database guides that replace `src/api/routers/auth.py` keep the cookie-mode `/auth/session` and `/auth/logout` routes; the pymongo and Beanie guides name where `security.py` comes from; sqlalchemy-iam reuses only sqlalchemy's auth section; `add/SKILL.md` defines `<target>`.
 - `migrate`: the migration branch is cut before any change, a stack with no database leaf stops cleanly, and the phase-4 step after 4f-3 is 4g.
 - Docs: SECURITY supported versions (7.x), README scripts tree and test counts, the scheduled-loop wording, the Python 3.14 example heading, and CONVENTIONS enforcement claims.
+- Kit Steps E–H (manifest, base snapshot, docs, symlink, AGENTS.md tail, plugins) are their own required step in every stack guide; before, they sat inside the optional task-management step.
+- Seeded `docs/CONSTITUTION.md`: every placeholder is a one-line `[Fill in: …]` that kit Step D's check finds; the authentication, audit-log, 401-test and PR-template rules no longer demand what a fresh scaffold lacks.
+- Kit Step E keys each hook hash by the hook's file name, not by position.
+- FastAPI verification gate: formats first, starts uvicorn without reload, polls `/health`, then stops the server.
+- The git-hook `readme-coupling` warning and the documentation kit's working set both skip `.lefthook/`.
+- `.claude/rules/vite-react.md` names `ApiClient` as what `add auth` adds and the auth feature as a dev stub; rules name `templatecentral:add (…)` instead of skill names that do not exist.
+- `scripts/build-agents-dist.sh` copies `.claude/rules/`, `plugin.json` and `CHANGELOG.md` next to the output, so `<skill-dir>/../../` reads resolve in other tools.
+- Smaller fixes: the nestjs `CLAUDE.md` step text, the `nestjs-kysely` B7 ordering note, migrate/database pointers to the copied `kysely.service.ts`, the Next.js cleanup note about an auth folder it does not have, the FastAPI `PROJECT_DESCRIPTION` note, the stale "tail is appended" line and `[[post-harness]]` seam text in each AGENTS.md, and the FastAPI pre-commit hooks now run in sequence.
 
 ### Changed
-- Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files and code fences are unchanged.
+- Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files (CONSTITUTION, `regen-harness.sh`, `.gitignore`, the nextjs AGENTS.md) follow suit; frozen code fences are unchanged.
 
 ---
 

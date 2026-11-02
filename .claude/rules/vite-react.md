@@ -14,15 +14,15 @@ Stack: Vite 8, React ≥19.2.7 (RSC DoS advisory fix; 19.2.6 had a Server-Action
 - Do not put secrets, API keys or tokens in `VITE_*`; they are embedded in the client bundle
 - Use named exports, not `export default`, in application code (exception: tooling configs like `vite.config.ts`, `eslint.config.mjs`)
 - Keep data fetching out of components; use React Query hooks in features
-- Auth targets the backend cookie mode (`POST /auth/session`, `GET /auth/me`, `POST /auth/logout`; every backend call goes through `ApiClient`, which sends `credentials: 'include'` and `X-CSRF-Token` from `csrfHeader()` on non-GET; `FetchClient` uses `AbortSignal.any`, so browsers ≥ Chrome 116 / Safari 17.4 / Firefox 124) — change these names only together with `add/auth/{fastapi,nestjs}.md`
+- Auth targets the backend cookie mode (`POST /auth/session`, `GET /auth/me`, `POST /auth/logout`; once `templatecentral:add auth` runs, every backend call goes through `ApiClient` (a `FetchClient` subclass it adds), which sends `credentials: 'include'` and `X-CSRF-Token` from `csrfHeader()` on non-GET; the scaffold's `FetchClient` uses `AbortSignal.any`, so browsers ≥ Chrome 116 / Safari 17.4 / Firefox 124) — change these names only together with `add/auth/{fastapi,nestjs}.md`
 
 ## Architecture
 
 - Features: `src/features/<name>/` (api/, components/, hooks/, schemas/, types.ts, constants.ts, index.ts)
-- Auth: `src/features/auth/` (AuthProvider, ProtectedRoute, LoginCard)
+- Auth: `src/features/auth/` (AuthProvider, ProtectedRoute, LoginCard) ships with the scaffold as a dev-only stub (`DEV_USER` behind `ENV.IS_DEV`); `templatecentral:add auth` wires it to the backend
 - Routing: `src/router.tsx` (definitions) + `src/pages/` (page components)
 - Shared: `src/lib/` (clients/, constants/, errors/, utils/) + `src/components/` (layout/, ui/, widgets/)
-- Integrations: `src/integrations/` (created by `add-integration` skill — clients, schemas, services for external APIs)
+- Integrations: `src/integrations/` (created by `templatecentral:add (integration)` — clients, schemas, services for external APIs)
 
 ## Standards
 

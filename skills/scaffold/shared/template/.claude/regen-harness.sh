@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# HUMAN-RUN ONLY. Rewrites origin_hash in .claude/harness.json to the current files.
-# NEVER let an agent run this — regenerating the baseline masks the drift the verifier
+# Human-run only. Rewrites origin_hash in .claude/harness.json to the current files.
+# Agents do not run this: regenerating the baseline masks the drift the verifier
 # exists to catch. protect-files.sh requires human approval to edit harness.json itself.
 set -euo pipefail
 if command -v node >/dev/null 2>&1; then

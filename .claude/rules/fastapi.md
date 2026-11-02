@@ -17,7 +17,7 @@ Stack: FastAPI 0.136+ (current stable 0.143.x), Python 3.14 (Docker `python:3.14
 
 ## Architecture
 
-- Layered: `api/` (routers, schemas, services) → `models/` (domain models — dataclasses, or ORM/ODM models after `add-database`)
+- Layered: `api/` (routers, schemas, services) → `models/` (domain models — dataclasses, or ORM/ODM models after `templatecentral:add (database)`)
 - Shared: `core/` (config, logging, exceptions), `utils/`
 - Tests: `test/conftest.py`, `test/factories/`, `test/test_api/`
 

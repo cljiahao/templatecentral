@@ -25,6 +25,7 @@ directory name. Run the generator below to produce a tool-agnostic copy with the
 ```bash
 bash scripts/build-agents-dist.sh
 # -> dist/agents-skills/   (skill names == folder names: scaffold, add, migrate, standards, …)
+# -> dist/.claude/rules/, dist/.claude-plugin/plugin.json, dist/CHANGELOG.md (plugin-root files the skills read)
 ```
 
 `dist/` is a gitignored build artifact. Re-run the script after pulling updates.

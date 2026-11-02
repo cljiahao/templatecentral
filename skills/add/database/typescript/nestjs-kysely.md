@@ -32,7 +32,7 @@ Add a migration script to `package.json`:
 
 Run `TC_PART=leaf TC_LEAF=add/database/typescript/nestjs-kysely bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/database/typescript/nestjs-kysely/template/` (listed in `<skill-dir>/database/typescript/nestjs-kysely/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
-> **Complete B7 (Configure Environment) before this step** — `serviceConfig.DATABASE_URL` must be defined before creating the service.
+> The copied `kysely.service.ts` reads `serviceConfig.DATABASE_URL`, which B7 (Configure Environment) adds; the build fails until B7 is done.
 
 **`src/database/kysely.service.ts`**:
 

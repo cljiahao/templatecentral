@@ -1,8 +1,8 @@
 <!-- templateCentral: nextjs@6.0.0 -->
 # AGENTS.md — __TC_PROJECT_TITLE__
 
-> STOP — Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
-> ALL async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
+> Next.js 16 breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
+> all async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
 
 ## Stack
 Next.js 16 · App Router · TypeScript strict · shadcn/ui · TanStack Query v5
@@ -57,7 +57,5 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in `NEXT_PUBLIC_*` variables
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
-
 ## Project-Specific Notes
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
+<!-- [[post-harness]] — reserved for meta-harness integration (see FUTURE.md) -->

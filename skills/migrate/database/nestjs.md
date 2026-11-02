@@ -41,9 +41,9 @@ rm -rf drizzle/
 
 ### Step 4 — Create `src/database/kysely.service.ts` (IAM variant)
 
-> **Canonical source**: the `KyselyService` block below and the `serviceConfig` block in
-> Step 10 are duplicated verbatim from `add/database/typescript/nestjs-kysely-iam.md` (canonical).
-> The lint fails if they drift: re-copy, never hand-edit.
+> **Canonical source**: the copied `src/database/kysely.service.ts` and the `serviceConfig` block in
+> Step 10 match `add/database/typescript/nestjs-kysely-iam.md` (canonical).
+> The lint fails if they drift: re-copy, do not hand-edit.
 
 **Download the AWS RDS CA bundle first.** The Amazon RDS root CA is not in Node's default trust
 store, so without the bundle TLS fails with `SELF_SIGNED_CERT_IN_CHAIN`. Never "fix" it with
@@ -59,7 +59,7 @@ Run `TC_PART=leaf TC_LEAF=migrate/database/nestjs bash "<skill-dir>/../scaffold/
 
 Commit `certs/rds-global-bundle.pem` (it is a public certificate, not a secret) or bake it
 into the Docker image; `RDS_CA_BUNDLE_PATH` is set in Step 10. In a container, `NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem`
-is an equivalent process-wide alternative to the explicit `ca` option below.
+is an equivalent process-wide alternative to the explicit `ca` option in the copied `kysely.service.ts`.
 
 Copied verbatim from `<skill-dir>/database/nestjs/template/src/database/kysely.service.ts` by the copy step; do not re-type it.
 

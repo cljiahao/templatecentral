@@ -4,7 +4,7 @@
 
 # Shared Harness Kit
 
-Index of the agent harness seeded into every project. Read the **Per-stack delta table** first, then execute ALL steps in the **Step order** below with the current stack's row.
+Index of the agent harness seeded into every project. Read the **Per-stack delta table** first, then execute every step in the **Step order** below with the current stack's row.
 
 ---
 

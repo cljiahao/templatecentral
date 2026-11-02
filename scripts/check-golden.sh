@@ -226,6 +226,8 @@ EDITED = user_edited()
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
 PLACEHOLDER = re.compile(r"PROJECT_NAME_PLACEHOLDER|\[Project Name\]|__TC_[A-Z0-9_]+__")
 APPENDED = {"AGENTS.md"}
+# Created only when the user wants it (the stack's CLAUDE.md step): absent passes, present is compared.
+OPTIONAL = {"CLAUDE.md"}
 SUBSET_JSON = {"package.json"}
 
 
@@ -340,7 +342,9 @@ for rel, sha in sorted(golden.items()):
     if os.path.islink(other):
         report_symlink(rel); continue
     if not os.path.isfile(other):
-        print(f"MISSING {combo} {rel}"); bad = 1; continue
+        if rel not in OPTIONAL:
+            print(f"MISSING {combo} {rel}"); bad = 1
+        continue
     if not os.path.isfile(full) or rel in EDITED:
         continue
     a, b = open(full, "rb").read(), open(other, "rb").read()

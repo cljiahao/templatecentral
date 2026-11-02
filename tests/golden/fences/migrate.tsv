@@ -21,18 +21,17 @@ d33f75d573493e46535431562a634bfc820abac99255296ca0d6bae19279dfef	skills/migrate/
 bcbe89886d774fd454e93e146887439679957c043fe6f3299cc2f9c8b4fb04d4	skills/migrate/database/nextjs.md	Step 9 — Update query code in API routes and Server Components	0	typescript
 a4dd8d34b7ed32e1d474545e4d64c6b772bb50497597a3e5157a4356bfc7dae5	skills/migrate/general/implementation.md	If A — Light adoption	0	-
 ce111660992e116de4ddcfb412014f524f0f7138830550b070ade232b3069a7c	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	0	-
-63afea46864c2b44049a861dcb9cdf82fd0f0f3ee5e4264d26fcbb38489091a5	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	1	-
+c82dbfb6467a146ff1602a4677806983cd8ec80a873be1842a4fa319b8f2f58f	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	1	-
 91bc9016639205da6f506418a78e409597e78434dcb172d97beec99552871cfa	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	2	-
-b2ec8789e729ab7afee69570b289c7692ac762e8f774dea60cbe3c06b9adc20b	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	3	-
-42a6b0c290f0cb7fd21e10c1f8fd4c50a44e8344581b73cc22743f325ddafbb7	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	4	-
+5772859fc7ebeb1b4882819a62d1748e4f691122216a198dedacc1e59b590e24	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	3	-
+191264b140c96e5f745b5334a713313b474c4364cc159d89a89523d568886299	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	4	-
 7430ac98d01b9381257298a87503cd8795c21c639a15d6d0b8179829689de063	skills/migrate/general/implementation.md	Phase 0 — Check for Version Upgrade (agent, autonomous)	5	-
 292d96052b77f6db12a10e65d5018a063e2ff2f038febb3ee0fb4ed377618a8b	skills/migrate/general/implementation.md	Phase 2 — Human Decision ⛔ GATE	0	-
-67c6a3730dceacc69d73396503b52f0baa43dd30ebd37b35f8c435619c044d59	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	0	markdown
-336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	1	-
-9927eac45673a62f7f33c93c76d097fc948dc4fb1a4c8a623f408163d093f838	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	2	markdown
-1b14ad6ef54edfb3096e056a0dc82a51f8b6f6149e7c354bcfe5cb538911c89f	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	3	markdown
-41f002885586d70ed3e3535c20ef0d1f0eae81a36b2209be135579a520e5acb0	skills/migrate/general/phase-4-upgrade.md	Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)	4	-
-0b3220ff1a4b2153cf9edd751f266edbc35167e23002d9d6eb57e55d4080b5a0	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	0	-
+336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	0	-
+9927eac45673a62f7f33c93c76d097fc948dc4fb1a4c8a623f408163d093f838	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	1	markdown
+1b14ad6ef54edfb3096e056a0dc82a51f8b6f6149e7c354bcfe5cb538911c89f	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	2	markdown
+af5fec80d6292e14977a0a4df2b13c38d67075d9b95f66e4e7f017cf6f2ee837	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)	3	-
+75f556216730f470df0a3cb1689b4cdad1b0244b4e4637889ccc50ed8ff62f3f	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	0	-
 833e41fb33ccb9e5376c223820b72a1efdd811f3b4f7dcdc871d945f7d3b3495	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	1	-
 3f61cb998b3b199a3b67a75501acab5af958b8f295acefa5191a60163d8294cf	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	2	-
 acf2c690a5f8ebcac3c71120d662f16d2c27f17ddfddb79149c53c9cb1181430	skills/migrate/general/phase-5-health-check.md	Phase 5 — Harness Health Check	3	-
