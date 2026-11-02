@@ -137,7 +137,7 @@ if [ "$PART" = manifest ]; then
   WHAT="write .claude/harness.json"
   mf=.claude/harness.json
   [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: run this at kit Step E"
-  [ -d "$TGT/.claude" ] && [ ! -L "$TGT/.claude" ] || stop "$TGT/.claude is missing or a symlink: run kit Steps 0 through D first"
+  if [ ! -d "$TGT/.claude" ] || [ -L "$TGT/.claude" ]; then stop "$TGT/.claude is missing or a symlink: run kit Steps 0 through D first"; fi
   if [ -e "$TGT/$mf" ] || [ -L "$TGT/$mf" ]; then stop "$TGT/$mf already exists"; fi
   pj=${SH%/skills/scaffold/shared}/.claude-plugin/plugin.json
   [ -f "$pj" ] || pj=${SH%/scaffold/shared}/../.claude-plugin/plugin.json
