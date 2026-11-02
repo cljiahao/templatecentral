@@ -7,6 +7,8 @@
 #   checks it answers HTTP (/health for the APIs, / for the frontends), then runs .claude/verify-harness.sh.
 #   Prints a PASS/FAIL/SKIP row per step with the first failing line; exit 1 on any FAIL.
 #   --no-docker  skip the two Docker steps (also what happens when no Docker daemon answers)
+#   DEPLOY_SMOKE_CA_FILE=<pem>  for a network that re-signs TLS: the CA is passed to the build as a BuildKit secret
+#                and appended to the image trust store before each `RUN apk`, in the scratch Dockerfile only
 #   --keep       leave the scratch dir (printed at the end) instead of removing it
 # Needs network (package registries, shadcn registry, Docker base images), git, node, pnpm (TS stacks),
 # python3.14 (fastapi), docker. Run it outside a sandbox.
@@ -138,7 +140,13 @@ if [[ $DOCKER -eq 1 ]]; then
     nestjs) PATH_OK=/health ;;
     nextjs) PATH_OK=/api/health ;;
   esac
-  if step "docker build" docker build -t "$IMG" .; then
+  BUILD_ARGS=()
+  if [[ -n "${DEPLOY_SMOKE_CA_FILE:-}" ]]; then
+    sed -i.bak 's|^RUN apk|RUN --mount=type=secret,id=ca cat /run/secrets/ca >> /etc/ssl/certs/ca-certificates.crt\
+RUN apk|' "$P/Dockerfile" && rm -f "$P/Dockerfile.bak"
+    BUILD_ARGS=(--secret "id=ca,src=$DEPLOY_SMOKE_CA_FILE")
+  fi
+  if step "docker build" docker build ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} -t "$IMG" .; then
     HP=$((20000 + RANDOM % 20000))
     # a non-http-proxy stack needs no env; the APIs read src/.env or the defaults baked into the image
     CID=$(docker run -d -p "$HP:$PORT_IN" "$IMG" 2> "$LOGS/run.log")
