@@ -255,13 +255,13 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/scaffold/fastapi/source-files.md`
 - [ ] `skills/scaffold/fastapi/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/fastapi.md`, `response_model` on every route, layered flow `api/` → `models/`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/fastapi.md`
+- [ ] `skills/add/auth/fastapi.md` ← code is in `skills/add/auth/fastapi/template/` and `template-cookie/`; review those trees too
 - [ ] `skills/add/database/python.md` ← stack router
-- [ ] `skills/add/database/python/sqlalchemy.md`
-- [ ] `skills/add/database/python/sqlalchemy-iam.md`
-- [ ] `skills/add/database/python/pymongo-async.md` ← MongoDB default
+- [ ] `skills/add/database/python/sqlalchemy.md` ← code is in `sqlalchemy/template/` beside the `.md`; review it too
+- [ ] `skills/add/database/python/sqlalchemy-iam.md` ← code is in `sqlalchemy-iam/template/`
+- [ ] `skills/add/database/python/pymongo-async.md` ← MongoDB default; code is in `pymongo-async/template/`
 - [ ] `skills/add/database/python/pymongo-async-auth.md` ← auth-stub completion add-on
-- [ ] `skills/add/database/python/beanie.md` ← opt-in, pins Python 3.13
+- [ ] `skills/add/database/python/beanie.md` ← opt-in, pins Python 3.13; code is in `beanie/template/`
 - [ ] `skills/add/endpoint/fastapi.md`
 - [ ] `skills/add/integration/fastapi.md`
 - [ ] `skills/add/test/fastapi.md`
@@ -290,9 +290,9 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/scaffold/nestjs/source-files.md`
 - [ ] `skills/scaffold/nestjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nestjs.md`, DTOs use `createZodDto`, every endpoint has `@ApiTags()` + `@ApiOperation()`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/nestjs.md`
+- [ ] `skills/add/auth/nestjs.md` ← code is in `skills/add/auth/nestjs/template/` and `template-cookie/`; review those trees too
 - [ ] `skills/add/database/typescript.md` ← stack router (NestJS + Next.js)
-- [ ] `skills/add/database/typescript/nestjs-drizzle.md`
+- [ ] `skills/add/database/typescript/nestjs-drizzle.md` ← code is in `nestjs-drizzle/template/` beside the `.md`; review it too (same for the base `nestjs-{kysely,mongoose}` and `nextjs-{drizzle,kysely,mongoose}` leaves; the `-iam` and `-auth` add-ons have no tree)
 - [ ] `skills/add/database/typescript/nestjs-kysely.md`
 - [ ] `skills/add/database/typescript/nestjs-kysely-iam.md` ← IAM add-on (canonical for migrate/database/nestjs.md IAM blocks)
 - [ ] `skills/add/database/typescript/nestjs-kysely-auth.md` ← auth-stub completion add-on
@@ -306,7 +306,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/logging/nestjs.md`
 - [ ] `skills/add/pagination/nestjs.md`
 - [ ] `skills/add/mutation-testing/typescript.md`
-- [ ] `skills/migrate/database/nestjs.md`
+- [ ] `skills/migrate/database/nestjs.md` ← code is in `skills/migrate/database/nestjs/template/`; review it too
 - [ ] `skills/standards/code-standards/nestjs.md`
 - [ ] `skills/standards/validation-patterns/nestjs.md`
 
@@ -332,7 +332,7 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/scaffold/nextjs/source-files.md`
 - [ ] `skills/scaffold/nextjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nextjs.md`, no `middleware.ts`, every route wrapped in `withLogging()`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/nextjs.md`
+- [ ] `skills/add/auth/nextjs.md` ← code is in `skills/add/auth/nextjs/template/`; review it too
 - [ ] `skills/add/database/typescript/nextjs-drizzle.md`
 - [ ] `skills/add/database/typescript/nextjs-kysely.md`
 - [ ] `skills/add/database/typescript/nextjs-mongoose.md`
@@ -346,7 +346,7 @@ Read each file in full, apply checklist above:
 - [ ] `skills/add/logging/nextjs.md`
 - [ ] `skills/add/pagination/nextjs.md`
 - [ ] `skills/add/mutation-testing/typescript.md`
-- [ ] `skills/migrate/database/nextjs.md`
+- [ ] `skills/migrate/database/nextjs.md` ← code is in `skills/migrate/database/nextjs/template/`; review it too
 - [ ] `skills/standards/code-standards/nextjs.md`
 - [ ] `skills/standards/validation-patterns/nextjs.md`
 
@@ -367,7 +367,7 @@ Read each file in full, apply checklist above:
 
 - [ ] `skills/scaffold/vite-react/source-files.md`
 - [ ] `skills/scaffold/vite-react/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/vite-react.md`, no `process.env`, no `export default` outside tooling configs. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/vite-react.md`
+- [ ] `skills/add/auth/vite-react.md` ← code is in `skills/add/auth/vite-react/template/`; review it too
 - [ ] `skills/add/feature/vite-react.md`
 - [ ] `skills/add/form/vite-react.md`
 - [ ] `skills/add/integration/vite-react.md`
@@ -403,7 +403,8 @@ Read each file in full, apply checklist above:
 - [ ] `skills/standards/validation-patterns/patterns.md`
 - [ ] `skills/standards/drift-check/implementation.md`
 - [ ] `skills/standards/full-stack-pairing/implementation.md`
-- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`. The hooks, `lefthook.yml`, `.gitleaks.toml`, `ci-gates.sh`, `verify-harness.sh`, `regen-harness.sh` and the CI files are real files under `skills/scaffold/shared/template/`, `template-ts/`, `template-py/`, `template-ci/`, `template-settings-ts/`, `template-settings-py/` and `template-late/` (the settings, `FUTURE.md`, `docs/CONSTITUTION.md` and `/skill-audit` files), plus `template-tail/` (the AGENTS.md tail, appended by Step G); the copy is one script, `harness-kit.md` Step 0, run with a different `PART`; the manifest is `skills/scaffold/shared/template.manifest`: audit those files, not the kit markdown, and flag any fenced copy of one that reappears in the markdown
+- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`. The hooks, `lefthook.yml`, `.gitleaks.toml`, `ci-gates.sh`, `verify-harness.sh`, `regen-harness.sh` and the CI files are real files under `skills/scaffold/shared/template/`, `template-ts/`, `template-py/`, `template-ci/`, `template-settings-ts/`, `template-settings-py/` and `template-late/` (the settings, `FUTURE.md`, `docs/CONSTITUTION.md` and `/skill-audit` files), plus `template-tail/` (the AGENTS.md tail, appended by Step G); the copy is one script, `skills/scaffold/shared/tc-copy.sh`, run per `TC_PART` (`base` | `settings` | `ci` | `late` | `stack` | `agents` | `tail`) as described in `harness-kit.md` Step 0; the manifest is `skills/scaffold/shared/template.manifest`: audit those files, not the kit markdown, and flag any fenced copy of one that reappears in the markdown
+- [ ] `skills/add/*/*/template*/` and `skills/migrate/database/<stack>/template/` ← new-file code for `add` and `migrate` lives in real template trees beside each leaf, each with a `template.manifest`: `add/auth/<stack>/`, `add/database/{python,typescript}/<variant>/`, `add/logging/<stack>/`, `add/pagination/<stack>/`, `add/error-handling/nextjs/`, `add/mutation-testing/typescript/`, `add/redaction/hook-{node,python}/`. `tc-copy.sh` copies them with `TC_PART=leaf TC_LEAF=<add|migrate>/<leaf-stem> [TC_TREE=...] bash tc-copy.sh <target>`. Audit those files as project code, not the leaf `.md`, and flag any fenced copy of a template file that reappears in the leaf `.md`. Re-list the trees with `find skills/add skills/migrate -type d -name 'template*'`
 - [ ] `skills/scaffold/shared/documentation-kit.md` ← per-folder README/`.order` generation SSOT
 - [ ] `skills/migrate/general/implementation.md` ← Phases 0–3 + router; `phase-4-upgrade.md` (full seed), `phase-5-health-check.md` (health check + re-sync)
 - [ ] `skills/migrate/nextjs-backend-extraction.md`
@@ -472,7 +473,7 @@ After reading all files, answer these questions from memory (no additional reads
 - [ ] **Local gitleaks is blocking**: the seeded `lefthook.yml` gitleaks command must NOT end in `|| true` (or otherwise swallow the exit code) — a non-blocking local secret scan lets a leaked credential reach the remote before CI runs. It must use `gitleaks git --pre-commit --staged` (not the deprecated `gitleaks protect`). The seeded CI must install the MIT gitleaks CLI with the version + SHA-256 in ONE `env` block and `sha256sum -c` (never `gitleaks/gitleaks-action`, which needs a paid `GITLEAKS_LICENSE` on org repos), scan `origin/<base>..HEAD` on PRs (no `--first-parent` — on GitHub's synthetic merge it scans nothing) and full history on push, and the seeded `.gitleaks.toml` must use `[[allowlists]]` (top-level `[allowlist]` deprecated since v8.25).
 - [ ] **verify-harness fails closed on a bad manifest**: the seeded `verify-harness.sh` exits non-zero when `.claude/harness.json` is missing, empty, unparseable, or has an empty file list — it must never report OK because there was nothing to check.
 - [ ] **Deps gate present and fail-closed**: `shared/template/.claude/ci-gates.sh` ships the `deps` gate and all three CI files (`shared/template-ci/github-ts/`, `github-py/`, `azure/`) run it; the gate has no label bypass, rejects pnpm-native suppressions (`auditConfig`, `ignoreGhsas`, `ignoreCves`, `audit.ignore` in block or flow style, quoted or not), audits every ecosystem present, and fails on a missing tool or unparseable output. Unaudited packages cannot be allowlisted. Lint-enforced presence: `check_security_seeds_present`; behaviour: `scripts/test-harness-kit.sh`.
-- [ ] **Authz seeds deny by default**: `add/auth/{fastapi,nestjs,nextjs}.md` ship role and ownership helpers (`require_roles`/`ensure_owner`, `RolesGuard`/`assertOwner`, `hasRole`/`isOwner`) that deny on a missing role list, a malformed role entry or a missing record, return the same 404 for another user's record as for a missing one, take roles from the database and never the token or client input, and ship with unit tests. Lint-enforced presence: `check_security_seeds_present`.
+- [ ] **Authz seeds deny by default**: the role and ownership helpers (`require_roles`/`ensure_owner`, `RolesGuard`/`assertOwner`, `hasRole`/`isOwner`) and their unit tests live in `skills/add/auth/<stack>/template*/` (e.g. `skills/add/auth/fastapi/template/src/api/dependencies/authz.py` and `.../test/test_api/test_authz.py`; `skills/add/auth/nextjs/template/src/lib/authz.ts` and `.../test/lib/authz.test.ts`; `skills/add/auth/nestjs/template/test/modules/auth/authz.spec.ts`). They deny on a missing role list, a malformed role entry or a missing record, return the same 404 for another user's record as for a missing one, take roles from the database and never the token or client input, and ship with unit tests. Lint-enforced presence: `check_security_seeds_present` greps for the definitions in `skills/add/auth/<stack>.md` or in the template trees under `skills/add/auth/<stack>/`; it does not check the 404 or database-role criteria or the unit tests.
 - [ ] **AGENTS.md hashed after its final write**: the scaffold/migrate step that records `harness.json` hashes runs AFTER the last edit to AGENTS.md (incl. any stack-specific append). Hashing earlier records a stale SHA and every fresh project reports drift on its first verify.
 
 ---
@@ -662,6 +663,10 @@ These carry intentional decisions — don't rewrite blindly. Read each, compare 
 Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
 
 ## Changelog
+### 2.12.0
+- Step 2 file lists follow the template-tree layout: `add` and `migrate` new-file code lives in real trees beside each leaf (`template*/` + `template.manifest`), copied by `skills/scaffold/shared/tc-copy.sh` (`TC_PART=leaf TC_LEAF=... bash tc-copy.sh <target>`). New cross-stack item audits those trees as project code and flags any fenced copy that reappears in a leaf `.md`; the per-stack `add/auth`, `add/database` and `migrate/database` entries point at their trees.
+- Harness-kit item names `tc-copy.sh` and its `TC_PART` values instead of "run with a different `PART`".
+- Authz seeds item names where the helpers and tests now live and states what `check_security_seeds_present` reads (the leaf `.md` or the template trees under it).
 ### 2.11.0
 - Step 3H hook checks corrected against verified Claude Code behavior: hooks use exec form = string `command` + `args` array with `${CLAUDE_PROJECT_DIR}`-anchored script paths (an array-valued `command` is silently skipped — the previous bullet recommended exactly that inert form); PostToolUse feedback must use `hookSpecificOutput.additionalContext` JSON or exit 2 + stderr (plain stdout on exit 0 never reaches Claude); Stop hook has an 8-continuation cap (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) but the `stop_hook_active` guard stays mandatory; `omitClaudeMd` is opt-in for custom subagents (CC v2.1.271), built-in for Explore/Plan; hook-event count is 33.
 - New 3H checks: SubagentStop guards (`stop_hook_active` + skip read-only agent types); skill-usage-log matcher `Skill` / `tool_input.skill`; `.env` guard case-insensitive + `NotebookEdit`; every hook sets `timeout`; local gitleaks not `|| true`; verify-harness fails on malformed/empty manifest; AGENTS.md hashed after its final write; no `PostToolUseFailure` hook seeded.
