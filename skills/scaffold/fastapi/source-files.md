@@ -113,17 +113,17 @@ Execute kit Step **0** now as `TC_STACK=fastapi TC_PART=base bash "<skill-dir>/s
 
 ### 6d. Seed additional project skills
 
-Ask whether any repeated workflow should become a project skill. Candidates:
+Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Candidates:
 - `api-migrate` — Alembic migration with safety gate (if SQLAlchemy/Alembic is wired up)
 - `api-endpoint` — scaffold a new router + schema + service method
 
-If yes, create them in `.claude/skills/` and add a row to the `AGENTS.md` Skills table.
+For each workflow the user named, create a skill in `.claude/skills/` and add a row to the `AGENTS.md` Skills table.
 
 ---
 
 ### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
-Skip if the user does not use Claude Code.
+Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code.
 
 Create `CLAUDE.md` at the project root with exactly one line:
 
@@ -137,7 +137,7 @@ Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 8. Task management (optional)
 
-Ask whether the user wants structured task management for complex features. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
+Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
 ```bash
 printf '\n' >> AGENTS.md
@@ -150,7 +150,7 @@ Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step 
 
 ### 9. Remove example code (optional)
 
-Once the project is verified, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
+Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the project is verified, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
 
 FastAPI-specific steps (the skill covers these):
 - Delete `src/api/routers/example.py`, `src/api/schemas/request/example.py`, `src/api/schemas/response/example.py`, `src/api/services/example.py`, `test/test_api/test_example.py`

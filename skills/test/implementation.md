@@ -6,6 +6,8 @@
 
 Write tests for newly added code using the stack's `templatecentral:add (test)` skill conventions. Run the full test suite. Report failures with context.
 
+**Called by `templatecentral:scaffold`:** only run the existing suite (step 4) and report (step 5). Write no new tests and do not load `templatecentral:add (test)`: every file is a copied template, and the template's own tests cover it. Report `Tests written: none (scaffold run)`.
+
 ## Stack Detection
 
 Use the build utility's Stack Detection table (`<skill-dir>/../build/implementation.md`).
@@ -55,4 +57,4 @@ Rules:
 
 ## Callers
 
-Dispatched by `templatecentral:add` (`feature`, `endpoint`, and their aliases).
+Dispatched by `templatecentral:add` (`feature`, `endpoint`, and their aliases) and by `templatecentral:scaffold` (post-scaffold check, suite only).

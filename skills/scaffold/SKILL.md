@@ -21,6 +21,8 @@ Full-stack → scaffold frontend and backend as two separate runs.
 - one-sentence description.
 - CI host — GitHub Actions or Azure DevOps.
 
+Then settle the user's choices the later steps act on: `cat "<skill-dir>/shared/user-choices.md"` (`<skill-dir>` as in Step 2) lists them with their defaults.
+
 **Step 2** — Load the guide. Replace `<skill-dir>` with this skill's own directory — Claude Code prints it as **"Base directory for this skill"** when the skill loads; substitute that absolute path (it is **not** a shell variable). Other Agent-Skills tools provide the skill's directory the same way.
 
 ```bash

@@ -40,7 +40,7 @@ Write `.claude/harness.json` with the copy script. It hashes every seeded file p
 TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> TC_RICH_README=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-`TC_ADO_WIKI` and `TC_RICH_README` are the Step E3 documentation choices (both default to `false`); they become the top-level `adoWiki` and `richReadme` fields that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
+`TC_ADO_WIKI` and `TC_RICH_README` are the Step E3 documentation choices (both default to `false`). In a scaffold, set them from the scaffold Step 1 answers on the Azure DevOps Code Wiki (`adoWiki`) and rich READMEs (`richReadme`), so Step E3 reads them and asks nothing. A migration has no scaffold Step 1: reuse the `adoWiki` and `richReadme` values of the project's previous manifest when it has them, and otherwise ask the user both questions, worded as in `documentation-kit.md` Steps 1a and 1b, before running the script. They become the top-level `adoWiki` and `richReadme` fields that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
 
 ---
 
@@ -118,11 +118,11 @@ If `CLAUDE.md` is created in this step, add its `seeded_files` entry before runn
 Then run these agent skills in order. They are **on by default** — skipping requires explicit user confirmation.
 
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
-2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — verify all scaffold tests pass
+2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — run the existing suite and confirm it passes. At scaffold time it writes no new tests and does not load `templatecentral:add (test)`: the template's tests already cover the copied code.
 3. the review utility (update operation) — load it with: `cat "<skill-dir>/../review/SKILL.md"` — freshen any deps that have newer compatible versions
-4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — run the first full code review over the whole project; it writes `.claude/review-baseline.md` only once the project has a commit
+4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — review only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the generated READMEs. The copied templates are not in scope; they are reviewed when the plugin is released. The project has no commit yet, so this review writes no `.claude/review-baseline.md`; the first review after the project's first commit writes it.
 
-**If the user asks to skip:** Warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
+**Skipping these steps:** use the scaffold Step 1 answer on post-scaffold checks. If the user asks to skip and has not already confirmed it, warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 
 **If any agent reports failures:** Stop there and do not run the next agent. Report the specific errors to the user and wait for them to be resolved before re-running that agent.
 
@@ -130,7 +130,7 @@ Then run these agent skills in order. They are **on by default** — skipping re
 
 ## Step H. Install Claude Code plugins
 
-**Claude Code users only.** `marketplace add` only registers a source; then install. **On by default** — skip only if the user opts out. Installs are user-scoped.
+**Claude Code users only.** `marketplace add` only registers a source; then install. **On by default** — use the scaffold Step 1 answer on Claude Code plugins, and skip only if the user opted out there or opts out now. Installs are user-scoped.
 
 ```bash
 claude plugin marketplace add JuliusBrussee/caveman

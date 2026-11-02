@@ -131,9 +131,9 @@ Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Step
 
 ### 6d. Seed additional project skills
 
-Ask the user: "Do you want to create project-scoped skills for any workflows you'll run regularly in this project?"
+Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it.
 
-If yes — or if the user ran any workflow more than once during the scaffold process — create skills in `.claude/skills/`. Common candidates for new projects:
+If they named workflows — or if the user ran any workflow more than once during the scaffold process — create skills in `.claude/skills/`. Common candidates for new projects:
 
 | Workflow | Suggested skill name | Body |
 |----------|---------------------|------|
@@ -145,7 +145,7 @@ Each skill gets a SKILL.md with `name:` and `description:` frontmatter and a sho
 
 ### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
-Skip if the user does not use Claude Code — `AGENTS.md` is enough.
+Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code — `AGENTS.md` is enough.
 
 Create `CLAUDE.md` at the project root with exactly one line:
 
@@ -157,7 +157,7 @@ Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 7b. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
+Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
 ```bash
 printf '\n' >> AGENTS.md
@@ -170,7 +170,7 @@ Execute kit Steps **E through H** using the **nextjs** row: harness.json (Step E
 
 ### 8. Remove example code (optional)
 
-Once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
+Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the project is verified and the user confirms it runs, use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.md"`.
 
 It deletes `src/features/example/` and the `ExampleList` import in `src/app/dashboard/(overview)/page.tsx`.
 
