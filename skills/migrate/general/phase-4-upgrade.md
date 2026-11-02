@@ -130,7 +130,7 @@ Before running against production: verify `DATABASE_URL` in `.env.local` points 
 
 **Step 4f: Create `.claude/harness.json`**
 
-Execute kit **Step E**: it hashes every seeded file and writes the manifest. Include only files actually created or merged.
+Execute kit **Step E** with the copy script at `<skill-dir>/../scaffold/shared/tc-copy.sh`: it hashes every seeded file present and writes the manifest, with `templatecentral_version` from the plugin's `plugin.json`. If the project already has a `.claude/harness.json`, the script refuses; move the old file to `.claude/harness.json.bak`, run it, then delete the backup once `verify-harness.sh` passes.
 
 **Step 4f-1b: Seed the base snapshot**
 

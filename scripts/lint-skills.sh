@@ -1630,20 +1630,12 @@ check_step0_before_install() {
 }
 
 check_harness_version_matches_plugin() {
-  # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
-  # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
-  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; revisit if versioning strategy changes.
-  header "harness.json templatecentral_version matches plugin.json"
-  local plugin_json=".claude-plugin/plugin.json"
-  if [[ ! -f "$plugin_json" ]]; then
-    pass "No plugin.json found — skipping harness version check"
-    return
-  fi
-  local plugin_version
-  plugin_version=$(grep '"version"' "$plugin_json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | head -1)
-  report "$(scan "" '"templatecentral_version"' "\"$plugin_version\"")" \
-    "templatecentral_version in harness.json template does not match plugin.json ($plugin_version) — update scaffold and migrate source-files.md" \
-    "templatecentral_version matches plugin.json ($plugin_version)"
+  # tc-copy.sh TC_PART=manifest reads templatecentral_version from plugin.json when it writes harness.json.
+  # A semver literal next to the key in skill text would be a second source that drifts on every bump.
+  header "harness.json templatecentral_version is read from plugin.json, never written as a literal"
+  report "$(scan "-E" '"templatecentral_version"[[:space:]]*:[[:space:]]*"[0-9]')" \
+    "a skill writes templatecentral_version as a literal — let tc-copy.sh TC_PART=manifest read it from plugin.json" \
+    "No templatecentral_version literal in skill text"
 }
 
 check_agents_marker_not_drifted_to_semver() {

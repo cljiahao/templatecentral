@@ -34,74 +34,13 @@ It must print nothing.
 
 **Prerequisites:** run only after the stack file's verify-skill step (6c for fastapi/nestjs/nextjs, 7c for vite-react) has created the verify skills (and `next-migrate` for nextjs).
 
-Compute SHA-256 hashes and write `.claude/harness.json`. Hash `CLAUDE.md` only if it exists.
+Write `.claude/harness.json` with the copy script. It hashes every seeded file present (`AGENTS.md`, `CLAUDE.md` if the stack's CLAUDE.md step created it, `settings.json`, the verify skills of the delta table, `/skill-audit`, every file under `.claude/hooks/` including `local/`, the git-hook layer, the CI file Step B3 seeded and the harness scripts), takes `templatecentral_version` from the plugin's `.claude-plugin/plugin.json`, and refuses when the file already exists or a verify skill is missing:
 
 ```bash
-# Portable SHA-256: macOS ships shasum, minimal Linux images ship sha256sum.
-sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else sha256sum "$1"; fi | cut -d' ' -f1; }
-sha256_agents=$(sha256 AGENTS.md)   # provisional — Step G appends the tail + formats, then re-hashes
-# Every enforcement hook script is a high-value tamper target — hash each for drift detection.
-# Add a seeded_files entry (origin_hash + path) for EACH line printed below, alongside the core files:
-find .claude/hooks -type f | sort | while IFS= read -r h; do printf '%s  %s\n' "$(sha256 "$h")" "$h"; done
-# CLAUDE.md is optional (the stack's CLAUDE.md step) — hash it only if it exists
-[ -f CLAUDE.md ] && sha256_claude=$(sha256 CLAUDE.md)
-sha256_settings=$(sha256 .claude/settings.json)
-# Hash the verify skill (substitute `<stack>-verify` with the verify-skill name from the delta table, e.g. `next-verify` for nextjs):
-sha256_verify=$(sha256 .claude/skills/<stack>-verify/SKILL.md)
-sha256_skillaudit=$(sha256 .claude/skills/skill-audit/SKILL.md)
-# nextjs only — hash the migrate skill too (file-existence guard makes this a no-op on other stacks):
-[ -f .claude/skills/next-migrate/SKILL.md ] && sha256_migrate=$(sha256 .claude/skills/next-migrate/SKILL.md)
-# Git-hook layer (Step B2) — drift-tracked too:
-sha256_lefthook=$(sha256 lefthook.yml)
-sha256_commitmsg=$(sha256 .lefthook/commit-msg.sh)
-sha256_gitleaks=$(sha256 .gitleaks.toml)
-sha256_comment_patterns=$(sha256 .claude/comment-hygiene-patterns.txt)
-# CI (Step B3) — the one file seeded for this host, plus the shared gate script:
-[ -f .github/workflows/ci.yml ] && sha256_ci=$(sha256 .github/workflows/ci.yml)
-[ -f azure-pipelines/templatecentral-gates.yml ] && sha256_ci=$(sha256 azure-pipelines/templatecentral-gates.yml)
-[ -f .claude/ci-gates.sh ] && sha256_cigates=$(sha256 .claude/ci-gates.sh)
-sha256_verifyh=$(sha256 .claude/verify-harness.sh)
-sha256_regenh=$(sha256 .claude/regen-harness.sh)
+TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> TC_RICH_README=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-**`.claude/harness.json`** (substitute stack name, verify-skill path, and computed hashes):
-```json
-{
-  "templatecentral_version": "7.2.0",
-  "stack": "<stack>",
-  "seeded_at": "<ISO-date>",
-  "seeded_files": {
-    "AGENTS.md": { "origin_hash": "<sha256_agents>", "path": "AGENTS.md" },
-    "CLAUDE.md": { "origin_hash": "<sha256_claude>", "path": "CLAUDE.md" },
-    ".claude/settings.json": { "origin_hash": "<sha256_settings>", "path": ".claude/settings.json" },
-    ".claude/skills/<stack>-verify/SKILL.md": { "origin_hash": "<sha256_verify>", "path": ".claude/skills/<stack>-verify/SKILL.md" },
-    ".claude/skills/skill-audit/SKILL.md": { "origin_hash": "<sha256_skillaudit>", "path": ".claude/skills/skill-audit/SKILL.md" },
-    ".claude/hooks/protect-files.sh": { "origin_hash": "<hash printed for .claude/hooks/protect-files.sh>", "path": ".claude/hooks/protect-files.sh" },
-    ".claude/hooks/block-no-verify.sh": { "origin_hash": "<hash printed for .claude/hooks/block-no-verify.sh>", "path": ".claude/hooks/block-no-verify.sh" },
-    ".claude/hooks/user-prompt-guard.<ext>": { "origin_hash": "<hash printed for .claude/hooks/user-prompt-guard.<ext>>", "path": ".claude/hooks/user-prompt-guard.<ext>" },
-    ".claude/hooks/post-edit-typecheck.sh": { "origin_hash": "<hash printed for .claude/hooks/post-edit-typecheck.sh>", "path": ".claude/hooks/post-edit-typecheck.sh" },
-    ".claude/hooks/stop-checks.sh": { "origin_hash": "<hash printed for .claude/hooks/stop-checks.sh>", "path": ".claude/hooks/stop-checks.sh" },
-    ".claude/hooks/subagent-stop.sh": { "origin_hash": "<hash printed for .claude/hooks/subagent-stop.sh>", "path": ".claude/hooks/subagent-stop.sh" },
-    ".claude/hooks/session-context.sh": { "origin_hash": "<hash printed for .claude/hooks/session-context.sh>", "path": ".claude/hooks/session-context.sh" },
-    ".claude/hooks/skill-usage-log.sh": { "origin_hash": "<hash printed for .claude/hooks/skill-usage-log.sh>", "path": ".claude/hooks/skill-usage-log.sh" },
-    ".claude/hooks/post-edit-comment-check.sh": { "origin_hash": "<hash printed for .claude/hooks/post-edit-comment-check.sh>", "path": ".claude/hooks/post-edit-comment-check.sh" },
-    "lefthook.yml": { "origin_hash": "<sha256_lefthook>", "path": "lefthook.yml" },
-    ".lefthook/commit-msg.sh": { "origin_hash": "<sha256_commitmsg>", "path": ".lefthook/commit-msg.sh" },
-    ".gitleaks.toml": { "origin_hash": "<sha256_gitleaks>", "path": ".gitleaks.toml" },
-    ".claude/comment-hygiene-patterns.txt": { "origin_hash": "<sha256_comment_patterns>", "path": ".claude/comment-hygiene-patterns.txt" },
-    ".github/workflows/ci.yml": { "origin_hash": "<sha256_ci>", "path": ".github/workflows/ci.yml" },
-    ".claude/ci-gates.sh": { "origin_hash": "<sha256_cigates>", "path": ".claude/ci-gates.sh" },
-    ".claude/verify-harness.sh": { "origin_hash": "<sha256_verifyh>", "path": ".claude/verify-harness.sh" },
-    ".claude/regen-harness.sh": { "origin_hash": "<sha256_regenh>", "path": ".claude/regen-harness.sh" }
-  }
-}
-```
-
-> `user-prompt-guard.<ext>` is `.cjs` for TS stacks (nestjs, nextjs, vite-react) and `.py` for FastAPI. The kit seeds **9** hook scripts — one `seeded_files` entry each, holding the hash the loop printed next to that file's path; `verify-harness.sh` exits 2 while any `<…>` placeholder remains.
-> The `AGENTS.md` (and `CLAUDE.md`) hashes written here are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`.
-> Omit the `CLAUDE.md` entry if the stack's CLAUDE.md step did not create it.
-> For **nextjs**, also add a `".claude/skills/next-migrate/SKILL.md"` entry.
-> On **Azure DevOps** (Step B3), key and path the CI entry as `azure-pipelines/templatecentral-gates.yml` instead of `.github/workflows/ci.yml` — or omit both CI entries and the `ci-gates.sh` entry when Step B3 seeded neither because the project's pipelines already cover them. Add one entry per `.claude/hooks/local/*` script the loop above prints.
+`TC_ADO_WIKI` and `TC_RICH_README` are the Step E3 documentation choices (both default to `false`); they become the top-level `adoWiki` and `richReadme` fields that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
 
 ---
 

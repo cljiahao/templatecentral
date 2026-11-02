@@ -27,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Smaller fixes: the nestjs `CLAUDE.md` step text, the `nestjs-kysely` B7 ordering note, migrate/database pointers to the copied `kysely.service.ts`, the Next.js cleanup note about an auth folder it does not have, the FastAPI `PROJECT_DESCRIPTION` note, the stale "tail is appended" line and `[[post-harness]]` seam text in each AGENTS.md, and the FastAPI pre-commit hooks now run in sequence.
 
 ### Changed
+- Kit Step E writes `.claude/harness.json` with `tc-copy.sh TC_PART=manifest` instead of about 22 hand-copied hashes. The script hashes every seeded file present, reads `templatecentral_version` from `plugin.json` (no hardcoded version to bump), and sets `adoWiki` / `richReadme` from `TC_ADO_WIKI` / `TC_RICH_README`. The lint now fails on a version literal instead of checking one.
+- `migrate` phase 4 copies the nextjs `AGENTS.md` from the scaffold template instead of embedding a drifted copy; its summary and the phase-5 report print the plugin release instead of "v6.0". The `add auth` (nextjs) file list names the template manifest instead of a hand-kept tree. (Fence snapshot updated.)
 - Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files (CONSTITUTION, `regen-harness.sh`, `.gitignore`, the nextjs AGENTS.md) follow suit; frozen code fences are unchanged.
 
 ---

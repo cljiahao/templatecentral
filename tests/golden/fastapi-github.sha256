@@ -4,7 +4,6 @@
 # Format: <sha256>  <path>
 ef60c7d0537d710454d979f526c101b1145d158f6a6946a4c0539ed2d8e88341  .claude/ci-gates.sh
 61e448dd1b798c211ec37f4efc9667275a0eaea0ba3be2217d4d187d15cbf078  .claude/comment-hygiene-patterns.txt
-ae3219cc9d44adafbe1f704b4bdcd6546a329f64ca22131fd3bec958676630c4  .claude/harness.json
 38dd2409c9505c668946cead287f2bd49111a8cc8bdd25e2b138d98344762da9  .claude/hooks/block-no-verify.sh
 7dd91cd041f864190e5493200e457b47cfb682f41231fffadaef226132c16b29  .claude/hooks/post-edit-comment-check.sh
 16acefc36f812e098ac9a3f17821ba0978a06491092653abeda1740bfa08aafc  .claude/hooks/post-edit-typecheck.sh

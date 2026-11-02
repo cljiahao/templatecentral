@@ -1248,6 +1248,31 @@ for sv in nextjs:ts fastapi:py; do
   out=$(run_part "$tgt" "$st" settings); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_settings[$st]: a second run refuses (settings.json exists)"
 done
+# part_manifest: Step E writes harness.json from the files present, with the plugin version and doc flags
+pv=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$REPO_ROOT/.claude-plugin/plugin.json" | head -n 1)
+for st in nextjs fastapi; do
+  tgt="$T/manifest-$st"; mkdir -p "$tgt"
+  for part in stack base agents settings late; do TC_STACK=$st TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+  TC_STACK=$st TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+  out=$(TC_STACK=$st TC_PART=manifest TC_RICH_README=true bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+  check 0 "$ec" "part_manifest[$st]: exits 0 ($out)"
+  got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); print(j["templatecentral_version"], j["stack"], j["adoWiki"], j["richReadme"], "AGENTS.md" in j["seeded_files"], ".claude/hooks/protect-files.sh" in j["seeded_files"], "CLAUDE.md" in j["seeded_files"])' "$tgt/.claude/harness.json" 2>&1)
+  check "$pv $st False True True True False" "$got" "part_manifest[$st]: version from plugin.json, flags, core and hook entries, no CLAUDE.md entry when absent"
+  vh=$(cd "$tgt" && bash .claude/verify-harness.sh 2>&1); ec=$?
+  check 0 "$ec" "part_manifest[$st]: verify-harness passes on the written manifest ($vh)"
+  out=$(TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"already exists"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_manifest[$st]: a second run refuses ($out)"
+done
+tgt="$T/manifest-noskill"; mkdir -p "$tgt"
+for part in base agents settings late; do TC_STACK=nextjs TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"verify-skill step"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_without_verify_skill ($out)"
+rm -rf "$tgt/.claude/harness.json"; mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
+out=$(TC_STACK=nextjs TC_PART=manifest TC_ADO_WIKI=yes bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"take true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
+out=$(TC_STACK=nextjs TC_PART=manifest TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_manifest_refuses_ci ($out)"
+
 # settings and late refuse without Step 0, and with a STACK that does not match it
 for part in settings late; do
   tgt="$T/part-nostep0-$part"; mkdir -p "$tgt"; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
