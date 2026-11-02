@@ -9,6 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- A fresh Azure DevOps scaffold now ships wired: `TC_CI=azure` also copies a starter `azure-pipelines.yml` (from `template-ci/azure-ts/` or `template-ci/azure-py/` by stack) that installs, includes `azure-pipelines/templatecentral-gates.yml`, then lints, typechecks, tests and gates changed-line coverage, mirroring the GitHub `quality` job. Before, the gates template was seeded with no pipeline calling it. `lint-skills.sh` checks that both starters include the template.
+- The vite-react template `package.json` drops `@radix-ui/react-slot`, which nothing imports (current shadcn uses the `radix-ui` package).
 - A real scaffold of all four stacks, run by an agent that followed the skills as written, passed every project gate (install, lint, typecheck, build, tests, `verify-harness.sh`) but failed `check-golden.sh --tree`. Three causes, all fixed:
   - Edits the kit told the agent to make by hand now ship in the templates: the build-artefact `Read` denies in both `settings.json` variants, `.claude/skill-usage.log` in each stack `.gitignore`, and `lefthook` in the FastAPI `requirements-dev.txt`.
   - `check-golden.sh --tree` now requires, but does not compare, the files the guides tell the agent to customise (branding, project settings, `docs/CONSTITUTION.md`), listed in `tests/golden/user-edited.txt`.

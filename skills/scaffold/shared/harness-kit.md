@@ -27,7 +27,7 @@ The loader cats this index plus exactly three part files — the stack's **one**
 | A | `.claude/settings.json` (copied here with `TC_PART=settings`) | enforcement (merge rules, deny lists, hook inventory) + variant notes |
 | B | `.claude/hooks/` scripts (copied in Step 0) | notes in the variant (`protect-files`, `block-no-verify`, `user-prompt-guard`, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`) + enforcement (`comment-hygiene-patterns.txt`, `session-context`, `skill-usage-log`, `chmod`) |
 | B2 | git-hook layer (files copied in Step 0) | notes in the variant (`lefthook.yml`) + enforcement (`.lefthook/commit-msg.sh`, `.gitleaks.toml`, install wiring) |
-| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` from Step 0, plus the CI file copied here: `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` on Azure DevOps) | enforcement (CI host pick and copy; the `deps` dependency-audit gate lives in `ci-gates.sh`) + fastapi variant (notes on the FastAPI `quality` job) |
+| B3 | CI quality gates incl. dependency audit (`.claude/ci-gates.sh` from Step 0, plus the CI file copied here: `.github/workflows/ci.yml` on GitHub, or `azure-pipelines/templatecentral-gates.yml` plus the `azure-pipelines.yml` starter that includes it on Azure DevOps) | enforcement (CI host pick and copy; the `deps` dependency-audit gate lives in `ci-gates.sh`) + fastapi variant (notes on the FastAPI `quality` job) |
 | B4 | harness integrity verifier (`verify-harness.sh`, `regen-harness.sh`, copied in Step 0) | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md` (copied with `TC_PART=late`, together with the `/skill-audit` skill of Step B5) | finalize |
@@ -52,7 +52,7 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 |---|---|---|
 | `base` | here, before Step A and the first `pnpm install` | `template` + `template-ts` (nestjs, nextjs, vite-react) or `template-py` (fastapi), per `<skill-dir>/shared/template.manifest` |
 | `settings` | Step A, after the stack's `AGENTS.md` step | `template-settings-ts` or `template-settings-py`: `.claude/settings.json` |
-| `ci` | Step B3, with `TC_CI=github` or `TC_CI=azure` | `template-ci/github-ts`, `github-py` or `azure`; `TC_CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise |
+| `ci` | Step B3, with `TC_CI=github` or `TC_CI=azure` | `template-ci/github-ts` or `github-py`, or `azure` plus `azure-ts` or `azure-py`; `TC_CI=none` instead removes the `.claude/ci-gates.sh` that `base` placed, only when it is byte for byte the template's, and refuses otherwise |
 | `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`; prettier would reformat the first two at an earlier format pass) |
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 | `leaf` | an `add` or `migrate` leaf that names its own template tree | `TC_LEAF=<add or migrate>/<leaf stem>` (for example `add/auth/nestjs`) copies every `template*` tree beside that leaf per its `template.manifest`, or only `TC_TREE=<tree>`; `TC_STACK` is not used. Same refusals and `STOP:` line as the other parts |

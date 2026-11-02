@@ -56,4 +56,4 @@ FastAPI: identical shape to the TS body; `UserPromptSubmit` runs `python3` on `u
 
 ## Step B3 — `.github/workflows/ci.yml` `quality` job (FastAPI)
 
-`.github/workflows/ci.yml` FastAPI (swap the `quality` job; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs and the Azure Pipelines template are identical). The CI copy in `harness-kit-enforcement.md` Step B3 places it from `<skill-dir>/shared/template-ci/github-py/.github/workflows/ci.yml`.
+`.github/workflows/ci.yml` FastAPI (swap the `quality` job; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs and the Azure Pipelines template are identical). The CI copy in `harness-kit-enforcement.md` Step B3 places it from `<skill-dir>/shared/template-ci/github-py/.github/workflows/ci.yml`. On Azure DevOps the same Python steps run in the starter `azure-pipelines.yml`, copied from `<skill-dir>/shared/template-ci/azure-py/azure-pipelines.yml`.

@@ -108,7 +108,7 @@ case "$PART" in
   ci)
     case "$CI" in
       github) SEL="template-ci/github-$V" ;;
-      azure) SEL="template-ci/azure" ;;
+      azure) SEL="template-ci/azure template-ci/azure-$V" ;;
       none) SEL= ;;
       *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
@@ -163,7 +163,7 @@ if [ "$PART" = manifest ]; then
     printf '%s\n' .claude/skills/skill-audit/SKILL.md
     (cd "$TGT" && find .claude/hooks -type f 2>/dev/null | LC_ALL=C sort)
     printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
-      .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml .claude/ci-gates.sh \
+      .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh \
       .claude/verify-harness.sh .claude/regen-harness.sh
   )
   body=""

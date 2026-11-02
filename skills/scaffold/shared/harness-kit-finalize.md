@@ -34,7 +34,7 @@ It must print nothing.
 
 **Prerequisites:** run only after the stack file's verify-skill step (6c for fastapi/nestjs/nextjs, 7c for vite-react) has created the verify skills (and `next-migrate` for nextjs).
 
-Write `.claude/harness.json` with the copy script. It hashes every seeded file present (`AGENTS.md`, `CLAUDE.md` if the stack's CLAUDE.md step created it, `settings.json`, the verify skills of the delta table, `/skill-audit`, every file under `.claude/hooks/` including `local/`, the git-hook layer, the CI file Step B3 seeded and the harness scripts), takes `templatecentral_version` from the plugin's `.claude-plugin/plugin.json`, and refuses when the file already exists or a verify skill is missing:
+Write `.claude/harness.json` with the copy script. It hashes every seeded file present (`AGENTS.md`, `CLAUDE.md` if the stack's CLAUDE.md step created it, `settings.json`, the verify skills of the delta table, `/skill-audit`, every file under `.claude/hooks/` including `local/`, the git-hook layer, the CI files Step B3 seeded and the harness scripts), takes `templatecentral_version` from the plugin's `.claude-plugin/plugin.json`, and refuses when the file already exists or a verify skill is missing:
 
 ```bash
 TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> TC_RICH_README=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
