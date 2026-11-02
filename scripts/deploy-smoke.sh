@@ -142,8 +142,15 @@ if [[ $DOCKER -eq 1 ]]; then
   esac
   BUILD_ARGS=()
   if [[ -n "${DEPLOY_SMOKE_CA_FILE:-}" ]]; then
-    sed -i.bak 's|^RUN apk|RUN --mount=type=secret,id=ca cat /run/secrets/ca >> /etc/ssl/certs/ca-certificates.crt\
-RUN apk|' "$P/Dockerfile" && rm -f "$P/Dockerfile.bak"
+    # Every `RUN apk` gets the CA first: appended to the bundle (needed before ca-certificates is installed) and
+    # copied where update-ca-certificates re-reads it (so the trigger from `apk add ca-certificates` keeps it).
+    # A later `&& apk upgrade` continuation line in the same RUN re-appends it as a fallback.
+    ca=/run/secrets/ca
+    setup="mkdir -p /usr/local/share/ca-certificates \&\& cp $ca /usr/local/share/ca-certificates/smoke-ca.crt \&\& cat $ca >> /etc/ssl/certs/ca-certificates.crt \&\& "
+    sed -i.bak -E \
+      -e "s#^RUN apk#RUN --mount=type=secret,id=ca ${setup}apk#" \
+      -e "/^RUN /!s#&& apk upgrade#\&\& cat $ca >> /etc/ssl/certs/ca-certificates.crt \&\& apk upgrade#" \
+      "$P/Dockerfile" && rm -f "$P/Dockerfile.bak"
     BUILD_ARGS=(--secret "id=ca,src=$DEPLOY_SMOKE_CA_FILE")
   fi
   if step "docker build" docker build ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} -t "$IMG" .; then
