@@ -92,7 +92,6 @@ c5ddbac61b411e35c1689a224969f082d8f9a049b93ea646c2ccd99a1e822655	skills/add/auth
 5e5b3db7831ef173630ba418dbd8fb66ac82fe9c8772ebea34069e95f286a0e2	skills/add/auth/nextjs.md	7. Create `src/app/(public)/login/page.tsx`	0	tsx
 8ed10c49010f74687d8f2444cbb4e4fe65b0d83d7f1efd89fc71a9661b9eb693	skills/add/auth/nextjs.md	8. Create `src/app/dashboard/layout.tsx` (skip if already exists)	0	tsx
 1e89a94938f6575e0b0edd66d6bfe576ef7462f29195b1afae51e19bfd9cfa8d	skills/add/auth/nextjs.md	9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)	0	tsx
-bc9e945552811c9c9689c8090900e60c0eb01413da938654368709d5d70da3a1	skills/add/auth/nextjs.md	Files this skill creates	0	-
 e5b8fa447509e371d0cba2716bb818d1c6b9c196c1fcd425c753ff5b9c2b8962	skills/add/auth/nextjs.md	Files this skill modifies	0	-
 f4c772a7a65b684631833e167c16c187ab23d263322406a24894fe98eeeff372	skills/add/auth/nextjs.md	Rate Limiting (Required for Production)	0	typescript
 d46ce4b276de67ae88ac1d5db5d8f72739913c80a4a6b2f9e8df602d850a58c0	skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	0	typescript

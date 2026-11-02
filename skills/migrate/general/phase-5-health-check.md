@@ -34,10 +34,10 @@ Compare `current_hash` to `origin_hash`. Classify each file:
 
 **Step 5c: Report**
 
-In the header, `v6.0.0` is the harness schema; print the plugin release instead, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
+In the header, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
 
 ```
-Harness health check — templateCentral v6.0.0 / <stack>
+Harness health check — templateCentral <version> / <stack>
 Seeded: <seeded_at>
 
   AGENTS.md              UNCHANGED

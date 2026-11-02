@@ -14,6 +14,8 @@
 #   SRC_DIR  default: skills
 #   OUT_DIR  default: dist/agents-skills   (gitignored build artifact)
 #
+# It also copies .claude/rules/, .claude-plugin/plugin.json and CHANGELOG.md into OUT_DIR's parent,
+# where the skills' <skill-dir>/../../ references resolve.
 # Then point your tool's skill path at OUT_DIR — see docs/CROSS-TOOL.md for per-tool config.
 set -euo pipefail
 
@@ -45,6 +47,24 @@ fi
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp -R "$SRC/." "$OUT/"
+
+# Skills read plugin-root files as <skill-dir>/../../<file>, which here is OUT's parent: ship the
+# stack rules, plugin.json and CHANGELOG.md there. Skipped when OUT's parent is the source root
+# (the repo's own copies), $HOME (~/.claude/rules is the user's) or holds a .claude/settings.json
+# (a real project), so a run never overwrites rules it does not own.
+ROOT=$(cd "$(dirname "$SRC")" && pwd -P)
+PARENT=$(cd "$(dirname "$OUT")" && pwd -P)
+HOME_REAL=$(cd "$HOME" 2>/dev/null && pwd -P) || HOME_REAL=
+if [[ "$PARENT" == "$ROOT" || "$PARENT" == "$HOME_REAL" || -e "$PARENT/.claude/settings.json" ]]; then
+  echo "note: plugin-root files not copied next to $OUT; <skill-dir>/../../ reads will not resolve there" >&2
+else
+  for f in .claude/rules .claude-plugin/plugin.json CHANGELOG.md; do
+    [[ -e "$ROOT/$f" ]] || continue
+    mkdir -p "$PARENT/$(dirname "$f")"
+    rm -rf "${PARENT:?}/$f"
+    cp -R "$ROOT/$f" "$PARENT/$f"
+  done
+fi
 
 # Un-namespace registered skill names: `name: templatecentral:<x>` -> `name: <x>`.
 # Agent-utility SKILL.md files (build/test/review/cleanup) carry a <!-- ref: --> header instead of

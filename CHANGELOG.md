@@ -8,7 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [7.2.1] — 2026-11-02
+
 ### Fixed
+- A fresh Azure DevOps scaffold now ships wired: `TC_CI=azure` also copies a starter `azure-pipelines.yml` (from `template-ci/azure-ts/` or `template-ci/azure-py/` by stack) that installs, includes `azure-pipelines/templatecentral-gates.yml`, then lints, typechecks, tests and gates changed-line coverage, mirroring the GitHub `quality` job. Before, the gates template was seeded with no pipeline calling it. `lint-skills.sh` checks that both starters include the template.
+- The vite-react template `package.json` drops `@radix-ui/react-slot`, which nothing imports (current shadcn uses the `radix-ui` package).
 - A real scaffold of all four stacks, run by an agent that followed the skills as written, passed every project gate (install, lint, typecheck, build, tests, `verify-harness.sh`) but failed `check-golden.sh --tree`. Three causes, all fixed:
   - Edits the kit told the agent to make by hand now ship in the templates: the build-artefact `Read` denies in both `settings.json` variants, `.claude/skill-usage.log` in each stack `.gitignore`, and `lefthook` in the FastAPI `requirements-dev.txt`.
   - `check-golden.sh --tree` now requires, but does not compare, the files the guides tell the agent to customise (branding, project settings, `docs/CONSTITUTION.md`), listed in `tests/golden/user-edited.txt`.
@@ -17,9 +23,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `add` database guides that replace `src/api/routers/auth.py` keep the cookie-mode `/auth/session` and `/auth/logout` routes; the pymongo and Beanie guides name where `security.py` comes from; sqlalchemy-iam reuses only sqlalchemy's auth section; `add/SKILL.md` defines `<target>`.
 - `migrate`: the migration branch is cut before any change, a stack with no database leaf stops cleanly, and the phase-4 step after 4f-3 is 4g.
 - Docs: SECURITY supported versions (7.x), README scripts tree and test counts, the scheduled-loop wording, the Python 3.14 example heading, and CONVENTIONS enforcement claims.
+- Kit Steps E–H (manifest, base snapshot, docs, symlink, AGENTS.md tail, plugins) are their own required step in every stack guide; before, they sat inside the optional task-management step.
+- Seeded `docs/CONSTITUTION.md`: every placeholder is a one-line `[Fill in: …]` that kit Step D's check finds; the authentication, audit-log, 401-test and PR-template rules no longer demand what a fresh scaffold lacks.
+- Kit Step E keys each hook hash by the hook's file name, not by position.
+- FastAPI verification gate: formats first, starts uvicorn without reload, polls `/health`, then stops the server.
+- The git-hook `readme-coupling` warning and the documentation kit's working set both skip `.lefthook/`.
+- `.claude/rules/vite-react.md` names `ApiClient` as what `add auth` adds and the auth feature as a dev stub; rules name `templatecentral:add (…)` instead of skill names that do not exist.
+- `scripts/build-agents-dist.sh` copies `.claude/rules/`, `plugin.json` and `CHANGELOG.md` next to the output, so `<skill-dir>/../../` reads resolve in other tools.
+- Smaller fixes: the nestjs `CLAUDE.md` step text, the `nestjs-kysely` B7 ordering note, migrate/database pointers to the copied `kysely.service.ts`, the Next.js cleanup note about an auth folder it does not have, the FastAPI `PROJECT_DESCRIPTION` note, the stale "tail is appended" line and `[[post-harness]]` seam text in each AGENTS.md, and the FastAPI pre-commit hooks now run in sequence.
 
 ### Changed
-- Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files and code fences are unchanged.
+- Kit Step E writes `.claude/harness.json` with `tc-copy.sh TC_PART=manifest` instead of about 22 hand-copied hashes. The script hashes every seeded file present, reads `templatecentral_version` from `plugin.json` (no hardcoded version to bump), and sets `adoWiki` / `richReadme` from `TC_ADO_WIKI` / `TC_RICH_README`. The lint now fails on a version literal instead of checking one.
+- `migrate` phase 4 copies the nextjs `AGENTS.md` from the scaffold template instead of embedding a drifted copy; its summary and the phase-5 report print the plugin release instead of "v6.0". The `add auth` (nextjs) file list names the template manifest instead of a hand-kept tree. (Fence snapshot updated.)
+- Agent-facing prose drops all-caps emphasis (NEVER, MUST, CRITICAL, "Do NOT"). Current Claude models follow plain instructions and over-apply shouted ones, so each rule is a plain sentence with its reason; security rules stay firm. Seeded template files (CONSTITUTION, `regen-harness.sh`, `.gitignore`, the nextjs AGENTS.md) follow suit; frozen code fences are unchanged.
+- `templatecentral:scaffold` Step 1 asks every user choice up front, each with a default: extra project skills, `CLAUDE.md`, task management, removing example code, the Azure DevOps Code Wiki (`adoWiki`), rich READMEs (`richReadme`), the post-scaffold checks and the Claude Code plugins. The stack guides and kit Steps E, G and H use those answers and ask only when Step 1 left one open; kit Step E passes the documentation answers as `TC_ADO_WIKI` / `TC_RICH_README`. The documentation kit keeps its own ask for `migrate` and `add (documentation)`.
+- The post-scaffold utilities have a defined scope: the test utility only runs the existing suite (no new tests, no `add (test)`), the review covers only the files edited by hand during the scaffold, and `.claude/review-baseline.md` is written by the first review after the project's first commit. The update utility notes that the scaffold does not install `pip-audit`, so its FastAPI audit step is skipped and CI's `deps` gate does the audit.
 
 ---
 

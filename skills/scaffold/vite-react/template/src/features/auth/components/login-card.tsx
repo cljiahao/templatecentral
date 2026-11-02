@@ -23,7 +23,7 @@ export function LoginCard() {
       className="w-full max-w-md shadow-lg"
     >
       <div className="flex flex-col gap-4">
-        {/* TODO: add your SSO / OAuth sign-in button here. */}
+        {/* The SSO / OAuth sign-in button goes here (templatecentral:add auth). */}
         {ENV.IS_DEV && (
           <Button type="button" variant="outline" onClick={handleDevLogin}>
             Sign in as dev user

@@ -513,7 +513,8 @@ check_scaffold_seeds_complete_harness() {
   done
   [[ -f "$kit_dir/template-ts/.claude/hooks/user-prompt-guard.cjs" ]] || missing+="$kit_dir/template-ts/.claude/hooks/user-prompt-guard.cjs — template file not found"$'\n'
   [[ -f "$kit_dir/template-py/.claude/hooks/user-prompt-guard.py" ]] || missing+="$kit_dir/template-py/.claude/hooks/user-prompt-guard.py — template file not found"$'\n'
-  for p in github-ts/.github/workflows/ci.yml github-py/.github/workflows/ci.yml azure/azure-pipelines/templatecentral-gates.yml; do
+  for p in github-ts/.github/workflows/ci.yml github-py/.github/workflows/ci.yml azure/azure-pipelines/templatecentral-gates.yml \
+    azure-ts/azure-pipelines.yml azure-py/azure-pipelines.yml; do
     [[ -f "$kit_dir/template-ci/$p" ]] || missing+="$kit_dir/template-ci/$p — template file not found"$'\n'
   done
   for p in template-settings-ts/.claude/settings.json template-settings-py/.claude/settings.json \
@@ -950,7 +951,7 @@ for dp, _, fs in os.walk(root):
 # mistaken for "no broken references".
 need = {
     "scaffold/shared/harness-kit.md": ["PART=base", "PART=tail", "<skill-dir>/shared/tc-copy.sh", "<skill-dir>/shared"],
-    "scaffold/shared/tc-copy.sh": ['cp -- "$SK/$t/$p" "$TGT/$dest"', 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure"', "settings | late | tail)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"'],
+    "scaffold/shared/tc-copy.sh": ['cp -- "$SK/$t/$p" "$TGT/$dest"', 'SEL="template template-$V"', 'SEL="template"', 'SEL="template-agents"', 'SEL="template-late"', 'SEL="template-settings-$V"', 'SEL="template-ci/github-$V"', 'SEL="template-ci/azure template-ci/azure-$V"', "settings | late | tail)", "stack | agents)", "none) SEL= ;;", 'rm -f -- "$TGT/$gate"'],
     "scaffold/shared/harness-kit-enforcement.md": ["PART=ci", "CI=none", "PART=settings", "PART=late"],
     "scaffold/nextjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nextjs", "<skill-dir>/nextjs/template.manifest", "<skill-dir>/nextjs/template-agents/"],
     "scaffold/nestjs/source-files.md": ["PART=stack", "PART=base", "PART=agents", "STACK=nestjs", "<skill-dir>/nestjs/template.manifest", "<skill-dir>/nestjs/template-agents/"],
@@ -1348,6 +1349,14 @@ check_security_seeds_present() {
   else
     missing+=$'\n'"$f: file not found"
   fi
+  # The starter pipelines must include the gates template, so a fresh Azure scaffold never ships it unwired.
+  for f in "$shared/template-ci/azure-ts/azure-pipelines.yml" "$shared/template-ci/azure-py/azure-pipelines.yml"; do
+    if [[ -f "$f" ]]; then
+      grep -qE '^[[:space:]]+- template: azure-pipelines/templatecentral-gates\.yml$' "$f" || missing+=$'\n'"$f: Azure starter pipeline step '- template: azure-pipelines/templatecentral-gates.yml' missing"
+    else
+      missing+=$'\n'"$f: file not found"
+    fi
+  done
   for spec in \
     "fastapi|^def require_roles\(" "fastapi|^def get_current_roles\(" "fastapi|^def ensure_owner\(" \
     "nestjs|^export class RolesGuard " "nestjs|^export function assertOwner\(" \
@@ -1630,20 +1639,12 @@ check_step0_before_install() {
 }
 
 check_harness_version_matches_plugin() {
-  # Scaffold source-files.md embed "templatecentral_version" in the harness.json template they write.
-  # If this version drifts from plugin.json on a version bump, scaffolded projects report the wrong generator version.
-  # ECOSYSTEM-ERA: tied to the current plugin semver scheme; revisit if versioning strategy changes.
-  header "harness.json templatecentral_version matches plugin.json"
-  local plugin_json=".claude-plugin/plugin.json"
-  if [[ ! -f "$plugin_json" ]]; then
-    pass "No plugin.json found — skipping harness version check"
-    return
-  fi
-  local plugin_version
-  plugin_version=$(grep '"version"' "$plugin_json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | head -1)
-  report "$(scan "" '"templatecentral_version"' "\"$plugin_version\"")" \
-    "templatecentral_version in harness.json template does not match plugin.json ($plugin_version) — update scaffold and migrate source-files.md" \
-    "templatecentral_version matches plugin.json ($plugin_version)"
+  # tc-copy.sh TC_PART=manifest reads templatecentral_version from plugin.json when it writes harness.json.
+  # A semver literal next to the key in skill text would be a second source that drifts on every bump.
+  header "harness.json templatecentral_version is read from plugin.json, never written as a literal"
+  report "$(scan "-E" '"templatecentral_version"[[:space:]]*:[[:space:]]*"[0-9]')" \
+    "a skill writes templatecentral_version as a literal — let tc-copy.sh TC_PART=manifest read it from plugin.json" \
+    "No templatecentral_version literal in skill text"
 }
 
 check_agents_marker_not_drifted_to_semver() {

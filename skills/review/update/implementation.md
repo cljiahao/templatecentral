@@ -48,6 +48,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 6. Dispatch the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`
 7. If build fails → rollback
 8. Run `pip-audit --requirement requirements.txt` if `pip-audit` is available
+   - The scaffold does not install `pip-audit` (it is not in `requirements-dev.txt`; the CI `deps` gate runs its own pinned copy through `pipx`), so on a fresh scaffold this step is usually skipped. Do not install it.
    - If `pip-audit` is not installed: add note "pip-audit not installed — security advisory check skipped" to report
    - Report any vulnerabilities under "Security advisories" in the results summary
    - Also list every entry in `.claude/dep-audit-allow.txt` and propose removing it once a fixed release exists or its documented reason no longer holds

@@ -8,7 +8,7 @@ Phase 5 (health check + safe re-sync) is `phase-5-health-check.md`.
 
 ---
 
-## Phase 4 — v4.0–v6.0 Upgrade (agent, autonomous after Phase 0 gate)
+## Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)
 
 Run only when the user chose A in Phase 0. Never for unmarked projects.
 
@@ -23,71 +23,13 @@ Save the original first:
 cp AGENTS.md AGENTS.md.bak
 ```
 
-If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. For `nextjs`, replace `AGENTS.md` with exactly:
+If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. For `nextjs`, replace `AGENTS.md` with the scaffold's template, then set the title:
 
-~~~markdown
-<!-- templateCentral: nextjs@6.0.0 -->
-# AGENTS.md — [Project Name]
-
-> STOP — Next.js breaking changes: `cookies()`, `headers()`, `params`, `searchParams` are
-> ALL async. `middleware.ts` is replaced by `proxy.ts`. Verify before writing route handlers.
-
-## Stack
-Next.js · App Router · TypeScript strict · shadcn/ui · TanStack Query
-React Hook Form · Zod · Vitest · pnpm · Node
-Stack versions: tracked in the templateCentral plugin's `.claude/rules/nextjs.md`
-
-## Commands
 ```bash
-pnpm dev          # dev server — http://localhost:3000
-pnpm build        # production build
-pnpm test         # run test suite
-pnpm check        # format + lint + typecheck
+cp "<skill-dir>/../scaffold/nextjs/template-agents/AGENTS.md" AGENTS.md
 ```
 
-## File Layout
-src/app/                — app router (pages, layouts, route handlers)
-src/app/api/            — API route handlers
-src/features/<name>/    — feature modules: api/, components/, hooks/, types.ts
-src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
-src/components/widgets/ — reusable composed components (project-owned)
-proxy.ts + src/lib/auth.ts — auth layer
-src/integrations/database/ — database layer (after `templatecentral:add (database)`)
-src/lib/constants/env.ts — environment constants
-
-## Skills
-
-### Project skills — check here first
-Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
-
-| Skill | What it does |
-|-------|-------------|
-| `/next-verify` | typecheck + lint + test in one pass |
-| `/next-migrate` | Drizzle push/migrate with safety gate |
-
-### templateCentral plugin skills — framework-level operations
-| Skill | When to use |
-|-------|-------------|
-| `templatecentral:add (auth)` | JWT/OAuth/session auth |
-| `templatecentral:add (database)` | connect Drizzle/Kysely/Mongoose |
-| `templatecentral:add (feature)` | full feature: page + API route + hooks; also the route for a reusable UI component |
-| `templatecentral:add (endpoint)` | API route with auth guard |
-| `templatecentral:migrate` | DB migrations or framework upgrades |
-| `templatecentral:standards` | drift check, validation patterns |
-
-## Rules (always)
-- TypeScript strict — no `any`, no `@ts-ignore`
-- All user input validated with Zod at every boundary
-- DB writes via repository layer only
-- `z.input<typeof Schema>` for form types; `z.infer` for post-parse output
-- No secrets in `NEXT_PUBLIC_*` variables
-- Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
-
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
-
-## Project-Specific Notes
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
-~~~
+With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one line). Then move any project-specific notes from `AGENTS.md.bak` under `## Project-Specific Notes`.
 
 For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G appends the `## AI Harness` tail; append nothing by hand.
 
@@ -120,7 +62,7 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step B3** — CI quality gates (by hand, per the scaffold-only note above): `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). The kit's Step B3 rules for existing Azure pipelines apply (skip, or add only the `deps` step).
 - **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`); seed it, because Phase 5d and pre-push call it.
 - **Step B5** — the `/skill-audit` project skill, from `template-late/`.
-- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name).
+- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name and fill or delete each `[Fill in: …]` line per kit Step D).
 
 The scripts do not depend on the plugin, so the harness keeps enforcing if the plugin is removed.
 
@@ -188,7 +130,7 @@ Before running against production: verify `DATABASE_URL` in `.env.local` points 
 
 **Step 4f: Create `.claude/harness.json`**
 
-Execute kit **Step E**: it hashes every seeded file and writes the manifest. Include only files actually created or merged.
+Execute kit **Step E** with the copy script at `<skill-dir>/../scaffold/shared/tc-copy.sh`: it hashes every seeded file present and writes the manifest, with `templatecentral_version` from the plugin's `plugin.json`. If the project already has a `.claude/harness.json`, the script refuses; move the old file to `.claude/harness.json.bak`, run it, then delete the backup once `verify-harness.sh` passes.
 
 **Step 4f-1b: Seed the base snapshot**
 
@@ -214,10 +156,10 @@ Execute kit **Step G** up to its post-scaffold utilities list: append the AGENTS
 
 **Step 4g: Print summary**
 
-In the first line, `v6.0` is the harness schema; print the plugin release instead, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
+In the first line, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
 
 ```
-✓ Upgraded to templateCentral v6.0.
+✓ Upgraded to templateCentral <version>.
 
 Changes made:
   AGENTS.md                      — Marker @6.0.0 + shared tail (nextjs: compressed template)

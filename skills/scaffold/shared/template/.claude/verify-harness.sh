@@ -4,11 +4,14 @@
 # on drift (1) or on an unreadable/unfilled manifest (2). Wired into CI and lefthook pre-push.
 # Bless intentional changes with regen-harness.sh.
 set -euo pipefail
+# Paths below are project-relative: run from the project root, whatever directory the caller is in.
+here=$(cd "$(dirname "$0")" && pwd)
+[ "$(basename "$here")" = .claude ] && cd "$here/.."
 manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|azure-pipelines/templatecentral-gates\.yml$)'
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {

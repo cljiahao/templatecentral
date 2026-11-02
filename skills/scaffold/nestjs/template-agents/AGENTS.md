@@ -46,7 +46,5 @@ Add new project skills here whenever you repeat a workflow more than once.
 - No secrets in code — use env vars; document in `.env.example`
 - Comments explain *why*, not *what* — no commented-out code, no change-narration (`// was X, now Y`); own-line over trailing. See `templatecentral:standards (code-standards)`
 
-(AGENTS.md tail — AI Harness / Skills Security / Git Workflow / Skill capture — is appended by harness-kit-finalize.md Step G; not embedded here to avoid duplication.)
-
 ## Project-Specific Notes
-<!-- [[post-harness]] — reserved for trace capture and meta-harness integration (v5.0+) -->
+<!-- [[post-harness]] — reserved for meta-harness integration (see FUTURE.md) -->

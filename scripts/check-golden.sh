@@ -7,7 +7,7 @@
 #   a path held in a template tree comes from the templates, every other path from the
 #   fences, and a path produced by both fails as DUPLICATE (the fence still holds a file the template trees hold).
 #   --from-templates builds each combo from the template trees alone (shared/template,
-#   shared/template-<ts|py>, shared/template-settings-<ts|py>, shared/template-late, shared/template-ci/<github-<ts|py>|azure>, <stack>/template, <stack>/template-agents),
+#   shared/template-<ts|py>, shared/template-settings-<ts|py>, shared/template-late, shared/template-ci/<github-<ts|py>|azure plus azure-<ts|py>>, <stack>/template, <stack>/template-agents),
 #   substitutes the placeholder values in tests/golden/placeholders.env, and compares only
 #   the golden paths those trees hold: a path no template tree holds is not compared in this mode (the default
 #   mode fails it as MISSING when neither the fences nor the templates produce it).
@@ -95,7 +95,10 @@ template_dirs() {
   [[ "$ci" == github ]] && ci_dir="github-$ts"
   printf '%s\n' "$SCAFFOLD_DIR/shared/template" "$SCAFFOLD_DIR/shared/template-$ts" \
     "$SCAFFOLD_DIR/shared/template-settings-$ts" "$SCAFFOLD_DIR/shared/template-late" \
-    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir" "$SCAFFOLD_DIR/$stack/template" "$SCAFFOLD_DIR/$stack/template-agents"
+    "$SCAFFOLD_DIR/shared/template-ci/$ci_dir"
+  # Azure copies the shared gates template plus the stack's pipeline
+  [[ "$ci" == azure ]] && printf '%s\n' "$SCAFFOLD_DIR/shared/template-ci/azure-$ts"
+  printf '%s\n' "$SCAFFOLD_DIR/$stack/template" "$SCAFFOLD_DIR/$stack/template-agents"
 }
 
 # overlay_templates <stack> <ci> <tree> — copy the combo's template trees into <tree>; prints
@@ -113,7 +116,7 @@ overlay_templates() {
 }
 
 # expected_template_count <stack> <ci> — files the manifests list for one combo: the shared manifest
-# rows for its trees (template, template-<ts|py>, template-ci/<host>) plus every row of
+# rows for its trees (template, template-<ts|py>, template-ci/<host>, and template-ci/azure-<ts|py> on Azure) plus every row of
 # <stack>/template.manifest when that exists.
 expected_template_count() {
   local stack="$1" ci="$2" ts=py ci_dir=azure n=0 m
@@ -121,8 +124,10 @@ expected_template_count() {
   [[ "$ci" == github ]] && ci_dir="github-$ts"
   m="$SCAFFOLD_DIR/shared/template.manifest"
   if [[ -f "$m" ]]; then
-    n=$(awk -v a="template/" -v b="template-$ts/" -v c="template-ci/$ci_dir/" -v d="template-settings-$ts/" -v e="template-late/" \
-      '!/^#/ && NF && (index($1, a) == 1 || index($1, b) == 1 || index($1, c) == 1 || index($1, d) == 1 || index($1, e) == 1) { n++ } END { print n + 0 }' "$m")
+    local f=NONE/
+    [[ "$ci" == azure ]] && f="template-ci/azure-$ts/"
+    n=$(awk -v a="template/" -v b="template-$ts/" -v c="template-ci/$ci_dir/" -v d="template-settings-$ts/" -v e="template-late/" -v f="$f" \
+      '!/^#/ && NF && (index($1, a) == 1 || index($1, b) == 1 || index($1, c) == 1 || index($1, d) == 1 || index($1, e) == 1 || index($1, f) == 1) { n++ } END { print n + 0 }' "$m")
   fi
   m="$SCAFFOLD_DIR/$stack/template.manifest"
   if [[ -f "$m" ]]; then n=$((n + $(awk '!/^#/ && NF && index($1, "template-tail/") != 1 { n++ } END { print n + 0 }' "$m"))); fi
@@ -226,6 +231,8 @@ EDITED = user_edited()
 SKIP = re.compile(r"(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|node_modules/|src/components/ui/|\.claude/\.harness-base/)|^\.claude/harness\.json$")
 PLACEHOLDER = re.compile(r"PROJECT_NAME_PLACEHOLDER|\[Project Name\]|__TC_[A-Z0-9_]+__")
 APPENDED = {"AGENTS.md"}
+# Created only when the user wants it (the stack's CLAUDE.md step): absent passes, present is compared.
+OPTIONAL = {"CLAUDE.md"}
 SUBSET_JSON = {"package.json"}
 
 
@@ -340,7 +347,9 @@ for rel, sha in sorted(golden.items()):
     if os.path.islink(other):
         report_symlink(rel); continue
     if not os.path.isfile(other):
-        print(f"MISSING {combo} {rel}"); bad = 1; continue
+        if rel not in OPTIONAL:
+            print(f"MISSING {combo} {rel}"); bad = 1
+        continue
     if not os.path.isfile(full) or rel in EDITED:
         continue
     a, b = open(full, "rb").read(), open(other, "rb").read()

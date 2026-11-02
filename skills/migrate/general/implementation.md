@@ -42,7 +42,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 - **`.claude/harness.json` exists** → print:
   ```
-  ✓ This project is at templateCentral v6.0.0 or later. No migration needed.
+  ✓ This project is on the current harness schema (@6.0.0). No migration needed.
   ```
   Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
 
@@ -72,7 +72,7 @@ from the harness kit. Skip Phases 1–3 and present:
 Its .claude/settings.json hooks use an array-form "command", which Claude Code
 silently ignores — the harness guards have never actually run.
 
-v6.0 re-seeds the enforcement layer from the harness kit:
+The upgrade re-seeds the enforcement layer from the harness kit:
 - settings.json hooks rewritten to exec form ("command" + "args", ${CLAUDE_PROJECT_DIR} paths)
 - .claude/hooks/* reset to canonical (post-tool-failure.sh removed — Claude already sees tool errors)
 
@@ -89,7 +89,7 @@ User B → print "No changes made — hooks remain inert until re-synced." Exit.
 
 v5.0 converts seeded project skills to directory form:
 - .claude/skills/<name>/SKILL.md  — flat <name>.md files are silently ignored by Claude Code
-v6.0 re-seeds settings.json hooks in exec form — earlier array-form hooks never ran
+It also re-seeds settings.json hooks in exec form — earlier array-form hooks never ran
 
 Upgrade? (A) Yes  (B) Skip
 ```

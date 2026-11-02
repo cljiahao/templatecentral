@@ -35,7 +35,8 @@ mkdir -p "$KIT"
 TPL="$REPO_ROOT/skills/scaffold/shared"
 LEFTHOOKS=("$TPL/template-ts/lefthook.yml" "$TPL/template-py/lefthook.yml")
 CI_FILES=("$TPL/template-ci/github-ts/.github/workflows/ci.yml" "$TPL/template-ci/github-py/.github/workflows/ci.yml"
-  "$TPL/template-ci/azure/azure-pipelines/templatecentral-gates.yml")
+  "$TPL/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "$TPL/template-ci/azure-ts/azure-pipelines.yml"
+  "$TPL/template-ci/azure-py/azure-pipelines.yml")
 for v in ts py; do
   for f in protect-files block-no-verify post-edit-typecheck post-edit-comment-check stop-checks subagent-stop; do
     cp "$TPL/template-$v/.claude/hooks/$f.sh" "$KIT/$f.$v.sh" 2>/dev/null

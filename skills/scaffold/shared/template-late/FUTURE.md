@@ -6,7 +6,7 @@ Design seams built into this project for AI collaboration patterns that are not 
 
 CI that validates this project's own harness: a job that scaffolds the project and asserts the output passes tests and lint. Most near-term post-harness direction.
 
-**Seam:** `<!-- [[post-harness:meta]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
+**Seam:** `<!-- [[post-harness]] -->` in `AGENTS.md` — reserved for meta-harness CI configuration.
 
 ## Trace-Driven Evolution
 

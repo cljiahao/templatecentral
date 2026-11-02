@@ -42,16 +42,18 @@ Both must print nothing.
 
 ### 2. Update project name and branding
 
-- `index.html`: update `<title>` to the project name
-- `src/components/layout/navbar.tsx`: replace `templateCentral` with the project name
-- `src/components/layout/site-footer.tsx`: replace `'Built with templateCentral'` default with project-appropriate text
-- `src/pages/home.tsx`: replace `"Vite + React Template"` heading with the project name
+- `index.html`: update `<title>` to the project title
+- `src/components/layout/navbar.tsx`: replace `templateCentral` with the project title
+- `src/components/layout/site-footer.tsx`: replace the `'Built with templateCentral'` default with the project description
+- `src/pages/home.tsx`: replace the `"Vite + React Template"` heading with the project title
 
 ### 3. Copy `.env.example` to `.env`
 
 ```bash
 cp .env.example .env
 ```
+
+If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
 ### 4. Initialize git and install dependencies
 
@@ -117,17 +119,17 @@ Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Step
 
 ### 7d. Seed additional project skills
 
-Ask: "Do you have any repeated workflows that should be captured as project skills?" Common candidates:
+Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Common candidates:
 - `vite-feature` — scaffold a new feature module (components + query hook + page)
 - `vite-component` — scaffold a reusable widget component with props + story
 
-If yes — create them in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
+For each workflow the user named, create a skill in `.claude/skills/` and add a row to the Skills table in `AGENTS.md`.
 
 ---
 
 ### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
 
-Skip if the user does not use Claude Code.
+Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code.
 
 Create `CLAUDE.md` at the project root with exactly one line:
 
@@ -137,24 +139,24 @@ Create `CLAUDE.md` at the project root with exactly one line:
 
 This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate commands or conventions here — everything lives in `AGENTS.md`.
 
-Step E hashes it into `seeded_files` (it runs next).
+Step E, in the finish step below, hashes it into `seeded_files`.
 
 ### 9. Optional: Task management
 
-Ask whether the user wants structured task management for complex features. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
+Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
 ```bash
 printf '\n' >> AGENTS.md
 cat "<skill-dir>/vite-react/template-tail/task-management.md" >> AGENTS.md
 ```
 
-If no, skip.
+#### Finish the harness (required, whatever the answer above)
 
-Then execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E — includes the `vite-verify` skill hash), the base snapshot (Step E2), per-folder documentation (Step E3), `.agents` symlink (Step F), AGENTS.md tail append (Step G — always appends the shared tail fragment with the vite-react `PostToolUse` line), and plugin install (Step H).
+Execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E, with the `vite-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
 
 ### 10. Optional: Remove example code
 
-Once the project is verified and the user confirms it runs, optionally remove example code:
+Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the project is verified and the user confirms it runs, remove the example code:
 
 - Delete `src/features/example/` directory
 - Remove the `ExampleList` import and usage from `src/pages/dashboard.tsx`
@@ -171,7 +173,7 @@ Or use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.
 - Update the `index.html` title; it is the browser tab name
 - Routes are defined in `src/router.tsx`, not by filesystem convention
 - Read env only through `import.meta.env.VITE_*` in `src/lib/constants/env.ts`; `process.env` is undefined in the browser
-- Verify `pnpm build`, `pnpm typecheck`, and `pnpm test` all pass before generating `AGENTS.md`
+- Pass the Step 6 gate (`pnpm format`, `pnpm build`, `pnpm check`, `pnpm test`) before generating `AGENTS.md`
 - Remove example code only after the user confirms the project runs
 - Leave `node_modules/` and `dist/` out of the scaffold; they are installed or built
 - The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off

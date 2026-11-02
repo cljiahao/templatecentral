@@ -27,7 +27,7 @@ the marker.
 | `fastapi` | `src/api/routers/example.py` file exists |
 | `nestjs` | `src/modules/example/` directory exists |
 
-If the check fails → ⛔ STOP. Tell the user: "No example code found —
+If the check fails, stop and tell the user: "No example code found —
 nothing to remove. The example may have already been removed."
 
 If found → proceed to the section for your detected stack below.
@@ -37,8 +37,6 @@ If found → proceed to the section for your detected stack below.
 1. Delete `src/features/example/`
 2. Edit `src/app/dashboard/(overview)/page.tsx` — remove the `ExampleList` import and usage; the `/dashboard` route stays, with placeholder content
 3. Verify no remaining imports reference `@/features/example`
-
-> `src/features/auth/` is intentional scaffold code (auth hooks, `AuthProvider`) — do **not** delete it. `templatecentral:add (auth)` replaces the dev stub with a real implementation.
 
 ## Vite + React
 

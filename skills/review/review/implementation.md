@@ -34,6 +34,8 @@ Check for `.claude/review-baseline.md` in the project root before identifying fi
 **If no baseline file exists:**
 - Fall back to all files written or edited this session
 
+**Called by `templatecentral:scaffold`:** the scope is only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the generated READMEs. Files copied unchanged from the plugin's templates are out of scope, even though this session wrote them.
+
 If the resulting scope is empty (no changes since baseline, no session edits), report `No changes since last review — nothing to check.` and stop. Do not update the baseline.
 
 ## Baseline
@@ -46,7 +48,7 @@ stack: <detected stack>
 reviewed-at: <YYYY-MM-DD>
 ```
 
-If the project has no commits yet, skip writing the baseline.
+If the project has no commits yet, skip writing the baseline. This is always the case for the post-scaffold review, so the baseline is first written by the first review after the project's first commit.
 
 ## What to check
 
@@ -100,4 +102,4 @@ Rules:
 
 ## Callers
 
-Dispatched by: `templatecentral:scaffold` (all stacks, post-scaffold review), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
+Dispatched by: `templatecentral:scaffold` (all stacks, post-scaffold review of the hand-edited files only), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.

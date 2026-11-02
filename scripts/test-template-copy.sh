@@ -77,7 +77,7 @@ sys.stdout.write(text)
 
 # render <snippet-text> <target> <selector> — a template-tree selector mapped onto STACK and CI:
 # "template template-ts" is nextjs, "template template-py" fastapi, "template-ci/github-ts" nextjs on
-# GitHub, "template-ci/github-py" fastapi on GitHub, "template-ci/azure" nextjs on Azure.
+# GitHub, "template-ci/github-py" fastapi on GitHub, "template-ci/azure" nextjs on Azure (with azure-ts).
 render() {
   local stack=bogus ci=""
   case "$3" in
@@ -176,7 +176,7 @@ for combo in $COMBOS; do
   tgt="$T/copy-$v-$h"; mkdir -p "$tgt"
   out=$(run_copy "$tgt" "$v" "$h"); ec=$?
   check 0 "$ec" "copy_keeps_dotfiles[$combo]: copy exits 0 ($out)"
-  ci_file=.github/workflows/ci.yml; [[ $h == azure ]] && ci_file=azure-pipelines/templatecentral-gates.yml
+  ci_file=.github/workflows/ci.yml; [[ $h == azure ]] && ci_file="azure-pipelines/templatecentral-gates.yml azure-pipelines.yml"
   want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh lefthook.yml $ci_file"
   missing=""
   for p in $want; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
@@ -213,6 +213,13 @@ check 1 "$r" "copy_refuses_existing_path: Azure CI file clash refused by the CI 
 check "mine" "$(cat "$tgt/azure-pipelines/templatecentral-gates.yml")" "copy_refuses_existing_path: existing CI file untouched"
 rm -rf "$T/refuse-ci-gh"; mkdir -p "$T/refuse-ci-gh/azure-pipelines"; printf 'mine\n' > "$T/refuse-ci-gh/azure-pipelines/templatecentral-gates.yml"
 run_ci "$T/refuse-ci-gh" ts github >/dev/null; check 0 $? "copy_refuses_existing_path: Azure CI file does not block a GitHub CI copy"
+# a clash on the starter pipeline alone refuses too, and leaves the gates template unwritten
+tgt="$T/refuse-ci-pipe"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/azure-pipelines.yml"
+run_step0 "$tgt" py >/dev/null
+if run_ci "$tgt" py azure >/dev/null; then r=0; else r=1; fi
+check 1 "$r" "copy_refuses_existing_path: Azure starter pipeline clash refused by the CI step"
+check "mine" "$(cat "$tgt/azure-pipelines.yml")" "copy_refuses_existing_path: existing starter pipeline untouched"
+check 1 "$([[ ! -e "$tgt/azure-pipelines" ]] && echo 1 || echo 0)" "copy_refuses_existing_path: no gates template written beside the clash"
 # a clash on the other variant's hook does not block (only the chosen variant is seeded)
 tgt="$T/refuse-variant"; mkdir -p "$tgt/.claude/hooks"; printf 'mine\n' > "$tgt/.claude/hooks/user-prompt-guard.py"
 run_copy "$tgt" ts github >/dev/null; check 0 $? "copy_refuses_existing_path: other variant's file does not block"
@@ -282,7 +289,7 @@ if command -v zsh >/dev/null 2>&1; then
   zsh -c "$(render "$STEP0" "$tgt" "template template-ts")" >/dev/null 2>&1
   out=$(zsh -c "$(render "$CI_SNIPPET" "$tgt" "template-ci/azure")" 2>&1); ec=$?
   check 0 "$ec" "zsh_ci_success_exits_0 ($out)"
-  check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" ]] && echo 1 || echo 0)" "zsh_ci_success_copies"
+  check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" && -f "$tgt/azure-pipelines.yml" ]] && echo 1 || echo 0)" "zsh_ci_success_copies"
   tgt="$T/z3"; mkdir -p "$tgt"; printf 'mine\n' > "$tgt/.gitleaks.toml"; before=$(snap "$tgt")
   out=$(zsh -c "$(render "$STEP0" "$tgt" "template template-ts")
 echo CALLER_SURVIVED" 2>&1)
@@ -416,11 +423,14 @@ for sc in nestjs:cjs nextjs:cjs vite-react:cjs fastapi:py; do
     check 00 "$e1$e2" "stack_derives_trees[$st/$ci]: both fences exit 0 ($out $out2)"
     check 1 "$([[ -f "$tgt/.claude/hooks/user-prompt-guard.$ext" && ! -e "$tgt/.claude/hooks/user-prompt-guard.$other" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: the right user-prompt-guard (.$ext, not .$other)"
     if [[ $ci == azure ]]; then
-      check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" && ! -e "$tgt/.github" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: the Azure file only"
+      check 1 "$([[ -f "$tgt/azure-pipelines/templatecentral-gates.yml" && -f "$tgt/azure-pipelines.yml" && ! -e "$tgt/.github" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: the Azure files only"
+      want=0; [[ $ext == py ]] && want=1
+      check "$want" "$(grep -c 'pyright' "$tgt/azure-pipelines.yml")" "stack_derives_trees[$st/$ci]: the Azure pipeline for this stack (pyright step only for fastapi)"
+      check 1 "$(grep -c '^      - template: azure-pipelines/templatecentral-gates\.yml$' "$tgt/azure-pipelines.yml")" "stack_derives_trees[$st/$ci]: the Azure pipeline includes the gates template"
     else
       want=0; [[ $ext == py ]] && want=1
       check "$want" "$(grep -c 'pyright' "$tgt/.github/workflows/ci.yml")" "stack_derives_trees[$st/$ci]: the GitHub workflow for this stack (pyright job only for fastapi)"
-      check 1 "$([[ ! -e "$tgt/azure-pipelines" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: no Azure file"
+      check 1 "$([[ ! -e "$tgt/azure-pipelines" && ! -e "$tgt/azure-pipelines.yml" ]] && echo 1 || echo 0)" "stack_derives_trees[$st/$ci]: no Azure file"
     fi
   done
 done
@@ -1248,6 +1258,42 @@ for sv in nextjs:ts fastapi:py; do
   out=$(run_part "$tgt" "$st" settings); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_settings[$st]: a second run refuses (settings.json exists)"
 done
+# part_manifest: Step E writes harness.json from the files present, with the plugin version and doc flags
+pv=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$REPO_ROOT/.claude-plugin/plugin.json" | head -n 1)
+for st in nextjs fastapi; do
+  tgt="$T/manifest-$st"; mkdir -p "$tgt"
+  for part in stack base agents settings late; do TC_STACK=$st TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+  TC_STACK=$st TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+  out=$(TC_STACK=$st TC_PART=manifest TC_RICH_README=true bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+  check 0 "$ec" "part_manifest[$st]: exits 0 ($out)"
+  got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); print(j["templatecentral_version"], j["stack"], j["adoWiki"], j["richReadme"], "AGENTS.md" in j["seeded_files"], ".claude/hooks/protect-files.sh" in j["seeded_files"], "CLAUDE.md" in j["seeded_files"])' "$tgt/.claude/harness.json" 2>&1)
+  check "$pv $st False True True True False" "$got" "part_manifest[$st]: version from plugin.json, flags, core and hook entries, no CLAUDE.md entry when absent"
+  vh=$(cd "$tgt" && bash .claude/verify-harness.sh 2>&1); ec=$?
+  check 0 "$ec" "part_manifest[$st]: verify-harness passes on the written manifest ($vh)"
+  out=$(TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"already exists"* && "$out" == *"$STOPLINE"* ]] && echo 1 || echo 0)" "part_manifest[$st]: a second run refuses ($out)"
+done
+# part_manifest on Azure: the gates template and the starter pipeline are both hashed, so dropping the
+# template: line from the pipeline shows as drift
+tgt="$T/manifest-azure"; mkdir -p "$tgt"
+for part in stack base agents settings late; do TC_STACK=fastapi TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+TC_STACK=fastapi TC_PART=ci TC_CI=azure bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+TC_STACK=fastapi TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
+got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1]))["seeded_files"]; print("azure-pipelines/templatecentral-gates.yml" in j, "azure-pipelines.yml" in j)' "$tgt/.claude/harness.json" 2>&1)
+check "True True" "$got" "part_manifest_azure: both Azure files are hashed"
+(cd "$tgt" && bash .claude/verify-harness.sh > /dev/null 2>&1); check 0 $? "part_manifest_azure: verify-harness passes"
+sed -i.bak '/- template: azure-pipelines\/templatecentral-gates.yml/d' "$tgt/azure-pipelines.yml"; rm -f "$tgt/azure-pipelines.yml.bak"
+(cd "$tgt" && bash .claude/verify-harness.sh > /dev/null 2>&1); check 1 $? "part_manifest_azure: verify-harness flags an unwired pipeline as drift"
+tgt="$T/manifest-noskill"; mkdir -p "$tgt"
+for part in base agents settings late; do TC_STACK=nextjs TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
+out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"verify-skill step"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_without_verify_skill ($out)"
+rm -rf "$tgt/.claude/harness.json"; mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
+out=$(TC_STACK=nextjs TC_PART=manifest TC_ADO_WIKI=yes bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"take true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
+out=$(TC_STACK=nextjs TC_PART=manifest TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_manifest_refuses_ci ($out)"
+
 # settings and late refuse without Step 0, and with a STACK that does not match it
 for part in settings late; do
   tgt="$T/part-nostep0-$part"; mkdir -p "$tgt"; printf '# AGENTS.md\n' > "$tgt/AGENTS.md"
@@ -1341,7 +1387,7 @@ out=$(cd "$tgt" && bash -c "$(printf '%s\n' "$TM_CMD" | python3 -c 'import sys; 
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Task Management$' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "task_management_append: the documented command appends the section ($out)"
 # Step D fills the title with the Edit tool: no script and no heredoc carries the name
 check 0 "$(grep -c 'TC_NAME' "$SHARED/harness-kit-finalize.md")" "step_d_has_no_name_heredoc"
-check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -n '__TC_' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
+check 1 "$([[ "$(snippet "$SHARED/harness-kit-finalize.md" '^## Step D\b' 1)" == *"grep -nE '__TC_|\[Fill in' docs/CONSTITUTION.md"* ]] && echo 1 || echo 0)" "step_d_greps_for_leftover_placeholders"
 
 # every template .sh parses
 bad=""; while IFS= read -r f; do bash -n "$f" 2>/dev/null || bad+=" $f"; done < <(find "$SHARED" \( -path '*/template*' -o -name tc-copy.sh \) -name '*.sh')

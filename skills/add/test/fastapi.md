@@ -11,7 +11,7 @@
 
 Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
-**Context check:** Confirm `src/api/routers/` contains at least one `.py` file. If not, ⛔ STOP and tell the user: "No routers found. Run
+**Context check:** Confirm `src/api/routers/` contains at least one `.py` file. If not, stop and tell the user: "No routers found. Run
 `templatecentral:add` (endpoint) first, then return here."
 
 ### Test Structure

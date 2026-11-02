@@ -1,0 +1,30 @@
+# PR and main-branch pipeline for Azure DevOps (TS stacks). The harness merge gates live in the
+# included azure-pipelines/templatecentral-gates.yml; this file adds install, lint, typecheck and tests.
+trigger:
+  branches: { include: [main] }
+pr:
+  branches: { include: [main, uat, develop] }
+pool:
+  vmImage: ubuntu-latest
+jobs:
+  - job: quality
+    timeoutInMinutes: 20
+    steps:
+      - checkout: self
+        fetchDepth: 0    # diff-cover and the PR-only gates need full history
+      - task: NodeTool@0
+        inputs: { versionSpec: "24.x" }
+        displayName: Node 24
+      - bash: npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
+        displayName: pnpm (the version pinned in packageManager)
+      - bash: pnpm install --frozen-lockfile    # lockfile-in-sync gate
+        displayName: Install deps
+      - template: azure-pipelines/templatecentral-gates.yml
+      - bash: pnpm run check                    # format:check + lint + typecheck
+        displayName: Format, lint and typecheck
+      - bash: pnpm exec vitest --run --coverage    # writes coverage/cobertura-coverage.xml
+        displayName: Tests with coverage
+      - bash: |
+          target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
+          pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+        displayName: Changed-line coverage (>= 80%)

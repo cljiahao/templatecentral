@@ -4,7 +4,9 @@
 # Usage: TC_STACK=<stack> TC_PART=<part> [TC_CI=<host>] bash tc-copy.sh <target>
 #        TC_PART=leaf TC_LEAF=<add|migrate>/<path/to/leaf-stem> [TC_TREE=<tree>] bash tc-copy.sh <target>
 #   TC_STACK  nestjs | nextjs | vite-react | fastapi (not used by TC_PART=leaf)
-#   TC_PART   base | settings | ci | late | stack | agents | tail | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
+#             manifest writes .claude/harness.json (kit Step E); TC_ADO_WIKI / TC_RICH_README (true|false,
+#             default false) set its adoWiki / richReadme fields
 #   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
 #   TC_LEAF   for leaf: the leaf's stem under skills/, e.g. add/auth/nestjs; its template trees and
 #             template.manifest sit in skills/<TC_LEAF>/
@@ -106,10 +108,13 @@ case "$PART" in
   ci)
     case "$CI" in
       github) SEL="template-ci/github-$V" ;;
-      azure) SEL="template-ci/azure" ;;
+      azure) SEL="template-ci/azure template-ci/azure-$V" ;;
       none) SEL= ;;
       *) stop "unknown CI '$CI' (want github, azure or none)" ;;
     esac ;;
+  manifest)
+    [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=manifest"
+    SEL= ;;
   stack | agents)
     [ -z "$CI" ] || stop "TC_CI must stay empty for TC_PART=$PART"
     SK=${SH%/shared}/$STACK
@@ -124,6 +129,63 @@ if [ "$PART" = tail ]; then
   out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "$SH/template-tail/AGENTS-tail.md") || stop "cannot read the tail file"
   [ -n "$out" ] || stop "the tail file is empty"
   printf '\n%s\n' "$out" >> "$TGT/AGENTS.md" || stop "appending to $TGT/AGENTS.md failed"
+  exit 0
+fi
+if [ "$PART" = manifest ]; then
+  # Writes .claude/harness.json: one seeded_files entry per seeded file present in the project, with its
+  # sha256 as origin_hash, and the plugin version read from .claude-plugin/plugin.json.
+  WHAT="write .claude/harness.json"
+  mf=.claude/harness.json
+  [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: run this at kit Step E"
+  if [ ! -d "$TGT/.claude" ] || [ -L "$TGT/.claude" ]; then stop "$TGT/.claude is missing or a symlink: run kit Steps 0 through D first"; fi
+  if [ -e "$TGT/$mf" ] || [ -L "$TGT/$mf" ]; then stop "$TGT/$mf already exists"; fi
+  pj=${SH%/skills/scaffold/shared}/.claude-plugin/plugin.json
+  [ -f "$pj" ] || pj=${SH%/scaffold/shared}/../.claude-plugin/plugin.json
+  [ -f "$pj" ] || stop "cannot find .claude-plugin/plugin.json next to the plugin's skills directory"
+  ver=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$pj" | head -n 1)
+  [ -n "$ver" ] || stop "no version in $pj"
+  case "$STACK" in
+    fastapi) skills=api-verify ;;
+    nestjs) skills=nest-verify ;;
+    nextjs) skills="next-verify next-migrate" ;;
+    vite-react) skills=vite-verify ;;
+  esac
+  for s in $skills; do [ -f "$TGT/.claude/skills/$s/SKILL.md" ] || stop "$TGT/.claude/skills/$s/SKILL.md is missing: the stack's verify-skill step comes before Step E"; done
+  for b in "${TC_ADO_WIKI:-false}" "${TC_RICH_README:-false}"; do
+    case "$b" in true | false) ;; *) stop "TC_ADO_WIKI and TC_RICH_README take true or false (got '$b')" ;; esac
+  done
+  sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
+  # Core seeded files, then every hook (local guards included), in a fixed order. A file that is
+  # absent is left out: CLAUDE.md is optional, and Step B3 may seed no CI file.
+  list=$(
+    printf '%s\n' AGENTS.md CLAUDE.md .claude/settings.json
+    for s in $skills; do printf '.claude/skills/%s/SKILL.md\n' "$s"; done
+    printf '%s\n' .claude/skills/skill-audit/SKILL.md
+    (cd "$TGT" && find .claude/hooks -type f 2>/dev/null | LC_ALL=C sort)
+    printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
+      .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh \
+      .claude/verify-harness.sh .claude/regen-harness.sh
+  )
+  body=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if [ -L "$TGT/$p" ]; then stop "$TGT/$p is a symlink"; fi
+    [ -f "$TGT/$p" ] || continue
+    case "$p" in *[\"\\]*) stop "the path $p holds a quote or backslash" ;; esac
+    h=$(sha "$TGT/$p") || stop "cannot hash $p"
+    body="$body,$NL    \"$p\": { \"origin_hash\": \"$h\", \"path\": \"$p\" }"
+  done <<TC_LIST
+$list
+TC_LIST
+  [ -n "$body" ] || stop "no seeded file found in $TGT"
+  tmp="$TGT/$mf.tmp.$$"
+  {
+    printf '{\n  "templatecentral_version": "%s",\n  "stack": "%s",\n  "seeded_at": "%s",\n' "$ver" "$STACK" "$(date -u +%Y-%m-%d)"
+    printf '  "adoWiki": %s,\n  "richReadme": %s,\n' "${TC_ADO_WIKI:-false}" "${TC_RICH_README:-false}"
+    printf '  "seeded_files": {%s\n  }\n}\n' "${body#,}"
+  } > "$tmp" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
+  mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
+  echo "Wrote $TGT/$mf ($(printf '%s' "$body" | grep -c origin_hash) entries, templatecentral_version $ver)."
   exit 0
 fi
 if [ "$PART" = ci ] && [ "$CI" = none ]; then
