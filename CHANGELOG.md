@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - `scaffold-verify.yml` prints the Claude result text when the agent step fails, so an `is_error: true` run names its cause instead of ending with no detail.
+- `scaffold-verify.yml` now runs headless without reporting false deviations: the prompt supplies the scaffold Step 1 answers (including no plugin install, so the run leaves `~/.claude` alone) and takes the documented headless skip of the env-file copy.
+- The four stack guides give the env-file copy a headless outcome (skip, continue, report) when the repo secret guard blocks it and no user can run the copy. `harness-kit-finalize.md` Step H does the same for the plugin install, and the guides' "not finished until Step H" line now reads "done or skipped". The interactive flow is unchanged.
+- `scaffold-verify.yml` installs prettier into the FastAPI scaffold before the golden diff. That tree has no `node_modules`, so `check-golden.sh` could not format `AGENTS.md` and reported a mismatch.
 
 ---
 

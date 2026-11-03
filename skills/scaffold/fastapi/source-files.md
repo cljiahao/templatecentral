@@ -49,6 +49,8 @@ cp src/.env.default src/.env
 
 If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
+**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+
 Never commit `src/.env`.
 
 ### 4. Set up virtual environment and install dependencies
@@ -147,7 +149,7 @@ cat "<skill-dir>/fastapi/template-tail/task-management.md" >> AGENTS.md
 
 #### Finish the harness (required, whatever the answer above)
 
-Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E, with the `api-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
+Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E, with the `api-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
 ### 9. Remove example code (optional)
 

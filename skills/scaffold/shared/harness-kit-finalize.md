@@ -143,3 +143,5 @@ claude plugin install superpowers
 - **superpowers** — brainstorm → plan → implement for features touching 3+ files. Skip for one-liners.
 
 **If the user asks to skip:** Accept without pushback — these improve session quality but are not required.
+
+**No interactive user** (headless run): skip this step unless the run's instructions say to install the plugins, and note the skip in your final report. An unattended run does not change user-scoped Claude Code configuration on its own.

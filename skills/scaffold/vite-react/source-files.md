@@ -55,6 +55,8 @@ cp .env.example .env
 
 If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
+**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+
 ### 4. Initialize git and install dependencies
 
 Before the first install, run kit Step **0** again as `TC_STACK=vite-react TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
@@ -152,7 +154,7 @@ cat "<skill-dir>/vite-react/template-tail/task-management.md" >> AGENTS.md
 
 #### Finish the harness (required, whatever the answer above)
 
-Execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E, with the `vite-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
+Execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E, with the `vite-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
 ### 10. Optional: Remove example code
 

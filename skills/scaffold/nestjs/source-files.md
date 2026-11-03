@@ -46,6 +46,8 @@ In `src/config/env.config.ts`, set the `PROJECT_NAME` default (`'My Project'`) t
 
 If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
+**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+
 ### 4. Install Dependencies
 
 Before the first install, run kit Step **0** again as `TC_STACK=nestjs TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `lefthook.yml` and the other harness files, so the `prepare` script wires the git hooks instead of writing a stub config.
@@ -120,7 +122,7 @@ cat "<skill-dir>/nestjs/template-tail/task-management.md" >> AGENTS.md
 
 #### Finish the harness (required, whatever the answer above)
 
-Execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E, with the `nest-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
+Execute kit Steps **E through H** using the **nestjs** row: harness.json (Step E, with the `nest-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
 ### 8. Remove Example Code (Optional)
 

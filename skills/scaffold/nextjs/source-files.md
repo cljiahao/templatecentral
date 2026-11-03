@@ -85,6 +85,8 @@ cp .env.example .env.local
 
 If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
 
+**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+
 Never commit `.env.local`.
 
 ### 5b. Run verification gate before copying AGENTS.md
@@ -166,7 +168,7 @@ cat "<skill-dir>/nextjs/template-tail/task-management.md" >> AGENTS.md
 
 #### Finish the harness (required, whatever the answer above)
 
-Execute kit Steps **E through H** using the **nextjs** row: harness.json (Step E, with the `next-verify` and `next-migrate` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done.
+Execute kit Steps **E through H** using the **nextjs** row: harness.json (Step E, with the `next-verify` and `next-migrate` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
 ### 8. Remove example code (optional)
 

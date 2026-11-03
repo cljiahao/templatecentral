@@ -74,7 +74,22 @@ jobs:
             Follow skills/scaffold/${{ matrix.stack }}/source-files.md to
             scaffold a brand-new project into /tmp/scaffold-e2e EXACTLY as written - no
             improvisation, use GitHub Actions CI (seed .github/workflows/ci.yml, not the Azure
-            pipeline), no silently fixing template bugs. Then run that stack's quality
+            pipeline), no silently fixing template bugs.
+            This is a headless run: no user is present, so never ask a question. These are the
+            scaffold Step 1 answers; use them as given and do not report them as deviations:
+            - project name scaffold-e2e, project title "Scaffold E2E", description "Scaffold verification project."
+            - CI host: GitHub Actions
+            - extra project skills: none
+            - CLAUDE.md: yes
+            - task management: no
+            - remove example code: no
+            - adoWiki: false
+            - richReadme: false
+            - post-scaffold checks (kit Step G utilities): skip. You confirm the skip here; the quality gates below replace them.
+            - Claude Code plugins (kit Step H): no. The run must not touch ~/.claude.
+            The repo guard blocks creating env files. Where the guide documents the headless
+            skip for the env-file copy, take it; that is expected, not a deviation.
+            Then run that stack's quality
             gates (TS stacks: pnpm install, pnpm check or lint+typecheck, pnpm build, pnpm
             test or test:ci; FastAPI: pip install -r requirements.txt, ruff check src/,
             python -m pyright src/, python -m pytest). If every gate passes and you made no
@@ -110,6 +125,11 @@ jobs:
           fi
           cd /tmp/scaffold-e2e
           bash .claude/verify-harness.sh
+      # The FastAPI scaffold has no node_modules, and check-golden runs prettier
+      # (npx --no-install) from the generated tree to compare formatter-owned files.
+      - name: Install prettier for the golden diff
+        if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' && matrix.stack == 'fastapi' }}
+        run: npm install --no-save --no-audit --no-fund --prefix /tmp/scaffold-e2e 'prettier@^3.8.3'
       - name: Diff generated tree against the golden scaffold
         if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
         run: bash scripts/check-golden.sh --tree /tmp/scaffold-e2e "${{ matrix.stack }}-github"
