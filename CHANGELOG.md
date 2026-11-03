@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `scaffold-verify.yml` prints the Claude result text when the agent step fails, so an `is_error: true` run names its cause instead of ending with no detail.
+
 ---
 
 ## [7.2.2] — 2026-11-03
