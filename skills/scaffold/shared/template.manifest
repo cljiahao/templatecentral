@@ -20,6 +20,7 @@ template-ci/github-ts/.github/workflows/ci.yml 644 - -
 template-late/.claude/skills/skill-audit/SKILL.md.tmpl 644 - -
 template-late/FUTURE.md 644 - -
 template-late/docs/CONSTITUTION.md 644 __TC_PROJECT_TITLE__ -
+template-late/docs/harness.md 644 - -
 template-py/.claude/hooks/block-no-verify.sh 755 - -
 template-py/.claude/hooks/post-edit-comment-check.sh 755 - -
 template-py/.claude/hooks/post-edit-typecheck.sh 755 - -

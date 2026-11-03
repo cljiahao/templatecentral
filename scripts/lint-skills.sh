@@ -518,7 +518,7 @@ check_scaffold_seeds_complete_harness() {
     [[ -f "$kit_dir/template-ci/$p" ]] || missing+="$kit_dir/template-ci/$p — template file not found"$'\n'
   done
   for p in template-settings-ts/.claude/settings.json template-settings-py/.claude/settings.json \
-    template-late/FUTURE.md template-late/docs/CONSTITUTION.md template-late/.claude/skills/skill-audit/SKILL.md.tmpl \
+    template-late/FUTURE.md template-late/docs/CONSTITUTION.md template-late/docs/harness.md template-late/.claude/skills/skill-audit/SKILL.md.tmpl \
     template-tail/AGENTS-tail.md; do
     [[ -f "$kit_dir/$p" ]] || missing+="$kit_dir/$p — template file not found"$'\n'
   done

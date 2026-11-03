@@ -62,7 +62,7 @@ Using the **detected stack's row** in the kit's delta table (TS stacks: `node`; 
 - **Step B3** — CI quality gates (by hand, per the scaffold-only note above): `.claude/ci-gates.sh` plus the host's CI file (`.github/workflows/ci.yml` on GitHub, `azure-pipelines/templatecentral-gates.yml` on Azure DevOps — never both). The kit's Step B3 rules for existing Azure pipelines apply (skip, or add only the `deps` step).
 - **Step B4** — harness integrity verifier (`.claude/verify-harness.sh`, `.claude/regen-harness.sh`); seed it, because Phase 5d and pre-push call it.
 - **Step B5** — the `/skill-audit` project skill, from `template-late/`.
-- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name and fill or delete each `[Fill in: …]` line per kit Step D).
+- **Steps C, D** — `FUTURE.md`, `docs/CONSTITUTION.md`, `docs/harness.md` from `template-late/` (set `__TC_PROJECT_TITLE__` to the project name and fill or delete each `[Fill in: …]` line per kit Step D).
 
 The scripts do not depend on the plugin, so the harness keeps enforcing if the plugin is removed.
 
@@ -152,7 +152,7 @@ ln -s .claude .agents
 
 **Step 4f-3: Finish the AGENTS.md tail and re-baseline**
 
-Execute kit **Step G** up to its post-scaffold utilities list: append the AGENTS.md tail (here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
+Execute kit **Step G** up to its post-scaffold utilities list: append the AGENTS.md tail (here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
 **Step 4g: Print summary**
 
