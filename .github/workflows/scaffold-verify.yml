@@ -63,7 +63,8 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No Anthropic credentials configured - skipping this loop. Add the ANTHROPIC_API_KEY secret (API) or CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token', Claude subscription) to enable it."
           fi
-      - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b  # v1.0.247
+      - id: claude
+        uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b  # v1.0.247
         if: steps.creds.outputs.ok == 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -81,6 +82,17 @@ jobs:
             On ANY failure or deviation instead: write a precise report naming the broken
             template section and file to /tmp/scaffold-e2e-report.md and do NOT write the
             result file.
+      # The action hides Claude's output, so an auth, usage-limit or startup
+      # failure shows only "is_error: true". Print the result text so the cause is visible.
+      - name: Show Claude error
+        if: failure() && steps.claude.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          jq -r '[.[] | select(.type == "result")] | last
+            | (.result // (.errors | select(.) | tostring) // "no result text")
+            | "::error title=Scaffold Verify::" + gsub("\n"; "%0A")' \
+            "$EXECUTION_FILE"
       - name: Assert verification result
         if: steps.creds.outputs.ok == 'true'
         run: |
