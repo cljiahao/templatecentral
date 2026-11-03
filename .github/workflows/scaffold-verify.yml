@@ -103,8 +103,13 @@ jobs:
           fi
       - name: Verify harness integrity
         if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
-        working-directory: /tmp/scaffold-e2e
-        run: bash .claude/verify-harness.sh
+        run: |
+          if [ ! -d /tmp/scaffold-e2e ]; then
+            echo "::error::/tmp/scaffold-e2e does not exist: the agent scaffolded nothing"
+            exit 1
+          fi
+          cd /tmp/scaffold-e2e
+          bash .claude/verify-harness.sh
       - name: Diff generated tree against the golden scaffold
         if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
         run: bash scripts/check-golden.sh --tree /tmp/scaffold-e2e "${{ matrix.stack }}-github"
