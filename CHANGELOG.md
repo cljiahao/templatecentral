@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- Step G (`TC_PART=tail`) is idempotent: it wraps the AGENTS.md tail in `templatecentral-tail` BEGIN/END markers and replaces that block on a re-run instead of appending a second copy. Malformed markers, or an `## AI Harness` heading without markers, stop with an error.
+- Step G's refusal message names the `## AI Harness` heading correctly, and Ctrl-C or SIGTERM during a replace now exits (status 130 / 143) after removing its temp files.
+- The Step G replace keeps a symlinked `AGENTS.md` (the temp file goes beside the real target), matches BEGIN and END as whole lines outside code fences, and cleans its temp files on failure or interrupt.
+- The AGENTS.md tail names both hook-manager bypass envs (`LEFTHOOK=0` / `HUSKY=0`) and points the Stop hook at the repo's own Stop gate; the per-repo cue comment is gone.
 - The AGENTS.md tail that kit Step G appends (`## AI Harness`, `## Skills Security`, `## Git Workflow`, `## Skill capture`) shrinks from 5295 to 1996 bytes. It now keeps only the rules an agent obeys on every turn, including the hook-wiring rule. The rest moved in full into a new seeded `docs/harness.md` (`template-late/`, copied at Step C like `FUTURE.md`), which each section points to: hook-event descriptions (SessionStart, UserPromptSubmit, SubagentStop), git hooks, CI gates and bypass labels, the full CI/CD path list, and the protected-branch note moved to the doc in full. **Existing products:** re-sync copies `docs/harness.md` when absent and merges the new tail into `AGENTS.md`. `AGENTS.md` is hashed in `.claude/harness.json`, so after the re-sync the product recomputes its `origin_hash` and refreshes `.claude/.harness-base/AGENTS.md` (Phase 5 "After applying") and runs `bash .claude/verify-harness.sh`. The hashing scheme is unchanged; `docs/harness.md` is not hashed, like `FUTURE.md`.
 
 ### Fixed

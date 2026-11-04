@@ -128,8 +128,65 @@ if [ "$PART" = tail ]; then
   esac
   out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "$SH/template-tail/AGENTS-tail.md") || stop "cannot read the tail file"
   [ -n "$out" ] || stop "the tail file is empty"
-  printf '\n%s\n' "$out" >> "$TGT/AGENTS.md" || stop "appending to $TGT/AGENTS.md failed"
-  exit 0
+  # The tail sits between fixed markers, so a re-run replaces it instead of appending a second copy.
+  BEGIN_M='<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->'
+  END_M='<!-- END:templatecentral-tail -->'
+  AG="$TGT/AGENTS.md"
+  wrapped=$(printf '%s\n%s\n%s\n' "$BEGIN_M" "$out" "$END_M")
+  # One pass: marker counts and first line numbers (whole-line matches only, so prose that mentions a marker is
+  # ignored), whether a `## AI Harness` heading sits outside a code fence (the fence toggle is a heuristic: a line opening with ``` or ~~~), and the total line count.
+  scan=$(awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence }
+    !fence && /^<!-- BEGIN:templatecentral-tail \(managed by templateCentral Step G; edits inside are overwritten; put repo rules outside\) -->[[:space:]]*$/ { nb++; if (!bl) bl = NR }
+    !fence && /^<!-- END:templatecentral-tail -->[[:space:]]*$/ { ne++; if (!el) el = NR }
+    !fence && /^## AI Harness[[:space:]]*$/ { hh = 1 }
+    END { print nb + 0, ne + 0, bl + 0, el + 0, hh + 0, NR }' "$AG") || stop "cannot read $AG"
+  # shellcheck disable=SC2086
+  set -- $scan
+  nb=$1 ne=$2 bl=$3 el=$4 hh=$5 tot=$6
+  if [ "$nb" -eq 0 ] && [ "$ne" -eq 0 ]; then
+    if [ "$hh" -eq 1 ]; then
+      stop "$AG has an '## AI Harness' heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
+    fi
+    printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
+    exit 0
+  fi
+  if ! { [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ]; }; then
+    stop "$AG has malformed templatecentral-tail markers ($nb BEGIN, $ne END): want exactly one of each"
+  fi
+  [ "$bl" -lt "$el" ] || stop "$AG has the END:templatecentral-tail marker before BEGIN"
+  nonl=0
+  [ -z "$(tail -c 1 "$AG")" ] || nonl=1
+  # A symlinked AGENTS.md (say to CLAUDE.md) is followed, so the link survives and the target is replaced.
+  real=$AG
+  hops=0
+  while [ -L "$real" ] && [ "$hops" -lt 40 ]; do
+    link=$(readlink -- "$real") || break
+    case "$link" in
+      /*) real=$link ;;
+      *) real=$(dirname -- "$real")/$link ;;
+    esac
+    hops=$((hops + 1))
+  done
+  [ ! -L "$real" ] || stop "$AG is a symlink loop"
+  rdir=$(dirname -- "$real")
+  # The temp files sit beside the real file so the final mv stays on one filesystem; cp -p keeps the file mode.
+  tmpn=
+  tmpo=
+  trap 'rm -f "$tmpn" "$tmpo"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  tmpn=$(mktemp "$rdir/.AGENTS.tail.XXXXXX") || stop "cannot create a temp file in $rdir"
+  tmpo=$(mktemp "$rdir/.AGENTS.new.XXXXXX") || stop "cannot create a temp file in $rdir"
+  printf '%s\n' "$wrapped" > "$tmpn" || stop "cannot write the temp file in $rdir"
+  if cp -p "$real" "$tmpo" && awk -v b="$bl" -v e="$el" -v nf="$tmpn" -v nonl="$nonl" -v tot="$tot" '
+      NR == b { while ((getline l < nf) > 0) print l; close(nf) }
+      NR < b || NR > e { if (nonl && NR == tot) printf "%s", $0; else print }' "$AG" > "$tmpo" && mv "$tmpo" "$real"; then
+    rm -f "$tmpn"
+    trap - EXIT INT TERM
+    exit 0
+  fi
+  stop "replacing the tail in $AG failed; $AG is unchanged"
 fi
 if [ "$PART" = manifest ]; then
   # Writes .claude/harness.json: one seeded_files entry per seeded file present in the project, with its
