@@ -1377,7 +1377,7 @@ check 0 "$ec" "agents_tail_prose_mention: the re-run replaces ($out)"
 check 1 "$([[ "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_prose_mention: still one tail after the re-run"
 tgt="$T/tail-suffix"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '## Harness (project)\nold\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
-check 1 "$([[ $ec -ne 0 && "$out" == *"Harness heading"* ]] && echo 1 || echo 0)" "agents_tail_heading_suffix: refuses ($out)"
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Harness (project)$' "$tgt/AGENTS.md")" == 1 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_heading_suffix: a ## Harness (project) section is the repo's own, so the tail appends ($out)"
 tgt="$T/tail-fenced"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n## Harness\n```\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 0 "$ec" "agents_tail_heading_in_fence: a heading inside a code fence is ignored ($out)"
@@ -1387,6 +1387,25 @@ cp "$tgt/AGENTS.md" "$T/tail-nonl.once"
 run_tail nextjs "$tgt" >/dev/null
 check 1 "$(cmp -s "$T/tail-nonl.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_no_final_newline: bytes after END are unchanged, including a missing final newline"
 check 1 "$([[ "$(stat -f %Lp "$tgt/AGENTS.md" 2>/dev/null || stat -c %a "$tgt/AGENTS.md")" == 640 && -z "$(ls -A "$tgt" | grep -v '^AGENTS.md$')" ]] && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
+# symlinked AGENTS.md, CRLF, fastapi, suffixed BEGIN, fenced markers
+tgt="$T/tail-link"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/CLAUDE.md"; ln -s CLAUDE.md "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null; run_tail nextjs "$tgt" >/dev/null
+check 1 "$([[ -L "$tgt/AGENTS.md" && "$(readlink "$tgt/AGENTS.md")" == CLAUDE.md && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/CLAUDE.md")" == 1 && -z "$(ls -A "$tgt" | grep -v -e '^AGENTS.md$' -e '^CLAUDE.md$')" ]] && echo 1 || echo 0)" "agents_tail_symlink: the link survives two runs and the target holds one block"
+tgt="$T/tail-crlf"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\r\nrules\r\n' > "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null; cp "$tgt/AGENTS.md" "$T/tail-crlf.once"; run_tail nextjs "$tgt" >/dev/null
+check 1 "$([[ "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && cmp -s "$T/tail-crlf.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_crlf: two runs leave one block and the file is idempotent"
+printf '<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->\r\nold\r\n<!-- END:templatecentral-tail -->\r\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 && "$(grep -c '^old' "$tgt/AGENTS.md")" == 0 ]] && echo 1 || echo 0)" "agents_tail_crlf: CRLF marker lines still match ($out)"
+tgt="$T/tail-fastapi"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/AGENTS.md"
+run_tail fastapi "$tgt" >/dev/null; cp "$tgt/AGENTS.md" "$T/tail-fastapi.once"; run_tail fastapi "$tgt" >/dev/null
+check 1 "$(cmp -s "$T/tail-fastapi.once" "$tgt/AGENTS.md" && grep -qF 'python -m pyright src/' "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_idempotent[fastapi]: two runs are byte-identical"
+tgt="$T/tail-suffixed-begin"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '<!-- BEGIN:templatecentral-tail-foo -->\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail-foo' "$tgt/AGENTS.md")" == 1 && "$(grep -c '^<!-- BEGIN:templatecentral-tail (managed' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_suffixed_begin: a BEGIN line with a suffix is not a marker ($out)"
+tgt="$T/tail-fenced-markers"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n%s\n%s\n```\n' "$BM" "$EM" > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 2 && "$(head -4 "$tgt/AGENTS.md" | tail -1)" == '```' ]] && echo 1 || echo 0)" "agents_tail_fenced_markers: markers inside a code fence are ignored and the tail is appended ($out)"
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?

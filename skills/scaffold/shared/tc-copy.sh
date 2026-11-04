@@ -134,19 +134,19 @@ if [ "$PART" = tail ]; then
   AG="$TGT/AGENTS.md"
   wrapped=$(printf '%s\n%s\n%s\n' "$BEGIN_M" "$out" "$END_M")
   # One pass: marker counts and first line numbers (whole-line matches only, so prose that mentions a marker is
-  # ignored), whether a Harness heading sits outside a code fence, and the total line count.
+  # ignored), whether a `## AI Harness` heading sits outside a code fence (the fence toggle is a heuristic: a line opening with ``` or ~~~), and the total line count.
   scan=$(awk '
     /^[[:space:]]*(```|~~~)/ { fence = !fence }
-    /^<!-- BEGIN:templatecentral-tail/ { nb++; if (!bl) bl = NR }
-    /^<!-- END:templatecentral-tail -->[[:space:]]*$/ { ne++; if (!el) el = NR }
-    !fence && /^## (AI )?Harness([^[:alnum:]_]|$)/ { hh = 1 }
+    !fence && /^<!-- BEGIN:templatecentral-tail \(managed by templateCentral Step G; edits inside are overwritten; put repo rules outside\) -->[[:space:]]*$/ { nb++; if (!bl) bl = NR }
+    !fence && /^<!-- END:templatecentral-tail -->[[:space:]]*$/ { ne++; if (!el) el = NR }
+    !fence && /^## AI Harness[[:space:]]*$/ { hh = 1 }
     END { print nb + 0, ne + 0, bl + 0, el + 0, hh + 0, NR }' "$AG") || stop "cannot read $AG"
   # shellcheck disable=SC2086
   set -- $scan
   nb=$1 ne=$2 bl=$3 el=$4 hh=$5 tot=$6
   if [ "$nb" -eq 0 ] && [ "$ne" -eq 0 ]; then
     if [ "$hh" -eq 1 ]; then
-      stop "$AG has a Harness heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
+      stop "$AG has an `## AI Harness` heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
     fi
     printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
     exit 0
@@ -155,14 +155,31 @@ if [ "$PART" = tail ]; then
   [ "$bl" -lt "$el" ] || stop "$AG has the END:templatecentral-tail marker before BEGIN"
   nonl=0
   [ -z "$(tail -c 1 "$AG")" ] || nonl=1
-  # The temp files sit beside AGENTS.md so the final mv stays on one filesystem; cp -p keeps the file mode.
-  tmpn=$(mktemp "$TGT/.AGENTS.tail.XXXXXX") || stop "cannot create a temp file in $TGT"
-  tmpo=$(mktemp "$TGT/.AGENTS.new.XXXXXX") || { rm -f "$tmpn"; stop "cannot create a temp file in $TGT"; }
-  printf '%s\n' "$wrapped" > "$tmpn"
-  if cp -p "$AG" "$tmpo" && awk -v b="$bl" -v e="$el" -v nf="$tmpn" -v nonl="$nonl" -v tot="$tot" '
+  # A symlinked AGENTS.md (say to CLAUDE.md) is followed, so the link survives and the target is replaced.
+  real=$AG
+  hops=0
+  while [ -L "$real" ] && [ "$hops" -lt 40 ]; do
+    link=$(readlink -- "$real") || break
+    case "$link" in
+      /*) real=$link ;;
+      *) real=$(dirname -- "$real")/$link ;;
+    esac
+    hops=$((hops + 1))
+  done
+  [ ! -L "$real" ] || stop "$AG is a symlink loop"
+  rdir=$(dirname -- "$real")
+  # The temp files sit beside the real file so the final mv stays on one filesystem; cp -p keeps the file mode.
+  tmpn=
+  tmpo=
+  trap 'rm -f "$tmpn" "$tmpo"' EXIT INT TERM
+  tmpn=$(mktemp "$rdir/.AGENTS.tail.XXXXXX") || stop "cannot create a temp file in $rdir"
+  tmpo=$(mktemp "$rdir/.AGENTS.new.XXXXXX") || stop "cannot create a temp file in $rdir"
+  printf '%s\n' "$wrapped" > "$tmpn" || { rm -f "$tmpn" "$tmpo"; stop "cannot write the temp file in $rdir"; }
+  if cp -p "$real" "$tmpo" && awk -v b="$bl" -v e="$el" -v nf="$tmpn" -v nonl="$nonl" -v tot="$tot" '
       NR == b { while ((getline l < nf) > 0) print l; close(nf) }
-      NR < b || NR > e { if (nonl && NR == tot) printf "%s", $0; else print }' "$AG" > "$tmpo" && mv "$tmpo" "$AG"; then
+      NR < b || NR > e { if (nonl && NR == tot) printf "%s", $0; else print }' "$AG" > "$tmpo" && mv "$tmpo" "$real"; then
     rm -f "$tmpn"
+    trap - EXIT INT TERM
     exit 0
   fi
   rm -f "$tmpn" "$tmpo"
