@@ -146,7 +146,7 @@ if [ "$PART" = tail ]; then
   nb=$1 ne=$2 bl=$3 el=$4 hh=$5 tot=$6
   if [ "$nb" -eq 0 ] && [ "$ne" -eq 0 ]; then
     if [ "$hh" -eq 1 ]; then
-      stop "$AG has an `## AI Harness` heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
+      stop "$AG has an '## AI Harness' heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
     fi
     printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
     exit 0
@@ -171,10 +171,12 @@ if [ "$PART" = tail ]; then
   # The temp files sit beside the real file so the final mv stays on one filesystem; cp -p keeps the file mode.
   tmpn=
   tmpo=
-  trap 'rm -f "$tmpn" "$tmpo"' EXIT INT TERM
+  trap 'rm -f "$tmpn" "$tmpo"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   tmpn=$(mktemp "$rdir/.AGENTS.tail.XXXXXX") || stop "cannot create a temp file in $rdir"
   tmpo=$(mktemp "$rdir/.AGENTS.new.XXXXXX") || stop "cannot create a temp file in $rdir"
-  printf '%s\n' "$wrapped" > "$tmpn" || { rm -f "$tmpn" "$tmpo"; stop "cannot write the temp file in $rdir"; }
+  printf '%s\n' "$wrapped" > "$tmpn" || stop "cannot write the temp file in $rdir"
   if cp -p "$real" "$tmpo" && awk -v b="$bl" -v e="$el" -v nf="$tmpn" -v nonl="$nonl" -v tot="$tot" '
       NR == b { while ((getline l < nf) > 0) print l; close(nf) }
       NR < b || NR > e { if (nonl && NR == tot) printf "%s", $0; else print }' "$AG" > "$tmpo" && mv "$tmpo" "$real"; then
@@ -182,7 +184,6 @@ if [ "$PART" = tail ]; then
     trap - EXIT INT TERM
     exit 0
   fi
-  rm -f "$tmpn" "$tmpo"
   stop "replacing the tail in $AG failed; $AG is unchanged"
 fi
 if [ "$PART" = manifest ]; then

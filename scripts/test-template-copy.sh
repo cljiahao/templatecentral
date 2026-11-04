@@ -1360,7 +1360,7 @@ run_tail nextjs "$tgt" >/dev/null
 check 1 "$(cmp -s "$T/tail-idem.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_idempotent: an edit inside the markers is overwritten, the text outside kept"
 tgt="$T/tail-heading"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '## AI Harness\nold\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
-check 1 "$([[ $ec -ne 0 && "$out" == *"wrap the existing generic tail"* && "$(cat "$tgt/AGENTS.md")" == $'## AI Harness\nold' ]] && echo 1 || echo 0)" "agents_tail_heading_without_markers: refuses, file untouched ($out)"
+check 1 "$([[ $ec -ne 0 && "$out" == *"has an '## AI Harness' heading but no"* && "$out" == *"wrap the existing generic tail"* && "$(cat "$tgt/AGENTS.md")" == $'## AI Harness\nold' ]] && echo 1 || echo 0)" "agents_tail_heading_without_markers: refuses, file untouched ($out)"
 BM='<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->'
 EM='<!-- END:templatecentral-tail -->'
 for bad in "$BM" "$BM"$'\n'"$BM"$'\n'"$EM" "$EM"$'\n'"$BM"; do
@@ -1406,6 +1406,12 @@ check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail-foo' "$t
 tgt="$T/tail-fenced-markers"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n%s\n%s\n```\n' "$BM" "$EM" > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 2 && "$(head -4 "$tgt/AGENTS.md" | tail -1)" == '```' ]] && echo 1 || echo 0)" "agents_tail_fenced_markers: markers inside a code fence are ignored and the tail is appended ($out)"
+tgt="$T/tail-chain"; rm -rf "$tgt"; mkdir -p "$tgt/sub"; printf 'top\n' > "$tgt/sub/real.md"; ln -s sub/real.md "$tgt/mid.md"; ln -s mid.md "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null; run_tail nextjs "$tgt" >/dev/null
+check 1 "$([[ -L "$tgt/AGENTS.md" && -L "$tgt/mid.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/sub/real.md")" == 1 && -z "$(ls -A "$tgt" "$tgt/sub" | grep -e '^\.AGENTS')" ]] && echo 1 || echo 0)" "agents_tail_symlink_chain: both links survive and the real file holds one block"
+tgt="$T/tail-abslink"; rm -rf "$tgt"; mkdir -p "$tgt/proj" "$tgt/elsewhere"; printf 'top\n' > "$tgt/elsewhere/CLAUDE.md"; ln -s "$tgt/elsewhere/CLAUDE.md" "$tgt/proj/AGENTS.md"
+run_tail nextjs "$tgt/proj" >/dev/null; run_tail nextjs "$tgt/proj" >/dev/null
+check 1 "$([[ -L "$tgt/proj/AGENTS.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/elsewhere/CLAUDE.md")" == 1 && -z "$(ls -A "$tgt/proj" "$tgt/elsewhere" | grep -e '^\.AGENTS')" ]] && echo 1 || echo 0)" "agents_tail_symlink_absolute: the absolute link survives and its target holds one block"
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?
