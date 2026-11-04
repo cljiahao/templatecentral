@@ -1249,7 +1249,7 @@ for sv in nextjs:ts fastapi:py; do
   out3=$(run_part "$tgt" "$st" late); ec=$?
   check 0 "$ec" "part_late[$st]: exits 0 ($out3)"
   missing=""
-  for p in FUTURE.md docs/CONSTITUTION.md .claude/skills/skill-audit/SKILL.md; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
+  for p in FUTURE.md docs/CONSTITUTION.md docs/harness.md .claude/skills/skill-audit/SKILL.md; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
   check "" "$missing" "part_late[$st]: the three late files arrived"
   check 1 "$([[ "$(grep -c '__TC_PROJECT_TITLE__' "$tgt/docs/CONSTITUTION.md")" == 1 ]] && echo 1 || echo 0)" "part_late[$st]: CONSTITUTION carries its one placeholder"
   check 1 "$([[ ! -e "$tgt/AGENTS-tail.md" && ! -e "$tgt/template-tail" && ! -e "$tgt/.claude/AGENTS-tail.md" ]] && echo 1 || echo 0)" "part_late[$st]: the tail is never copied as a file"

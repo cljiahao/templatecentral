@@ -8,12 +8,13 @@ Every stack. Step order and the delta table are in `harness-kit.md`.
 
 ---
 
-## Step C. Seed `FUTURE.md`, `docs/CONSTITUTION.md` and the `/skill-audit` skill
+## Step C. Seed `FUTURE.md`, `docs/CONSTITUTION.md`, `docs/harness.md` and the `/skill-audit` skill
 
-Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late bash "<skill-dir>/shared/tc-copy.sh" "<target>"` with the `STACK` of Step 0, after the stack's verification gate and its format pass. It copies three files from `<skill-dir>/shared/template-late/` and refuses when any already exists:
+Run `tc-copy.sh` of `harness-kit.md` Step 0 as `TC_STACK=<stack> TC_PART=late bash "<skill-dir>/shared/tc-copy.sh" "<target>"` with the `STACK` of Step 0, after the stack's verification gate and its format pass. It copies four files from `<skill-dir>/shared/template-late/` and refuses when any already exists:
 
 - `FUTURE.md` — design seams for AI collaboration patterns not yet activated.
 - `docs/CONSTITUTION.md` — binding invariants; wins over `AGENTS.md` and all skill guidance.
+- `docs/harness.md` — the reference detail behind the short `## AI Harness` / `## Git Workflow` tail of Step G, which points to it.
 - `.claude/skills/skill-audit/SKILL.md` — the Step B5 skill.
 
 ---
