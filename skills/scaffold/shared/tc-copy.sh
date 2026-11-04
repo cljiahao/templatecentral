@@ -151,7 +151,9 @@ if [ "$PART" = tail ]; then
     printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
     exit 0
   fi
-  [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] || stop "$AG has malformed templatecentral-tail markers ($nb BEGIN, $ne END): want exactly one of each"
+  if ! { [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ]; }; then
+    stop "$AG has malformed templatecentral-tail markers ($nb BEGIN, $ne END): want exactly one of each"
+  fi
   [ "$bl" -lt "$el" ] || stop "$AG has the END:templatecentral-tail marker before BEGIN"
   nonl=0
   [ -z "$(tail -c 1 "$AG")" ] || nonl=1
