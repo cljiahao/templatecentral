@@ -1394,7 +1394,7 @@ run_tail nextjs "$tgt" >/dev/null; printf 'last line without newline' >> "$tgt/A
 cp "$tgt/AGENTS.md" "$T/tail-nonl.once"
 run_tail nextjs "$tgt" >/dev/null
 check 1 "$(cmp -s "$T/tail-nonl.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_no_final_newline: bytes after END are unchanged, including a missing final newline"
-check 1 "$([[ "$(stat -f %Lp "$tgt/AGENTS.md" 2>/dev/null || stat -c %a "$tgt/AGENTS.md")" == 640 ]] && no_tail_tmp "$tgt" && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
+check 1 "$([[ "$(modeof "$tgt/AGENTS.md")" == 640 ]] && no_tail_tmp "$tgt" && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
 # symlinked AGENTS.md, CRLF, fastapi, suffixed BEGIN, fenced markers
 tgt="$T/tail-link"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/CLAUDE.md"; ln -s CLAUDE.md "$tgt/AGENTS.md"
 run_tail nextjs "$tgt" >/dev/null; run_tail nextjs "$tgt" >/dev/null
