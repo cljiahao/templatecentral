@@ -4,6 +4,7 @@ Enforced by hooks in `.claude/settings.json`. Detail, bypass labels and CI gates
 - The Bash guard blocks `--no-verify`, hook bypasses (`LEFTHOOK=0`, `core.hooksPath`), commits to protected branches and force-pushes to them.
 - PostToolUse runs an incremental type-check (see delta table for stack command) and a comment-hygiene scan after each edit. Feedback only: fix what they report.
 - The Stop hook runs the full test suite when changes are uncommitted; exit 2 means fix the failures.
+- Wire every `settings.json` hook as `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`; an array-valued `command` is silently ignored.
 - Project-specific guards go in `.claude/hooks/local/` (re-sync never overwrites it). Project skills: `.claude/skills/`. Manifest: `.claude/harness.json`.
 
 ## Skills Security
