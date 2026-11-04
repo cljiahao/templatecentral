@@ -1369,7 +1369,13 @@ for bad in "$BM" "$BM"$'\n'"$BM"$'\n'"$EM" "$EM"$'\n'"$BM"; do
   check 1 "$([[ $ec -ne 0 && "$out" == *"templatecentral-tail"* ]] && cmp -s "$T/tail-malformed.before" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_malformed_markers: refuses, file untouched ($out)"
 done
 # whole-line markers: prose that quotes a marker is not a marker; a heading with a suffix still counts; END last without a newline
-tgt="$T/tail-prose"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'Mention `BEGIN:templatecentral-tail` and `END:templatecentral-tail` in prose.\n' > "$tgt/AGENTS.md"
+no_tail_tmp() { # no_tail_tmp <dir>... — succeeds when no .AGENTS.* temp file is left in any dir
+  local d
+  for d in "$@"; do ! compgen -G "$d/.AGENTS.*" >/dev/null || return 1; done
+}
+tgt="$T/tail-prose"; rm -rf "$tgt"; mkdir -p "$tgt"
+# shellcheck disable=SC2016  # literal backticks: the prose quotes the marker names
+printf 'Mention `BEGIN:templatecentral-tail` and `END:templatecentral-tail` in prose.\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_prose_mention: backticked marker text is ignored, the tail is appended ($out)"
 out=$(run_tail nextjs "$tgt"); ec=$?
@@ -1378,7 +1384,9 @@ check 1 "$([[ "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" =
 tgt="$T/tail-suffix"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '## Harness (project)\nold\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^## Harness (project)$' "$tgt/AGENTS.md")" == 1 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_heading_suffix: a ## Harness (project) section is the repo's own, so the tail appends ($out)"
-tgt="$T/tail-fenced"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n## Harness\n```\n' > "$tgt/AGENTS.md"
+tgt="$T/tail-fenced"; rm -rf "$tgt"; mkdir -p "$tgt"
+# shellcheck disable=SC2016  # a literal code fence
+printf '```md\n## Harness\n```\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 0 "$ec" "agents_tail_heading_in_fence: a heading inside a code fence is ignored ($out)"
 tgt="$T/tail-nonl"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/AGENTS.md"
@@ -1386,11 +1394,11 @@ run_tail nextjs "$tgt" >/dev/null; printf 'last line without newline' >> "$tgt/A
 cp "$tgt/AGENTS.md" "$T/tail-nonl.once"
 run_tail nextjs "$tgt" >/dev/null
 check 1 "$(cmp -s "$T/tail-nonl.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_no_final_newline: bytes after END are unchanged, including a missing final newline"
-check 1 "$([[ "$(stat -f %Lp "$tgt/AGENTS.md" 2>/dev/null || stat -c %a "$tgt/AGENTS.md")" == 640 && -z "$(ls -A "$tgt" | grep -v '^AGENTS.md$')" ]] && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
+check 1 "$([[ "$(stat -f %Lp "$tgt/AGENTS.md" 2>/dev/null || stat -c %a "$tgt/AGENTS.md")" == 640 ]] && no_tail_tmp "$tgt" && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
 # symlinked AGENTS.md, CRLF, fastapi, suffixed BEGIN, fenced markers
 tgt="$T/tail-link"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/CLAUDE.md"; ln -s CLAUDE.md "$tgt/AGENTS.md"
 run_tail nextjs "$tgt" >/dev/null; run_tail nextjs "$tgt" >/dev/null
-check 1 "$([[ -L "$tgt/AGENTS.md" && "$(readlink "$tgt/AGENTS.md")" == CLAUDE.md && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/CLAUDE.md")" == 1 && -z "$(ls -A "$tgt" | grep -v -e '^AGENTS.md$' -e '^CLAUDE.md$')" ]] && echo 1 || echo 0)" "agents_tail_symlink: the link survives two runs and the target holds one block"
+check 1 "$([[ -L "$tgt/AGENTS.md" && "$(readlink "$tgt/AGENTS.md")" == CLAUDE.md && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/CLAUDE.md")" == 1 ]] && no_tail_tmp "$tgt" && echo 1 || echo 0)" "agents_tail_symlink: the link survives two runs and the target holds one block"
 tgt="$T/tail-crlf"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\r\nrules\r\n' > "$tgt/AGENTS.md"
 run_tail nextjs "$tgt" >/dev/null; cp "$tgt/AGENTS.md" "$T/tail-crlf.once"; run_tail nextjs "$tgt" >/dev/null
 check 1 "$([[ "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && cmp -s "$T/tail-crlf.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_crlf: two runs leave one block and the file is idempotent"
@@ -1403,15 +1411,17 @@ check 1 "$(cmp -s "$T/tail-fastapi.once" "$tgt/AGENTS.md" && grep -qF 'python -m
 tgt="$T/tail-suffixed-begin"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '<!-- BEGIN:templatecentral-tail-foo -->\n' > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail-foo' "$tgt/AGENTS.md")" == 1 && "$(grep -c '^<!-- BEGIN:templatecentral-tail (managed' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_suffixed_begin: a BEGIN line with a suffix is not a marker ($out)"
-tgt="$T/tail-fenced-markers"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n%s\n%s\n```\n' "$BM" "$EM" > "$tgt/AGENTS.md"
+tgt="$T/tail-fenced-markers"; rm -rf "$tgt"; mkdir -p "$tgt"
+# shellcheck disable=SC2016  # a literal code fence
+printf '```md\n%s\n%s\n```\n' "$BM" "$EM" > "$tgt/AGENTS.md"
 out=$(run_tail nextjs "$tgt"); ec=$?
 check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 2 && "$(head -4 "$tgt/AGENTS.md" | tail -1)" == '```' ]] && echo 1 || echo 0)" "agents_tail_fenced_markers: markers inside a code fence are ignored and the tail is appended ($out)"
 tgt="$T/tail-chain"; rm -rf "$tgt"; mkdir -p "$tgt/sub"; printf 'top\n' > "$tgt/sub/real.md"; ln -s sub/real.md "$tgt/mid.md"; ln -s mid.md "$tgt/AGENTS.md"
 run_tail nextjs "$tgt" >/dev/null; run_tail nextjs "$tgt" >/dev/null
-check 1 "$([[ -L "$tgt/AGENTS.md" && -L "$tgt/mid.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/sub/real.md")" == 1 && -z "$(ls -A "$tgt" "$tgt/sub" | grep -e '^\.AGENTS')" ]] && echo 1 || echo 0)" "agents_tail_symlink_chain: both links survive and the real file holds one block"
+check 1 "$([[ -L "$tgt/AGENTS.md" && -L "$tgt/mid.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/sub/real.md")" == 1 ]] && no_tail_tmp "$tgt" "$tgt/sub" && echo 1 || echo 0)" "agents_tail_symlink_chain: both links survive and the real file holds one block"
 tgt="$T/tail-abslink"; rm -rf "$tgt"; mkdir -p "$tgt/proj" "$tgt/elsewhere"; printf 'top\n' > "$tgt/elsewhere/CLAUDE.md"; ln -s "$tgt/elsewhere/CLAUDE.md" "$tgt/proj/AGENTS.md"
 run_tail nextjs "$tgt/proj" >/dev/null; run_tail nextjs "$tgt/proj" >/dev/null
-check 1 "$([[ -L "$tgt/proj/AGENTS.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/elsewhere/CLAUDE.md")" == 1 && -z "$(ls -A "$tgt/proj" "$tgt/elsewhere" | grep -e '^\.AGENTS')" ]] && echo 1 || echo 0)" "agents_tail_symlink_absolute: the absolute link survives and its target holds one block"
+check 1 "$([[ -L "$tgt/proj/AGENTS.md" && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/elsewhere/CLAUDE.md")" == 1 ]] && no_tail_tmp "$tgt/proj" "$tgt/elsewhere" && echo 1 || echo 0)" "agents_tail_symlink_absolute: the absolute link survives and its target holds one block"
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?
