@@ -31,7 +31,7 @@ cp "<skill-dir>/../scaffold/nextjs/template-agents/AGENTS.md" AGENTS.md
 
 With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one line). Then move any project-specific notes from `AGENTS.md.bak` under `## Project-Specific Notes`.
 
-For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G appends the `## AI Harness` tail; append nothing by hand.
+For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G writes the `## AI Harness` tail between its `templatecentral-tail` markers; write nothing of it by hand.
 
 Every stack's rules section must carry the comment doctrine; if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Do **not** overwrite an existing lint config; recommend the scaffold's comment rules from `<skill-dir>/../scaffold/<stack>/template/eslint.config.mjs` or `<skill-dir>/../scaffold/fastapi/template/pyproject.toml` (TS: `no-inline-comments: 'error'`, `sonarjs/no-commented-code: 'error'`, `linterOptions.reportUnusedDisableDirectives` and `reportUnusedInlineConfigs` at `'error'`, `sonarjs/todo-tag`/`fixme-tag` as `warn`; FastAPI: Ruff `ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`).
 
@@ -152,7 +152,7 @@ ln -s .claude .agents
 
 **Step 4f-3: Finish the AGENTS.md tail and re-baseline**
 
-Execute kit **Step G** up to its post-scaffold utilities list: append the AGENTS.md tail (here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
+Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.md tail between its markers (an existing generic tail with no markers must be wrapped in them by hand first; the script refuses otherwise; here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
 **Step 4g: Print summary**
 

@@ -128,8 +128,33 @@ if [ "$PART" = tail ]; then
   esac
   out=$(TC="$TC" awk 'BEGIN { m = "see delta table for stack command" } { i = index($0, m); if (i) $0 = substr($0, 1, i - 1) ENVIRON["TC"] substr($0, i + length(m)); print }' "$SH/template-tail/AGENTS-tail.md") || stop "cannot read the tail file"
   [ -n "$out" ] || stop "the tail file is empty"
-  printf '\n%s\n' "$out" >> "$TGT/AGENTS.md" || stop "appending to $TGT/AGENTS.md failed"
-  exit 0
+  # The tail sits between fixed markers, so a re-run replaces it instead of appending a second copy.
+  BEGIN_M='<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->'
+  END_M='<!-- END:templatecentral-tail -->'
+  AG="$TGT/AGENTS.md"
+  wrapped=$(printf '%s\n%s\n%s\n' "$BEGIN_M" "$out" "$END_M")
+  nb=$(grep -cF 'BEGIN:templatecentral-tail' "$AG")
+  ne=$(grep -cF 'END:templatecentral-tail' "$AG")
+  if [ "$nb" -eq 0 ] && [ "$ne" -eq 0 ]; then
+    if grep -qE '^## (AI )?Harness[[:space:]]*$' "$AG"; then
+      stop "$AG has a Harness heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
+    fi
+    printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
+    exit 0
+  fi
+  [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] || stop "$AG has malformed templatecentral-tail markers ($nb BEGIN, $ne END): want exactly one of each"
+  bl=$(awk 'index($0, "BEGIN:templatecentral-tail") { print NR; exit }' "$AG")
+  el=$(awk 'index($0, "END:templatecentral-tail") { print NR; exit }' "$AG")
+  [ "$bl" -lt "$el" ] || stop "$AG has the END:templatecentral-tail marker before BEGIN"
+  tmpn=$(mktemp "${TMPDIR:-/tmp}/tc-tail.XXXXXX") || stop "cannot create a temp file"
+  tmpo=$(mktemp "${TMPDIR:-/tmp}/tc-tail.XXXXXX") || { rm -f "$tmpn"; stop "cannot create a temp file"; }
+  printf '%s\n' "$wrapped" > "$tmpn"
+  if awk -v b="$bl" -v e="$el" -v nf="$tmpn" 'NR == b { while ((getline l < nf) > 0) print l; close(nf) } NR < b || NR > e { print }' "$AG" > "$tmpo" && cat "$tmpo" > "$AG"; then
+    rm -f "$tmpn" "$tmpo"
+    exit 0
+  fi
+  rm -f "$tmpn" "$tmpo"
+  stop "replacing the tail in $AG failed"
 fi
 if [ "$PART" = manifest ]; then
   # Writes .claude/harness.json: one seeded_files entry per seeded file present in the project, with its

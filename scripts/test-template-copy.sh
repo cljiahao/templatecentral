@@ -1330,10 +1330,12 @@ for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec ts
 import sys
 base, tail, cmd, got = sys.argv[1:]
 body = open(tail, "rb").read().replace(b"see delta table for stack command", cmd.encode())
-want = open(base, "rb").read() + b"\n" + body.rstrip(b"\n") + b"\n"
+BEGIN = b"<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->\n"
+END = b"<!-- END:templatecentral-tail -->\n"
+want = open(base, "rb").read() + b"\n" + BEGIN + body.rstrip(b"\n") + b"\n" + END
 print("ok" if open(got, "rb").read() == want else "differs")
 PY
-)" "agents_tail[$st]: the appended bytes are one blank line, then the tail with the marker filled"
+)" "agents_tail[$st]: the appended bytes are one blank line, then the marker-wrapped tail with the command filled"
 done
 # an unknown or empty STACK appends nothing
 for bad in rails ''; do
@@ -1345,6 +1347,27 @@ tgt="$T/tail-nofile"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'body\n' > "$tgt/AG
 sk=$(alt_skill notail); rm -rf "$sk/shared/template-tail"
 out=$(run_tail nextjs "$tgt" "$sk"); ec=$?
 check 1 "$([[ $ec -ne 0 && "$(cat "$tgt/AGENTS.md")" == body ]] && echo 1 || echo 0)" "agents_tail_is_atomic: a failed read appends nothing, not even the blank line ($out)"
+# idempotent re-run: the tail between the markers is replaced, bytes outside stay, bad marker states refuse
+tgt="$T/tail-idem"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null; printf '\n## Repo rules\nmine\n' >> "$tgt/AGENTS.md"
+cp "$tgt/AGENTS.md" "$T/tail-idem.once"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 0 "$ec" "agents_tail_idempotent: the re-run exits 0 ($out)"
+check 1 "$(cmp -s "$T/tail-idem.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_idempotent: a second identical run changes nothing"
+check 1 "$([[ "$(grep -c 'BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_idempotent: one BEGIN marker"
+sed 's/^## Skills Security$/## Skills Security EDITED/' "$T/tail-idem.once" > "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null
+check 1 "$(cmp -s "$T/tail-idem.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_idempotent: an edit inside the markers is overwritten, the text outside kept"
+tgt="$T/tail-heading"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '## AI Harness\nold\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"wrap the existing generic tail"* && "$(cat "$tgt/AGENTS.md")" == $'## AI Harness\nold' ]] && echo 1 || echo 0)" "agents_tail_heading_without_markers: refuses, file untouched ($out)"
+BM='<!-- BEGIN:templatecentral-tail (managed by templateCentral Step G; edits inside are overwritten; put repo rules outside) -->'
+EM='<!-- END:templatecentral-tail -->'
+for bad in "$BM" "$BM"$'\n'"$BM"$'\n'"$EM" "$EM"$'\n'"$BM"; do
+  tgt="$T/tail-malformed"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'x\n%s\n' "$bad" > "$tgt/AGENTS.md"; cp "$tgt/AGENTS.md" "$T/tail-malformed.before"
+  out=$(run_tail nextjs "$tgt"); ec=$?
+  check 1 "$([[ $ec -ne 0 && "$out" == *"templatecentral-tail"* ]] && cmp -s "$T/tail-malformed.before" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_malformed_markers: refuses, file untouched ($out)"
+done
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?
