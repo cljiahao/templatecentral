@@ -133,28 +133,40 @@ if [ "$PART" = tail ]; then
   END_M='<!-- END:templatecentral-tail -->'
   AG="$TGT/AGENTS.md"
   wrapped=$(printf '%s\n%s\n%s\n' "$BEGIN_M" "$out" "$END_M")
-  nb=$(grep -cF 'BEGIN:templatecentral-tail' "$AG")
-  ne=$(grep -cF 'END:templatecentral-tail' "$AG")
+  # One pass: marker counts and first line numbers (whole-line matches only, so prose that mentions a marker is
+  # ignored), whether a Harness heading sits outside a code fence, and the total line count.
+  scan=$(awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence }
+    /^<!-- BEGIN:templatecentral-tail/ { nb++; if (!bl) bl = NR }
+    /^<!-- END:templatecentral-tail -->[[:space:]]*$/ { ne++; if (!el) el = NR }
+    !fence && /^## (AI )?Harness([^[:alnum:]_]|$)/ { hh = 1 }
+    END { print nb + 0, ne + 0, bl + 0, el + 0, hh + 0, NR }' "$AG") || stop "cannot read $AG"
+  # shellcheck disable=SC2086
+  set -- $scan
+  nb=$1 ne=$2 bl=$3 el=$4 hh=$5 tot=$6
   if [ "$nb" -eq 0 ] && [ "$ne" -eq 0 ]; then
-    if grep -qE '^## (AI )?Harness[[:space:]]*$' "$AG"; then
+    if [ "$hh" -eq 1 ]; then
       stop "$AG has a Harness heading but no templatecentral-tail markers: wrap the existing generic tail in the BEGIN:templatecentral-tail and END:templatecentral-tail lines by hand, then re-run"
     fi
     printf '\n%s\n' "$wrapped" >> "$AG" || stop "appending to $AG failed"
     exit 0
   fi
   [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] || stop "$AG has malformed templatecentral-tail markers ($nb BEGIN, $ne END): want exactly one of each"
-  bl=$(awk 'index($0, "BEGIN:templatecentral-tail") { print NR; exit }' "$AG")
-  el=$(awk 'index($0, "END:templatecentral-tail") { print NR; exit }' "$AG")
   [ "$bl" -lt "$el" ] || stop "$AG has the END:templatecentral-tail marker before BEGIN"
-  tmpn=$(mktemp "${TMPDIR:-/tmp}/tc-tail.XXXXXX") || stop "cannot create a temp file"
-  tmpo=$(mktemp "${TMPDIR:-/tmp}/tc-tail.XXXXXX") || { rm -f "$tmpn"; stop "cannot create a temp file"; }
+  nonl=0
+  [ -z "$(tail -c 1 "$AG")" ] || nonl=1
+  # The temp files sit beside AGENTS.md so the final mv stays on one filesystem; cp -p keeps the file mode.
+  tmpn=$(mktemp "$TGT/.AGENTS.tail.XXXXXX") || stop "cannot create a temp file in $TGT"
+  tmpo=$(mktemp "$TGT/.AGENTS.new.XXXXXX") || { rm -f "$tmpn"; stop "cannot create a temp file in $TGT"; }
   printf '%s\n' "$wrapped" > "$tmpn"
-  if awk -v b="$bl" -v e="$el" -v nf="$tmpn" 'NR == b { while ((getline l < nf) > 0) print l; close(nf) } NR < b || NR > e { print }' "$AG" > "$tmpo" && cat "$tmpo" > "$AG"; then
-    rm -f "$tmpn" "$tmpo"
+  if cp -p "$AG" "$tmpo" && awk -v b="$bl" -v e="$el" -v nf="$tmpn" -v nonl="$nonl" -v tot="$tot" '
+      NR == b { while ((getline l < nf) > 0) print l; close(nf) }
+      NR < b || NR > e { if (nonl && NR == tot) printf "%s", $0; else print }' "$AG" > "$tmpo" && mv "$tmpo" "$AG"; then
+    rm -f "$tmpn"
     exit 0
   fi
   rm -f "$tmpn" "$tmpo"
-  stop "replacing the tail in $AG failed"
+  stop "replacing the tail in $AG failed; $AG is unchanged"
 fi
 if [ "$PART" = manifest ]; then
   # Writes .claude/harness.json: one seeded_files entry per seeded file present in the project, with its

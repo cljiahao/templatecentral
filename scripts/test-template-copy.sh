@@ -1325,7 +1325,7 @@ for sc in nextjs:'pnpm exec tsc --noEmit --incremental' vite-react:'pnpm exec ts
   tgt="$T/tail-$st"; rm -rf "$tgt"; mkdir -p "$tgt"; cp "$NX/template-agents/AGENTS.md" "$tgt/AGENTS.md"
   out=$(run_tail "$st" "$tgt"); ec=$?
   check 0 "$ec" "agents_tail[$st]: the documented command exits 0 ($out)"
-  check 1 "$([[ "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 && "$(grep -c 'see delta table for stack command' "$tgt/AGENTS.md")" == 0 && "$(grep -cF "incremental type-check ($cmd)" "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail[$st]: one tail, with the fixed command inside the parentheses"
+  check 1 "$([[ "$(grep -c '^## AI Harness$' "$tgt/AGENTS.md")" == 1 && "$(grep -c 'see delta table for stack command' "$tgt/AGENTS.md")" == 0 && "$(grep -cF "incremental type-check (\`$cmd\`)" "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail[$st]: one tail, with the fixed command inside the parentheses"
   check ok "$(python3 - "$NX/template-agents/AGENTS.md" "$TAIL_FILE" "$cmd" "$tgt/AGENTS.md" <<'PY'
 import sys
 base, tail, cmd, got = sys.argv[1:]
@@ -1368,6 +1368,25 @@ for bad in "$BM" "$BM"$'\n'"$BM"$'\n'"$EM" "$EM"$'\n'"$BM"; do
   out=$(run_tail nextjs "$tgt"); ec=$?
   check 1 "$([[ $ec -ne 0 && "$out" == *"templatecentral-tail"* ]] && cmp -s "$T/tail-malformed.before" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_malformed_markers: refuses, file untouched ($out)"
 done
+# whole-line markers: prose that quotes a marker is not a marker; a heading with a suffix still counts; END last without a newline
+tgt="$T/tail-prose"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'Mention `BEGIN:templatecentral-tail` and `END:templatecentral-tail` in prose.\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -eq 0 && "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_prose_mention: backticked marker text is ignored, the tail is appended ($out)"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 0 "$ec" "agents_tail_prose_mention: the re-run replaces ($out)"
+check 1 "$([[ "$(grep -c '^<!-- BEGIN:templatecentral-tail' "$tgt/AGENTS.md")" == 1 ]] && echo 1 || echo 0)" "agents_tail_prose_mention: still one tail after the re-run"
+tgt="$T/tail-suffix"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '## Harness (project)\nold\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 1 "$([[ $ec -ne 0 && "$out" == *"Harness heading"* ]] && echo 1 || echo 0)" "agents_tail_heading_suffix: refuses ($out)"
+tgt="$T/tail-fenced"; rm -rf "$tgt"; mkdir -p "$tgt"; printf '```md\n## Harness\n```\n' > "$tgt/AGENTS.md"
+out=$(run_tail nextjs "$tgt"); ec=$?
+check 0 "$ec" "agents_tail_heading_in_fence: a heading inside a code fence is ignored ($out)"
+tgt="$T/tail-nonl"; rm -rf "$tgt"; mkdir -p "$tgt"; printf 'top\n' > "$tgt/AGENTS.md"
+run_tail nextjs "$tgt" >/dev/null; printf 'last line without newline' >> "$tgt/AGENTS.md"; chmod 640 "$tgt/AGENTS.md"
+cp "$tgt/AGENTS.md" "$T/tail-nonl.once"
+run_tail nextjs "$tgt" >/dev/null
+check 1 "$(cmp -s "$T/tail-nonl.once" "$tgt/AGENTS.md" && echo 1 || echo 0)" "agents_tail_no_final_newline: bytes after END are unchanged, including a missing final newline"
+check 1 "$([[ "$(stat -f %Lp "$tgt/AGENTS.md" 2>/dev/null || stat -c %a "$tgt/AGENTS.md")" == 640 && -z "$(ls -A "$tgt" | grep -v '^AGENTS.md$')" ]] && echo 1 || echo 0)" "agents_tail_replace: file mode kept, no temp file left behind"
 # without an AGENTS.md the command refuses and creates nothing, so >> cannot make the file
 tgt="$T/tail-noagents"; rm -rf "$tgt"; mkdir -p "$tgt"; before=$(snap "$tgt")
 out=$(run_tail nextjs "$tgt"); ec=$?
