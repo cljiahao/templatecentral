@@ -135,4 +135,4 @@ Zod 4: use top-level `z.flattenError(err)` for field errors and `err.issues` for
 7. **User-friendly errors** — no raw validation paths or user input echoed back
 8. **Parameterized ORM queries** — never concatenate user input into SQL
 9. **`dangerouslySetInnerHTML` only for trusted content** — JSX otherwise auto-escapes
-10. **Cryptography and keys** — use vetted, maintained cryptographic libraries, never custom primitives; load keys and secrets from a secrets manager and rotate them; use TLS for data in transit and storage-level encryption for data at rest
+10. **Cryptography and keys** — use vetted, maintained cryptographic libraries, never custom primitives; load keys and secrets from the environment or a secrets manager, never from code, and rotate them; use TLS for data in transit and storage-level encryption for data at rest
