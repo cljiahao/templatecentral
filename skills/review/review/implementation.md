@@ -64,6 +64,9 @@ If the project has no commits yet, skip writing the baseline. This is always the
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
 - **Overly broad responses**: full DB records or internal fields returned when a subset is sufficient
 - **Hardcoded secrets**: tokens, passwords, connection strings, or API keys anywhere in code
+- **Cryptography and keys**: a vetted, maintained library is used with no custom or hand-rolled crypto, and keys come from a secrets manager, never from code
+- **Log retention and protection**: logs are shipped off the app host, kept for a defined retention period and protected from alteration
+- **Upload scanning**: where untrusted users upload files, uploads are scanned for malware before they are stored or served
 - **Missing authorization**: every by-id read or write checks the caller owns the record or holds the required role; denial of another user's record returns 404
 
 **Layer 2 — Stack style (from code-standards skill):**
