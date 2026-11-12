@@ -276,6 +276,10 @@ grep -i "password\|secret\|token\|authorization\|cookie" <log-output>
 # processor failed.
 ```
 
+## Production Requirement
+
+Ship logs to a separate system with a defined retention period, protected from alteration — production logs must not live only on the app host.
+
 ## After Writing Code
 
 Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

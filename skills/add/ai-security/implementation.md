@@ -91,6 +91,8 @@ export function redactPII(text: string): string {
 
 **Rule**: Log only `request_id`, `model`, `token_count`, `duration_ms` — never log the raw prompt or completion.
 
+Before sending sensitive data to a model provider, confirm the provider's terms on logging it and on training on it.
+
 ---
 
 ### LLM03 — Supply Chain
@@ -105,7 +107,9 @@ const model = 'gpt-4o';
 const model = '<provider>-<model>-<snapshot-date>';
 ```
 
-For open-source / self-hosted models: verify checksums against the provider's published hash before loading.
+For open-source / self-hosted models: verify checksums against the provider's published hash before loading. Prefer weight formats and loaders that cannot execute code on load.
+
+Files uploaded for model processing get the same safeguards as any upload — see rule 5 in `<skill-dir>/../standards/validation-patterns/patterns.md`.
 
 ---
 
@@ -329,6 +333,8 @@ if (requiresFactualGrounding(result.content)) {
 ```
 
 **Rule**: For high-stakes domains (medical, legal, financial), gate AI output behind a human review step or source citation before presenting to end users.
+
+Keep a small evaluation set and re-run it whenever the model, prompt or retrieval changes. Tell users where AI output is shown that it can be wrong.
 
 ---
 
