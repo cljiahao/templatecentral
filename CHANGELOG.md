@@ -145,7 +145,7 @@ Covers the 7.1 work (add and migrate fences become real template files) and the 
 
 ### Added
 - Scaffolded apps can be framed by their appCentral portal, and only by it. When the platform
-  injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://appcentral-uat.cpfnet.gov.sg`) and it matches
+  injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://portal.example.com`) and it matches
   `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`, the app sends `Content-Security-Policy: frame-ancestors
   <origin>` with its other CSP directives and no `X-Frame-Options`. Unset or invalid keeps
   `X-Frame-Options: DENY` + `frame-ancestors 'none'`. Exactly one origin, never `*`; dev behaviour
@@ -1680,7 +1680,7 @@ Agents check `.claude/skills/` first for project-specific workflows, then use `t
 **Security**
 - ErrorBoundary production leaks (vite-react, nestjs error-handling): `error.message` / component stack guarded with `DEV` checks
 - OWASP LLM Top 10 v2.0 added to `add/ai-security`; LLM07 System Prompt Leakage added; Agentic Top 10 2026 entries added
-- NIST SP 800-63B references replaced with "OWASP recommendation" across all auth skills (jurisdiction neutrality)
+- References to a published authentication guideline replaced with "OWASP recommendation" across all auth skills (jurisdiction neutrality)
 
 **Accuracy**
 - FastAPI pagination: sync SQLAlchemy as primary path (async was the only runnable path shown but scaffold default is sync)
@@ -1924,7 +1924,7 @@ All registered skill names have changed. Any saved invocations using the old nam
 
 ### Changed — Audit (`audit/implementation.md` v2.1.0)
 
-- **Universal standards mandate**: All skills must be jurisdiction-neutral, industry-neutral, and free of region/country/ethnicity/gender/race-specific content. Security guidance follows OWASP (Top 10 web, LLM Top 10, Agentic Top 10) as the universal standard. Government-grade rigour (least privilege, defence-in-depth, audit logging, strong authentication) applied generically without naming any specific regulation.
+- **Universal standards mandate**: All skills must be jurisdiction-neutral, industry-neutral, and free of region/country/ethnicity/gender/race-specific content. Security guidance follows OWASP (Top 10 web, LLM Top 10, Agentic Top 10) as the universal standard. High-assurance rigour (least privilege, defence-in-depth, audit logging, strong authentication) applied generically without naming any specific regulation.
 - **Training cutoff**: Step 0 now states "August 2025" explicitly; all ecosystem state treated as potentially stale until confirmed by web search.
 - **C6 — Jurisdiction neutrality check**: grep pattern added to catch known jurisdiction-specific framework names in skill files.
 - **Step 4b**: minor fixes (single file, ≤10 lines) → fix directly, no plan required; large-scope → confirm first.
@@ -1933,7 +1933,7 @@ All registered skill names have changed. Any saved invocations using the old nam
 
 ### Fixed
 
-- `add/database/python.md`, `add/database/typescript.md`: removed jurisdiction-specific compliance framework names (HIPAA, PCI) from database detection signal examples; replaced with generic high-security signal language (`regulated`, `iam`, `no-password`, `audit-logging`).
+- `add/database/python.md`, `add/database/typescript.md`: removed jurisdiction-specific compliance framework names from database detection signal examples; replaced with generic high-security signal language (`regulated`, `iam`, `no-password`, `audit-logging`).
 - `scripts/lint-skills.sh`: updated all `shared-audit` exclusion patterns to `audit/implementation` following path rename; added `audit/implementation.md` exclusion to jurisdiction check.
 
 ### Removed
@@ -2033,7 +2033,7 @@ All registered skill names have changed. Any saved invocations using the old nam
 - `fastapi-add-auth`: removed PyJWT version pin from dependencies list — version belongs in rules, not skills
 
 ### Changed
-- `fastapi-add-auth`: migrated password hashing from bcrypt to argon2id (`argon2-cffi`) — removes bcrypt 72-byte limit constraint; OWASP/NIST SP 800-63B recommended algorithm
+- `fastapi-add-auth`: migrated password hashing from bcrypt to argon2id (`argon2-cffi`) — removes bcrypt 72-byte limit constraint; OWASP-recommended algorithm
 - `nestjs-add-auth`: migrated password hashing from bcrypt to argon2id (`argon2` npm) — updated `onlyBuiltDependencies` from `bcrypt` to `argon2`; removed `@types/bcrypt`
 - `fastapi-code-standards`: updated password hashing standard from bcrypt to argon2id
 
@@ -2042,7 +2042,7 @@ All registered skill names have changed. Any saved invocations using the old nam
 ## [2.8.0] — 2026-05-07
 
 ### Fixed
-- `fastapi-scaffold`, `nextjs-scaffold`, `nestjs-scaffold`, `vite-react-scaffold`: removed hardcoded `Asia/Singapore` timezone from Dockerfiles — containers now default to UTC; operators can override via `TZ` env var at deploy time
+- `fastapi-scaffold`, `nextjs-scaffold`, `nestjs-scaffold`, `vite-react-scaffold`: removed a hardcoded timezone from Dockerfiles — containers now default to UTC; operators can override via `TZ` env var at deploy time
 - `shared-add-ai-security`: replaced hardcoded `gpt-4o-2024-11-20` model snapshot in LLM03 and LLM10 examples with a placeholder annotation — the teaching point (pin a dated snapshot) is preserved without encoding a specific version
 - `nextjs-add-auth`: removed `better-auth ≥1.6` and `better-auth 1.6` version markers from `freshAge` and OIDC provider notes — behavioral facts retained, drifting version pins removed
 - `fastapi-scaffold`, `shared-add-logging`: updated `python-json-logger` floor from `>=3.3.0,<4.0` to `>=4.0` — v4.1.0 is current stable (March 2026)
@@ -2053,8 +2053,8 @@ All registered skill names have changed. Any saved invocations using the old nam
 
 ### Fixed
 - `nextjs-add-database`, `nestjs-add-database`: retired Drizzle ORM v1 RC warning — v1.0 is now stable; retained casing API guidance and migration guide link
-- `nestjs-add-auth`, `fastapi-add-auth`: added argon2id guidance note to Rules — argon2id is the current OWASP/NIST recommendation for new projects; bcrypt remains acceptable
-- `shared-add-ai-security`: replaced Singapore-specific NRIC regex and phone country code with generic jurisdiction-neutral PII patterns
+- `nestjs-add-auth`, `fastapi-add-auth`: added argon2id guidance note to Rules — argon2id is the current OWASP recommendation for new projects; bcrypt remains acceptable
+- `shared-add-ai-security`: replaced country-specific identity-number regex and phone country code with generic jurisdiction-neutral PII patterns
 - `nextjs-add-auth`: removed hardcoded `v1.5` version pin from better-auth Drizzle adapter note
 
 ---
@@ -2108,31 +2108,31 @@ All registered skill names have changed. Any saved invocations using the old nam
 
 ### Fixed
 - **All auth skills**: Removed hardcoded CVE notes for `drizzle-orm` and `better-auth` — CVE tracking belongs in `shared-drift-check` Step 6 (dynamic `pnpm audit` / `pip-audit`), not baked into skill files
-- **All skills**: Stripped IM8 policy codes (AS-4, AS-5, AS-6, AS-8, AS-10, AS-11, AS-12, LM-1) from skill files — templateCentral is general-purpose; the security guidance is retained, the Singapore government attribution is removed
+- **All skills**: Removed policy-framework codes from skill files — templateCentral is general-purpose; the security guidance is retained, the attribution to a specific framework is removed
 - **Four scaffold skills**: Vault note in generated AGENTS.md templates is now vendor-neutral ("use a secrets manager appropriate to your cloud platform") — no prescriptive AWS/Azure/GCP lock-in
-- **shared-add-logging**: Log isolation section de-IM8'd; guidance preserved
-- **AGENTS.md**: File upload malware scanning note de-IM8'd; guidance preserved
+- **shared-add-logging**: Log isolation section reworded neutrally; guidance preserved
+- **AGENTS.md**: File upload malware scanning note reworded neutrally; guidance preserved
 
 ---
 
 ## [2.2.0] — 2026-05-06
 
 ### Security
-- **Next.js scaffold**: Added HTTP security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS, CSP baseline) via `next.config.ts` `headers()` — IM8 AS-10
+- **Next.js scaffold**: Added HTTP security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS, CSP baseline) via `next.config.ts` `headers()`
 - **NestJS scaffold**: Swagger `/docs` endpoint now disabled in `NODE_ENV=production`; expanded CSP directives (`default-src`, `script-src`, `object-src`, `img-src`)
 - **Next.js scaffold**: `https-agent.ts` TLS now defaults to verified in all environments; opt-out via `NODE_TLS_REJECT_UNAUTHORIZED=0` only
 - **CI**: `actions/checkout` pinned to SHA (supply chain: OWASP A03:2025); added hardcoded-secret scan job
 
 ### Added
 - **Next.js scaffold**: `pino` structured logging baked in — `src/lib/logger.ts`, `src/lib/utils/with-logging.ts` (aligns with `shared-add-logging` skill requirements)
-- **NestJS scaffold**: Pino `genReqId` for per-request correlation IDs (IM8 audit trail)
+- **NestJS scaffold**: Pino `genReqId` for per-request correlation IDs (audit trail)
 - **shared-add-ai-security**: New skill — OWASP LLM Top 10 v2.0 controls (prompt injection, PII redaction, output validation, tool allowlists, token budgets) for A/B/C capability tiers
 - **shared-drift-check**: Step 6 — interactive security audit (`pnpm audit` / `pip-audit`) with OSV/NVD vulnerability check
-- **AGENTS.md**: SBOM generation guidance (EU CRA / CSA AD-2026-003) and vulnerability scanning commands
-- **IM8 AS-6**: Argon2id preference note added to `nextjs-add-auth` Security Rules
-- **IM8 AS-8**: Secrets vault note added to all four scaffold generated `AGENTS.md` templates
-- **IM8 AS-12**: File upload malware scanning note added to root `AGENTS.md`
-- **IM8 LM-1**: Log isolation requirement added to `shared-add-logging` Production Requirement section
+- **AGENTS.md**: SBOM generation guidance and vulnerability scanning commands
+- **Password hashing**: Argon2id preference note added to `nextjs-add-auth` Security Rules
+- **Secrets vault**: Secrets vault note added to all four scaffold generated `AGENTS.md` templates
+- **File upload scanning**: File upload malware scanning note added to root `AGENTS.md`
+- **Log isolation**: Log isolation requirement added to `shared-add-logging` Production Requirement section
 
 ### Changed
 - **NestJS scaffold**: Migrated from Jest to Vitest (NestJS 11 default); explicit `vitest.config.ts` + `vitest.config.e2e.ts`; `package.json` scripts now specified verbatim
@@ -2148,7 +2148,7 @@ All registered skill names have changed. Any saved invocations using the old nam
 ### Fixed
 - May 2026 accuracy, security, and compliance pass across all skills
 - Next.js minimum version bumped to 16.2.4+ / 15.5.9+ (security patches)
-- IM8 compliance: bcrypt cost factor, secret validation, rate limiting
+- Security hardening: bcrypt cost factor, secret validation, rate limiting
 - better-auth CVE minimum version enforced
 - Zod v4 email error format updated
 - Engines fields added to all Node scaffolds (Node ≥22)
