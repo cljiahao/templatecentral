@@ -130,8 +130,9 @@ Zod 4: use top-level `z.flattenError(err)` for field errors and `err.issues` for
 2. **Field-level errors** — mapped to form field names, not schema paths
 3. **Server validates independently** — never trust client validation
 4. **Validate before business logic** — at the route/controller entry point
-5. **File uploads: cap, whitelist, sniff, rename** — Cap body size before buffering, whitelist type/extension, verify magic bytes, and generate the storage key server-side (never a path from the client filename)
+5. **File uploads: cap, whitelist, sniff, rename** — Cap body size before buffering, whitelist type/extension, verify magic bytes, and generate the storage key server-side (never a path from the client filename). When the project accepts files from untrusted users, also scan them for malware before they are stored or served
 6. **Validate external API responses** — Zod `safeParse()`
 7. **User-friendly errors** — no raw validation paths or user input echoed back
 8. **Parameterized ORM queries** — never concatenate user input into SQL
 9. **`dangerouslySetInnerHTML` only for trusted content** — JSX otherwise auto-escapes
+10. **Cryptography and keys** — use vetted, maintained cryptographic libraries, never custom primitives; load keys and secrets from a secrets manager, or from environment variables injected from one, never from code, and rotate them; use TLS for data in transit and storage-level encryption for data at rest

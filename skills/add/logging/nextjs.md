@@ -181,6 +181,10 @@ Expect zero matches. On macOS, BSD `grep` has no `-P` — use `rg` instead (same
 available via `rg -P`), or drop the lookahead and confirm by eye that every sensitive key printed
 has `"[Redacted]"` as its value.
 
+## Production Requirement
+
+Ship logs to a separate system with a defined retention period, protected from alteration — production logs must not live only on the app host.
+
 ## After Writing Code
 
 Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
