@@ -50,6 +50,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-sonarjs": "4.2.2",
     "globals": "^17.6.0",
+    "jscpd": "^5.4.3",
     "lefthook": "^2.1.9",
     "jsdom": "^30.0.1",
     "prettier": "^3.8.3",

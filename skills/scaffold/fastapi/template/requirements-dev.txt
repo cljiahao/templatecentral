@@ -1,6 +1,7 @@
 pytest
 pytest-asyncio
 pytest-cov
+pytest-xdist
 httpx2
 ruff
 pyright

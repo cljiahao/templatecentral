@@ -40,14 +40,11 @@ export default tseslint.config(
     rules: {
       ...sonarjs.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-call': 'off',
-      // Decorator-only imports (`@Body()`) are prone to false positives here; no-unused-vars covers unused imports.
-      'sonarjs/unused-import': 'off',
       // Honour the `_`-prefix convention for intentionally-unused args/vars.
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       // Comment hygiene gate — see templatecentral:standards code-standards/comments.md.
@@ -56,6 +53,10 @@ export default tseslint.config(
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
       'sonarjs/no-commented-code': 'error',
+      // SonarQube's default quality gate: cognitive complexity 15 per function.
+      'sonarjs/cognitive-complexity': ['error', 15],
+      // NOSONAR hides findings from the server's quality gate; fix the finding instead.
+      'no-warning-comments': ['error', { terms: ['nosonar'], location: 'anywhere' }],
       // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',
       'sonarjs/fixme-tag': 'warn',

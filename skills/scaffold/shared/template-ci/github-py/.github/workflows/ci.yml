@@ -6,6 +6,8 @@ permissions: { contents: read }
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+env:
+  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -30,7 +32,10 @@ jobs:
         run: bash .claude/verify-harness.sh
       - run: ruff check src/ && ruff format --check src/
       - run: python -m pyright src/
-      - run: python -m pytest test/ --cov=src --cov-report=xml -q   # writes coverage.xml
+      - name: Duplication (<= 3%, the SonarQube new-code gate)
+        run: npx --yes jscpd@${JSCPD_VERSION} src --threshold 3 --reporters console
+      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)
+        run: python -m pytest test/ -n auto --cov=src --cov-report=xml -q
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}

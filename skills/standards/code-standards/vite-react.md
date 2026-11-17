@@ -68,9 +68,13 @@ Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and
 - JSDoc only on public APIs the signature does not explain: see `comments.md`.
 - `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
-### Static Analysis (`eslint-plugin-sonarjs`)
+### Quality gate (SonarQube default "Sonar way")
 
-`eslint.config.mjs` extends `sonarjs.configs.recommended` at `error` (bugs, code smells, tests, React/JSX). Overrides: `src/components/ui/**` (generated shadcn) turns off `prefer-read-only-props`; test files (`src/**/*.{test,spec}.{ts,tsx}`) turn off `no-hardcoded-secrets` / `no-clear-text-protocols`.
+Target: new-code coverage >= 80%, duplication on new code <= 3%, cognitive complexity <= 15 per function, no new bugs, vulnerabilities or hotspots. Local and CI mirror it:
+
+- `eslint.config.mjs` runs `sonarjs.configs.recommended` at `error`, with `sonarjs/cognitive-complexity` at 15 and `no-warning-comments` banning `NOSONAR`. Overrides: `src/components/ui/**` (generated shadcn) turns off `prefer-read-only-props`; test files turn off `no-hardcoded-secrets` / `no-clear-text-protocols`. Fix findings; do not add disable comments or raise limits.
+- CI runs `jscpd src --threshold 3` (whole tree), Vitest sharded (`SHARD_COUNT`, default 2) with coverage merged from shard blob reports, then `diff-cover --fail-under=80` on changed lines.
+- Seeded `sonar-project.properties` points the scanner at `src`/`test` and `coverage/lcov.info`. Generated shadcn code is the only coverage exclusion. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: add one after the test step, with both as CI secrets.
 
 ### Security (Vite + React)
 

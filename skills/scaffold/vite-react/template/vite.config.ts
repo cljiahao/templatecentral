@@ -33,9 +33,14 @@ export default defineConfig({
     env: { VITE_API_BASE_URL: 'http://api.test' },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
+    pool: 'forks',
+    // CI runners are small: half the cores per process keeps memory flat; sharding adds the parallelism.
+    maxWorkers: process.env.CI ? '50%' : undefined,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'cobertura'],
+      reporter: ['text', 'cobertura', 'lcov'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['**/*.test.{ts,tsx}', '**/*.d.ts', 'src/components/ui/**', 'src/test/**'],
     },
   },
 });

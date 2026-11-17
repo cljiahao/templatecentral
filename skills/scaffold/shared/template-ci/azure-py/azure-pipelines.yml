@@ -6,6 +6,8 @@ pr:
   branches: { include: [main, uat, develop] }
 pool:
   vmImage: ubuntu-latest
+variables:
+  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build
 jobs:
   - job: quality
     timeoutInMinutes: 20
@@ -25,7 +27,9 @@ jobs:
         displayName: Lint and format check
       - bash: python -m pyright src/
         displayName: Typecheck
-      - bash: python -m pytest test/ --cov=src --cov-report=xml -q    # writes coverage.xml
+      - bash: npx --yes jscpd@$(JSCPD_VERSION) src --threshold 3 --reporters console
+        displayName: Duplication (<= 3%, the SonarQube new-code gate)
+      - bash: python -m pytest test/ -n auto --cov=src --cov-report=xml -q    # xdist workers; pytest-cov combines their data into coverage.xml
         displayName: Tests with coverage
       - bash: |
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}

@@ -29,6 +29,7 @@ template-py/.claude/hooks/stop-checks.sh 755 - -
 template-py/.claude/hooks/subagent-stop.sh 755 - -
 template-py/.claude/hooks/user-prompt-guard.py 644 - -
 template-py/lefthook.yml 644 - -
+template-py/sonar-project.properties 644 - -
 template-settings-py/.claude/settings.json 644 - -
 template-settings-ts/.claude/settings.json 644 - -
 template-tail/AGENTS-tail.md 644 - -
@@ -40,6 +41,7 @@ template-ts/.claude/hooks/stop-checks.sh 755 - -
 template-ts/.claude/hooks/subagent-stop.sh 755 - -
 template-ts/.claude/hooks/user-prompt-guard.cjs 644 - -
 template-ts/lefthook.yml 644 - -
+template-ts/sonar-project.properties 644 - -
 template/.claude/ci-gates.sh 755 - -
 template/.claude/comment-hygiene-patterns.txt 644 - -
 template/.claude/hooks/session-context.sh 755 - -
