@@ -12,8 +12,7 @@ MAX_PAGE_SIZE = 100
 class BaseRepository[T: BaseModel]:
     model: type[T]
     collection_name: str
-    # update() writes only these keys, so a request body can never set
-    # hashed_password or smuggle a "$" operator into the update document.
+    # update() writes only these keys so a body cannot set hashed_password or inject "$" operators.
     updatable_fields: frozenset[str] = frozenset()
 
     def __init__(self, db: AsyncDatabase[dict[str, Any]]) -> None:

@@ -12,10 +12,7 @@ import { serviceConfig } from '../config/env.config';
 export class DatabaseModule implements OnModuleInit {
   constructor(@InjectConnection() private readonly connection: Connection) {}
 
-  // Mongoose builds schema indexes in the background: on a fresh database, inserts
-  // made right after boot land before the unique index exists and duplicates get in.
-  // Awaiting init() holds the boot until every forFeature model's indexes are built
-  // (and fails it loudly if existing duplicates block a unique index).
+  // Awaiting init() holds boot until unique indexes exist, so early inserts cannot create duplicates.
   async onModuleInit() {
     await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
   }

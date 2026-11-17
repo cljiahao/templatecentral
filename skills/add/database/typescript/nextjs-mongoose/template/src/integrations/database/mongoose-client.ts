@@ -24,10 +24,9 @@ export async function connectDB(): Promise<typeof mongoose> {
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URL, {
-      // Fail fast instead of holding a serverless invocation open for the 30s default
+      // Fail fast instead of holding a serverless invocation for the 30s default.
       serverSelectionTimeoutMS: 5_000,
-      // Each serverless instance keeps its own pool — a small cap avoids exhausting
-      // the cluster's connection limit as instances scale out
+      // A small pool avoids exhausting the cluster connection limit as instances scale out.
       maxPoolSize: 10,
     });
   }

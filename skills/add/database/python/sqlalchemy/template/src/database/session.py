@@ -8,10 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.config import api_settings, common_settings
 
 url = make_url(api_settings.DATABASE_URL)
-# libpq's default sslmode=prefer never verifies the server certificate and silently falls
-# back to plaintext. Local Docker Postgres serves no TLS, so only dev skips verify-full.
-# `system` = the OS CA store (libpq ≥ 16); a private CA (e.g. the RDS bundle) goes in the
-# URL as `?sslrootcert=/path/ca.pem`.
+# libpq's default sslmode=prefer silently falls back to plaintext; only dev skips verify-full.
 connect_args: dict[str, Any] = {}
 if url.get_backend_name() == "postgresql" and common_settings.ENVIRONMENT != "dev":
     connect_args = {

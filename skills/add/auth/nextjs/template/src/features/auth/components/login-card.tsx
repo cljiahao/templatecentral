@@ -8,8 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CustomCard } from '@/components/widgets/custom-card';
 
-// better-auth's email validator rejects single-label domains — 'dev@local' fails with
-// INVALID_EMAIL on both sign-in and sign-up. Use a dotted domain.
+// better-auth rejects single-label domains such as dev@local; use a dotted domain.
 const DEV_EMAIL = 'dev@dev.local';
 const DEV_PASSWORD = 'dev-password-local';
 
@@ -23,7 +22,7 @@ export function LoginCard() {
     });
 
     if (error) {
-      // First run: account does not exist yet — create it (autoSignIn: true signs in immediately)
+      // First run: create the account; autoSignIn signs in immediately.
       const { error: signUpError } = await authClient.signUp.email({
         email: DEV_EMAIL,
         password: DEV_PASSWORD,

@@ -10,10 +10,8 @@ def get_current_roles(
     user_id: Annotated[str, Depends(get_current_user)],
 ) -> frozenset[str]:
     """Roles the current user holds. Grants none until a database lookup replaces it."""
-    # `user_id` is unused here but must stay: the dependency forces authentication, and the
-    # database lookup that replaces this body needs it.
-    # Roles are loaded per request, never read from the token, so revoking a role
-    # takes effect on the caller's next request rather than when the token expires.
+    # user_id must stay: it forces authentication and the database lookup that replaces this body needs it.
+    # Roles are loaded per request, never from the token, so revocation takes effect immediately.
     return frozenset()
 
 
@@ -39,6 +37,6 @@ def require_roles(*roles: str) -> Callable[..., str]:
 
 def ensure_owner(owner_id: str | None, user_id: str) -> None:
     """404 unless `user_id` owns the record; pass None when the record does not exist."""
-    # 404 rather than 403, so a caller cannot probe which ids belong to other users.
+    # 404 rather than 403 so callers cannot probe other users' ids.
     if owner_id is None or owner_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")

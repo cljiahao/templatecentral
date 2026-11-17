@@ -4,25 +4,21 @@ import { APIError } from '@/lib/errors';
 import { z } from 'zod';
 import type { AuthUser } from '../types';
 
-// Resolved per-request, never at module scope: getApiBaseUrl() throws when
-// VITE_API_BASE_URL is unset, and a module-scope throw kills bundle evaluation
-// before createRoot() runs — a blank page with no ErrorBoundary to catch it.
+// Resolved per request: a module-scope throw would blank the page before createRoot().
 const authBase = () => `${getApiBaseUrl()}/auth`;
 
-// Validate API response shapes at the boundary — mirrors the AuthUser type.
 const authUserSchema = z
   .object({
     id: z.string(),
-    // NestJS's /auth/me returns only the token claims (id, email) — fall back to email.
+    // NestJS /auth/me returns only token claims; fall back to email.
     name: z.string().optional(),
     email: z.email(),
-    // AuthUser has it — without this, parse() silently strips it
+    // Keep this field or parse() silently strips it.
     image: z.string().nullable().optional(),
   })
   .transform((u): AuthUser => ({ ...u, name: u.name ?? u.email }));
 
-// POST /auth/session is the backend's browser login (cookie mode): it sets the HttpOnly
-// session cookie plus XSRF-TOKEN and returns 204 — the JWT never reaches JavaScript.
+// Cookie-mode login: the backend sets the HttpOnly session cookie, so the JWT never reaches JavaScript.
 export async function loginWithCredentials(email: string, password: string): Promise<AuthUser> {
   const res = await fetch(`${authBase()}/session`, {
     method: 'POST',

@@ -213,9 +213,7 @@ Run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template-cookie bash "<skill-
 **1. `src/core/security.py`** — add `import hashlib`, `import hmac`, `import secrets` to the imports, change the config import to `from core.config import api_settings, common_settings`, and append:
 
 ```python
-# --- Browser client (cookie mode) -------------------------------------------------
-# Secure is dropped only in dev (plain-http localhost); the __Host- prefix requires
-# Secure, so the session cookie takes its hardened name everywhere else.
+# Secure is dropped only in dev; the __Host- prefix requires Secure elsewhere.
 COOKIE_SECURE = common_settings.ENVIRONMENT != "dev"
 SESSION_COOKIE = "__Host-session" if COOKIE_SECURE else "session"
 CSRF_COOKIE = "XSRF-TOKEN"  # readable by the SPA, which echoes it in CSRF_HEADER
@@ -383,17 +381,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-# get_remote_address reads request.client.host — correct behind a proxy only when
-# TRUST_PROXY is set (see Rules), otherwise every user shares the proxy's bucket.
+# Behind a proxy this is correct only when TRUST_PROXY is set.
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# On auth endpoints — limit /register as well as /login (both are
-# unauthenticated and CPU-expensive via argon2 hashing), plus /session in cookie mode.
-# Keep each handler's current `def`/`async def` — only add the decorator and `request`.
+# Limit /register and /login (argon2 is CPU-expensive), plus /session in cookie mode.
 @router.post("/register", response_model=UserResponse)
 @limiter.limit("3/15minutes")
 def register(request: Request, body: RegisterRequest) -> UserResponse: ...

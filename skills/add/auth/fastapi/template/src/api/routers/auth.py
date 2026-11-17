@@ -7,8 +7,7 @@ from api.services.auth_service import login_user, register_user
 router = APIRouter(prefix="/auth")
 
 
-# Plain `def`: argon2 hashing is ~100 ms of CPU, and FastAPI runs sync handlers in its
-# threadpool instead of blocking the event loop.
+# Plain def: argon2 hashing is CPU-bound, so FastAPI runs it in the threadpool.
 @router.post("/register", response_model=UserResponse)
 def register(body: RegisterRequest) -> UserResponse:
     """Register a new user account."""

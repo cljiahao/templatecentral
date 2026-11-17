@@ -11,7 +11,7 @@ from models.user import User
 pytestmark = pytest.mark.integration
 
 Db = AsyncDatabase[dict[str, Any]]
-FAKE_HASH = "placeholder-hash"  # repository tests never verify it
+FAKE_HASH = "placeholder-hash"
 
 
 def make_user(email: str = "ada@example.com") -> User:

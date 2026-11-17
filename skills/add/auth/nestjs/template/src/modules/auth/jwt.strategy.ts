@@ -27,8 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): AuthUser {
-    // Roles are never taken from the token; load them from the database so a revoked role
-    // stops working on the next request. Until then nobody holds a role.
+    // Roles come from the database, never the token, so a revoked role stops on the next request.
     return { id: payload.sub, email: payload.email, roles: [] };
   }
 }

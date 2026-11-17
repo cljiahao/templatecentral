@@ -91,8 +91,7 @@ export class GithubIntegrationService {
       throw new BadGatewayException('Upstream returned an unexpected shape.');
     }
 
-    // Per-row safeParse: a ZodError is not an HttpException (it would surface as an
-    // unformatted 500), and one bad row should not discard the whole list.
+    // Per-row safeParse: a ZodError would surface as an unformatted 500.
     const repos: GithubRepo[] = [];
     let skipped = 0;
 

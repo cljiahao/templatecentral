@@ -1,11 +1,7 @@
-// src/lib/logging/breadcrumbs.ts
 const MAX_BREADCRUMBS = 20;
 const buffer: Array<{ type: string; label: string; ts: string }> = [];
 
-// Navigation labels are URL paths, and paths routinely carry the exact values that
-// must never leave the browser: /reset-password/<one-time-token>, /users/<uuid>,
-// /invite/<code>. Collapse any segment that is not a plain word to a placeholder so
-// the route shape survives for debugging but the value does not.
+// Collapse non-word path segments to placeholders so tokens and ids never leave the browser.
 const SAFE_SEGMENT = /^[a-z][a-z0-9-]*$/i;
 
 export function redactLabel(label: string): string {

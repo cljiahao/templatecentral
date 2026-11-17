@@ -10,8 +10,7 @@ async def init_mongo() -> None:
     global mongo_client
     mongo_client = AsyncMongoClient(
         api_settings.MONGODB_URL.get_secret_value(),
-        # Outside dev, require TLS (overrides any tls=false in the URL): a non-TLS
-        # server fails the boot instead of receiving credentials in plaintext.
+        # Outside dev TLS is required: a non-TLS server fails the boot instead of seeing plaintext credentials.
         tls=common_settings.ENVIRONMENT != "dev",
         serverSelectionTimeoutMS=5000,
         tz_aware=True,

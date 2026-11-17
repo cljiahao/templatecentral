@@ -1,4 +1,3 @@
-// src/lib/pagination/pagination-service.ts
 import type { PaginationMetadata } from '@/lib/types/pagination';
 
 export function calculateOffset(page: number, limit: number): number {

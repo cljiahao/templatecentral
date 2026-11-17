@@ -73,9 +73,7 @@ def validate_user_prompt(text: str) -> None:
 Never allow PII or credentials to enter LLM context. Strip before sending.
 
 ```ts
-// Order matters: specific patterns run before broad ones, or the bare-digit national-ID
-// pattern consumes card and phone numbers first. Replace NATIONAL-ID with your locale's
-// exact format — "any 6-12 digits" also hits order numbers and amounts.
+// Specific patterns run before broad ones; set NATIONAL-ID to your locale format.
 const PII_PATTERNS: Array<[RegExp, string]> = [
   [/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.\w{2,}\b/g, '[EMAIL]'],
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
@@ -125,8 +123,7 @@ Training data, fine-tuning sets and retrieval corpora are attack surfaces: poiso
 ```ts
 import { createHash } from 'node:crypto';
 
-// Store provenance with every chunk so a poisoned source can be traced and purged later.
-// Regex-stripping HTML here is not a control (bypassable); rendering safety is LLM05's job.
+// Store provenance per chunk so a poisoned source can be purged.
 async function ingestDocument(content: string, source: string, expectedHash?: string): Promise<void> {
   const hash = createHash('sha256').update(content).digest('hex');
   if (expectedHash && hash !== expectedHash) {

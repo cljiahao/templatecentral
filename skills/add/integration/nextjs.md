@@ -92,7 +92,7 @@ export class GithubService {
 
 ```ts
 // src/integrations/factories.ts
-// Build error if a client component imports this — keeps tokens out of the browser bundle.
+// Build error if a client component imports this, keeping tokens out of the bundle.
 import 'server-only';
 import { GithubClient } from './clients/github-client';
 import { GithubService } from './services/github-service';

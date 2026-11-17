@@ -150,7 +150,7 @@ export const paginatedProjectsSchema = z.object({
 
 ```ts
 // src/features/project/api/project-service.ts
-// Not '@/lib/errors' — that barrel pulls server-only modules into the client bundle.
+// Not '@/lib/errors': that barrel pulls server-only modules into the client bundle.
 import { APIError } from '@/integrations/error';
 import { paginatedProjectsSchema } from '../schemas/project.schema';
 

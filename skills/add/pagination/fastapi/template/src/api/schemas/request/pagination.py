@@ -1,4 +1,3 @@
-# src/api/schemas/request/pagination.py
 from pydantic import Field
 
 from api.schemas.base import BaseRequestSchema

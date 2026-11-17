@@ -41,8 +41,7 @@ Add to `APISettings` in **`src/core/config.py`** (`from pydantic import SecretSt
 
 ```python
 class APISettings(BaseSettings):
-    # ... existing fields ...
-    # SecretStr: the URL usually embeds credentials; keeps them out of repr()/logs.
+    # SecretStr keeps the credential-bearing URL out of repr() and logs.
     MONGODB_URL: SecretStr = Field(
         description="MongoDB connection URL — must be set in environment"
     )
@@ -98,8 +97,7 @@ from pydantic import EmailStr
 
 
 class User(Document):
-    # The unique index (built by init_beanie at boot) is what makes B7's
-    # DuplicateKeyError → 409 fire; a plain `EmailStr` stores duplicates silently.
+    # The unique index makes a duplicate email raise DuplicateKeyError (409).
     email: Annotated[EmailStr, Indexed(unique=True)]
     name: str
     hashed_password: str
@@ -151,13 +149,11 @@ router = APIRouter()
 
 
 def to_response(user: User) -> UserResponse:
-    # Explicit fields: hashed_password never reaches the response, and the
-    # document's ObjectId id becomes the schema's str id.
+    # Explicit fields keep hashed_password out of the response.
     return UserResponse(id=str(user.id), email=user.email, name=user.name)
 
 
-# No response_model=: the return annotation is the response model (ruff FAST001
-# flags the duplicate on the 3.13 target this path pins).
+# No response_model=: the return annotation is the model (ruff FAST001).
 @router.get("/users")
 async def list_users() -> list[UserResponse]:
     return [to_response(u) for u in await user_service.list_users()]
@@ -260,9 +256,7 @@ from pymongo.errors import DuplicateKeyError
 from core.security import create_access_token, hash_password, verify_password
 from models.user import User
 
-# Verified on the miss path so an unknown email costs the same as a wrong
-# password — without it, response timing leaks which accounts exist. Hashed at
-# import with the live PasswordHasher so its cost always matches real hashes.
+# Hashed at import so an unknown email costs the same as a wrong password.
 DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 

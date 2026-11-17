@@ -39,9 +39,7 @@ from core.logging import logger
 async def log_requests(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    # Clear at the START, not in a `finally`: the scaffold's `Exception` handler runs in
-    # Starlette's outermost ServerErrorMiddleware, i.e. after this function unwinds — clearing
-    # on the way out would strip request_id from the one log line you most need it on.
+    # Clear at the start, not in `finally`: the outer Exception handler runs after unwind.
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(request_id=correlation_id.get())
     start = time.monotonic()
@@ -120,8 +118,7 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
         logger.warning(
             "Login failure",
             reason="invalid_credentials",
-            # Proxy IP unless TRUST_PROXY is set (see add (auth) — Rate Limiting);
-            # request.client is None on some ASGI transports.
+            # Proxy IP unless TRUST_PROXY is set; request.client can be None.
             ip=request.client.host if request.client else None,
         )
         raise
@@ -144,8 +141,7 @@ from core.logging import logger
 
 
 def require_role(required_role: str):
-    # Factory: a bare `required_role: str` parameter on a dependency would be parsed as a
-    # client-supplied query param, letting the caller choose the role being checked.
+    # Factory: a bare `required_role: str` would be parsed as a client query param.
     async def checker(
         request: Request, user_id: Annotated[str, Depends(get_current_user)]
     ):

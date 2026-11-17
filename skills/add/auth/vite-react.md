@@ -133,8 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     fetchCurrentUser()
       .then(setUser)
-      // A network failure or a ZodError from authUserSchema.parse() would otherwise
-      // reject unhandled and leave isLoading stuck; treat either as "not signed in".
+      // A network or ZodError failure means "not signed in", not a stuck isLoading.
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
   }, []);

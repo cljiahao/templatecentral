@@ -1,4 +1,3 @@
-// src/common/dto/pagination.dto.ts
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 

@@ -36,7 +36,7 @@ def _write(user_id: User) -> dict[str, str]:
 
 @pytest.fixture
 def browser() -> TestClient:
-    # https so the cookie jar returns Secure cookies when COOKIE_SECURE is on (non-dev).
+    # https so the cookie jar returns Secure cookies outside dev.
     client = TestClient(probe, base_url="https://testserver")
     assert client.post("/login").status_code == 204
     return client

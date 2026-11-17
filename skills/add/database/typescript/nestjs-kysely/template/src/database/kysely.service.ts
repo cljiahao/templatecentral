@@ -13,9 +13,7 @@ export class KyselyService extends Kysely<Database> implements OnModuleInit, OnM
     const pool = new Pool({
       connectionString: serviceConfig.DATABASE_URL,
       max: 10,
-      // node-postgres does NOT negotiate TLS on its own. Without this the password and
-      // every row travel in plaintext. Local Docker Postgres serves no TLS, so it is
-      // disabled in dev only — never for a managed/remote database.
+      // node-postgres does not negotiate TLS itself; disabled in dev only, never for remote databases.
       ssl: appConfig.ENVIRONMENT === 'dev' ? false : { rejectUnauthorized: true },
     });
 

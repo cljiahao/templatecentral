@@ -43,7 +43,7 @@ describe('Auth cookie mode (e2e)', () => {
       imports: [AppModule],
       controllers: [CsrfProbeController],
     })
-      // Add the same .overrideProvider(...) calls your auth.e2e-spec.ts carries (database guides).
+      // Add the same .overrideProvider(...) calls as auth.e2e-spec.ts.
       .compile();
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     // Registers @fastify/cookie and CORS exactly as main.ts does.
@@ -52,8 +52,7 @@ describe('Auth cookie mode (e2e)', () => {
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
 
-    // Stand-in for AuthService.login (a stub until the database guide lands): any valid token
-    // works for the cookie checks.
+    // Stand-in for AuthService.login: any valid token works for the cookie checks.
     const accessToken = await app
       .get(JwtService)
       .signAsync({ sub: 'user-1', email: 'a@example.com' });
@@ -129,8 +128,7 @@ describe('Auth cookie mode (e2e)', () => {
     expect(res.statusCode).toBe(201);
   });
 
-  // CORS-simple bodies skip preflight: Fastify refuses a body with no Content-Type (415) and
-  // hands text/plain to Zod as a string (400) — neither reaches AuthService.login.
+  // CORS-simple bodies skip preflight; Fastify rejects them (415/400) before AuthService.login.
   it.each([
     { headers: {}, status: 415 },
     { headers: { 'content-type': 'text/plain' }, status: 400 },

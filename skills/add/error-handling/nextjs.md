@@ -121,7 +121,7 @@ No session → 401. Missing resource **and** someone else's resource → the sam
 
 ```ts
 // src/app/api/projects/[id]/route.ts
-// Your data-layer lookup; must return the row or null.
+// Your data-layer lookup returns the row or null.
 import { findProjectById } from '@/integrations/database/queries/find-project';
 import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';

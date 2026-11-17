@@ -251,15 +251,12 @@ from api.repositories.user_repository import (
 )
 from core.security import create_access_token, hash_password, verify_password
 
-# Verified on the miss path so an unknown email costs the same as a wrong
-# password — without it, response timing leaks which accounts exist.
-# Hashed at import with the live PasswordHasher so its cost always matches real hashes.
+# Hashed at import so an unknown email costs the same as a wrong password.
 DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def register_user(db: Session, email: str, password: str, name: str) -> dict:
-    # The unique index, not a find-then-insert check, is what stops duplicate
-    # accounts under concurrent registrations.
+    # The unique index, not a pre-check, stops concurrent duplicate registrations.
     try:
         user = create_user(
             db=db,

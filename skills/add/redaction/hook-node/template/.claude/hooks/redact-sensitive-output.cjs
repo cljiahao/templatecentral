@@ -7,13 +7,10 @@ const path = require('path');
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const CONFIG_PATH = path.join(PROJECT_DIR, '.claude', 'redaction-config.json');
 const MAP_PATH = path.join(PROJECT_DIR, '.claude', '.redaction-map.json');
-// Synthetic address spaces, tried in order. 10.0.0.0/8 is RFC 1918 private-use;
-// 198.18.0.0/15 is the RFC 2544 benchmarking range -- standards-reserved and
-// essentially never used for real internal infra, so it is the fallback whenever a
-// configured real range overlaps the primary space (masking into a block that
-// overlaps the real one would emit the real value back out).
+// 10.0.0.0/8 is tried first; 198.18.0.0/15 is the fallback when a real range overlaps it.
 const SYNTHETIC_SPACES = ['10.0.0.0/8', '198.18.0.0/15'];
-const DOMAIN_SUFFIX = 'example'; // RFC 2606 reserved
+// RFC 2606 reserved.
+const DOMAIN_SUFFIX = 'example';
 const CIDR_RE = /^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/;
 const IPV4_RE = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 
@@ -71,10 +68,7 @@ function emptyMap() {
   return normalizeMap(null);
 }
 
-// Keeps assignments another concurrent invocation may have persisted since this run
-// read the map, adding only the keys this run allocated. Combined with the temp-file
-// + rename(2) write below (atomic, so no reader ever sees a partial map) this narrows
-// -- it does not fully close -- the read/modify/write race between parallel tool calls.
+// Merges keys a concurrent run persisted; narrows, but does not close, the write race.
 function mergeMaps(base, ours) {
   return {
     cidrs: { ...ours.cidrs, ...base.cidrs },
@@ -97,9 +91,7 @@ function saveMapAtomic(filePath, map) {
   fs.renameSync(tmpPath, filePath);
 }
 
-// Returns a human-readable problem description, or null when the config is usable.
-// A malformed entry must never be silently ignored: a CIDR that does not parse would
-// otherwise disable masking for that range without anyone noticing.
+// Returns a problem description, or null when usable; a malformed CIDR must never silently disable masking.
 function validateConfig(config) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     return 'top-level value must be a JSON object';
@@ -130,13 +122,7 @@ function validateConfig(config) {
   return null;
 }
 
-// Allocates an alignment-correct synthetic block that overlaps neither a previously
-// allocated synthetic block nor ANY configured real range. A synthetic space that any
-// configured real range touches is disqualified wholesale: allocating from it risks
-// handing back the real value as its own "mask", which reports success while leaking.
-// Larger real blocks (a short prefix such as /8 or shorter) claim a proportionally
-// bigger share of a space, so they exhaust the available slots fastest; when no space
-// can serve the request this throws rather than returning a colliding block.
+// Allocates a synthetic block overlapping no real or allocated range; throws rather than collide.
 function allocateSyntheticCidr(prefixLen, map, realCidrs) {
   const slotSize = blockSize(prefixLen);
   for (let i = 0; i < SYNTHETIC_SPACES.length; i += 1) {
@@ -209,8 +195,7 @@ function escapeRegExp(str) {
 function maskDomains(text, domainSuffixes, map) {
   let count = 0;
   let masked = text;
-  // Longest suffix first so overlapping entries (e.g. "internal" and "corp.internal")
-  // do not collapse into the shorter one depending on config order.
+  // Longest suffix first so overlapping entries do not collapse into the shorter one.
   const ordered = [...domainSuffixes].sort((a, b) => b.length - a.length);
   for (const suffix of ordered) {
     const re = new RegExp(`\\b(?:[\\w-]+\\.)*${escapeRegExp(suffix)}\\b`, 'gi');
@@ -230,11 +215,7 @@ function redact(text, config, map) {
   return { text: domainResult.text, count: ipResult.count + domainResult.count };
 }
 
-// Built-in tools return structured output (Bash yields {stdout, stderr, interrupted,
-// isImage}), and `updatedToolOutput` must have the SAME shape as the tool produced --
-// a flat string is silently discarded and the model sees the unmasked original. Walk
-// whatever shape arrived and mask every string leaf in place, so this stays correct
-// for all four matched tools and for any future change to their output shape.
+// updatedToolOutput must match the tool's output shape or it is discarded; mask every string leaf.
 function redactValue(value, config, map) {
   if (typeof value === 'string') {
     const result = redact(value, config, map);
@@ -263,9 +244,7 @@ function redactValue(value, config, map) {
 }
 
 function warnAndExit(message) {
-  // Fail-open warning. Plain stderr on exit 0 reaches only the debug log -- neither the user nor
-  // Claude sees it -- so the warning goes out as a `systemMessage` (shown to the user) while the
-  // stderr copy keeps the debug log useful. Exit 0: the hook never blocks a tool call.
+  // Fail-open: a systemMessage reaches the user; stderr on exit 0 only reaches the debug log.
   process.stderr.write(`${message}\n`);
   process.stdout.write(JSON.stringify({ systemMessage: message }));
   process.exit(0);
@@ -300,8 +279,7 @@ function main() {
     map = emptyMap();
   }
 
-  // Build the whole synthetic address plan up front so an unsatisfiable configuration
-  // surfaces here -- at load time, named -- instead of deep inside the masking path.
+  // Build the address plan up front so a bad configuration fails at load time.
   try {
     const realCidrs = (config.cidrs || []).map(parseCidr);
     for (const cidrStr of config.cidrs || []) getOrAssignMaskedCidr(cidrStr, map, realCidrs);

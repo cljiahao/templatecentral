@@ -20,8 +20,7 @@ pino-http handles request/response logging automatically (method, path, status_c
 ```ts
 // src/app.module.ts — add assignResponse next to the existing pinoHttp object
 LoggerModule.forRoot({
-  // Fields set with PinoLogger.assign() during the request also land on pino-http's
-  // "request completed" line, not just on logs written after the assign() call.
+  // Fields set with assign() also land on the "request completed" line.
   assignResponse: true,
   pinoHttp: {
     // ...keep existing level, redact, transport unchanged
@@ -105,8 +104,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
     // ...existing jwtService + database collaborator, unchanged
   ) {}
 
-  // in login(), inside the existing `if (!user || !passwordOk)` branch, before the throw:
-  // No email: it is PII, and logging it on failure builds a list of probed accounts.
+  // In login(), in the failure branch before the throw; no email, it is PII.
   this.logger.warn({ reason: 'invalid_credentials' }, 'Login failure');
 
   // in login(), just before the return:
@@ -136,8 +134,8 @@ async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
 **Slow DB queries** — add a timing wrapper method to `DrizzleService` in `src/database/drizzle.service.ts`:
 
 ```ts
-// src/database/drizzle.service.ts  (extend existing DrizzleService)
-// Add this method to the class body:
+// src/database/drizzle.service.ts
+// Add this method to the DrizzleService class body.
 
 async timedQuery<T>(name: string, fn: () => Promise<T>): Promise<T> {
   const start = Date.now();

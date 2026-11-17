@@ -1,4 +1,3 @@
-# src/utils/pagination.py
 from typing import Literal, cast
 
 from api.schemas.response.pagination import PaginationMetadata

@@ -106,8 +106,7 @@ import { addBreadcrumb } from '@/lib/logging/breadcrumbs';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 
-// addBreadcrumb() redacts non-word path segments, so ids and one-time tokens
-// in the pathname never reach the buffer.
+// addBreadcrumb() redacts non-word path segments, so ids and tokens never reach the buffer.
 export function NavigationBreadcrumbs() {
   const location = useLocation();
 

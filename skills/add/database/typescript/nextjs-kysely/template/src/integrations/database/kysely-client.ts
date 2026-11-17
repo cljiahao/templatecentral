@@ -6,8 +6,7 @@ import type { Database } from './types';
 function createPool() {
   return new Pool({
     connectionString: process.env.DATABASE_URL,
-    // TLS is required for any non-local database. Verify the server certificate —
-    // `rejectUnauthorized: false` accepts a MITM proxy silently.
+    // TLS required for non-local databases; rejectUnauthorized: false would accept a MITM proxy.
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
     max: 10,
   });

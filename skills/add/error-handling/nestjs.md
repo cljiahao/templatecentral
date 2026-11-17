@@ -43,9 +43,7 @@ const STATUS_ERRORS: Partial<Record<number, ErrorResponse>> = {
   [HttpStatus.TOO_MANY_REQUESTS]: { error: 'Too many requests' },
 };
 
-// A thrower that already built an ErrorResponse (e.g. the allowed-sort-field list from
-// `templatecentral:add (pagination)`) keeps it. Nest's built-in bodies also carry `error`,
-// so `statusCode` tells them apart.
+// Keep a thrower-built ErrorResponse; Nest built-in bodies carry `error`, so `statusCode` tells them apart.
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return typeof body === 'object' && body !== null && 'error' in body && !('statusCode' in body);
 }
@@ -96,7 +94,7 @@ Throw Nest's built-in exceptions (`NotFoundException`, `ConflictException`, …)
 
 ```ts
 // src/common/exceptions/app-not-found.exception.ts
-// Domain prefix avoids shadowing @nestjs/common's built-in NotFoundException.
+// Domain prefix avoids shadowing the built-in NotFoundException.
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class AppNotFoundException extends HttpException {

@@ -19,11 +19,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-python/template/.claude/hooks/r
 `sys.exit(0)`:
 
 ```python
-# Redaction companion (OWASP LLM02 infra-topology variant) -- only active if add (redaction) has been applied.
-# Warns, never blocks: the human is the one party allowed to reference real infra values.
-# The warning goes out as `systemMessage`, a human-facing surface. It must NOT go to plain
-# stdout or additionalContext: on UserPromptSubmit those can be injected into the model's
-# context, which would feed it the very real values this capability exists to keep out.
+# Warns, never blocks; reports via `systemMessage` only, since plain stdout or additionalContext could feed real values to the model.
 try:
     import os
     config_path = os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(), '.claude', 'redaction-config.json')

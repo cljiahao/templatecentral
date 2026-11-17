@@ -43,8 +43,7 @@ import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-// Replace with your actual data access — e.g. (after running templatecentral:add (database)):
-//   import { db, projects } from '@/integrations/database';
+// Replace with your data access (see templatecentral:add (database)).
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -133,8 +132,7 @@ import { describe, expect, it } from 'vitest';
 
 import { GET, POST } from '@/app/api/projects/route';
 
-// withLogging-wrapped handlers are typed against NextRequest and always take the
-// request as their first argument — a plain Request or a zero-arg call is a type error.
+// withLogging handlers take NextRequest first; a plain Request is a type error.
 describe('GET /api/projects', () => {
   it('returns 200 and a list', async () => {
     const response = await GET(new NextRequest('http://localhost/api/projects'));

@@ -63,8 +63,7 @@ Client services for React Query hooks. Validate every response with Zod so types
 // schemas/project.schema.ts
 import { z } from 'zod';
 
-// One canonical project schema — templatecentral:add (pagination) extends this same file.
-// Extra row fields (createdAt, updatedAt) are stripped by z.object().
+// One canonical project schema; add (pagination) extends this file.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),

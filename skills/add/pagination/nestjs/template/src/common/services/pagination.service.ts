@@ -1,4 +1,3 @@
-// src/common/services/pagination.service.ts
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { PaginationMetadata } from '../dto/pagination.dto';
 

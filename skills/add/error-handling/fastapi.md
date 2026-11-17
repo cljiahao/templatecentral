@@ -89,10 +89,7 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"error": str(exc), "details": {"code": "NOT_FOUND"}},
         )
 
-    # Starlette's base class also covers router-level 404/405 raised outside FastAPI routes.
-    # Replacing FastAPI's default handler means re-implementing its no-body rule:
-    # 1xx/204/205/304 must go out without a body, or uvicorn errors mid-response
-    # and resets the connection.
+    # Replacing the default handler means 1xx/204/205/304 must go out without a body.
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
         request: Request, exc: StarletteHTTPException

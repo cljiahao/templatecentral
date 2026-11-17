@@ -21,8 +21,7 @@ Add to `APISettings` in **`src/core/config.py`** (`from pydantic import SecretSt
 
 ```python
 class APISettings(BaseSettings):
-    # ... existing fields ...
-    # SecretStr: the URL usually embeds credentials; keeps them out of repr()/logs.
+    # SecretStr keeps the credential-bearing URL out of repr() and logs.
     MONGODB_URL: SecretStr = Field(
         description="MongoDB connection URL — must be set in environment"
     )
