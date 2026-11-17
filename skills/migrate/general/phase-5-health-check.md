@@ -34,37 +34,13 @@ Compare `current_hash` to `origin_hash`. Classify each file:
 
 **Step 5c: Report**
 
-In the header, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
+Print a header (plugin release from `version` in `.claude-plugin/plugin.json`, stack, `seeded_at`) and one status line per seeded file. `MODIFIED` files are intentional edits; Step 5d pulls in newer defaults without losing them (3-way merge, no clobber). Say plainly when:
 
-```
-Harness health check — templateCentral <version> / <stack>
-Seeded: <seeded_at>
+- every file is `UNCHANGED`, `templatecentral_version` equals the plugin version and the `AGENTS.md` import is present: nothing to do;
+- `CLAUDE.md` lacks the import (rule in `phase-4-upgrade.md` Step 4c): Claude Code loads `AGENTS.md` only through `@AGENTS.md`; Step 5d can append it;
+- a file is `MISSING`: templateCentral skills may misbehave; Step 5d re-seeds it.
 
-  AGENTS.md              UNCHANGED
-  CLAUDE.md              MODIFIED   ← you customized this
-  .claude/settings.json  UNCHANGED
-
-MODIFIED files are intentional edits. To pull the latest templateCentral defaults
-into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way-merges,
-it does not clobber.
-```
-
-If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version **and** the `AGENTS.md` import is present, print:
-```
-✓ All harness files match their templateCentral origin and are up to date. No action needed.
-```
-
-If `CLAUDE.md` lacks the import (rule in `phase-4-upgrade.md` Step 4c), warn; Step 5d offers the fix:
-```
-⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
-  Step 5d can append it on approval.
-```
-
-If any file is `MISSING`, print a warning:
-```
-⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.
-  Re-seed it via the re-sync below (Step 5d).
-```
+Then run the baseline (`quality-baseline.md`), print its report, and offer the quality pass (`quality-pass.md`) if any number misses the target.
 
 **Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
 

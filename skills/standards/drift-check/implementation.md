@@ -4,7 +4,7 @@
 
 # Drift Check
 
-Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, and optionally run dependency and security checks.
+Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, measure code quality, and optionally run dependency and security checks. Read-only: this guide writes no project file.
 
 ## Step 1 — Confirm a templateCentral project
 
@@ -14,7 +14,7 @@ Line 1 of the project's `AGENTS.md` must be the harness marker:
 <!-- templateCentral: <stack>@<schema-version> -->
 ```
 
-e.g. `<!-- templateCentral: nextjs@6.0.0 -->`. `@X.Y.Z` is the harness *schema floor*, not the install version — never compare it to the plugin semver; it only identifies `<stack>`.
+e.g. `<!-- templateCentral: nextjs@6.0.0 -->`. `@X.Y.Z` is the harness schema version, not the install version, so it is expected to stay put across plugin releases. Never compare it to the plugin semver; it only identifies `<stack>`.
 
 No marker → not a templateCentral project. Exit silently.
 
@@ -27,36 +27,26 @@ No marker → not a templateCentral project. Exit silently.
 
 > "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
 
-Then exit.
+Skip Steps 3–4 and continue at Step 5 (quality).
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
 
 Read `<skill-dir>/../../CHANGELOG.md`. Extract every entry newer than the project version that touches the detected stack, the shared harness, or skills the project uses. Also compare the project's pinned versions against the `Stack:` line in `<skill-dir>/../../.claude/rules/<stack>.md`.
 
-Report in this shape (content comes from the changelog — never invent entries):
+Report the project and plugin versions, then the changelog lines since the install (grouped by version, stack-relevant only; never invent entries), then each stack floor the project does not meet (package, project value, floor). Convention updates are manual: say so.
 
-```
-templateCentral convention drift detected
+## Step 5 — Quality (read-only)
 
-Project install version: <project version>
-Current plugin version:  <plugin version>
+Take the measurements in `cat "<skill-dir>/../migrate/general/quality-baseline.md"`, with its rules: measure only, change nothing, `n/a` for an absent tool. Skip its report-file step. Print the metric table, then a short list of the worst offenders per category (up to five, each with a file path). If `docs/quality-baseline.md` exists, add a column with its recorded values and mark every metric that moved the wrong way.
 
-Changes since your install (<stack>-relevant):
-### <version>
-- <changelog line>
+Against the target in that file, name each metric that misses it and recommend `templatecentral:migrate` for the fix.
 
-Stack floors not met:
-- <package>: project <x>, floor <y>
-
-Convention updates are manual — review the above and apply what is relevant.
-```
-
-## Step 5 — Dependency drift (optional)
+## Step 6 — Dependency drift (optional)
 
 Ask:
 
@@ -64,7 +54,7 @@ Ask:
 
 If the user accepts, or the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, dispatch the review utility's `update` operation (`cat "<skill-dir>/../review/SKILL.md"`). The marker skips the question and runs this step even when Step 3 found no convention drift.
 
-## Step 6 — Security audit (optional)
+## Step 7 — Security audit (optional)
 
 Ask:
 

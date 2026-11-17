@@ -4,9 +4,21 @@
 
 # Migrate or Adopt Project
 
-Detects the stack, asks the user once, then runs autonomously.
+Goal: bring an existing project up to the templateCentral standard — harness seeded, code measured, findings fixed, result proven. Detect the stack, ask the user once, then run autonomously.
 
-**Phase files.** Phases 0–3 are below. Load Phase 4 or 5 only when Phase 0 routes to it. The shared kits load **here**, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+**Marker.** Line 1 of `AGENTS.md` is `<!-- templateCentral: <stack>@6.0.0 -->`. The `@6.0.0` is the harness schema floor, not the plugin version, so it does not go stale when the plugin updates. The installed plugin version lives in `.claude/harness.json` (`templatecentral_version`). Only a schema change moves the marker; "the Step 4b marker update" sets it to `@6.0.0`.
+
+**Loading.** The shared kits load here, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+
+**Baseline** (every route, before any write):
+```bash
+cat "<skill-dir>/general/quality-baseline.md"
+```
+
+**Quality pass** (full adoption only, after the seed):
+```bash
+cat "<skill-dir>/general/quality-pass.md"
+```
 
 **Phase 4** — full harness seed / v4–v6 upgrade:
 ```bash
@@ -24,96 +36,23 @@ cat "<skill-dir>/general/phase-5-health-check.md"
 ```
 On an approved 5d re-sync, load the five kit files that Phase 4 loads after `phase-4-upgrade.md` (the four harness-kit files and `documentation-kit.md`).
 
-"The Step 4b marker update" means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
-
 ---
 
-## Phase 0 — Check for Version Upgrade (agent, autonomous)
+## Phase 0 — Route by marker (agent, autonomous)
 
-Check `AGENTS.md` line 1 for a templateCentral version marker:
+Read `AGENTS.md` line 1.
 
-```
-<!-- templateCentral: <stack>@<version> -->
-```
+| Marker | Route |
+|---|---|
+| none | Phase 1 → Phase 2 gate |
+| `@6.0.0` or later, `.claude/harness.json` present | already on the current schema: Phase 5 (5a–5c, offer 5d), then offer the quality pass |
+| `@6.0.0` or later, no `.claude/harness.json` | adopted but never seeded: Phase 1, baseline, offer the full seed |
+| `@5.x` | hooks are inert (array-valued `command`, which Claude Code skips); offer a re-seed in exec form (`"command"` + `"args"`, `${CLAUDE_PROJECT_DIR}` paths) |
+| earlier than `@4.0.0`, or `@4.x` | offer the upgrade: v4 adds the harness layer, v5 converts skills to directory form and fixes hooks |
 
-**If no marker** → skip to Phase 1 (stack detection).
+For every route except a clean Phase 5, take the stack from the marker (or Phase 1), run the **baseline**, print the report, then ask once: proceed (A) or skip (B). On B write nothing but the baseline report and exit. On A: `@5.x` with a harness runs Step 4b's marker update first (before anything hashes `AGENTS.md`), then Phase 5 and 5d; every other route runs Phase 4, then the **quality pass**, then the before/after table.
 
-**If marker present, version `@6.0.0` or later** → check whether `.claude/harness.json` exists:
-
-- **`.claude/harness.json` exists** → print:
-  ```
-  ✓ This project is on the current harness schema (@6.0.0). No migration needed.
-  ```
-  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
-
-- **`.claude/harness.json` does not exist** → a light adoption wrote the marker but never seeded
-  the harness. Do **not** exit. Skip Phases 1–3 and present:
-  ```
-  ℹ️ This project carries a templateCentral <version> marker but has no harness
-     (.claude/harness.json is absent — it was adopted, not fully seeded).
-
-  Seed the full harness now? It adds:
-  - .claude/settings.json + .claude/hooks/  — the enforcement layer
-  - lefthook.yml, .gitleaks.toml, CI quality gates
-  - .claude/harness.json                    — the integrity manifest
-
-  Seed it? (A) Yes  (B) Skip
-  ```
-  User A → proceed to Phase 4.
-  User B → print "No changes made." Exit.
-
-**If marker present, version `@5.0.0` through `@5.x`** → the hooks are inert: pre-6.0.0 schemas wrote
-each `settings.json` hook with an array-valued `command`, which Claude Code silently skips. Re-seed
-them in exec form (`"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`)
-from the harness kit. Skip Phases 1–3 and present:
-```
-⚠ This project was scaffolded with templateCentral <version>.
-
-Its .claude/settings.json hooks use an array-form "command", which Claude Code
-silently ignores — the harness guards have never actually run.
-
-The upgrade re-seeds the enforcement layer from the harness kit:
-- settings.json hooks rewritten to exec form ("command" + "args", ${CLAUDE_PROJECT_DIR} paths)
-- .claude/hooks/* reset to canonical (post-tool-failure.sh removed — Claude already sees tool errors)
-
-Re-sync? (A) Yes  (B) Skip
-```
-User A → first do the Step 4b marker update, before anything hashes `AGENTS.md` (or its
-`origin_hash` goes stale). Then, if `.claude/harness.json` exists, run Phase 5 (5a–5c) and the
-Step 5d re-sync, which replaces the array-form entries; otherwise proceed to Phase 4.
-User B → print "No changes made — hooks remain inert until re-synced." Exit.
-
-**If marker present, version `@4.0.0` through `@4.x`** → skip Phases 1–3. Present:
-```
-ℹ️ This project was scaffolded with templateCentral <version>.
-
-v5.0 converts seeded project skills to directory form:
-- .claude/skills/<name>/SKILL.md  — flat <name>.md files are silently ignored by Claude Code
-It also re-seeds settings.json hooks in exec form — earlier array-form hooks never ran
-
-Upgrade? (A) Yes  (B) Skip
-```
-User A → proceed to Phase 4.
-User B → print "No changes made." Exit.
-
-**If marker present, version earlier than `@4.0.0`** → skip Phases 1–3. Present:
-```
-ℹ️ This project was scaffolded with templateCentral <version>.
-
-v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
-- AGENTS.md              — ## AI Harness section with post-harness seams
-
-Upgrade? (A) Yes  (B) Skip
-```
-User A → proceed to Phase 4.
-User B → print "No changes made." Exit.
-
----
-
-## Phase 1 — Detect Stack (agent, autonomous)
-
-Scan the current directory for stack signals:
+## Phase 1 — Detect stack (agent, autonomous)
 
 | Signal | Stack |
 |---|---|
@@ -122,98 +61,20 @@ Scan the current directory for stack signals:
 | `requirements.txt` contains `fastapi` | FastAPI |
 | `nest-cli.json` present, or `@nestjs/core` in `package.json` | NestJS |
 
-If multiple signals found (likely a monorepo root) → ask the user: "Which project
-should be adopted first — frontend or backend? Please provide the subdirectory path."
-Re-run detection there; Phases 2 and 3 then work in that subdirectory, not the original working directory.
+Several signals (likely a monorepo root) → ask which subdirectory to adopt first and work there. No signal → say so and exit. Ambiguous (for example `vite.config.ts` without the React plugin) → ask.
 
-If no signals found → tell the user: "No recognised stack detected in this directory.
-Please run this skill from a project directory, not a parent folder." Exit.
+## Phase 2 — Gate ⛔
 
-If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
+Show the baseline report, then ask which to run; do not proceed until the user answers.
 
----
+- **A. Full adoption** — Phase 4 (harness seed), lint alignment and the quality pass, then re-measure. Done only when lint, typecheck and tests pass and no number regressed.
+- **B. Light adoption** — marker plus the baseline report only. Code and config stay as they are; the report shows the gap.
+- **C. Stop** — write nothing.
 
-## Phase 2 — Human Decision ⛔ GATE
+## Phase 3 — Execute (agent, autonomous after the gate)
 
-Do not proceed until the user responds. Present exactly this message (substituting
-the detected stack name):
+**A** — Phase 4 with the stack from Phase 1, then the quality pass, then the before/after table. Existing CI, sharding and stricter coverage thresholds found by the baseline are adapted to, not duplicated or lowered.
 
-```
-⚠️ This project has no templateCentral marker.
+**B** — Make `<!-- templateCentral: <stack>@6.0.0 -->` the first line of `AGENTS.md` (create the file with that line if absent), write the baseline report, and return control to the invoking skill: it continues from Step 1, treating structural differences from templateCentral conventions as review points.
 
-Detected stack: <stack>
-
-Choose how to proceed:
-
-A) Light adoption (fast)
-   Adds the templateCentral marker to AGENTS.md and notes any structural
-   gaps vs templateCentral conventions. Your existing code stays as-is.
-   Best if your project structure is already close to templateCentral
-   conventions.
-
-B) Stop
-   Exit without changes. Run `templatecentral:scaffold` to start
-   a fresh project, or proceed manually.
-
-Which would you prefer? (A / B)
-```
-
----
-
-## Phase 3 — Execute (agent, autonomous after gate)
-
-### If A — Light adoption
-
-**Step A1: Write the marker**
-
-Make `<!-- templateCentral: <stack>@6.0.0 -->` the first line of `AGENTS.md`, above the original
-content; if the file does not exist, create it with that line only.
-
-**Step A2: Scan for structural gaps**
-
-List any that are absent for the detected stack.
-
-**Next.js gaps:**
-- `src/app/` directory
-- `src/features/` directory
-- `src/components/` directory
-- `src/lib/` directory
-
-**Vite + React gaps:**
-- `src/features/` directory
-- `src/components/` directory
-- `src/lib/` directory
-
-**FastAPI gaps:**
-- `src/api/routers/` directory
-- `src/models/` directory
-- `src/core/config.py`
-
-**NestJS gaps:**
-- `src/modules/` directory
-- `src/common/` directory
-- `src/config/` directory
-
-**Step A3: Print adoption summary and return**
-
-Print:
-
-```
-✓ Project adopted as <stack>@6.0.0.
-
-Structural gaps noted (review files generated by the invoking skill carefully
-where your project structure differs from templateCentral conventions):
-- [list each missing item, or "None — structure matches templateCentral conventions"]
-
-Returning to the skill that invoked me — proceeding from Step 1.
-```
-
-Return control; the invoking skill continues from Step 1.
-
-### If B — Stop
-
-Print: "No changes made."
-
-Return control; the invoking skill must exit without generating any files.
-
----
+**C** — Make no change, and tell the invoking skill to exit without generating files.
