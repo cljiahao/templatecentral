@@ -1,734 +1,110 @@
 <!-- ref: tc-audit/implementation.md
      loaded-by: tc-audit/SKILL.md
      prereq: Project identified. Do not invoke this file directly — it is loaded at runtime by the /tc-audit skill. -->
-## Mindset — fresh eyes
+## Mindset
 
-Approach every file as if you have never seen this project before. Do not carry assumptions from previous audit sessions or conversations. The goal is to find what is wrong, not confirm what already passed.
+Read every file as if you had never seen the project. Priority: accuracy, security (OWASP), quality, lifecycle fit. Skills stay jurisdiction-, industry- and region-neutral.
 
-**Universal standards — no exceptions**: All skills must be jurisdiction-neutral, industry-neutral, and free of region-, country-, ethnicity-, gender-, and race-specific content. Security guidance follows **OWASP** (Top 10 web, LLM Top 10, Agentic Top 10) as the universal standard. Apply government-grade security rigour — principle of least privilege, defence-in-depth, audit logging, strong authentication — without referencing any specific government, country, or compliance regulation by name. When in doubt, ask: "Would this guidance apply equally in any country, to any developer, on any project?"
-
-Priority order:
-1. **Accuracy** — is this correct for the current ecosystem as of today?
-2. **Security** — are there vulnerabilities, insecure defaults, or missing controls? Evaluate against OWASP; apply government-grade rigour generically.
-3. **Quality** — SRP, SoC, DRY, YAGNI, token reduction, readability
-4. **AIDLC/SDLC alignment** — does the skill guide users toward safe, maintainable development lifecycle practices?
+The audit judges what the plugin **generates**, not only what the skill markdown says. Steps 1 and 2 are mechanical and measured; read files (Step 3) only where they point.
 
 ---
 
-## Step 0 — Ecosystem research
-
-**CRITICAL — model knowledge cutoff**: The AI assistant running this audit has a training cutoff of **August 2025**. Today's date may be a year or more beyond that. Treat all ecosystem state — framework versions, library APIs, security advisories, OWASP rankings — as potentially stale until confirmed by a web search. You MUST NOT rely on training data alone for ecosystem state; always follow the cache protocol below.
-
-### 0a — Check the research cache
-
-Read `.claude/audit-ecosystem-research.md` at the project root.
-
-**If the file does not exist, or the `last-scanned` date is more than 30 days before today:**
-
-→ Proceed to **0b** (run full web scan). Do not skip this even if you believe your training data is recent enough — the cache is the authoritative source.
-
-**If the file exists and `last-scanned` is within the last 30 days:**
-
-→ Load the cached findings. Print:
-```
-Using cached ecosystem research from <last-scanned date>. Skipping web scan.
-```
-→ Skip to **0c** (apply findings).
-
----
-
-### 0b — Run full web scan (only when cache is missing or stale)
-
-Use WebSearch and/or WebFetch to check for changes **since the date in the cache** (or the last 12 months if no cache exists). For each item below, record the current stable version, any breaking changes, deprecations, new APIs, or security advisories.
-
-**Frameworks and runtimes**
-- Next.js — major/minor releases, App Router changes, deprecated APIs, proxy/middleware changes
-- NestJS + `@nestjs/platform-fastify` — major/minor releases, Fastify adapter changes
-- FastAPI + Starlette — major/minor releases, breaking Pydantic v2 changes, async patterns
-- pnpm — config file changes, workspace.yaml behavior, `allowBuilds` / `blockExoticSubdeps` behavior
-
-**Libraries**
-- Zod — API changes, new methods, deprecations
-- better-auth — breaking changes, new session/OIDC behavior
-- Drizzle ORM — release status, API changes, migration tooling
-- argon2 / argon2-cffi — parameter recommendation changes
-- `@nestjs/throttler` — API changes, helper function changes
-- slowapi — rate limiting behavior, proxy-aware configuration
-- TanStack Query — v5/v6 status, API changes, deprecated hooks (`isLoading`, `onSuccess`/`onError` on useQuery)
-- Vite + `@vitejs/plugin-react` — major version, bundler changes (Rolldown/Oxc), Babel removal status
-
-**Security standards**
-- OWASP Top 10 (web) — new ranking or new category
-- OWASP LLM Top 10 — version update
-- OWASP Top 10 for Agentic Applications — new guidance
-- NIST SP 800-63B — any updated authenticator assurance guidance
-- AWS Responsible AI Lens — new dimensions or updated guidance
-
-**Claude Code harness engineering**
-Check for changes to: hook events (confirmed count), hook handler types (command/http/mcp_tool/prompt/agent), new hook options (asyncRewake, async, args[]), skill scoping priority order, Stop hook block-cap behavior, PreCompact/PostCompact capabilities, new settings.json fields (worktree, sandbox, skillListingBudgetFraction, etc.), AGENTS.md open standard (AAIF) status.
-
-**Claude Code harness engineering — community consensus & team recommendations**
-Beyond the official changelog, scan for emerging harness-engineering practice and grade each finding by source strength:
-
-- Official team guidance: Anthropic engineering blog, Claude Code docs and release notes — hook patterns, skill design, context management, settings best practices
-- Community practice: `claude-code` GitHub issues/discussions with high engagement, and reputable practitioner write-ups on hooks, skill scoping, AGENTS.md structure, and compaction recovery
-
-Grade every finding before recording it:
-
-| Grade | Bar | Audit action |
-|-------|-----|--------------|
-| `RECOMMENDED` | explicit Anthropic team guidance | becomes a targeted Step 3H check this run |
-| `CONSENSUS` | ≥3 independent credible sources agree | becomes a targeted Step 3H check this run |
-| `EMERGING` | single credible source | record and track; do NOT act on it yet |
-
-Also record anti-patterns the community has converged on avoiding. A `RECOMMENDED` or `CONSENSUS` pattern missing from the scaffolds' harness templates is a Step 3H finding; an `EMERGING` one is noted in the report only.
-
-**Loop engineering — community/team practice**
-- Loop engineering — current community/team practice on agent loop design (goals, termination, budgets, scheduled self-prompting); grade per the table above
-
-**Reference: AWS AIDLC**
-Check the AWS AI Development Lifecycle (AIDLC) guidance for any new controls or patterns relevant to AI-assisted development workflows — particularly around prompt injection, model output validation, and agent trust boundaries.
-
-**After completing all searches**, write the results to `.claude/audit-ecosystem-research.md` in this exact format. Write placeholders as `{name}`, never as `<name>`: the publish guard (`scripts/check-research-content.py`) rejects any `<`-tag, even inside code spans. Also avoid `]:` (even in prose or type hints), ZWJ emoji sequences, 4-space indents, links, images and code fences.
-
-```markdown
----
-last-scanned: YYYY-MM-DD
-expires-after-days: 30
----
-
-# Ecosystem Research Cache
-
-> Auto-generated by /tc-audit Step 0. Edit only to correct errors; the next full scan overwrites this file.
-
-## Scan date: YYYY-MM-DD
-
-## Frameworks and runtimes
-
-### Next.js
-<current stable version and findings>
-
-### NestJS + @nestjs/platform-fastify
-<current stable version and findings>
-
-### FastAPI + Starlette
-<current stable version and findings>
-
-### pnpm
-<current stable version and findings>
-
-## Libraries
-
-### Zod
-<current stable version and findings>
-
-### better-auth
-<current stable version and findings>
-
-### Drizzle ORM
-<current stable version and findings>
-
-### argon2 / argon2-cffi
-<current stable version and findings>
-
-### @nestjs/throttler
-<current stable version and findings>
-
-### slowapi
-<current stable version and findings>
-
-### TanStack Query
-<current stable version and findings>
-
-### Vite + @vitejs/plugin-react
-<current stable version and findings>
-
-## Security standards
-
-### OWASP Top 10 (web)
-<current version and findings>
-
-### OWASP LLM Top 10
-<current version and findings>
-
-### OWASP Top 10 for Agentic Applications
-<current version and findings>
-
-### NIST SP 800-63B
-<current version and findings>
-
-### AWS Responsible AI Lens
-<current version and findings>
-
-### AWS AIDLC
-<current version and findings>
-
-## Claude Code Harness Engineering
-<hook events, hook types, new options, skill scoping, Stop cap, settings.json fields — current as of scan date>
-
-### Community consensus & team recommendations
-<graded findings: RECOMMENDED (official team guidance) / CONSENSUS (≥3 independent sources) / EMERGING (single credible source — track only), each with sources; plus community-converged anti-patterns>
-```
-
----
-
-### 0c — Apply findings
-
-From the cache (whether freshly written or previously cached), extract all findings. Record them as a numbered list before proceeding to Step 1. Any finding here becomes a targeted check in Step 2.
-
----
-
-## Step 1 — Mechanical checks (run the lint script)
+## Step 1 — Lint
 
 ```bash
 bash scripts/lint-skills.sh skills/
 ```
 
-Any failures here must be fixed before proceeding to semantic review. The lint script is the single source of truth for greppable anti-patterns. If it passes, record "Mechanical: PASS" and continue.
+Fix every failure first. The lint script is the single source of truth for greppable anti-patterns.
 
 ---
 
-## Conventions Compliance
-
-> **Lint-enforced as of v4.7.0 — no separate pass needed.**
->
-> Conventions checks C1–C6 are now fully covered by `scripts/lint-skills.sh`:
-> - **C1** (description ≤ 150 chars) → `check_skillmd_description_length`
-> - **C2** (ref file headers) → `check_ref_file_headers`
-> - **C3** (no duplicate content) / **C5** (SKILL.md body ≤ 30 lines) → `check_skillmd_body_length`
-> - **C4** (nesting depth ≤ 3) → `check_nesting_depth`
-> - **C6** (jurisdiction neutrality) → `check_no_jurisdiction_specific`
->
-> Run Step 1 (`bash scripts/lint-skills.sh skills/`). If lint passes, conventions compliance passes. No separate C1–C6 pass is needed.
-
----
-
-## Step 2 — Semantic review
-
-Read each file below **in full** and apply the checklist beneath it. Do not skim. Mark each file as CLEAN or list specific issues with the line reference.
-
-### Checklist applied to every SKILL.md
-
-Apply these questions to every file. If the check is not applicable to that skill (e.g. no password hashing in a UI skill), mark it N/A.
-
-**Accuracy** ← primary
-- [ ] Are all API calls, imports, and CLI commands current for the stack version in `.claude/rules/*.md`?
-- [ ] Does anything in this file conflict with the ecosystem research findings from Step 0?
-- [ ] Does the skill reference a library method, flag, config key, or CLI option that no longer exists or has changed?
-- [ ] Are any patterns shown as "current" actually deprecated or superseded?
-
-**Security** ← primary
-- [ ] Is all user input validated at the boundary (Zod / Pydantic) before use?
-- [ ] Are passwords hashed with argon2id — not bcrypt, not SHA, not MD5?
-- [ ] Are JWTs verified with an explicit algorithm whitelist?
-- [ ] Is rate limiting mentioned where the skill adds an authentication endpoint?
-- [ ] If the code reads `request.ip` or `X-Forwarded-For`, is `TRUST_PROXY` documented for both one-hop (ALB → App) and two-hop (ALB → Traefik → App) topologies?
-- [ ] Are error responses free of stack traces, internal paths, or DB query text?
-- [ ] Are security headers complete for scaffold skills (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection)?
-- [ ] Anti-clickjacking defaults to `X-Frame-Options: DENY` + `frame-ancestors 'none'`; only a valid `APPCENTRAL_PORTAL_ORIGIN` (one origin matching `^https://[a-z0-9-]+(\.[a-z0-9-]+)+$`, never `*`) replaces it with `frame-ancestors <origin>` and no `X-Frame-Options`. Same rule in all four stacks.
-- [ ] Is the content jurisdiction- and industry-neutral — no country-specific regulations, government schemes, or compliance frameworks?
-- [ ] Are version numbers absent from the skill body (SSOT: versions belong in `.claude/rules/*.md` only)?
-- [ ] Is there any CVE identifier present? Replace with "security advisory" language.
-
-**Code quality** ← secondary
-- [ ] **SRP** — does the skill do one thing? Are mixed concerns present (e.g. a scaffold skill that also teaches auth patterns)?
-- [ ] **SoC** — are layers cleanly separated in code examples (routing vs business logic, validation vs persistence)?
-- [ ] **DRY** — is the same guidance or code block repeated across sections without need?
-- [ ] **YAGNI** — is there guidance for features that users of this skill will never need from this entry point?
-- [ ] **Token efficiency** — targeted checks:
-  - Any reference file exceeding 200 lines? Flag for splitting in the report; do not split during the audit. Template files are not reference files: review them through their `template.manifest`.
-  - Inline comments that restate what the surrounding code clearly shows? Delete them.
-  - Code examples demonstrating > 3 files where 1–2 would suffice? Trim.
-  - The same instruction stated in two different forms within 15 lines? Collapse to one.
-  - Introductory prose before a code block that already has self-explanatory comments? Delete the prose.
-
-**AIDLC / SDLC alignment** ← secondary
-- [ ] Does the skill guide users toward testable, reviewable outputs (not just "run this command")?
-- [ ] Are generated files structured for auditability — clear naming, separation of secrets from config, no magic globals?
-- [ ] For AI-adjacent skills (`add/ai-security/`): does guidance align with current AWS AIDLC and OWASP Agentic guidance on prompt boundaries, output validation, and agent trust?
-
----
-
-### FastAPI stack
-
-Read each file in full, apply checklist above:
-
-- [ ] `skills/scaffold/fastapi/source-files.md`
-- [ ] `skills/scaffold/fastapi/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/fastapi.md`, `response_model` on every route, layered flow `api/` → `models/`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/fastapi.md` ← code is in `skills/add/auth/fastapi/template/` and `template-cookie/`; review those trees too
-- [ ] `skills/add/database/python.md` ← stack router
-- [ ] `skills/add/database/python/sqlalchemy.md` ← code is in `sqlalchemy/template/` beside the `.md`; review it too
-- [ ] `skills/add/database/python/sqlalchemy-iam.md` ← code is in `sqlalchemy-iam/template/`
-- [ ] `skills/add/database/python/pymongo-async.md` ← MongoDB default; code is in `pymongo-async/template/`
-- [ ] `skills/add/database/python/pymongo-async-auth.md` ← auth-stub completion add-on
-- [ ] `skills/add/database/python/beanie.md` ← opt-in, pins Python 3.13; code is in `beanie/template/`
-- [ ] `skills/add/endpoint/fastapi.md`
-- [ ] `skills/add/integration/fastapi.md`
-- [ ] `skills/add/test/fastapi.md`
-- [ ] `skills/add/error-handling/fastapi.md`
-- [ ] `skills/add/logging/fastapi.md`
-- [ ] `skills/add/pagination/fastapi.md`
-- [ ] `skills/add/mutation-testing/python.md`
-- [ ] `skills/migrate/database/fastapi.md`
-- [ ] `skills/standards/code-standards/fastapi.md`
-- [ ] `skills/standards/validation-patterns/fastapi.md`
-
-**FastAPI-specific additional checks** (apply to the above):
-- [ ] `SecurityHeadersMiddleware` includes HSTS, X-Content-Type-Options, X-Frame-Options (`DENY` unless a valid `APPCENTRAL_PORTAL_ORIGIN` is set — `frame_ancestors()` uses `re.fullmatch`), Referrer-Policy, Permissions-Policy, and X-XSS-Protection
-- [ ] `TRUST_PROXY` env var gates `ProxyHeadersMiddleware` and `ForwardedHostMiddleware`
-- [ ] `slowapi` rate limiter is mentioned for auth endpoints with a `TRUST_PROXY` note
-- [ ] Pydantic v2 syntax used (not v1 `validator`, `__fields__`, etc.)
-- [ ] Async route handlers preferred (`async def`) over sync (`def`) for I/O-bound operations
-- [ ] Starlette ≥1.0.1 in `requirements.txt` — a published security advisory (GHSA-86qp-5c8j-p5mr, BadHost: malformed Host header auth-bypass) was patched in 1.0.1; current stable is 1.10.0. The floor of record is `.claude/rules/fastapi.md` (≥1.3.1, covering the later form-limit DoS GHSA-82w8-qh3p-5jfq). Prefer endpoint-level `Depends()`/`Security()` over middleware path-matching for auth-critical routes.
-- [ ] Every `pytest` invocation in FastAPI skill bodies uses `python -m pytest` (never bare `pytest`) — a bare invocation resolves via PATH and silently breaks or picks up the wrong interpreter when the caller's shell doesn't have `.venv` activated. Lint-enforced by `check_no_bare_pytest_invocation`.
-
----
-
-### NestJS stack
-
-Read each file in full, apply checklist above:
-
-- [ ] `skills/scaffold/nestjs/source-files.md`
-- [ ] `skills/scaffold/nestjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nestjs.md`, DTOs use `createZodDto`, every endpoint has `@ApiTags()` + `@ApiOperation()`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/nestjs.md` ← code is in `skills/add/auth/nestjs/template/` and `template-cookie/`; review those trees too
-- [ ] `skills/add/database/typescript.md` ← stack router (NestJS + Next.js)
-- [ ] `skills/add/database/typescript/nestjs-drizzle.md` ← code is in `nestjs-drizzle/template/` beside the `.md`; review it too (same for the base `nestjs-{kysely,mongoose}` and `nextjs-{drizzle,kysely,mongoose}` leaves; the `-iam` and `-auth` add-ons have no tree)
-- [ ] `skills/add/database/typescript/nestjs-kysely.md`
-- [ ] `skills/add/database/typescript/nestjs-kysely-iam.md` ← IAM add-on (canonical for migrate/database/nestjs.md IAM blocks)
-- [ ] `skills/add/database/typescript/nestjs-kysely-auth.md` ← auth-stub completion add-on
-- [ ] `skills/add/database/typescript/nestjs-mongoose.md`
-- [ ] `skills/add/database/typescript/nestjs-mongoose-iam.md` ← IAM add-on
-- [ ] `skills/add/database/typescript/nestjs-mongoose-auth.md` ← auth-stub completion add-on
-- [ ] `skills/add/endpoint/nestjs.md`
-- [ ] `skills/add/integration/nestjs.md`
-- [ ] `skills/add/test/nestjs.md`
-- [ ] `skills/add/error-handling/nestjs.md`
-- [ ] `skills/add/logging/nestjs.md`
-- [ ] `skills/add/pagination/nestjs.md`
-- [ ] `skills/add/mutation-testing/typescript.md`
-- [ ] `skills/migrate/database/nestjs.md` ← code is in `skills/migrate/database/nestjs/template/`; review it too
-- [ ] `skills/standards/code-standards/nestjs.md`
-- [ ] `skills/standards/validation-patterns/nestjs.md`
-
-**NestJS-specific additional checks**:
-- [ ] Fastify adapter used — no Express-specific APIs (`req.body` without Fastify types, `res.send`, etc.)
-- [ ] Helmet config includes `referrerPolicy: { policy: 'strict-origin-when-cross-origin' }`
-- [ ] `onSend` hook sets `Permissions-Policy` and `Cache-Control`; no `Pragma` or `Expires` headers
-- [ ] `TRUST_PROXY` env var wires into `FastifyAdapter({ trustProxy })`
-- [ ] `ThrottlerModule` uses `minutes()` helper (not raw ms) for readability
-- [ ] `@nestjs/throttler` rate limiting note references `TRUST_PROXY` requirement
-- [ ] `nestjs-zod` used for DTOs — not `class-validator` / `class-transformer`
-- [ ] `allowBuilds` in `pnpm-workspace.yaml` (not `.npmrc` or `package.json#pnpm`)
-- [ ] `JwtStrategy` constructor includes `algorithms: ['HS256']` — prevents algorithm confusion attacks
-- [ ] Test code examples use `vi.fn()` / `vi.spyOn()` (Vitest) — not `jest.fn()` / `jest.spyOn()` (Jest)
-- [ ] ESLint config template uses only `globals.node` — `globals.jest` must not appear (project uses Vitest with `globals: false`)
-- [ ] `@nestjs/platform-fastify` floor matches `.claude/rules/nestjs.md`, the floor of record: the `@nestjs/*` core family is ≥12.1.2 on Nest 12 (≥11.2.4 on the 11 line). The path-scoped middleware bypass GHSA-9c5c-9qcx-q35q (High) is fixed in 12.0.2 / 11.2.4, so 12.0.2 is the advisory minimum, not the floor; current stable is 12.2.0. Flag any project whose range can resolve below the floor.
-
----
-
-### Next.js stack
-
-Read each file in full, apply checklist above:
-
-- [ ] `skills/scaffold/nextjs/source-files.md`
-- [ ] `skills/scaffold/nextjs/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/nextjs.md`, no `middleware.ts`, every route wrapped in `withLogging()`. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/nextjs.md` ← code is in `skills/add/auth/nextjs/template/`; review it too
-- [ ] `skills/add/database/typescript/nextjs-drizzle.md`
-- [ ] `skills/add/database/typescript/nextjs-kysely.md`
-- [ ] `skills/add/database/typescript/nextjs-mongoose.md`
-- [ ] `skills/add/endpoint/nextjs.md`
-- [ ] `skills/add/feature/nextjs.md`
-- [ ] `skills/add/form/nextjs.md`
-- [ ] `skills/add/integration/nextjs.md`
-- [ ] `skills/add/page/nextjs.md`
-- [ ] `skills/add/test/nextjs.md`
-- [ ] `skills/add/error-handling/nextjs.md`
-- [ ] `skills/add/logging/nextjs.md`
-- [ ] `skills/add/pagination/nextjs.md`
-- [ ] `skills/add/mutation-testing/typescript.md`
-- [ ] `skills/migrate/database/nextjs.md` ← code is in `skills/migrate/database/nextjs/template/`; review it too
-- [ ] `skills/standards/code-standards/nextjs.md`
-- [ ] `skills/standards/validation-patterns/nextjs.md`
-
-**Next.js-specific additional checks**:
-- [ ] `proxy.ts` used for auth proxy — not `middleware.ts` (deprecated in Next.js 16)
-- [ ] Route Handlers use `async` APIs for `cookies()`, `headers()`, `params`, `searchParams`
-- [ ] `next.config.ts` security headers include HSTS, Referrer-Policy, Permissions-Policy, X-XSS-Protection and NO CSP; the whole CSP (`CSP_BASE` + `frame-ancestors`) and X-Frame-Options come only from `applyFrameProtection` (`src/lib/security/frame-protection.ts`), which the scaffold's `src/proxy.ts` and the auth proxy apply to every response except `/api/external/*` (backend rewrite keeps the backend's headers)
-- [ ] `TRUST_PROXY` env var gates `getAppOrigin()` utility (`X-Forwarded-Proto` / `X-Forwarded-Host`)
-- [ ] `better-auth` session config documented — `expiresIn`, `updateAge`, `cookieCache`
-- [ ] `allowBuilds` in `pnpm-workspace.yaml` (not `.npmrc` or `package.json#pnpm`)
-- [ ] `z.flattenError()` used — not deprecated `.flatten()`
-
----
-
-### Vite + React stack
-
-Read each file in full, apply checklist above:
-
-- [ ] `skills/scaffold/vite-react/source-files.md`
-- [ ] `skills/scaffold/vite-react/template/` and `template-agents/` ← the verbatim files the scaffold copies (listed in `template.manifest`). Review them as project code: pins match `.claude/rules/vite-react.md`, no `process.env`, no `export default` outside tooling configs. `lint-skills.sh` already checks tree ↔ manifest
-- [ ] `skills/add/auth/vite-react.md` ← code is in `skills/add/auth/vite-react/template/`; review it too
-- [ ] `skills/add/feature/vite-react.md`
-- [ ] `skills/add/form/vite-react.md`
-- [ ] `skills/add/integration/vite-react.md`
-- [ ] `skills/add/page/vite-react.md`
-- [ ] `skills/add/test/vite-react.md`
-- [ ] `skills/add/error-handling/vite-react.md`
-- [ ] `skills/add/logging/vite-react.md`
-- [ ] `skills/add/pagination/vite-react.md`
-- [ ] `skills/add/mutation-testing/typescript.md`
-- [ ] `skills/standards/code-standards/vite-react.md`
-- [ ] `skills/standards/validation-patterns/vite-react.md`
-
-**Vite-specific additional checks**:
-- [ ] `pnpm-workspace.yaml` includes `blockExoticSubdeps: true` and `allowBuilds`
-- [ ] Dockerfile `COPY` includes `pnpm-workspace.yaml*`
-- [ ] `@vitejs/plugin-react` v6 Oxc-based — no `@babel/core` required
-- [ ] `z.flattenError()` used — not deprecated `.flatten()`
-- [ ] nginx.conf.template includes `Content-Security-Policy` with `frame-ancestors ${TC_FRAME_ANCESTORS}`, and `docker/15-frame-protection.envsh` defaults it to `'none'`
-- [ ] nginx.conf.template uses `X-Frame-Options "${TC_X_FRAME_OPTIONS}"`, which the envsh defaults to `DENY` (never `SAMEORIGIN`) and empties only for a valid `APPCENTRAL_PORTAL_ORIGIN`
-
----
-
-### Cross-stack and utility skills
-
-Read each file in full, apply checklist above:
-
-- [ ] `skills/add/ai-security/implementation.md`
-- [ ] `skills/add/documentation/implementation.md` ← README backfill / enforcement-check capability
-- [ ] `skills/add/redaction/implementation.md` ← PII/secret masking + DLP capability (router for the per-runtime hook files below)
-- [ ] `skills/add/redaction/hook-node.md` ← Node `PostToolUse` masking hook + `user-prompt-guard.cjs` companion (TS stacks)
-- [ ] `skills/add/redaction/hook-python.md` ← Python `PostToolUse` masking hook + `user-prompt-guard.py` companion (FastAPI); masking logic must stay behaviourally identical to hook-node.md
-- [ ] `skills/standards/code-standards/comments.md` ← shared comment doctrine (loaded first by code-standards)
-- [ ] `skills/standards/validation-patterns/patterns.md`
-- [ ] `skills/standards/drift-check/implementation.md`
-- [ ] `skills/standards/full-stack-pairing/implementation.md`
-- [ ] `skills/scaffold/shared/harness-kit.md` ← kit index (step order + delta table); parts: `harness-kit-ts.md` / `harness-kit-fastapi.md` (per-stack bodies — a run loads one), `harness-kit-enforcement.md`, `harness-kit-finalize.md`. The hooks, `lefthook.yml`, `.gitleaks.toml`, `ci-gates.sh`, `verify-harness.sh`, `regen-harness.sh` and the CI files are real files under `skills/scaffold/shared/template/`, `template-ts/`, `template-py/`, `template-ci/`, `template-settings-ts/`, `template-settings-py/` and `template-late/` (the settings, `FUTURE.md`, `docs/CONSTITUTION.md` and `/skill-audit` files), plus `template-tail/` (the AGENTS.md tail, appended by Step G); the copy is one script, `skills/scaffold/shared/tc-copy.sh`, run per `TC_PART` (`base` | `settings` | `ci` | `late` | `stack` | `agents` | `tail`) as described in `harness-kit.md` Step 0; the manifest is `skills/scaffold/shared/template.manifest`: audit those files, not the kit markdown, and flag any fenced copy of one that reappears in the markdown
-- [ ] `skills/add/*/*/template*/` and `skills/migrate/database/<stack>/template/` ← new-file code for `add` and `migrate` lives in real template trees beside each leaf, each with a `template.manifest`: `add/auth/<stack>/`, `add/database/{python,typescript}/<variant>/`, `add/logging/<stack>/`, `add/pagination/<stack>/`, `add/error-handling/nextjs/`, `add/mutation-testing/typescript/`, `add/redaction/hook-{node,python}/`. `tc-copy.sh` copies them with `TC_PART=leaf TC_LEAF=<add|migrate>/<leaf-stem> [TC_TREE=...] bash tc-copy.sh <target>`. Audit those files as project code, not the leaf `.md`, and flag any fenced copy of a template file that reappears in the leaf `.md`. Re-list the trees with `find skills/add skills/migrate -type d -name 'template*'`
-- [ ] `skills/scaffold/shared/documentation-kit.md` ← per-folder README/`.order` generation SSOT
-- [ ] `skills/migrate/general/implementation.md` ← Phases 0–3 + router; `phase-4-upgrade.md` (full seed), `phase-5-health-check.md` (health check + re-sync)
-- [ ] `skills/migrate/nextjs-backend-extraction.md`
-- [ ] `skills/migrate/nextjs-backend-extraction/nestjs.md`
-- [ ] `skills/migrate/nextjs-backend-extraction/fastapi.md`
-- [ ] `skills/build/implementation.md`
-- [ ] `skills/test/implementation.md`
-- [ ] `skills/review/review/implementation.md`
-- [ ] `skills/review/update/implementation.md`
-- [ ] `skills/cleanup/remove-example/implementation.md`
-- [ ] `skills/cleanup/task-management/implementation.md`
-- [ ] `.claude/skills/tc-write-skill/SKILL.md` ← authoring checklist; check it still matches CONVENTIONS.md
-- [ ] `.claude/skills/tc-write-skill/implementation.md`
-- [ ] `.claude/skills/tc-audit/implementation.md` ← this file; check it is still accurate
-
-**Cross-stack additional checks**:
-- [ ] `add/ai-security/implementation.md`: all LLM01–LLM10 sections present (lint now enforces this); OWASP LLM Top 10 version still current; Tier C references OWASP Agentic Top 10
-- [ ] `add/logging/*`: no PII, passwords, tokens, or SQL text in log field examples
-- [ ] `add/error-handling/*`: error responses contain no stack traces or internal paths; `z.flattenError()` used
-- [ ] `standards/validation-patterns/*`: `z.flattenError()` used; password min-length ≥12
-- [ ] `standards/drift-check/implementation.md`: `pnpm audit` and `pip-audit` commands still current
-
----
-
-## Step 3 — Cross-cutting checks
-
-After reading all files, answer these questions from memory (no additional reads needed):
-
-- [ ] **Stack version alignment**: Do the skill bodies align with the versions in `.claude/rules/fastapi.md`, `nestjs.md`, `nextjs.md`, `vite-react.md`? Any skill referencing a feature only available in a newer version than the rules specify?
-- [ ] **TRUST_PROXY completeness**: All three API stacks (FastAPI, NestJS, Next.js) document `TRUST_PROXY` for both the one-hop (ALB → App) and two-hop (ALB → Traefik → App) topologies?
-- [ ] **Security header parity**: Do all three API scaffolds set the same set of security headers? If one has a header the others don't, flag it.
-- [ ] **Ecosystem currency**: Is there anything in the skills that was best practice in 2024 but has since been superseded? (Consider: new OWASP guidance, framework major releases, deprecated packages.)
-
-### Harness engineering checks (Step 3H)
-
-- [ ] **PostToolUse hook command** (match the kit's per-stack delta table): TS stacks run `pnpm exec tsc --noEmit --incremental` (not plain `--noEmit`, not `pnpm test`); FastAPI runs `python -m pyright src/` (not mypy). Output is **captured** (`out=$(… 2>&1)`), trimmed to the error lines (≤ 20), and delivered as `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"..."}}` JSON on stdout; the hook **always exits 0** (feedback-only, never blocks) and only acts on matching source-file edits. **Plain stdout on exit 0 is NOT shown to Claude** (debug log only) — flag any PostToolUse hook that pipes `| tail -N` to plain stdout or otherwise relies on plain stdout to deliver errors.
-- [ ] **Stop hook exits 2 on failure**: The Stop hook must run tests, capture exit code, write output to **stderr** (not stdout), and `exit 2` if tests fail so Claude receives test results and is forced to fix. Pattern (matches the kit — print output **only on failure**): `OUTPUT=$(cmd 2>&1); EC=$?; if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi; exit 0`. Do NOT pipe through `tail` without capturing exit code (piping exits 0 regardless).
-- [ ] **PreToolUse `.env` protection**: Scaffold settings.json includes a `PreToolUse` hook that blocks edits to `.env*` files (exit 2) while allowing `.env.example`. The basename match is **case-insensitive** (`.ENV`, `.Env.local` are the same file on case-insensitive filesystems). Matcher is `Edit|Write|NotebookEdit` (NotebookEdit writes files too; no `MultiEdit` tool exists). Must read `tool_input.file_path` (and `tool_input.notebook_path` for NotebookEdit) from stdin JSON — not top-level `file_path`. The `permissions.deny` `Read(...)` rules also block Edit/Write on the same paths (defense in depth), but the hook stays — it covers patterns the deny list does not. FastAPI uses `python3`, TS stacks use `node`.
-- [ ] **UserPromptSubmit hook present** (OWASP LLM01): Scaffold settings.json includes a `UserPromptSubmit` hook that pattern-checks incoming prompts for obvious injection phrases (`ignore previous instructions`, `you are now a`, etc.) using exec form (string `command` + `args`); exit 2 blocks the prompt and writes reason to stderr. FastAPI uses `python3`, TS stacks use `node`. Deny list is intentionally minimal — users extend for their domain.
-- [ ] **SessionStart hook present (post-compaction recovery)**: Scaffold settings.json includes a `SessionStart` hook (matcher `startup|resume|clear|compact`) running `session-context.sh`, which re-injects the constitution + universal invariants via plain stdout. `PostCompact` fires after compaction and its stdout IS injected as context (JSON output can set `watchPaths`, reload skills, or supply `initialUserMessage`) — both `PostCompact` and `SessionStart(source: compact)` are valid re-injection mechanisms. `SessionStart` is the one seeded here because it additionally covers session resume and startup, not because `PostCompact` is incapable.
-- [ ] **Skill scoping priority correct**: Official order per current docs is `Managed/Enterprise > CLI flag > User > Project > Plugin` — when names collide, enterprise overrides personal and personal (`~/.claude/skills/`) overrides project (`.claude/skills/`). Plugin skills are namespaced and never conflict. Scaffold AGENTS.md template instructs agents to check `.claude/skills/` first for project workflows, then `templatecentral:*` for framework-level operations (routing guidance — unaffected by collision priority). Note: this `User > Project` order is for **skills**; **subagent** precedence is the inverse (`Project > User`), so do not state a single unified order across both.
-- [ ] **Seeded project skills are directories**: A skill is a directory with `SKILL.md` as the entrypoint (`.claude/skills/<name>/SKILL.md`). Flat `.claude/skills/<name>.md` files are NOT discovered (flat files work only under `.claude/commands/`). Every scaffold/migrate step that seeds a project skill must create the directory form.
-- [ ] **Hook types documented**: Five hook handler types exist — `command`, `http`, `mcp_tool` (v2.1.117), `prompt`, `agent` (experimental). Scaffold uses `command` type. Any skill recommending hook setup should reference the correct type field. Any skill that states a hook-event count must match the current docs (33 events as of CC 2.1.273, incl. the newer `DirectoryAdded`, `PreModelSwitch`, `PostModelSwitch`) — re-verify the count in Step 0 rather than trusting this number.
-- [ ] **Stop hook loop termination**: Claude Code caps consecutive Stop-hook continuations at **8** (override via env `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). The cap is a backstop, not the guard — 8 forced test re-runs is still expensive. Skills must not describe the cap as absent, and must not rely on it in place of `stop_hook_active` (see next bullet).
-- [ ] **Stop hook block-cap env var not raised in seeds**: No seeded `settings.json` `env` block or script raises `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` — a higher cap only lengthens a runaway loop.
-- [ ] **Stop hook loop guard (mandatory despite the cap)**: every seeded stop-checks script exits 0 when `stop_hook_active` is true in stdin JSON before running tests. Per the hooks docs, a Stop hook that exits 2 re-runs Claude; without the guard the hook re-blocks until the 8-continuation cap. TS stacks parse stdin with `node -e`, FastAPI with `python3 -c`. The guard runs FIRST — before any test command.
-- [ ] **Compaction recovery via SessionStart**: `PreCompact` can block (exit 2 prevents compaction from completing) but is not used here. `PostCompact` fires after compaction and its stdout is injected as context — a valid alternative re-injection mechanism — but scaffolds use `SessionStart` (source list includes `compact`) since it also covers session resume and startup in one hook.
-- [ ] **omitClaudeMd scope**: The built-in `Explore` and `Plan` subagents skip CLAUDE.md (and its `@AGENTS.md` import) by built-in behavior. Custom subagents receive it by default but MAY opt out with `omitClaudeMd: true` in their definition (CC v2.1.271). Scaffold AGENTS.md must stay self-contained because Explore/Plan skip it. Flag any seeded custom agent that sets `omitClaudeMd: true` without restating the safety constraints it needs in its own prompt.
-- [ ] **Project skill seeding**: Every scaffold skill seeds a `*-verify` project skill into `.claude/skills/` (next-verify, nest-verify, api-verify, vite-verify). Next.js also seeds `next-migrate`. Migrate Phase 4 seeds the same for all stacks.
-- [ ] **Write-more-skills instruction present**: Scaffold instructions include a step asking the user to create additional project skills for repeated workflows.
-- [ ] **harness.json origin hashes**: Scaffold includes a step to compute SHA-256 hashes of seeded files and write `.claude/harness.json`. Tracked files must include AGENTS.md, CLAUDE.md, `.claude/settings.json`, and the stack's `*-verify/SKILL.md` skill. Migrate Phase 5 reads these to detect drift.
-- [ ] **CLAUDE.md is one line**: Every scaffold and migrate path generates `@AGENTS.md` as the only content of `CLAUDE.md` — never verbose content.
-- [ ] **Skills Security section in scaffolded AGENTS.md**: All 4 scaffold AGENTS.md templates include a `## Skills Security` section reminding users to review SKILL.md content before installing third-party skills, scope `allowed-tools:`, and avoid skills that hardcode secrets or make unscoped network calls.
-- [ ] **Skill frontmatter uses `allowed-tools:` tightly scoped**: Any SKILL.md that grants tool access scopes it to the minimum required commands (e.g. `Bash(pnpm *)` not `Bash`). No SKILL.md grants unrestricted `Bash` without explicit justification.
-- [ ] **Ghost skill names absent**: No skill file references old names (`shared-*-agent`, `nestjs-code-standards`, `fastapi-code-standards`, `nextjs-add-auth`, `shared-audit`). Use `templatecentral:*` or `templatecentral:standards`.
-- [ ] **Hook commands use exec form (string `command` + `args`)**: Every hook is `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"]`. An **array-valued** `"command": [...]` is NOT a valid hook — Claude Code silently skips it (verified: never fires), so the guard is inert. Script paths MUST be prefixed with `${CLAUDE_PROJECT_DIR}` (Claude Code substitutes it in `command` and `args`) because hooks run in Claude's current working directory, which drifts when Claude `cd`s into a subdirectory. Exec form passes argv with no shell in between — no interpolation, no injection. Inline `node -e`/`python3 -c` one-liners belong in wrapper scripts. Lint-enforced by `check_hook_command_uses_args_array`.
-- [ ] **Every hook sets `timeout`**: each seeded hook entry carries an explicit `timeout` (seconds) sized to its job (guards: a few seconds; typecheck/test hooks: longer). Without one, a hung script stalls the session for the default timeout.
-- [ ] **Hook `"if"` field — single rule only**: The `"if"` field exists and holds exactly ONE permission rule (e.g. `Edit(.env*)`); there is no `&&`/`||`/pipe to combine rules or tools. Because of that single-rule limit, scaffolds filter PostToolUse to TS/Python edits **in-script** (reading `tool_input.file_path`) rather than via `if`. `continueOnBlock` does NOT exist in the hooks schema — do not add it.
-- [ ] **SubagentStop wired if subagents used**: If a skill spawns subagents, a `SubagentStop` hook should be present. It fires when a subagent finishes, is distinct from `Stop`, and can force review by exiting 2 (stderr → Claude) or emitting `{"decision":"block","reason":"..."}` on stdout. There is **no** `blocking` settings field — control is the hook's exit code / JSON `decision` output. If no subagents are used, no check needed.
-- [ ] **SubagentStop guards**: the seeded `subagent-stop.sh` (1) exits 0 when `stop_hook_active` is true — the field is present in SubagentStop input too, and without the guard a subagent re-blocks until the continuation cap; and (2) exits 0 for read-only agent types (`Explore`, `Plan`, and other non-editing agents, read from `agent_type` in stdin JSON) — they make no edits, so forcing a review only burns turns.
-- [ ] **skill-usage-log matcher is `Skill`**: the `skill-usage-log.sh` PostToolUse entry matches the tool name `Skill` and reads the skill name from `tool_input.skill`. Any other matcher string never fires.
-- [ ] **No PostToolUseFailure hook seeded**: the kit does not seed `post-tool-failure.sh` / a `PostToolUseFailure` entry — Claude already sees tool errors directly, so such a hook only duplicates context. Flag any skill that still seeds or lists it.
-- [ ] **skillListingMaxDescChars set**: `settings.json` may pair `skillListingBudgetFraction: 0.02` with `skillListingMaxDescChars: 1536` (default) to cap per-skill description length. Neither field is required, but both should be consistent if one is set. Scaffold should set `skillListingBudgetFraction` and omit `skillListingMaxDescChars` (relying on the 1536-char default) unless a lower cap is needed.
-- [ ] **block-`--no-verify` PreToolUse hook present**: Scaffold settings.json includes a `PreToolUse` hook with `matcher: "Bash"` that checks incoming Bash commands and exits 2 if `--no-verify` is found. Must read `tool_input.command` from stdin JSON — **not** top-level `command`. TS stacks use `node` via exec form; FastAPI uses `python3`. Without this hook, an agent can bypass Stop (and all other hooks) by running `git commit --no-verify`.
-- [ ] **migrate seeds the FULL harness-kit (scaffold parity)**: `migrate/general` Phase 4 must execute harness-kit Steps **A–E** (incl. B2 git-hook layer, B3 CI, B4 integrity verifier, B5 `/skill-audit`), not just A–B — a migrated project must get the same enforcement layer as a scaffolded one. Its `harness.json` must defer to kit **Step E** (all 9 hooks incl. `skill-usage-log.sh`, `post-edit-comment-check.sh`, `lefthook.yml`, `.gitleaks.toml`, `ci.yml`, `verify/regen-harness.sh`, `skill-audit`, `.claude/comment-hygiene-patterns.txt`), never a hand-maintained partial copy. Phase 5d re-sync + the pre-push hook call `verify-harness.sh`, so B4 MUST be seeded. Flag any stale "10 hooks" / `post-tool-failure.sh` reference or partial-manifest drift.
-- [ ] **Local gitleaks is blocking**: the seeded `lefthook.yml` gitleaks command must NOT end in `|| true` (or otherwise swallow the exit code) — a non-blocking local secret scan lets a leaked credential reach the remote before CI runs. It must use `gitleaks git --pre-commit --staged` (not the deprecated `gitleaks protect`). The seeded CI must install the MIT gitleaks CLI with the version + SHA-256 in ONE `env` block and `sha256sum -c` (never `gitleaks/gitleaks-action`, which needs a paid `GITLEAKS_LICENSE` on org repos), scan `origin/<base>..HEAD` on PRs (no `--first-parent` — on GitHub's synthetic merge it scans nothing) and full history on push, and the seeded `.gitleaks.toml` must use `[[allowlists]]` (top-level `[allowlist]` deprecated since v8.25).
-- [ ] **verify-harness fails closed on a bad manifest**: the seeded `verify-harness.sh` exits non-zero when `.claude/harness.json` is missing, empty, unparseable, or has an empty file list — it must never report OK because there was nothing to check.
-- [ ] **Deps gate present and fail-closed**: `shared/template/.claude/ci-gates.sh` ships the `deps` gate and all three CI files (`shared/template-ci/github-ts/`, `github-py/`, `azure/`) run it; the gate has no label bypass, rejects pnpm-native suppressions (`auditConfig`, `ignoreGhsas`, `ignoreCves`, `audit.ignore` in block or flow style, quoted or not), audits every ecosystem present, and fails on a missing tool or unparseable output. Unaudited packages cannot be allowlisted. Lint-enforced presence: `check_security_seeds_present`; behaviour: `scripts/test-harness-kit.sh`.
-- [ ] **Authz seeds deny by default**: the role and ownership helpers (`require_roles`/`ensure_owner`, `RolesGuard`/`assertOwner`, `hasRole`/`isOwner`) and their unit tests live in `skills/add/auth/<stack>/template*/` (e.g. `skills/add/auth/fastapi/template/src/api/dependencies/authz.py` and `.../test/test_api/test_authz.py`; `skills/add/auth/nextjs/template/src/lib/authz.ts` and `.../test/lib/authz.test.ts`; `skills/add/auth/nestjs/template/test/modules/auth/authz.spec.ts`). They deny on a missing role list, a malformed role entry or a missing record, return the same 404 for another user's record as for a missing one, take roles from the database and never the token or client input, and ship with unit tests. Lint-enforced presence: `check_security_seeds_present` greps for the definitions in `skills/add/auth/<stack>.md` or in the template trees under `skills/add/auth/<stack>/`; it does not check the 404 or database-role criteria or the unit tests.
-- [ ] **AGENTS.md hashed after its final write**: the scaffold/migrate step that records `harness.json` hashes runs AFTER the last edit to AGENTS.md (incl. any stack-specific append). Hashing earlier records a stale SHA and every fresh project reports drift on its first verify.
-
----
-
-## Step 4 — Report, fix, and re-audit (loop until clean)
-
-This step is a loop, not a one-shot. Do not update the CHANGELOG or bump the version until the exit condition is met.
-
-### 4a — Report findings
-
-Present all findings grouped by severity:
-
-**HIGH** — incorrect, insecure, or will break user code  
-**MEDIUM** — outdated, misleading, or missing important guidance  
-**LOW** — style, readability, token reduction  
-**CLEAN** — list all files with no findings
-
-### 4b — Fix
-
-- HIGH and MEDIUM: fix immediately. Classify each fix before acting:
-  - **Minor** (single file, ≤ 10 lines changed, no architectural impact): fix directly without asking. No plan needed.
-  - **Large-scope** (multi-file, architectural change, or > 10 lines): describe the fix and confirm before implementing. A written plan is never required — work directly from the finding description.
-- LOW: fix directly without asking.
-- After fixing, run the lint script to confirm no mechanical regressions:
+## Step 2 — Measure generated outcomes
 
 ```bash
-bash scripts/lint-skills.sh skills/
+bash scripts/measure-outcomes.sh
 ```
 
-### 4c — Re-audit changed files
+Static, no installs: one table per stack template (`skills/scaffold/*/template`) with comment lines, multi-line and parenthetical comments, suppressions (`eslint-disable`, `noqa`, `type: ignore`, `@ts-expect-error`, `NOSONAR`, coverage pragmas), test files and cases versus source files and LOC, lint/coverage/Sonar exclusions, and whether each CI template carries sharding/parallel settings and the `diff-cover` 80% gate. Exit 1 means a number crossed a threshold at the top of the script.
 
-Re-read every file that was modified in 4b and re-apply the full checklist from Step 2. Do not skip this — fixes sometimes introduce new issues or reveal adjacent problems that were masked by the original finding.
+Target is SonarQube's default gate on new code: cognitive complexity ≤ 15, duplication ≤ 3%, coverage ≥ 80%. A failing number is a finding: fix the template, never loosen a threshold to pass. Tighten a threshold whenever the real numbers drop well under it.
 
-### 4d — Exit condition check
+### 2b — Deeper check (optional; needs network and installs)
 
-After re-auditing:
+Scaffold one stack into a temp directory with `templatecentral:scaffold`, then run its lint, typecheck and tests (`pnpm run check`, `pnpm exec vitest --run --coverage`; FastAPI: `ruff check`, `python -m pyright src/`, `pytest --cov`). Record wall-clock time per command and flag any that is slow or any warning. Rotate the stack each audit. Skip it when offline.
 
-- **If any HIGH or MEDIUM findings remain** → return to 4b. Do not proceed.
-- **If only LOW findings remain, or all files are CLEAN** → proceed to 4e.
+---
 
-### 4e — Final lint confirmation
+## Step 3 — Semantic review (choose what to read)
 
-```bash
-bash scripts/lint-skills.sh skills/
-```
+Do not read everything. Read, in full, only:
 
-Must pass with "All checks passed" before continuing.
+1. Files changed since the last audit (`git log --since` / `git diff <last-audit-tag>..HEAD -- skills`).
+2. Files a Step 1 or Step 2 finding points at.
+3. One file per stack from `skills/scaffold/<stack>/template/` and its `source-files.md`, rotating each audit, plus the leaf of any `skills/add/*` capability whose template changed.
 
-### 4f — Update CHANGELOG and version (only reached when 4d passes)
+Apply to each file:
 
-Now that no HIGH or MEDIUM findings remain:
+- **Accuracy**: commands, imports, config keys and versions match `.claude/rules/*.md`; nothing deprecated shown as current. Verify any version-sensitive fact (framework majors, advisories, OWASP lists, Claude Code hook behaviour) against current official docs; do not rely on model memory.
+- **Security**: input validated at the boundary, argon2id hashing, JWT algorithm whitelist, rate limiting on auth endpoints, no stack traces in errors, security headers and anti-clickjacking defaults consistent across the three API stacks, `TRUST_PROXY` documented for one- and two-hop topologies, authz deny-by-default, no CVE ids, no versions in skill bodies (versions live in `.claude/rules/*.md`).
+- **Quality**: SRP, DRY, YAGNI; reference files over 200 lines flagged (not split during the audit); comments that restate code deleted; same instruction not repeated within 15 lines.
+- **Template code**: code lives in real template trees (`template*/` plus `template.manifest`, copied by `skills/scaffold/shared/tc-copy.sh`); flag any fenced copy of a template file that reappears in markdown.
 
-0. **Verify all fixes are committed** — run `git status` and confirm the working tree is clean. Do not write the CHANGELOG entry while uncommitted changes remain; write the entry only after the final commit.
-1. Write a `CHANGELOG.md` entry summarising all changes made across all iterations of this audit run — not just the last pass.
-2. **Bump the version in `.claude-plugin/plugin.json`** using semver:
-   - **patch** (`x.y.Z`): fixes only — corrected outdated code, removed bad patterns, updated docs/examples. Nothing changes for users who don't hit the fixed case.
-   - **minor** (`x.Y.0`): new guidance, new checklist items, new reference files, or any additive change a user would notice. No existing skill behaviour removed.
-   - **major** (`X.0.0`): breaking — registered skill names changed, skills removed, or the invocation contract changed in a way that breaks existing usage.
-3. If any LOW findings were left unfixed (deferred by choice), note them under an `### In Progress` or `### Known` section so they are not lost.
+Mark each file CLEAN or list issues with line references.
+
+### 3H — Harness checks (guard real failures only)
+
+`scripts/lint-skills.sh` and `scripts/test-harness-kit.sh` cover hook wiring. Check these by hand only when the hook templates changed:
+
+- **Hook delivery**: PostToolUse hooks capture output and return `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":...}}`, always exit 0. Plain stdout on exit 0 never reaches Claude.
+- **Stop hook**: runs tests, prints to stderr and exits 2 only on failure, and exits 0 first when `stop_hook_active` is true. The block cap is a backstop; never raise `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` in seeds.
+- **Exec form and timeouts**: every hook is `"command": "<bin>", "args": ["${CLAUDE_PROJECT_DIR}/..."]` (array-valued `command` never fires) and sets `timeout`.
+- **Guards**: `.env*` edit block (case-insensitive, `.env.example` allowed, reads `tool_input.file_path`), prompt-injection check, `--no-verify` block (reads `tool_input.command`). SubagentStop exits 0 for `stop_hook_active` and read-only agent types.
+- **Fail-closed gates**: `verify-harness.sh` fails on a missing/empty/unparseable manifest; the deps gate has no bypass and rejects pnpm-native suppressions; local gitleaks is blocking (`gitleaks git --pre-commit --staged`, no `|| true`).
+- **Migrate parity**: `migrate` Phase 4 runs harness-kit Steps A–E, and `harness.json` hashes are written after the final AGENTS.md edit.
+- **Skills**: seeded project skills are directories (`.claude/skills/<name>/SKILL.md`); `CLAUDE.md` is one line, `@AGENTS.md`; scaffolded AGENTS.md has a `## Skills Security` section.
+
+---
+
+## Step 4 — Report, fix, re-audit
+
+Report findings by severity: **HIGH** (incorrect, insecure, breaks user code), **MEDIUM** (outdated, missing guidance), **LOW** (style, token cost), then the CLEAN files.
+
+Fix HIGH and MEDIUM; a minor fix (one file, ≤ 10 lines) needs no confirmation, a larger one is described and confirmed first. Fix LOW directly. After fixing, re-run Steps 1 and 2 and re-read the files you changed. Repeat until only LOW findings remain.
+
+No CHANGELOG entry or version bump comes with an audit. A release happens when the owner asks.
 
 ---
 
 ## Step 5 — Update audit infrastructure
 
-After fixing all findings, ask: did this audit surface a new **class** of issue — something that could recur in a future skill edit?
+If the audit surfaced a new class of issue, make it recur-proof:
 
-If yes, update the infrastructure so it never slips through again:
-
-### New greppable pattern → add to lint script
-
-If the issue is detectable with grep (a specific string, API call, or token), add a new `check_*` function to `scripts/lint-skills.sh`:
-
-```bash
-check_no_<pattern_name>() {
-  # One sentence: what this catches and why it is wrong.
-  # TIMELESS or ECOSYSTEM-ERA: <when to revisit or retire this check>
-  header "<Human-readable label>"
-  local matches
-  matches=$(grep -rn '<pattern>' "$SKILLS_DIR/" 2>/dev/null || true)
-  if [[ -n "$matches" ]]; then
-    echo "$matches"
-    fail "<Message explaining the fix>"
-  else
-    pass "No <pattern> found"
-  fi
-}
-```
-
-Then call it in the "Run all checks" section at the bottom of the script, under the correct category (TIMELESS or ECOSYSTEM-ERA).
-
-Run the script to verify the new check passes on the current codebase before committing:
-
-```bash
-bash scripts/lint-skills.sh skills/
-```
-
-### New semantic pattern → add to this skill
-
-If the issue requires judgment (context-dependent, not detectable by grep alone), add a checklist item to the relevant section of this file (`.claude/skills/tc-audit/implementation.md`):
-
-- Stack-specific issue → add under the appropriate stack section's "additional checks"
-- Cross-cutting issue → add under Step 3
-
-Keep the item concise — one checkbox, one line.
-
-### New skill added to the project
-
-If a new `skills/<name>/SKILL.md` was added since the last audit, add it to the correct stack section in Step 2 so it is covered on the next run.
-
-### Missing capability gap
-
-If this audit repeatedly encountered a user need that no `templatecentral:add` capability covers — and it appeared in more than one stack or file — note it explicitly as a skill candidate. Open a `/tc-write-skill` session to draft it.
-
-### After updating infrastructure
-
-Commit the lint script and this skill together with the content fixes, so the audit history is traceable:
-
-```bash
-git add scripts/lint-skills.sh .claude/skills/tc-audit/SKILL.md .claude/skills/tc-audit/implementation.md
-git commit -m "audit: add <pattern> check to lint script and /tc-audit"
-```
+- Greppable → add a `check_*` function to `scripts/lint-skills.sh` (header, collect hits, report; mark TIMELESS or ECOSYSTEM-ERA), call it at the bottom, confirm it passes.
+- Measurable on generated output → add a metric and threshold to `scripts/measure-outcomes.sh` and a case to its test.
+- Judgment only → add one checklist line to this file.
 
 ---
 
-## Step 6 — Repo harness health check
-
-Run after Step 5 to verify templateCentral's own harness files are intact.
+## Step 6 — Repo harness and docs
 
 ```bash
-# AGENTS.md exists and has the plugin marker on line 1
-head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo "OK: AGENTS.md marker" || echo "FAIL: AGENTS.md marker missing"
-
-# CLAUDE.md exists and is @AGENTS.md
-[ -f CLAUDE.md ] && grep -q '^@AGENTS.md' CLAUDE.md && echo "OK: CLAUDE.md" || echo "FAIL: CLAUDE.md missing or wrong"
-
-# .claude/settings.json exists
-[ -f .claude/settings.json ] && echo "OK: .claude/settings.json" || echo "FAIL: .claude/settings.json missing"
-
-# .claude/settings.json has skillListingBudgetFraction (10+ skill repos need this to cap listing overhead)
-[ -f .claude/settings.json ] && grep -q '"skillListingBudgetFraction"' .claude/settings.json && echo "OK: skillListingBudgetFraction set" || echo "FAIL: skillListingBudgetFraction missing — add \"skillListingBudgetFraction\": 0.02 to .claude/settings.json"
-
-# .claude/harness.json exists
-[ -f .claude/harness.json ] && echo "OK: .claude/harness.json" || echo "FAIL: .claude/harness.json missing"
+head -1 AGENTS.md | grep -q 'templateCentral: plugin@' && echo OK || echo "FAIL: AGENTS.md marker"
+grep -q '^@AGENTS.md' CLAUDE.md && echo OK || echo "FAIL: CLAUDE.md"
+for f in .claude/settings.json .claude/harness.json; do [ -f "$f" ] && echo "OK: $f" || echo "FAIL: $f missing"; done
+bash scripts/validate-manifest.sh
 ```
 
-Any `FAIL` line means a harness file was removed or corrupted. Re-create it from the v4.0.0 spec in `AGENTS.md` → **Working on this repo** section.
+Markers: the AGENTS.md line-1 `@X.Y.Z` is a migration schema floor pinned at `HARNESS_SCHEMA_VERSION` in `lint-skills.sh`; never bump it on a normal release. `templatecentral_version` tracks `.claude-plugin/plugin.json`.
+
+Narrative docs (`README.md`, `EXAMPLES.md`, `AGENTS.md` capability row, `CONTRIBUTING.md`, `FUTURE.md`, `SECURITY.md`): verify counts and command names mechanically (`ls skills/*/SKILL.md | wc -l`, `ls skills/add/`), and draft replacements for stale spans for the user to approve.
 
 ---
 
-## Step 7 — Documentation sync
+## Ecosystem refresh (on demand)
 
-Run last, after all content fixes and the version bump in Step 4f. The goal: every markdown doc and version marker is accurate before the audit closes. Two tracks — handle them differently.
+### 0b — Full web scan
 
-### 7a — Structural markers (auto-update, no approval needed)
+Run only when the owner asks, or when `.github/workflows/ecosystem-refresh.yml` runs. Use WebSearch/WebFetch for current stable versions, breaking changes, deprecations and advisories of: Next.js, NestJS + `@nestjs/platform-fastify`, FastAPI + Starlette, pnpm, Zod, better-auth, Drizzle ORM, argon2/argon2-cffi, `@nestjs/throttler`, slowapi, TanStack Query, Vite + `@vitejs/plugin-react`; OWASP Top 10 (web, LLM, Agentic), NIST SP 800-63B, AWS Responsible AI Lens and AIDLC; Claude Code hook events/types, settings fields and AGENTS.md standard status. Grade harness-practice findings `RECOMMENDED` (official guidance), `CONSENSUS` (≥ 3 independent sources) or `EMERGING` (one source; record only).
 
-These are formulaic — one correct value, derived from `.claude-plugin/plugin.json`. Update them directly to match, then let the lint scripts confirm. The two scripts enforce these automatically, so the audit's job is to fix any the scripts flag:
-
-```bash
-bash scripts/lint-skills.sh skills/        # check_harness_version_matches_plugin, check_agents_marker_not_drifted_to_semver
-bash scripts/validate-manifest.sh          # README badge, repo harness.json, repo AGENTS.md marker vs plugin.json
-```
-
-| Marker | Tracks | Where | Rule |
-|--------|--------|-------|------|
-| `version` | — | `.claude-plugin/plugin.json` | source of truth (set in Step 4f) |
-| README version badge | plugin semver | `README.md` | == plugin.json |
-| `templatecentral_version` | plugin semver | repo `.claude/harness.json` + all scaffold/migrate harness.json templates | == plugin.json |
-| AGENTS.md line-1 marker `@X.Y.Z` | harness **schema floor** | repo `AGENTS.md` + scaffold/migrate templates | **PINNED** at `HARNESS_SCHEMA_VERSION` (currently 6.0.0); never bump on a normal release |
-
-**Critical distinction:** `templatecentral_version` tracks the plugin's semver (bump every release). The AGENTS.md `@X.Y.Z` marker is a *migration schema floor* read by `migrate` Phase 0 — bumping it on a normal release makes every existing project falsely report "needs migration." It moves only on a deliberate harness-structure change, at which point you bump `HARNESS_SCHEMA_VERSION` in `lint-skills.sh` and the floor markers together. Both lint scripts guard against accidental drift in either direction.
-
-If either script reports a mismatch, fix the flagged file to match `plugin.json` (or revert a drifted floor marker), then re-run until both pass.
-
-### 7b — Narrative docs (flag + draft, user approves)
-
-These carry intentional decisions — don't rewrite blindly. Read each, compare against the current state of the repo, and for anything stale, present a drafted replacement for the user to approve before writing:
-
-| Doc | Check for staleness against |
-|-----|------------------------------|
-| `README.md` | skill count (registered `skills/*/SKILL.md`), capability list, stack names, command names |
-| `EXAMPLES.md` | every `templatecentral:*` reference resolves to a real skill; workflows still valid |
-| `AGENTS.md` | `templatecentral:add` capability row matches `skills/add/*` directories exactly |
-| `CONTRIBUTING.md` | lint/validate commands and contribution steps still exist |
-| `FUTURE.md` | any listed seam/direction that has since shipped (move to CHANGELOG) or changed |
-| `SECURITY.md` | supported-version statements, disclosure process |
-
-Verify counts mechanically before claiming a doc is accurate — e.g. `ls skills/*/SKILL.md | wc -l` for the skill count, `ls skills/add/ | grep -v SKILL.md` for the capability list. Report each narrative doc as CLEAN or list the stale span with a proposed fix; apply only after approval.
-
-## Changelog
-### 2.12.0
-- Step 2 file lists follow the template-tree layout: `add` and `migrate` new-file code lives in real trees beside each leaf (`template*/` + `template.manifest`), copied by `skills/scaffold/shared/tc-copy.sh` (`TC_PART=leaf TC_LEAF=... bash tc-copy.sh <target>`). New cross-stack item audits those trees as project code and flags any fenced copy that reappears in a leaf `.md`; the per-stack `add/auth`, `add/database` and `migrate/database` entries point at their trees.
-- Harness-kit item names `tc-copy.sh` and its `TC_PART` values instead of "run with a different `PART`".
-- Authz seeds item names where the helpers and tests now live and states what `check_security_seeds_present` reads (the leaf `.md` or the template trees under it).
-### 2.11.0
-- Step 3H hook checks corrected against verified Claude Code behavior: hooks use exec form = string `command` + `args` array with `${CLAUDE_PROJECT_DIR}`-anchored script paths (an array-valued `command` is silently skipped — the previous bullet recommended exactly that inert form); PostToolUse feedback must use `hookSpecificOutput.additionalContext` JSON or exit 2 + stderr (plain stdout on exit 0 never reaches Claude); Stop hook has an 8-continuation cap (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) but the `stop_hook_active` guard stays mandatory; `omitClaudeMd` is opt-in for custom subagents (CC v2.1.271), built-in for Explore/Plan; hook-event count is 33.
-- New 3H checks: SubagentStop guards (`stop_hook_active` + skip read-only agent types); skill-usage-log matcher `Skill` / `tool_input.skill`; `.env` guard case-insensitive + `NotebookEdit`; every hook sets `timeout`; local gitleaks not `|| true`; verify-harness fails on malformed/empty manifest; AGENTS.md hashed after its final write; no `PostToolUseFailure` hook seeded.
-- Seeded hook count 10 → 9 (`post-tool-failure.sh` removed — Claude already sees tool errors). `HARNESS_SCHEMA_VERSION` 5.0.0 → 6.0.0 so migrate flags projects carrying inert array-form hooks.
-### 2.10.0
-- FastAPI-specific additional checks gain a `python -m pytest` (never bare `pytest`) checklist item — a 2026-07 audit found 12 FastAPI skill files still invoking bare `pytest` in Validate sections, the same venv-resolution failure mode already fixed once in this pass's predecessor for a single file (`migrate/nextjs-backend-extraction/fastapi.md`) but never generalized. Now lint-enforced by `check_no_bare_pytest_invocation`.
-### 2.9.0
-- Step 2 cross-stack file list gains `skills/add/documentation/implementation.md` and `skills/scaffold/shared/documentation-kit.md` — the per-folder README/`.order` governance feature added its own capability + shared kit but the audit's own file inventory was never updated to cover them.
-### 2.8.0
-- Harness kit extracted: 3H bullet updated — all scaffolds + migrate now load `scaffold/shared/harness-kit.md` (single source); verify the kit itself, then per-stack deltas. Step 2 cross-stack file list gains `skills/scaffold/shared/harness-kit.md`.
-### 2.7.0
-- Conventions Compliance C1–C6 block replaced with a short lint-enforcement note: these checks are now fully covered by `scripts/lint-skills.sh` (`check_skillmd_description_length`, `check_ref_file_headers`, `check_skillmd_body_length`, `check_nesting_depth`, `check_no_jurisdiction_specific`). Run Step 1; no separate pass needed.
-- Step 0b community-consensus block: added loop-engineering research bullet — current community/team practice on agent loop design (goals, termination, budgets, scheduled self-prompting); graded per RECOMMENDED/CONSENSUS/EMERGING table.
-- Duplicate `### 2.4.0` changelog heading removed (was duplicated on two consecutive lines).
-- Utility skill category paths (`build/`, `test/`, `review/`, `cleanup/`) now documented as the canonical cat-path contract for de-registered agent utilities; Step 2 cross-stack file list confirms the correct paths.
-### 2.6.0
-- Step 0b: added "Claude Code harness engineering — community consensus & team recommendations" research item — scans official Anthropic guidance and community sources (claude-code GitHub discussions, practitioner write-ups) for harness-engineering practice, graded RECOMMENDED / CONSENSUS / EMERGING; RECOMMENDED and CONSENSUS findings become targeted Step 3H checks, EMERGING is tracked only. Cache template gained a matching subsection.
-### 2.5.0
-- Added Step 7 — Documentation sync: two-track doc maintenance (auto-update structural version markers; flag + draft narrative docs). Runs every audit so markdown and version markers can't silently drift.
-- Scoped-skills enforcement: lint now requires every seeded `*-verify`/`*-migrate` skill to declare a tightly-scoped `allowed-tools:` (`check_seeded_skills_scope_tools`) and bans unscoped `Bash` grants (`check_no_unscoped_bash_grant`). All seeded skills updated to model least-agency (OWASP Agentic ASI02).
-- Harness-completeness enforcement: `check_scaffold_seeds_complete_harness` lint-enforces that every scaffold + migrate `settings.json` template seeds the full hook set AND the `permissions.deny` secret-Read block (the Step 3H manual checklist is now backstopped by lint). Adoption/retrofit routing surfaced in `AGENTS.md` + `README.md`.
-- Defense-in-depth: scaffolds now seed `permissions.deny` for `Read(.env*)`/`Read(./secrets/**)` — the Edit/Write PreToolUse guard only blocked writes; an agent could still read secrets.
-- **Full harness parity:** scaffolds + migrate seed a **6-event** `.claude/hooks/` script kit (9 scripts: `protect-files`, `block-no-verify` with git-guards, `user-prompt-guard` with LLM02 credential detection, `post-edit-typecheck`, `post-edit-comment-check`, `stop-checks`, `subagent-stop`, `session-context`, `skill-usage-log`; no `post-tool-failure` — Claude already sees tool errors). When auditing a scaffold's harness, verify: the 6 events (PreToolUse, UserPromptSubmit, PostToolUse, Stop, SubagentStop, SessionStart); PostToolUse filters to source-file edits **in-script** (no `if` field used — it allows only a single rule; and no `continueOnBlock` — not a real key); JSON parsing uses the runtime guaranteed per stack (Node for TS / python3 for FastAPI) so guards fail safe; `SessionStart` (source `compact`) re-injects context — PostCompact stdout is also injected as context but SessionStart additionally covers resume/startup, so it's the seeded mechanism; all scaffolds + migrate load `scaffold/shared/harness-kit.md` (single source); verify the kit itself, then per-stack deltas. Enforced by `check_scaffold_seeds_complete_harness`.
-- Step 5 / lint: added `check_harness_version_matches_plugin` (harness.json `templatecentral_version` templates == plugin.json) and `check_agents_marker_not_drifted_to_semver` (AGENTS.md schema-floor marker must stay <= `HARNESS_SCHEMA_VERSION`, guarding migrate Phase 0).
-- `validate-manifest.sh`: added DOC SYNC section — README badge, repo `.claude/harness.json`, and repo AGENTS.md marker checked against `plugin.json`.
-- Documented the `templatecentral_version` (plugin semver) vs AGENTS.md `@X.Y.Z` marker (harness schema floor) distinction; introduced `HARNESS_SCHEMA_VERSION` constant in `lint-skills.sh`.
-### 2.4.0
-- Step 3H: added block-`--no-verify` PreToolUse hook check — scaffold must block `git ... --no-verify` via `tool_input.command` (not top-level `command`); without it agents can bypass Stop and all other hooks
-- Step 5: added `check_no_toplevel_command_in_hooks` to lint script — catches hooks that read bash command from top-level `d.command` instead of `d.tool_input.command`
-### 2.3.0
-- Step 6: added `skillListingBudgetFraction` health check — 10+ skill repos should set `"skillListingBudgetFraction": 0.02` in `.claude/settings.json` to cap skill-listing context overhead
-- Harness check list now at 15 items (PostToolUse feedback hook awareness)
-### 2.2.0
-- Step 4f: added semver decision rules for version bump (patch = fixes only, minor = additive, major = breaking skill name/contract changes)
-### 2.1.0
-- Added universal-standards philosophy to Mindset: OWASP as the stated security standard, government-grade rigour applied generically, explicit prohibition on country/region/ethnicity/gender-specific content
-- Hardened Step 0 training-cutoff note: "August 2025" named explicitly; all ecosystem state treated as stale until web-searched
-- Added C6 — Jurisdiction neutrality check: grep for known jurisdiction-specific framework names (IM8, PDPA, GDPR, HIPAA, PCI-DSS, etc.) in skill files
-- Expanded Token efficiency checklist item from one line to five concrete sub-checks (line count, redundant comments, over-scaffolded examples, duplicate instructions, redundant prose)
-- Step 4b: added explicit "minor = fix directly / large-scope = confirm first" classification; stated no written plan is ever required for audit findings
-- Step 4f: added pre-changelog gate — verify working tree is clean before writing CHANGELOG entry
-### 2.0.0
-- Updated all Step 2 file lists from 33 old skill paths to new 10-skill nested structure (`add/`, `scaffold/`, `standards/`, `migrate/`, etc.)
-- Fixed C4 depth check: `NF > 4` → `NF > 5` to accommodate the deeper nested layout
-- Updated git commit command in Step 5 from `shared-audit/` to `audit/`
-- Updated AIDLC checklist reference from `shared-add-ai-security` to `add/ai-security/`
-### 1.6.0
-- Added `check_no_globals_jest_in_vitest_projects` to lint script (ECOSYSTEM-ERA: catches `globals.jest` in ESLint config templates — Node stacks use Vitest with `globals: false`; `globals.jest` is unused and misleading)
-- Added NestJS-specific checklist item: ESLint config must not include `globals.jest` when using Vitest
-### 1.5.0
-- Added `check_no_jest_apis_in_skills` to lint script (ECOSYSTEM-ERA: catches `jest.fn()`, `jest.spyOn()`, `jest-e2e.json` in skill code examples — all Node stacks use Vitest)
-- Added NestJS-specific checklist item: test examples must use `vi.fn()` / `vi.spyOn()` (Vitest), not Jest APIs
-### 1.4.0
-- Added `algorithms: ['HS256']` whitelist check to NestJS-specific additional checks
-- Added `check_no_zod_string_format_methods` to lint script (ECOSYSTEM-ERA: catches deprecated `z.string().url()`, `z.string().datetime()` etc. in Zod v4)
-### 1.3.0
-- Added "Mindset" preamble — fresh eyes, no carry-over assumptions, explicit priority order (accuracy → security → quality → AIDLC)
-- Added Step 0 — Ecosystem research; WebSearch/WebFetch for 6-month ecosystem changes across all stack packages and security standards before reading any skill files; AWS AIDLC reference included
-- Checklist expanded: accuracy items now cross-reference Step 0 findings; security items add trust proxy topology detail; structural section renamed to "Code quality" with SRP, SoC, DRY, YAGNI, and token efficiency named explicitly; new "AIDLC/SDLC alignment" section added
-### 1.2.0
-- Step 4 rewritten as an iterative loop (4a–4f) — CHANGELOG and version bump gated behind exit condition; re-audit of changed files mandatory
-### 1.1.0
-- Added Step 5 — audit infrastructure self-update
-### 1.0.0
-- Initial release — structured per-file semantic audit covering all 49 skills
+Write the result to `.claude/audit-ecosystem-research.md`: frontmatter `last-scanned: YYYY-MM-DD` and `expires-after-days: 30`, a `# Ecosystem Research Cache` heading, then one `###` section per item above under `## Frameworks and runtimes`, `## Libraries`, `## Security standards`, `## Claude Code Harness Engineering`. Write placeholders as `{name}`; avoid `<` tags, `]:`, ZWJ emoji, 4-space indents, links, images and code fences (`scripts/check-research-content.py` rejects them).
