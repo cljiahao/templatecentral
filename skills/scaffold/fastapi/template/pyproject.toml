@@ -33,8 +33,11 @@ pythonpath = ["src", "test"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Register a marker here before using it to select a subset (e.g. "integration: needs a running service").
-markers = []
+# Register a marker here before using it, so nothing warns.
+markers = [
+  "unit: fast tests with no external service",
+  "integration: needs a running service",
+]
 
 addopts = [
     "--import-mode=importlib",

@@ -91,7 +91,7 @@ def db_client() -> Generator[TestClient]:
 
 ### Naming
 
-- Functions: `test_<subject>_<scenario>`. No docstring or marker needed when the name says it; add a marker only to select a subset, and register it in `markers` in `pyproject.toml` first (none ship by default).
+- Functions: `test_<subject>_<scenario>`. No docstring or marker needed when the name says it; add a marker only to select a subset. `unit` and `integration` are registered in `pyproject.toml`; register any other in `markers` first.
 
 ```python
 def test_example_rejects_invalid_payload(client: TestClient) -> None:

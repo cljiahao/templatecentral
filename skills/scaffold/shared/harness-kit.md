@@ -76,9 +76,9 @@ The CI file is not part of this copy: Step B3 picks the host and copies it. Ever
 | Stack | JSON-parsing runtime | Typecheck feedback cmd | Stop-checks test cmd | Verify-skill name(s) | Quality-gate line in CONSTITUTION §6 |
 |-------|----------------------|------------------------|----------------------|----------------------|---------------------------------------|
 | **fastapi** | `python3` | `python -m pyright src/` (errors → `additionalContext`) | changed test files, name-matched then import-matched tests, else all of `test/` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
-| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `nest-verify` | `pnpm check` |
-| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `next-verify` + `next-migrate` | `pnpm check` |
-| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `vite-verify` | `pnpm check` |
+| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` (full `pnpm test` for non-code changes) | `nest-verify` | `pnpm check` |
+| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` (full `pnpm test` for non-code changes) | `next-verify` + `next-migrate` | `pnpm check` |
+| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` (full `pnpm test` for non-code changes) | `vite-verify` | `pnpm check` |
 
 **Additional per-stack notes:**
 - `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js`: `"type": "module"` would load `.js` as ESM and break `require()`).

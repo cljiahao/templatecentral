@@ -431,9 +431,8 @@ case "$*" in
     [ -f "$MOCK_TSC_OK" ] && exit 0
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
-  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
   "exec vitest --version") [ -n "$MOCK_NO_VITEST" ] && exit 1; exit 0 ;;
-  "exec vitest --run --passWithNoTests") echo "vitest-full" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
   "exec vitest related --run"*) echo "related $*" >> "$MOCK_LOG"
     [ -n "$MOCK_RELATED_NONE" ] && { echo "No test files found, exiting with code 1"; exit 1; }
     echo "1 test failed"; exit 1 ;;
@@ -528,141 +527,176 @@ echo 'export const a = 1' > "$PROJ/a.ts"
 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'related --run a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
 rm -f "$PROJ/a.ts"
-# Fixtures are committed first so that only the intended file counts as changed; each case asserts the
-# exact pytest argument list (grep -x), so over- and under-selection both fail.
+# Fixtures are committed first so that only the intended files count as changed; each case asserts the
+# exact tool arguments (grep -x), so over- and under-selection both fail.
 commit_all() { git -C "$PROJ" add -A; git -C "$PROJ" "${GIT_ID[@]}" commit -qm "$1"; }
-mk() { mkdir -p "$PROJ/src/a" "$PROJ/src/b" "$PROJ/test"; }
+mk() { mkdir -p "$PROJ/src" "$PROJ/test"; }
 reset_proj() { git -C "$PROJ" reset -q --hard; git -C "$PROJ" clean -fdq; mk; : > "$MOCK_LOG"; }
+# put <path> [content]: write a file, creating its directory.
+put() { mkdir -p "$(dirname "$PROJ/$1")"; printf '%s\n' "${2:-x}" > "$PROJ/$1"; }
 # py_runs <expected pytest args> <name>: the hook blocks (exit 2) and pytest got exactly these args.
 py_runs() {
   run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
   check "2 yes" "$EC $(ok_if grep -qxF "pytest -m pytest -q $1" "$MOCK_LOG")" "$2" "$(cat "$MOCK_LOG")"
 }
-mkdir -p "$PROJ/src/a" "$PROJ/src/b" "$PROJ/test"
-echo 'x = 1' > "$PROJ/src/a.py"
+py_pyright() { check "$1" "$(ok_if grep -qx pyright "$MOCK_LOG")" "$2"; }
+# ts_runs <log line> <name>: the hook blocks (exit 2) and the mock logged exactly this line.
+ts_runs() {
+  run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+  check "2 yes" "$EC $(ok_if grep -qxF "$1" "$MOCK_LOG")" "$2" "$(cat "$MOCK_LOG")"
+}
+# quiet <hook> <name>: exit 0 and no tool ran.
+quiet() {
+  run_hook "$KIT/stop-checks.$1.sh" "$PROJ" '{}'
+  check "0 no" "$EC $(ok_if test -s "$MOCK_LOG")" "$2"
+}
+
+# ── Python: a test-files-only change runs those files; anything else runs all of test/ ──
+mkdir -p "$PROJ/src" "$PROJ/test"
+echo 'x = 1' > "$PROJ/src/util.py"
+printf 'from util import x\ny = x\n' > "$PROJ/src/svc.py"
+echo 'from svc import y' > "$PROJ/test/test_svc.py"
 echo 'def test_a(): pass' > "$PROJ/test/test_a.py"
-commit_all py-name-fixture
-reset_proj
-echo 'x = 2' > "$PROJ/src/a.py"
-py_runs test/test_a.py "stop-checks.py runs exactly the test file named for the changed module"
-git -C "$PROJ" rm -q test/test_a.py
-mk
-echo 'from a import x' > "$PROJ/test/test_b.py"
-commit_all py-import-fixture
-reset_proj
-echo 'x = 3' > "$PROJ/src/a.py"
-py_runs test/test_b.py "stop-checks.py runs exactly the test that imports the changed module"
-echo 'def test_c(): pass' > "$PROJ/test/test_b.py"
-commit_all py-nomatch-fixture
-reset_proj
-echo 'x = 4' > "$PROJ/src/a.py"
-py_runs test "stop-checks.py falls back to all of test/ when nothing names or imports the module"
-echo 'import pytest' > "$PROJ/test/conftest.py"
-commit_all py-conftest-fixture
-reset_proj
-echo '# edit' >> "$PROJ/test/conftest.py"
-py_runs test "stop-checks.py runs all of test/ on a conftest-only change"
-echo '[project]' > "$PROJ/pyproject.toml"
-commit_all py-config-fixture
-reset_proj
-echo '# edit' >> "$PROJ/pyproject.toml"
-py_runs test "stop-checks.py runs all of test/ on a pyproject.toml change"
-echo 'x = 1' > "$PROJ/src/my mod.py"
 echo 'def test_m(): pass' > "$PROJ/test/test_my mod.py"
-echo 'x = 1' > "$PROJ/src/a/utils.py"
-echo 'x = 1' > "$PROJ/src/b/utils.py"
-echo 'def test_u(): pass' > "$PROJ/test/test_utils.py"
-commit_all py-space-nested-fixture
-reset_proj
-echo 'x = 2' > "$PROJ/src/my mod.py"
-py_runs "test/test_my mod.py" "stop-checks.py handles a file name with a space"
-reset_proj
-echo 'x = 2' > "$PROJ/src/a/utils.py"
-py_runs test/test_utils.py "stop-checks.py maps nested same-basename modules to the shared test file"
-# Config files that can change every test: typecheck and run all of test/.
-for cfgf in uv.lock requirements-dev.txt pytest.ini pyrightconfig.json setup.cfg tox.ini .python-version; do
-  echo x > "$PROJ/$cfgf"
-  commit_all "py-cfg-$cfgf"
-  reset_proj
-  echo y >> "$PROJ/$cfgf"
-  py_runs test "stop-checks.py runs all of test/ on a $cfgf change"
-  check yes "$(ok_if grep -qx pyright "$MOCK_LOG")" "stop-checks.py typechecks on a $cfgf change"
-done
-# Dotted-path import and multi-line import both select the importing test.
-mkdir -p "$PROJ/src/pkg" "$PROJ/test"
-echo 'x = 1' > "$PROJ/src/pkg/core.py"
-echo 'import pkg.core' > "$PROJ/test/test_dotted.py"
-printf 'from pkg import (\n    other,\n    core,\n)\n' > "$PROJ/test/test_multi.py"
-printf 'from pkg.core import (\n    x,\n)\n' > "$PROJ/test/test_multi_head.py"
-echo 'def test_z(): pass' > "$PROJ/test/test_unrelated.py"
-commit_all py-import-forms-fixture
-reset_proj
-echo 'x = 2' > "$PROJ/src/pkg/core.py"
-run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check "2 yes yes yes no" "$EC $(ok_if grep -qF 'test/test_dotted.py' "$MOCK_LOG") $(ok_if grep -qF 'test/test_multi.py' "$MOCK_LOG") $(ok_if grep -qF 'test/test_multi_head.py' "$MOCK_LOG") $(ok_if grep -qF 'test_unrelated' "$MOCK_LOG")" \
-  "stop-checks.py matches dotted, multi-line and multi-line-head imports" "$(cat "$MOCK_LOG")"
-# pytest exit 5 (nothing collected) is not a failure.
-reset_proj
-echo 'x = 3' > "$PROJ/src/pkg/core.py"
-MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check 0 "$EC" "stop-checks.py treats pytest exit 5 as OK"
-# Non-ASCII path: quotePath off, so the file is still seen.
-reset_proj
-echo 'x = 1' > "$PROJ/src/café.py"
 echo 'def test_c(): pass' > "$PROJ/test/test_café.py"
-commit_all py-nonascii-fixture
+commit_all py-fixture
 reset_proj
-echo 'x = 2' > "$PROJ/src/café.py"
-py_runs "test/test_café.py" "stop-checks.py handles a non-ASCII file name"
-# Deleted tracked code file: nothing on disk to relate, so typecheck and run the full suite.
+echo 'x = 2' > "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when util.py changes and only svc.py (not util.py) is imported by a test"
 reset_proj
-rm -f "$PROJ/src/b/utils.py"
-py_runs test "stop-checks.py runs all of test/ when a Python file is deleted"
-check yes "$(ok_if grep -qx pyright "$MOCK_LOG")" "stop-checks.py typechecks when a Python file is deleted"
+echo 'def test_a(): assert 1' > "$PROJ/test/test_a.py"
+py_runs test/test_a.py "stop-checks.py runs only the changed test file"
+py_pyright no "stop-checks.py skips pyright on a test-files-only change"
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+echo '# e' >> "$PROJ/test/test_svc.py"
+put test/test_new.py 'def test_n(): pass'
+py_runs "test/test_a.py test/test_new.py test/test_svc.py" "stop-checks.py runs exactly the changed and new test files"
+reset_proj
+echo '# e' >> "$PROJ/test/test_my mod.py"
+py_runs "test/test_my mod.py" "stop-checks.py handles a test file name with a space"
+reset_proj
+echo '# e' >> "$PROJ/test/test_café.py"
+py_runs "test/test_café.py" "stop-checks.py handles a non-ASCII test file name"
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+echo 'x = 3' > "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when a test file and a source file change together"
+py_pyright yes "stop-checks.py typechecks when a source file changes"
+reset_proj
+put src/new_mod.py 'z = 1'
+py_runs test "stop-checks.py runs all of test/ for a new source file"
+reset_proj
+rm -f "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when a source file is deleted"
+py_pyright yes "stop-checks.py typechecks when a source file is deleted"
+reset_proj
+git -C "$PROJ" mv src/util.py src/util2.py
+py_runs test "stop-checks.py runs all of test/ when a source file is renamed"
+reset_proj
+rm -f "$PROJ/test/test_a.py"
+quiet py "stop-checks.py exits 0 and runs nothing when only a test file is deleted"
+for f in test/conftest.py test/helpers.py test/data/case.json test/__init__.py; do
+  reset_proj
+  put "$f" 'x = 1'
+  py_runs test "stop-checks.py runs all of test/ for a $f change"
+done
+# Config files that can change every test: typecheck and run all of test/.
+for f in pyproject.toml uv.lock requirements-dev.txt pytest.ini pyrightconfig.json setup.cfg tox.ini .python-version; do
+  reset_proj
+  put "$f" 'x'
+  commit_all "py-cfg-$f"
+  reset_proj
+  echo y >> "$PROJ/$f"
+  py_runs test "stop-checks.py runs all of test/ on a $f change"
+  py_pyright yes "stop-checks.py typechecks on a $f change"
+done
+# Anything that is not documentation or an image runs the full suite.
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json test/__snapshots__/a.snap; do
+  reset_proj
+  put "$f"
+  py_runs test "stop-checks.py runs all of test/ for a $f change"
+done
+for f in README.md docs/guide.txt sub/docs/a.txt logo.png photo.JPG.jpg anim.gif icon.svg favicon.ico LICENSE CHANGELOG.rst; do
+  reset_proj
+  put "$f"
+  quiet py "stop-checks.py ignores $f"
+done
+# pytest exit 5: fine on a test-files-only run, a failure on the full suite.
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check 0 "$EC" "stop-checks.py accepts pytest exit 5 on a test-files-only run"
+reset_proj
+echo 'x = 9' > "$PROJ/src/util.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check 2 "$EC" "stop-checks.py rejects pytest exit 5 on the full suite"
+# Bulk changes: more than 50 files run the full suite in one pass; 50 inert files stay quiet.
+reset_proj
+for i in $(seq 1 51); do put "notes/n$i.md"; done
+py_runs test "stop-checks.py runs all of test/ when more than 50 files changed"
+reset_proj
+for i in $(seq 1 50); do put "notes/n$i.md"; done
+quiet py "stop-checks.py ignores exactly 50 inert files"
+
+# ── TS: changed code files run vitest related; anything else runs pnpm test ──
 reset_proj
 echo 'export const d = 1' > "$PROJ/d.ts"
-commit_all ts-delete-fixture
+echo 'export const c = 1' > "$PROJ/café2.ts"
+commit_all ts-fixture
+reset_proj
+put a.ts 'export const a = 1'
+ts_runs 'related exec vitest related --run a.ts' "stop-checks.ts runs vitest related on a changed code file"
+check no "$(ok_if grep -qx pnpm-test "$MOCK_LOG")" "stop-checks.ts does not run pnpm test for a related-only change"
 reset_proj
 rm -f "$PROJ/d.ts"
-run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -qx 'vitest-full' "$MOCK_LOG")" "stop-checks.ts runs the full suite when a code file is deleted"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a code file is deleted"
 reset_proj
+git -C "$PROJ" mv d.ts d2.ts
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a code file is renamed"
+reset_proj
+echo 'export const c = 2' > "$PROJ/café2.ts"
+ts_runs 'related exec vitest related --run café2.ts' "stop-checks.ts handles a tracked non-ASCII file name"
+reset_proj
+put café.ts 'export const c = 1'
+ts_runs 'related exec vitest related --run café.ts' "stop-checks.ts handles an untracked non-ASCII file name"
+reset_proj
+put n.ts 'export const n = 1'
+MOCK_RELATED_NONE=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -qx pnpm-test "$MOCK_LOG")" "stop-checks.ts falls back to pnpm test when related finds no test"
+for f in tsconfig.json vitest.config.ts vite.config.ts vitest.workspace.ts package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc test/setup.ts src/test/setup.ts; do
+  reset_proj
+  put "$f" 'x'
+  commit_all "ts-cfg-$f"
+  reset_proj
+  echo y >> "$PROJ/$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test on a $f change"
+done
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json src/__snapshots__/a.snap; do
+  reset_proj
+  put "$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test for a $f change"
+done
+for f in README.md docs/guide.txt sub/docs/a.txt logo.png photo.jpeg anim.gif icon.svg favicon.ico LICENSE CHANGELOG.md; do
+  reset_proj
+  put "$f"
+  quiet ts "stop-checks.ts ignores $f"
+done
+reset_proj
+for i in $(seq 1 51); do put "notes/n$i.md"; done
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when more than 50 files changed"
+reset_proj
+for i in $(seq 1 50); do put "notes/n$i.md"; done
+quiet ts "stop-checks.ts ignores exactly 50 inert files"
 # TS: tsc and vitest availability guards skip with a message, never exit 2.
-echo 'export const a = 1' > "$PROJ/a.ts"
+reset_proj
+put a.ts 'export const a = 1'
 MOCK_NO_TSC=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "0 yes" "$EC $(ok_if grep -q 'tsc unavailable' "$T/err")" "stop-checks.ts skips when tsc is unavailable"
 MOCK_NO_VITEST=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "0 yes" "$EC $(ok_if grep -q 'vitest unavailable' "$T/err")" "stop-checks.ts skips when vitest is unavailable"
-rm -f "$PROJ/a.ts"
-# TS: a config-only change typechecks and runs the full suite, not a related-only run.
-echo '{}' > "$PROJ/tsconfig.json"
-commit_all ts-config-fixture
 reset_proj
-echo '{"a":1}' > "$PROJ/tsconfig.json"
-run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -qx 'vitest-full' "$MOCK_LOG")" "stop-checks.ts runs the full suite on a tsconfig change"
-mkdir -p "$PROJ/test" "$PROJ/src/test"
-for cfgf in vitest.config.ts vite.config.ts vitest.workspace.ts package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc test/setup.ts src/test/setup.ts; do
-  echo x > "$PROJ/$cfgf"
-  commit_all "ts-cfg-$cfgf"
-  reset_proj
-  mkdir -p "$PROJ/src/test"
-  echo y >> "$PROJ/$cfgf"
-  run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-  check "2 yes" "$EC $(ok_if grep -qx 'vitest-full' "$MOCK_LOG")" "stop-checks.ts runs the full suite on a $cfgf change"
-done
-# Related selection that finds no test falls back to the full suite.
-reset_proj
-echo 'export const n = 1' > "$PROJ/n.ts"
-MOCK_RELATED_NONE=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -qx 'vitest-full' "$MOCK_LOG")" "stop-checks.ts falls back to the full suite when related finds no test"
-# Non-ASCII path is still seen.
-reset_proj
-echo 'export const c = 1' > "$PROJ/café.ts"
-run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -qF 'related --run café.ts' "$MOCK_LOG")" "stop-checks.ts handles a non-ASCII file name"
-reset_proj
-rm -rf "$PROJ/src" "$PROJ/test" "$MOCK_TSC_OK"
+rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/notes" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
 # ── post-edit-comment-check.sh ────────────────────────────────────────────────

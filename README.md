@@ -83,7 +83,7 @@ flowchart LR
 | 1 | **Prompt** (`UserPromptSubmit`) | Blocks prompt-injection phrases and pasted credentials before the model sees them |
 | 2 | **Before each tool** (`PreToolUse`) | Secrets hard-blocked · CI and governance edits ask a human · git hook bypasses blocked |
 | 3 | **After each edit** (`PostToolUse`) | Type-check and comment-hygiene feedback straight back to the agent |
-| 4 | **Before the agent stops** (`Stop`, `SubagentStop`) | Typecheck and related tests must pass before a turn ends (full suite: pre-push and CI); types must pass before a subagent returns |
+| 4 | **Before the agent stops** (`Stop`, `SubagentStop`) | Typecheck and the change's tests must pass before a turn ends (pre-push and CI stay authoritative); types must pass before a subagent returns |
 | 5 | **Commit and push** (git hooks) | Commit-message format and pre-commit checks; pre-push re-checks the harness hashes |
 | 6 | **Pull request** (CI gates) | Secret scan, dependency audit, harness integrity; no label bypass |
 
@@ -142,7 +142,7 @@ Optional: [caveman](https://github.com/JuliusBrussee/caveman) cuts output tokens
 | Hook bypass | Usually only `--no-verify` | All known bypass spellings, judged by the folder the command runs in |
 | Hook tampering | Agent can edit the hook | Edits ask a human; hash drift fails push and CI |
 | Secrets | `.gitignore` | Writes hard-blocked; reads denied in `permissions.deny` |
-| Done check | The agent's word | Typecheck + related tests on `Stop` (full suite in pre-push and CI), types on `SubagentStop` |
+| Done check | The agent's word | Typecheck + the change's tests on `Stop` (pre-push and CI stay authoritative), types on `SubagentStop` |
 | Dependency audit | Optional, skippable by label | Blocking, every ecosystem, expiring allowlist only |
 | Authorization | Left to each developer | Deny-by-default helpers with tests, 404 on ownership |
 | Upgrades | Copy and paste, local edits lost | Three-way re-sync; local guards kept |

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Stop — typecheck + run only the tests related to changed files; exit 2 (stderr to Claude) forces a fix.
-# The full suite runs in pre-push and CI. stop_hook_active guard prevents re-entry after an exit-2 block.
+# Stop — typecheck + tests; exit 2 (stderr to Claude) forces a fix. stop_hook_active guard prevents re-entry after an exit-2 block.
+# Selection is sound or it is the full suite: when every changed file is a test file, run just those files;
+# any other changed file (source, config, fixture, data, deletion, rename) or more than 50 changed files runs all of test/.
+# Only docs and images are inert. Timeout: see docs/harness.md.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 active=$(printf '%s' "$input" | python3 -c "import json,sys
@@ -8,92 +10,46 @@ try: print('true' if json.loads(sys.stdin.read() or '{}').get('stop_hook_active'
 except Exception: print('false')" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-files=$( { git -c core.quotePath=false diff --name-only --relative HEAD; git -c core.quotePath=false ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
-# Matches test modules that import the changed module, including multi-line "from x import (...)" forms.
-read -r -d '' IMPORT_MATCH <<'PYEOF' || true
-import os, re, sys
-dotted, stem = sys.argv[1:3]
-def hit(m):
-    return m in (dotted, stem) or m.endswith("." + stem) or m.endswith("." + dotted)
-frm = re.compile(r"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]*(\([^)]*\)|[^\n]*)", re.M)
-imp = re.compile(r"^[ \t]*import[ \t]+([^\n]*)", re.M)
-for root, _, names in os.walk("test"):
-    for n in names:
-        if not n.endswith(".py"):
-            continue
-        path = os.path.join(root, n)
-        try:
-            text = open(path, encoding="utf-8", errors="replace").read()
-        except OSError:
-            continue
-        ok = False
-        for m in frm.finditer(text):
-            imported = [x.split(" as ")[0].strip() for x in re.sub(r"[()#\\]", "", m.group(2)).replace("\n", ",").split(",")]
-            if hit(m.group(1)) or stem in imported or dotted in imported:
-                ok = True
-                break
-        if not ok:
-            for m in imp.finditer(text):
-                if any(hit(x.split(" as ")[0].strip()) for x in m.group(1).split(",")):
-                    ok = True
-                    break
-        if ok:
-            print(path)
-PYEOF
-src_changed=""
-full=""
-tests=""
+files=$( { git -c core.quotePath=false diff --name-only --no-renames HEAD; git -c core.quotePath=false ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+[ -n "$files" ] || exit 0
+n=0; src_changed=""; full=""; tests=""
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  base=${f##*/}; stem=${base%.py}
-  # Config, lock and shared-fixture files can break every test: typecheck and run all of test/.
-  case "$base" in
-    pyproject.toml|uv.lock|requirements*.txt|pytest.ini|conftest.py|pyrightconfig.json|setup.cfg|tox.ini|.python-version) src_changed=1; full=1; continue ;;
+  n=$((n + 1))
+  case "$f" in
+    *.md|docs/*|*/docs/*|*.png|*.jpg|*.jpeg|*.gif|*.svg|*.ico|LICENSE|*/LICENSE|CHANGELOG*|*/CHANGELOG*) continue ;;
   esac
-  case "$f" in *.py) ;; *) continue ;; esac
-  # A deleted Python file has nothing to relate to: typecheck and run all of test/.
-  if [ ! -f "$f" ]; then src_changed=1; full=1; continue; fi
   case "$f" in
     test/*|*/test/*|tests/*|*/tests/*)
-      case "$stem" in
-        test_*|*_test) tests="$tests
-$f" ;;
-        # Helpers and factories: any test may depend on them.
-        *) full=1 ;;
+      case "${f##*/}" in
+        # A deleted test file leaves nothing to run.
+        test_*.py|*_test.py) [ -f "$f" ] && tests="$tests
+$f"; continue ;;
       esac ;;
-    *)
-      src_changed=1
-      [ "$stem" = "__init__" ] && continue
-      # (a) tests matching the changed module by name; (b) tests importing it.
-      match=$(find test -type f \( -name "test_${stem}.py" -o -name "${stem}_test.py" \) 2>/dev/null)
-      [ -n "$match" ] && tests="$tests
-$match"
-      dotted=$(printf '%s' "${f%.py}" | sed 's|^src/||; s|/|.|g')
-      imp=$(python3 -c "$IMPORT_MATCH" "$dotted" "$stem" 2>/dev/null)
-      [ -n "$imp" ] && tests="$tests
-$imp" ;;
   esac
+  src_changed=1; full=1
 done <<EOF2
 $files
 EOF2
-[ -n "$tests$src_changed$full" ] || exit 0
+[ "$n" -gt 50 ] && { src_changed=1; full=1; }
+[ -n "$tests$full" ] || exit 0
 [ -f .venv/bin/activate ] && . .venv/bin/activate
 python -m pytest --version >/dev/null 2>&1 || { echo "pytest unavailable — skipping Stop gate" >&2; exit 0; }
 if [ -n "$src_changed" ] && python -m pyright --version >/dev/null 2>&1; then
   OUTPUT=$(python -m pyright src/ 2>&1); EC=$?
   if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 fi
-# Changed/matching test files. A source change that selects none, or a test-support change, runs all of test/.
-set --
-while IFS= read -r t; do [ -n "$t" ] && set -- "$@" "$t"; done <<EOF2
-$(printf '%s\n' "$tests" | sort -u)
-EOF2
-if [ -n "$full" ] || [ "$#" -eq 0 ]; then
+if [ -n "$full" ]; then
   [ -d test ] || exit 0
   OUTPUT=$(python -m pytest -q test 2>&1); EC=$?
 else
+  set --
+  while IFS= read -r t; do [ -n "$t" ] && set -- "$@" "$t"; done <<EOF2
+$(printf '%s\n' "$tests" | sort -u)
+EOF2
   OUTPUT=$(python -m pytest -q "$@" 2>&1); EC=$?
+  # 5 = nothing collected; fine for a test-files-only run, never for the full suite.
+  [ "$EC" -eq 5 ] && EC=0
 fi
-# 5 = nothing collected.
-if [ "$EC" -ne 0 ] && [ "$EC" -ne 5 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
+if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 exit 0
