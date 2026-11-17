@@ -2,5 +2,5 @@
   "path": ["src"],
   "threshold": 3,
   "reporters": ["console"],
-  "ignore": ["**/*.{test,spec}.{ts,tsx}", "**/test/**", "**/*.d.ts", "**/dist/**", "**/.next/**", "**/coverage/**"]
+  "ignore": ["**/*.{test,spec}.{ts,tsx}", "src/test/**","**/*.d.ts", "**/dist/**", "**/.next/**", "**/coverage/**"]
 }

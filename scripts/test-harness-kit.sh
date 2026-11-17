@@ -862,6 +862,13 @@ check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in Python"
 printf 'const x = 1; // nosonar\n' > "$NSR/src/b.ts"; git -C "$NSR" rm -qf --cached src/a.py; git -C "$NSR" add src/b.ts
 (cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
 check 1 "$?" "ci-gates nosonar fails on a lower-case marker in TypeScript"
+for ext in js jsx mjs cjs; do
+  git -C "$NSR" rm -qf --cached src/b.ts 2>/dev/null || true
+  printf 'const x = 1; // NOSONAR\n' > "$NSR/src/c.$ext"; git -C "$NSR" add "src/c.$ext"
+  (cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+  check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in .$ext"
+  git -C "$NSR" rm -qf --cached "src/c.$ext"
+done
 for g in changelog readme comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"

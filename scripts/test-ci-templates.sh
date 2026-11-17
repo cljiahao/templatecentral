@@ -115,7 +115,7 @@ for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
-        if re.search(r"\|\|\s*(true|:)\s*($|['\"])|continue-on-error|succeededOrFailed\(|\balways\(\)", code):
+        if re.search(r"\|\|\s*(true\b|:(?![\w/.-]))|continue-on-error|succeededOrFailed\(|\balways\(\)", code):
             errors.append(f"{rel}:{i + 1}: gate-neutralising construct: {l.strip()}")
         if re.match(r"^\s*condition:\s*(always|succeededOrFailed)", l):
             errors.append(f"{rel}:{i + 1}: condition that runs after failure: {l.strip()}")
@@ -153,8 +153,33 @@ for host, (rel, merge) in files.items():
             c = job_has_condition(n)
             if c:
                 errors.append(f"{rel}:{n + 1}: {what} job has a run condition: {c}")
+    code_lines = [l for l in lines if not l.lstrip().startswith("#")]
+    for n, l in enumerate(lines):
+        if re.search(r"pipx run\s+(\"?)diff-cover", l) and not re.search(r"pipx run\s+\"diff-cover==(\$\{DIFF_COVER_VERSION\}|\$\(diffCoverVersion\)|\$\(DIFF_COVER_VERSION\))\"", l):
+            errors.append(f"{rel}:{n + 1}: diff-cover must run pinned as \"diff-cover==<version variable>\": {l.strip()}")
+    pins = [(n, l) for n, l in enumerate(lines) if re.match(r"^\s*(DIFF_COVER_VERSION|diffCoverVersion|JSCPD_VERSION):", l)]
+    if not any("diff" in l.lower() for _, l in pins):
+        errors.append(f"{rel}: missing the diff-cover version variable")
+    for n, l in pins:
+        if not re.match(r"^\s*\w+:\s*\"\d+\.\d+\.\d+\"(\s|$)", l):
+            errors.append(f"{rel}:{n + 1}: tool version must be an exact x.y.z string: {l.strip()}")
+    if not any(re.search(r"(pnpm exec jscpd|npx --yes jscpd@)", l) for l in code_lines):
+        errors.append(f"{rel}: missing the jscpd duplication step")
+    nosonar_file = rel if host.startswith("github") else "azure/azure-pipelines/templatecentral-gates.yml"
+    if "ci-gates.sh nosonar" not in open(f"{root}/{nosonar_file}").read():
+        errors.append(f"{nosonar_file}: missing the `ci-gates.sh nosonar` step (used by {rel})")
+    for n, l in enumerate(lines):
+        if "upload-artifact" in l and "uses:" in l:
+            a, b = step_bounds(n)
+            if not any(re.match(r"^\s*if-no-files-found:\s*error\s*$", lines[k]) for k in range(a, b)):
+                errors.append(f"{rel}:{n + 1}: upload-artifact step must keep `if-no-files-found: error`")
     if not any("diff-cover" in l and "--fail-under=80" in l for l in lines):
         errors.append(f"{rel}: diff-cover must run with --fail-under=80")
+gates = "azure/azure-pipelines/templatecentral-gates.yml"
+for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
+    code = re.sub(r"\s#\s.*$", "", l)
+    if re.search(r"\|\|\s*(true\b|:(?![\w/.-]))|continue-on-error|succeededOrFailed\(|\balways\(\)|^\s*condition:", code):
+        errors.append(f"{gates}:{i + 1}: gate-neutralising construct: {l.strip()}")
 print("\n".join(errors))
 sys.exit(1 if errors else 0)
 PY
@@ -189,6 +214,59 @@ mutate "merge command removed (github-ts)" github-ts/.github/workflows/ci.yml '-
 mutate "job-level if: always() on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    if: always()\n    needs: test\n' static
 mutate "|| true inside the Azure merge script (azure-ts)" azure-ts/azure-pipelines.yml 'vitest run --merge-reports=blob --coverage' 'vitest run --merge-reports=blob --coverage || true' static
 mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "run: '[ \"\$(find blob" "run: 'true || [ \"\$(find blob" github
+mutate "|| true mid-command before a following command (github-ts nosonar)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: bash .claude/ci-gates.sh nosonar || true; echo done' static
+mutate "|| : mid-command (azure gates nosonar)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || : ; echo done' static
+mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
+mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
+mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
+mutate "jscpd step replaced (github-py)" github-py/.github/workflows/ci.yml 'npx --yes jscpd@' 'echo skipped #' static
+mutate "jscpd step replaced (azure-ts)" azure-ts/azure-pipelines.yml '- bash: pnpm exec jscpd' '- bash: echo skipped' static
+mutate "jscpd step replaced (azure-py)" azure-py/azure-pipelines.yml 'npx --yes jscpd@' 'echo skipped #' static
+mutate "unpinned diff-cover (github-ts)" github-ts/.github/workflows/ci.yml "pipx run \"diff-cover==\${DIFF_COVER_VERSION}\"" 'pipx run diff-cover' static
+mutate "unpinned diff-cover (azure-py)" azure-py/azure-pipelines.yml "pipx run \"diff-cover==\$(DIFF_COVER_VERSION)\"" 'pipx run diff-cover' static
+mutate "diff-cover version range instead of exact (github-py)" github-py/.github/workflows/ci.yml 'DIFF_COVER_VERSION: "11.0.3"' 'DIFF_COVER_VERSION: ">=11"' static
+mutate "diff-cover version variable removed (azure-ts)" azure-ts/azure-pipelines.yml '  diffCoverVersion: "11.0.3"' '  unusedVar: "1"' static
+mutate "jscpd version range instead of exact (azure-py)" azure-py/azure-pipelines.yml 'JSCPD_VERSION: "5.4.3"' 'JSCPD_VERSION: "^5"' static
+mutate "nosonar step removed (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: echo skipped' static
+mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'echo skipped' static
+
+# 7. passWithNoTests must not appear anywhere in the seeded templates (a shard with no test files would pass silently)
+nopass_check() { # nopass_check <scaffold dir>
+  local hits
+  hits=$(grep -rIn -e 'passWithNoTests' "$1" 2>/dev/null | grep '/template' || true)
+  if [[ -n "$hits" ]]; then echo "$hits"; return 1; fi
+}
+if out=$(nopass_check "$REPO_ROOT/skills/scaffold" 2>&1); then ok "no passWithNoTests in any template"; else bad "passWithNoTests found in a template: $out"; fi
+nopass_mutate() { # nopass_mutate <label> <source file> <old> <new>; copies one template file into a scratch tree
+  local label=$1 src=$2 d="$T/np/x/template"
+  rm -rf "$T/np" && mkdir -p "$d" && cp "$REPO_ROOT/$src" "$d/$(basename "$src")"
+  python3 - "$d/$(basename "$src")" "$3" "$4" <<'PY'
+import sys
+p, old, new = sys.argv[1:4]
+s = open(p).read()
+if old not in s:
+    sys.exit("mutation target not found: " + old)
+open(p, "w").write(s.replace(old, new, 1))
+PY
+  if out=$(nopass_check "$T/np" 2>&1); then bad "mutation not caught: $label"; else ok "mutation caught: $label -> $(head -1 <<<"$out")"; fi
+}
+nopass_mutate "passWithNoTests: true in vitest.config.ts" skills/scaffold/nestjs/template/vitest.config.ts 'test: {' 'test: { passWithNoTests: true,'
+nopass_mutate "--passWithNoTests in a package.json script" skills/scaffold/nestjs/template/package.json '"test": "vitest --run' '"test": "vitest --run --passWithNoTests'
+
+# 8. Python lint scope: CI and the lefthook pre-push gate check the same paths (src/ and test/)
+py_scope_check() { # py_scope_check <template-ci dir> <lefthook.yml>
+  local f
+  for f in "$1/github-py/.github/workflows/ci.yml" "$1/azure-py/azure-pipelines.yml"; do
+    grep -qF 'ruff check src/ test/ && ruff format --check src/ test/' "$f" || { echo "$f: ruff must check src/ and test/"; return 1; }
+  done
+  grep -qF 'ruff check src/ test/ &&' "$2" || { echo "$2: pre-push ruff must check src/ and test/"; return 1; }
+}
+LEFTHOOK_PY="$REPO_ROOT/skills/scaffold/shared/template-py/lefthook.yml"
+if out=$(py_scope_check "$CI_DIR" "$LEFTHOOK_PY" 2>&1); then ok "python lint scope: CI and lefthook both check src/ and test/"; else bad "python lint scope drifted: $out"; fi
+rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut" && sed -i.bak 's#ruff check src/ test/ \&\&#ruff check src/ \&\&#' "$T/mut/github-py/.github/workflows/ci.yml"
+if out=$(py_scope_check "$T/mut" "$LEFTHOOK_PY" 2>&1); then bad "mutation not caught: CI ruff scope narrowed to src/"; else ok "mutation caught: CI ruff scope narrowed to src/ -> $out"; fi
+cp "$LEFTHOOK_PY" "$T/lefthook.bad" && sed -i.bak 's#ruff check src/ test/ &&#ruff check src/ \&\&#' "$T/lefthook.bad"
+if out=$(py_scope_check "$CI_DIR" "$T/lefthook.bad" 2>&1); then bad "mutation not caught: lefthook ruff scope narrowed to src/"; else ok "mutation caught: lefthook ruff scope narrowed to src/ -> $out"; fi
 
 if [[ $fail -eq 0 ]]; then
   echo "test-ci-templates: all passed"

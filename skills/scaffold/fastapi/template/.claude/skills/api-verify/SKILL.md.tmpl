@@ -7,7 +7,7 @@ allowed-tools: Bash(python *), Bash(ruff *)
 Run all quality checks in sequence:
 
 ```bash
-python -m pyright src/ && ruff check src/ && python -m pytest test/ -q
+python -m pyright src/ && ruff check src/ test/ && python -m pytest test/ -q
 ```
 
 Report failures with the exact error output. Fix before proceeding.

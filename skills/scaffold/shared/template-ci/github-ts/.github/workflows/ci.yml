@@ -7,6 +7,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 env:
+  DIFF_COVER_VERSION: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
   SHARD_COUNT: "2"    # the one knob for test sharding: raise it to split the suite across more runners
   NODE_OPTIONS: --max-old-space-size=4096    # caps each Node process (the test workers inherit it)
 jobs:
@@ -93,7 +94,7 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
+        run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
   changelog:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

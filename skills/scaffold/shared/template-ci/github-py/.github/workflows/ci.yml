@@ -7,7 +7,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 env:
-  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build
+  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build. `npx jscpd@<version>` pins jscpd only, not its transitive dependencies
+  DIFF_COVER_VERSION: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -33,7 +34,7 @@ jobs:
         run: bash .claude/verify-harness.sh
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
-      - run: ruff check src/ && ruff format --check src/
+      - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -m pyright src/
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by version (JSCPD_VERSION); bump it deliberately.
@@ -43,7 +44,7 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: pipx run diff-cover coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
+        run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}

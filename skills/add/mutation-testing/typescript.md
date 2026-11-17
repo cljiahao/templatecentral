@@ -40,7 +40,7 @@ Set `mutate` to match what your stack's test policy covers:
 | Stack | `mutate` |
 |---|---|
 | Next.js | `["src/app/api/**/*.ts"]` — the test policy covers API routes under `src/app/api/**`, not React UI |
-| NestJS | `["src/**/*.ts", "!src/main.ts"]` — all backend code except the bootstrap entrypoint |
+| NestJS | `["src/**/*.ts", "!src/main.ts"]` — all backend code except the `main.ts` entrypoint (it only calls `runBootstrap()`; `src/bootstrap.ts` is tested and mutated) |
 | Vite + React | the default above — tests are co-located, so the `!src/**/*.test.*` exclusions are required (an explicit `mutate` overrides Stryker's built-in test-file exclusion) |
 
 #### Step 2 — Add npm script

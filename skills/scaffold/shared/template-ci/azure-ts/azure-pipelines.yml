@@ -7,6 +7,7 @@ pr:
 pool:
   vmImage: ubuntu-latest
 variables:
+  diffCoverVersion: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
   shardCount: 2    # the one knob for test sharding: raise it to split the suite across more agents
   NODE_OPTIONS: --max-old-space-size=4096    # caps each Node process (the test workers inherit it)
 jobs:
@@ -88,5 +89,5 @@ jobs:
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
-          pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+          pipx run "diff-cover==$(diffCoverVersion)" coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
         displayName: Changed-line coverage (>= 80%)

@@ -7,7 +7,8 @@ pr:
 pool:
   vmImage: ubuntu-latest
 variables:
-  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build
+  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build. `npx jscpd@<version>` pins jscpd only, not its transitive dependencies
+  DIFF_COVER_VERSION: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
 jobs:
   - job: quality
     timeoutInMinutes: 20
@@ -24,7 +25,7 @@ jobs:
           if [ -f uv.lock ]; then python -m pip install uv; fi    # the deps gate exports uv.lock with uv
         displayName: Install deps
       - template: azure-pipelines/templatecentral-gates.yml
-      - bash: ruff check src/ && ruff format --check src/
+      - bash: ruff check src/ test/ && ruff format --check src/ test/
         displayName: Lint and format check
       - bash: python -m pyright src/
         displayName: Typecheck
@@ -36,5 +37,5 @@ jobs:
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
-          pipx run diff-cover coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
+          pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
         displayName: Changed-line coverage (>= 80%)

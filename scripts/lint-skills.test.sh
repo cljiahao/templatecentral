@@ -1299,6 +1299,14 @@ floor_in_code() { printf '\nInstall `zz-lib ≥9.9` first.\n\n```text\nzz-lib �
 fails prose_floor_fails "Version floors in skill prose" floor_in_prose "zz-lib ≥9.9"
 passes prose_floor_in_code_passes "Version floors in skill prose" floor_in_code
 
+# ── check_sonar_scope_alignment ──────────────────────────────────────────────────────────────
+H_SONAR="Sonar test scope matches the coverage excludes of each stack"
+sonar_drop_spec() { sed -i.bak 's|\*\*/\*\.spec\.ts,||' "$S/scaffold/shared/template-ts/sonar-project.properties"; }
+sonar_py_sources() { sed -i.bak 's|^sonar.sources=src$|sonar.sources=.|' "$S/scaffold/shared/template-py/sonar-project.properties"; }
+fails sonar_scope_spec_inclusion_dropped "$H_SONAR" sonar_drop_spec "coverage exclude"
+fails sonar_scope_py_sources_changed "$H_SONAR" sonar_py_sources "missing sonar.sources=src"
+passes sonar_scope_aligned "$H_SONAR" true
+
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

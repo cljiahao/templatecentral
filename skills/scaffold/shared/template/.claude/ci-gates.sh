@@ -96,7 +96,7 @@ case "$gate" in
     ;;
   nosonar)
     # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
-    hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' ':!.claude') && rc=0 || rc=$?
+    hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude') && rc=0 || rc=$?
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2

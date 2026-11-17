@@ -2,5 +2,5 @@
   "path": ["src"],
   "threshold": 3,
   "reporters": ["console"],
-  "ignore": ["**/test/**", "**/__pycache__/**", "**/.venv/**"]
+  "ignore": ["src/test/**","**/test_*.py", "**/*_test.py", "**/__pycache__/**", "**/.venv/**"]
 }
