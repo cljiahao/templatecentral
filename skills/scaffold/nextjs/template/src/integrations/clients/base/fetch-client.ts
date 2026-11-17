@@ -49,14 +49,13 @@ export abstract class FetchClient {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      // Node's fetch has no default timeout — an unresponsive upstream would pin
-      // the calling route handler open indefinitely without this.
+      // Node's fetch has no default timeout.
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      // Log status/URL only — never the error body (may contain PII)
+      // Log status and URL only; error bodies may contain PII.
       console.error(`[HTTP ${res.status}] ${res.statusText} from ${res.url}`);
       throw new APIError({ statusCode: res.status, data });
     }

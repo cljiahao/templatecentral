@@ -36,7 +36,7 @@ def _write(user_id: User) -> dict[str, str]:
 
 @pytest.fixture
 def browser() -> TestClient:
-    # https so the cookie jar returns Secure cookies when COOKIE_SECURE is on (non-dev).
+    # https so the cookie jar returns Secure cookies outside dev.
     client = TestClient(probe, base_url="https://testserver")
     assert client.post("/login").status_code == 204
     return client
@@ -73,7 +73,7 @@ def test_unsafe_request_needs_csrf_header(browser: TestClient) -> None:
 
 @pytest.mark.unit
 def test_csrf_token_is_bound_to_its_session(browser: TestClient) -> None:
-    """A valid token from one session is rejected under another (cookie injection)."""
+    """A valid token from one session is rejected under another session."""
     stolen = browser.cookies[CSRF_COOKIE]
     other = TestClient(probe, base_url="https://testserver")
     other.post("/login?sub=user-2")
@@ -106,7 +106,7 @@ def test_logout_clears_cookies(client: TestClient) -> None:
 def test_session_login_requires_json(
     client: TestClient, headers: dict[str, str]
 ) -> None:
-    """No Content-Type or text/plain (CORS-simple: no preflight) is refused before login."""
+    """A request without Content-Type or with text/plain is refused before login."""
     body = b'{"email": "a@example.com", "password": "correct-horse-battery"}'
     res = client.post("/auth/session", content=body, headers=headers)
     assert res.status_code == 415

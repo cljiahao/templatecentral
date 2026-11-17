@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 interface CustomCardProps {
   header: string;
-  /** Heading element for `header` — pick the level that fits the page outline. @default "h2" */
+  /** Heading element for `header`. @default "h2" */
   headingLevel?: 'h1' | 'h2' | 'h3';
   description?: string;
   children?: ReactNode;

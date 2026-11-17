@@ -1,8 +1,6 @@
 import pino from 'pino';
 
-// pino ships NO redaction by default — logging a raw `req`/`res` or an object that
-// carries credentials would otherwise leak secrets. Paths are case-sensitive; wildcards
-// (`*.token`) cost more but catch nested fields. Never build these paths from user input.
+// pino has no default redaction; list credential paths, which are case-sensitive and never built from user input.
 const redact = [
   'password',
   '*.password',
@@ -29,10 +27,7 @@ function createLogger() {
   });
 }
 
-// Cache the logger on globalThis in dev. Next.js HMR re-imports this module on every hot
-// reload; without the cache each reload spawns a fresh pino-pretty transport (a thread-stream
-// worker), and the accumulating listeners trip Node's MaxListenersExceededWarning. This mirrors
-// the canonical Next.js PrismaClient singleton pattern. In production a single instance is used.
+// Cached on globalThis in dev: HMR re-imports would spawn a pino-pretty transport per reload.
 const globalForLogger = globalThis as unknown as {
   __logger?: ReturnType<typeof createLogger>;
 };

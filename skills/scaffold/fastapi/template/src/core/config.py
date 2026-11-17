@@ -7,8 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class CommonSettings(BaseSettings):
     """Common settings for the application."""
 
-    # Read src/.env directly rather than relying on main.py's load_dotenv(): the Docker
-    # entrypoints run `uvicorn app:app --app-dir src`, which never executes main.py.
+    # Read .env directly: Docker entrypoints never run main.py.
     model_config = SettingsConfigDict(env_file="src/.env", extra="ignore")
 
     PROJECT_NAME: str = Field(default="My Project")
@@ -22,11 +21,9 @@ class CommonSettings(BaseSettings):
         - [Issues](https://www.github.com/issues)
         """
     )
-    # Closed set (parity with NestJS's z.enum): an unknown value such as "production" must
-    # fail at boot, not slip past main.py's prod/uat check and run with auto-reload on.
+    # Closed set: an unknown value must fail at boot, not slip past main.py's prod/uat check and run with auto-reload.
     ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
-    # Injected by appCentral at runtime: the only origin allowed to frame this app.
-    # Validated in core/security_headers.py; unset or invalid denies all framing.
+    # Only origin allowed to frame this app; see core/security_headers.py.
     APPCENTRAL_PORTAL_ORIGIN: str = Field(default="")
 
 
@@ -66,6 +63,4 @@ class APISettings(BaseSettings):
 
 
 common_settings = CommonSettings()
-# Fields without a default (e.g. added by templatecentral:add) are filled from the
-# environment at runtime; pyright only sees the constructor signature and flags them.
-api_settings = APISettings()  # pyright: ignore[reportCallIssue]
+api_settings = APISettings()

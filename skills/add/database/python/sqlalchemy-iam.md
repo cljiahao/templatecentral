@@ -68,9 +68,7 @@ def _get_iam_token() -> str:
 engine = create_engine(
     f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}",
-    # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
-    # credential, so the server certificate must be verified against the AWS
-    # RDS CA bundle or an on-path attacker can intercept it.
+    # verify-full, not "require": the IAM token is a bearer credential, so verify the server certificate against the RDS CA bundle.
     connect_args={
         "sslmode": "verify-full",
         "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH,
@@ -101,19 +99,20 @@ Add these fields to `APISettings` (do not add `DATABASE_URL` — IAM uses separa
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    DATABASE_HOST: str = Field(description="RDS instance hostname")
+    DATABASE_HOST: str = Field(default=..., description="RDS instance hostname")
     DATABASE_PORT: int = Field(default=5432, description="RDS port")
-    DATABASE_USER: str = Field(description="IAM database user")
-    DATABASE_NAME: str = Field(description="Database name")
+    DATABASE_USER: str = Field(default=..., description="IAM database user")
+    DATABASE_NAME: str = Field(default=..., description="Database name")
     AWS_REGION: str = Field(
         default="us-east-1", description="AWS region for RDS signer"
     )
     RDS_CA_BUNDLE_PATH: str = Field(
+        default=...,
         description="Path to the AWS global RDS CA bundle used for sslmode=verify-full"
     )
 ```
 
-Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
+Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 
@@ -152,11 +151,13 @@ config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 This URL carries no password, so online migrations must connect through the shared `engine` from `database.session` — it holds the `do_connect` token listener and `verify-full` TLS. A fresh `engine_from_config()` (the `alembic init` default) would fail authentication:
 
 ```python
+import importlib
+
 from database.base import Base
 from database.session import engine
 
-# Autogenerate only sees tables whose model modules were imported — list every one.
-from models import project  # noqa: F401
+# Autogenerate only sees tables whose model modules were imported: import every one.
+importlib.import_module("models.project")
 
 target_metadata = Base.metadata
 

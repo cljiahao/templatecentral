@@ -64,9 +64,7 @@ import * as argon2 from 'argon2';
 import { KyselyService } from '../../database/kysely.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
-// Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist. Hashed at
-// startup with the same defaults as real passwords so the cost matches exactly.
+// Hashed at startup so an unknown email costs the same as a wrong password.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
 const PG_UNIQUE_VIOLATION = '23505';

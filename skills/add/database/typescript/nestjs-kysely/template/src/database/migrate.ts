@@ -3,8 +3,7 @@ import 'dotenv/config';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { Kysely, PostgresDialect } from 'kysely';
-// Migration classes live under the kysely/migration subpath — the root export's
-// FileMigrationProvider/Migrator are typed as compile-time redirects to this subpath.
+// Migration classes live under the kysely/migration subpath.
 import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { Pool } from 'pg';
 
@@ -45,8 +44,7 @@ async function migrate() {
   await db.destroy();
 }
 
-// Without the catch, a rejected promise leaves the exit code at 0 and CI reports a
-// failed migration as a passing step.
+// Without the catch a rejected promise leaves exit code 0 and CI passes a failed migration.
 migrate().catch((e) => {
   console.error(e);
   process.exit(1);

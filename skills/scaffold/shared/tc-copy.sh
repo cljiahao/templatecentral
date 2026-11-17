@@ -12,12 +12,9 @@
 #             template.manifest sit in skills/<TC_LEAF>/
 #   TC_TREE   for leaf: copy only this tree (template or template-<suffix>); empty copies every tree
 #   target    the project root; it must be an existing directory
-# The inputs carry a TC_ prefix because CI, STACK and PART are common in a caller's environment (CI=true
-# is exported by most CI hosts and agent sandboxes).
+# TC_ prefix: CI, STACK and PART are common in a caller's environment.
 #
-# It finds the trees and manifests from its own location (following a symlink to it), so it works from
-# the plugin directory and from the dist layout that scripts/build-agents-dist.sh builds. A refusal
-# writes nothing and ends with a STOP: line.
+# It finds trees and manifests from its own location (symlink followed), in the plugin and dist layouts. A refusal writes nothing and ends with a STOP: line.
 [ -n "${BASH_VERSION-}" ] || { echo "tc-copy.sh: run with bash" >&2; exit 1; }
 STACK=${TC_STACK-}
 CI=${TC_CI-}
@@ -133,8 +130,7 @@ if [ "$PART" = tail ]; then
   END_M='<!-- END:templatecentral-tail -->'
   AG="$TGT/AGENTS.md"
   wrapped=$(printf '%s\n%s\n%s\n' "$BEGIN_M" "$out" "$END_M")
-  # One pass: marker counts and first line numbers (whole-line matches only, so prose that mentions a marker is
-  # ignored), whether a `## AI Harness` heading sits outside a code fence (the fence toggle is a heuristic: a line opening with ``` or ~~~), and the total line count.
+  # One pass: marker counts, first line numbers, whether `## AI Harness` sits outside a code fence (heuristic), and line count.
   scan=$(awk '
     /^[[:space:]]*(```|~~~)/ { fence = !fence }
     !fence && /^<!-- BEGIN:templatecentral-tail \(managed by templateCentral Step G; edits inside are overwritten; put repo rules outside\) -->[[:space:]]*$/ { nb++; if (!bl) bl = NR }
@@ -170,7 +166,7 @@ if [ "$PART" = tail ]; then
   done
   [ ! -L "$real" ] || stop "$AG is a symlink loop"
   rdir=$(dirname -- "$real")
-  # The temp files sit beside the real file so the final mv stays on one filesystem; cp -p keeps the file mode.
+  # Temp files sit beside the real file so mv stays on one filesystem.
   tmpn=
   tmpo=
   trap 'rm -f "$tmpn" "$tmpo"' EXIT
@@ -189,8 +185,7 @@ if [ "$PART" = tail ]; then
   stop "replacing the tail in $AG failed; $AG is unchanged"
 fi
 if [ "$PART" = manifest ]; then
-  # Writes .claude/harness.json: one seeded_files entry per seeded file present in the project, with its
-  # sha256 as origin_hash, and the plugin version read from .claude-plugin/plugin.json.
+  # Writes .claude/harness.json: seeded_files with origin_hash, plus the plugin version.
   WHAT="write .claude/harness.json"
   mf=.claude/harness.json
   [ -f "$TGT/AGENTS.md" ] || stop "$TGT/AGENTS.md does not exist yet: run this at kit Step E"
@@ -212,8 +207,7 @@ if [ "$PART" = manifest ]; then
     case "$b" in true | false) ;; *) stop "TC_ADO_WIKI and TC_RICH_README take true or false (got '$b')" ;; esac
   done
   sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
-  # Core seeded files, then every hook (local guards included), in a fixed order. A file that is
-  # absent is left out: CLAUDE.md is optional, and Step B3 may seed no CI file.
+  # Core seeded files, then every hook, in fixed order; absent files are left out.
   list=$(
     printf '%s\n' AGENTS.md CLAUDE.md .claude/settings.json
     for s in $skills; do printf '.claude/skills/%s/SKILL.md\n' "$s"; done

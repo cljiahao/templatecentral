@@ -1,5 +1,4 @@
-// Not the '@/lib/errors' barrel: it loads error-log-handler, which add (logging) wires to an
-// ApiClient subclass — importing through it makes a cycle that breaks `extends`.
+// Not the '@/lib/errors' barrel: it creates an import cycle that breaks `extends`.
 import { APIError } from '@/lib/errors/api-error';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -19,7 +18,6 @@ const TEXT_CONTENT_TYPES = ['text/plain', 'text/html', 'text/csv', 'text/xml', '
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export abstract class FetchClient {
-  // Subclass knobs: cookie auth (add auth) sends 'include'; unload-time senders need keepalive.
   protected credentials: RequestCredentials = 'same-origin';
   protected keepalive = false;
 
@@ -28,7 +26,7 @@ export abstract class FetchClient {
     protected headers: Record<string, string>
   ) {}
 
-  /** Per-request headers (e.g. a CSRF token) — the base client has no auth knowledge. */
+  /** Per-request headers, e.g. a CSRF token. */
   protected requestHeaders(_method: HttpMethod): Record<string, string> {
     return {};
   }
@@ -52,15 +50,14 @@ export abstract class FetchClient {
     const headers: Record<string, string> = { ...this.headers, ...this.requestHeaders(method) };
     let payload: BodyInit | undefined;
     if (body instanceof FormData) {
-      // No Content-Type — the browser must add its own multipart boundary.
+      // No Content-Type: the browser adds the multipart boundary.
       payload = body;
     } else if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       payload = JSON.stringify(body);
     }
 
-    // fetch has no default timeout — an unresponsive upstream would leave the
-    // calling React Query hook pending indefinitely without this.
+    // fetch has no default timeout.
     const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const res = await fetch(url, {
       method,
@@ -73,7 +70,7 @@ export abstract class FetchClient {
 
     if (!res.ok) {
       const data = await this.parseErrorBody(res);
-      // Log status/URL only — never the error body (may contain PII)
+      // Log status and URL only; error bodies may contain PII.
       console.error(`[HTTP ${res.status}] ${res.statusText} from ${res.url}`);
       throw new APIError({ statusCode: res.status, data });
     }

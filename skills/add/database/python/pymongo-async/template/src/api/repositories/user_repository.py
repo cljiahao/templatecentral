@@ -12,6 +12,5 @@ class UserRepository(BaseRepository[User]):
         return self._to_model(doc) if doc else None
 
     async def ensure_indexes(self) -> None:
-        # The unique index, not a find-then-insert check, is what stops duplicate
-        # accounts under concurrent registrations.
+        # The unique index, not find-then-insert, stops duplicates under concurrent registration.
         await self.collection.create_index("email", unique=True)

@@ -4,12 +4,10 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { appConfig } from '../../config/env.config';
 
-// Secure is dropped only in dev (plain-http localhost); the __Host- prefix requires Secure,
-// so the session cookie takes its hardened name everywhere else.
+// Secure is dropped only in dev; the __Host- prefix requires it everywhere else.
 export const COOKIE_SECURE = appConfig.ENVIRONMENT !== 'dev';
 export const SESSION_COOKIE = COOKIE_SECURE ? '__Host-session' : 'session';
-// Readable by the SPA, which echoes it back in the X-CSRF-Token header (Fastify lower-cases
-// incoming header names, hence the lookup key).
+// Readable by the SPA, which echoes it in X-CSRF-Token; Fastify lower-cases header names.
 export const CSRF_COOKIE = 'XSRF-TOKEN';
 export const CSRF_HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -17,7 +15,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const CSRF_KEY = createHmac('sha256', appConfig.JWT_SECRET).update('csrf-v1').digest();
 
 function csrfSignature(session: string, nonce: string): string {
-  // Length-prefixed message (OWASP signed double-submit) binds the token to the session.
+  // A length-prefixed message binds the token to the session.
   return createHmac('sha256', CSRF_KEY)
     .update(`${session.length}!${session}!${nonce.length}!${nonce}`)
     .digest('hex');
@@ -36,8 +34,7 @@ function verifyCsrfToken(token: string, session: string): boolean {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-// req.cookies exists only once @fastify/cookie is registered (setupSecurity) — suites that build
-// the app without it must still get a clean 401, not a TypeError.
+// req.cookies is absent until @fastify/cookie registers; suites without it must get a clean 401.
 function readCookie(req: FastifyRequest, name: string): string | undefined {
   return (req.cookies as Partial<Record<string, string>> | undefined)?.[name];
 }
@@ -70,7 +67,6 @@ export function setSessionCookies(reply: FastifyReply, token: string): void {
     maxAge: appConfig.JWT_EXPIRES_IN_SECONDS,
   } as const;
   void reply.setCookie(SESSION_COOKIE, token, { ...options, httpOnly: true });
-  // Readable on purpose: the SPA echoes it back in the X-CSRF-Token header.
   void reply.setCookie(CSRF_COOKIE, createCsrfToken(token), { ...options, httpOnly: false });
 }
 

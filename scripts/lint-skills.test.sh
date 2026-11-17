@@ -1260,7 +1260,7 @@ sec_nest_classvalidator() { sed -i.bak 's/"nestjs-zod"/"class-validator": "1.0.0
 sec_fastapi_mw() { sed -i.bak 's/add_middleware(SecurityHeadersMiddleware)/pass/' "$S/scaffold/fastapi/template/src/app.py"; }
 sec_fastapi_trust() { sed -i.bak 's/if not api_settings.TRUST_PROXY:/if False:/' "$S/scaffold/fastapi/template/src/app.py"; }
 sec_fastapi_deny() { sed -i.bak 's/b"DENY"/b"SAMEORIGIN"/' "$S/scaffold/fastapi/template/src/core/security_headers.py"; }
-sec_next_csp_dup() { sed -i.bak "s|^\( *\)// Content-Security-Policy and|\1{ key: 'Content-Security-Policy', value: 'x' },\n&|" "$S/scaffold/nextjs/template/next.config.ts"; }
+sec_next_csp_dup() { sed -i.bak "s|^\( *\)source: '/(.\*)',|\1key: 'Content-Security-Policy',\n&|" "$S/scaffold/nextjs/template/next.config.ts"; }
 sec_next_origin() { sed -i.bak 's/process.env.TRUST_PROXY/process.env.OTHER/' "$S/scaffold/nextjs/template/src/lib/utils/request-origin.ts"; }
 sec_next_deny() { sed -i.bak "s/'DENY'/'ALLOWALL'/" "$S/scaffold/nextjs/template/src/lib/security/frame-protection.ts"; }
 sec_vite_exotic() { sed -i.bak 's/^blockExoticSubdeps: true/blockExoticSubdeps: false/' "$S/scaffold/vite-react/template/pnpm-workspace.yaml"; }

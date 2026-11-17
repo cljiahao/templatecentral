@@ -82,7 +82,7 @@ Every other backend call goes through `ApiClient` (`src/lib/clients/api-client.t
 import { csrfHeader } from './csrf';
 import { FetchClient, type HttpMethod } from './fetch-client';
 
-  // Sends the session cookie on every call (same-origin via the /api proxy).
+  // Sends the session cookie on every call, same-origin via the /api proxy.
   protected override credentials: RequestCredentials = 'include';
 
   protected override requestHeaders(method: HttpMethod): Record<string, string> {
@@ -133,8 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     fetchCurrentUser()
       .then(setUser)
-      // A network failure or a ZodError from authUserSchema.parse() would otherwise
-      // reject unhandled and leave isLoading stuck; treat either as "not signed in".
+      // A network or ZodError failure means "not signed in", not a stuck isLoading.
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
   }, []);

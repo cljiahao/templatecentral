@@ -20,8 +20,7 @@ pino-http handles request/response logging automatically (method, path, status_c
 ```ts
 // src/app.module.ts — add assignResponse next to the existing pinoHttp object
 LoggerModule.forRoot({
-  // Fields set with PinoLogger.assign() during the request also land on pino-http's
-  // "request completed" line, not just on logs written after the assign() call.
+  // Fields set with assign() also land on the "request completed" line.
   assignResponse: true,
   pinoHttp: {
     // ...keep existing level, redact, transport unchanged
@@ -58,7 +57,7 @@ Startup is already logged by `bootstrap()`. nestjs-pino's `Logger` keeps Nest's 
 **Auth events** — log in your auth guard or Passport strategy. Inject `PinoLogger` (not `Logger`) for structured fields — `PinoLogger` keeps pino's `(obj, msg)` signature, whereas `Logger.log(obj, 'msg')` would treat the string as a Nest context:
 
 ```ts
-// src/modules/auth/jwt-auth.guard.ts  (path per templatecentral:add (auth))
+// src/modules/auth/jwt-auth.guard.ts
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -87,7 +86,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (err instanceof Error) throw err;
       throw new UnauthorizedException();
     }
-    // Binds user_id to every later log in this request and (assignResponse) the completion line.
+    // Binds user_id to every later log in this request and to the completion line.
     this.logger.assign({ user_id: user.id });
     return user;
   }
@@ -105,8 +104,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
     // ...existing jwtService + database collaborator, unchanged
   ) {}
 
-  // in login(), inside the existing `if (!user || !passwordOk)` branch, before the throw:
-  // No email: it is PII, and logging it on failure builds a list of probed accounts.
+  // In login(), in the failure branch before the throw; no email, it is PII.
   this.logger.warn({ reason: 'invalid_credentials' }, 'Login failure');
 
   // in login(), just before the return:
@@ -120,7 +118,7 @@ For Mongoose, the id is `user._id.toString()`. Log logout/refresh the same way i
 **Key domain events** — log in service methods for state changes (`this.logger` is an injected `PinoLogger`, as in the auth examples above):
 
 ```ts
-// src/modules/projects/projects.service.ts  (example — adapt to your domain)
+// src/modules/projects/projects.service.ts
 async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
   const [project] = await this.drizzle.db
     .insert(projects)
@@ -136,8 +134,7 @@ async createProject(dto: CreateProjectDto, userId: string): Promise<Project> {
 **Slow DB queries** — add a timing wrapper method to `DrizzleService` in `src/database/drizzle.service.ts`:
 
 ```ts
-// src/database/drizzle.service.ts  (extend existing DrizzleService)
-// Add this method to the class body:
+// src/database/drizzle.service.ts: add this method to the DrizzleService class body
 
 async timedQuery<T>(name: string, fn: () => Promise<T>): Promise<T> {
   const start = Date.now();
@@ -163,7 +160,7 @@ const rows = await this.drizzle.timedQuery('projects.findAll', () =>
 **Sanitized request context** — add `customProps` to `pinoHttp` for request-start facts only (headers are fixed when the request starts; `user_id` stays on `assign()` from Tier 1/2):
 
 ```ts
-// src/app.module.ts  (add to the existing pinoHttp object)
+// src/app.module.ts
 import type { IncomingMessage } from 'node:http';
 
 customProps: (req: IncomingMessage) => ({
@@ -177,7 +174,7 @@ customProps: (req: IncomingMessage) => ({
 // src/common/cache/cache.service.ts
 async get<T>(key: string): Promise<T | null> {
   const value = await this.redis.get(key);
-  // Log a key prefix, not the full key, if keys embed user data (e.g. "session:<email>").
+  // Log a key prefix, not the full key, when keys embed user data such as "session:<email>".
   this.logger.debug({ cache_key: key, hit: value !== null }, 'Cache lookup');
   return value ? JSON.parse(value) : null;
 }

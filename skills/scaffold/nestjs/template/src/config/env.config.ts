@@ -10,21 +10,19 @@ const envSchema = z.object({
   ENVIRONMENT: z.enum(['dev', 'uat', 'prod']).default('dev'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   CLIENT_URL: z.string().min(1).default('http://localhost:3000'),
-  // Reverse proxy trust: comma-separated IPs/CIDRs, or "*" — see main.ts's resolveTrustProxy().
+  // Comma-separated IPs/CIDRs or "*"; see resolveTrustProxy() in main.ts.
   TRUST_PROXY: z.string().optional(),
-  // Injected by appCentral at runtime: the only origin allowed to frame this app. Not
-  // validated here — an invalid value must deny framing, not fail boot (see security.setup.ts).
+  // Not validated here: an invalid value must deny framing, not fail boot.
   APPCENTRAL_PORTAL_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
 });
 
-// An empty value in `.env` means "not set" — drop it so the schema default applies.
+// An empty value means not set, so the schema default applies.
 const rawEnv = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ''));
 
 const parsed = envSchema.safeParse(rawEnv);
 
-// Fail at import time. A `!` assertion is erased at compile time and would surface a
-// missing variable as an obscure runtime failure on the first request instead.
+// Fails at import: a `!` assertion would surface as an obscure runtime error.
 if (!parsed.success) {
   throw new Error(`Invalid environment configuration:\n${z.prettifyError(parsed.error)}`);
 }

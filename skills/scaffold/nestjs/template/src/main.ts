@@ -9,11 +9,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
-// Fastify trustProxy: "*" → trust every hop (closed networks only — the leftmost, client-supplied
-// X-Forwarded-For entry wins); otherwise comma-separated IPs/CIDRs that must cover EVERY proxy in
-// the chain (one-hop ALB → App: ALB CIDR; two-hop ALB → Traefik → App: Traefik's AND the ALB's
-// CIDRs). Numeric hop counts were removed in fastify 5.12.1 (security advisory): they
-// cannot validate the connecting peer, so they now trust nothing.
+// Fastify 5.12.1+: numeric hops trust nothing; list CIDRs covering every proxy hop. '*' lets client X-Forwarded-For win.
 function resolveTrustProxy(value: string | undefined): boolean | string | undefined {
   return value === '*' ? true : value;
 }
@@ -22,8 +18,7 @@ async function bootstrap(): Promise<void> {
   const trustProxy = resolveTrustProxy(appConfig.TRUST_PROXY);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    // Fastify assigns req.id before pino-http runs, so the UUID generator must live here; a
-    // pino-http genReqId is ignored and logs show Fastify's sequential req-1, req-2.
+    // Fastify assigns req.id before pino-http runs, so genReqId must live here.
     new FastifyAdapter({
       genReqId: () => crypto.randomUUID(),
       ...(trustProxy ? { trustProxy } : {}),

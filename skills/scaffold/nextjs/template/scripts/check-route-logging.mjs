@@ -1,5 +1,4 @@
-// Fail the build if any App Router API handler is not wrapped in withLogging().
-// Enforces the "every route is logged" rule the base scaffold models on its own handlers.
+// Fails the build if an App Router API handler is not wrapped in withLogging().
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -8,13 +7,11 @@ const METHODS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS';
 // Matches route.ts|tsx|js|jsx|mjs|mts
 const ROUTE_FILE = /^route\.m?[jt]sx?$/;
 
-// Match on comment-stripped, whole-file text (not line-by-line) so commented-out handlers
-// don't false-positive and prettier-wrapped `export const POST =\n  withLogging(...)` still passes.
+// Matches comment-stripped whole-file text, so commented-out handlers and wrapped declarations behave.
 const bareFn = new RegExp(`export\\s+(?:async\\s+)?function\\s+(?:${METHODS})\\b`, 'g');
 // Whitespace lives INSIDE the lookahead so it can't backtrack to zero and false-pass `= withLogging`.
 const unwrapped = new RegExp(`export\\s+const\\s+(?:${METHODS})\\b\\s*=(?!\\s*withLogging\\b)`, 'g');
-// Destructured (`export const { GET } = …`) and re-exported (`export { GET } from …`) handlers
-// can never be wrapped in place, so either form is a violation.
+// Destructured and re-exported handlers cannot be wrapped in place, so they are violations.
 const indirect = new RegExp(`export\\s+(?:const\\s+)?\\{[^}]*\\b(?:${METHODS})\\b[^}]*\\}`, 'g');
 
 function walk(dir) {

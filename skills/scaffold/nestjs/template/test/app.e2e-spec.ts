@@ -11,8 +11,7 @@ describe('AppController (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    // Mirror main.ts's adapter options so request IDs (and anything keyed off them, e.g. log
-    // correlation) behave the same under test as in the running app.
+    // Mirrors main.ts's adapter options so request IDs behave as in the running app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );

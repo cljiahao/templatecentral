@@ -37,11 +37,7 @@ _NO_BODY_STATUSES = frozenset({204, 205, 304})
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> dict[str, list[str]]:
-    """Convert Pydantic validation errors to field-level format.
-
-    Returns:
-      Dict mapping field names to lists of error messages.
-    """
+    """Convert Pydantic validation errors to a field-to-messages mapping."""
     field_errors: dict[str, list[str]] = {}
     for err in errors:
         loc = err.get("loc", ())
@@ -89,10 +85,7 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"error": str(exc), "details": {"code": "NOT_FOUND"}},
         )
 
-    # Starlette's base class also covers router-level 404/405 raised outside FastAPI routes.
-    # Replacing FastAPI's default handler means re-implementing its no-body rule:
-    # 1xx/204/205/304 must go out without a body, or uvicorn errors mid-response
-    # and resets the connection.
+    # Default handler replaced: 1xx/204/205/304 must go out bodiless or uvicorn resets the connection mid-response.
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
         request: Request, exc: StarletteHTTPException

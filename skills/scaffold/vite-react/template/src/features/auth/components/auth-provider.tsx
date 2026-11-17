@@ -24,7 +24,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(
-    // Dev bypass — guarded by ENV.IS_DEV; Vite tree-shakes this in production builds. Do not remove the guard.
+    // Dev bypass, tree-shaken in production; keep the ENV.IS_DEV guard.
     ENV.IS_DEV ? DEV_USER : null
   );
   const [isLoading] = useState(false);

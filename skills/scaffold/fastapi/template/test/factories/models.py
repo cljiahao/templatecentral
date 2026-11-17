@@ -1,9 +1,4 @@
-"""Factory functions for creating test domain models with sensible defaults.
-
-Usage:
-    member = create_member(name="Alice")
-    member = create_member()  # uses defaults
-"""
+"""Factory functions for test domain models with sensible defaults."""
 
 
 def create_example_request(

@@ -59,7 +59,7 @@ If the project has no commits yet, skip writing the baseline. This is always the
 - **SoC**: layers bleeding into each other (UI doing data fetching, validation mixed with business logic, config hardcoded in implementation)
 - **Premature abstractions**: abstracted from only 1–2 callsites — wait for the third
 - **Dead code**: commented-out blocks, unused imports, unused variables, TODO stubs
-- **Comment hygiene**: WHAT-comments restating code, change-narration (`was X, now Y`, dates, ticket refs), redundant trailing comments
+- **Comment hygiene**: apply `standards/code-standards/comments.md`
 - **Tech debt markers**: `// fix later`, `// temp`, empty catch blocks, swallowed errors
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
 - **Overly broad responses**: full DB records or internal fields returned when a subset is sufficient

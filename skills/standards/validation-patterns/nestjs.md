@@ -120,7 +120,7 @@ export class ProjectsController {
 **3. Service — upload checks live here, not in the controller**
 
 ```ts
-// src/modules/projects/projects.service.ts (upload excerpt)
+// src/modules/projects/projects.service.ts — upload excerpt
 import { randomUUID } from 'node:crypto';
 import type { MultipartFile } from '@fastify/multipart';
 import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
@@ -130,14 +130,12 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 @Injectable()
 export class ProjectsService {
   async storeUpload(file: MultipartFile) {
-    // mimetype is client-supplied — for high assurance, also verify magic bytes
-    // (e.g. with the file-type package) against the buffer below.
+    // mimetype is client-supplied: for high assurance, also verify magic bytes with a detector such as file-type.
     if (!ALLOWED_TYPES.includes(file.mimetype)) {
       throw new BadRequestException('File type not allowed');
     }
 
-    // toBuffer() throws a plain Error once the stream exceeds limits.fileSize. Unconverted,
-    // it bypasses HttpExceptionFilter and surfaces as an unformatted 500.
+    // toBuffer() throws a plain Error past limits.fileSize, which bypasses HttpExceptionFilter and surfaces as an unformatted 500.
     let buffer: Buffer;
     try {
       buffer = await file.toBuffer();
@@ -145,8 +143,7 @@ export class ProjectsService {
       throw new PayloadTooLargeException('File exceeds the maximum allowed size');
     }
 
-    // file.filename is attacker-controlled (`../`, absolute paths, NUL bytes) — it must
-    // NEVER become part of a storage path. It survives only as sanitized display metadata.
+    // file.filename is attacker-controlled, including ../, absolute paths and NUL bytes: never put it in a storage path, only in sanitized display metadata.
     const storageKey = randomUUID();
     const displayName = file.filename.replace(/[^\w.\- ]/g, '_').slice(0, 255);
 

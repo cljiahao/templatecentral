@@ -1,13 +1,11 @@
-# Git-hook layer. Install once: pnpm exec lefthook install (auto-run by the "prepare" script).
+# Git-hook layer. Install once with pnpm exec lefthook install; the prepare script runs it automatically.
 pre-commit:
-  # Sequential on purpose: the lockfile command runs `pnpm install`, which rewrites node_modules —
-  # running it in parallel with tsc/eslint/prettier races them against a half-written tree.
+  # Sequential: the lockfile step's pnpm install rewrites node_modules and would race tsc/eslint/prettier.
   parallel: false
   commands:
     format-lint:
       glob: "*.{ts,tsx,js,mjs,cjs}"
-      # Reformatting a hashed hook (or its .harness-base copy, at any depth) would make
-      # verify-harness.sh report MODIFIED on the first commit.
+      # Reformatting a hashed hook would make verify-harness.sh report MODIFIED.
       exclude:
         - .claude/hooks/*
         - .claude/.harness-base/**
@@ -19,13 +17,10 @@ pre-commit:
       glob: "package.json"
       run: pnpm install --frozen-lockfile
     secret-scan:
-      # Skips only when gitleaks isn't installed locally (CI is the hard gate); when it IS
-      # installed, a finding fails the commit — no `|| true` swallowing real leaks.
+      # Skips only when gitleaks is not installed; CI is the hard gate.
       run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
     readme-coupling:
-      # Warn-only (never blocks): a folder with staged file changes should have its own
-      # README.md staged too (per-folder documentation convention — see documentation-kit.md).
-      # A root-level file (e.g. .env.example) is covered via folder "." — no special-casing needed.
+      # Warn-only: a folder with staged changes should stage its README.md too.
       run: |
         tmp=$(mktemp)
         git diff --cached --name-only > "$tmp"
@@ -47,14 +42,13 @@ pre-commit:
         fi
         exit 0
     comment-hygiene:
-      # Warn-only (never blocks). Patterns come from .claude/comment-hygiene-patterns.txt.
+      # Warn-only, never blocks. Patterns come from .claude/comment-hygiene-patterns.txt.
       run: |
         patterns=".claude/comment-hygiene-patterns.txt"
         [ -f "$patterns" ] || exit 0
         nl=$(printf '\nx'); nl=${nl%x}
         flagged=""
-        # lefthook runs `run:` under sh — no `read -d ''`; stage the NUL-separated list as lines
-        # in a temp file instead of word-splitting $(git diff), so paths with spaces survive.
+        # sh has no `read -d ''`: stage the NUL-separated list in a temp file so paths with spaces survive.
         staged=$(mktemp)
         git diff --cached --name-only -z | tr '\0' '\n' > "$staged"
         while IFS= read -r f <&3; do

@@ -10,7 +10,7 @@ interface MediaCardProps {
   title: string;
   description?: string;
   descClassName?: string;
-  /** Where the media (children) is placed relative to the text. @default "top" */
+  /** Where the media is placed relative to the text. @default "top" */
   mediaPosition?: MediaPosition;
 }
 

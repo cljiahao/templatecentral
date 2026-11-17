@@ -273,8 +273,7 @@ describe('TaskController', () => {
       controllers: [TaskController],
       providers: [TaskService, TaskRepository],
     })
-      // The guard's own deps (PassportStrategy, PinoLogger) are not in this module; the 401
-      // path belongs in an e2e test against the real AppModule.
+      // The guard path belongs in an e2e test against the real AppModule.
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .compile();

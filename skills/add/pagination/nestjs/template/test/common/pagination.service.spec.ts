@@ -1,4 +1,3 @@
-// test/common/pagination.service.spec.ts
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { PaginationService } from '../../src/common/services/pagination.service';

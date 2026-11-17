@@ -20,16 +20,13 @@ from api.repositories.user_repository import UserRepository
 from core.security import create_access_token, hash_password, verify_password
 from models.user import User
 
-# Verified on the miss path so an unknown email costs the same as a wrong
-# password — without it, response timing leaks which accounts exist. Hashed at
-# import with the live PasswordHasher so its cost always matches real hashes.
+# Hashed at import so an unknown email costs the same as a wrong password.
 DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 type Db = AsyncDatabase[dict[str, Any]]
 
 
-# argon2 is ~100 ms of CPU per call: run it in a worker thread (asyncio.to_thread)
-# so one login cannot stall every other request on the event loop.
+# argon2 is CPU-heavy: run it in a worker thread to keep the event loop free.
 async def register_user(db: Db, email: str, password: str, name: str) -> dict:
     hashed = await asyncio.to_thread(hash_password, password)
     user = User(email=email, hashed_password=hashed, name=name)
@@ -100,8 +97,7 @@ async def login(body: LoginRequest, db: DbDep) -> TokenResponse:
     return TokenResponse(access_token=token)
 
 
-# Auth first: FastAPI resolves dependencies in parameter order, so an
-# unauthenticated request is rejected before it touches the database.
+# Auth is resolved first, so unauthenticated requests never reach the database.
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     user_id: Annotated[str, Depends(get_current_user)], db: DbDep

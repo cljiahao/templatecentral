@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs';
 import { defineConfig } from 'drizzle-kit';
 
-// drizzle-kit does not read Next.js's .env.local. Load it locally when present; CI and
-// deploy jobs inject DATABASE_URL directly and have no such file (loadEnvFile would throw).
+// drizzle-kit does not read .env.local; CI injects DATABASE_URL, so load it only when present.
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 export default defineConfig({

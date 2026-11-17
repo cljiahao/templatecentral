@@ -35,7 +35,7 @@ src/features/<feature-name>/
 ### 2. Create `types.ts`
 
 ```ts
-// Mirrors the backend Project response (FastAPI `ProjectResponse`, NestJS `ProjectDto`).
+// Mirrors the backend Project response.
 export interface ProjectItem {
   id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface ProjectItem {
 Put all static data here, not in components:
 
 ```ts
-// Values use the backend `sort` format (`asc_<field>` / `desc_<field>`).
+// Values use the backend `sort` format: `asc_<field>` or `desc_<field>`.
 export const SORT_OPTIONS = [
   { value: 'asc_name', label: 'Name (A-Z)' },
   { value: 'desc_createdAt', label: 'Newest first' },
@@ -63,9 +63,7 @@ First define a Zod schema for the API response shape — every external response
 // schemas/project.schema.ts
 import { z } from 'zod';
 
-// One canonical project schema — templatecentral:add (pagination) extends this same file.
-// nullish: FastAPI emits `null`; a NestJS DTO may omit the key. Extra backend fields
-// (createdAt, updatedAt) are stripped by z.object().
+// One canonical project schema; nullish because backends may emit null or omit the key.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -83,23 +81,19 @@ import { ApiClient } from '@/lib/clients/api-client';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
-// The FastAPI (response_model) and NestJS (plain return) backends send bare bodies — no
-// `{ data }` envelope — so parse the body directly. Only paginated list endpoints wrap
-// (`{ data: { items, pagination } }`, see templatecentral:add (pagination)).
-// Methods return unknown: the service parses, so network data is never type-asserted.
+// Backends send bare bodies; only paginated lists wrap in `{ data }`. Methods return unknown so the service parses.
 class ProjectClient extends ApiClient {
   list(signal?: AbortSignal): Promise<unknown> {
     return this.request('projects', 'GET', undefined, {}, signal);
   }
 
   get(id: string, signal?: AbortSignal): Promise<unknown> {
-    // Encoding stops a crafted id from rewriting the path (`../admin`).
+    // Encoding stops a crafted id from rewriting the path, e.g. `../admin`.
     return this.request(`projects/${encodeURIComponent(id)}`, 'GET', undefined, {}, signal);
   }
 }
 
-// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset, and a module-scope
-// throw kills bundle evaluation before createRoot() — a blank page no ErrorBoundary catches.
+// Lazy: a module-scope ApiClient throw would blank the page before createRoot().
 let client: ProjectClient | undefined;
 const projects = (): ProjectClient => (client ??= new ProjectClient());
 

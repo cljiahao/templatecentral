@@ -3,8 +3,7 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
-// Icon visibility is driven by the `dark:` variant, not by `resolvedTheme`: the theme is
-// unknown during SSR, so state-derived styles would mismatch on hydration.
+// Icons use the dark: variant, not resolvedTheme, to avoid a hydration mismatch.
 export function ThemeToggleButton() {
   const { resolvedTheme, setTheme } = useTheme();
 

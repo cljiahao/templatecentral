@@ -36,8 +36,7 @@ import { serviceConfig } from '../config/env.config';
 export class DatabaseModule implements OnModuleInit {
   constructor(@InjectConnection() private readonly connection: Connection) {}
 
-  // Same as the standard C2 module: hold the boot until schema indexes (the unique
-  // email index) exist, so early inserts cannot slip duplicates past them.
+  // Wait for schema indexes so early inserts cannot bypass the unique email index.
   async onModuleInit() {
     await Promise.all(Object.values(this.connection.models).map((model) => model.init()));
   }

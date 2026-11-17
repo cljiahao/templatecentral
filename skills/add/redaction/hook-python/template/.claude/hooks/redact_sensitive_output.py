@@ -8,13 +8,10 @@ from pathlib import Path
 PROJECT_DIR = Path(os.environ.get('CLAUDE_PROJECT_DIR') or Path.cwd())
 CONFIG_PATH = PROJECT_DIR / '.claude' / 'redaction-config.json'
 MAP_PATH = PROJECT_DIR / '.claude' / '.redaction-map.json'
-# Synthetic address spaces, tried in order. 10.0.0.0/8 is RFC 1918 private-use;
-# 198.18.0.0/15 is the RFC 2544 benchmarking range -- standards-reserved and
-# essentially never used for real internal infra, so it is the fallback whenever a
-# configured real range overlaps the primary space (masking into a block that
-# overlaps the real one would emit the real value back out).
+# 10.0.0.0/8 is tried first; 198.18.0.0/15 is the fallback when a real range overlaps it.
 SYNTHETIC_SPACES = ['10.0.0.0/8', '198.18.0.0/15']
-DOMAIN_SUFFIX = 'example'  # RFC 2606 reserved
+# RFC 2606 reserved.
+DOMAIN_SUFFIX = 'example'
 
 CIDR_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$')
 IPV4_RE = re.compile(
@@ -22,10 +19,7 @@ IPV4_RE = re.compile(
 )
 
 
-# Hand-rolled rather than `ipaddress` so this agrees byte-for-byte with the Node
-# runtime, including octets written with a leading zero ("172.18.161.05"), which
-# `ipaddress.IPv4Address` rejects outright. Masking such a candidate is the safer
-# default for a security control than passing it through untouched.
+# Hand-rolled to match the Node runtime byte for byte, including leading-zero octets ipaddress rejects.
 def ip_to_int(ip_str):
     parts = [int(part) for part in ip_str.split('.')]
     return (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
@@ -90,10 +84,7 @@ def empty_map():
     return normalize_map(None)
 
 
-# Keeps assignments another concurrent invocation may have persisted since this run
-# read the map, adding only the keys this run allocated. Combined with the temp-file
-# + atomic replace below (no reader ever sees a partial map) this narrows -- it does
-# not fully close -- the read/modify/write race between parallel tool calls.
+# Merges keys a concurrent run persisted; narrows, but does not close, the write race.
 def merge_maps(base, ours):
     cidrs = dict(ours['cidrs'])
     cidrs.update(base['cidrs'])
@@ -121,9 +112,7 @@ def save_map_atomic(path, redaction_map):
     os.replace(tmp_path, path)
 
 
-# Returns a human-readable problem description, or None when the config is usable.
-# A malformed entry must never be silently ignored: a CIDR that does not parse would
-# otherwise disable masking for that range without anyone noticing.
+# Returns a problem description, or None when usable; a malformed CIDR must never silently disable masking.
 def validate_config(config):
     if not isinstance(config, dict):
         return 'top-level value must be a JSON object'
@@ -149,13 +138,7 @@ def validate_config(config):
     return None
 
 
-# Allocates an alignment-correct synthetic block that overlaps neither a previously
-# allocated synthetic block nor ANY configured real range. A synthetic space that any
-# configured real range touches is disqualified wholesale: allocating from it risks
-# handing back the real value as its own "mask", which reports success while leaking.
-# Larger real blocks (a short prefix such as /8 or shorter) claim a proportionally
-# bigger share of a space, so they exhaust the available slots fastest; when no space
-# can serve the request this raises rather than returning a colliding block.
+# Allocates a synthetic block overlapping no real or allocated range; raises rather than collide.
 def allocate_synthetic_cidr(prefix_len, redaction_map, real_cidrs):
     slot_size = block_size(prefix_len)
     for i, space_str in enumerate(SYNTHETIC_SPACES):
@@ -233,8 +216,7 @@ def mask_ips(text, cidr_strs, redaction_map):
 def mask_domains(text, domain_suffixes, redaction_map):
     count = 0
     masked = text
-    # Longest suffix first so overlapping entries (e.g. "internal" and "corp.internal")
-    # do not collapse into the shorter one depending on config order.
+    # Longest suffix first so overlapping entries do not collapse into the shorter one.
     for suffix in sorted(domain_suffixes, key=len, reverse=True):
         pattern = re.compile(r'\b(?:[\w-]+\.)*' + re.escape(suffix) + r'\b', re.IGNORECASE)
 
@@ -255,11 +237,7 @@ def redact(text, config, redaction_map):
     return text, ip_count + domain_count
 
 
-# Built-in tools return structured output (Bash yields {stdout, stderr, interrupted,
-# isImage}), and `updatedToolOutput` must have the SAME shape as the tool produced --
-# a flat string is silently discarded and the model sees the unmasked original. Walk
-# whatever shape arrived and mask every string leaf in place, so this stays correct
-# for all four matched tools and for any future change to their output shape.
+# updatedToolOutput must match the tool's output shape or it is discarded; mask every string leaf.
 def redact_value(value, config, redaction_map):
     if isinstance(value, str):
         return redact(value, config, redaction_map)
@@ -283,9 +261,7 @@ def redact_value(value, config, redaction_map):
 
 
 def warn_and_exit(message):
-    # Fail-open warning. Plain stderr on exit 0 reaches only the debug log -- neither the user
-    # nor Claude sees it -- so the warning goes out as a `systemMessage` (shown to the user)
-    # while the stderr copy keeps the debug log useful. Exit 0: the hook never blocks a tool call.
+    # Fail-open: a systemMessage reaches the user; stderr on exit 0 only reaches the debug log.
     sys.stderr.write(f'{message}\n')
     sys.stdout.write(json.dumps({'systemMessage': message}, separators=(',', ':')))
     sys.exit(0)
@@ -314,8 +290,7 @@ def main():
     except (json.JSONDecodeError, OSError):
         redaction_map = empty_map()
 
-    # Build the whole synthetic address plan up front so an unsatisfiable configuration
-    # surfaces here -- at load time, named -- instead of deep inside the masking path.
+    # Build the address plan up front so a bad configuration fails at load time.
     try:
         real_cidrs = [parse_cidr(c) for c in config.get('cidrs') or []]
         for cidr_str in config.get('cidrs') or []:

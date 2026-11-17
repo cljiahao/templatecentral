@@ -39,9 +39,7 @@ from core.logging import logger
 async def log_requests(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    # Clear at the START, not in a `finally`: the scaffold's `Exception` handler runs in
-    # Starlette's outermost ServerErrorMiddleware, i.e. after this function unwinds — clearing
-    # on the way out would strip request_id from the one log line you most need it on.
+    # Clear at the start, not in `finally`: the outer Exception handler runs after unwind.
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(request_id=correlation_id.get())
     start = time.monotonic()
@@ -120,8 +118,7 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
         logger.warning(
             "Login failure",
             reason="invalid_credentials",
-            # Proxy IP unless TRUST_PROXY is set (see add (auth) — Rate Limiting);
-            # request.client is None on some ASGI transports.
+            # Proxy IP unless TRUST_PROXY is set; request.client can be None.
             ip=request.client.host if request.client else None,
         )
         raise
@@ -135,7 +132,7 @@ Add the same `try`/`except` + `logger.info`/`logger.warning` pair to `/auth/regi
 Access denied — log in your auth dependency once roles exist (illustrative; base `get_current_user` has no roles until a database-backed user model):
 
 ```python
-# src/api/dependencies/auth.py  (example — adapt once you have a User model with roles)
+# src/api/dependencies/auth.py
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -144,8 +141,7 @@ from core.logging import logger
 
 
 def require_role(required_role: str):
-    # Factory: a bare `required_role: str` parameter on a dependency would be parsed as a
-    # client-supplied query param, letting the caller choose the role being checked.
+    # Factory: a bare `required_role: str` would be parsed as a client query param.
     async def checker(
         request: Request, user_id: Annotated[str, Depends(get_current_user)]
     ):
@@ -174,7 +170,7 @@ Copied verbatim from `<skill-dir>/logging/fastapi/template/src/utils/http_client
 **Key domain events** — log inside service-layer functions:
 
 ```python
-# src/api/services/projects.py  (example — adapt to your domain)
+# src/api/services/projects.py
 from core.logging import logger
 
 
@@ -189,7 +185,7 @@ async def create_project(data: CreateProjectRequest, user_id: str) -> Project:
 **Slow DB queries** — add a SQLAlchemy event listener:
 
 ```python
-# src/database/session.py  (add after engine creation)
+# src/database/session.py
 import time
 
 from sqlalchemy import event
@@ -241,7 +237,7 @@ from core.logging import logger
 
 async def cache_get(key: str):
     value = await redis.get(key)
-    # Log a key prefix, not the full key, if keys embed user data (e.g. "session:<email>").
+    # Log a key prefix, not the full key, when keys embed user data such as "session:<email>".
     logger.debug("Cache lookup", cache_key=key, hit=value is not None)
     return value
 ```

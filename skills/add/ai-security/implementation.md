@@ -73,9 +73,7 @@ def validate_user_prompt(text: str) -> None:
 Never allow PII or credentials to enter LLM context. Strip before sending.
 
 ```ts
-// Order matters: specific patterns run before broad ones, or the bare-digit national-ID
-// pattern consumes card and phone numbers first. Replace NATIONAL-ID with your locale's
-// exact format — "any 6-12 digits" also hits order numbers and amounts.
+// Order matters: bare-digit NATIONAL-ID would eat card and phone numbers first; set it to your locale format.
 const PII_PATTERNS: Array<[RegExp, string]> = [
   [/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.\w{2,}\b/g, '[EMAIL]'],
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
@@ -125,8 +123,7 @@ Training data, fine-tuning sets and retrieval corpora are attack surfaces: poiso
 ```ts
 import { createHash } from 'node:crypto';
 
-// Store provenance with every chunk so a poisoned source can be traced and purged later.
-// Regex-stripping HTML here is not a control (bypassable); rendering safety is LLM05's job.
+// Store provenance per chunk so a poisoned source can be purged.
 async function ingestDocument(content: string, source: string, expectedHash?: string): Promise<void> {
   const hash = createHash('sha256').update(content).digest('hex');
   if (expectedHash && hash !== expectedHash) {
@@ -172,11 +169,11 @@ Treat all LLM output as untrusted user input. Never evaluate, exec, or render it
 // ❌ Never render raw LLM output as HTML
 return <div dangerouslySetInnerHTML={{ __html: llmOutput }} />;
 
-// ✅ Sanitise or use text-only rendering
+// ✅ Sanitise or use text-only rendering; regex-stripping HTML is bypassable, so it is not a control
 import DOMPurify from 'dompurify';
 return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(llmOutput) }} />;
 
-// ✅ Or use a markdown renderer with sanitisation (e.g. react-markdown with rehype-sanitize)
+// ✅ Or use a markdown renderer with sanitisation, e.g. react-markdown with rehype-sanitize
 ```
 
 **Structured output** — use schema validation on model responses:

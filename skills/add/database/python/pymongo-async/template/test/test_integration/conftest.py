@@ -20,20 +20,20 @@ EXPLICIT_URL = os.environ.get("MONGODB_TEST_URL")
 async def mongo_db() -> AsyncIterator[AsyncDatabase[dict[str, Any]]]:
     client: AsyncMongoClient[dict[str, Any]] = AsyncMongoClient(
         EXPLICIT_URL or "mongodb://localhost:27017",
-        serverSelectionTimeoutMS=1000,  # localhost answers in ms; keeps skips fast
+        serverSelectionTimeoutMS=1000,
         tz_aware=True,
     )
     try:
         await client.admin.command("ping")
     except ServerSelectionTimeoutError:
         await client.close()
-        # Skip on a laptop without Mongo; an explicitly configured URL (CI) must work.
+        # Skip when no Mongo is reachable, but an explicitly configured URL must work.
         if EXPLICIT_URL:
             raise
         pytest.skip(
             "MongoDB not reachable on localhost:27017 — run `docker compose up -d mongo`"
         )
-    db = client[f"test_{uuid4().hex}"]  # throwaway database per test
+    db = client[f"test_{uuid4().hex}"]
     await UserRepository(db).ensure_indexes()
     yield db
     await client.drop_database(db.name)
@@ -44,8 +44,7 @@ async def mongo_db() -> AsyncIterator[AsyncDatabase[dict[str, Any]]]:
 async def api(
     mongo_db: AsyncDatabase[dict[str, Any]],
 ) -> AsyncIterator[httpx2.AsyncClient]:
-    # Same event loop as mongo_db (TestClient would run the app on another loop),
-    # and ASGITransport skips the lifespan so the app never opens its own client.
+    # Same event loop as mongo_db; ASGITransport skips the lifespan so the app opens no client.
     app.dependency_overrides[get_db] = lambda: mongo_db
     transport = httpx2.ASGITransport(app=app)
     async with httpx2.AsyncClient(

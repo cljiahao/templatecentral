@@ -1,4 +1,3 @@
-// src/lib/types/pagination.ts
 export interface PaginationMetadata {
   page: number;
   limit: number;

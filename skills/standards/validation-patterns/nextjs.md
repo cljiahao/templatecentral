@@ -54,16 +54,14 @@ export function LoginForm() {
       });
 
       if (!response.ok) {
-        // The backend's error text is for engineers, not users — it can carry stack
-        // traces, SQL fragments, or internal identifiers. Log it, show a fixed string.
+        // The backend's error text can carry stack traces, SQL fragments or internal identifiers: log it, show a fixed string.
         const body = await response.json().catch(() => ({}));
         console.error('Login failed', body.error ?? response.status);
         setError('Login failed. Check your credentials and try again.');
         return;
       }
 
-      // router.push, never window.location.href — a full document reload discards
-      // the App Router cache and client state
+      // router.push, never window.location.href: a full reload discards the App Router cache and client state
       router.push('/dashboard');
     } catch (err) {
       console.error('Login request failed', err);
@@ -136,13 +134,11 @@ import { z } from 'zod';
 import { LoginFormSchema } from '../schemas/login-form';
 
 export async function loginAction(formData: unknown) {
-  // Re-validate server-side. The client-side resolver is UX only — a crafted
-  // request reaches this action with arbitrary input.
+  // Re-validate server-side: the client resolver is UX only and a crafted request reaches this action with arbitrary input.
   const parsed = LoginFormSchema.safeParse(formData);
 
   if (!parsed.success) {
-    // Server actions return a plain serializable value to the caller, not an HTTP
-    // response — this is why it does not use handleApiError like the routes below
+    // Server actions return a plain serializable value, not an HTTP response, so this does not use handleApiError like the routes below
     return {
       error: 'Validation failed',
       details: {
@@ -175,8 +171,7 @@ export const POST = withLogging(async (request) => {
     const parsed = LoginFormSchema.safeParse(body);
 
     if (!parsed.success) {
-      // handleApiError's ZodError branch emits the 400 + fieldErrors + VALIDATION_ERROR
-      // shape — never hand-roll it, or the error contract drifts per route
+      // handleApiError's ZodError branch emits the 400 + fieldErrors + VALIDATION_ERROR shape; never hand-roll it or the contract drifts per route
       return handleApiError('Login failed', parsed.error);
     }
 
@@ -202,8 +197,7 @@ import { NextResponse } from 'next/server';
 export const GET = withLogging(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
-    // get() returns null for a missing param; z.coerce.number() turns null into 0 and
-    // `.default()` only fires on undefined — coalesce so the defaults apply
+    // get() returns null for a missing param and z.coerce.number() turns null into 0, so coalesce to undefined for .default() to apply
     const queryObj = {
       page: searchParams.get('page') ?? undefined,
       limit: searchParams.get('limit') ?? undefined,
@@ -250,8 +244,7 @@ import { NextResponse } from 'next/server';
 
 type AllowedType = (typeof ALLOWED_UPLOAD_TYPES)[number];
 
-// Leading signature bytes per allowed type. For formats beyond these, use a
-// maintained detector (e.g. file-type) rather than extending this by hand.
+// Leading signature bytes per allowed type; for other formats use a maintained detector such as file-type.
 const MAGIC_BYTES: Record<AllowedType, number[]> = {
   'image/png': [0x89, 0x50, 0x4e, 0x47],
   'image/jpeg': [0xff, 0xd8, 0xff],
@@ -338,8 +331,7 @@ export async function fetchGithubUser(username: string) {
   const parsed = externalApiUserSchema.safeParse(data);
 
   if (!parsed.success) {
-    // Field errors are a debugging aid, not a user-facing message — log them, and
-    // throw the generic APIError the rest of the app already knows how to render.
+    // Field errors are a debugging aid, not a user message: log them and throw the generic APIError the app already renders.
     logError(
       'fetchGithubUser: response failed schema validation',
       new Error(JSON.stringify(z.flattenError(parsed.error).fieldErrors))

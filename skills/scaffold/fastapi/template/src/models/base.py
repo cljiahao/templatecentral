@@ -3,9 +3,9 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class BaseModel:
-    """Base for mutable domain models (state that changes during processing)."""
+    """Base for mutable domain models."""
 
 
 @dataclass(frozen=True, slots=True)
 class BaseImmutableModel:
-    """Base for immutable domain models (config, lookup data, parameters)."""
+    """Base for immutable domain models."""

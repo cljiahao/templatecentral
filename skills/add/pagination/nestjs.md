@@ -41,7 +41,7 @@ holding `CreateProjectDto`). **Add** the schema and class below to it — do not
 overwrite the existing DTOs. Create the file (with the two imports) only if it is absent.
 
 ```ts
-// src/modules/projects/projects.dto.ts — append (keep existing CreateProjectDto etc.)
+// src/modules/projects/projects.dto.ts
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -79,7 +79,7 @@ export class ProjectsController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({ name: 'sort', required: false, example: 'asc_name' })
-  // Validated by the scaffold's global ZodValidationPipe (APP_PIPE).
+  // Validated by the scaffold's global ZodValidationPipe.
   list(@Query() query: PaginationDto): Promise<PaginatedResponse<ProjectDto>> {
     return this.projectsService.listProjects(query);
   }
@@ -106,7 +106,7 @@ export const projects = pgTable('projects', {
 ```
 
 ```ts
-// src/modules/projects/projects.service.ts (Drizzle)
+// src/modules/projects/projects.service.ts
 import { Injectable } from '@nestjs/common';
 import { asc, count, desc } from 'drizzle-orm';
 
@@ -166,7 +166,7 @@ export interface ProjectsTable {
 ```
 
 ```ts
-// src/database/migrations/NNN_projects.ts — NNN = next unused number (e.g. 002, or 003 after 002_add_auth.ts)
+// src/database/migrations/NNN_projects.ts with NNN the next unused number
 import { type Kysely, sql } from 'kysely';
 
 export async function up(db: Kysely<unknown>): Promise<void> {
@@ -186,7 +186,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 ```
 
 ```ts
-// src/modules/projects/projects.service.ts (Kysely)
+// src/modules/projects/projects.service.ts
 import { Injectable } from '@nestjs/common';
 
 import type { PaginatedResponse, PaginationParams } from '../../common/dto/pagination.dto';

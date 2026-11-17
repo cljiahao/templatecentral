@@ -123,12 +123,9 @@ describe('ProjectService (API-backed)', () => {
   afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
   it('fetches projects from API', async () => {
-    // FastAPI/NestJS return a bare body (no `{ data }` envelope), so the fixture is the array
-    // itself. It must carry every required projectItemSchema field — ProjectService.getAll()
-    // runs it through .parse(), so a short fixture throws first.
+    // Bare array body, no `{ data }` envelope, with every required projectItemSchema field since getAll() parses it.
     const projects = [{ id: '1', name: 'Alpha', description: null }];
-    // Response.json sets application/json — FetchClient parses by content-type, so a bare
-    // `new Response(JSON.stringify(...))` (text/plain) comes back as a string and fails .parse().
+    // Response.json sets application/json; a bare `new Response(JSON.stringify(...))` is text/plain and fails .parse().
     mockFetch.mockResolvedValue(Response.json(projects));
 
     const result = await ProjectService.getAll();

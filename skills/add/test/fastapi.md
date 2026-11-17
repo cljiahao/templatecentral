@@ -65,16 +65,12 @@ from sqlalchemy.pool import StaticPool
 @pytest.fixture
 def db_client() -> Generator[TestClient]:
     """TestClient with a clean in-memory database for each test."""
-    # Imported here, after the env seeding; importing app also registers every
-    # model on Base.metadata, so create_all sees all tables.
+    # Imported after the env seeding; importing app also registers every model on Base.metadata.
     from app import app
     from database.base import Base
     from database.session import get_db
 
-    # StaticPool + check_same_thread=False are mandatory here: SQLite's
-    # in-memory database lives inside a single connection, and TestClient
-    # runs the app in a different thread. The default pool hands that thread
-    # a fresh, empty database and every test fails with "no such table".
+    # StaticPool + check_same_thread=False keep the in-memory SQLite database visible to TestClient's thread.
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -103,7 +99,6 @@ def db_client() -> Generator[TestClient]:
 ### Naming
 
 - Functions: `test_<subject>_<scenario>`
-- Always provide a one-line docstring describing expected behavior.
 
 ```python
 @pytest.mark.unit
@@ -124,7 +119,7 @@ def create_example_request(
     name: str = "World",
     repeat_count: int = 1,
 ) -> dict:
-    """Create an example request payload with camelCase keys (matching API contract)."""
+    """Create an example request payload with camelCase keys matching the API contract."""
     return {"name": name, "repeatCount": repeat_count}
 ```
 

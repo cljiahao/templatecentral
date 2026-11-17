@@ -1,4 +1,3 @@
-# src/utils/http_client.py
 import time
 from urllib.parse import urlparse, urlunparse
 

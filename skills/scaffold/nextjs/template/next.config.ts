@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Standalone only for the Docker image (builder sets NEXT_OUTPUT); `next start` rejects it locally.
+  // Standalone only for the Docker image; `next start` rejects it locally.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   reactStrictMode: true,
   poweredByHeader: false,
@@ -9,10 +9,7 @@ const nextConfig: NextConfig = {
   // next/image refuses external hosts until they are allowlisted in `images.remotePatterns`.
 
   async headers() {
-    // Content-Security-Policy and X-Frame-Options are NOT set here. headers() is resolved at
-    // build time, but the allowed framing origin (APPCENTRAL_PORTAL_ORIGIN) is injected at
-    // runtime, so src/proxy.ts sets both per request via src/lib/security/frame-protection.ts.
-    // That file is the only place the CSP is defined: add new CSP directives there, never here.
+    // CSP and X-Frame-Options are set per request in src/proxy.ts, because the framing origin is only known at runtime.
     return [
       {
         source: '/(.*)',

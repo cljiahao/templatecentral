@@ -35,7 +35,7 @@ Copied verbatim from `<skill-dir>/logging/vite-react/template/src/lib/logging/br
 Add `logEvent` alongside the existing `logError`. Do not replace `logError` — only add:
 
 ```ts
-// src/lib/errors/error-log-handler.ts  (extend existing file — add below logError)
+// src/lib/errors/error-log-handler.ts
 import { addBreadcrumb } from '@/lib/logging/breadcrumbs';
 
 // --- existing logError stays unchanged ---
@@ -52,7 +52,7 @@ Then attach breadcrumbs to error logs. `error.data` is the **raw backend respons
 ```ts
 import { addBreadcrumb, getBreadcrumbs } from '@/lib/logging/breadcrumbs';
 
-// At the top of every logError branch (before console.error):
+// Top of every logError branch, before console.error:
 addBreadcrumb({ type: 'error', label });
 
 // APIError branch — raw data stays behind the DEV guard, never in the shipped payload:
@@ -81,7 +81,7 @@ Only allowlisted fields cross this boundary — `enqueueLog` POSTs off the brows
 // src/lib/errors/error-log-handler.ts — add at the end of each branch
 import { enqueueLog } from '@/lib/logging/log-batcher';
 
-// In logError (APIError branch):
+// In logError, APIError branch:
 enqueueLog({
   level: 'error',
   label,
@@ -106,8 +106,7 @@ import { addBreadcrumb } from '@/lib/logging/breadcrumbs';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 
-// addBreadcrumb() redacts non-word path segments, so ids and one-time tokens
-// in the pathname never reach the buffer.
+// addBreadcrumb() redacts non-word path segments, so ids and tokens never reach the buffer.
 export function NavigationBreadcrumbs() {
   const location = useLocation();
 
@@ -123,7 +122,9 @@ export function NavigationBreadcrumbs() {
 // src/router.tsx — render it inside <BrowserRouter>, alongside the existing <Routes>
 <BrowserRouter>
   <NavigationBreadcrumbs />
-  <Routes>{/* existing routes unchanged */}</Routes>
+  <Routes>
+    {/* existing routes */}
+  </Routes>
 </BrowserRouter>
 ```
 

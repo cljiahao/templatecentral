@@ -19,11 +19,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-node/template/.claude/hooks/red
 `process.exit(0);` (leave the injection and credential hard-block paths above it untouched):
 
 ```javascript
-// Redaction companion (OWASP LLM02 infra-topology variant) — only active if add (redaction) has been applied.
-// Warns, never blocks: the human is the one party allowed to reference real infra values.
-// The warning goes out as `systemMessage`, a human-facing surface. It must NOT go to plain
-// stdout or additionalContext: on UserPromptSubmit those can be injected into the model's
-// context, which would feed it the very real values this capability exists to keep out.
+// Warns, never blocks; `systemMessage` only: stdout or additionalContext could feed real values to the model.
 try {
   const fs = require('fs');
   const path = require('path');
@@ -51,7 +47,9 @@ try {
       }));
     }
   }
-} catch { /* fail open — never let the redaction check block a legitimate prompt */ }
+} catch {
+  // Fail open: a redaction error must never block a legitimate prompt.
+}
 
 process.exit(0);
 ```

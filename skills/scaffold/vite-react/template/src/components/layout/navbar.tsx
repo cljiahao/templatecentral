@@ -24,8 +24,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 to={link.href}
-                // Colour alone cannot convey the active link — aria-current is what
-                // reaches assistive tech and users who can't distinguish the hue.
+                // aria-current conveys the active link beyond colour.
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'hover:text-primary text-sm font-medium transition-colors',

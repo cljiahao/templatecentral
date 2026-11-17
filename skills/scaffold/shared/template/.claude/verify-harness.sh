@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Harness integrity sensor. Recomputes sha256 of the enforcement-layer seeded files and
-# compares to the origin_hash baseline in .claude/harness.json. Read-only; exits non-zero
-# on drift (1) or on an unreadable/unfilled manifest (2). Wired into CI and lefthook pre-push.
-# Bless intentional changes with regen-harness.sh.
+# Harness integrity sensor: read-only; exits 1 on hash drift, 2 on a bad manifest. Bless changes with regen-harness.sh.
 set -euo pipefail
 # Paths below are project-relative: run from the project root, whatever directory the caller is in.
 here=$(cd "$(dirname "$0")" && pwd)
@@ -31,7 +28,7 @@ drift=0; checked=0; unfilled=0
 while IFS=$'\t' read -r path origin; do
   [ -n "$path" ] || continue
   case "$origin" in ""|null|undefined|None|"<"*) echo "UNFILLED: $path (origin_hash is a placeholder)" >&2; unfilled=1; continue ;; esac
-  printf '%s' "$path" | grep -qE "$guard" || continue   # enforcement layer only
+  printf '%s' "$path" | grep -qE "$guard" || continue
   checked=$((checked + 1))
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
   [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }

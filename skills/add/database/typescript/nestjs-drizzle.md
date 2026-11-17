@@ -231,9 +231,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
-// Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist. Hashed at
-// startup with the same defaults as real passwords so the cost matches exactly.
+// Hashed at startup so an unknown email costs the same as a wrong password.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -255,8 +253,7 @@ export class AuthService {
         .returning({ id: users.id, email: users.email, name: users.name });
       return user;
     } catch (error) {
-      // The unique index, not a SELECT-then-INSERT pre-check, is race-free under concurrent
-      // sign-ups. Drizzle v1 wraps driver errors in DrizzleQueryError; the pg code is on `cause`.
+      // The unique index is race-free; the pg error code is on `cause`.
       if ((error as { cause?: { code?: string } }).cause?.code === PG_UNIQUE_VIOLATION) {
         throw new ConflictException('Email already registered.');
       }

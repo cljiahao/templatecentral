@@ -41,7 +41,7 @@ from core.exceptions import InvalidInputError
 from models.project import Project
 from utils.pagination import calculate_offset, create_metadata, parse_sort_param
 
-# API-facing (camelCase) name -> column. The allow-list IS this mapping, so it cannot drift.
+# API-facing camelCase name to column; the allow-list is this mapping, so it cannot drift.
 SORT_COLUMNS = {
     "name": Project.name,
     "createdAt": Project.created_at,

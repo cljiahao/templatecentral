@@ -8,8 +8,7 @@ export const db =
   globalForDb.db ??
   drizzle({
     client: postgres(process.env.DATABASE_URL!, {
-      // postgres.js defaults to plaintext. Local Docker Postgres serves no TLS, so only
-      // `next dev` skips it; 'verify-full' checks the certificate chain and hostname.
+      // postgres.js defaults to plaintext; only next dev skips TLS, verify-full checks chain and host.
       ssl: process.env.NODE_ENV === 'production' ? 'verify-full' : false,
     }),
   });

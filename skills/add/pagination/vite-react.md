@@ -30,8 +30,7 @@ The FastAPI and NestJS pagination endpoints return `{ data: { items, pagination:
 // src/features/project/schemas/project.schema.ts
 import { z } from 'zod';
 
-// Canonical project schema (same as add (feature)). nullish: FastAPI emits `null`, a NestJS
-// DTO may omit the key; extra fields (createdAt, updatedAt) are stripped.
+// Canonical project schema, shared with the feature guide; nullish because backends may emit null.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -69,8 +68,7 @@ class ProjectClient extends ApiClient {
   }
 }
 
-// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset — at module scope
-// that kills bundle evaluation before createRoot().
+// Lazy: a module-scope ApiClient throw would kill bundle evaluation.
 let client: ProjectClient | undefined;
 const projects = (): ProjectClient => (client ??= new ProjectClient());
 

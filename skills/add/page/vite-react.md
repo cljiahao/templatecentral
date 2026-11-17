@@ -83,8 +83,7 @@ import { NotFoundPage } from '@/pages/not-found';
 import { useParams } from 'react-router';
 import { z } from 'zod';
 
-// Match the schema to the real id format — z.uuid() here, z.coerce.number().int().positive()
-// for numeric ids, z.enum([...]) for a fixed set.
+// Match the schema to the real id format: uuid, positive int or enum.
 const paramsSchema = z.object({ id: z.uuid() });
 
 export function ProjectDetailPage() {

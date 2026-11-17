@@ -2,7 +2,7 @@ from datetime import date
 
 
 def year_month_to_date(year_month: str) -> date:
-    """Convert 'YYYY-MM' string to a date (first of month)."""
+    """Convert a 'YYYY-MM' string to the first day of that month."""
     year, month = year_month.split("-")
     return date(int(year), int(month), 1)
 

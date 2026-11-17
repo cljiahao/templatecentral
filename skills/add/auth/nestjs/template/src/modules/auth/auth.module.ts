@@ -12,8 +12,7 @@ import { JwtStrategy } from './jwt.strategy';
     PassportModule,
     JwtModule.register({
       secret: appConfig.JWT_SECRET,
-      // Seconds, not an "30m" string: @nestjs/jwt types expiresIn as number | ms.StringValue,
-      // which a plain Zod-validated string does not satisfy.
+      // Seconds, not "30m": @nestjs/jwt types expiresIn as number | ms.StringValue.
       signOptions: { algorithm: 'HS256', expiresIn: appConfig.JWT_EXPIRES_IN_SECONDS },
     }),
   ],

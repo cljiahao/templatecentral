@@ -1,4 +1,3 @@
-// src/components/layout/error-boundary-async.tsx
 'use client';
 
 import { useEffect, useState } from 'react';

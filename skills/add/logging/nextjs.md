@@ -89,7 +89,7 @@ Copied verbatim from `<skill-dir>/logging/nextjs/template/src/integrations/clien
 **Key domain events** — log where the state change happens:
 
 ```ts
-// src/app/api/projects/route.ts  (example — adapt to your domain)
+// src/app/api/projects/route.ts
 import { logger } from '@/lib/logger';
 
 // After successful create:
@@ -133,8 +133,7 @@ const rows = await withSlowQueryLog('projects.findAll', () =>
 **Sanitized request context** — extend `withLogging` or add inline at the top of route handlers:
 
 ```ts
-// src/lib/utils/with-logging.ts  (extend existing HOF)
-// Add header-presence logging before calling handler:
+// src/lib/utils/with-logging.ts: add header-presence logging before calling the handler
 logger.debug(
   {
     method: req.method,

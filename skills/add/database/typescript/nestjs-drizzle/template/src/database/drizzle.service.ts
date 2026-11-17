@@ -9,14 +9,12 @@ import { appConfig, serviceConfig } from '../config/env.config';
 export class DrizzleService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DrizzleService.name);
   private readonly client: ReturnType<typeof postgres>;
-  // In v1 the first type parameter of `drizzle` is TRelations, not the schema —
-  // tables are passed per query (`.from(users)`), so no schema generic is needed.
+  // In v1 drizzle's first type parameter is TRelations, not the schema.
   readonly db: ReturnType<typeof drizzle>;
 
   constructor() {
     this.client = postgres(serviceConfig.DATABASE_URL, {
-      // postgres.js defaults to plaintext. Local Docker Postgres serves no TLS, so only dev
-      // skips it; 'verify-full' checks the certificate chain and hostname.
+      // postgres.js defaults to plaintext; only dev skips TLS, verify-full checks chain and host.
       ssl: appConfig.ENVIRONMENT === 'dev' ? false : 'verify-full',
     });
     this.db = drizzle({ client: this.client });

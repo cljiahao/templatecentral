@@ -1,4 +1,3 @@
-// src/integrations/clients/http-client.ts
 import { logger } from '@/lib/logger';
 
 // origin + path only: userinfo, query, and fragment can all carry credentials.

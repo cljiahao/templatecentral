@@ -8,11 +8,9 @@ from core.config import api_settings
 
 ALGORITHM = "HS256"
 
-# argon2id, t=3 / m=64 MiB / p=1 — above OWASP's minimums. Set explicitly because
-# argon2-cffi's defaults (RFC 9106 low-memory profile) use p=4.
+# argon2id t=3, m=64 MiB, p=1, above OWASP minimums; argon2-cffi defaults use p=4.
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
-# A named tuple, not `except A, B:` — that unparenthesized form (PEP 758) is a
-# SyntaxError before 3.14, and the Beanie path pins projects to 3.13.
+# A named tuple, not `except A, B:`, which is a SyntaxError before Python 3.14.
 _VERIFY_ERRORS = (VerificationError, InvalidHashError)
 
 
@@ -43,7 +41,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
 def decode_access_token(token: str) -> str | None:
     """Decode and validate a JWT token. Returns the subject or None."""
     try:
-        # Pinned algorithm list blocks alg-confusion / "none"; require rejects tokens missing exp/sub.
+        # Pinned algorithms block alg confusion and "none"; require rejects tokens missing exp/sub.
         payload = jwt.decode(
             token,
             api_settings.SECRET_KEY,

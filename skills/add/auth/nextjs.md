@@ -105,11 +105,7 @@ async function route(req: NextRequest): Promise<Response> {
     return NextResponse.next();
   }
 
-  // Optimistic check ONLY. getSessionCookie reads the cookie's presence with no
-  // database call — this avoids a DB/session round-trip at the routing layer on every
-  // request, keeping proxy latency low. It gates routing and redirects; it does NOT
-  // validate the session (a forged cookie passes). The authoritative check MUST run
-  // server-side in the protected layout (see step 8).
+  // Optimistic cookie-presence check only; the authoritative check runs in the protected layout.
   const hasSession = getSessionCookie(req) != null;
 
   // Handle /login: redirect users who appear signed in to the dashboard, allow others through
@@ -120,7 +116,7 @@ async function route(req: NextRequest): Promise<Response> {
     return NextResponse.next();
   }
 
-  // Protected routes: require a session cookie (authoritative validation happens in the layout)
+  // Protected routes require a session cookie; the layout validates it authoritatively
   if (!hasSession) {
     if (isApiRoute(pathname)) {
       return new Response(null, { status: 401 });
@@ -131,11 +127,7 @@ async function route(req: NextRequest): Promise<Response> {
   return NextResponse.next();
 }
 
-// Never configure a single-entry `i18n.locales` list — a high-severity security
-// advisory covers exactly that shape: a single-locale list under Turbopack can skip
-// the proxy entirely, so every auth check here silently stops running. If you add
-// i18n routing, re-verify the proxy still executes on every matched path.
-// See the Next.js floor in .claude/rules/nextjs.md.
+// A single-entry `i18n.locales` under Turbopack can skip the proxy and every auth check; see .claude/rules/nextjs.md.
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|ico|webp)$).*)',
@@ -178,13 +170,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  // Authoritative gate. proxy.ts only checks cookie presence to keep routing fast; this
-  // verifies the session's signature and, when the cookie cache is cold, revalidates it
-  // against the store. Without this, a forged cookie would pass the proxy and reach
-  // protected content. Note: with `cookieCache.enabled: true` (maxAge 5 min) this can be
-  // served from the signed cookie without touching the store, so revocation and lockout
-  // take effect only after that window — set `cookieCache.enabled: false` in
-  // src/lib/auth.ts for high-assurance flows that need immediate revocation.
+  // Authoritative gate; `cookieCache.enabled: false` gives immediate revocation, otherwise it lags up to 5 min.
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect(PAGE_ROUTES.LOGIN);
@@ -400,9 +386,7 @@ const ratelimit = new Ratelimit({
   prefix: 'auth:credentials',
 });
 
-// Every credential-accepting auth endpoint, not just sign-in: sign-up, password
-// reset and forgot-password are equally brute-forceable and all sit under the
-// /api/auth public prefix.
+// Limit every credential-accepting endpoint, not just sign-in.
 const RATE_LIMITED_AUTH_PATHS = [
   '/api/auth/sign-in',
   '/api/auth/sign-up',
@@ -411,9 +395,7 @@ const RATE_LIMITED_AUTH_PATHS = [
   '/api/auth/reset-password',
 ];
 
-// TRUST_PROXY = number of trusted proxy hops (1 = ALB → App, 2 = ALB →
-// Traefik → App); empty/unset = X-Forwarded-For is not trusted.
-// Returns null when no trustworthy client IP can be derived.
+// Returns null when no trustworthy client IP exists; TRUST_PROXY is the trusted hop count.
 function getRateLimitKey(req: NextRequest): string | null {
   const hops = Number(process.env.TRUST_PROXY);
   if (!hops) return null;
@@ -421,21 +403,13 @@ function getRateLimitKey(req: NextRequest): string | null {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean);
-  // Take the right-most entry that is not a trusted hop: each trusted proxy
-  // appends exactly one entry, so with one hop the client IP is the last
-  // entry, with two hops the second-to-last. Anything further left is
-  // client-forgeable.
+  // Take the right-most entry that is not a trusted hop; anything left of it is client-forgeable.
   return entries[entries.length - hops] ?? null;
 }
 
-// At the top of route(), immediately after `const { pathname } = req.nextUrl;`
-// and BEFORE the isPublicRoute() short-circuit (which would otherwise return
-// NextResponse.next() for /api/auth/* and skip this check entirely):
+// Place at the top of route(), before the isPublicRoute() short-circuit.
 if (RATE_LIMITED_AUTH_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {
-  // Fail closed when no trustworthy client IP exists (TRUST_PROXY unset or
-  // header missing): all such requests share one bucket, keeping the endpoint
-  // throttled instead of wide open. Fix the deployment topology — never fall
-  // back to a client-supplied header.
+  // Fail closed on a missing IP: share one bucket, never trust a client header.
   const key = getRateLimitKey(req) ?? 'untrusted';
   const { success } = await ratelimit.limit(key);
   if (!success) return new Response(null, { status: 429 });

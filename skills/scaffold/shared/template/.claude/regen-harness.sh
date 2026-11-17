@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Human-run only. Rewrites origin_hash in .claude/harness.json to the current files.
-# Agents do not run this: regenerating the baseline masks the drift the verifier
-# exists to catch. protect-files.sh requires human approval to edit harness.json itself.
+# Human-run only: rewrites origin_hash in .claude/harness.json. An agent run would mask the drift the verifier catches.
 set -euo pipefail
 if command -v node >/dev/null 2>&1; then
   node -e 'const fs=require("fs"),cr=require("crypto"),j=JSON.parse(fs.readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(j.seeded_files)){if(fs.existsSync(v.path))v.origin_hash=cr.createHash("sha256").update(fs.readFileSync(v.path)).digest("hex");}fs.writeFileSync(".claude/harness.json",JSON.stringify(j,null,2)+"\n");console.log("harness baseline regenerated");'

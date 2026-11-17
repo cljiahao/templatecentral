@@ -65,8 +65,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(_db: Kysely<unknown>): Promise<void> {
-  // No-op by design: the table pre-existed this adoption migration, so dropping it on
-  // rollback would destroy production data.
+  // No-op by design: the table pre-existed this migration, so a rollback drop would destroy production data.
 }
 ```
 

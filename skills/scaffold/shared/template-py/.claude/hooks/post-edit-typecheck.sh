@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# PostToolUse(Edit|Write) — fast type feedback on Python edits only. Feedback-only (never blocks).
-# Errors reach Claude via hookSpecificOutput.additionalContext — plain stdout from a
-# PostToolUse hook goes to the debug log only. Always exits 0.
+# PostToolUse(Edit|Write): fast type feedback, never blocks; errors reach Claude via additionalContext.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 file=$(printf '%s' "$input" | python3 -c "import json,sys

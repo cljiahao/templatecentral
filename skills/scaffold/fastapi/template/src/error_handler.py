@@ -14,13 +14,7 @@ INTERNAL_SERVER_ERROR_DETAIL = "Internal server error"
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> list[dict]:
-    """Make Pydantic validation errors JSON-safe and strip submitted values.
-
-    exc.errors() can contain raw exception objects in the 'ctx' dict
-    which are not JSON serializable. Convert them to strings.
-    Drop 'input' (echoes the submitted value — e.g. passwords — into
-    responses and logs) and 'url' (Pydantic docs link, noise).
-    """
+    """Makes validation errors JSON-safe and drops the submitted input, which can echo passwords."""
     safe = []
     for err in errors:
         clean = {k: v for k, v in err.items() if k not in ("input", "url")}
@@ -58,9 +52,7 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    # HTTPException deliberately has no handler here: FastAPI's built-in one already
-    # returns this {"detail": ...} envelope with exc.headers, covers router-level 404/405,
-    # and sends an empty body for no-body statuses (1xx/204/205/304).
+    # HTTPException has no handler: FastAPI's built-in one already returns this envelope.
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(

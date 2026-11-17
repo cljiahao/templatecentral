@@ -38,8 +38,7 @@ Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `temp
 ```typescript
 import { z } from 'zod';
 
-// One source of truth for the constraint, its error copy, and the field hint —
-// all three drift apart the moment the number is written out three times.
+// One source of truth for the constraint, its error copy and the hint.
 export const MESSAGE_MIN_LENGTH = 10;
 
 export const contactFormSchema = z.object({
@@ -91,8 +90,7 @@ export function ContactForm() {
 
   // Async so formState.isSubmitting tracks the returned promise.
   const onSubmit = async (_values: ContactFormValues) => {
-    // TODO: call the server action / mutation hook. Never echo `values` into a toast or
-    // Error message — form payloads routinely carry passwords and tokens.
+    // TODO: call the server action; never echo `values` into a toast or Error.
     toast.error('Submit handler not wired yet');
   };
 

@@ -55,8 +55,7 @@ export default tseslint.config(
     },
   },
   {
-    // shadcn/ui primitives are generated, not hand-edited — prefer-read-only-props
-    // fires on their prop typing and can't be fixed without diverging from `shadcn add` output.
+    // shadcn/ui primitives are generated; prefer-read-only-props cannot be fixed without diverging from shadcn add output.
     files: ['src/components/ui/**/*.tsx'],
     plugins: { sonarjs: sonarjsPlugin },
     rules: { 'sonarjs/prefer-read-only-props': 'off' },

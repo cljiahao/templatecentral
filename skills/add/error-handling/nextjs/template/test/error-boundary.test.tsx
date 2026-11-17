@@ -1,4 +1,3 @@
-// test/error-boundary.test.tsx
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect } from 'vitest';
@@ -10,7 +9,7 @@ const Thrower = () => {
 };
 
 describe('ErrorBoundary', () => {
-  // Vitest runs with NODE_ENV=test, so the production (generic) message path is exercised.
+  // NODE_ENV=test exercises the production message path.
   it('renders the generic fallback without leaking the error message', () => {
     render(
       <ErrorBoundary>

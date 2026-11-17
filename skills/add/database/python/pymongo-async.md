@@ -22,14 +22,16 @@ Add to `APISettings` in **`src/core/config.py`** (`from pydantic import SecretSt
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    # SecretStr: the URL usually embeds credentials; keeps them out of repr()/logs.
+
+    # SecretStr keeps the credential-bearing URL out of repr() and logs.
     MONGODB_URL: SecretStr = Field(
+        default=...,
         description="MongoDB connection URL — must be set in environment"
     )
-    MONGODB_DB_NAME: str = Field(description="MongoDB database name")
+    MONGODB_DB_NAME: str = Field(default=..., description="MongoDB database name")
 ```
 
-Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
+Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Ask the user to add both to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 

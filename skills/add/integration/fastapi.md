@@ -95,7 +95,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class GithubRepo(BaseModel):
-    """GitHub repository as returned by the upstream API (snake_case preserved)."""
+    """GitHub repository as returned by the upstream API, snake_case preserved."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -298,7 +298,7 @@ async def test_get_repo_returns_validated_model() -> None:
 
 @pytest.mark.unit
 async def test_upstream_404_maps_to_not_found() -> None:
-    """Upstream 404 becomes the domain NoResultsFound (-> 404)."""
+    """Upstream 404 becomes the domain NoResultsFound."""
     with pytest.raises(NoResultsFound, match="not found"):
         await make_service(404, {}).get_repo("o", "missing")
 

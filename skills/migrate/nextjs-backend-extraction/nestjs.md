@@ -139,11 +139,7 @@ import { Injectable } from '@nestjs/common';
 import { serviceConfig } from '../../config/env.config';
 import { FetchClient } from '../clients/base/fetch-client';
 
-// In src/config/env.config.ts: add both fields to `envSchema` (so a missing value fails at
-// boot, not as `Bearer undefined`), e.g. `GITHUB_API_URL: z.url(), GITHUB_TOKEN: z.string().min(1),`
-// AND expose them on the hand-written `serviceConfig` object:
-//   GITHUB_API_URL: env.GITHUB_API_URL,
-//   GITHUB_TOKEN: env.GITHUB_TOKEN,
+// In src/config/env.config.ts add GITHUB_API_URL and GITHUB_TOKEN to `envSchema`, so a missing value fails at boot, not as `Bearer undefined`, and to the hand-written `serviceConfig`.
 @Injectable()
 export class GithubService extends FetchClient {
   constructor() {

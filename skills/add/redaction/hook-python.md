@@ -19,11 +19,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-python/template/.claude/hooks/r
 `sys.exit(0)`:
 
 ```python
-# Redaction companion (OWASP LLM02 infra-topology variant) -- only active if add (redaction) has been applied.
-# Warns, never blocks: the human is the one party allowed to reference real infra values.
-# The warning goes out as `systemMessage`, a human-facing surface. It must NOT go to plain
-# stdout or additionalContext: on UserPromptSubmit those can be injected into the model's
-# context, which would feed it the very real values this capability exists to keep out.
+# Warns, never blocks; `systemMessage` only: stdout or additionalContext could feed real values to the model.
 try:
     import os
     config_path = os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(), '.claude', 'redaction-config.json')
@@ -54,7 +50,8 @@ try:
                 '.claude/redaction-config.json -- Claude will see them in cleartext for this turn. '
                 'Non-blocking.'}, separators=(',', ':')))
 except Exception:
-    pass  # fail open -- never let the redaction check block a legitimate prompt
+    # Fail open: a redaction error must never block a legitimate prompt.
+    pass
 
 sys.exit(0)
 ```

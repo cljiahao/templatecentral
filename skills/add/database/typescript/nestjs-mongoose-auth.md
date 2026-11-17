@@ -23,9 +23,7 @@ export class User {
   @Prop({ required: true })
   name: string;
 
-  // `select: false` keeps the hash out of every query result by default — without it
-  // any `findOne`/`find` that serializes a user document leaks the password hash.
-  // Opt back in explicitly with `.select('+hashedPassword')` where it is actually needed.
+  // `select: false` keeps the hash out of queries; opt in with `.select('+hashedPassword')`.
   @Prop({ required: true, select: false })
   hashedPassword: string;
 }
@@ -46,9 +44,7 @@ import { Model } from 'mongoose';
 import { User, type UserDocument } from './schemas/user.schema';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
-// Verified on the miss path so an unknown email costs the same as a wrong
-// password — without it, response timing leaks which accounts exist. Hashed at
-// startup with the same defaults as real passwords so the cost matches exactly.
+// Hashed at startup so an unknown email costs the same as a wrong password.
 const DUMMY_HASH = argon2.hash(randomUUID());
 
 const MONGO_DUPLICATE_KEY = 11000;

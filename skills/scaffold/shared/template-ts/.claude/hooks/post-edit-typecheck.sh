@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# PostToolUse(Edit|Write) — fast type feedback on TS edits only. Feedback-only (never blocks).
-# Errors reach Claude via hookSpecificOutput.additionalContext — plain stdout from a
-# PostToolUse hook goes to the debug log only. Always exits 0.
+# PostToolUse(Edit|Write): fast type feedback, never blocks; errors reach Claude via additionalContext.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)

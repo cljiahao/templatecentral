@@ -39,8 +39,7 @@ async def create_user(db: Db, payload: CreateUserRequest) -> User:
 
 
 async def update_user(db: Db, user_id: str, payload: UpdateUserRequest) -> User:
-    # exclude_none: an explicit `"name": null` would otherwise $set null and leave a
-    # document that no longer validates as User.
+    # exclude_none: an explicit null would $set null and leave an invalid User document.
     changes = payload.model_dump(exclude_unset=True, exclude_none=True)
     user = await UserRepository(db).update(user_id, changes)
     if user is None:

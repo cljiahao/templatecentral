@@ -18,12 +18,12 @@ export class RolesGuard implements CanActivate {
     if (!required?.length) {
       throw new ForbiddenException('Insufficient permissions.');
     }
-    // Partial: a customised validate() may omit roles, which must deny (403), not throw (500).
+    // A customised validate() may omit roles; that must deny with 403, not throw a 500.
     const { user } = context
       .switchToHttp()
       .getRequest<FastifyRequest & { user?: Partial<AuthUser> }>();
     const roles = user?.roles;
-    // A malformed roles list (any non-string entry) denies outright instead of being matched loosely.
+    // A malformed roles list denies outright instead of being matched loosely.
     if (
       !Array.isArray(roles) ||
       !roles.every((role) => typeof role === 'string') ||

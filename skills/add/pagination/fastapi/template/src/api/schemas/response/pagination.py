@@ -1,4 +1,3 @@
-# src/api/schemas/response/pagination.py
 from api.schemas.base import BaseResponseSchema
 
 

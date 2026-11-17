@@ -27,8 +27,7 @@ export default tseslint.config(
       globals: {
         ...globals.node,
       },
-      // Source is ES-module syntax (tsc emits CJS). 'commonjs' + projectService under ESLint 10
-      // drops scope references for lib-global-named imports (e.g. `Body`) → false unused-import.
+      // Source is ES-module syntax; 'commonjs' + projectService on ESLint 10 flags lib-global imports like Body as unused.
       sourceType: 'module',
       parserOptions: {
         projectService: true,

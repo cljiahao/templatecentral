@@ -35,7 +35,7 @@ src/features/<feature-name>/
 ### 2. Create `types.ts`
 
 ```ts
-// Mirrors the projects table (id, name, description) used across templateCentral backends.
+// Mirrors the projects table used across templateCentral backends.
 export interface ProjectItem {
   id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface ProjectItem {
 Static data goes here, not in components:
 
 ```ts
-// Values use the API `sort` format (`asc_<field>` / `desc_<field>`).
+// Values use the API `sort` format: `asc_<field>` or `desc_<field>`.
 export const SORT_OPTIONS = [
   { value: 'asc_name', label: 'Name (A-Z)' },
   { value: 'desc_createdAt', label: 'Newest first' },
@@ -63,8 +63,7 @@ Client services for React Query hooks. Validate every response with Zod so types
 // schemas/project.schema.ts
 import { z } from 'zod';
 
-// One canonical project schema — templatecentral:add (pagination) extends this same file.
-// Extra row fields (createdAt, updatedAt) are stripped by z.object().
+// One canonical project schema; the pagination guide extends this file.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -84,7 +83,7 @@ import { APIError } from '@/integrations/error';
 import { projectItemSchema } from '../schemas';
 import type { ProjectItem } from '../types';
 
-// Route handlers wrap every success body as `{ data }` (see templatecentral:add (endpoint)).
+// Route handlers wrap every success body as `{ data }`.
 const envelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 
 // `message` is the fallback only when the error body is not JSON.
@@ -104,7 +103,7 @@ export const ProjectService = {
   },
 
   getById: async (id: string): Promise<ProjectItem> => {
-    // Encoding stops a crafted id from rewriting the path (`../admin`).
+    // Encoding stops a crafted id from rewriting the path, e.g. `../admin`.
     const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
     await assertOk(res, 'Project not found');
     return envelope(projectItemSchema).parse(await res.json()).data;
@@ -131,7 +130,7 @@ Export from barrel: `api/index.ts`
 When the feature has a form, add an input schema next to the response schema:
 
 ```ts
-// schemas/project.schema.ts (same file as the response schema)
+// schemas/project.schema.ts, the same file as the response schema
 import { z } from 'zod';
 
 export const createProjectSchema = z.object({
