@@ -604,10 +604,9 @@ cc_case py "short hash is not a SHA pin" "trailing comment" $'uses: a@abc123  # 
 cc_case py "single-quoted string holding the marker" - $'a = \'x # y\'\n'
 cc_case py "HS256 key id is not a ticket" - $'# HS-256 signs it\na = 1\n'
 cc_case py "PKCS-8 key format is not a ticket" - $'# PKCS-8 key\na = 1\n'
-big=$(awk 'BEGIN { for (i = 0; i < 20000; i++) print "a = 1  # note" }')
 for v in ts py; do
-  if [ "$v" = ts ]; then bx=${big//#/\/\/}; else bx=$big; fi
-  printf '%s\n' "$bx" > "$CC/big.$v"
+  if [ "$v" = ts ]; then bc='//'; else bc='#'; fi
+  awk -v c="$bc" 'BEGIN { for (i = 0; i < 20000; i++) print "a = 1  " c " note" }' > "$CC/big.$v"
   cap_out=$(cd "$CC" && bash "$KIT/post-edit-comment-check.$v.sh" --scan "big.$v" 2>&1)
   check "51 yes" "$(wc -l <<<"$cap_out" | tr -d ' ') $(ok_if grep -q 'and 19950 more findings' <<<"$cap_out")" "post-edit-comment-check.$v --scan caps findings at 50 plus a count" "$(tail -n 2 <<<"$cap_out")"
   run_hook "$KIT/post-edit-comment-check.$v.sh" "$CC" "{\"tool_input\":{\"file_path\":\"big.$v\"}}"
