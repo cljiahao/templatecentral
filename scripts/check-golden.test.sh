@@ -7,7 +7,7 @@ export TC_TEST=1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="${CHECK_GOLDEN:-$REPO_ROOT/scripts/check-golden.sh}"
 COMBO=fastapi-azure
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
 
 PASS=0

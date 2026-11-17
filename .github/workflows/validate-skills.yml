@@ -187,6 +187,16 @@ jobs:
         run: bash scripts/test-template-copy.sh
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
+      - name: Outcome measurement tests
+        run: bash scripts/measure-outcomes.test.sh
+      - name: Template outcome metrics (comments, suppressions, test band, CI gates)
+        run: bash scripts/measure-outcomes.sh
+      - name: Post-edit lint hook tests
+        run: bash scripts/post-edit-lint.test.sh
+      - name: Doc sync tests
+        run: bash scripts/check-doc-sync.test.sh
+      - name: Doc sync (README, EXAMPLES, AGENTS capability row)
+        run: bash scripts/check-doc-sync.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests

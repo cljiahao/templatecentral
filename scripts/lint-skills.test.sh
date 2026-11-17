@@ -15,7 +15,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
 JOBS="${JOBS:-4}"
 LINT="${LINT:-scripts/lint-skills.sh}"
@@ -1249,6 +1249,43 @@ passes security_seed_moved_into_the_nextjs_template_passes "Deps gate and deny-b
 fails security_seed_fails_when_a_tree_holds_a_different_file "Deps gate and deny-by-default authz seeds" seed_deleted_nest_with_tree "RolesGuard"
 fails security_seed_fails_when_the_tree_belongs_to_another_leaf "Deps gate and deny-by-default authz seeds" seed_moved_to_wrong_leaf "RolesGuard"
 fails security_seed_fails_when_the_definition_is_deleted "Deps gate and deny-by-default authz seeds" seed_deleted_require_roles "require_roles"
+
+# ── check_template_security_defaults ─────────────────────────────────────────────────────────
+H_SEC="Template security defaults present"
+sec_empty() { rm -rf "$S/scaffold/nestjs/template" "$S/scaffold/fastapi/template" "$S/scaffold/nextjs/template" "$S/scaffold/vite-react/template"; }
+sec_nest_jwt() { sed -i.bak "s/algorithms: \['HS256'\]/algorithms: ['none']/" "$S/add/auth/nestjs/template/src/modules/auth/jwt.strategy.ts"; }
+sec_nest_referrer() { sed -i.bak 's/referrerPolicy: {/referrerPolicyX: {/' "$S/scaffold/nestjs/template/src/config/setups/security.setup.ts"; }
+sec_nest_trust() { sed -i.bak 's/\.\.\.(trustProxy ? { trustProxy } : {}),//' "$S/scaffold/nestjs/template/src/main.ts"; }
+sec_nest_classvalidator() { sed -i.bak 's/"nestjs-zod"/"class-validator": "1.0.0", "nestjs-zod"/' "$S/scaffold/nestjs/template/package.json"; }
+sec_fastapi_mw() { sed -i.bak 's/add_middleware(SecurityHeadersMiddleware)/pass/' "$S/scaffold/fastapi/template/src/app.py"; }
+sec_fastapi_trust() { sed -i.bak 's/if not api_settings.TRUST_PROXY:/if False:/' "$S/scaffold/fastapi/template/src/app.py"; }
+sec_fastapi_deny() { sed -i.bak 's/b"DENY"/b"SAMEORIGIN"/' "$S/scaffold/fastapi/template/src/core/security_headers.py"; }
+sec_next_csp_dup() { sed -i.bak "s|^\( *\)// Content-Security-Policy and|\1{ key: 'Content-Security-Policy', value: 'x' },\n&|" "$S/scaffold/nextjs/template/next.config.ts"; }
+sec_next_origin() { sed -i.bak 's/process.env.TRUST_PROXY/process.env.OTHER/' "$S/scaffold/nextjs/template/src/lib/utils/request-origin.ts"; }
+sec_next_deny() { sed -i.bak "s/'DENY'/'ALLOWALL'/" "$S/scaffold/nextjs/template/src/lib/security/frame-protection.ts"; }
+sec_vite_exotic() { sed -i.bak 's/^blockExoticSubdeps: true/blockExoticSubdeps: false/' "$S/scaffold/vite-react/template/pnpm-workspace.yaml"; }
+sec_vite_envsh() { sed -i.bak 's/TC_X_FRAME_OPTIONS="DENY"/TC_X_FRAME_OPTIONS=""/' "$S/scaffold/vite-react/template/docker/15-frame-protection.envsh"; }
+sec_dockerfile() { sed -i.bak 's/ pnpm-workspace.yaml\* / /' "$S/scaffold/nextjs/template/Dockerfile"; }
+fails security_defaults_fails_on_empty_match "$H_SEC" sec_empty "file not found"
+fails security_defaults_nest_jwt_alg "$H_SEC" sec_nest_jwt "NestJS JWT algorithm whitelist"
+fails security_defaults_nest_referrer "$H_SEC" sec_nest_referrer "referrerPolicy"
+fails security_defaults_nest_trust_proxy "$H_SEC" sec_nest_trust "TRUST_PROXY reaches FastifyAdapter"
+fails security_defaults_nest_class_validator "$H_SEC" sec_nest_classvalidator "class-validator"
+fails security_defaults_fastapi_middleware "$H_SEC" sec_fastapi_mw "SecurityHeadersMiddleware registered"
+fails security_defaults_fastapi_trust_gate "$H_SEC" sec_fastapi_trust "gated by TRUST_PROXY"
+fails security_defaults_fastapi_deny "$H_SEC" sec_fastapi_deny "X-Frame-Options DENY"
+fails security_defaults_next_csp_second_source "$H_SEC" sec_next_csp_dup "must be the only source"
+fails security_defaults_next_origin_gate "$H_SEC" sec_next_origin "gated by TRUST_PROXY"
+fails security_defaults_next_deny "$H_SEC" sec_next_deny "X-Frame-Options DENY"
+fails security_defaults_vite_block_exotic "$H_SEC" sec_vite_exotic "blockExoticSubdeps"
+fails security_defaults_vite_envsh_deny "$H_SEC" sec_vite_envsh "X-Frame-Options DENY"
+sec_nest_fallback() { sed -i.bak "s/portal ?? \"'none'\"/portal ?? \"'self'\"/" "$S/scaffold/nestjs/template/src/config/setups/security.setup.ts"; }
+sec_nest_dockerfile_one() { perl -0pi -e 's/pnpm-workspace\.yaml\* //' "$S/scaffold/nestjs/template/Dockerfile"; }
+sec_nest_import() { printf "import { IsString } from 'class-validator';\n" >> "$S/scaffold/nestjs/template/src/main.ts"; }
+fails security_defaults_nest_frame_ancestors_fallback_only "$H_SEC" sec_nest_fallback "frame-ancestors 'none' fallback"
+fails security_defaults_nest_dockerfile_one_stage "$H_SEC" sec_nest_dockerfile_one "both stages"
+fails security_defaults_nest_class_validator_import "$H_SEC" sec_nest_import "imports class-validator"
+fails security_defaults_dockerfile_workspace "$H_SEC" sec_dockerfile "Dockerfile copies pnpm-workspace.yaml"
 
 # ── check_owasp_llm_sections_complete ────────────────────────────────────────────────────────
 passes owasp_sections_may_be_split_into_a_ref_file "OWASP LLM Top 10 v2.0 completeness" owasp_split_to_ref

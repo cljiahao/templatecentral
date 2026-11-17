@@ -5,7 +5,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTRACT="${EXTRACT_FENCES:-$REPO_ROOT/scripts/extract-fences.py}"
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
 
 PASS=0

@@ -86,7 +86,7 @@ check yes "$(entry_check "$j" migrate:general/implementation '"skills/migrate/ge
 check yes "$(entry_check "$j" migrate:nextjs-backend-extraction/nestjs '"skills/migrate/nextjs-backend-extraction/common.md" in f and not any(p.startswith("skills/add/") for p in list(f) + list(u))')" "migrate extraction follows common.md and no add leaf"
 check yes "$(entry_check "$j" migrate:portal-frame-ancestors '"skills/scaffold/nextjs/template/src/proxy.ts" in u')" "migrate follows concrete cat lines into the scaffold templates"
 # No shipped doc keeps a <stack> cat line, so a fixture tree holds one: <stack> must be skipped without @STACK and filled with it.
-FIX=$(mktemp -d)
+FIX=$(mktemp -d) || exit 1
 trap 'rm -rf "$FIX"' EXIT
 mkdir -p "$FIX/scripts" "$FIX/skills/migrate" "$FIX/skills/scaffold/fastapi"
 cp "$COUNT" "$FIX/scripts/count-load.sh"

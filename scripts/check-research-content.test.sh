@@ -3,7 +3,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 2
 GUARD=${GUARD:-scripts/check-research-content.py}   # override to run the suite against another guard version
-T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+T=$(mktemp -d) || exit 1; trap 'rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 
 # check <want-exit> <description> <file> [args...]: run the guard on <file>; exit-code range is >=2 for "2+".

@@ -1,6 +1,9 @@
 #!/bin/bash
-# PostToolUse feedback: runs the skill lint only when the edited file can affect it, and
-# returns failures as additionalContext (plain stdout on exit 0 never reaches Claude).
+# PostToolUse feedback: runs the skill lint only when the edited file can affect it. The lint reads
+# skills/, scripts/*.sh (the change-narration check scans them) and scripts/check-fences.py, so edits
+# to docs, manifests and other files skip it. lint-skills.sh has no path or check filter (a skills
+# subdirectory fails its root-relative checks), so a skills edit runs the whole lint (about half a
+# second). Failures return as additionalContext (plain stdout on exit 0 never reaches Claude).
 # Always exits 0 — feedback, not a gate; CI enforces.
 
 cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
@@ -9,7 +12,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 file=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null)
 file="${file#"$PWD"/}"
 case "$file" in
-  skills/*|scripts/*|.claude-plugin/*|.claude/harness.json|AGENTS.md|README.md|CHANGELOG.md) ;;
+  skills/*|scripts/*.sh|scripts/check-fences.py) ;;
   *) exit 0 ;;
 esac
 
