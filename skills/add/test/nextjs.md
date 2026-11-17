@@ -5,7 +5,7 @@
 
 Tests for Next.js API route handlers only — not frontend components.
 
-**Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope. Apply the test-value rule (`docs/CONSTITUTION.md` §4): test behaviour that can regress, one test per behaviour, parametrize siblings, extend an existing test before adding one.
+**Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope. Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 

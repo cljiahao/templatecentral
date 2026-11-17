@@ -3,7 +3,7 @@
      prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS
 
-**Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4): test behaviour that can regress, one test per behaviour, parametrize siblings, extend an existing test before adding one.
+**Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 

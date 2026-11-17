@@ -255,7 +255,7 @@ import { BaseModule, ExampleModule, TaskModule } from './modules';
 
 ### 9. Add Tests
 
-Apply the test-value rule (`docs/CONSTITUTION.md` §4): extend an existing spec when one covers the module. Otherwise create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
+Apply the test-value rule (`docs/CONSTITUTION.md` §4). Extend an existing spec when one covers the module, otherwise create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
 
 ```typescript
 import { beforeEach, describe, expect, it } from 'vitest';

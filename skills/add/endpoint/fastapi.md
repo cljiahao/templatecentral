@@ -123,7 +123,7 @@ router.include_router(my_thing.router, tags=[APITags.MY_TAG])
 
 ### 5. Add Tests
 
-Apply the test-value rule (`docs/CONSTITUTION.md` §4): one test per distinct behaviour, parametrize sibling inputs. Create `test/test_api/test_my_thing.py`:
+Apply the test-value rule (`docs/CONSTITUTION.md` §4). Create `test/test_api/test_my_thing.py`:
 
 ```python
 from fastapi.testclient import TestClient

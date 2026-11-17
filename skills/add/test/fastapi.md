@@ -3,7 +3,7 @@
      prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI
 
-**Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4): test behaviour that can regress, one test per behaviour, parametrize siblings, extend an existing test before adding one.
+**Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 

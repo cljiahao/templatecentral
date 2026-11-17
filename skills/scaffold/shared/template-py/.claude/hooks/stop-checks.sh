@@ -13,8 +13,13 @@ src_changed=""
 full=""
 tests=""
 while IFS= read -r f; do
-  case "$f" in *.py) [ -f "$f" ] || continue ;; *) continue ;; esac
+  [ -f "$f" ] || continue
   base=${f##*/}; stem=${base%.py}
+  # Config, lock and shared-fixture files can break every test: typecheck and run all of test/.
+  case "$base" in
+    pyproject.toml|uv.lock|requirements*.txt|pytest.ini|conftest.py) src_changed=1; full=1; continue ;;
+  esac
+  case "$f" in *.py) ;; *) continue ;; esac
   case "$f" in
     test/*|*/test/*|tests/*|*/tests/*)
       case "$stem" in
@@ -30,7 +35,7 @@ $f" ;;
       [ -n "$match" ] && tests="$tests
 $match"
       dotted=$(printf '%s' "${f%.py}" | sed 's|^src/||; s|/|.|g')
-      imp=$(grep -rlE --include='*.py' "^[[:space:]]*(from|import)[[:space:]].*([[:space:]]${dotted}([[:space:].,]|$)|[[:space:].]${stem}([[:space:],]|$))" test 2>/dev/null)
+      imp=$(grep -rlE --include='*.py' "^[[:space:]]*(from|import)[[:space:]]+(.*[[:space:].,])?(${dotted}|${stem})([[:space:].,]|$)" test 2>/dev/null)
       [ -n "$imp" ] && tests="$tests
 $imp" ;;
   esac

@@ -9,17 +9,27 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 # Working-tree code files (tracked diff plus untracked) present on disk.
 files=$( { git diff --name-only --relative --diff-filter=d HEAD; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
 set --
+any=""; cfg=""
 while IFS= read -r f; do
-  case "$f" in *.ts|*.tsx|*.mts|*.cts|*.js|*.jsx|*.mjs|*.cjs) [ -f "$f" ] && set -- "$@" "$f" ;; esac
+  [ -f "$f" ] || continue
+  case "${f##*/}" in
+    vitest.config.*|package.json|tsconfig*.json|pnpm-lock.yaml) any=1; cfg=1; continue ;;
+  esac
+  case "$f" in *.ts|*.tsx|*.mts|*.cts|*.js|*.jsx|*.mjs|*.cjs) any=1; set -- "$@" "$f" ;; esac
 done <<EOF2
 $files
 EOF2
-[ "$#" -gt 0 ] || exit 0
+[ -n "$any" ] || exit 0
 command -v pnpm >/dev/null 2>&1 || { echo "pnpm unavailable — skipping Stop gate" >&2; exit 0; }
 pnpm exec tsc --version >/dev/null 2>&1 || { echo "tsc unavailable — skipping Stop gate" >&2; exit 0; }
 OUTPUT=$(pnpm exec tsc --noEmit --incremental 2>&1); EC=$?
 if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 pnpm exec vitest --version >/dev/null 2>&1 || { echo "vitest unavailable — skipping Stop gate" >&2; exit 0; }
-OUTPUT=$(pnpm exec vitest related --run --passWithNoTests "$@" 2>&1); EC=$?
+# Config or lockfile changes can break every test: run the full suite, not just related files.
+if [ -n "$cfg" ]; then
+  OUTPUT=$(pnpm exec vitest --run --passWithNoTests 2>&1); EC=$?
+else
+  OUTPUT=$(pnpm exec vitest related --run --passWithNoTests "$@" 2>&1); EC=$?
+fi
 if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 exit 0

@@ -3,7 +3,7 @@
      prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React
 
-Apply the test-value rule (`docs/CONSTITUTION.md` §4): test behaviour that can regress, one test per behaviour, parametrize siblings, extend an existing test before adding one.
+Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 

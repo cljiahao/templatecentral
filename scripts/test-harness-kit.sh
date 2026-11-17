@@ -432,6 +432,8 @@ case "$*" in
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
   "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "exec vitest --version") [ -n "$MOCK_NO_VITEST" ] && exit 1; exit 0 ;;
+  "exec vitest --run --passWithNoTests") echo "vitest-full" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
   "exec vitest related --run --passWithNoTests"*) echo "related $*" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
 esac
 exit 0
@@ -444,7 +446,7 @@ case "$*" in
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
-  "-m pytest -q test/test_a.py"|"-m pytest -q test/test_b.py"|"-m pytest -q test") echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest -q"*) echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
 esac
 exit 0
 MOCK
@@ -524,52 +526,80 @@ echo 'export const a = 1' > "$PROJ/a.ts"
 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'related --run --passWithNoTests a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
 rm -f "$PROJ/a.ts"
-mkdir -p "$PROJ/src" "$PROJ/test"
+# Fixtures are committed first so that only the intended file counts as changed; each case asserts the
+# exact pytest argument list (grep -x), so over- and under-selection both fail.
+commit_all() { git -C "$PROJ" add -A; git -C "$PROJ" "${GIT_ID[@]}" commit -qm "$1"; }
+mk() { mkdir -p "$PROJ/src/a" "$PROJ/src/b" "$PROJ/test"; }
+reset_proj() { git -C "$PROJ" reset -q --hard; git -C "$PROJ" clean -fdq; mk; : > "$MOCK_LOG"; }
+py_runs() { # <expected pytest args> <name>
+  run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+  check "2 yes" "$EC $(ok_if grep -qxF "pytest -m pytest -q $1" "$MOCK_LOG")" "$2" "$(cat "$MOCK_LOG")"
+}
+mkdir -p "$PROJ/src/a" "$PROJ/src/b" "$PROJ/test"
 echo 'x = 1' > "$PROJ/src/a.py"
 echo 'def test_a(): pass' > "$PROJ/test/test_a.py"
-: > "$MOCK_LOG"
-run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'pytest -q test/test_a.py' "$MOCK_LOG")" "stop-checks.py runs the test file matching a changed module"
-rm -f "$PROJ/test/test_a.py"
-# Import match: test_b.py imports the changed module without sharing its name.
+commit_all py-name-fixture
+reset_proj
+echo 'x = 2' > "$PROJ/src/a.py"
+py_runs test/test_a.py "stop-checks.py runs exactly the test file named for the changed module"
+git -C "$PROJ" rm -q test/test_a.py
+mk
 echo 'from a import x' > "$PROJ/test/test_b.py"
-: > "$MOCK_LOG"
-run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'pytest -q test/test_b.py' "$MOCK_LOG")" "stop-checks.py runs a test that imports the changed module"
-# No match at all: a source change still runs all of test/.
+commit_all py-import-fixture
+reset_proj
+echo 'x = 3' > "$PROJ/src/a.py"
+py_runs test/test_b.py "stop-checks.py runs exactly the test that imports the changed module"
 echo 'def test_c(): pass' > "$PROJ/test/test_b.py"
-git -C "$PROJ" add test/test_b.py
-git -C "$PROJ" "${GIT_ID[@]}" commit -qm test-b
-: > "$MOCK_LOG"
-run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'pytest -q test$' "$MOCK_LOG")" "stop-checks.py falls back to all of test/ when nothing matches"
-rm -f "$PROJ/src/a.py"
-git -C "$PROJ" rm -qf test/test_b.py
-git -C "$PROJ" "${GIT_ID[@]}" commit -qm rm-test-b
-# Test-support-only change (conftest.py) runs all of test/.
-mkdir -p "$PROJ/test"
+commit_all py-nomatch-fixture
+reset_proj
+echo 'x = 4' > "$PROJ/src/a.py"
+py_runs test "stop-checks.py falls back to all of test/ when nothing names or imports the module"
 echo 'import pytest' > "$PROJ/test/conftest.py"
-: > "$MOCK_LOG"
-run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'pytest -q test$' "$MOCK_LOG")" "stop-checks.py runs all of test/ on a conftest-only change"
-rm -f "$PROJ/test/conftest.py"
+commit_all py-conftest-fixture
+reset_proj
+echo '# edit' >> "$PROJ/test/conftest.py"
+py_runs test "stop-checks.py runs all of test/ on a conftest-only change"
+echo '[project]' > "$PROJ/pyproject.toml"
+commit_all py-config-fixture
+reset_proj
+echo '# edit' >> "$PROJ/pyproject.toml"
+py_runs test "stop-checks.py runs all of test/ on a pyproject.toml change"
+echo 'x = 1' > "$PROJ/src/my mod.py"
+echo 'def test_m(): pass' > "$PROJ/test/test_my mod.py"
+echo 'x = 1' > "$PROJ/src/a/utils.py"
+echo 'x = 1' > "$PROJ/src/b/utils.py"
+echo 'def test_u(): pass' > "$PROJ/test/test_utils.py"
+commit_all py-space-nested-fixture
+reset_proj
+echo 'x = 2' > "$PROJ/src/my mod.py"
+py_runs "test/test_my mod.py" "stop-checks.py handles a file name with a space"
+reset_proj
+echo 'x = 2' > "$PROJ/src/a/utils.py"
+py_runs test/test_utils.py "stop-checks.py maps nested same-basename modules to the shared test file"
 # Deleted tracked file: nothing on disk to run, exit 0.
-echo 'x = 1' > "$PROJ/src/gone.py"
-git -C "$PROJ" add src/gone.py
-git -C "$PROJ" "${GIT_ID[@]}" commit -qm gone
-rm -f "$PROJ/src/gone.py"
-: > "$MOCK_LOG"
+reset_proj
+rm -f "$PROJ/src/b/utils.py"
 for v in ts py; do
   run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{}'
   check 0 "$EC" "stop-checks.$v deleted-file-only change exits 0"
 done
 check no "$(ok_if test -s "$MOCK_LOG")" "stop-checks deleted-file-only change runs no tool"
-git -C "$PROJ" rm -q --cached src/gone.py 2>/dev/null; git -C "$PROJ" "${GIT_ID[@]}" commit -qm rm-gone 2>/dev/null
-# tsc unavailable: skip with a message, never exit 2.
+reset_proj
+# TS: tsc and vitest availability guards skip with a message, never exit 2.
 echo 'export const a = 1' > "$PROJ/a.ts"
 MOCK_NO_TSC=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "0 yes" "$EC $(ok_if grep -q 'tsc unavailable' "$T/err")" "stop-checks.ts skips when tsc is unavailable"
+MOCK_NO_VITEST=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "0 yes" "$EC $(ok_if grep -q 'vitest unavailable' "$T/err")" "stop-checks.ts skips when vitest is unavailable"
 rm -f "$PROJ/a.ts"
+# TS: a config-only change typechecks and runs the full suite, not a related-only run.
+echo '{}' > "$PROJ/tsconfig.json"
+commit_all ts-config-fixture
+reset_proj
+echo '{"a":1}' > "$PROJ/tsconfig.json"
+run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -qx 'vitest-full' "$MOCK_LOG")" "stop-checks.ts runs the full suite on a tsconfig change"
+reset_proj
 rm -rf "$PROJ/src" "$PROJ/test" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
