@@ -91,7 +91,7 @@ def configure_security_headers(app: FastAPI) -> None:
 
 def configure_proxy_headers(app: FastAPI) -> None:
     """Trusts reverse-proxy headers when TRUST_PROXY is set."""
-    # uvicorn takes IPs/CIDRs, not a hop count: list every proxy hop or all clients resolve to the nearest proxy; * lets the client-supplied X-Forwarded-For win.
+    # TRUST_PROXY takes IPs/CIDRs, not a hop count: list every proxy hop and have an inner proxy keep the outer X-Forwarded-For, or all clients resolve to the nearest proxy; * lets a client-supplied X-Forwarded-For win.
     if not api_settings.TRUST_PROXY:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware

@@ -3,12 +3,16 @@
 # Scope: ts/js/py template sources and ts/js/py guide fences, plus .yml/.yaml template files.
 # Skipped: skills/scaffold/shared/template-ci/ (swept in a follow-up change).
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 TS=skills/scaffold/shared/template-ts/.claude/hooks/post-edit-comment-check.sh
 PY=skills/scaffold/shared/template-py/.claude/hooks/post-edit-comment-check.sh
 export COMMENT_HYGIENE_PATTERNS=skills/scaffold/shared/template/.claude/comment-hygiene-patterns.txt
 export COMMENT_HYGIENE_CAP=1000000
 SKIP_CI=skills/scaffold/shared/template-ci/
+die() { echo "check-template-comments: $*" >&2; exit 2; }
+for f in "$TS" "$PY" "$COMMENT_HYGIENE_PATTERNS"; do
+  [ -s "$f" ] || die "missing or empty input: $f"
+done
 work=$(mktemp -d) || exit 2
 trap 'rm -rf "$work"' EXIT
 
@@ -16,6 +20,9 @@ trap 'rm -rf "$work"' EXIT
   find skills/scaffold -path '*/template*/*' -type f
   find skills/add -path '*template*/*' -type f
 } | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|yml|yaml)$' | grep -v '/node_modules/' | grep -vF "$SKIP_CI" | sort -u >"$work/files"
+
+nfiles=$(wc -l <"$work/files" | tr -d ' ')
+[ "$nfiles" -gt 0 ] || die "no template files found to scan"
 
 python3 - "$work" <<'PYEOF'
 import os, re, sys
@@ -47,10 +54,16 @@ with open(os.path.join(work, "files"), "a") as lst, open(os.path.join(work, "fen
                     i += 1
 PYEOF
 
+[ -s "$work/fences.map" ] || die "no guide fences found to scan"
+nfences=$(wc -l <"$work/fences.map" | tr -d ' ')
+printf 'a = 1  # canary\n' >"$work/canary.py"; printf 'a = 1  // canary\n' >"$work/canary.ts"; printf 'a: 1  # canary\n' >"$work/canary.yml"
+bash "$TS" --scan "$work/canary.ts" 2>&1 | grep -q 'trailing comment' || die "ts scanner did not flag its canary"
+bash "$PY" --scan "$work/canary.py" "$work/canary.yml" 2>&1 | grep -c 'trailing comment' | grep -qx 2 || die "py/yaml scanner did not flag its canary"
+
 grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' "$work/files" | xargs bash "$TS" --scan >"$work/raw" 2>&1
 grep -E '\.(py|yml|yaml)$' "$work/files" | xargs bash "$PY" --scan >>"$work/raw" 2>&1
 
-python3 - "$work" <<'PYEOF'
+python3 - "$work" "$nfiles" "$nfences" <<'PYEOF'
 import os, sys
 work = sys.argv[1]
 fence = {}
@@ -64,6 +77,8 @@ if os.path.exists("scripts/check-template-comments.exempt"):
         if l.strip():
             exempt.add(l.split(" ", 1)[0])
 skipped = 0
+used = set()
+stale = 0
 for l in open(os.path.join(work, "raw"), encoding="utf-8", errors="replace"):
     l = l.rstrip("\n")
     path, sep, rest = l.partition(":")
@@ -72,17 +87,22 @@ for l in open(os.path.join(work, "raw"), encoding="utf-8", errors="replace"):
         src, off = fence[path]
         loc = "%s:%d" % (src, off + int(ln) - 1)
         if loc in exempt:
+            used.add(loc)
             skipped += 1
             continue
         print("%s: %s" % (loc, msg))
         counts["guide-fences"] += 1
         continue
     if "%s:%s" % (path, ln) in exempt:
+        used.add("%s:%s" % (path, ln))
         skipped += 1
         continue
     print(l)
     counts["add-templates" if path.startswith("skills/add") else "scaffold-templates"] += 1
-total = sum(counts.values())
+for e in sorted(exempt - used):
+    print("%s: stale exemption (no finding on that line): remove it from scripts/check-template-comments.exempt" % e)
+    stale += 1
+total = sum(counts.values()) + stale
 if skipped:
     print("check-template-comments: %d finding(s) exempt (see scripts/check-template-comments.exempt)" % skipped)
 for k, v in counts.items():
@@ -90,5 +110,5 @@ for k, v in counts.items():
 if total:
     print("check-template-comments: FAIL (%d finding(s))" % total)
     sys.exit(1)
-print("check-template-comments: ok")
+print("check-template-comments: ok (%s files, %s fences scanned)" % (sys.argv[2], sys.argv[3]))
 PYEOF

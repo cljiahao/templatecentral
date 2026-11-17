@@ -121,11 +121,27 @@ function scan_py(line, n,   i, L, c, d, q, has, text, rest, e, doc, t, delim) {
     has = 1; code_seen = 1; i++
   }
 }
+function scan_yaml(line, n,   i, L, c, q, has, prev, text, code, m) {
+  L = length(line); q = ""; has = 0; prev = ""; code = line
+  for (i = 1; i <= L; i++) {
+    c = substr(line, i, 1)
+    if (q != "") { if (q == "\"" && c == "\\") { i++; continue } if (c == q) q = ""; prev = c; continue }
+    if (c == " " || c == "\t") { prev = c; continue }
+    if (c == "#" && (prev == "" || prev == " " || prev == "\t")) {
+      text = trim(substr(line, i + 1)); code = substr(line, 1, i - 1)
+      if (has) trailing(n, code, text); else fullline(n, text)
+      break
+    }
+    if ((c == "\"" || c == SQ) && prev !~ /[A-Za-z0-9]/) q = c
+    has = 1; prev = c
+  }
+  if (code ~ /(^|[ \t:-])[|>][-+0-9]*[ \t]*$/) { in_bs = 1; match(line, /^[ \t]*(-[ \t]+)*/); bs_ind = RLENGTH }
+}
 BEGIN { SQ = sprintf("%c", 39) }
 {
   if (FNR == 1) {
     endrun(); if (in_blk) blkend()
-    in_tpl = 0; in_str3 = ""; code_seen = 0; curfile = FILENAME
+    in_tpl = 0; in_str3 = ""; code_seen = 0; curfile = FILENAME; isyaml = (curfile ~ /\.ya?ml$/); in_bs = 0
   }
   n = FNR; line = $0; sub(/\r$/, "", line); fl = 0
   if (n == 1 && line ~ /^#!/) next
@@ -145,7 +161,12 @@ BEGIN { SQ = sprintf("%c", 39) }
     }
     next
   }
-  if (lang == "ts") scan_ts(line, n); else scan_py(line, n)
+  if (isyaml && in_bs) {
+    match(line, /^[ \t]*/)
+    if (trim(line) == "" || RLENGTH > bs_ind) next
+    in_bs = 0
+  }
+  if (isyaml) scan_yaml(line, n); else if (lang == "ts") scan_ts(line, n); else scan_py(line, n)
   if (!fl) endrun()
 }
 END { endrun() }

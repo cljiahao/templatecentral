@@ -1,6 +1,6 @@
 import { type NextRequest } from 'next/server';
 
-// TRUST_PROXY is the trusted hop count; callers must validate the host against ALLOWED_HOSTS.
+// Unset TRUST_PROXY ignores X-Forwarded-*; set, it is the trusted hop count, and callers must check the host against ALLOWED_HOSTS to stop Host header injection.
 export function getAppOrigin(request: NextRequest): string {
   const trustProxy = process.env.TRUST_PROXY;
   const proto = (trustProxy

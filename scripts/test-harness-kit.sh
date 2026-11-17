@@ -613,6 +613,26 @@ for v in ts py; do
   check "0 yes" "$EC $(ok_if json_has "'more findings' in d['additionalContext']")" "post-edit-comment-check.$v hook output survives 20000 findings" "$(printf '%s' "$OUT" | tail -c 200)"
 done
 
+# cy_case <name> <needle|-> <content>: scan yaml content with the py hook
+cy_case() {
+  local out
+  printf '%s' "$3" > "$CC/case.yml"
+  out=$(cd "$CC" && bash "$KIT/post-edit-comment-check.py.sh" --scan "case.yml" 2>&1)
+  if [ "$2" = "-" ]; then
+    check "" "$out" "post-edit-comment-check yaml $1 stays silent" "$out"
+  else
+    check yes "$(ok_if grep -q -- "$2" <<<"$out")" "post-edit-comment-check yaml $1 flagged" "$out"
+  fi
+}
+cy_case "trailing comment" "trailing comment" $'key: value # note\n'
+cy_case "url fragment" - $'c: http://a.b/c#frag\n'
+cy_case "hash inside a quoted value" - $'c: "a # b"\n'
+cy_case "shell hash in a run block" - $'run: |\n  echo $# ${#x}\n  # not a yaml comment\nnext: 1\n'
+cy_case "text in a folded scalar" - $'d: >-\n  folded # text\n\n  more # text\n'
+cy_case "list item block scalar" - $'- run: |\n    echo "$#"\n  name: z\n'
+cy_case "comment after a block scalar ends" "trailing comment" $'run: |\n  echo hi\nnext: 1 # note\n'
+cy_case "sibling key after list-item scalar" "trailing comment" $'- run: |\n    echo hi\n  name: z # note\n'
+
 # check-template-comments.sh: run it against a minimal tree, clean then with one trailing comment planted
 GT="$T/gate"
 mkdir -p "$GT/scripts" "$GT/skills/add" "$GT/skills/scaffold/fastapi/template/src" "$GT/skills/scaffold/shared/template/.claude"
@@ -620,8 +640,9 @@ for v in ts py; do mkdir -p "$GT/skills/scaffold/shared/template-$v/.claude/hook
 cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$GT/skills/scaffold/shared/template/.claude/"
 cp "$REPO_ROOT/scripts/check-template-comments.sh" "$GT/scripts/"
 printf 'a = 1\n' > "$GT/skills/scaffold/fastapi/template/src/ok.py"
+printf '%s\n' 'text' '```py' 'a = 1' '```' > "$GT/skills/add/clean.md"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments passes a clean tree" "$gate_out"
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments passes a clean tree" "$gate_out"
 printf 'a = 1  # note\n' > "$GT/skills/scaffold/fastapi/template/src/bad.py"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'bad.py:1: trailing comment' <<<"$gate_out")" "check-template-comments fails on a trailing comment and names the file" "$gate_out"
@@ -631,17 +652,50 @@ gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'cfg.yml:1: trailing comment' <<<"$gate_out")" "check-template-comments scans yaml template files" "$gate_out"
 printf 'uses: a@0123456789abcdef0123456789abcdef01234567  # v4\n' > "$GT/skills/scaffold/fastapi/template/cfg.yml"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments allows a SHA-pin version annotation" "$gate_out"
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments allows a SHA-pin version annotation" "$gate_out"
 mkdir -p "$GT/skills/scaffold/shared/template-ci/github-ts"
 printf 'k: 1  # note\n' > "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments skips template-ci" "$gate_out"
-printf 'text\n```py\na = 1  # note\n```\n' > "$GT/skills/add/foo.md"
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments skips template-ci" "$gate_out"
+printf '%s\n' 'text' '```py' 'a = 1  # note' '```' > "$GT/skills/add/foo.md"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'skills/add/foo.md:3: trailing comment' <<<"$gate_out")" "check-template-comments maps a guide fence finding to its markdown line" "$gate_out"
 printf 'skills/add/foo.md:3 reason text\n' > "$GT/scripts/check-template-comments.exempt"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments honours a per-line exemption" "$gate_out"
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments honours a per-line exemption" "$gate_out"
+printf 'skills/add/foo.md:1 nothing is flagged here\n' >> "$GT/scripts/check-template-comments.exempt"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'foo.md:1: stale exemption' <<<"$gate_out")" "check-template-comments fails on a stale exemption" "$gate_out"
+rm "$GT/scripts/check-template-comments.exempt"
+gate_ok='ok \(.* files, .* fences scanned\)$'
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'foo.md:3: trailing comment' <<<"$gate_out")" "check-template-comments fails again once the exemption is gone" "$gate_out"
+rm "$GT/skills/add/foo.md" "$GT/skills/add/clean.md"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'no guide fences found' <<<"$gate_out")" "check-template-comments exits 2 when no fences are found" "$gate_out"
+printf '%s\n' 'text' '```py' 'a = 1' '```' > "$GT/skills/add/foo.md"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "0 yes" "$gate_ec $(ok_if grep -Eq "$gate_ok" <<<"$gate_out")" "check-template-comments prints scanned file and fence counts" "$gate_out"
+GPAT="$GT/skills/scaffold/shared/template/.claude/comment-hygiene-patterns.txt"
+cp "$GPAT" "$GT/pat.bak"; : > "$GPAT"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'missing or empty input' <<<"$gate_out")" "check-template-comments exits 2 on an empty patterns file" "$gate_out"
+rm "$GPAT"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'missing or empty input' <<<"$gate_out")" "check-template-comments exits 2 on a missing patterns file" "$gate_out"
+cp "$GT/pat.bak" "$GPAT"
+GHOOK="$GT/skills/scaffold/shared/template-py/.claude/hooks/post-edit-comment-check.sh"
+cp "$GHOOK" "$GT/hook.bak"; rm "$GHOOK"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'missing or empty input' <<<"$gate_out")" "check-template-comments exits 2 on a missing hook script" "$gate_out"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$GHOOK"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'did not flag its canary' <<<"$gate_out")" "check-template-comments exits 2 when a hook flags nothing" "$gate_out"
+cp "$GT/hook.bak" "$GHOOK"
+mv "$GT/skills/scaffold/fastapi/template" "$GT/tpl.bak"; mv "$GT/skills/add" "$GT/add.bak"; mkdir "$GT/skills/add"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "2 yes" "$gate_ec $(ok_if grep -q 'no template files found' <<<"$gate_out")" "check-template-comments exits 2 when no template files are found" "$gate_out"
+rmdir "$GT/skills/add"; mv "$GT/add.bak" "$GT/skills/add"; mv "$GT/tpl.bak" "$GT/skills/scaffold/fastapi/template"
 
 # ── session-context.sh ────────────────────────────────────────────────────────
 
