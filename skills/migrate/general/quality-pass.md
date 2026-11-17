@@ -8,7 +8,7 @@ This pass changes user code, tests and config. It adds no suppression and no exc
 
 **Scratch.** The pass's scratch directory is a new directory in the session scratch area, outside the project. Batch lists, file copies, reports and coverage XML live there.
 
-**Preconditions.** Run `quality-baseline.sh <project-dir> --full --label before --keep-coverage <scratch>/cov-before` first. Continue only when lint, typecheck and tests passed and `git status` is clean (the migration changes are committed by the user, or on the user's explicit instruction). There is no dirty-tree option: say which condition fails and stop. The pass's own changes stay uncommitted so the user can review them.
+**Preconditions.** Run `<skill-dir>/general/quality-baseline.sh <project-dir> --full --label before --keep-coverage <scratch>/cov-before` first. Write its table to `docs/quality-baseline.md` as the `before` column (create the file; it stays under 60 lines). Continue only when lint, typecheck and tests passed and `git status` is clean (the migration changes are committed by the user, or on the user's explicit instruction). There is no dirty-tree option: say which condition fails and stop. The pass's own changes stay uncommitted so the user can review them.
 
 **Safety.** Before each batch, write the list of files it will create or modify to the scratch directory, and copy the modified ones there. On failure restore those copies and delete the listed created files. Never use `git restore`, `git checkout`, `git stash` or `git clean` on the user's work. Run no project script without the user's consent.
 
@@ -33,4 +33,4 @@ Work one directory per batch. Per stage: apply the confirmed batch, run lint, ty
 4. **Comments.** Apply the comment rules loaded with this file, leaving an ADR id where an ADR explains the code.
 5. **Exclusions.** Remove coverage, lint and Sonar exclusions that exist only to pass a gate (confirm the list first); keep one only for generated or third-party code, with the reason beside it. Never lower an existing coverage threshold.
 
-Finish by running `quality-baseline.sh <project-dir> --full --label after`, adding its column to `docs/quality-baseline.md`, and printing the before/after table with the backlog.
+Finish by running `<skill-dir>/general/quality-baseline.sh <project-dir> --full --label after`, adding its column to `docs/quality-baseline.md`, and printing the before/after table with the backlog.

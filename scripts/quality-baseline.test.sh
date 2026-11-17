@@ -205,5 +205,16 @@ bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/p/cov" >/dev/null 2>&1; check "
 bash "$SCRIPT" "$T/p" --static --keep-coverage "$T/keep/x" >/dev/null 2>&1; check "keep without --full exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/missing/x" >/dev/null 2>&1; check "keep with missing parent exits 2" 2 $?
 check "nothing created inside the project" no "$([ -e "$T/p/cov" ] && echo yes || echo no)"
+ln -s "$T/p" "$T/lnk"
+bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk" >/dev/null 2>&1; check "keep symlink to the project exits 2" 2 $?
+bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk/cov" >/dev/null 2>&1; check "keep under a symlink into the project exits 2" 2 $?
+if [ -d "$T/P" ]; then
+  bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/P/cov" >/dev/null 2>&1; check "keep with a case-variant project path exits 2" 2 $?
+  bash "$SCRIPT" "$T/P" --full --keep-coverage "$T/p/cov" >/dev/null 2>&1; check "case-variant project with keep inside exits 2" 2 $?
+else echo "skip case-variant keep-coverage tests: the filesystem is case-sensitive"; fi
+mkdir -p "$T/keep2"; echo victim >"$T/victim"; ln -s "$T/victim" "$T/keep2/cobertura.xml"
+outl=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/keep2")
+contains "a symlinked cobertura.xml is not written through" "is a symlink" "$(value 'coverage xml kept' "$outl")"
+check "the symlink target is untouched" victim "$(cat "$T/victim")"
 
 exit $fail

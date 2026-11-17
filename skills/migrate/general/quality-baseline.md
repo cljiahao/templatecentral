@@ -15,7 +15,7 @@ bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --full --label afte
 
 From the drift-check skill the path is `<skill-dir>/../migrate/general/quality-baseline.sh`. Run it once per package of a monorepo; for FastAPI activate the project's virtualenv first.
 
-- `--static` counts files and lines. It runs no project code and no tool, uses no network and installs nothing. Use it before any approval and in drift-check. Neither mode intentionally writes to the project; the last row reports any write.
+- `--static` counts files and lines. It runs no project script, test or hook and no tool, uses no network and installs nothing. Use it before any approval and in drift-check. Git reads the tree and may run filters that the user's git config defines. Neither mode intentionally writes to the project; the last row reports any write.
 - `--full` runs the project's lint, typecheck and tests (project code executes) and installs the pinned tools named in the script header into its own scratch directory (network). Run it only after the user's yes to the quality pass or to drift-check Step 5. Each tool is limited to 10 minutes. `--keep-coverage <dir>` also copies the Cobertura XML to `<dir>/cobertura.xml`; the directory must be outside the project and its parent must exist.
 
 Exit 2 is a usage error. The last row says `unchanged`, `unchanged in git; the run wrote ignored files: …` (logs or caches the project's own tests wrote; report them), or `CHANGED (…)`; on `CHANGED` stop and show the files it names.
@@ -29,4 +29,4 @@ Exit 2 is a usage error. The last row says `unchanged`, `unchanged in git; the r
 
 ## Record
 
-Note what later steps adapt to and never replace: test sharding, a coverage threshold above 80% (keep it), an existing Sonar or quality pipeline (read its config; call no remote service), workspace layout, another git-hook manager. `docs/quality-baseline.md` stays under 60 lines.
+Note what later steps adapt to and never replace: test sharding, a coverage threshold above 80% (keep it), an existing Sonar or quality pipeline (read its config; call no remote service), workspace layout, another git-hook manager. `docs/quality-baseline.md` stays under 60 lines. The first baseline run after the user's consent creates it with the `before` column; the final run of the quality pass adds `after`. Drift-check compares against its latest column.

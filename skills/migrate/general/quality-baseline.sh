@@ -40,9 +40,25 @@ case "$LABEL" in before|after) ;; *) usage ;; esac
 P=$(cd "$PROJECT" && pwd -P) || usage
 if [ -n "$KEEP" ]; then
   [ "$MODE" = full ] || usage
-  KEEPDIR=$(cd "$(dirname "$KEEP")" 2>/dev/null && pwd -P) || usage
-  KEEP="$KEEPDIR/$(basename "$KEEP")"
-  case "$KEEP/" in "$P"/*) echo "--keep-coverage must name a directory outside the project" >&2; exit 2 ;; esac
+  KEEPPARENT=$(cd "$(dirname "$KEEP")" 2>/dev/null && pwd -P) || usage
+  KEEP="$KEEPPARENT/$(basename "$KEEP")"
+  # Refuse a target that resolves to the project or inside it. Resolved paths cover symlinks; -ef covers a
+  # case-variant spelling of the project path on a case-insensitive filesystem.
+  inside_project() {
+    local d=$1
+    while :; do
+      [ "$d" = "$P" ] && return 0
+      [ -e "$d" ] && [ "$d" -ef "$P" ] && return 0
+      [ "$d" = / ] && return 1
+      d=$(dirname "$d")
+    done
+  }
+  if [ -L "$KEEP" ] || [ -e "$KEEP" ] && [ ! -d "$KEEP" ]; then echo "--keep-coverage: $KEEP must be a directory" >&2; exit 2; fi
+  if [ -d "$KEEP" ]; then
+    KEEP=$(cd "$KEEP" && pwd -P)
+    if inside_project "$KEEP"; then echo "--keep-coverage must name a directory outside the project" >&2; exit 2; fi
+  elif inside_project "$KEEPPARENT"; then echo "--keep-coverage must name a directory outside the project" >&2; exit 2
+  fi
 fi
 
 # Read-only git: no optional lock files, no fsmonitor daemon.
@@ -398,7 +414,9 @@ KEPT=
 if [ -n "$KEEP" ] && [ "$MODE" = full ]; then
   KEPT="n/a (no coverage report)"
   for x in "$S/cov/cobertura-coverage.xml" "$S/coverage.xml"; do
-    [ -f "$x" ] && mkdir -p "$KEEP" && cp "$x" "$KEEP/cobertura.xml" && { KEPT="$KEEP/cobertura.xml"; break; }
+    [ -f "$x" ] || continue
+    if [ -L "$KEEP/cobertura.xml" ]; then KEPT="n/a ($KEEP/cobertura.xml is a symlink)"; break; fi
+    mkdir -p "$KEEP" && cp "$x" "$KEEP/cobertura.xml" && { KEPT="$KEEP/cobertura.xml"; break; }
   done
 fi
 

@@ -15,6 +15,7 @@ cat "<skill-dir>/general/quality-baseline.md"
 
 **Quality pass** (only after its own question, see "Quality pass (opt-in)" below; the test and comment rules load with it):
 ```bash
+cat "<skill-dir>/general/quality-baseline.md"
 cat "<skill-dir>/general/quality-pass.md"
 cat "<skill-dir>/../test/implementation.md"
 cat "<skill-dir>/../standards/code-standards/comments.md"
@@ -113,7 +114,7 @@ User B → print "No changes made." Exit.
 ℹ️ This project was scaffolded with templateCentral <version>.
 
 v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (typecheck + related tests), SessionStart (re-injects AGENTS.md after compaction)
+- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
 - AGENTS.md              — ## AI Harness section with post-harness seams
 
 Upgrade? (A) Yes  (B) Skip
@@ -143,7 +144,7 @@ Please run this skill from a project directory, not a parent folder." Exit.
 
 If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
 
-**Static baseline.** Once the stack and the project directory are resolved, and before the Phase 2 gate, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as plain information. It runs no project code and no tool, uses no network, installs nothing, and does not intentionally write; its last row reports any write. It is not part of the gate message and asks nothing. Routes that skip Phase 1 (a marker is present, Phase 0) run no baseline.
+**Static baseline.** Once the stack and the project directory are resolved, and before the Phase 2 gate, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as plain information. It runs no project script, test or hook and no tool, uses no network and installs nothing. Git reads the tree and may run filters that the user's git config defines. The script does not intentionally write; its last row reports any write. It is not part of the gate message and asks nothing. Routes that skip Phase 1 (a marker is present, Phase 0) run no baseline.
 
 ---
 

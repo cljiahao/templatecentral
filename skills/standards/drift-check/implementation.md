@@ -4,7 +4,7 @@
 
 # Drift Check
 
-Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, measure code quality, and optionally run dependency and security checks. Read-only except for run artefacts the measurements leave (deleted afterwards) and the scratch directory they use.
+Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, and optionally run dependency and security checks.
 
 ## Step 1 — Confirm a templateCentral project
 
@@ -14,7 +14,7 @@ Line 1 of the project's `AGENTS.md` must be the harness marker:
 <!-- templateCentral: <stack>@<schema-version> -->
 ```
 
-e.g. `<!-- templateCentral: nextjs@6.0.0 -->`. `@X.Y.Z` is the harness schema version, not the install version, so it is expected to stay put across plugin releases. Never compare it to the plugin semver; it only identifies `<stack>`.
+e.g. `<!-- templateCentral: nextjs@6.0.0 -->`. `@X.Y.Z` is the harness *schema floor*, not the install version — never compare it to the plugin semver; it only identifies `<stack>`.
 
 No marker → not a templateCentral project. Exit silently.
 
@@ -27,26 +27,36 @@ No marker → not a templateCentral project. Exit silently.
 
 > "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
 
-Skip Steps 3–4. Continue at Step 5 only if the request asked for a quality check; otherwise exit.
+Then exit.
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. Go to Step 5 if the request asked for a quality check, and to Step 6 if `AGENTS.md` contains `<!-- templateCentral-check-deps -->`; otherwise exit silently.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
 
 Read `<skill-dir>/../../CHANGELOG.md`. Extract every entry newer than the project version that touches the detected stack, the shared harness, or skills the project uses. Also compare the project's pinned versions against the `Stack:` line in `<skill-dir>/../../.claude/rules/<stack>.md`.
 
-Report the project and plugin versions, then the changelog lines since the install (grouped by version, stack-relevant only; never invent entries), then each stack floor the project does not meet (package, project value, floor). Convention updates are manual: say so.
+Report in this shape (content comes from the changelog — never invent entries):
 
-## Step 5 — Quality (opt-in)
+```
+templateCentral convention drift detected
 
-Ask first and state the cost: the run executes the project's tests with coverage plus lint, typecheck, complexity and duplication (up to 10 minutes per tool). Skip this step when the user declines.
+Project install version: <project version>
+Current plugin version:  <plugin version>
 
-On yes, load `cat "<skill-dir>/../migrate/general/quality-baseline.md"` and run its script with `--full`, only because the user said yes above; the script does not intentionally write to the project and its last row reports any write. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else the baseline values) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
+Changes since your install (<stack>-relevant):
+### <version>
+- <changelog line>
 
-## Step 6 — Dependency drift (optional)
+Stack floors not met:
+- <package>: project <x>, floor <y>
+
+Convention updates are manual — review the above and apply what is relevant.
+```
+
+## Step 5 — Dependency drift (optional)
 
 Ask:
 
@@ -54,7 +64,7 @@ Ask:
 
 If the user accepts, or the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, dispatch the review utility's `update` operation (`cat "<skill-dir>/../review/SKILL.md"`). The marker skips the question and runs this step even when Step 3 found no convention drift.
 
-## Step 7 — Security audit (optional)
+## Step 6 — Security audit (optional)
 
 Ask:
 
@@ -66,3 +76,9 @@ If accepted:
 - **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped". Review `.claude/dep-audit-allow.txt` the same way.
 
 Zero findings → "No known vulnerabilities found." Otherwise list package, severity, advisory ID, and whether a fixed version exists, and recommend the review utility's `update` operation. Never auto-upgrade.
+
+## Step 7 — Quality (optional)
+
+Run only when the request asked for a quality check, or after Step 6. Ask first and state the cost: the run executes the project's tests with coverage plus lint, typecheck, complexity and duplication (up to 10 minutes per tool). Skip this step when the user declines.
+
+On yes, load `cat "<skill-dir>/../migrate/general/quality-baseline.md"` and run its script with `--full`, only because the user said yes above. No project script, test hook or git hook is run by the script itself; its last row reports any write to the project. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else `before`) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
