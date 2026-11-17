@@ -1,6 +1,6 @@
 import { LoginCard } from '@/features/auth';
 
-// The (public) layout renders <main>; CardTitle is a div, so the h1 comes from here.
+// The layout renders <main> and CardTitle is a div, so the h1 comes from here.
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-6">

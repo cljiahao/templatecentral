@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates shared by GitHub Actions and Azure Pipelines.
-# Usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]
-# An empty base-branch scans full history (secrets) or skips the PR-only gates; deps takes no base branch.
-# LABELS: space-separated PR labels; skip-changelog / skip-readme-check / skip-comment-check bypass a gate.
-# deps has no label bypass: only .claude/dep-audit-allow.txt, whose entries expire, suppresses an advisory.
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -25,14 +21,16 @@ pr_only() {
 
 case "$gate" in
   secrets)
-    GITLEAKS_VERSION="8.30.1"   # bump VERSION and SHA256 together, from the release's gitleaks_<version>_checksums.txt
-    GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"   # gitleaks_<version>_linux_x64.tar.gz
+    # Bump version and SHA256 together, from the release's gitleaks_<version>_checksums.txt
+    GITLEAKS_VERSION="8.30.1"
+    GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
     if ! command -v gitleaks >/dev/null 2>&1; then
       tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gitleaks.XXXXXX")
       curl -fsSL -o "$tmp/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" || fail "gitleaks download failed"
       echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum -c - || fail "gitleaks checksum mismatch"
       tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks || fail "gitleaks install failed"
-      PATH="$tmp:$PATH"   # no sudo: works on hosted and self-hosted Linux x64 agents
+      # No sudo: works on hosted and self-hosted Linux x64 agents
+      PATH="$tmp:$PATH"
     fi
     if [ -n "$branch" ]; then
       gitleaks git --redact --no-banner --log-opts="$base..HEAD" || fail "gitleaks found secrets in this PR's commits"
@@ -97,16 +95,16 @@ case "$gate" in
     fi
     ;;
   deps)
-    PIP_AUDIT_VERSION="2.10.1"   # pip-audit release run through pipx; bump deliberately, it decides what fails the build
-    MAX_EXPIRY_DAYS=180          # an allowlist entry may not silence an advisory for longer than this
+    # pip-audit release run through pipx; bump deliberately, it decides what fails the build
+    PIP_AUDIT_VERSION="2.10.1"
+    # An allowlist entry may not silence an advisory for longer than this many days
+    MAX_EXPIRY_DAYS=180
     allow=".claude/dep-audit-allow.txt"
     tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/deps.XXXXXX")
-    trap 'rm -rf "$tmp"' EXIT   # fail() exits, so this also covers every failure path
+    # fail() exits, so the trap covers every failure path
+    trap 'rm -rf "$tmp"' EXIT
     need() { command -v "$1" >/dev/null 2>&1 || fail "$1 not found — install it before the deps gate"; }
-    # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected outright.
-    # package.json is parsed (any JSON layout, a parse failure fails closed); the YAML files and .npmrc are
-    # matched by text. Not detected: the YAML complex-key form (`? audit`), which pnpm does not document.
-    # pnpm also reads package.json5 and package.yaml; they are not parsed here, so they fail closed.
+    # pnpm's own suppression settings would bypass the expiring allowlist, so they are rejected; unparsed formats fail closed.
     for f in package.json5 package.yaml; do
       [ ! -f "$f" ] || fail "unsupported pnpm manifest format: $f — use package.json"
     done
@@ -125,7 +123,8 @@ case "$gate" in
       [ "$rc" -ne 2 ] || fail "package.json is not valid JSON — the deps gate cannot check it for advisory suppressions"
       [ "$rc" -eq 0 ] || fail "advisory suppressions belong in $allow, not package.json"
     fi
-    q="[\"']"   # an optionally quoted key: audit, "audit" or 'audit'
+    # An optionally quoted key: audit, "audit" or 'audit'
+    q="[\"']"
     for f in pnpm-workspace.yaml .npmrc; do
       [ -f "$f" ] || continue
       # Flow style (audit: { ignore: [...] }) and block style are both caught; any `ignore` under an audit key fails closed.
@@ -166,7 +165,8 @@ case "$gate" in
         printf '%s\n' "$id" | tr '[:lower:]' '[:upper:]' >> "$tmp/allowed"
       done < "$allow"
     fi
-    : > "$tmp/found"   # one line per finding: <package>|<severity>|<ids>, or !<package>: not audited (...)
+    # One line per finding: <package>|<severity>|<ids>, or !<package>: not audited
+    : > "$tmp/found"
     cat > "$tmp/pa.py" <<'PY'
 import json, re, sys
 try:
@@ -203,7 +203,8 @@ PY
     if [ -f pnpm-lock.yaml ]; then
       audited=1
       need pnpm
-      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"   # exits non-zero when it finds anything: the report decides
+      # Exits non-zero when it finds anything; the report decides
+      pnpm audit --json --prod > "$tmp/report.json" 2> "$tmp/err.txt"
       node - "$tmp/report.json" >> "$tmp/found" <<'JS'
 const fs = require("fs");
 let report;

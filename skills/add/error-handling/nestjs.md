@@ -93,8 +93,7 @@ Non-`HttpException` errors bypass this filter and get Nest's default `{ statusCo
 Throw Nest's built-in exceptions (`NotFoundException`, `ConflictException`, …) from services — the filter maps each status to its fixed client message, so the exception text is for logs only. A domain exception is only worth a class when several services share it:
 
 ```ts
-// src/common/exceptions/app-not-found.exception.ts
-// Domain prefix avoids shadowing the built-in NotFoundException.
+// src/common/exceptions/app-not-found.exception.ts: the domain prefix avoids shadowing NotFoundException
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class AppNotFoundException extends HttpException {

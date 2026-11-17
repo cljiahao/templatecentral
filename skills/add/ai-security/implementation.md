@@ -73,7 +73,7 @@ def validate_user_prompt(text: str) -> None:
 Never allow PII or credentials to enter LLM context. Strip before sending.
 
 ```ts
-// Specific patterns run before broad ones; set NATIONAL-ID to your locale format.
+// Order matters: bare-digit NATIONAL-ID would eat card and phone numbers first; set it to your locale format.
 const PII_PATTERNS: Array<[RegExp, string]> = [
   [/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.\w{2,}\b/g, '[EMAIL]'],
   [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
@@ -129,6 +129,7 @@ async function ingestDocument(content: string, source: string, expectedHash?: st
   if (expectedHash && hash !== expectedHash) {
     throw new Error('Document hash mismatch — possible content tampering');
   }
+  // Regex-stripping HTML is not a control, being bypassable; rendering safety is LLM05's job.
   await embedAndStore(content, { source, sha256: hash });
 }
 ```
@@ -173,7 +174,7 @@ return <div dangerouslySetInnerHTML={{ __html: llmOutput }} />;
 import DOMPurify from 'dompurify';
 return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(llmOutput) }} />;
 
-// ✅ Or use a markdown renderer with sanitisation (e.g. react-markdown with rehype-sanitize)
+// ✅ Or use a markdown renderer with sanitisation, e.g. react-markdown with rehype-sanitize
 ```
 
 **Structured output** — use schema validation on model responses:

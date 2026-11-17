@@ -30,7 +30,7 @@ The FastAPI and NestJS pagination endpoints return `{ data: { items, pagination:
 // src/features/project/schemas/project.schema.ts
 import { z } from 'zod';
 
-// Canonical project schema (same as add (feature)); nullish because backends may emit null.
+// Canonical project schema, shared with the feature guide; nullish because backends may emit null.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),

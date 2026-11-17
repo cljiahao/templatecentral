@@ -525,6 +525,66 @@ for v in ts py; do
   check "0:" "$EC:$OUT" "post-edit-comment-check.$v silent on a WHY comment"
 done
 
+# cc_case <ts|py> <name> <needle|-> <content>: scan <content>; "-" expects no finding, else the finding text
+cc_case() {
+  local v=$1 name=$2 needle=$3 out
+  printf '%s' "$4" > "$CC/case.$v"
+  out=$(cd "$CC" && bash "$KIT/post-edit-comment-check.$v.sh" --scan "case.$v" 2>&1)
+  if [ "$needle" = "-" ]; then
+    check "" "$out" "post-edit-comment-check.$v $name stays silent" "$out"
+  else
+    check yes "$(ok_if grep -q -- "$needle" <<<"$out")" "post-edit-comment-check.$v $name flagged" "$out"
+  fi
+}
+for v in ts py; do
+  if [ "$v" = ts ]; then C='//'; X='const a = 1'; else C='#'; X='a = 1'; fi
+  cc_case $v "trailing comment" "trailing comment" "$X $C note"$'\n'
+  cc_case $v "string holding the comment marker" - "s = \"a $C b\""$'\n'
+  cc_case $v "url in a string" - "u = \"https://x.test/a\""$'\n'
+  cc_case $v "block of two lines" "comment block of 2" "$C one"$'\n'"$C two"$'\n'"$X"$'\n'
+  cc_case $v "four-line header at line 1" "comment block of 4" "$C a"$'\n'"$C b"$'\n'"$C c"$'\n'"$C d"$'\n'"$X"$'\n'
+  cc_case $v "real licence header" - "$C Copyright 2026 Acme"$'\n'"$C Licensed under the MIT licence"$'\n'"$X"$'\n'
+  cc_case $v "the word license in a block" "comment block of 2" "$C the license check"$'\n'"$C runs first"$'\n'"$X"$'\n'
+  cc_case $v "parenthetical aside" "parenthetical" "$C retries (twice) on reset"$'\n'"$X"$'\n'
+  cc_case $v "one-word parenthetical" "parenthetical" "$C retries (twice)"$'\n'"$X"$'\n'
+  cc_case $v "commented-out call" - "$C fn(a, b)"$'\n'"$X"$'\n'
+  cc_case $v "ADR cited by id" - "$C ADR-0007"$'\n'"$X"$'\n'
+  cc_case $v "ADR restated" "ADR restated" "$C ADR-0007 chose argon2"$'\n'"$X"$'\n'
+  cc_case $v "UTF-8 is not a ticket" - "$C UTF-8 only"$'\n'"$X"$'\n'
+  cc_case $v "SHA-256 is not a ticket" - "$C SHA-256 digest"$'\n'"$X"$'\n'
+  cc_case $v "AES-256 is not a ticket" - "$C AES-256 key"$'\n'"$X"$'\n'
+  cc_case $v "ticket reference" "narration or reference" "$C PROJ-12 fix"$'\n'"$X"$'\n'
+done
+cc_case ts "eslint directive" - $'// eslint-disable-next-line no-console -- reason\nconsole.log(1)\n'
+cc_case ts "trailing ts directive" - $'foo() // @ts-expect-error reason\n'
+cc_case ts "shebang" - $'#!/usr/bin/env node\nconst a = 1\n'
+cc_case ts "triple-slash reference" - $'/// <reference types="vite/client" />\nconst a = 1\n'
+cc_case ts "private field named like narration" - $'class A { #was = 2 }\n'
+cc_case ts "multi-line JSDoc" "block/JSDoc comment of 2" $'/**\n * Summary\n * more detail\n */\nexport const a = 1\n'
+cc_case ts "one-line JSDoc" - $'/** Summary */\nexport const a = 1\n'
+cc_case ts "aside in a JSDoc body" "parenthetical" $'/** Returns x (never null) */\nexport const a = 1\n'
+cc_case py "noqa directive" - $'a = 1  # noqa: S104\n'
+cc_case py "type directive" - $'a = 1  # type: ignore[assignment]\n'
+cc_case py "shebang" - $'#!/usr/bin/env python3\na = 1\n'
+cc_case py "narration-looking hash text" "narration or reference" $'#was = 2\na = 1\n'
+cc_case py "multi-line docstring" "docstring of 2" $'def f():\n    """Summary.\n\n    More detail.\n    """\n'
+cc_case py "one-line docstring" - $'def f():\n    """Summary."""\n'
+cc_case py "aside in a docstring body" "parenthetical" $'def f():\n    """Returns x (never None)."""\n'
+cc_case py "hash inside a multi-line string" - $'q = """\nselect 1 # not a comment\n"""\n'
+
+# check-template-comments.sh: run it against a minimal tree, clean then with one trailing comment planted
+GT="$T/gate"
+mkdir -p "$GT/scripts" "$GT/skills/add" "$GT/skills/scaffold/fastapi/template/src" "$GT/skills/scaffold/shared/template/.claude"
+for v in ts py; do mkdir -p "$GT/skills/scaffold/shared/template-$v/.claude/hooks"; cp "$TPL/template-$v/.claude/hooks/post-edit-comment-check.sh" "$GT/skills/scaffold/shared/template-$v/.claude/hooks/"; done
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$GT/skills/scaffold/shared/template/.claude/"
+cp "$REPO_ROOT/scripts/check-template-comments.sh" "$GT/scripts/"
+printf 'a = 1\n' > "$GT/skills/scaffold/fastapi/template/src/ok.py"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments passes a clean tree" "$gate_out"
+printf 'a = 1  # note\n' > "$GT/skills/scaffold/fastapi/template/src/bad.py"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'bad.py:1: trailing comment' <<<"$gate_out")" "check-template-comments fails on a trailing comment and names the file" "$gate_out"
+
 # ── session-context.sh ────────────────────────────────────────────────────────
 
 printf '# Project AGENTS\nrouting line\n' > "$CC/AGENTS.md"

@@ -105,7 +105,7 @@ async function route(req: NextRequest): Promise<Response> {
     return NextResponse.next();
   }
 
-  // Optimistic cookie-presence check only; the authoritative check runs in the protected layout (step 8).
+  // Optimistic cookie-presence check only; the authoritative check runs in the protected layout.
   const hasSession = getSessionCookie(req) != null;
 
   // Handle /login: redirect users who appear signed in to the dashboard, allow others through
@@ -116,7 +116,7 @@ async function route(req: NextRequest): Promise<Response> {
     return NextResponse.next();
   }
 
-  // Protected routes: require a session cookie (authoritative validation happens in the layout)
+  // Protected routes require a session cookie; the layout validates it authoritatively
   if (!hasSession) {
     if (isApiRoute(pathname)) {
       return new Response(null, { status: 401 });
@@ -127,7 +127,7 @@ async function route(req: NextRequest): Promise<Response> {
   return NextResponse.next();
 }
 
-// Never use a single-entry `i18n.locales`: under Turbopack it can skip the proxy and every auth check.
+// A single-entry `i18n.locales` under Turbopack can skip the proxy and every auth check; see .claude/rules/nextjs.md.
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|ico|webp)$).*)',
@@ -170,7 +170,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  // Authoritative gate; with `cookieCache.enabled: true` revocation lags up to 5 min.
+  // Authoritative gate; `cookieCache.enabled: false` gives immediate revocation, otherwise it lags up to 5 min.
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect(PAGE_ROUTES.LOGIN);

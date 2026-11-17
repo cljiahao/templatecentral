@@ -1,1 +1,1 @@
-/** Factory functions for integration client instances. */
+/** Integration client factories: FetchClient by default, createAxiosClient only for mutual TLS or pinning. */

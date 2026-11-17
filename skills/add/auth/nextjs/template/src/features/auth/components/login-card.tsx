@@ -40,7 +40,7 @@ export function LoginCard() {
   return (
     <CustomCard header="Sign in" className="w-full max-w-sm">
       <div className="flex flex-col gap-3">
-        {/* Add SSO provider buttons here — import LoginButton and render one per provider */}
+        {/* One LoginButton per SSO provider goes here. */}
         {isDev && (
           <Button onClick={handleDevLogin} variant="outline">
             Dev login (bypass auth)

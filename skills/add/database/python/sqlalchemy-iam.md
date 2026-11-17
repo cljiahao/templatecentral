@@ -101,19 +101,20 @@ Add these fields to `APISettings` (do not add `DATABASE_URL` — IAM uses separa
 ```python
 class APISettings(BaseSettings):
     # ... existing fields ...
-    DATABASE_HOST: str = Field(description="RDS instance hostname")
+    DATABASE_HOST: str = Field(default=..., description="RDS instance hostname")
     DATABASE_PORT: int = Field(default=5432, description="RDS port")
-    DATABASE_USER: str = Field(description="IAM database user")
-    DATABASE_NAME: str = Field(description="Database name")
+    DATABASE_USER: str = Field(default=..., description="IAM database user")
+    DATABASE_NAME: str = Field(default=..., description="Database name")
     AWS_REGION: str = Field(
         default="us-east-1", description="AWS region for RDS signer"
     )
     RDS_CA_BUNDLE_PATH: str = Field(
+        default=...,
         description="Path to the AWS global RDS CA bundle used for sslmode=verify-full"
     )
 ```
 
-Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
+Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 

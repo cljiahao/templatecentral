@@ -40,12 +40,13 @@ Add `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` to `APISettings` in **`src/co
 class APISettings(BaseSettings):
     # ... existing fields ...
     SECRET_KEY: str = Field(
+        default=...,
         description="JWT signing key — generate with: openssl rand -hex 32"
     )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
 ```
 
-Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
+Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 > `TRUST_PROXY` already exists in the scaffold's `APISettings` (`src/core/config.py`) and `src/.env.default` — do not re-add it.
 
@@ -96,7 +97,8 @@ def delete_item(
 def get_item(
     item_id: str, user_id: Annotated[str, Depends(get_current_user)]
 ) -> ItemResponse:
-    item = item_service.get(item_id)  # None when no such record
+    # None when there is no such record
+    item = item_service.get(item_id)
     ensure_owner(item.owner_id if item else None, user_id)
     return ItemResponse.model_validate(item)
 ```
@@ -151,7 +153,7 @@ from api.schemas.response.auth import UserResponse
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user_id: Annotated[str, Depends(get_current_user)]) -> UserResponse:
-    """Get the current authenticated user. Implement DB lookup after running `templatecentral:add` (database)."""
+    """Get the current authenticated user; the lookup arrives with the database capability."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Database integration required. Run `templatecentral:add` (database) to complete auth.",
@@ -216,7 +218,8 @@ Run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template-cookie bash "<skill-
 # Secure is dropped only in dev; the __Host- prefix requires Secure elsewhere.
 COOKIE_SECURE = common_settings.ENVIRONMENT != "dev"
 SESSION_COOKIE = "__Host-session" if COOKIE_SECURE else "session"
-CSRF_COOKIE = "XSRF-TOKEN"  # readable by the SPA, which echoes it in CSRF_HEADER
+# Readable by the SPA, which echoes it in CSRF_HEADER
+CSRF_COOKIE = "XSRF-TOKEN"
 CSRF_HEADER = "X-CSRF-Token"
 # Sub-key so the CSRF HMAC never shares raw key material with JWT signing.
 _CSRF_KEY = hmac.new(
@@ -225,13 +228,13 @@ _CSRF_KEY = hmac.new(
 
 
 def _csrf_signature(session: str, nonce: str) -> str:
-    # Length-prefixed message (OWASP signed double-submit) binds the token to the session.
+    # A length-prefixed message binds the token to the session.
     message = f"{len(session)}!{session}!{len(nonce)}!{nonce}".encode()
     return hmac.new(_CSRF_KEY, message, hashlib.sha256).hexdigest()
 
 
 def create_csrf_token(session: str) -> str:
-    """Issue a CSRF token bound to this session value (signed double-submit)."""
+    """Issue a CSRF token bound to this session value."""
     nonce = secrets.token_urlsafe(32)
     return f"{nonce}.{_csrf_signature(session, nonce)}"
 
@@ -273,7 +276,7 @@ def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     session: Annotated[str | None, Depends(session_cookie)],
 ) -> str:
-    """Resolve the user from a Bearer header (API clients) or the session cookie (browsers)."""
+    """Resolve the user from a Bearer header for API clients or the session cookie for browsers."""
     if credentials is not None:
         # Browsers never attach Authorization on their own — no CSRF exposure.
         token = credentials.credentials
@@ -304,8 +307,7 @@ def get_current_user(
 
 
 def require_json(request: Request) -> None:
-    """415 unless the body is declared JSON — FastAPI parses a body with no Content-Type
-    as JSON too, so this keeps /auth/session out of reach of CORS-simple requests."""
+    """415 unless the body is declared JSON: keeps /auth/session out of reach of CORS-simple requests."""
     media_type = request.headers.get("content-type", "").partition(";")[0].strip()
     if media_type.lower() != "application/json":
         raise HTTPException(
@@ -334,7 +336,7 @@ def set_session_cookies(response: Response, token: str) -> None:
 
 
 def clear_session_cookies(response: Response) -> None:
-    """Expire both cookies (attributes must match, or __Host- deletion is ignored)."""
+    """Expire both cookies; attributes must match or __Host- deletion is ignored."""
     for name, httponly in ((SESSION_COOKIE, True), (CSRF_COOKIE, False)):
         response.delete_cookie(
             name, path="/", secure=COOKIE_SECURE, httponly=httponly, samesite="strict"
@@ -351,7 +353,7 @@ def clear_session_cookies(response: Response) -> None:
     dependencies=[Depends(require_json)],
 )
 def create_session(body: LoginRequest, response: Response) -> None:
-    """Browser login: set the HttpOnly session cookie (no token in the body)."""
+    """Browser login: set the HttpOnly session cookie, no token in the body."""
     # Call login_user exactly as /login does — the database guide adds a `db` argument.
     token = login_user(email=body.email, password=body.password)
     set_session_cookies(response, token)
@@ -381,14 +383,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-# Behind a proxy this is correct only when TRUST_PROXY is set.
+# Correct behind a proxy only when TRUST_PROXY is set; otherwise every user shares the proxy's bucket.
 limiter = Limiter(key_func=get_remote_address)
 # In app.py:
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# Limit /register and /login (argon2 is CPU-expensive), plus /session in cookie mode.
+# Limit /register, /login and, in cookie mode, /session: argon2 is CPU-bound. Keep each handler's `def`/`async def`; add only the decorator and `request`.
 @router.post("/register", response_model=UserResponse)
 @limiter.limit("3/15minutes")
 def register(request: Request, body: RegisterRequest) -> UserResponse: ...

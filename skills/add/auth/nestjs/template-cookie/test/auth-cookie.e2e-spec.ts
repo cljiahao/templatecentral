@@ -128,7 +128,7 @@ describe('Auth cookie mode (e2e)', () => {
     expect(res.statusCode).toBe(201);
   });
 
-  // CORS-simple bodies skip preflight; Fastify rejects them (415/400) before AuthService.login.
+  // Bodies that skip CORS preflight are rejected by Fastify before AuthService.login.
   it.each([
     { headers: {}, status: 415 },
     { headers: { 'content-type': 'text/plain' }, status: 400 },

@@ -132,7 +132,7 @@ Add the same `try`/`except` + `logger.info`/`logger.warning` pair to `/auth/regi
 Access denied — log in your auth dependency once roles exist (illustrative; base `get_current_user` has no roles until a database-backed user model):
 
 ```python
-# src/api/dependencies/auth.py  (example — adapt once you have a User model with roles)
+# src/api/dependencies/auth.py
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -170,7 +170,7 @@ Copied verbatim from `<skill-dir>/logging/fastapi/template/src/utils/http_client
 **Key domain events** — log inside service-layer functions:
 
 ```python
-# src/api/services/projects.py  (example — adapt to your domain)
+# src/api/services/projects.py
 from core.logging import logger
 
 
@@ -185,7 +185,7 @@ async def create_project(data: CreateProjectRequest, user_id: str) -> Project:
 **Slow DB queries** — add a SQLAlchemy event listener:
 
 ```python
-# src/database/session.py  (add after engine creation)
+# src/database/session.py
 import time
 
 from sqlalchemy import event
@@ -237,7 +237,7 @@ from core.logging import logger
 
 async def cache_get(key: str):
     value = await redis.get(key)
-    # Log a key prefix, not the full key, if keys embed user data (e.g. "session:<email>").
+    # Log a key prefix, not the full key, when keys embed user data such as "session:<email>".
     logger.debug("Cache lookup", cache_key=key, hit=value is not None)
     return value
 ```

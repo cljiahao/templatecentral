@@ -23,7 +23,7 @@ export class PaginationService {
   ): SortParam<F> | null {
     if (!sort) return null;
 
-    // Split on the FIRST underscore only — field names may be snake_case (e.g. asc_created_at).
+    // Split on the first underscore only; field names may be snake_case.
     const separatorIndex = sort.indexOf('_');
     const direction = sort.slice(0, separatorIndex);
     const field = sort.slice(separatorIndex + 1) as F;

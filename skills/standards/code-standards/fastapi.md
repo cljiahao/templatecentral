@@ -50,7 +50,7 @@
 ### Comments & Docstrings
 
 - Follow `code-standards/comments.md`.
-- Docstrings: one-line for simple functions, short paragraph for complex ones; describe the contract (args, returns, behavior), not the implementation.
+- Docstrings only on public APIs the signature does not explain: see `comments.md`.
 - Keep Ruff's comment rules in `pyproject.toml` (`comments.md` → Enforcement).
 
 ### Static Analysis (`ruff`)

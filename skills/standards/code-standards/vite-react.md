@@ -65,7 +65,7 @@ Centralized in `src/lib/constants/env.ts` — read it for the shape of `ENV` and
 ### Comments
 
 - Follow `code-standards/comments.md`.
-- JSDoc on exported functions/components describes the contract (props, return, behavior) — not the implementation.
+- JSDoc only on public APIs the signature does not explain: see `comments.md`.
 - `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
 ### Static Analysis (`eslint-plugin-sonarjs`)

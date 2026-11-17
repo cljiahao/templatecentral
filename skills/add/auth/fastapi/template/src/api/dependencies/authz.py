@@ -10,8 +10,7 @@ def get_current_roles(
     user_id: Annotated[str, Depends(get_current_user)],
 ) -> frozenset[str]:
     """Roles the current user holds. Grants none until a database lookup replaces it."""
-    # user_id must stay: it forces authentication and the database lookup that replaces this body needs it.
-    # Roles are loaded per request, never from the token, so revocation takes effect immediately.
+    # Load roles per request, never from the token, so revocation is immediate; user_id forces authentication.
     return frozenset()
 
 

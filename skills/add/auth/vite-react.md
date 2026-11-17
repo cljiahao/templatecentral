@@ -82,7 +82,7 @@ Every other backend call goes through `ApiClient` (`src/lib/clients/api-client.t
 import { csrfHeader } from './csrf';
 import { FetchClient, type HttpMethod } from './fetch-client';
 
-  // Sends the session cookie on every call (same-origin via the /api proxy).
+  // Sends the session cookie on every call, same-origin via the /api proxy.
   protected override credentials: RequestCredentials = 'include';
 
   protected override requestHeaders(method: HttpMethod): Record<string, string> {

@@ -11,7 +11,7 @@ async function migrate() {
     provider: new FileMigrationProvider({
       fs,
       path,
-      // ESM project ("type": "module") — __dirname does not exist
+      // ESM has no __dirname.
       migrationFolder: path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations'),
     }),
   });

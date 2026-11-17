@@ -19,7 +19,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-node/template/.claude/hooks/red
 `process.exit(0);` (leave the injection and credential hard-block paths above it untouched):
 
 ```javascript
-// Warns, never blocks; reports via `systemMessage` only, since plain stdout or additionalContext could feed real values to the model.
+// Warns, never blocks; `systemMessage` only: stdout or additionalContext could feed real values to the model.
 try {
   const fs = require('fs');
   const path = require('path');
@@ -47,7 +47,9 @@ try {
       }));
     }
   }
-} catch { /* fail open — never let the redaction check block a legitimate prompt */ }
+} catch {
+  // Fail open: a redaction error must never block a legitimate prompt.
+}
 
 process.exit(0);
 ```

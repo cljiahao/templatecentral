@@ -19,7 +19,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-python/template/.claude/hooks/r
 `sys.exit(0)`:
 
 ```python
-# Warns, never blocks; reports via `systemMessage` only, since plain stdout or additionalContext could feed real values to the model.
+# Warns, never blocks; `systemMessage` only: stdout or additionalContext could feed real values to the model.
 try:
     import os
     config_path = os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(), '.claude', 'redaction-config.json')
@@ -50,7 +50,8 @@ try:
                 '.claude/redaction-config.json -- Claude will see them in cleartext for this turn. '
                 'Non-blocking.'}, separators=(',', ':')))
 except Exception:
-    pass  # fail open -- never let the redaction check block a legitimate prompt
+    # Fail open: a redaction error must never block a legitimate prompt.
+    pass
 
 sys.exit(0)
 ```

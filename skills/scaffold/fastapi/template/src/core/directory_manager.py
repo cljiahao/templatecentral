@@ -20,12 +20,7 @@ class DirectoryManager:
             self.create_directory(folder)
 
     def create_directory(self, folder_path: Path, to_remove: bool = False) -> None:
-        """Helper method to ensure the destination directory exists, and remove it if necessary.
-
-        Args:
-            folder_path: The path to the directory.
-            to_remove: If True, remove the directory before creating it.
-        """
+        """Creates the directory, removing it first when to_remove is set."""
         if to_remove and folder_path.exists():
             try:
                 rmtree(folder_path)
@@ -42,15 +37,7 @@ class DirectoryManager:
     def create_subdirectories(
         self, directory: Path, folder_list: list[str], to_remove: bool = False
     ) -> None:
-        """Creates multiple subdirectories under a specified base directory.
-
-        Args:
-            directory: The parent directory where the subdirectories will be created.
-            folder_list: A list of subdirectory names to create and count.
-
-        Raises:
-            TypeError: If non str type is found in folder_list
-        """
+        """Creates each named subdirectory under directory."""
         for folder in folder_list:
             if not isinstance(folder, str):
                 raise TypeError(

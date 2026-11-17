@@ -15,7 +15,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const CSRF_KEY = createHmac('sha256', appConfig.JWT_SECRET).update('csrf-v1').digest();
 
 function csrfSignature(session: string, nonce: string): string {
-  // Length-prefixed message (OWASP signed double-submit) binds the token to the session.
+  // A length-prefixed message binds the token to the session.
   return createHmac('sha256', CSRF_KEY)
     .update(`${session.length}!${session}!${nonce.length}!${nonce}`)
     .digest('hex');

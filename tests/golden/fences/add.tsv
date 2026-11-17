@@ -2,12 +2,12 @@
 4394ac89c1763838b8f7d0cf3667fdf0d073798a0873b9fc5903ea1278d61c06	skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	0	ts
 3771b6e6d575e05aab06038918e3a44e0e73fb373ec4dc39c99e91b784928551	skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	1	ts
 4b6a070d2492ee4ba9936ec8c5ca6533b46a79723f4d5e2c3cd1ee696bbcd4f8	skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	2	python
-9b034d68e1a6d0e4a8028816c909ae81a4bf83a5ef569a7f2dd44aec8e8724f3	skills/add/ai-security/implementation.md	LLM02 — Sensitive Information Disclosure	0	ts
+79a92d056e7bc457446b5bd00631f4efef8fab4619ca379903b427ced0f03560	skills/add/ai-security/implementation.md	LLM02 — Sensitive Information Disclosure	0	ts
 41bae4f2db1d4fac2ff5826956d2b84ac8f463cdddc595287a3cc4c8403459b9	skills/add/ai-security/implementation.md	LLM03 — Supply Chain	0	ts
-ca905867eccaf8edcba6c351533a55d1db4005757345f801007cf08a7edfdfdc	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	0	ts
+f9c49ac876256c4cd1eb542492f7e1f2f5e9950652feb0b11aaa26cf26145d86	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	0	ts
 5104f43d5de602996188f014da82be2649d9e546cfdc2be5d207db59e8b41939	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	1	python
 29b472f17a8b4469d29d6eaf4044bba1181c75896edfa04b1f5a2d500e17a89b	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	2	ts
-0bcfa7d9b12058396e9f079ae2a177d898bc78810894a122beb62c4c7cc1cbcc	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	0	ts
+af3bb3dc4656694c0b458a097f4f12d576a043430bb2b6905ec9e9cf8f929c00	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	0	ts
 03823f9f1af91c45337aa54db3ea3a3528a9920b07b594bd67ed4490173ea618	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	1	ts
 bf1b5e828658a7735f383729560da2fb65009345b8c7b1ea673366ad83074ca9	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	2	python
 eaa288abd355269dda87591921b5babb8386de0743d94e09e5ebf95fbdd31412	skills/add/ai-security/implementation.md	LLM06 — Excessive Agency (applies once any tool/function is wired)	0	ts
@@ -18,27 +18,27 @@ ebb4090d6c9dd37fa63d6cccd2351c0f35970ccdab572a31df29515bb6fdc22f	skills/add/ai-s
 baf35ae4eb27958adbf5d20c49fee76208b86f3d55f8b150419b40389b9bba61	skills/add/ai-security/implementation.md	LLM10 — Unbounded Consumption	0	ts
 6ef8ec22b8a9ead0ef80ecf81ac959eb78b492589310f4772cd1fa56e683a3e6	skills/add/ai-security/implementation.md	LLM10 — Unbounded Consumption	1	-
 1655362f54602b135516342a704304a83573dca1e9ebf8fda21260779a643643	skills/add/auth/fastapi.md	1. Add Auth Schemas	0	python
-4f1f0a39952c134617450ca669963b229a28f14a1b01a81432b1470fe60b7504	skills/add/auth/fastapi.md	1. Add Auth Schemas	1	python
-58cd7764c7c0380de0698767e9812b178e038d78309f90c292f40a8d70b037e1	skills/add/auth/fastapi.md	10. Protect Routes	0	python
+515acfe240340e33300fbc0042ea0a4b45f48cb64da12b37144f691704b1bc6f	skills/add/auth/fastapi.md	1. Add Auth Schemas	1	python
+75a15a8a40a5108fc6f0b3dcb699334821c043fada0ee0cbec3760a1f23f26c7	skills/add/auth/fastapi.md	10. Protect Routes	0	python
 83a9168f004ce3fe5bed687e3427621ae108cc3a87060a071ab3d49abf5d086c	skills/add/auth/fastapi.md	11. Tests	0	python
 dca59fbbb01af9bd6545118ef547dba46f9aba6e0f3d86d233251ad07f7e1dd8	skills/add/auth/fastapi.md	11. Tests	1	python
 400da53556ff9e89dfa9b8c91976ef152dd23296ddae2ece800c85d84da9f31a	skills/add/auth/fastapi.md	11. Tests	2	python
-c6f8c659f8c55d41ee67e5dae94efbcbb57b24c9792467e2f8b9fb1001e7eb76	skills/add/auth/fastapi.md	2. Extend Config	0	python
+89eef3e96f41fd6ef2c02b31befb92cfa47fc1ec2e5cf46e143c04ba97284d37	skills/add/auth/fastapi.md	2. Extend Config	0	python
 ffd14d6910932175c4f1703ca04060481a63b04c09180f20705afa3d2b058da1	skills/add/auth/fastapi.md	2. Extend Config	1	-
 4541644cb28d20606e5e7718e9e32aa7272e6c15aa9652860133c10f9a4ac753	skills/add/auth/fastapi.md	2. Extend Config	2	-
 822256e5a06d9382ebf290cd825f3152eb51b6471ddbba3a56215e6d22832329	skills/add/auth/fastapi.md	3. Create Security Module	0	python
 fc09357630d7a63f3d663d8c20ab395482c69e357d130c24389ba4908206adfe	skills/add/auth/fastapi.md	4. Create Auth Dependency	0	python
-05a307a6027bda4d528c22adfb00a720cb6b363ca98e5c44e1d41156e01d5ac3	skills/add/auth/fastapi.md	5. Create Authorization Helpers	0	python
-7d6fc0bb9aa3da53917bb58da4b71482b90ae83900e7599dfbeaa1ce2f9df44c	skills/add/auth/fastapi.md	5. Create Authorization Helpers	1	python
-2d31bfbe2f15d326be385bc9eaec4f588282b4f1208f935cbc6265b226c39e67	skills/add/auth/fastapi.md	6. Create Auth Service	0	python
+d494407d3f2e93a4aae14eaf021bc0ecba52a61e0c6824e8ecdf81f16031c5b3	skills/add/auth/fastapi.md	5. Create Authorization Helpers	0	python
+4f019a4ff00b4b033624286d86b5d259ef409b404468cd43b17541faf0b7de12	skills/add/auth/fastapi.md	5. Create Authorization Helpers	1	python
+d22a5f4eb42707c05be98951c1ca4292bae2511cc55d0e3dbc5069d00e00dfdb	skills/add/auth/fastapi.md	6. Create Auth Service	0	python
 4d81f7d64d1c85b003fc8b1df0517a185b4361f5160af73315f44dfbad050d71	skills/add/auth/fastapi.md	7. Add Auth Tag	0	python
 f1b6c71ab73d383e73e72ac3d26386fc4c4049f7adf20e4447de128195706035	skills/add/auth/fastapi.md	8. Create Auth Router	0	python
 97705a8c4ccec4032aee1c7593dd684a95313c19851784b3a5528b1a387e5f5c	skills/add/auth/fastapi.md	9. Register the Router	0	python
-e9f50c0e1d7a8a082e4a8144f59b6b054abcc5b416436fdddeb3ae612701ae9f	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	0	python
-368645cce50e7b768c8dcff081c1f618433acd8de441383f5d3dd87852744e63	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	1	python
-a22898ccd4033f7e167bb5a53d74f9224a073e1630d0122271ab282cf51f872c	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	2	python
-f1b6dec452b2d7ea1977187bbc404e989241b3b5b958bd4140e4cca06e03e60a	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	3	python
-d588abc17181188d0441063a50d8fb749334b355f89073abfa1d52aea541d819	skills/add/auth/fastapi.md	Rate Limiting (Required for Production)	0	python
+4a24263d593d5c4314da1b5334c6a009efc4b0136b33ff96a563c0eab297a43c	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	0	python
+221fd863aab7178f37dabaf7b759582ec4a5f7a5045daa0ac687cb00a9bd0678	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	1	python
+6a17c3fc55767bf52ca26c2fb797667ed45e095dac4b810b8847fb7f8c75bb0c	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	2	python
+37919dd86945921fc6743baa66b608236724984da8b7bb2e1fce5d8a9971f7fd	skills/add/auth/fastapi.md	Browser Client (Cookie Mode)	3	python
+888f751cfa75b6471c646d3d1375cac3b7d0ac523709ef2892c80456cd378168	skills/add/auth/fastapi.md	Rate Limiting (Required for Production)	0	python
 191ad887759a7bab054f01284a9f4cd0d72b1c5b34375cbd7c966906c5805e94	skills/add/auth/nestjs.md	10. Export from Modules Barrel	0	typescript
 7f6f2ecce7938d7160c0efe7e104ae0e0a8d5d07828b8fe5dddc465a83d2025c	skills/add/auth/nestjs.md	11. Register in AppModule	0	typescript
 d7baf27b1f6d8fb63ae95be9ff48bbcba912096a6bc5183a11a5fced856c8c64	skills/add/auth/nestjs.md	12. Protect Routes	0	typescript
@@ -53,7 +53,7 @@ e84cbf87d5e953f450b291d2e587343a582e9c6441f931fb6885e6de4a877e3a	skills/add/auth
 d50c69d23095ba716190c6067fb36fa9a20824990d13ee08adc1dbf0664e0028	skills/add/auth/nestjs.md	4. Create JWT Strategy	0	typescript
 51fc903ffa25cb72c7ecc1aa1fed8c9d5bf7c6dd2f7f0efe9d5fa1d7490b020c	skills/add/auth/nestjs.md	5. Create Auth Guard	0	typescript
 cc7353d6948cb443eb8aafe0ab74b448a0f79e7fb4f31dba7787599cb0c70d33	skills/add/auth/nestjs.md	6. Create Authorization Helpers	0	typescript
-0ef25ae7bb1c3e48e5c1253f77ecd51fbbb759230e5fbd5e6ccbe690f2e64f2c	skills/add/auth/nestjs.md	6. Create Authorization Helpers	1	typescript
+12d32ed059c40be423538f0d0a4f820f771040b366b959b1ef6d2b52632de1c9	skills/add/auth/nestjs.md	6. Create Authorization Helpers	1	typescript
 bda03ed5e4ea3ceb7c12d0ca87dc42a4fe9355dd0abb66ffb9e7cd224b5614e4	skills/add/auth/nestjs.md	6. Create Authorization Helpers	2	typescript
 7ba2d90f7d901a6706ee6b7f2d08e8084d4964782e3486edf000f5238f2c1991	skills/add/auth/nestjs.md	6. Create Authorization Helpers	3	typescript
 3cc82d63c8a0c7fcba1be69a2b66cde2b1c741c5b640d2b833fb79a85caa970e	skills/add/auth/nestjs.md	6. Create Authorization Helpers	4	typescript
@@ -61,17 +61,17 @@ bda03ed5e4ea3ceb7c12d0ca87dc42a4fe9355dd0abb66ffb9e7cd224b5614e4	skills/add/auth
 ccf4fe1aa8e7f2564edfe2a0f028175c595d9c448ce46fa82190c227afe566fe	skills/add/auth/nestjs.md	8. Create Auth Controller	0	typescript
 23e2ea260ef2fdd650b3e481acc1817440aa6ca3dd36b289fec05fc66324d431	skills/add/auth/nestjs.md	9. Create Auth Module	0	typescript
 64567b7e8af2fdad3beca4a625b33d8a04d870df31eaf7e2b3a5553d1f9f0c0e	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	0	typescript
-c30d2c64b7221286f64d360f1565433214ec3ecd1d79f63f44f83fe0770cdd16	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	1	typescript
-87a994ed63f89575c6a839467be4e732f6342cd9d3f0f338c91bc674aa7d669a	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	2	typescript
+0a58ea1ab43d22416e4dae45c13e70da4b3c50ba93e76677a9b11a3b8a008d34	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	1	typescript
+4479dd318dca1865d1533449599102961264dd274a579abc657a01bfd31978b8	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	2	typescript
 2f70cc61cf5b6ec2bef5874d122cd8f26502a5bf84e12c739513fa75ded2963d	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	3	typescript
 b0c32fdcd3a33b11432a687a710dd063eb3785fe5122d3fa65882528eb39e372	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	4	typescript
-186f60beb70f223402e3267f1e45809d17976cad4e97d76fcd122a3b4810dedd	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	5	typescript
+273abfa99a3c6c97a44bcdd0e671fa579bc47c86036c5ca4a1bd36ae7339047e	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	5	typescript
 4a9e72cb7bb2384b10f0380e94f5697c6531b36dcaf77fb812b50a8436402ec1	skills/add/auth/nestjs.md	Dependencies	0	yaml
 c651ad11b1fcb8f4b8bd7cbb67f654b126f5c5955b4ed9cf8fc8ae3b3d7de4e2	skills/add/auth/nestjs.md	Rate Limiting (Required for Production)	0	typescript
 b191dcea0d7ff202a71eeb3cc9892669db37131788bff63d09c5b827bb36b148	skills/add/auth/nestjs.md	Rate Limiting (Required for Production)	1	typescript
 8ca0f69c0eddb59a357d064fa0da596373bd13f245efe7ac5956edca01adc4b8	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	0	tsx
 70b4f5b81ba8dd76ab051176301e828bf7394ecd6399c8b8112341abec750e5d	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	1	tsx
-c06a28049e012ad45899cfab09efaf04ac48233a9503df40c75f52549143a99e	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	2	tsx
+7f08ef6d38ada4d24d0e2caec98b4b485d19e4d409bc0489cdf92bb21dc59c5a	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	2	tsx
 13d24cc471b1e4c48188d5a8a9a8e5abb11d8e4fd1e2ed4504ca4c5d1d16fb33	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	3	ts
 f73b596cb4b4860fd0a3ea8cab67a42ad344d95a392ca986ca4588f59ea8c2cf	skills/add/auth/nextjs.md	10. Create `src/features/auth/` components	4	ts
 5371da16bdf70ea4e1994a214159a82b74b5954d7e3d663890c838f146b3bcc0	skills/add/auth/nextjs.md	11. Update `.env.example` and `.env.local`	0	-
@@ -86,17 +86,17 @@ cc0e92bf29da6e64ffaa876c86ec800f4594c6b771f2a83afb05d270cde370bd	skills/add/auth
 7251cd711bda744c0627153062f47b3e2643229f1269a2ef0576f583aa080a6e	skills/add/auth/nextjs.md	15. Adding an SSO provider	0	ts
 84153a018d695a380ffc34def677f8c0c48521dbd227a5f2bb9df84a4f66c845	skills/add/auth/nextjs.md	2. Write `src/lib/auth.ts` (verbatim — do not generate)	0	ts
 69d2527a5110588bf499c522d0929220ebff14e535265a1f656a272bcb33b84b	skills/add/auth/nextjs.md	3. Write `src/lib/auth-client.ts` (verbatim — do not generate)	0	ts
-5374889d052b04e1303ea5eec8579b9cec8146b9eb0b5aaaa8bb115abec69975	skills/add/auth/nextjs.md	4. Write `src/proxy.ts` (verbatim — do not generate)	0	ts
+dcf584e610e15a6897a8a1c5a3481e10d753d8e6bf4db254653bb13e94b77df4	skills/add/auth/nextjs.md	4. Write `src/proxy.ts` (verbatim — do not generate)	0	ts
 9504381bdf67b9d01a6174806ef60a6d89ed23749abdd52b7042627ece1977e4	skills/add/auth/nextjs.md	5. Create `src/app/api/auth/[...all]/route.ts`	0	ts
 c5ddbac61b411e35c1689a224969f082d8f9a049b93ea646c2ccd99a1e822655	skills/add/auth/nextjs.md	6. Add `PAGE_ROUTES.LOGIN` to `src/lib/constants/routes.ts`	0	ts
-06e62f8535ad5979bdf2633f07ec34c8c81695a4124eb502d97288b0fc6ae1e9	skills/add/auth/nextjs.md	7. Create `src/app/(public)/login/page.tsx`	0	tsx
-80b6f7ac787c74226ce7770f5bac04a694f145a15c191acaf227e1a90f83c677	skills/add/auth/nextjs.md	8. Create `src/app/dashboard/layout.tsx` (skip if already exists)	0	tsx
+3c542dcb3676872140406628240dd0af4eb6db51f7ffc23e96afef21da50e950	skills/add/auth/nextjs.md	7. Create `src/app/(public)/login/page.tsx`	0	tsx
+e52386def4ff2b1c0eb32ca32af262d7040445dcbde69e4ff267fbc3fef0ca07	skills/add/auth/nextjs.md	8. Create `src/app/dashboard/layout.tsx` (skip if already exists)	0	tsx
 1e89a94938f6575e0b0edd66d6bfe576ef7462f29195b1afae51e19bfd9cfa8d	skills/add/auth/nextjs.md	9. Create `src/app/dashboard/(overview)/page.tsx` (skip if already exists)	0	tsx
 e5b8fa447509e371d0cba2716bb818d1c6b9c196c1fcd425c753ff5b9c2b8962	skills/add/auth/nextjs.md	Files this skill modifies	0	-
 118cc414a2c13cf30a5fe05792d1569c6a43ecae5fa66eab1611bf4d28d9d814	skills/add/auth/nextjs.md	Rate Limiting (Required for Production)	0	typescript
-d0c87da496c872db87f2802b05b4139041bb9a4601426d0294f62476325cb0f1	skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	0	typescript
+2ecbb1e231c0478ce1702f5ca7944a9f7802474d4c137a4bfe8a5a9de8698b44	skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	0	typescript
 5ac4c23d23a878a11a1f4a8ae656e58efb063dbc090098de731f041911533df9	skills/add/auth/vite-react.md	2. Create the CSRF Helper and Auth Service	1	typescript
-96651d8472ee8178b5115b103362019a35e860ecc91b4b639de911d5a954fe42	skills/add/auth/vite-react.md	3. Send the Session and CSRF Token from `ApiClient`	0	typescript
+14cd806bbf7b65bb7e6f2897e3d7487fc976722cba6f1f594c941ad4b031d9cf	skills/add/auth/vite-react.md	3. Send the Session and CSRF Token from `ApiClient`	0	typescript
 07d4e9b73bcfec7728b50e5ba47046759529f8cd802f9da9f6db10caadc89a82	skills/add/auth/vite-react.md	4. Wire AuthProvider to the Backend	0	tsx
 ae8f0ca211107f65b87db1d310863151441a8fdc992cd8adf2741d7a2f0c7078	skills/add/auth/vite-react.md	5. Add a Login Form	0	tsx
 cc352a2aca1a1e025f33871aa2bc35049ccc9fd249e3fbce8129ec245162403e	skills/add/auth/vite-react.md	6. Add Protected Routes	0	tsx
@@ -104,15 +104,15 @@ c3f153618c00ae05d72efa1793bd46da3fa08da6d2ae2cf74fe4beca0475a92e	skills/add/auth
 bee9c20345692fc39976421100763bea999f472fb9d93535db7e9a893ac6369e	skills/add/auth/vite-react.md	Architecture	0	-
 432d9d99a15ab44f7aa701480100f00a21a850dc00a3f38b44d6fbaa10cd84c9	skills/add/database/python/beanie.md	B1. Install Dependencies	0	-
 6de4715d6fbe182df32f564ff1b205c465fac38d58cee6c8d6696a6a89811f3f	skills/add/database/python/beanie.md	B2. Create MongoDB Connection	0	python
-148d6fdad5fdfd3b987518ea4b4c197503b3da6d913964ae3769f1c9e407f90b	skills/add/database/python/beanie.md	B3. Add Configuration	0	python
+caacbc202cbe3778fc8a107ec77ff57166abc49bc5fe70935caff28199dad48b	skills/add/database/python/beanie.md	B3. Add Configuration	0	python
 686daa01c6b62d83ac3d40e6364941e72ea6b39496b4b4eaa30c97d0f665156c	skills/add/database/python/beanie.md	B3. Add Configuration	1	-
 2ed3194f5c8f9d59e95ea53873083fd86f3849ada80b7ec7219ac4f9cbe3890a	skills/add/database/python/beanie.md	B4. Wire into FastAPI Lifespan	0	python
-08c7ba6c212873d068afb0757a6153593fba01ebc3674263a3dd18e7f2276588	skills/add/database/python/beanie.md	B5. Create a Document Model	0	python
+e7dfb70b51244199ee7896b59141441fcdcd42fb044d740a6e0679d610db7ded	skills/add/database/python/beanie.md	B5. Create a Document Model	0	python
 109a0aa7bbca8761a709585b338f4be444569f62b6926105fe5450aa278ea9fa	skills/add/database/python/beanie.md	B6. Register Document Models	0	python
 e201a0174f1df98693862380fffe5790018c7bdeccc93b13d8133727f91cf3eb	skills/add/database/python/beanie.md	B7. Usage	0	python
 67cc4991f73acd2e44536017236f73b08ef171af69a2b54459ffd5020a1f2d50	skills/add/database/python/beanie.md	B7. Usage	1	python
 f557817c54d245f544e38623d1312fc78df485f4b29b9d65055e8c5593b716ac	skills/add/database/python/beanie.md	B7. Usage	2	python
-1e5b2e2f9811645bbb167bae1ca041932b3a23b9a8516e9a0d5c340c0db79547	skills/add/database/python/beanie.md	B7. Usage	3	python
+12891695cd8b2d0a83672f7fe46abaa8a99256b459cc3d3b18c87d7e00728102	skills/add/database/python/beanie.md	B7. Usage	3	python
 a15eac3272512b9bbe4176312b791592b78ee965112dddb5af0a80eda4cd1761	skills/add/database/python/beanie.md	B8. Tests and Validate	0	python
 318cab621515eaa51decfd43848b8f5f7cef942d0462106ef4acf3254a11c287	skills/add/database/python/beanie.md	Step A — Update `src/models/user.py` and register it	0	python
 109a0aa7bbca8761a709585b338f4be444569f62b6926105fe5450aa278ea9fa	skills/add/database/python/beanie.md	Step A — Update `src/models/user.py` and register it	1	python
@@ -123,7 +123,7 @@ ebe4bae679b02ffb221f64d7965f063427420eef6066027393a93f1109b39a5c	skills/add/data
 fdf28d4d6bcdeda3a7c6829a24c3b5884f42a16c79de81575d7c5e7bf9187cd8	skills/add/database/python/pymongo-async-auth.md	Step B — Replace `src/api/routers/auth.py`	0	python
 663324b495778b9938091611c2d489f9c6a3ffb9fc945a68e87e6ad8e1e07940	skills/add/database/python/pymongo-async-auth.md	Step C — Lock down `src/api/routers/users.py`	0	python
 a3633dad6991ff54ba511504e113e3043a7e8d1f1e94d6fc3043e33703b642f6	skills/add/database/python/pymongo-async.md	M1. Install Dependencies	0	-
-148d6fdad5fdfd3b987518ea4b4c197503b3da6d913964ae3769f1c9e407f90b	skills/add/database/python/pymongo-async.md	M2. Add Configuration	0	python
+caacbc202cbe3778fc8a107ec77ff57166abc49bc5fe70935caff28199dad48b	skills/add/database/python/pymongo-async.md	M2. Add Configuration	0	python
 686daa01c6b62d83ac3d40e6364941e72ea6b39496b4b4eaa30c97d0f665156c	skills/add/database/python/pymongo-async.md	M2. Add Configuration	1	-
 b39d4e3dacb7307bb8d3603e90701bb49af97e025a1a8bb835cb8f1e20359532	skills/add/database/python/pymongo-async.md	M3. Create the Client	0	python
 7e36c5521045879b2901fb2c0732a599cc4f286cbf00ffdbfa220fea2edcdd16	skills/add/database/python/pymongo-async.md	M4. Create a Model	0	python
@@ -136,13 +136,13 @@ dd835a8f15dc9e255a22e6c7a14fc7db29a7a83476a1d8c7029e8e3791d95b70	skills/add/data
 7cce48355b3018d851487568921b96953c58a752956ee5cda476b75f886c67b4	skills/add/database/python/pymongo-async.md	M7. Schemas, Service, Router	3	python
 974033dd3290c2cd7e05f929c70e8f2de628b5cdf5a2e8c469b9e69a40e7f1d4	skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	0	yaml
 0488d003cd6f2799307edf9ea5672a89b3cbea84d36a3ddb7f08812d7d9e6425	skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	1	python
-20d435577c853e80f7f1002da80cf442746d0a1d971cae0bccf5daa5996760e7	skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	2	python
+bc1d3e4c5e48739b89a47bc5bc793167acabed7987926b78c9494c7c26c9d8bf	skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	2	python
 9ee5d752ac0d0bf5a2f05220f6c2ab15e61879518c4714d02852f0d2c1845c88	skills/add/database/python/pymongo-async.md	M8. Local MongoDB and Tests	3	python
 11cd0ed1f1ff01ee0337a395933a1b99c8dd66728c6d69b16d6e5fd7807738e0	skills/add/database/python/sqlalchemy-iam.md	A1. Install Dependencies	0	-
 987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560	skills/add/database/python/sqlalchemy-iam.md	A2. Create Database Base	0	python
 095cefe9576c86c272a3cccb53fc998e6002996619199cc24864c5145c610c7c	skills/add/database/python/sqlalchemy-iam.md	A3. Initialize Alembic (same as standard)	0	ini
 b8f0ac6de22f12c1d0f121261e76e464bf2473ea2353238af0d976c112e5b388	skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	python
-a5ecdb6266e1df3db72f8e4959fc81102dffc50143979decb1e265e04cc01d58	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	0	python
+a8625a5a21cd404469fafe47c5edf9132b64df877f3655b2f1825d1da6042fb8	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	0	python
 46d980976d66e5c5ea612f9b8f35b0023c80702e8ccb017a9448e2888e5d7c3d	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	1	-
 510cf5a911e12717fb77d1d6409705a4678bdcd477001cacdaca5868d3a8d8b8	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	2	python
 ea4e65cc01a59a1450085773a50a9df425cd39ab5108d3972c41ca6133499e02	skills/add/database/python/sqlalchemy-iam.md	A6. Update `alembic/env.py` for IAM fields	0	python
@@ -151,12 +151,12 @@ ea4e65cc01a59a1450085773a50a9df425cd39ab5108d3972c41ca6133499e02	skills/add/data
 8c7fd1aee9f061560193a1ce4f15004e9c4e1065dc94b77a00a061bcc679f4a9	skills/add/database/python/sqlalchemy-iam.md	A9. Usage	0	python
 58e3b8daed00417d9bb814e0dcccaa1f4361cd34450f54b01c4c5850952f3ebb	skills/add/database/python/sqlalchemy.md	A1. Install Dependencies	0	-
 987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560	skills/add/database/python/sqlalchemy.md	A2. Create Database Base	0	python
-b53e2024ccb1af35fb459b04793bc6a8553e13dddaab2d84210b3ca99220a60a	skills/add/database/python/sqlalchemy.md	A3. Add Configuration	0	python
+e2ca5e76a7b9140afb6373abde52320f011b22cd5ada775344cae8339ccee396	skills/add/database/python/sqlalchemy.md	A3. Add Configuration	0	python
 2dc8128dee0b23a193480cf97a88e55fdf3e4d69c8fc062794f4aa13ba31027b	skills/add/database/python/sqlalchemy.md	A3. Add Configuration	1	-
 72b75afc8a629001a7c045ed023cbf64a28182149b204d817e9081591f5ec850	skills/add/database/python/sqlalchemy.md	A3. Add Configuration	2	python
-3d5fededcdafcce040efc0bcf840f32d4faa6350d575cce8ab7a98944787684e	skills/add/database/python/sqlalchemy.md	A4. Create Database Session	0	python
+404ee9c51380f17af846d535156296473363c2c320a880472a36cfd3905ecb13	skills/add/database/python/sqlalchemy.md	A4. Create Database Session	0	python
 095cefe9576c86c272a3cccb53fc998e6002996619199cc24864c5145c610c7c	skills/add/database/python/sqlalchemy.md	A5. Initialize Alembic	0	ini
-6a6627b695d68d171f5bb5926ff8aeb6da6543b975ace737b82367063a612393	skills/add/database/python/sqlalchemy.md	A5. Initialize Alembic	1	python
+3524354ff7301da4b51be5c5825292997bf1ada7e2108b38dc15a1d2bcd97f62	skills/add/database/python/sqlalchemy.md	A5. Initialize Alembic	1	python
 4f8dec438dca7602b89ea3c2018a1628684474a12c6fbee31821e7338638638d	skills/add/database/python/sqlalchemy.md	A6. Create a Model	0	python
 8c7fd1aee9f061560193a1ce4f15004e9c4e1065dc94b77a00a061bcc679f4a9	skills/add/database/python/sqlalchemy.md	A8. Usage	0	python
 02f028fc86ac8329604cb4ba5ae4d4053084a75f8c445946fbb539639af62675	skills/add/database/python/sqlalchemy.md	Step A — Create `src/models/user.py`	0	python
@@ -233,7 +233,7 @@ e549496cf91a9a42b5778898386426b81a74039034468d31899eb79df274f1e6	skills/add/data
 2a37c223bb9e63aaeff3133b723c3bb53b1794277628a0224582544a3d8c5610	skills/add/database/typescript/nextjs-kysely.md	B3. Define Database Types	0	ts
 964536177d74a84a2d944d6277a36dcd444554b2ec21bb15cb122e45759036d1	skills/add/database/typescript/nextjs-kysely.md	B4. Create Barrel Export	0	ts
 a0300d6f7a0d9046533da5e52a005b917b318c72da9bed62c906f71060dbae6b	skills/add/database/typescript/nextjs-kysely.md	B5. Create First Migration	0	ts
-f54f642abe0cbf2f792d7b87f512fb4020c82d1782862066299d3fae5dac4673	skills/add/database/typescript/nextjs-kysely.md	B5. Create First Migration	1	ts
+be19ef88e3534dcf060ebdcf64811658045355a42266ef7264b68175bd18e7c9	skills/add/database/typescript/nextjs-kysely.md	B5. Create First Migration	1	ts
 249a11e90ecb76bfd97dc2378866954bd7aa561b6d305519cd2239ecabcb6a16	skills/add/database/typescript/nextjs-kysely.md	B6. Configure Environment	0	env
 2e83af57b4f47d55ec9dab46c7b803757bc0f14e8607da0585aa6c65b9438f19	skills/add/database/typescript/nextjs-kysely.md	B7. Usage	0	ts
 67c21db1005889b47a299d265919c0a0fd0afb9bd8526ceff9b8bbb50cca9d80	skills/add/database/typescript/nextjs-kysely.md	B7. Usage	1	tsx
@@ -267,21 +267,21 @@ ae44c31a2c750b73094a8590ef612dfac5899377228f15999ddb880df8a7c0ba	skills/add/endp
 99c41cfd61c74502543063acf85d25af6e334816e1d17d12bed429b32ec183d5	skills/add/endpoint/nestjs.md	9. Add Tests	0	typescript
 643960194d12415c1fbf1ba2cd99b2e866a4e09724904b59fe2f20868a279521	skills/add/endpoint/nestjs.md	Authorization — decide before moving on	0	typescript
 73309830bbc1669e7570e033da7889e05c40c3cddf6ae8ba17a6b43c59c7b7ac	skills/add/endpoint/nextjs.md	1. Create the Route File	0	-
-ee76dd4f60732f9f078cb52f29801f7bc1026f72601e23f4d096cf1066007ed8	skills/add/endpoint/nextjs.md	2. Implement the Route Handler	0	ts
+12caecc444bcfa50c68e6d6d6c5bcb84452d6c880f0c10c8580ef0e00a213c69	skills/add/endpoint/nextjs.md	2. Implement the Route Handler	0	ts
 97153b753d29f7d18ccd7708af551ec3f09623d4539b216f1e4af71b254e8627	skills/add/endpoint/nextjs.md	3. Dynamic Segments	0	ts
 78a0d75c1ca4efcc44f9eec795ecc7658646976e91d9b2a192e036f9549f0fc0	skills/add/endpoint/nextjs.md	4. Update Routes Constant	0	ts
 06d839f2cd3cba038b6b395fcd637c9af304c8147c16e437a3ff9685184f28fa	skills/add/endpoint/nextjs.md	5. Add tests (mandatory)	0	ts
-de075351f33106cb46e8ee7a1147c5d4c56f8427ca38aea4b941dac0f00ba60c	skills/add/error-handling/fastapi.md	Step 0 — Verify context	0	python
+dc0b6a98cde94f2104fd8269990dd86c8281c4d8682b9767cd394da797f21790	skills/add/error-handling/fastapi.md	Step 0 — Verify context	0	python
 3b67497985359cc05122206dfab3933b1b5f05460e57fa13c71606feb4c0a067	skills/add/error-handling/fastapi.md	Step 0 — Verify context	1	python
 25b77f77831c1a561a82fc87f435271ed216df826ba37f2d47884d1aacb4257b	skills/add/error-handling/fastapi.md	Step 0 — Verify context	2	python
 4713bf57c9b13191acbd69fe29c8b02ed5e650f1730f3b53cb9ad7949b33742b	skills/add/error-handling/fastapi.md	Step 0 — Verify context	3	python
 d3374f1436822825215c4e4bcf0a192ee027d37828b5561542ad58a657158de2	skills/add/error-handling/nestjs.md	Step 0 — Verify context	0	ts
-88230a8d7efb387c492751ccfae21fbadc6bf29bb7ecaea38ae878c891dbc66b	skills/add/error-handling/nestjs.md	Step 0 — Verify context	1	ts
+ea5da2f6524c1c227d48783e3c928a4cb729d6190f782b3827a3f22538a94a5e	skills/add/error-handling/nestjs.md	Step 0 — Verify context	1	ts
 641120f0e97cd4e97f3d3b051d65577cf14aeea51bc496d3bbe7b92e752837e2	skills/add/error-handling/nestjs.md	Step 0 — Verify context	2	ts
 020cb45113996b36936f73fe99ff7d68196cc095064d2cf24aca09ea616322fb	skills/add/error-handling/nextjs.md	Next.js Error Boundary Tests	0	typescript
 ba913d28c2aca5ab3ef52b381b04792b22782785151a8005828b91ff54590265	skills/add/error-handling/nextjs.md	Step 0 — Verify context	0	ts
-027471fc47010b577f367bb19f5fb5b148f034106eb26588f58878b2e0cdda63	skills/add/error-handling/nextjs.md	Step 0 — Verify context	1	ts
-55345008f61e98dc13bb31ec4541e724bc3ca05bb3f5dc3346a2b2c968d3ae0b	skills/add/error-handling/nextjs.md	Step 0 — Verify context	2	ts
+739023feaddfed2d2b27102b690cc430fffbe28caa3b2f21f36f2f3ec851d2ff	skills/add/error-handling/nextjs.md	Step 0 — Verify context	1	ts
+cedd729f36659842d7338e2a58bd4418fba8ab9a0b6516c986ccdf4bab503fe4	skills/add/error-handling/nextjs.md	Step 0 — Verify context	2	ts
 6ac86ec1be1287b614879ff96b112a7c6173fe2656d39385c24948d73b1451a3	skills/add/error-handling/nextjs.md	Step 0 — Verify context	3	tsx
 9992e69d17d6cd9f22527ccf2d1f9155f256835348b354ba76a38b8d2baa7698	skills/add/error-handling/nextjs.md	Step 0 — Verify context	4	tsx
 6d3a5b66e0b8bca72559272dd71b0e66be2326781abe006820f4c329d4a8eee4	skills/add/error-handling/nextjs.md	Step 0 — Verify context	5	tsx
@@ -289,20 +289,20 @@ ba913d28c2aca5ab3ef52b381b04792b22782785151a8005828b91ff54590265	skills/add/erro
 d11888b5d46bf810e95cc0bf650da8ce6b79cfac8db3d6faedf4c418c1d78f4a	skills/add/error-handling/vite-react.md	Step 0 — Verify context	1	ts
 3364f1509f6370c372c0cec64aea7946ec97d50cadafc345d7b5762424cfa5d7	skills/add/error-handling/vite-react.md	Step 0 — Verify context	2	tsx
 bc8e9d3db3671bdf7f67651a92b5cd6c957b83bbc0d9d928afd8d1064b2f1672	skills/add/feature/nextjs.md	1. Create the Feature Directory Structure	0	-
-7b1804d296a89ec46ddece9ad4bc252a09b4dc0bc101bbb6c9e170e818ffcccb	skills/add/feature/nextjs.md	2. Create `types.ts`	0	ts
-1286ade7aa597403cda2d869b72a5cabde055d7bb141316ce0407f6196182b4c	skills/add/feature/nextjs.md	3. Create `constants.ts`	0	ts
-dd3b7e4ee442df226a13912bb2f6e307d9b36c6f4bcd3cc7bb998add577accf1	skills/add/feature/nextjs.md	4. Create API Services (in `api/`)	0	ts
-61219e41199c0d3f9c7bfbc88b112d25017390f30c60e92caf1e5b7e8b1d8d8e	skills/add/feature/nextjs.md	4. Create API Services (in `api/`)	1	ts
-e657555261abdfc774fd5e6354a600d1c1daf67d2fcc6c6cb565b95fe0ff31d0	skills/add/feature/nextjs.md	4b. Add Form Schemas (in `schemas/`)	0	ts
+b85e3289148a77ff20488369622771aabfd7c074e9f6e31a10860813bc46d5fe	skills/add/feature/nextjs.md	2. Create `types.ts`	0	ts
+61ce3274fc2bfd936c25cf97bdf1c3afadf8a6c986f43cb2147065dd3955c7a5	skills/add/feature/nextjs.md	3. Create `constants.ts`	0	ts
+f166030a86ad0993cd0e5d94bac735fcee0dc7626122188239f8c267f21d5b11	skills/add/feature/nextjs.md	4. Create API Services (in `api/`)	0	ts
+185762ef22be46f445efb58d7813703c296907fbe332c8227043504432d17ffe	skills/add/feature/nextjs.md	4. Create API Services (in `api/`)	1	ts
+66b96344997b7d6a894dbfbc6e93e6d5cc8f04402cffe7ec75259bdc01bbf9a8	skills/add/feature/nextjs.md	4b. Add Form Schemas (in `schemas/`)	0	ts
 026e3f3cda3921d177ff976792201218b978fc91bdbfae5bcff0a2179b1a7c12	skills/add/feature/nextjs.md	5. Create Components (in `components/`)	0	tsx
 48830eedc6d384464b2e3d5ce00b49e8bc1669f883be8764f2060cd943ab6d74	skills/add/feature/nextjs.md	6. Create Hooks (in `hooks/`)	0	ts
 9b338b4c497f3f24498b4db6617174749932a861d8ab9990ca80aca3641f6c61	skills/add/feature/nextjs.md	7. Create Root Barrel Export	0	ts
 dcc390f6690437e874bc53640815938dbc46246123087a515b7d3906559d89cf	skills/add/feature/nextjs.md	7. Create Root Barrel Export	1	ts
 137c6a4850778b175ac6b03985515de41d8e33db252f5ed01e6b061e9803aa5d	skills/add/feature/vite-react.md	1. Create the Feature Directory Structure	0	-
-23b7787e913ee2ac2b2e6fed5f069abd3c64100225ac21c3596fb019290f130c	skills/add/feature/vite-react.md	2. Create `types.ts`	0	ts
-8e441a65efe737426778ee95504a4ba3c393e13f9cd42ffd9f7604f7c944f45d	skills/add/feature/vite-react.md	3. Create `constants.ts`	0	ts
+4313a7159a85d94c9843d32276541b83b44294d70def4cb2783edb917d115732	skills/add/feature/vite-react.md	2. Create `types.ts`	0	ts
+2e572f3896960e4ba20493aebe9d6cec0054b8722955af5002ee4d884f47e23a	skills/add/feature/vite-react.md	3. Create `constants.ts`	0	ts
 eb747e22da3ee5ed8c516f7de0366b569508bb55d770ca6f2275ec6648b3d5ca	skills/add/feature/vite-react.md	4. Create Response Schemas and API Services (in `schemas/` + `api/`)	0	ts
-c644714454ade5425a222ff0bae0bf39d7fda801026a685a31b36e02d92bccc3	skills/add/feature/vite-react.md	4. Create Response Schemas and API Services (in `schemas/` + `api/`)	1	ts
+079fccf033a3d03e112c58c0c586bc26fc86150a2b586b9d785032b04b9aa7e3	skills/add/feature/vite-react.md	4. Create Response Schemas and API Services (in `schemas/` + `api/`)	1	ts
 481ff92f1b624abdff8ff23a905917d2066df1df3ff2e92e299e321351963022	skills/add/feature/vite-react.md	5. Create Components (in `components/`)	0	tsx
 4e04941acc0912242a89eeb4717b384d51f6c1708bed3b407bed83d6523575ac	skills/add/feature/vite-react.md	6. Create Hooks (in `hooks/`)	0	ts
 9b338b4c497f3f24498b4db6617174749932a861d8ab9990ca80aca3641f6c61	skills/add/feature/vite-react.md	7. Create Root Barrel Export	0	ts
@@ -317,7 +317,7 @@ e893ab98040b070e3cd9438a7b225891b157cf40c547f8fe8d403b00604bd699	skills/add/form
 f73b596cb4b4860fd0a3ea8cab67a42ad344d95a392ca986ca4588f59ea8c2cf	skills/add/form/vite-react.md	3. Export from Feature Barrel	1	typescript
 a7c95357be553c9d5bc573e2b55aa387857e04d1abfc22273035157f3bb57f56	skills/add/form/vite-react.md	4. Use in a Page	0	tsx
 c48805a0bf86648543a262dacb0842772427e7f8aa3e1213696e82bdfbbc008b	skills/add/integration/fastapi.md	2. Create the Client	0	python
-7484b0d0690596a100fd824d49558a5c91d290667121a644c72e0d33b923b718	skills/add/integration/fastapi.md	3. Define Response Schemas	0	python
+103259485e902b6a66a6d0e8d340bb52191aec3aed21093b2e266194e57dc068	skills/add/integration/fastapi.md	3. Define Response Schemas	0	python
 c7f5a3245ffc1e39539803d8d8af25cdfbe363659b5f9a0306020aad2ae02e1e	skills/add/integration/fastapi.md	4. Create the Service	0	python
 bee69b42594a91894a835edf08674e6b23fb6257d34c4331e368b77870984de7	skills/add/integration/fastapi.md	5. Add Config	0	python
 d2010808a15b3a9467662cfd5831fe814683950aa9096cef836a60b6a37fd47c	skills/add/integration/fastapi.md	5. Add Config	1	python
@@ -327,7 +327,7 @@ f295a920a9d66cfdfeec16b4e1c4365580dfeae768a59eafc4449660a2a9a9ba	skills/add/inte
 278593c06b84f83cc999cfc9d0d58d37d22545859a6f584b3a600497cc640505	skills/add/integration/fastapi.md	7. Create the Router	0	python
 eb6dcb4e4b5b7b56e5b774b8c78beec677e1dfa0f82ef4aa153103b2e8d667b9	skills/add/integration/fastapi.md	7. Create the Router	1	python
 d11b6a2b20474941e383f42f3e8f2ac3fcb3e8f97dca69d5bdeeed3e1e210c9d	skills/add/integration/fastapi.md	8. Register the Router	0	python
-8ea8d7c9110d04e41147bd9a346787b81aac387dc91989e5bed78ccb8d04faac	skills/add/integration/fastapi.md	9. Tests	0	python
+8b3ecb15de6238fe0634f978a015d84bf49151b4e00d887db7b1112dc1ad6979	skills/add/integration/fastapi.md	9. Tests	0	python
 8a922787fdc939d25a9ca1323a83c06a197a77ab2e6c7ef74746d28a3e536dd4	skills/add/integration/fastapi.md	Architecture	0	-
 3d5aa100e2f73977fb845802e199e093c679d972370ffd2ab79e2450df1976eb	skills/add/integration/nestjs.md	2. Define Zod Schemas	0	typescript
 651515ec515794c2230790949489e0fb2fb0eef09816b225bffeb370d876a8ba	skills/add/integration/nestjs.md	3. Create the Service	0	typescript
@@ -341,7 +341,7 @@ f38895be03040a2b319bb9a1a00dfcec95d1e7e3b15139209a9058b835b431b3	skills/add/inte
 b2e9217bd7803b79e137fac3284e815107a037175150ae9039a697908b5d09e3	skills/add/integration/nextjs.md	1. Create Zod Schemas	0	ts
 a3e4333136ea2e1b576adba0f1bc790e53e1829d5fd9dfbe26db8bc96875454c	skills/add/integration/nextjs.md	2. Create the Client	0	ts
 1dddb1810785591a2551540d290a7f9ff9df8270f9e18cf541945913d1bc0c47	skills/add/integration/nextjs.md	3. Create the Service	0	ts
-4f005887959345d9d11494f14ece590bacebb10aba5e7b6445a93ee18c538010	skills/add/integration/nextjs.md	4. Add Factory Function	0	ts
+8c065e66eb3d4d68789479aecf27d2b3ec9a914be9f7f6e43a9db5a4a3ebce5b	skills/add/integration/nextjs.md	4. Add Factory Function	0	ts
 824e841e05b31a46bb5649481a5ac7693e50a34419bb927754fadc7b5c8fb1d7	skills/add/integration/nextjs.md	5. Consume via Factory	0	ts
 ccb4274b937d5cce3714833ea341c07565c9efb53b17f05481b50892e7e63cc9	skills/add/integration/nextjs.md	Architecture	0	-
 b2e9217bd7803b79e137fac3284e815107a037175150ae9039a697908b5d09e3	skills/add/integration/vite-react.md	1. Create Zod Schemas	0	ts
@@ -355,38 +355,38 @@ b775750f7bf52064f35f1e48418c2c24334769e32ee607639e6eb6492e3b11df	skills/add/logg
 9f6e5fcc2986768773d877de33ac69a505585cf6241f59e6113ef668ad2ef88c	skills/add/logging/fastapi.md	Tier 1 — Base	1	python
 a362fb86d1b4c5dd16e20dfe318a92c256b600e9b8058e88b3c2604b2bf28b78	skills/add/logging/fastapi.md	Tier 1 — Base	2	python
 4ac135c62215f3fe8cd2b41230784b8645a5ea262256a3758946009f24a49a6f	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	0	python
-d4e183c475c159eb6b9694b28d1af7d5490400bba16e0a2877da4f6d3ea6e32b	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	1	python
+33d712841271494a888a69fec6308a51ae9dfcce3aca949e3382d93d0a718a56	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	1	python
 c674bb22ab9e65505d6f2ce69429130a13cb99b10d4e141d51f829adbfc11fba	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	2	python
-7547fe29acbf4886dd30345be97e3d1f4f76e6417e30c3206b985420834d5258	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	3	python
-ef8ff250c7845011d4276dff3085886815f3ff9ecd8961d42f9d79385d70bd24	skills/add/logging/fastapi.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	0	python
+3a56090ab0b94cb5b4e1d8e6ecb04ed8ae93a323eca585d81cc18735b7274f59	skills/add/logging/fastapi.md	Tier 2 — Standard (+ Tier 1)	3	python
+d09335817df05d14385f39a1381cc2bf396c9dcf6027487d6bfad010a1864903	skills/add/logging/fastapi.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	0	python
 7d65b8318b3fb5a6d069c37aaa9b31c7579e90a2ac39a11eabd90e8f5c1a8f42	skills/add/logging/fastapi.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	1	python
-14939cf4ca7667c629644ca182fd2e72531bbb7dc39ed374140710172e262c90	skills/add/logging/fastapi.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	python
+12376bc99ca25ceaea2ddab45cae3d4025ea8b52c1a346c87e003c7c754858b9	skills/add/logging/fastapi.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	python
 5ad871d4280afbff78c8bf3beb80ad6aecf88e5e050c80f30c93277008d64495	skills/add/logging/nestjs.md	Tier 1 — Base	0	ts
 7d13ef2ce93e73f7b68f384106969168be9fa03658d424a8aacff6d9bdca7858	skills/add/logging/nestjs.md	Tier 1 — Base	1	ts
-6beb1d0109acff4ad108fc9c0f858f5f6f93c6a275ae61fbfdc13eaab59447c7	skills/add/logging/nestjs.md	Tier 2 — Standard (+ Tier 1)	0	ts
+bb4a7245209097f27c40b1487ed14aa57a00c98d397025dd8a5db0ccdbfb5f6d	skills/add/logging/nestjs.md	Tier 2 — Standard (+ Tier 1)	0	ts
 d43ae6e73b4e52058d42ff059ac6179f8773498d70960a81f087293be289710f	skills/add/logging/nestjs.md	Tier 2 — Standard (+ Tier 1)	1	ts
-78cdc6d410759069d238402ed3bef63809fbddeb2de12e68fc3fe94d58ec0cb8	skills/add/logging/nestjs.md	Tier 2 — Standard (+ Tier 1)	2	ts
-4c008a76be8a6899a5f5e86b36ff62764c16846281412d4b86a22ed87d0da5e2	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	0	ts
+545326771ea231a1c782e1f1cac826ee385098e9f9bfb7c8849752e8701a80cf	skills/add/logging/nestjs.md	Tier 2 — Standard (+ Tier 1)	2	ts
+2eb0b89b28ba2869f5c9a15e2b65c24e690a43f2d2a660565c30f640a07f41f1	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	0	ts
 455d3e117cf07dd6c451530e3b3f2de9364cfea0273e8f8db58ce9a2d67ef17d	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	1	ts
-aa6ca6afadaedd76c20e8149703b337c66aded99b1c258304a762cedd355e64c	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	ts
-6ebd84887a4c79cfd6c5a4186250d5d1404b0dc715c638b2ae62fe599fb06f4c	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	3	ts
+ba1d366d47335a809c1051b7a59c83508d25a85d296253664e8a90a1ceea0214	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	ts
+0b07d9a65b1a0f9c3d2c1015a1421ce957714266028bf4c7eff60e65e13ad64d	skills/add/logging/nestjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	3	ts
 1ec258ec137884eeebece9653c4cef5145cfc71fe29fd2fcb7669daac025556b	skills/add/logging/nextjs.md	Tier 1 — Base	0	ts
 98c43383e03a92fa7f14452c705fb8fa46b0f37e6efa8c0cfa2f3d83062083ba	skills/add/logging/nextjs.md	Tier 1 — Base	1	ts
 2403e002565661cf0e895533e2656ddc079bb07089237468621af371729750ea	skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	0	ts
 ab54f55d28ed3070253114cb40cd10e131ade90008c51ce51c8aa3cd8a9f760e	skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	1	ts
 006c7f5b9005b105c044d57edcf95a6a9e6d5691c8b3a4e1ea973bd8420c5eca	skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	2	ts
-01d0be608da6098c554a767a036fe5ab0198eeb0854b45aaef1f3253130a5184	skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	3	ts
+9fd2322d8a02e310bb01aa7dfa09139e546bc6cd8751d492bf2caf5ace8fc2e8	skills/add/logging/nextjs.md	Tier 2 — Standard (+ Tier 1)	3	ts
 f983fe64cfde388be3ce5c87603791a6c4b4d110d3ccffdf07a3f0bf8df68311	skills/add/logging/nextjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	0	ts
 58c7ee0f6515c7cfeef66b7182fad00114958f0e3278e011803cbe17cce04e77	skills/add/logging/nextjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	1	ts
-d129ec8e686e3ec505400246da77594e0650beecb3b3d1b6c6a6dc4cb0deb59b	skills/add/logging/nextjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	ts
+9d26c7f637716e1765b75202055a55c22b56d7d9e416ac5001d44439be524347	skills/add/logging/nextjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	2	ts
 c8151fa39a327532eceadcf359265aa3636eff91765ecc48f2820cbe183ca5d7	skills/add/logging/nextjs.md	Tier 3 — Verbose (+ Tier 1 + Tier 2)	3	ts
 593816f9df432562835ff667140cf17b0197d91fad3fe419635a611cac9227b3	skills/add/logging/vite-react.md	1. Create `src/lib/logging/breadcrumbs.ts`	0	ts
-98946e5108cf5c6c264ff888d440d291aa75ef9c9c947440a967df4ffc0ae32c	skills/add/logging/vite-react.md	2. Extend `src/lib/errors/error-log-handler.ts`	0	ts
-9ddde15d417529ff50ea97d91bfbde4473b3b9a3ce9f6c90dd06cf532e058972	skills/add/logging/vite-react.md	2. Extend `src/lib/errors/error-log-handler.ts`	1	ts
+1b36572213be552a4dd4c29870166a36c92505101785fb58ee2f3477164e43ff	skills/add/logging/vite-react.md	2. Extend `src/lib/errors/error-log-handler.ts`	0	ts
+bafc6ab2dfbc59bbfa110d74c63d228f525716e93a8fb55d31bd64df86e36d91	skills/add/logging/vite-react.md	2. Extend `src/lib/errors/error-log-handler.ts`	1	ts
 e6c4b70220a6f5ddbb6cdc3dff190ed2c7fd36973485ebc77f4962781c144091	skills/add/logging/vite-react.md	3. Create `src/lib/logging/log-batcher.ts`	0	ts
-025b14278b2011ede4ab185dea5be63b0eda0cd3a761c9c3f20f32687b37070e	skills/add/logging/vite-react.md	3. Create `src/lib/logging/log-batcher.ts`	1	ts
+ea4f39addd280acc520ff27afa06b19d265c93d37f4b47b9fc9519440e4c9960	skills/add/logging/vite-react.md	3. Create `src/lib/logging/log-batcher.ts`	1	ts
 44f65066524559db97ce24d5942304b32f8beb6fe682295e7e262e72e6afe67a	skills/add/logging/vite-react.md	4. Add router navigation breadcrumbs	0	tsx
-bf3c5db764fff6fbccbc81832b7df1a37888a217e52c6e9c45dad370fd4f2154	skills/add/logging/vite-react.md	4. Add router navigation breadcrumbs	1	tsx
+7dcae74f91c8858cfe5a39a882b8261bafd5beb1c93d2b13d02fc9d97a8f3edf	skills/add/logging/vite-react.md	4. Add router navigation breadcrumbs	1	tsx
 ee6caf0c8e9b4a0a2e03cafbf471fde45aecabb51c325794e7dde2df6df1d03b	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	0	ts
 d4215fbedeb2233765a4498380598229b8ac2cc65a30e8df98d9ea1928743d33	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	1	ts
 425a5f5171f1f324984095db6f40c2ceecabfca3988f75b61ea0be57cc2db0c1	skills/add/mutation-testing/python.md	Dependencies	0	-
@@ -399,7 +399,7 @@ d1fb635dd5e9362e0e25881107b790c7438e57d24131c325847c5c561e7ab41d	skills/add/muta
 7c274e6359ede0b6f3b9693f75c64921255c7ca5d29cf7f1b076aeec1484f949	skills/add/mutation-testing/typescript.md	Step 4 — Add CI job	0	yaml
 6914448cccf3c7e03e197959eb6377f34bfffdaec44f42a6e11f2c553a785921	skills/add/page/nextjs.md	2. Create the Page File	0	tsx
 d330d790c3b405436d0e7a11e601859b466b4d0fd82230bb72829d2f82fec6c0	skills/add/page/nextjs.md	3. Add a Loading State (Required for Data-Fetching Pages)	0	tsx
-24ab120a9b387fa78c642f33121fabc5827639f4f3c2d07674e3e6fa73016128	skills/add/page/nextjs.md	4. Add Error Handling (Optional)	0	tsx
+b9a5524e50e45081e39f763fe92dd9f52d78bd7b88c08672f3621d0554db7894	skills/add/page/nextjs.md	4. Add Error Handling (Optional)	0	tsx
 166c916d12691bed268127d400eccadb56426bfa3a79d9a0dbfaca71112b30b7	skills/add/page/nextjs.md	5. Add Not Found (Optional, for Dynamic Routes)	0	tsx
 988e98d638079faa8b2eb5f2b1ba56d4d1c0895b67305c42b9fb731070c8e903	skills/add/page/nextjs.md	6. Update Routes Constant	0	ts
 7cf07175627d9c754a0f14c774df1abdd69d8392443a55eb400210e8992566a8	skills/add/page/vite-react.md	1. Create the Page Component	0	tsx
@@ -407,61 +407,61 @@ d330d790c3b405436d0e7a11e601859b466b4d0fd82230bb72829d2f82fec6c0	skills/add/page
 9904f63eb085f2051dcd506ba1a792679d96e3c1f77d849a6c25a88d93cee13d	skills/add/page/vite-react.md	2. Add the Route to the Router	1	tsx
 169a2910b86e2a4c094d8b5bdb8785a23a1e67422e067b741cc41b069fba694b	skills/add/page/vite-react.md	2. Add the Route to the Router	2	tsx
 b15dda7300fb86e84484ae349e411fa427650f89feb713d11dbb4ab72ae42495	skills/add/page/vite-react.md	2. Add the Route to the Router	3	tsx
-c2cd9ac3307246c3901c5182174560b32b1172c752c814e4de7c54436480399a	skills/add/page/vite-react.md	2. Add the Route to the Router	4	tsx
+d455f1ad2d0580d2a359a5a51566d2be33b29f4f32d21606f68ae248763eec8f	skills/add/page/vite-react.md	2. Add the Route to the Router	4	tsx
 4d124ef0d1821e0b0083a92003b24314518846fc07528675a81b6f04afce6c43	skills/add/page/vite-react.md	2. Add the Route to the Router	5	tsx
 f3089195e6f1bbcf1d163ee371654433da719ac437f16b9c626576ce5e245b2c	skills/add/page/vite-react.md	3. Export from Barrel	0	ts
 631b870dacbf91cd61761e6fb959b96e255c5f0c42f177c539e81772564ef5cf	skills/add/page/vite-react.md	4. Update Routes Constant	0	ts
 4914c0a3ab629e31142c62471aa3205e1099979b16c759fcac83eadb29461370	skills/add/page/vite-react.md	5. Add Navigation (Optional)	0	ts
 b0c33aa2f9b83e5efeac8ce8752635c98c0bc7daf73d1e2ccc9557f581bb79e0	skills/add/pagination/fastapi.md	Step 0 — Verify context	0	python
 ece6f0266af0310cac3cea17803fe1679f9f9211185129e4d1e8c67d9bebd19b	skills/add/pagination/fastapi.md	Step 0 — Verify context	1	python
-a0cb03241bae11d6bc3ace99947ec5c462f556007e592b454b0a641ee7a29a98	skills/add/pagination/fastapi.md	Step 0 — Verify context	2	python
-83bd73f8174d4f245378119957f103b7702cf88ed2f0f651a0b3a8ec01a661e7	skills/add/pagination/fastapi.md	Step 0 — Verify context	3	python
+3a33d8738628129b5c853792535e8d5ab613fe353a4213fa88efc0bf62c6c72f	skills/add/pagination/fastapi.md	Step 0 — Verify context	2	python
+ed23b8e91269aa339a2d262d5ff1eb712d9daf0fdc521389d9ab7da44b1fe41c	skills/add/pagination/fastapi.md	Step 0 — Verify context	3	python
 db3ff774803c6a39c8562dc54138d64a8379475df4264f5c674039d019580d48	skills/add/pagination/fastapi.md	Step 0 — Verify context	4	python
 b7cf253195ff3744befdaee80ce918be136abbf33ae5132e9cf7162713b96d81	skills/add/pagination/nestjs.md	Step 0 — Verify context	0	ts
-f9c191b23055a19a4ea028013fe164d11ac5b94e695fd6a5abbc1a81c41d7fce	skills/add/pagination/nestjs.md	Step 0 — Verify context	1	ts
+1edc6e93b6d631e67587ef4793c81548b9042da6edb28863be2e36fc74c3e44c	skills/add/pagination/nestjs.md	Step 0 — Verify context	1	ts
 b04e4a0cdaf85b200b8beadd18b08442741d371ea543cd84e9c163a80fe1d9f7	skills/add/pagination/nestjs.md	Step 0 — Verify context	2	ts
-a59fd385f728a8afe1640da1958d66de17ccc94a8585884c4fd0b6f94bcae282	skills/add/pagination/nestjs.md	Step 0 — Verify context	3	ts
-60afcd7105dd7ee5d760cf0a8a13d22f75608b9825d79108117affa3d9bfa5dc	skills/add/pagination/nestjs.md	Step 0 — Verify context	4	ts
+83fbf3c3f44dde44c716cdfab5108d402127e238ea997f016d1b7bb72d809100	skills/add/pagination/nestjs.md	Step 0 — Verify context	3	ts
+922aac2675c54982da9e4d39027b9ea5567fe43c88bfded16e297c44a34dc3c7	skills/add/pagination/nestjs.md	Step 0 — Verify context	4	ts
 dc46b4d74be343611e3bbc42c5371193769273635241dcba7173ba1737d6fe6f	skills/add/pagination/nestjs.md	Step 0 — Verify context	5	ts
-6c19fd7c8dfbbc13886569bed2ae51d7a0ccdf1e2e1dedfab88011df3e069af3	skills/add/pagination/nestjs.md	Step 0 — Verify context	6	ts
+8990de303a7720581e51c75442a7047717c1f03a7603d86d5b70441395331c11	skills/add/pagination/nestjs.md	Step 0 — Verify context	6	ts
 0ce538cebe3f7720012df5f4c9e50528c770ac60d8a866710c5e0e5f0dc30fcd	skills/add/pagination/nestjs.md	Step 0 — Verify context	7	ts
-51c535ce5db7a81fa4675a9d78cc5b8b1355ce4313ca8fee0c29d9bc0bb467f5	skills/add/pagination/nestjs.md	Step 0 — Verify context	8	ts
-470df7fe905adb7fbce9357702d374ace42ba6497459ca0c4075111139e3a445	skills/add/pagination/nestjs.md	Step 0 — Verify context	9	ts
+c2cacfac461d1d1d76cb6883aabd6f41c39501689d756020666ee8045228f626	skills/add/pagination/nestjs.md	Step 0 — Verify context	8	ts
+56af0993b1d5cd479934354eb1e5825435de0c10256a8cb874ea753bea96d986	skills/add/pagination/nestjs.md	Step 0 — Verify context	9	ts
 6aca9bd72514ad9aa1b12a5efc11ccc5cc3965cd248a6329ca3a7f5c522240cb	skills/add/pagination/nestjs.md	Tests	0	ts
 d1afb1a96916cf8634293f3281100868ec3ca5d39cff12b0b710da7aba53049b	skills/add/pagination/nextjs.md	Step 0 — Verify context	0	ts
 68abd152cf90f1cebb2d53689769e458ea9e1e1b1d3564a7b7470e18e279d838	skills/add/pagination/nextjs.md	Step 0 — Verify context	1	ts
 d875f3160e1ee6365d42b9a965dd3a9bd52c81ee1d84dbcc30a270646a791bd0	skills/add/pagination/nextjs.md	Step 0 — Verify context	2	ts
 72174d3b5e41921a3ccd8afc73309ec319b356f183e93d8d0beb782184ac1bf3	skills/add/pagination/nextjs.md	Step 0 — Verify context	3	ts
-05be5a45b1114edd8a5ecd9429ae89c85bf5a7c7a9b2f225b78625d61c4b818a	skills/add/pagination/nextjs.md	Step 0 — Verify context	4	ts
-bfb513158370df39e798d4e114dec23bab5a1139fcbf5b9d9962051a109b7c85	skills/add/pagination/nextjs.md	Step 0 — Verify context	5	ts
-1ccecdd7c39706c3b8e47737d35e68002cca1800ad742c6faaa2ad7108b11b95	skills/add/pagination/nextjs.md	Step 0 — Verify context	6	ts
-d85e45a20ef2a29db8e8282c80c8ce8387924d3fcdfe6d0fe3a959d96d575f0a	skills/add/pagination/nextjs.md	Step 0 — Verify context	7	ts
+5852e65c0fd352dd9a9880a002dee5a43e63cf4bd13bfc152c21743dbcb0d352	skills/add/pagination/nextjs.md	Step 0 — Verify context	4	ts
+d96a25d6581fbbc78f4a4b24df23100bd2cb43cdefb8ea43bd141ebe9f6a3ee9	skills/add/pagination/nextjs.md	Step 0 — Verify context	5	ts
+4d73bb4800dce2ab5065a94f86a1441ec9841e6a4d366fce1f09d411592f8e7d	skills/add/pagination/nextjs.md	Step 0 — Verify context	6	ts
+ac146f9ea9a007ecaa9e44d4fc509e2719319cd63d6c9dc14a3aee3804837b34	skills/add/pagination/nextjs.md	Step 0 — Verify context	7	ts
 a15c237dfbbdc8ceaf0c8e2f1c0bc567fcaff2619438e093ae8b7ef711c11742	skills/add/pagination/nextjs.md	Step 0 — Verify context	8	tsx
-1b59e6655eb73f4818c14c10b3a3dc688769b7c448443bc56795464d65d3af2c	skills/add/pagination/vite-react.md	Step 0 — Verify context	0	ts
+017613b28e9047e7df5665dfb5ff23886b275a24e10a1b386f4720ff5130926a	skills/add/pagination/vite-react.md	Step 0 — Verify context	0	ts
 a42c25f0e3521c47c516e68dcefb4dc4ed3ae34d34e822b53cd065f36d6a8094	skills/add/pagination/vite-react.md	Step 0 — Verify context	1	ts
-c139819d26a737e1a60980480b1fbfa693acb6fff8e650472e234b4f48e35f3c	skills/add/pagination/vite-react.md	Step 0 — Verify context	2	ts
+e2111001063e5f02a4021544c6fa282ae9a9ba0e2bb5af64c8968ea8fc75e1d0	skills/add/pagination/vite-react.md	Step 0 — Verify context	2	ts
 00963b18628367f30f118317d6bcd1ba3cf918e536ad4846a11e35ad80fb890e	skills/add/pagination/vite-react.md	Step 0 — Verify context	3	ts
 5ebc7a825e509e4d7cfdeed03d0f4518ebd0b6964aa38f070eac0a976069e211	skills/add/pagination/vite-react.md	Step 0 — Verify context	4	tsx
 3e394940d3687451d257a077a1dfa99ad83b146e411135cef3e582be2ea953b1	skills/add/redaction/hook-node.md	Part A — `PostToolUse` masking hook	0	javascript
-73183a593b0f85b0e470dacd8e756e407cb8ea539f88882910115fe5eee06612	skills/add/redaction/hook-node.md	Part B — `user-prompt-guard` companion warning	0	javascript
+9a3ac1bcbe843a3488b873c634f62d5bfbba26e80f1360d2ca3f1833ee976fd1	skills/add/redaction/hook-node.md	Part B — `user-prompt-guard` companion warning	0	javascript
 9334025504db9c56072f710220745aa6b2acc5cd8539379cc079cb8aae50cdf5	skills/add/redaction/hook-python.md	Part A — `PostToolUse` masking hook	0	python
-43a4ce498141d08e538bd80ee69d5cebb474c93e6008184a8f3a2fde0131b6db	skills/add/redaction/hook-python.md	Part B — `user-prompt-guard` companion warning	0	python
+e88b11e04f3721aee89c2a1ef77bfb8a7abb3b9ad83495d034b2ef9772e7889f	skills/add/redaction/hook-python.md	Part B — `user-prompt-guard` companion warning	0	python
 8d3484a3220d7728a4e4f49240ee6465793b98359cfe827bdbcde1bc51717ccc	skills/add/redaction/implementation.md	Step 2 — Write `.claude/redaction-config.json`	0	json
 fc622a286ab89eb4266e13d91ebaeffc10cb8899d5dc6dcf545af26d29620743	skills/add/redaction/implementation.md	Step 4 — Wire the hook into `.claude/settings.json`	0	json
 9759720eca78ad7d7f7781a6401ba0b519aeabe19b75d26bd140ce92f89fac53	skills/add/redaction/implementation.md	Step 4 — Wire the hook into `.claude/settings.json`	1	json
 be586ee612306a52dd134b907d5c2e7167f28b9fdfb0392316b1b3b123b9a66e	skills/add/redaction/implementation.md	Step 4 — Wire the hook into `.claude/settings.json`	2	json
 f4b94b239e0c87db966a4e620c49218ef5d2010a6aff6aa87e3864e203c92829	skills/add/redaction/implementation.md	Step 7 — Gitignore the map file	0	-
-db3816e002162363d40c05831bfd9ffab3565d681f33b12c3641588e63e51d56	skills/add/test/fastapi.md	Factories	0	python
+49c061900b40165a39190eeb9581e01f32edbd94336769c2656d9ccbea5c66aa	skills/add/test/fastapi.md	Factories	0	python
 2eed193efcfca22b82da83734564eec0b7ded92ba9361e48f1025a1bfe735dca	skills/add/test/fastapi.md	Fixtures	0	python
-7aebd27ea47fe6f2926c571e5cc66ead7cff12d5bef96739fa52d22079697259	skills/add/test/fastapi.md	Fixtures	1	python
+f40903a2ddbcd7fa911b889de8a7c993d802c3b05966ca728774834015434462	skills/add/test/fastapi.md	Fixtures	1	python
 280e9aa28c2c42297746bc0db565682b7db2d76dba00f914aa1649b1e59273e7	skills/add/test/fastapi.md	Naming	0	python
 1e7b200fee34bfad8ce3407d8c2b4b8a74a838f8199fff0b26563fbfcb6092a8	skills/add/test/fastapi.md	Parametrize	0	python
 127c8544c201f7afda65c1016aa81a93bd1032511dd233b743706820b0cbdb3f	skills/add/test/fastapi.md	Test Structure	0	-
-961f655218f7e857f8b2e0dc6f3b7ad5279e0ccf4c66008e3028fe2ffb7f5af4	skills/add/test/nestjs.md	Controller Test	0	typescript
-6312a20ed037e2655e35ec58c00d5b4f2e8276634adf466d3d9128c710d24705	skills/add/test/nestjs.md	E2E Tests	0	typescript
+8833a7347db19452a2a9f35319d2be31845288f77dd09d242b42df2b05aead73	skills/add/test/nestjs.md	Controller Test	0	typescript
+4b01ecc6ff920444b739ccf699133f35dee4782adfd70dc4b3a16534df23f55d	skills/add/test/nestjs.md	E2E Tests	0	typescript
 293a8d4d150c730aabff4e5a8d4d57bc42e8cb6538ad5780f571ae8cc00a4770	skills/add/test/nestjs.md	Service Test with Mocked Repository	0	typescript
 77b85b69951d6fb6b6b5121257b3b95c291686abd963468a2d818b3581c78d8b	skills/add/test/nestjs.md	Test Organization	0	-
-82cd5c92b7bd4115102283459f894f6872ebacb854f50283f1924a207f5fc0ff	skills/add/test/nextjs.md	2. Test GET Endpoints	0	ts
+6995f9dbfaa44e50b3722ee34adbb30edcb1f9a919ceb5e57c369943d18bc707	skills/add/test/nextjs.md	2. Test GET Endpoints	0	ts
 7fcf128ee4f141907f47b5b44bdb34b7f648814af79ab47a85fa6a03c7945d5a	skills/add/test/nextjs.md	3. Test POST Endpoints with Validation	0	ts
 81e0938b4a1a24657d7b1d226fed20473f9b75f8e284602a304c59864f1fe928	skills/add/test/nextjs.md	4. Test Dynamic Segment Routes	0	ts
 83d0c323eeed6794661f7048c101973ac0f8252715cc01c9052a28b05bcb5ca7	skills/add/test/nextjs.md	4b. Routes That Check the Session	0	ts
@@ -472,5 +472,5 @@ db3816e002162363d40c05831bfd9ffab3565d681f33b12c3641588e63e51d56	skills/add/test
 4da0ca041242f54e275b02c880e89c1949f21405157b33983c71d8adc3b798c3	skills/add/test/vite-react.md	Component Tests with User Interaction	0	tsx
 6f6375fcf51b8b5314ba4321271fb74eba44c272e692dee525a7d8d625d080fd	skills/add/test/vite-react.md	Integration Service Tests (External APIs)	0	ts
 549b01c38e52a2c97997574ee4d3cee2639ac342f1f9c09bfe6872ca2e5c29da	skills/add/test/vite-react.md	React Query Hook Tests	0	tsx
-e3653e19f2fca6d3728d2ed13be6804483e6b994510754d998b53dacf6ece8df	skills/add/test/vite-react.md	Service Tests	0	ts
+1c5897e7ea0ec82e9b26aade5b9b0e842d6a53e67efc64e8f074f4ef7f54f6fd	skills/add/test/vite-react.md	Service Tests	0	ts
 488fcc9f11630f1c2014d74685cfffb4e5e118c2a7ef4da49ec97cd1584045ad	skills/add/test/vite-react.md	Test Structure	0	-

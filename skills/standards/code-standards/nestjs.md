@@ -100,7 +100,7 @@ Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`
 ### Comments
 
 - Follow `code-standards/comments.md`.
-- JSDoc on exported providers/controllers/DTOs describes the contract — not the implementation.
+- JSDoc only on public APIs the signature does not explain: see `comments.md`.
 - `eslint.config.mjs` gates comments and directives at `error`; every suppression must be scoped, used, and carry a `-- reason` (rule list: `comments.md` → Enforcement).
 
 ### Static Analysis (`eslint-plugin-sonarjs`)

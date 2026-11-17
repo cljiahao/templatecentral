@@ -60,8 +60,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from '@/app/api/projects/route';
 
-// Mock your data access layer — replace path and export with your actual service.
-// Route handlers consume integration-layer services (never feature api/ services).
+// Mock the integration-layer service the route handler consumes, never a feature api/ service.
 vi.mock('@/integrations/services/project-service', () => ({
   ProjectService: { getAll: vi.fn() },
 }));

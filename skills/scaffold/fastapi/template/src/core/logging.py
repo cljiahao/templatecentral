@@ -27,7 +27,7 @@ _SENSITIVE_KEYS = {
 def _redact_sensitive(
     _logger: Any, _method_name: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
-    """Redact sensitive values by key, recursing into nested dicts and sequences (parity with pino's `*.token`)."""
+    """Redact sensitive values by key, recursing into nested dicts and sequences."""
 
     def scrub(value: Any) -> Any:
         if isinstance(value, dict):

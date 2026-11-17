@@ -1,0 +1,6 @@
+skills/scaffold/nestjs/template/eslint.config.mjs
+skills/scaffold/nextjs/template/eslint.config.mjs
+skills/scaffold/vite-react/template/eslint.config.mjs
+skills/scaffold/vite-react/template/vite.config.ts
+skills/add/database/python/sqlalchemy-iam.md
+skills/add/database/typescript/nestjs-kysely-iam.md

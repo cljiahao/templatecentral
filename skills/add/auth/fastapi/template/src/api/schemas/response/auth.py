@@ -4,7 +4,7 @@ from api.schemas.base import BaseResponseSchema
 
 
 class TokenResponse(BaseModel):
-    """JWT token response — uses plain BaseModel to preserve OAuth2-standard snake_case (RFC 6749)."""
+    """JWT token response — plain BaseModel keeps the OAuth2 snake_case field names."""
 
     access_token: str = Field(description="JWT access token.")
     token_type: str = Field(default="bearer", description="Token type.")

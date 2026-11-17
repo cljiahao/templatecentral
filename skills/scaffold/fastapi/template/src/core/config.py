@@ -21,7 +21,7 @@ class CommonSettings(BaseSettings):
         - [Issues](https://www.github.com/issues)
         """
     )
-    # Closed set: an unknown value must fail at boot.
+    # Closed set: an unknown value must fail at boot, not slip past main.py's prod/uat check and run with auto-reload.
     ENVIRONMENT: Literal["dev", "uat", "prod"] = Field(default="dev")
     # Only origin allowed to frame this app; see core/security_headers.py.
     APPCENTRAL_PORTAL_ORIGIN: str = Field(default="")
@@ -63,5 +63,4 @@ class APISettings(BaseSettings):
 
 
 common_settings = CommonSettings()
-# Required fields are filled from the environment at runtime.
-api_settings = APISettings()  # pyright: ignore[reportCallIssue]
+api_settings = APISettings()

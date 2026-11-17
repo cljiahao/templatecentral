@@ -98,14 +98,14 @@ export const POST = withLogging(async (request) => {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return new Response(null, { status: 401 });
 
-    // Malformed JSON parses to null so it fails validation (400) instead of hitting the 500 path.
+    // Malformed JSON parses to null so it fails validation with 400, not the 500 path.
     const body: unknown = await request.json().catch(() => null);
     const parsed = CreateProjectSchema.safeParse(body);
     if (!parsed.success) {
       return handleApiError('Failed to create project', parsed.error);
     }
 
-    // Placeholder — replace with the data layer from `templatecentral:add (database)`.
+    // Placeholder; replace with your data layer.
     const project = { id: crypto.randomUUID(), ...parsed.data };
 
     return NextResponse.json({ data: project }, { status: 201 });
@@ -120,8 +120,7 @@ export const POST = withLogging(async (request) => {
 No session → 401. Missing resource **and** someone else's resource → the same 404, so the response never confirms the ID exists:
 
 ```ts
-// src/app/api/projects/[id]/route.ts
-// Your data-layer lookup returns the row or null.
+// src/app/api/projects/[id]/route.ts: the data-layer lookup returns the row or null
 import { findProjectById } from '@/integrations/database/queries/find-project';
 import { auth } from '@/lib/auth';
 import { handleApiError } from '@/lib/errors';

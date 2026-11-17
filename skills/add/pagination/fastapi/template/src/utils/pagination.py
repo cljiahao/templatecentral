@@ -16,7 +16,7 @@ def create_metadata(page: int, limit: int, total: int) -> PaginationMetadata:
 def parse_sort_param(
     sort: str | None, allowed_fields: set[str]
 ) -> tuple[str, SortDirection] | None:
-    """Return (field, direction) for an allow-listed `asc_<field>`/`desc_<field>`, else None."""
+    """Returns the field and direction for an allow-listed `asc_<field>`/`desc_<field>`, else None."""
     if not sort:
         return None
     # Split once: field names may themselves contain underscores.

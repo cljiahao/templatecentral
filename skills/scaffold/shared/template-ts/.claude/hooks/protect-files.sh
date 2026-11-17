@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# PreToolUse(Edit|Write|NotebookEdit) — block secrets and certs; ask before CI and governance edits.
-# Exit 2 = hard block (stderr → model); permissionDecision "ask" JSON (exit 0) = require human approval; plain exit 0 = allow.
-# Fail closed: a guard that cannot locate the project root blocks rather than guessing.
+# PreToolUse(Edit|Write|NotebookEdit): block secrets and certs, ask before CI and governance edits; fails closed.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: protect-files.sh cannot cd to the project root — refusing the write." >&2; exit 2; }
 input=$(cat)
 file=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{const ti=(JSON.parse(b||'{}').tool_input)||{};process.stdout.write(ti.file_path||ti.notebook_path||ti.path||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -z "$file" ] && exit 0
-shopt -s nocasematch   # .ENV, Dockerfile vs dockerfile, AGENTS.md vs agents.md — case-insensitive filesystems make these the same file
+# Case-insensitive: macOS treats .ENV and .env as one file.
+shopt -s nocasematch
 while [[ "$file" == ./* ]]; do file="${file#./}"; done
 base="${file##*/}"
 
@@ -16,10 +15,7 @@ if [[ "$base" == .env* && "$base" != ".env.example" && "$base" != ".env.default"
   exit 2
 fi
 
-# Resolve to a project-relative path: physical root (pwd -P — macOS /tmp is really /private/tmp),
-# relative paths anchored at the root, the longest existing ancestor canonicalised (symlinked
-# parents), and `.`/`..` in the not-yet-existing remainder folded lexically — so neither
-# `src/../.github/…` (no src/) nor a symlinked parent can disguise the target.
+# Canonicalise: physical root, symlinked parents and ./.. folded, so no path can disguise the target.
 root=$(pwd -P)
 case "$file" in /*) abs="$file" ;; *) abs="$root/$file" ;; esac
 canon() {
@@ -33,7 +29,8 @@ canon() {
   done
   printf '%s' "${d%/}$n/${1##*/}"
 }
-abs=$(canon "$abs"); abs=$(canon "$abs")   # 2nd pass: the folded path may now cross an existing (symlinked) dir
+# Second pass: the folded path may now cross a symlinked dir.
+abs=$(canon "$abs"); abs=$(canon "$abs")
 rel="${abs#"$root"/}"
 
 if [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
@@ -66,10 +63,7 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
   reason="CI/CD pipeline definition — changes skip or weaken the merge gates"
 fi
 if [ -n "$reason" ]; then
-  # Emit permissionDecision "ask" so Claude Code prompts for human approval before the write.
-  # (`exit 1` + stderr is NON-blocking on PreToolUse — the edit goes through and the warning
-  # never reaches the model. Only "ask" actually gates the write.) JSON is built by the runtime,
-  # never by printf, so a path containing quotes/backslashes can't break or inject into it.
+  # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
   node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:"PROTECTED FILE: "+process.argv[1]+" — "+process.argv[2]+". Confirm human approval and note it in the PR."}})+"\n")' "$rel" "$reason" \
     || { echo "BLOCKED: $rel is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0

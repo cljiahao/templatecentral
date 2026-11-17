@@ -24,7 +24,7 @@ export function usePagination<T>(
     queryKey: [...queryKey, { page, pageSize }],
     queryFn: ({ signal }) => fetchFn(page, pageSize, signal),
     enabled,
-    // Keeps the previous page on screen (isFetching) instead of unmounting to isPending.
+    // Keeps the previous page on screen while the next one loads.
     placeholderData: keepPreviousData,
   });
 

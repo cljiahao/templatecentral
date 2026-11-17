@@ -92,7 +92,7 @@ import { z } from 'zod';
 
 export const GET = withLogging(async (request) => {
   try {
-    // proxy.ts only checks cookie presence; omit in a project without templatecentral:add (auth).
+    // proxy.ts only checks cookie presence; omit when the project has no auth.
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return new Response(null, { status: 401 });
 
@@ -128,7 +128,7 @@ export const GET = withLogging(async (request) => {
 // src/features/project/schemas/project.schema.ts
 import { z } from 'zod';
 
-// Canonical project schema (same as add (feature)); extra columns are stripped.
+// Canonical project schema, shared with the feature guide; extra columns are stripped.
 export const projectItemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -149,8 +149,7 @@ export const paginatedProjectsSchema = z.object({
 ```
 
 ```ts
-// src/features/project/api/project-service.ts
-// Not '@/lib/errors': that barrel pulls server-only modules into the client bundle.
+// src/features/project/api/project-service.ts: not '@/lib/errors', whose barrel pulls server code into the client
 import { APIError } from '@/integrations/error';
 import { paginatedProjectsSchema } from '../schemas/project.schema';
 
@@ -182,7 +181,7 @@ export const useProjects = (page: number, limit: number) =>
   useQuery({
     queryKey: ['projects', { page, limit }],
     queryFn: ({ signal }) => fetchProjects(page, limit, signal),
-    // Keeps the previous page on screen (isFetching) instead of unmounting to isPending.
+    // Keeps the previous page on screen while the next one loads.
     placeholderData: keepPreviousData,
   });
 ```

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# PostToolUse(Skill) — silent skill-usage logger. Records which skills are invoked so the
-# /skill-audit skill can later surface workflows worth capturing as a committed project skill.
-# Silent + non-blocking: always exits 0, never interrupts. Log is per-developer (gitignored).
+# PostToolUse(Skill): silent, non-blocking skill-usage logger for /skill-audit; log is per-developer (gitignored).
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 # Real JSON parse (a regex misreads values containing `}`): node on TS stacks, python3 on FastAPI.

@@ -94,8 +94,7 @@ export default function AnalyticsError({ error, reset }: {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
       <h2 className="text-lg font-semibold">Something went wrong</h2>
-      {/* digest is the only handle on the server-side stack trace, which Next.js
-          strips from production error objects — surface it so users can report it */}
+      {/* digest is the only handle on the stripped server-side stack trace; surface it for bug reports */}
       {error.digest && (
         <p className="text-muted-foreground text-sm">Reference: {error.digest}</p>
       )}

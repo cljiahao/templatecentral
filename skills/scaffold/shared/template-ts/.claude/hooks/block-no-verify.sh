@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
-# Best-effort tripwire, not a security boundary: a determined shell can always obfuscate.
-# The lefthook + CI layers are the backstop.
-orig_dir=$PWD   # fallback only — Claude Code may spawn hooks from the session's original root, not a worktree
+# Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
+# Fallback only: hooks may be spawned from the session's original root, not a worktree.
+orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
 input=$(cat)
 cmd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(((JSON.parse(b||'{}').tool_input)||{}).command||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
-# The hook input's `cwd` is the directory the command actually runs in, so a bare `git commit` from a
-# worktree resolves that worktree's branch rather than the main checkout's.
+# The hook input's cwd is where the command runs, so a bare git commit resolves that worktree's branch.
 in_cwd=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(b||'{}').cwd||'')}catch(e){process.stdout.write('')}})" 2>/dev/null)
 [ -n "$in_cwd" ] && orig_dir=$in_cwd
 [ -z "$cmd" ] && exit 0
-# Drop heredoc bodies (a commit message saying "git push --force origin main" is text, not a command):
-# from a line opening `<<WORD` / `<<-'WORD'` / `<<"WORD"` (not the `<<<` here-string) through the
-# line equal to WORD (leading tabs allowed for `<<-`). The opening line itself is still scanned.
+# Drop heredoc bodies so commit-message text is not scanned as a command; the opening line is still scanned.
 cmd=$(printf '%s\n' "$cmd" | awk '
   inh { t = $0; if (tabs) sub(/^\t+/, "", t); if (t == w) inh = 0; next }
   { print; l = $0; gsub(/<<</, "", l)
@@ -22,12 +19,7 @@ cmd=$(printf '%s\n' "$cmd" | awk '
 block() { echo "BLOCKED: $1" >&2; exit 2; }
 protected='main|uat|develop'
 root=$PWD
-# Directories a bare commit/push in this command may land on: the command's cwd, plus each literal
-# cd/pushd/env -C/sudo -D target resolved against every candidate so far. The real directory is always a
-# candidate or one literal step from one, so a cd the shell undoes (subshell, `&`, `|`) or that fails
-# cannot hide it, and ANY protected candidate blocks. Anything this check cannot resolve exactly sets
-# redir, which adds the project root, the directory it judged before it knew the cwd. A construct the
-# parser misses therefore never leaves it weaker than that.
+# Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
 cand=("$orig_dir")
 redir=0
 unresolved() { [[ -z "$1" || "$1" == - || "$1" == Q || "$1" == *[\$\`~]* ]]; }
@@ -70,12 +62,7 @@ protected_branch() {
   [[ "$b" =~ ^($protected)$ ]] && echo "$b"
 }
 
-# Normalise before flag-matching:
-#  1. unwrap `bash|sh|zsh -c "…"` / `eval "…"` so a wrapped command is scanned, not scrubbed away;
-#  2. unquote quoted single words ("--no-verify", "main") — the shell strips those quotes too;
-#  3. replace remaining (multi-word or empty) quoted strings with a placeholder (Q) so text inside
-#     -m "…" can't false-trigger. Double quotes are handled before single quotes so an
-#     apostrophe inside "it's done" can't pair with a later ' and swallow real flags.
+# Unwrap bash -c/eval, unquote single words, mask other quoted text as Q; double quotes first so an apostrophe cannot swallow flags.
 sq="'"
 scan=$(printf '%s' "$cmd" | sed -E \
   -e "s/(^|[[:space:];&|(])(bash|sh|zsh|eval)([[:space:]]+-[a-z]*c)?[[:space:]]+\"([^\"]*)\"/\1 \4 /g" \
@@ -97,11 +84,7 @@ fi
 
 # Evaluate each simple command separately: split on && || ; | & ( ) ` and newlines.
 segments=$(printf '%s\n' "$scan" | tr ';|&()`' '\n\n\n\n\n\n')
-# Collect directory changes before judging any git invocation: a loop or a function can run a cd that
-# appears after the git word. Words before each segment's git executable (all words, when there is none)
-# are scanned wherever they sit — `if cd x`, `\cd x`, `env -C x git …` — not only at the segment start.
-# Passes repeat until the candidate set stops growing, so a relative target is resolved against every
-# directory the command can reach.
+# Collect every cd before judging a git word, since a loop or function can cd after it; repeat until the candidates stop growing.
 collect_dirs() {
   local seg p q w d n i
   local -a t
@@ -143,12 +126,9 @@ for _ in 1 2 3 4; do
   collect_dirs
   [ "${#cand[@]}" -eq "$before" ] && { settled=1; break; }
 done
-[ "$settled" -eq 1 ] || redir=1   # still growing at the cap: judge the project root too
-# A strict `&&` chain (no ; || | lone & ( ) ` or newline once N>&M redirections are set aside) reaches
-# each git only after every cd before it succeeded, so the directories its git words run in are known
-# exactly: judge those instead of the whole candidate set. That is what lets `cd repo && git commit`
-# through from a protected checkout. A cd that is not a plain literal at the start of a segment, a git
-# that is not the first word of its segment, or any redir leaves the candidate set as it is.
+# Still growing at the cap: judge the project root too.
+[ "$settled" -eq 1 ] || redir=1
+# In a strict && chain each git runs only after every earlier cd succeeded, so judge exactly those directories, not the whole set.
 chain_dirs() {
   local chk seg w d cur first sawgit=0
   local -a t out=()
@@ -187,14 +167,14 @@ fi
 while IFS= read -r seg; do
   read -ra t <<< "$seg"
   n=${#t[@]}; i=0
-  while [ "$i" -lt "$n" ]; do              # locate the git executable (git, /usr/bin/git, \git)
+  while [ "$i" -lt "$n" ]; do
     w="${t[$i]#\\}"
     [[ "$w" == git || "$w" == */git ]] && break
     i=$((i + 1))
   done
   [ "$i" -ge "$n" ] && continue
   i=$((i + 1)); cdir=""
-  while [ "$i" -lt "$n" ] && [[ "${t[$i]}" == -* ]]; do   # git global options precede the subcommand
+  while [ "$i" -lt "$n" ] && [[ "${t[$i]}" == -* ]]; do
     o="${t[$i]}"
     case "$o" in
       -C)
@@ -231,7 +211,7 @@ while IFS= read -r seg; do
         if [ "$skip" -eq 1 ]; then skip=0; continue; fi
         case "$a" in
           --*) ;;
-          -?*)   # short-flag cluster: walk letters; a value-taking flag consumes the rest (or the next word)
+          -?*)
             f="${a#-}"
             while [ -n "$f" ]; do
               c="${f:0:1}"; f="${f:1}"
@@ -255,9 +235,9 @@ while IFS= read -r seg; do
           -*) [[ "${a#-}" == *[fd]* ]] && force=1 ;;
           *)
             pos=$((pos + 1))
-            [ "$pos" -eq 1 ] && continue   # first positional is the remote
+            [ "$pos" -eq 1 ] && continue
             explicit=1
-            [[ "$a" == +* || "$a" == :* ]] && force=1   # +refspec forces; :branch deletes
+            [[ "$a" == +* || "$a" == :* ]] && force=1
             [[ "$a" =~ ^\+?((refs/heads/)?($protected)|[^:]*:(refs/heads/)?($protected))$ ]] && target=1
             # `HEAD` / `@` (no `:dst`) pushes the current branch to its same-named remote branch
             if [[ "$a" =~ ^\+?(HEAD|@)$ ]]; then [ -n "$(protected_branch)" ] && target=1; fi ;;

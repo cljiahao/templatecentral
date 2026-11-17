@@ -41,14 +41,17 @@ Add to `APISettings` in **`src/core/config.py`** (`from pydantic import SecretSt
 
 ```python
 class APISettings(BaseSettings):
+    # ... existing fields ...
+
     # SecretStr keeps the credential-bearing URL out of repr() and logs.
     MONGODB_URL: SecretStr = Field(
+        default=...,
         description="MongoDB connection URL — must be set in environment"
     )
-    MONGODB_DB_NAME: str = Field(description="MongoDB database name")
+    MONGODB_DB_NAME: str = Field(default=..., description="MongoDB database name")
 ```
 
-Pyright flags `api_settings = APISettings()` for required env fields; keep (or add) its `# pyright: ignore[reportCallIssue]`.
+Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Ask the user to add `MONGODB_URL` and `MONGODB_DB_NAME` to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 ```
@@ -97,7 +100,7 @@ from pydantic import EmailStr
 
 
 class User(Document):
-    # The unique index makes a duplicate email raise DuplicateKeyError (409).
+    # The unique index makes a duplicate email raise DuplicateKeyError, mapped to 409.
     email: Annotated[EmailStr, Indexed(unique=True)]
     name: str
     hashed_password: str
@@ -153,7 +156,7 @@ def to_response(user: User) -> UserResponse:
     return UserResponse(id=str(user.id), email=user.email, name=user.name)
 
 
-# No response_model=: the return annotation is the model (ruff FAST001).
+# No response_model: the return annotation is the model.
 @router.get("/users")
 async def list_users() -> list[UserResponse]:
     return [to_response(u) for u in await user_service.list_users()]

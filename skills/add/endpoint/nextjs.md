@@ -43,7 +43,7 @@ import { handleApiError } from '@/lib/errors';
 import { withLogging } from '@/lib/utils/with-logging';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-// Replace with your data access (see templatecentral:add (database)).
+// Replace with your data access.
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),

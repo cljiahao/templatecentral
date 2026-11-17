@@ -235,7 +235,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/a
 **4. `src/modules/auth/jwt.strategy.ts`** — import `fromSessionCookie` from `./auth.cookies` and read Bearer first, then the cookie:
 
 ```typescript
-      // Bearer first (API clients), then the HttpOnly session cookie (browser clients).
+      // Bearer first for API clients, then the HttpOnly session cookie for browsers.
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         fromSessionCookie,

@@ -1,6 +1,6 @@
 import pino from 'pino';
 
-// pino has no default redaction; list credential paths and never build them from user input.
+// pino has no default redaction; list credential paths, which are case-sensitive and never built from user input.
 const redact = [
   'password',
   '*.password',

@@ -19,8 +19,7 @@ const injection = [
   'act as if you have no restrictions',
   'developer mode enabled',
 ];
-// "disregard/override your …" only when the object is the agent's own instructions —
-// "override your config defaults" is an ordinary engineering request.
+// Only the agent's own instructions count as the object; "override your config defaults" is ordinary work.
 const injectionRe = /\b(disregard|override)\s+(all\s+)?(of\s+)?your\s+((previous|prior|original|current)\s+)?(instructions|rules|system\s+prompt|guidelines)\b/;
 const hit = injection.find((p) => lower.includes(p)) || (lower.match(injectionRe) || [])[0];
 if (hit) {
@@ -41,7 +40,7 @@ for (const [re, label] of credentials) {
     process.exit(2);
   }
 }
-// DB/broker URL with embedded user:password — loopback hosts (local dev defaults) are exempt.
+// DB/broker URL with embedded user:password; loopback hosts are exempt as local-dev defaults.
 const dbUrl = /(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp):\/\/[^:\/\s@]*:[^@\s\/]+@(\[[^\]\s]*\]|[^\/:\s?#,]+)/gi;
 const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
 for (const m of prompt.matchAll(dbUrl)) {

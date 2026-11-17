@@ -13,6 +13,7 @@ connect_args: dict[str, Any] = {}
 if url.get_backend_name() == "postgresql" and common_settings.ENVIRONMENT != "dev":
     connect_args = {
         "sslmode": "verify-full",
+        # "system" is the OS CA store and needs libpq >= 16; a private CA goes in ?sslrootcert=.
         "sslrootcert": url.query.get("sslrootcert", "system"),
     }
 

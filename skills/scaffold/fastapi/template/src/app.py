@@ -31,17 +31,9 @@ class SecurityHeadersMiddleware:
 
 
 class ForwardedHostMiddleware:
-    """Rewrites the Host header from X-Forwarded-Host so request.base_url reflects the public hostname.
+    """Rewrites Host from X-Forwarded-Host so request.base_url reflects the public hostname."""
 
-    uvicorn's ProxyHeadersMiddleware handles X-Forwarded-Proto and X-Forwarded-For but not
-    X-Forwarded-Host. Starlette builds request.url/base_url from the Host header (scope['server']
-    is only a fallback when Host is absent), so the Host header itself is what must change.
-
-    Trust model: only mounted when TRUST_PROXY is set (see configure_proxy_headers), and added
-    AFTER ProxyHeadersMiddleware so it runs outermost — scope['client'] is still the direct peer
-    (the proxy), validated against TRUST_PROXY before the header is honored. Without this guard
-    any client reaching the app directly could spoof generated URLs (e.g. password-reset links).
-    """
+    # Honored only from TRUST_PROXY peers; otherwise a direct client could spoof generated URLs such as reset links.
 
     def __init__(self, app: ASGIApp, trusted: str = "*") -> None:
         self.app = app
@@ -81,11 +73,7 @@ class ForwardedHostMiddleware:
 
 
 def configure_cors(app: FastAPI) -> None:
-    """Configures Cross-Origin Resource Sharing (CORS) middleware for the FastAPI application.
-
-    Args:
-        app: The FastAPI application instance.
-    """
+    """Adds the CORS middleware."""
     origins = api_settings.ALLOWED_CORS
 
     app.add_middleware(
@@ -102,34 +90,20 @@ def configure_security_headers(app: FastAPI) -> None:
 
 
 def configure_proxy_headers(app: FastAPI) -> None:
-    """Enables reverse-proxy header trust when TRUST_PROXY is set.
-
-    Safe to omit (empty TRUST_PROXY) for local dev or non-proxy deployments. uvicorn takes
-    comma-separated IPs/CIDRs, not a hop count: it walks X-Forwarded-For right-to-left and
-    returns the first address NOT in TRUST_PROXY as the client.
-    One-hop (ALB → App): set TRUST_PROXY to the ALB's VPC CIDR (e.g. 10.0.0.0/8).
-    Two-hop (ALB → Traefik → App): TRUST_PROXY must cover BOTH Traefik's container CIDR and
-    the ALB's CIDR (comma-separated, or one VPC CIDR spanning both) — trusting Traefik alone
-    resolves every client to the ALB's IP. Traefik must also keep the ALB's X-Forwarded-For
-    (entryPoints forwardedHeaders.trustedIPs = ALB CIDR).
-    Use * only in closed networks — it takes the leftmost, client-supplied X-Forwarded-For entry.
-    """
+    """Trusts reverse-proxy headers when TRUST_PROXY is set."""
+    # uvicorn takes IPs/CIDRs, not a hop count: list every proxy hop or all clients resolve to the nearest proxy; * lets the client-supplied X-Forwarded-For win.
     if not api_settings.TRUST_PROXY:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-    # ForwardedHostMiddleware must run before ProxyHeadersMiddleware rewrites the client.
+    # Last added runs outermost, so ForwardedHostMiddleware sees the request before ProxyHeadersMiddleware rewrites the client.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
     app.add_middleware(ForwardedHostMiddleware, trusted=api_settings.TRUST_PROXY)
 
 
 def start_application() -> FastAPI:
-    """Initialize and configures the FastAPI application.
-
-    Returns:
-        The initialized and configured FastAPI application instance.
-    """
-    # Schema and docs are dev-only to limit disclosure.
+    """Builds the configured FastAPI application."""
+    # Dev-only docs; openapi_url=None alone leaves /docs and /redoc, so all three are set explicitly.
     is_dev = common_settings.ENVIRONMENT == "dev"
     app = FastAPI(
         title=common_settings.PROJECT_NAME,

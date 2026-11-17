@@ -91,8 +91,7 @@ export class GithubService {
 #### 4. Add Factory Function
 
 ```ts
-// src/integrations/factories.ts
-// Build error if a client component imports this, keeping tokens out of the bundle.
+// src/integrations/factories.ts: a build error if a client component imports this keeps tokens out of the bundle
 import 'server-only';
 import { GithubClient } from './clients/github-client';
 import { GithubService } from './services/github-service';
@@ -111,7 +110,7 @@ export function Github() {
 
 > **Naming**: factories are PascalCase integration names (`Github()`, `Stripe()`, `SSM()`); database clients come from the database capability.
 
-> **Alternative: Axios-based client** — For server-side integrations needing mTLS, API key headers, or request/response logging, use `createAxiosClient` from `src/integrations/clients/base/axios-client.ts` instead of extending `FetchClient`.
+> **Alternative: Axios-based client** — default to `FetchClient`. Use `createAxiosClient` from `src/integrations/clients/base/axios-client.ts` instead only for mutual TLS, certificate pinning (custom HTTPS agent) or request/response interceptors.
 
 #### 5. Consume via Factory
 

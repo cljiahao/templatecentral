@@ -2,7 +2,7 @@ import re
 
 from core.config import common_settings
 
-# One https origin only; anything else denies, so the value cannot inject CSP directives.
+# One https origin; fullmatch, not $, since a trailing newline would pass; anything else denies, so no CSP injection.
 _PORTAL_ORIGIN_RE = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
@@ -25,6 +25,7 @@ def _build() -> list[tuple[bytes, bytes]]:
         (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
         # 0 disables the legacy XSS auditor, itself exploitable.
         (b"x-xss-protection", b"0"),
+        # Per-user data must not reach shared caches.
         (b"cache-control", b"no-store"),
         # Outside dev nothing may load: OWASP REST baseline.
         (

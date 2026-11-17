@@ -10,7 +10,7 @@ Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Secur
 
 **UserPromptSubmit:** pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 
-**PostToolUse:** an incremental type-check (the stack's command is in the `AGENTS.md` bullet) and a comment-hygiene scan (change-narration comments, oversized comment blocks; patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both are feedback-only: findings reach Claude as `additionalContext`, never a block.
+**PostToolUse:** an incremental type-check (the stack's command is in the `AGENTS.md` bullet) and a comment-hygiene scan (policy: `standards/code-standards/comments.md`; patterns from `.claude/comment-hygiene-patterns.txt`) after every Edit/Write. Both are feedback-only: findings reach Claude as `additionalContext`, never a block.
 
 **Stop hook:** runs the full test suite when there are uncommitted changes; exit 2 feeds failures to Claude via stderr; exit 0 on pass (Claude Code caps consecutive Stop continuations, 8 by default). **SubagentStop** type-gates a subagent's uncommitted changes (read-only Explore/Plan agents are skipped).
 

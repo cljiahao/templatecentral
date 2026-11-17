@@ -27,7 +27,7 @@ async def mongo_db() -> AsyncIterator[AsyncDatabase[dict[str, Any]]]:
         await client.admin.command("ping")
     except ServerSelectionTimeoutError:
         await client.close()
-        # Skip on a laptop without Mongo; an explicitly configured URL (CI) must work.
+        # Skip when no Mongo is reachable, but an explicitly configured URL must work.
         if EXPLICIT_URL:
             raise
         pytest.skip(

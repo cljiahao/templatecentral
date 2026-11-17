@@ -35,7 +35,7 @@ src/features/<feature-name>/
 ### 2. Create `types.ts`
 
 ```ts
-// Mirrors the backend Project response (FastAPI `ProjectResponse`, NestJS `ProjectDto`).
+// Mirrors the backend Project response.
 export interface ProjectItem {
   id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface ProjectItem {
 Put all static data here, not in components:
 
 ```ts
-// Values use the backend `sort` format (`asc_<field>` / `desc_<field>`).
+// Values use the backend `sort` format: `asc_<field>` or `desc_<field>`.
 export const SORT_OPTIONS = [
   { value: 'asc_name', label: 'Name (A-Z)' },
   { value: 'desc_createdAt', label: 'Newest first' },
@@ -88,7 +88,7 @@ class ProjectClient extends ApiClient {
   }
 
   get(id: string, signal?: AbortSignal): Promise<unknown> {
-    // Encoding stops a crafted id from rewriting the path (`../admin`).
+    // Encoding stops a crafted id from rewriting the path, e.g. `../admin`.
     return this.request(`projects/${encodeURIComponent(id)}`, 'GET', undefined, {}, signal);
   }
 }

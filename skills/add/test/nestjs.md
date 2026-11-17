@@ -46,8 +46,7 @@ describe('MyController', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  // Controllers must stay thin — this asserts the controller delegates rather than
-  // computing its own result, without mocking the service (see Rules below).
+  // Controllers stay thin: assert delegation to the service without mocking it.
   it('should delegate to the service', () => {
     expect(controller.findAll()).toEqual(service.findAll());
   });
@@ -121,12 +120,12 @@ describe('My Feature (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      // Database override from the `add (database)` guide — this suite needs no DB.
+      // Database override from the database guide; this suite needs no DB.
       .overrideProvider(KyselyService)
       .useValue({})
       .compile();
 
-    // Same adapter options as main.ts (UUID request IDs), so log correlation matches the real app.
+    // Same adapter options as main.ts, so request IDs and log correlation match the real app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );
