@@ -19,8 +19,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const status = exception.getStatus();
-    // A 5xx message is server-side detail (e.g. `new InternalServerErrorException(err.message)`)
-    // — log it, return the generic text, matching FastAPI's catch-all handler.
+    // 5xx messages are server-side detail: log them, return generic text.
     const isServerError = status >= 500;
     if (isServerError) {
       this.logger.error(exception.message, exception.stack);

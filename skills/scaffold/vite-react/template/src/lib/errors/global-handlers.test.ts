@@ -20,7 +20,7 @@ describe('registerGlobalErrorHandlers', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     registerGlobalErrorHandlers();
 
-    // jsdom doesn't emit unhandledrejection on its own — dispatch a shaped event manually.
+    // jsdom does not emit unhandledrejection; dispatch a shaped event.
     const event = new Event('unhandledrejection');
     Object.assign(event, { reason: new Error('nope') });
     window.dispatchEvent(event);

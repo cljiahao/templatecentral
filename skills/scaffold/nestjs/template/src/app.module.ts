@@ -11,8 +11,7 @@ import { appConfig } from './config';
     LoggerModule.forRoot({
       pinoHttp: {
         level: appConfig.LOG_LEVEL,
-        // pino-http's default serializer logs the whole headers object at info level.
-        // Without this, every request writes its bearer JWT and session cookies to the log.
+        // The default serializer logs all headers, leaking bearer JWTs and session cookies.
         redact: {
           paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           remove: true,

@@ -118,8 +118,7 @@ def configure_proxy_headers(app: FastAPI) -> None:
         return
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-    # Order matters: the last middleware added runs outermost. ForwardedHostMiddleware must run
-    # BEFORE ProxyHeadersMiddleware rewrites scope['client'], so it can validate the direct peer.
+    # ForwardedHostMiddleware must run before ProxyHeadersMiddleware rewrites the client.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=api_settings.TRUST_PROXY)
     app.add_middleware(ForwardedHostMiddleware, trusted=api_settings.TRUST_PROXY)
 
@@ -130,9 +129,7 @@ def start_application() -> FastAPI:
     Returns:
         The initialized and configured FastAPI application instance.
     """
-    # Setting openapi_url=None also auto-disables docs_url/redoc_url — set all three
-    # explicitly so the intent reads clearly at the call site. Schema/docs disclosure in
-    # prod is an unnecessary attack-surface/information-disclosure risk.
+    # Schema and docs are dev-only to limit disclosure.
     is_dev = common_settings.ENVIRONMENT == "dev"
     app = FastAPI(
         title=common_settings.PROJECT_NAME,
@@ -148,7 +145,7 @@ def start_application() -> FastAPI:
         },
     )
 
-    # Last added runs outermost: security headers wrap CORS so preflight responses get them too.
+    # Security headers wrap CORS so preflight responses get them.
     configure_cors(app)
     configure_security_headers(app)
     configure_proxy_headers(app)

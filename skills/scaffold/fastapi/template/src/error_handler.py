@@ -58,9 +58,7 @@ def configure_exceptions(app: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
-    # HTTPException deliberately has no handler here: FastAPI's built-in one already
-    # returns this {"detail": ...} envelope with exc.headers, covers router-level 404/405,
-    # and sends an empty body for no-body statuses (1xx/204/205/304).
+    # HTTPException has no handler: FastAPI's built-in one already returns this envelope.
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(

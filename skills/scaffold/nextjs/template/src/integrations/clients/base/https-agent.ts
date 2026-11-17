@@ -10,8 +10,7 @@ export interface HttpsAgentOptions {
   passphrase?: string;
 }
 
-// Respect explicit opt-out (NODE_TLS_REJECT_UNAUTHORIZED=0) but default to true in all envs.
-// Never use NODE_ENV to disable TLS — staging/UAT servers have valid certs and should be verified.
+// Never use NODE_ENV to disable TLS; only NODE_TLS_REJECT_UNAUTHORIZED=0 opts out.
 const DEFAULT_AGENT_OPTIONS: HttpsAgentOptions = {
   rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
   keepAlive: true,
