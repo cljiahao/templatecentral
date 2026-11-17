@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Quality baseline: measure a project, change nothing in it.
-# Usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full]
+# Quality baseline: measure a project. It does not intentionally write to it; the last row reports any write.
+# Usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]]
 #   --static (default) counts files and lines only. It runs no project code and no tool, uses no network, installs nothing.
 #   --full   also runs the project's lint, typecheck and tests, and installs pinned scratch tools into its own scratch directory
-#            (network access). Project code runs: tests execute. Nothing is written under the project; the last row proves it.
+#            (network access). Project code runs: tests execute.
+#   --keep-coverage <dir>  with --full: copy the Cobertura XML to <dir>/cobertura.xml; <dir> must be outside the project
+#            and its parent must exist.
 # Prints one markdown table on stdout. Exit 0 when measured, 2 on a usage error.
 # Needs bash 3.2+, BSD or GNU coreutils, git; python3 or node reads the JSON/XML reports.
 set -u
@@ -17,32 +19,53 @@ DIFFCOVER_VERSION=10.0.0   # used by quality-pass.md
 COMPLEXITY_LIMIT=15
 RUN_LIMIT=${QB_RUN_LIMIT:-600}
 
-usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full]" >&2; exit 2; }
+usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]]" >&2; exit 2; }
 
 LABEL=before
 MODE=static
 PROJECT=
+KEEP=
 while [ $# -gt 0 ]; do
   case "$1" in
     --label) [ $# -ge 2 ] || usage; LABEL=$2; shift 2 ;;
     --static) MODE=static; shift ;;
     --full) MODE=full; shift ;;
+    --keep-coverage) [ $# -ge 2 ] || usage; KEEP=$2; shift 2 ;;
     -*) usage ;;
     *) [ -z "$PROJECT" ] || usage; PROJECT=$1; shift ;;
   esac
 done
 [ -n "$PROJECT" ] && [ -d "$PROJECT" ] || usage
 case "$LABEL" in before|after) ;; *) usage ;; esac
-P=$(cd "$PROJECT" && pwd) || usage
+P=$(cd "$PROJECT" && pwd -P) || usage
+if [ -n "$KEEP" ]; then
+  [ "$MODE" = full ] || usage
+  KEEPDIR=$(cd "$(dirname "$KEEP")" 2>/dev/null && pwd -P) || usage
+  KEEP="$KEEPDIR/$(basename "$KEEP")"
+  case "$KEEP/" in "$P"/*) echo "--keep-coverage must name a directory outside the project" >&2; exit 2 ;; esac
+fi
+
+# Read-only git: no optional lock files, no fsmonitor daemon.
+g() { GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false "$@"; }
 
 S=$(mktemp -d "${TMPDIR:-/tmp}/qbaseline.XXXXXX") || { echo "cannot create a scratch directory" >&2; exit 2; }
+# `limited` starts each background job in its own process group (set -m), so a signal reaches the tool's children too.
+CHILD=; WATCH=
 # shellcheck disable=SC2329
 cleanup() {
+  local p
+  if [ -n "$CHILD$WATCH" ]; then
+    for p in $CHILD $WATCH; do kill -TERM -- "-$p" 2>/dev/null; done
+    sleep 1
+    for p in $CHILD $WATCH; do kill -KILL -- "-$p" 2>/dev/null; done
+  fi
   case "${S:-}" in
     */qbaseline.*) [ -d "$S" ] && rm -rf "$S" ;;
   esac
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 have() { command -v "$1" >/dev/null 2>&1; }
 ROWS=
@@ -53,12 +76,15 @@ row() { ROWS="${ROWS}| $1 | $2 |
 # killed after RUN_LIMIT seconds. Sets RC; 124 means timeout.
 limited() {
   local out=$1; shift
-  ( cd "$P" && exec "$@" ) </dev/null >"$out" 2>"$out.err" &
-  local pid=$!
-  ( sleep "$RUN_LIMIT"; pkill -P "$pid" 2>/dev/null; kill "$pid" 2>/dev/null; : >"$out.timeout" ) >/dev/null 2>&1 &
-  local watcher=$!
-  { wait "$pid"; RC=$?; } 2>/dev/null
-  pkill -P "$watcher" 2>/dev/null; kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null
+  set -m
+  # The braces hide bash's harmless "setpgid: Operation not permitted" race notice (the child sets its own group).
+  { ( cd "$P" && exec "$@" ) </dev/null >"$out" 2>"$out.err" & CHILD=$!; } 2>/dev/null
+  { ( sleep "$RUN_LIMIT"; : >"$out.timeout"; kill -TERM -- "-$CHILD"; sleep 2; kill -KILL -- "-$CHILD" ) >/dev/null 2>&1 & WATCH=$!; } 2>/dev/null
+  set +m
+  { wait "$CHILD"; RC=$?; } 2>/dev/null
+  kill -KILL -- "-$WATCH" 2>/dev/null; wait "$WATCH" 2>/dev/null
+  kill -KILL -- "-$CHILD" 2>/dev/null
+  CHILD=; WATCH=
   if [ -f "$out.timeout" ]; then RC=124; fi
   return 0
 }
@@ -119,21 +145,21 @@ JS
 # Tracked and untracked-but-not-ignored files that still exist, NUL separated.
 # Falls back to find when the project is not a git repository.
 list_files() {
-  if ( cd "$P" && git rev-parse --is-inside-work-tree ) >/dev/null 2>&1; then
-    ( cd "$P" && git ls-files -z --cached --others --exclude-standard )
+  if is_git; then
+    ( cd "$P" && g ls-files -z --cached --others --exclude-standard )
   else
-    ( cd "$P" && find . -type f -not -path './node_modules/*' -not -path './.venv/*' -not -path './.git/*' -print0 )
+    ( cd "$P" && find . \( -name node_modules -o -name .venv -o -name dist -o -name .next -o -name .git \) -prune -o -type f -print0 )
   fi
 }
 
-is_git() { ( cd "$P" && git rev-parse --is-inside-work-tree ) >/dev/null 2>&1; }
+is_git() { ( cd "$P" && g rev-parse --is-inside-work-tree ) >/dev/null 2>&1; }
 
 # Everything a run could have written to the project: git status, a hash of the working diff, and any file
 # newer than a stamp (this also catches caches in ignored directories and non-git projects).
 status_snapshot() {
   if is_git; then
-    ( cd "$P" && git status --porcelain -z --untracked-files=all ) | tr '\0' '\n'
-    ( cd "$P" && git diff HEAD 2>/dev/null | cksum )
+    ( cd "$P" && g status --porcelain -z --untracked-files=all ) | tr '\0' '\n'
+    ( cd "$P" && g diff --no-ext-diff --no-textconv HEAD 2>/dev/null | cksum )
   fi
 }
 newer_files() { find "$P" -type f -newer "$S/stamp" -not -path '*/.git/*' -not -path "$S/*" 2>/dev/null; }
@@ -188,10 +214,11 @@ measure_typescript() {
   # Types: tsc has no machine-readable output; count its own `error TS` lines from the captured file.
   if [ -f "$P/tsconfig.json" ]; then
     # Never write build info into the project: composite needs incremental, so point its file into scratch.
-    local tscflags="--noEmit --incremental false"
-    grep -Eq '"composite"[[:space:]]*:[[:space:]]*true' "$P/tsconfig.json" && tscflags="--noEmit --tsBuildInfoFile $S/tsbuildinfo"
-    # shellcheck disable=SC2086
-    limited "$S/tsc.log" pnpm exec tsc $tscflags
+    # --showConfig resolves extends and JSON comments.
+    local tscflags=(--noEmit --incremental false)
+    limited "$S/tsconfig.shown" pnpm exec tsc --showConfig
+    grep -Eq '"composite"[[:space:]]*:[[:space:]]*true' "$S/tsconfig.shown" && tscflags=(--noEmit --tsBuildInfoFile "$S/tsbuildinfo")
+    limited "$S/tsc.log" pnpm exec tsc "${tscflags[@]}"
     if [ "$RC" -eq 124 ]; then TYPES="n/a (timeout)"
     elif [ "$RC" -eq 0 ]; then TYPES=0
     elif grep -q 'error TS' "$S/tsc.log"; then TYPES=$(grep -c 'error TS' "$S/tsc.log")
@@ -278,17 +305,16 @@ measure_python() {
 
   if [ -z "$py" ]; then TESTS="n/a (no python)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
   if ! "$py" -c 'import pytest' >/dev/null 2>&1; then TESTS="n/a (pytest not installed)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
-  local covarg="--cov=$SRC --cov-report=xml:$S/coverage.xml" t0 t1
-  "$py" -c 'import pytest_cov' >/dev/null 2>&1 || covarg=
+  local covarg=(--cov="$SRC" --cov-report="xml:$S/coverage.xml") t0 t1
+  "$py" -c 'import pytest_cov' >/dev/null 2>&1 || covarg=()
   t0=$(date +%s)
-  # shellcheck disable=SC2086
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE="$S/.coverage" limited "$S/pytest.log" "$py" -m pytest --junitxml="$S/junit.xml" -q -p no:cacheprovider $covarg
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE="$S/.coverage" limited "$S/pytest.log" "$py" -m pytest --junitxml="$S/junit.xml" -q -p no:cacheprovider ${covarg[@]+"${covarg[@]}"}
   t1=$(date +%s)
   local r; r=$(jval junit "$S/junit.xml")
   if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
   if [ "$RC" -eq 124 ]; then TESTRC="timeout"; else TESTRC=$RC; fi
   SECS=$((t1 - t0))
-  if [ -z "$covarg" ]; then COV="n/a (pytest-cov not installed)"
+  if [ "${#covarg[@]}" -eq 0 ]; then COV="n/a (pytest-cov not installed)"
   else
     local c; c=$(jval cobertura "$S/coverage.xml")
     if [ -n "$c" ]; then COV="$c%"; else COV="n/a (no coverage report)"; fi
@@ -309,13 +335,12 @@ complexity_python() {
 measure_duplication() {
   [ "$SRC" != . ] || { DUP="n/a (no src, app or lib directory)"; return; }
   local runner
-  if have pnpm && [ "$STACK" = typescript ]; then runner="pnpm dlx"
-  elif have npx; then runner="npx --yes"
-  elif have pnpm; then runner="pnpm dlx"
+  if have pnpm && [ "$STACK" = typescript ]; then runner=(pnpm dlx)
+  elif have npx; then runner=(npx --yes)
+  elif have pnpm; then runner=(pnpm dlx)
   else DUP="n/a (no pnpm or npx)"; return; fi
   # Code formats only; tests, generated output, lock files, JSON and markdown are out.
-  # shellcheck disable=SC2086
-  limited "$S/jscpd.log" $runner "jscpd@$JSCPD_VERSION" --reporters json --output "$S/jscpd" \
+  limited "$S/jscpd.log" "${runner[@]}" "jscpd@$JSCPD_VERSION" --reporters json --output "$S/jscpd" \
     --format "typescript,tsx,javascript,jsx,python" \
     --ignore '**/node_modules/**,**/.next/**,**/dist/**,**/build/**,**/coverage/**,**/.venv/**,**/__pycache__/**,**/*.json,**/*.md,**/*.lock,**/*.d.ts,**/*.test.*,**/*.spec.*,**/__tests__/**,**/tests/**,**/test/**' "$SRC"
   local n; n=$(jval jscpd "$S/jscpd/jscpd-report.json")
@@ -326,7 +351,7 @@ measure_duplication() {
 TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.py$|_test\.py$)'
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|dist|\.next|\.venv)/)'
-SUPPRESS='eslint-disable|noqa|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover'
+SUPPRESS='eslint-disable|noqa|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover'
 EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|^[[:space:]]*ignores[[:space:]]*:'
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
@@ -369,6 +394,13 @@ elif [ "$STACK" != unknown ]; then
   LINT=$NA_STATIC TYPES=$NA_STATIC TESTS=$NA_STATIC TESTRC=$NA_STATIC SECS=$NA_STATIC COV=$NA_STATIC CPLX=$NA_STATIC DUP=$NA_STATIC
 fi
 count_static
+KEPT=
+if [ -n "$KEEP" ] && [ "$MODE" = full ]; then
+  KEPT="n/a (no coverage report)"
+  for x in "$S/cov/cobertura-coverage.xml" "$S/coverage.xml"; do
+    [ -f "$x" ] && mkdir -p "$KEEP" && cp "$x" "$KEEP/cobertura.xml" && { KEPT="$KEEP/cobertura.xml"; break; }
+  done
+fi
 
 AFTER=$(status_snapshot)
 NEWER=$(newer_files)
@@ -376,7 +408,7 @@ NEWER=$(newer_files)
 VISIBLE=; IGN=
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  if is_git && ( cd "$P" && git check-ignore -q -- "$f" ); then IGN="${IGN}${f#"$P"/} "; else VISIBLE="${VISIBLE}${f#"$P"/} "; fi
+  if is_git && ( cd "$P" && g check-ignore -q -- "$f" ); then IGN="${IGN}${f#"$P"/} "; else VISIBLE="${VISIBLE}${f#"$P"/} "; fi
 done <<EOF
 $NEWER
 EOF
@@ -397,10 +429,11 @@ row "test LOC" "$TESTLOC"
 row "source LOC" "$SRCLOC"
 row "test:source ratio" "$RATIO"
 row "test cases (static count; a parametrized case counts once)" "$CASES"
-row "suppressions (code files)" "$SUPP"
+row "suppression lines matching (code files)" "$SUPP"
 row "coverage, lint and Sonar exclusions" "$EXCL"
 row "coverage thresholds configured" "$THR"
 row "mode" "$MODE"
+[ -z "$KEEP" ] || row "coverage xml kept" "$KEPT"
 row "scratch tool versions" "${TOOLS:-none (static mode)}"
 row "project tree after the run" "$TREE"
 

@@ -8,7 +8,7 @@ Goal: bring an existing project up to the templateCentral standard — harness s
 
 **Phase files.** Phases 0–3 are below. Load Phase 4 or 5 only when Phase 0 routes to it. The shared kits load **here**, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
 
-**Baseline** (static counts only, every route except a clean Phase 5):
+**Baseline** (static counts only; loaded only on the no-marker path, after Phase 1):
 ```bash
 cat "<skill-dir>/general/quality-baseline.md"
 ```
@@ -35,8 +35,6 @@ cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
 cat "<skill-dir>/general/phase-5-health-check.md"
 ```
 On an approved 5d re-sync, load the five kit files that Phase 4 loads after `phase-4-upgrade.md` (the four harness-kit files and `documentation-kit.md`).
-
-**Static baseline.** Before any prompt or gate below (a clean Phase 5 excepted), run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as plain information. It runs no project code, uses no network, installs nothing and writes nothing. It is not part of any gate message and asks nothing.
 
 "The Step 4b marker update" means: set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->`.
 
@@ -145,6 +143,8 @@ Please run this skill from a project directory, not a parent folder." Exit.
 
 If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
 
+**Static baseline.** Once the stack and the project directory are resolved, and before the Phase 2 gate, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as plain information. It runs no project code and no tool, uses no network, installs nothing, and does not intentionally write; its last row reports any write. It is not part of the gate message and asks nothing. Routes that skip Phase 1 (a marker is present, Phase 0) run no baseline.
+
 ---
 
 ## Phase 2 — Human Decision ⛔ GATE
@@ -223,7 +223,6 @@ Returning to the skill that invoked me — proceeding from Step 1.
 ```
 
 Return control; the invoking skill continues from Step 1.
-Before returning, make the separate offer in "Quality pass (opt-in)".
 
 ### If B — Stop
 
@@ -235,4 +234,4 @@ Return control; the invoking skill must exit without generating any files.
 
 ## Quality pass (opt-in)
 
-After adoption finishes (Phase 3 A, Phase 4, or an approved Phase 5 re-sync), ask once, separately from every approval above: "Run the quality pass? It runs the project's lint, typecheck and tests, then changes code, tests and config, and needs a clean tree." Do not ask on B or Skip. On yes, load the files listed under "Quality pass" above and follow `quality-pass.md`. On no, print "Quality pass skipped." and finish.
+Only when migrate was invoked directly (no invoking skill waits for control) and adoption has finished with a clean tree (Phase 3 A, Phase 4, or an approved Phase 5 re-sync): ask once, separately from every approval above: "Run the quality pass? It runs the project's lint, typecheck and tests, then changes code, tests and config, and needs a clean tree." Never ask on the Phase 3 A return path, on B or Skip. On yes, load the files listed under "Quality pass" above and follow `quality-pass.md`. On no, print "Quality pass skipped." and finish.

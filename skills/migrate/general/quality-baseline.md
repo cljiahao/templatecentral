@@ -15,8 +15,8 @@ bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --full --label afte
 
 From the drift-check skill the path is `<skill-dir>/../migrate/general/quality-baseline.sh`. Run it once per package of a monorepo; for FastAPI activate the project's virtualenv first.
 
-- `--static` counts files and lines. It runs no project code and no tool, uses no network and installs nothing. Use it before any approval and in drift-check.
-- `--full` runs the project's lint, typecheck and tests (project code executes), installs the pinned tools named in the script header into its own scratch directory (network), and writes nothing under the project. Run it only inside the quality pass, after the user said yes to it. Each tool is limited to 10 minutes.
+- `--static` counts files and lines. It runs no project code and no tool, uses no network and installs nothing. Use it before any approval and in drift-check. Neither mode intentionally writes to the project; the last row reports any write.
+- `--full` runs the project's lint, typecheck and tests (project code executes) and installs the pinned tools named in the script header into its own scratch directory (network). Run it only after the user's yes to the quality pass or to drift-check Step 5. Each tool is limited to 10 minutes. `--keep-coverage <dir>` also copies the Cobertura XML to `<dir>/cobertura.xml`; the directory must be outside the project and its parent must exist.
 
 Exit 2 is a usage error. The last row says `unchanged`, `unchanged in git; the run wrote ignored files: …` (logs or caches the project's own tests wrote; report them), or `CHANGED (…)`; on `CHANGED` stop and show the files it names.
 

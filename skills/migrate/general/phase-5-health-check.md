@@ -34,13 +34,43 @@ Compare `current_hash` to `origin_hash`. Classify each file:
 
 **Step 5c: Report**
 
-Print a header (plugin release from `version` in `.claude-plugin/plugin.json`, stack, `seeded_at`) and one status line per seeded file. Say plainly when every file is `UNCHANGED`, `templatecentral_version` equals the plugin version and the `AGENTS.md` import is present (nothing to do), when `CLAUDE.md` lacks the import (`phase-4-upgrade.md` Step 4c; 5d can append it), and when a file is `MISSING` (5d re-seeds it).
+In the header, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
+
+```
+Harness health check — templateCentral <version> / <stack>
+Seeded: <seeded_at>
+
+  AGENTS.md              UNCHANGED
+  CLAUDE.md              MODIFIED   ← you customized this
+  .claude/settings.json  UNCHANGED
+
+MODIFIED files are intentional edits. To pull the latest templateCentral defaults
+into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way-merges,
+it does not clobber.
+```
+
+If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version **and** the `AGENTS.md` import is present, print:
+```
+✓ All harness files match their templateCentral origin and are up to date. No action needed.
+```
+
+If `CLAUDE.md` lacks the import (rule in `phase-4-upgrade.md` Step 4c), warn; Step 5d offers the fix:
+```
+⚠ CLAUDE.md does not import AGENTS.md. Claude Code loads AGENTS.md only through an `@AGENTS.md` line in CLAUDE.md.
+  Step 5d can append it on approval.
+```
+
+If any file is `MISSING`, print a warning:
+```
+⚠ <path> is missing. This may cause templateCentral skills to behave unexpectedly.
+  Re-seed it via the re-sync below (Step 5d).
+```
 
 **Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
 
 Canonical content comes from the template files (`phase-4-upgrade.md` Step 4d) and the harness kit loaded by `implementation.md`.
 
-Offer this when there is something to apply: a `MODIFIED`/`MISSING` file, a missing `AGENTS.md` import, or a `harness.json.templatecentral_version` older than the plugin. **Never write without explicit user approval.** Present a dry-run plan (per file: action + diff preview); choosing A in Phase 0 only selects this route; this dry-run plan is the approval. On approval, first set line 1 of `AGENTS.md` to `<!-- templateCentral: <stack>@6.0.0 -->` (create the file if absent), before any merge or hash of `AGENTS.md`, so no later edit leaves a stale `origin_hash`; then apply per **file class**:
+Offer this when there is something to apply: a `MODIFIED`/`MISSING` file, a missing `AGENTS.md` import, or a `harness.json.templatecentral_version` older than the plugin. **Never write without explicit user approval.** Present a dry-run plan (per file: action + diff preview), then on approval apply per **file class**:
 
 - **Enforcement layer** (`.claude/hooks/*` except `local/`, `.claude/comment-hygiene-patterns.txt`, `lefthook.yml`, `.lefthook/*`, `.gitleaks.toml`, `.claude/ci-gates.sh`, the host's CI file, `.claude/verify-harness.sh`, `.claude/regen-harness.sh`): these are not meant to be hand-edited (the verifier flags them), and a re-sync resets them to canonical. **Overwrite** file by file (never a bulk `cp -R`) with the canonical file from `<skill-dir>/../scaffold/shared/template/`, `template-ts/` or `template-py/`, or `template-ci/` for the CI file, as `<skill-dir>/../scaffold/shared/template.manifest` lists. The `TC_PART=ci` runs of the copy script are scaffold-only; re-sync the CI file by hand under the same rules. `protect-files.sh` asks per write, so show these diffs in the dry-run plan. If one was `MODIFIED`, warn, and check whether a `templatecentral:add` capability extended it (e.g. `add (redaction)` in `user-prompt-guard`); if so, name the capability to re-apply. Any other local edit to a canonical hook moves into a `.claude/hooks/local/` script with its own `settings.json` entry (kit Step A, "Project-local guards") in the same re-sync, so the rule survives.
 - **User-co-owned** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills/<stack>-verify/SKILL.md`, `.claude/skills/skill-audit/SKILL.md`, nextjs `next-migrate`):

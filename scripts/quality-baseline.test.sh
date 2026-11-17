@@ -53,7 +53,7 @@ out=$(PATH="$T/bin:$PATH" bash "$SCRIPT" "$T/p" --full --label before); check "r
 check "source LOC counts spaces in names and untracked files" 9 "$(value 'source LOC' "$out")"
 check "test LOC" 2 "$(value 'test LOC' "$out")"
 check "static test cases" 2 "$(value 'test cases (static count; a parametrized case counts once)' "$out")"
-check "suppressions in code files" 1 "$(value 'suppressions (code files)' "$out")"
+check "suppressions in code files" 1 "$(value 'suppression lines matching (code files)' "$out")"
 contains "label is the column header" "| Metric | before |" "$out"
 check "tree unchanged" unchanged "$(value 'project tree after the run' "$out")"
 contains "failed lint tool is n/a" "n/a (eslint failed" "$(value 'lint findings' "$out")"
@@ -88,7 +88,9 @@ echo "ruff \$*" >>"$T/tools.log"
 case "\$1" in --version) echo "ruff 0.0.0"; exit 0 ;; esac
 case " \$* " in *" --isolated "*) ls -A >"$T/cc.list"; echo '[]' >"$T/c901.out"; exit 0 ;; esac
 [ -n "\${FAKE_WRITE:-}" ] && echo x >stray.txt
-[ -n "\${FAKE_SLEEP:-}" ] && sleep 30
+[ -n "\${FAKE_EDIT:-}" ] && echo '# edited' >>src/a.py
+[ -n "\${FAKE_IGN:-}" ] && echo x >ignored.log
+if [ -n "\${FAKE_SLEEP:-}" ]; then echo \$\$ >"$T/ruff.pid"; sleep 30 & echo \$! >"$T/sleep.pid"; wait; fi
 out=; while [ \$# -gt 0 ]; do [ "\$1" = -o ] && out=\$2; shift; done
 [ -n "\$out" ] && echo '[]' >"\$out"
 exit 0
@@ -134,6 +136,28 @@ rm -f "$T/py/stray.txt" "$T/ng/stray.txt"
 outt=$(FAKE_SLEEP=1 QB_RUN_LIMIT=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full)
 contains "a timed-out tool reports exit 124" "124" "$(value 'lint findings' "$outt")"
 
+# a tracked file edited by a tool is detected, an ignored file is classified apart
+oute=$(FAKE_EDIT=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full)
+contains "an edited tracked file makes the tree CHANGED" "CHANGED" "$(value 'project tree after the run' "$oute")"
+contains "the edited tracked file is named" "src/a.py" "$(value 'project tree after the run' "$oute")"
+(cd "$T/py" && git checkout -q -- src/a.py)
+printf 'ignored.log\n' >"$T/py/.gitignore"
+outi=$(FAKE_IGN=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full)
+contains "an ignored file is reported apart" "unchanged in git; the run wrote ignored files: ignored.log" "$(value 'project tree after the run' "$outi")"
+rm -f "$T/py/ignored.log" "$T/py/.gitignore"
+
+# INT and TERM: the tool's whole process group dies and the scratch directory goes
+rm -f "$T/ruff.pid" "$T/sleep.pid"
+FAKE_SLEEP=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full >/dev/null 2>&1 &
+spid=$!
+n=0; while [ ! -s "$T/sleep.pid" ] && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
+kill -TERM "$spid"; wait "$spid" 2>/dev/null; check "TERM exits 143" 143 $?
+alive() { kill -0 "$(cat "$1")" 2>/dev/null && echo alive || echo dead; }
+n=0; while [ "$(alive "$T/sleep.pid")" = alive ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+check "TERM kills the tool" dead "$(alive "$T/ruff.pid")"
+check "TERM kills the tool's child" dead "$(alive "$T/sleep.pid")"
+check "TERM removes the scratch directory" 0 "$(find "$T/tmp" -maxdepth 1 -name 'qbaseline.*' | wc -l | tr -d ' ')"
+
 # a project that is not a git repository
 cp -R "$T/py" "$T/ng" && rm -rf "$T/ng/.git"
 outn=$(PATH="$PYPATH" bash "$SCRIPT" "$T/ng" --static); check "non-git static exits 0" 0 $?
@@ -141,5 +165,45 @@ check "non-git source LOC" 2 "$(value 'source LOC' "$outn")"
 check "non-git tree unchanged" unchanged "$(value 'project tree after the run' "$outn")"
 outn=$(FAKE_WRITE=1 PATH="$PYPATH" bash "$SCRIPT" "$T/ng" --full)
 contains "non-git full run is checked too" "CHANGED" "$(value 'project tree after the run' "$outn")"
+
+# --- TypeScript success path: a fake pnpm that answers eslint, tsc, vitest, jscpd and the scratch install
+mkdir -p "$T/bin2" "$T/p/node_modules"
+cat >"$T/bin2/pnpm" <<SH
+#!/usr/bin/env bash
+echo "pnpm \$* ENV=\${FAKE_ENV_MARK:-}" >>"$T/pnpm2.log"
+[ "\$1" = add ] && exit 0
+case " \$* " in *" --showConfig "*) echo '{"compilerOptions":{"composite": true}}'; exit 0 ;; esac
+out=; od=; rd=; while [ \$# -gt 0 ]; do
+  case "\$1" in -o) out=\$2 ;; --outputFile=*) out=\${1#*=} ;; --output) od=\$2 ;; --coverage.reportsDirectory=*) rd=\${1#*=} ;; esac
+  shift
+done
+case " \$* \$out" in *vitest*) :;; esac
+if [ -n "\$rd" ]; then mkdir -p "\$rd"; echo '<coverage line-rate="0.85"></coverage>' >"\$rd/cobertura-coverage.xml"; fi
+if [ -n "\$od" ]; then mkdir -p "\$od"; echo '{"statistics":{"total":{"percentage":1.5}}}' >"\$od/jscpd-report.json"; fi
+if [ -n "\$out" ]; then
+  case "\$out" in *vitest.json) echo '{"numFailedTests":0,"numTotalTests":3}' >"\$out" ;; *) echo '[]' >"\$out" ;; esac
+fi
+exit 0
+SH
+chmod +x "$T/bin2/pnpm"
+mkdir -p "$T/keep"
+outs=$(FAKE_ENV_MARK=passed PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/keep/cov"); check "ts success run exits 0" 0 $?
+check "ts lint findings" 0 "$(value 'lint findings' "$outs")"
+check "ts type errors" 0 "$(value 'type errors' "$outs")"
+check "ts tests" "0 failed of 3" "$(value 'tests failed' "$outs")"
+check "ts coverage" "85.0%" "$(value 'line coverage' "$outs")"
+check "ts complexity" 0 "$(value 'complexity over 15' "$outs")"
+check "ts duplication" "1.5%" "$(value 'duplication' "$outs")"
+check "ts tree unchanged" unchanged "$(value 'project tree after the run' "$outs")"
+contains "composite tsconfig points build info into scratch" "--tsBuildInfoFile" "$(grep 'exec tsc --noEmit' "$T/pnpm2.log")"
+contains "environment reaches the tool" "ENV=passed" "$(grep 'exec eslint' "$T/pnpm2.log" | head -1)"
+check "kept coverage xml exists" yes "$([ -f "$T/keep/cov/cobertura.xml" ] && echo yes || echo no)"
+check "kept coverage row" "$(cd "$T/keep" && pwd -P)/cov/cobertura.xml" "$(value 'coverage xml kept' "$outs")"
+
+# --keep-coverage validation
+bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/p/cov" >/dev/null 2>&1; check "keep dir inside project exits 2" 2 $?
+bash "$SCRIPT" "$T/p" --static --keep-coverage "$T/keep/x" >/dev/null 2>&1; check "keep without --full exits 2" 2 $?
+bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/missing/x" >/dev/null 2>&1; check "keep with missing parent exits 2" 2 $?
+check "nothing created inside the project" no "$([ -e "$T/p/cov" ] && echo yes || echo no)"
 
 exit $fail

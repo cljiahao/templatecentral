@@ -33,7 +33,7 @@ With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one l
 
 For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G writes the `## AI Harness` tail between its `templatecentral-tail` markers; write nothing of it by hand.
 
-Every stack's rules section carries this one line; add it if absent and restate no policy: *"Comments: see `templatecentral:standards (code-standards)`, file `comments.md`."* Leave an existing lint config as it is; lint alignment belongs to the opt-in quality pass (`quality-pass.md`).
+Every stack's rules section carries this one line; add it if absent and restate no policy: *"Comments: see `templatecentral:standards (code-standards)`, file `comments.md`."* Do **not** overwrite an existing lint config; recommend the scaffold's comment rules from `<skill-dir>/../scaffold/<stack>/template/eslint.config.mjs` or `<skill-dir>/../scaffold/fastapi/template/pyproject.toml` (TS: `no-inline-comments: 'error'`, `sonarjs/no-commented-code: 'error'`, `linterOptions.reportUnusedDisableDirectives` and `reportUnusedInlineConfigs` at `'error'`, `sonarjs/todo-tag`/`fixme-tag` as `warn`; FastAPI: Ruff `ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`).
 
 **Step 4c: Create `CLAUDE.md`**
 
@@ -156,4 +156,40 @@ Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.
 
 **Step 4g: Print summary**
 
-List the files written or merged by this phase, grouped by area, and the plugin release (`version` in `.claude-plugin/plugin.json`). Tell the user to commit them together: the harness enforces only as a complete set. Return to `implementation.md`.
+In the first line, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
+
+```
+✓ Upgraded to templateCentral <version>.
+
+Changes made:
+  AGENTS.md                      — Marker @6.0.0 + shared tail (nextjs: compressed template)
+  CLAUDE.md                      — Created (@AGENTS.md one-liner)
+  .claude/settings.json          — Created/merged: permissions.deny secret-read block,
+                                   skillListingBudgetFraction, 6 hook events
+                                   (exec form: "command" + "args")
+  .claude/hooks/*.sh             — 9 scripts: protect-files, block-no-verify,
+                                   user-prompt-guard, post-edit-typecheck,
+                                   post-edit-comment-check, stop-checks,
+                                   subagent-stop, session-context, skill-usage-log
+  .claude/hooks/post-tool-failure.sh — Deleted if present (no longer seeded; its
+                                   PostToolUseFailure settings entry removed)
+  .claude/comment-hygiene-patterns.txt — canonical pattern list (hook + lefthook + CI)
+  lefthook.yml                   — git-hook layer
+  .lefthook/commit-msg.sh        — Conventional Commits gate
+  .gitleaks.toml                 — secret-scan config
+  .claude/ci-gates.sh            — PR merge gates (secrets, changelog, readme, comments, deps)
+  .github/workflows/ci.yml       — CI quality gates (GitHub) — or
+  azure-pipelines/templatecentral-gates.yml — steps template (Azure DevOps)
+  .claude/verify-harness.sh      — harness integrity verifier
+  .claude/regen-harness.sh       — human-run baseline re-bless (never agent-run)
+  .claude/skills/skill-audit/    — repeat-workflow surfacing skill
+  .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
+  (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
+  .claude/harness.json           — Created with origin hashes for every file above
+  .claude/.harness-base/         — as-seeded snapshot (3-way-merge base for Phase 5d)
+  FUTURE.md                      — deferred-work log
+  docs/CONSTITUTION.md           — project invariants
+  README.md (per folder)         — created/refreshed via documentation-kit.md
+
+Commit these files together — the harness only enforces as a complete set.
+```
