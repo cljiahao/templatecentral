@@ -11,7 +11,7 @@ async function migrate() {
     provider: new FileMigrationProvider({
       fs,
       path,
-      // The Next.js scaffold is ESM ("type": "module") — __dirname does not exist
+      // The scaffold is ESM via "type": "module", so __dirname does not exist.
       migrationFolder: path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations'),
     }),
   });

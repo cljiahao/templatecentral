@@ -5,7 +5,7 @@
 be7c72ef67ae73b1d6c9e0ac4089a26292b6490eee2ae32e09ef58fb56de0321  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 f951ce6eb196e2c2d75caff07412c605e8b51aa9b7d3c4c92bcdef764ec9c185  .claude/hooks/block-no-verify.sh
-725f6564881d8e6ebdf6f4e338e4999c61edd0ae62fe9f272dc9f434256bb42f  .claude/hooks/post-edit-comment-check.sh
+3a729709fc343b1887b943759476d8a785361f8bcfb662749375898ef0ea7bfc  .claude/hooks/post-edit-comment-check.sh
 3a1a2151c0eb2f10e8656e1b2c7ebffd626bca5c107a23a71909d2690bd8b113  .claude/hooks/post-edit-typecheck.sh
 cee831c199d50bfe0c3e64d19a49c47e4c0342d40addf0f7c489b392c45bc914  .claude/hooks/protect-files.sh
 f1c11506667c110afd1e920e2b1b37ce059e97a91f69fec61096e26961e0dc09  .claude/hooks/session-context.sh
@@ -96,7 +96,7 @@ e932aea0539c0fe9962d8305f3cc7a44d5638f85cda7412f6a905991d5f552df  src/lib/errors
 0c077275add85344f9d058e42e79032ac86bb768557e40633c2dbd23afa1c6b8  src/lib/logger.ts
 6b161dda89d324fb0d82898a230ce529dfda92c7c29e715aade3578e84238dea  src/lib/security/frame-protection.ts
 9304a861c8673bee09e0f12de31773abbde503b02e59dfd74763ddec2e37cf05  src/lib/utils/index.ts
-a1d5f1769e4aced0132d4f217b6afaf98588219373ed4953b85869457bd0b8d4  src/lib/utils/request-origin.ts
+21d13ba25535ccaf592dd4dd16896790e1a8824d037389c9ba9c78856f0a6f5e  src/lib/utils/request-origin.ts
 e3a9eee3d39eaedcce9df26162e29592fd70a3164ea590745229dac4d06f7830  src/lib/utils/with-logging.ts
 73bef9a7f7d3f7db91aec85ac8e2da6b45be9c2d97cdeee72353071959030dde  src/proxy.ts
 deacbb729b6e9e41f0fae1d6c656b9f77ba0516dbd5ee5e9f3bc5520f1f5f7c9  test/api/health.test.ts

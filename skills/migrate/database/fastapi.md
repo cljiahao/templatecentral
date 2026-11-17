@@ -63,9 +63,7 @@ def _get_iam_token() -> str:
 engine = create_engine(
     f"postgresql+psycopg://{api_settings.DATABASE_USER}@"
     f"{api_settings.DATABASE_HOST}:{api_settings.DATABASE_PORT}/{api_settings.DATABASE_NAME}",
-    # verify-full (not "require") — the IAM auth token is a ~15-minute bearer
-    # credential, so the server certificate must be verified against the AWS
-    # RDS CA bundle or an on-path attacker can intercept it.
+    # verify-full, not "require": the IAM token is a bearer credential, so verify the server certificate against the RDS CA bundle.
     connect_args={
         "sslmode": "verify-full",
         "sslrootcert": api_settings.RDS_CA_BUNDLE_PATH,
@@ -95,7 +93,7 @@ Remove `DATABASE_URL` from `APISettings` and replace with IAM fields:
 
 ```python
 class APISettings(BaseSettings):
-    # ... existing fields (keep all non-database fields) ...
+    # ... keep all existing non-database fields ...
     DATABASE_HOST: str = Field(description="RDS instance hostname")
     DATABASE_PORT: int = Field(default=5432, description="RDS port")
     DATABASE_USER: str = Field(description="IAM database user")

@@ -134,12 +134,11 @@ cat "<skill-dir>/../standards/full-stack-pairing/implementation.md"
 // Before
 const res = await fetch('/api/users');
 
-// After: client component / hook (same-origin, sends X-CSRF-Token on non-GET)
+// After: client component / hook; same-origin, sends X-CSRF-Token on non-GET
 import { backendFetch } from '@/lib/clients/backend-browser';
 const res = await backendFetch('users');
 
-// After: server component / route handler, via getBackendClient() from
-// src/integrations/clients/backend-client.ts (full-stack-pairing Step 4; reads BACKEND_URL)
+// After: server component / route handler via getBackendClient() in src/integrations/clients/backend-client.ts, which reads BACKEND_URL
 ```
 
 4. **Update `.env.example`** with:

@@ -58,8 +58,7 @@ async function migrate() {
   await db.destroy();
 }
 
-// Without the catch, a rejected promise leaves the exit code at 0 and CI reports a
-// failed migration as a passing step.
+// Without the catch, a rejected promise leaves exit code 0 and CI reports a failed migration as passing.
 migrate().catch((e) => {
   console.error(e);
   process.exit(1);

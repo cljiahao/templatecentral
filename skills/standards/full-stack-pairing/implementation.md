@@ -45,7 +45,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        // FastAPI :8000; NestJS — whatever PORT you moved it to (see Port alignment)
+        // FastAPI :8000; for NestJS use whatever PORT you moved it to, see Port alignment
         target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
@@ -65,8 +65,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/external/:path*',
-        // Read at build time (rewrites are baked into the build output) — set BACKEND_URL
-        // in the build environment, not only at runtime.
+        // Read at build time because rewrites are baked into the build output: set BACKEND_URL in the build environment, not only at runtime.
         destination: `${process.env.BACKEND_URL ?? 'http://localhost:8000'}/:path*`,
       },
     ];
@@ -81,7 +80,8 @@ Add the browser path to `src/lib/constants/routes.ts` — a fixed same-origin pa
 ```typescript
 export const API_ROUTES = {
   HEALTH: '/api/health',
-  BACKEND: '/api/external', // rewritten to ${BACKEND_URL} by next.config.ts
+  // Rewritten to ${BACKEND_URL} by next.config.ts
+  BACKEND: '/api/external',
 } as const;
 ```
 
@@ -126,8 +126,7 @@ import { getApiBaseUrl } from '@/lib/constants/env';
 
 export class ApiClient extends FetchClient {
   constructor() {
-    // getApiBaseUrl() throws if VITE_API_BASE_URL is missing — so construct clients
-    // lazily, never at module scope (a module-scope throw blanks the page).
+    // getApiBaseUrl() throws if VITE_API_BASE_URL is missing: construct clients lazily, never at module scope, or the throw blanks the page.
     super(getApiBaseUrl(), {});
   }
 
@@ -153,9 +152,7 @@ class BackendClient extends FetchClient {
 
 let client: BackendClient | undefined;
 
-// Resolved on first use, not at import — `next build` evaluates route modules, and a
-// module-scope throw would fail builds where BACKEND_URL is only set at runtime.
-// A relative fallback has no origin to resolve against server-side, so fail loudly.
+// Resolved on first use: next build evaluates route modules, so a module-scope throw fails builds where BACKEND_URL is only set at runtime; fail loudly, as a relative fallback has no origin server-side.
 export function getBackendClient(): BackendClient {
   const backendUrl = process.env.BACKEND_URL;
   if (!backendUrl) {
@@ -169,7 +166,7 @@ export function getBackendClient(): BackendClient {
 **Server calls on behalf of the signed-in user** forward the browser's cookies, and echo the `XSRF-TOKEN` cookie as `X-CSRF-Token` on a non-GET:
 
 ```typescript
-// src/lib/session.ts — server-only (server components, layouts, route handlers)
+// src/lib/session.ts — server-only: server components, layouts, route handlers
 import 'server-only';
 import { cookies } from 'next/headers';
 

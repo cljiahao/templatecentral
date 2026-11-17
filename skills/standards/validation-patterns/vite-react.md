@@ -50,8 +50,7 @@ export function CreateProjectForm() {
       form.reset();
     } catch (error) {
       if (error instanceof APIError) {
-        // The backend's error text is for engineers, not users — it can carry stack
-        // traces, SQL fragments, or internal identifiers. Log it, show a fixed string.
+        // The backend's error text can carry stack traces, SQL fragments or internal identifiers: log it, show a fixed string.
         logError('CreateProjectForm: create failed', error);
         setSubmitError('Failed to create project. Please try again.');
         return;
@@ -213,8 +212,7 @@ class ProjectClient extends ApiClient {
   }
 }
 
-// Lazy: ApiClient's constructor throws when VITE_API_BASE_URL is unset — at module scope
-// that aborts bundle evaluation before createRoot() runs and renders a blank page.
+// Lazy: ApiClient throws when VITE_API_BASE_URL is unset, and at module scope that aborts bundle evaluation and blanks the page.
 let client: ProjectClient | undefined;
 const projects = (): ProjectClient => (client ??= new ProjectClient());
 
@@ -234,8 +232,7 @@ export async function fetchProject(id: string): Promise<Project> {
 
   const parsed = projectSchema.safeParse(await projects().get(parsedId.data));
   if (!parsed.success) {
-    // APIError, never a generic Error — the app's error handling is keyed on it.
-    // Field detail goes to the log; the thrown message stays user-safe.
+    // APIError, never a generic Error: error handling is keyed on it, and field detail goes to the log, not the message.
     logError(
       'fetchProject: response failed schema validation',
       new Error(JSON.stringify(z.flattenError(parsed.error).fieldErrors))

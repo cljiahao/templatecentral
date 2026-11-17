@@ -11,8 +11,7 @@ import { z } from 'zod';
 
 export const emailSchema = z.email({ error: 'Invalid email address' }).toLowerCase();
 
-// Modern authenticator guidance: require length and screen against breached-password lists —
-// do NOT impose character-composition rules. Long passphrases beat short complex strings.
+// Require length and screen against breached-password lists; do NOT impose composition rules, since long passphrases beat short complex strings.
 export const passwordSchema = z
   .string()
   .min(12, 'Password must be at least 12 characters')
@@ -22,9 +21,7 @@ export const uuidSchema = z.uuid();
 export const urlSchema = z.url();
 export const dateSchema = z.iso.datetime().transform((val) => new Date(val));
 
-// File metadata (name/size/type) is client-claimed — this schema is a usability filter.
-// The server must still cap the body before buffering, verify magic bytes, and generate
-// its own storage key (never a path from `name`). See the per-stack upload examples.
+// File metadata is client-claimed, so this schema is a usability filter: the server must still cap the body, verify magic bytes and generate its own storage key.
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf'] as const;
 export const ALLOWED_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'application/pdf'] as const;
@@ -70,8 +67,7 @@ export const createProjectSchema = z.object({
 
 export const updateProjectSchema = createProjectSchema.partial();
 
-// Query values arrive as strings (or null from URLSearchParams.get — coalesce to undefined
-// so the defaults apply). The `limit` ceiling is what stops a client requesting the whole table.
+// Query values arrive as strings or null: coalesce to undefined so defaults apply; the limit ceiling stops a client requesting the whole table.
 export const paginationSchema = z.object({
   // Capped: OFFSET cost grows with page, so an unbounded page is a cheap DoS lever.
   page: z.coerce.number().int().min(1, 'Page must be 1 or greater').max(10_000).default(1),
@@ -79,7 +75,7 @@ export const paginationSchema = z.object({
   sort: z.string().max(64).regex(/^(asc|desc)_\w+$/, 'Invalid sort format').optional(),
 });
 
-// External API responses: z.looseObject keeps unknown fields (z.object strips them)
+// External API responses: z.looseObject keeps unknown fields, z.object strips them
 export const externalApiUserSchema = z.looseObject({
   id: z.union([z.number(), z.string()]),
   email: emailSchema,

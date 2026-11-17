@@ -1,2 +1,1 @@
-skills/add/database/python/sqlalchemy-iam.md:71 mirrored byte-for-byte in skills/migrate/database/fastapi.md and checked by lint-skills; remove once both copies are shortened together
-skills/add/database/typescript/nestjs-kysely-iam.md:47 mirrored byte-for-byte in skills/migrate/database/nestjs/template/src/database/kysely.service.ts and checked by lint-skills; remove once both copies are shortened together
+# One exemption per line: <path>:<line> <reason>. An entry whose line no longer has a finding fails the gate.

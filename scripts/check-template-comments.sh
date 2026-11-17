@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the post-edit comment scanner once per language over every template file and every code fence in the guides; fails on any finding.
-# Scope: ts/js/py template sources and ts/js/py guide fences, plus .yml/.yaml template files.
+# Scope: ts/js/py template sources and guide fences (add, scaffold, migrate, standards, review), plus .yml/.yaml template files.
 # Skipped: skills/scaffold/shared/template-ci/ (swept in a follow-up change).
 set -u
 cd "$(dirname "$0")/.." || exit 2
@@ -18,7 +18,7 @@ trap 'rm -rf "$work"' EXIT
 
 {
   find skills/scaffold -path '*/template*/*' -type f
-  find skills/add -path '*template*/*' -type f
+  find skills/add skills/migrate -path '*template*/*' -type f
 } | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|yml|yaml)$' | grep -v '/node_modules/' | grep -vF "$SKIP_CI" | sort -u >"$work/files"
 
 nfiles=$(wc -l <"$work/files" | tr -d ' ')
@@ -32,7 +32,7 @@ os.makedirs(out, exist_ok=True)
 ext = {"ts": "ts", "tsx": "tsx", "typescript": "ts", "js": "js", "javascript": "js", "mjs": "mjs", "py": "py", "python": "py"}
 n = 0
 with open(os.path.join(work, "files"), "a") as lst, open(os.path.join(work, "fences.map"), "w") as mp:
-    for root in ("skills/add", "skills/scaffold"):
+    for root in ("skills/add", "skills/scaffold", "skills/migrate", "skills/standards", "skills/review"):
         for d, _, files in os.walk(root):
             for fn in sorted(files):
                 if not fn.endswith(".md"):
@@ -70,11 +70,11 @@ fence = {}
 for l in open(os.path.join(work, "fences.map")):
     name, src, off = l.rstrip("\n").split("\t")
     fence[name] = (src, int(off))
-counts = {"scaffold-templates": 0, "add-templates": 0, "guide-fences": 0}
+counts = {"scaffold-templates": 0, "add-templates": 0, "migrate-templates": 0, "guide-fences": 0}
 exempt = set()
 if os.path.exists("scripts/check-template-comments.exempt"):
     for l in open("scripts/check-template-comments.exempt"):
-        if l.strip():
+        if l.strip() and not l.startswith("#"):
             exempt.add(l.split(" ", 1)[0])
 skipped = 0
 used = set()
@@ -98,7 +98,7 @@ for l in open(os.path.join(work, "raw"), encoding="utf-8", errors="replace"):
         skipped += 1
         continue
     print(l)
-    counts["add-templates" if path.startswith("skills/add") else "scaffold-templates"] += 1
+    counts["add-templates" if path.startswith("skills/add") else "migrate-templates" if path.startswith("skills/migrate") else "scaffold-templates"] += 1
 for e in sorted(exempt - used):
     print("%s: stale exemption (no finding on that line): remove it from scripts/check-template-comments.exempt" % e)
     stale += 1

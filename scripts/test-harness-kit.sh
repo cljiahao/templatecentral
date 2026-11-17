@@ -696,6 +696,17 @@ mv "$GT/skills/scaffold/fastapi/template" "$GT/tpl.bak"; mv "$GT/skills/add" "$G
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "2 yes" "$gate_ec $(ok_if grep -q 'no template files found' <<<"$gate_out")" "check-template-comments exits 2 when no template files are found" "$gate_out"
 rmdir "$GT/skills/add"; mv "$GT/add.bak" "$GT/skills/add"; mv "$GT/tpl.bak" "$GT/skills/scaffold/fastapi/template"
+mkdir -p "$GT/skills/migrate/database/x/template" "$GT/skills/standards/v" "$GT/skills/review/r"
+printf 'a = 1  # note\n' > "$GT/skills/migrate/database/x/template/m.py"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'skills/migrate/database/x/template/m.py:1: trailing comment' <<<"$gate_out")" "check-template-comments scans migrate template trees" "$gate_out"
+rm "$GT/skills/migrate/database/x/template/m.py"
+for gd in migrate/database standards/v review/r; do
+  printf '%s\n' 'text' '```py' 'a = 1  # note' '```' > "$GT/skills/$gd/g.md"
+  gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+  check "1 yes" "$gate_ec $(ok_if grep -q "skills/$gd/g.md:3: trailing comment" <<<"$gate_out")" "check-template-comments scans $gd guide fences" "$gate_out"
+  rm "$GT/skills/$gd/g.md"
+done
 
 # ── session-context.sh ────────────────────────────────────────────────────────
 

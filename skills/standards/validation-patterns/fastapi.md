@@ -50,8 +50,7 @@ from api.schemas.base import BaseRequestSchema
 
 class LoginRequest(BaseRequestSchema):
     email: EmailStr
-    # Login accepts any non-empty password — the 12-char minimum is a signup/reset rule.
-    # Enforcing it here would lock out existing accounts and disclose the policy.
+    # Login accepts any non-empty password: the 12-char minimum is a signup rule, and enforcing it here locks out existing accounts and discloses the policy.
     password: str = Field(..., min_length=1, max_length=128)
 ```
 
@@ -107,7 +106,7 @@ async def upload_project_file(
 ```
 
 ```python
-# src/api/services/projects.py (upload excerpt)
+# src/api/services/projects.py — upload excerpt
 import uuid
 
 from fastapi import UploadFile
@@ -120,22 +119,18 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 async def store_project_file(file: UploadFile) -> str:
     """Validate an upload and persist it under a server-generated key."""
-    # content_type is the client-supplied header — a cheap first filter only. For anything
-    # security-sensitive, also sniff magic bytes (e.g. python-magic) before storing/serving.
-    # The message is fixed: never echo the submitted value back.
+    # content_type is client-supplied, so it is only a first filter: sniff magic bytes for sensitive files, and keep the error message fixed.
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise InvalidInputError("File type must be JPEG, PNG, or PDF")
 
-    # file.size comes from the parsed multipart spool, so it can reject before read();
-    # the post-read length check covers a missing size.
+    # file.size comes from the parsed multipart spool and rejects before read; the post-read length check covers a missing size.
     if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise InvalidInputError("File must be under 10MB")
     contents = await file.read()
     if len(contents) > MAX_UPLOAD_BYTES:
         raise InvalidInputError("File must be under 10MB")
 
-    # file.filename is attacker-controlled (`../`, absolute paths, NUL bytes) — NEVER build
-    # a storage path from it. Keep it as display metadata only.
+    # file.filename is attacker-controlled, including ../, absolute paths and NUL bytes: never build a storage path from it, keep it as display metadata.
     storage_key = str(uuid.uuid4())
     # Hand storage_key + contents to the storage layer here.
     return storage_key
@@ -189,7 +184,7 @@ class GitHubUser(BaseModel):
 
 
 async def fetch_github_user(username: str) -> GitHubUser:
-    """Fetch a GitHub user; raise NoResultsFound (404) if absent, RuntimeError (500) otherwise."""
+    """Fetch a GitHub user; an absent user raises NoResultsFound, other failures RuntimeError."""
     # Encode the path segment — an unencoded `../` or `?` rewrites the request URL
     url = f"https://api.github.com/users/{quote(username, safe='')}"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -202,8 +197,7 @@ async def fetch_github_user(username: str) -> GitHubUser:
     try:
         return GitHubUser.model_validate(response.json())
     except ValidationError as e:
-        # An upstream contract break is a 500, not the caller's 400. str(e) echoes input
-        # values, so log the structured errors without them and drop the exception chain.
+        # An upstream contract break is a 500, not the caller's 400; str(e) echoes input values, so log structured errors without them and drop the chain.
         logger.error(
             "GitHub response failed validation",
             errors=e.errors(include_input=False, include_url=False),

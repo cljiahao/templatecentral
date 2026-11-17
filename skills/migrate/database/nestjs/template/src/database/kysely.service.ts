@@ -25,8 +25,7 @@ export class KyselyService extends Kysely<Database> implements OnModuleInit, OnM
       user: serviceConfig.DATABASE_USER,
       database: serviceConfig.DATABASE_NAME,
       password: () => signer.getAuthToken(),
-      // The `ca` is required: without the Amazon RDS root CA, `rejectUnauthorized: true`
-      // cannot build a chain and every connection fails with SELF_SIGNED_CERT_IN_CHAIN.
+      // The `ca` is required: without the Amazon RDS root CA every connection fails with SELF_SIGNED_CERT_IN_CHAIN.
       ssl: {
         rejectUnauthorized: true,
         ca: readFileSync(serviceConfig.RDS_CA_BUNDLE_PATH, 'utf8'),

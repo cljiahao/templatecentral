@@ -141,7 +141,7 @@ bc1d3e4c5e48739b89a47bc5bc793167acabed7987926b78c9494c7c26c9d8bf	skills/add/data
 11cd0ed1f1ff01ee0337a395933a1b99c8dd66728c6d69b16d6e5fd7807738e0	skills/add/database/python/sqlalchemy-iam.md	A1. Install Dependencies	0	-
 987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560	skills/add/database/python/sqlalchemy-iam.md	A2. Create Database Base	0	python
 095cefe9576c86c272a3cccb53fc998e6002996619199cc24864c5145c610c7c	skills/add/database/python/sqlalchemy-iam.md	A3. Initialize Alembic (same as standard)	0	ini
-b8f0ac6de22f12c1d0f121261e76e464bf2473ea2353238af0d976c112e5b388	skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	python
+4f4a3dc2a7dd5903393274747fa2f8944274a5d874a3d7ad87632c98316ff356	skills/add/database/python/sqlalchemy-iam.md	A4. Create `src/database/session.py` (IAM variant)	0	python
 a8625a5a21cd404469fafe47c5edf9132b64df877f3655b2f1825d1da6042fb8	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	0	python
 46d980976d66e5c5ea612f9b8f35b0023c80702e8ccb017a9448e2888e5d7c3d	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	1	-
 510cf5a911e12717fb77d1d6409705a4678bdcd477001cacdaca5868d3a8d8b8	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	2	python
@@ -181,7 +181,7 @@ c8872afc67639c73447c5762eb45e9ad8e63c75a8a4e2cbcda441cee868d417c	skills/add/data
 0f172292e5e56a0c285d1beae64251c54d418a6004b07e0d2f1432f4b81b776b	skills/add/database/typescript/nestjs-kysely-auth.md	Completing Auth Integration	0	typescript
 32b6129113ed1f152929485a8e0c23020885477db4dc40125b1a6d15ba02b2b7	skills/add/database/typescript/nestjs-kysely-auth.md	Completing Auth Integration	1	typescript
 fd853eb81294d4ddd56a066161ba0fab4961223b9faf49f14a2771bad8f24e40	skills/add/database/typescript/nestjs-kysely-auth.md	Completing Auth Integration	2	typescript
-a2554a9fb03ef8816db216eecb7422a3d87b7ea9a4963507f9df90b67860bae0	skills/add/database/typescript/nestjs-kysely-iam.md	NestJS + Kysely — IAM Auth Variant	0	typescript
+8411c937bda44c507a10dea050987e48773b83c7315bd2e5ae5b4ff2baa1be7a	skills/add/database/typescript/nestjs-kysely-iam.md	NestJS + Kysely — IAM Auth Variant	0	typescript
 df4d5aad55d5ef0f127edfc7828a34da218e7d451c27509264e150d71901d851	skills/add/database/typescript/nestjs-kysely-iam.md	NestJS + Kysely — IAM Auth Variant	1	typescript
 9a5ced2eef96bcdbcd37b469d3c91f5820ea777148e7a30f50aa67a8c9c2c27b	skills/add/database/typescript/nestjs-kysely-iam.md	NestJS + Kysely — IAM Auth Variant	2	typescript
 cec00312925f6ed240d399d174514955f8f93f92416764378a73cba90b3c742a	skills/add/database/typescript/nestjs-kysely-iam.md	NestJS + Kysely — IAM Auth Variant	3	env
