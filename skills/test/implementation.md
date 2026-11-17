@@ -4,7 +4,7 @@
 
 # Test Agent
 
-Write the few tests that protect behaviour you added or changed, run the suite, report. Apply the test-value rule in `docs/CONSTITUTION.md` §4 (migrated projects without it: one test per distinct behaviour, parametrize siblings, extend an existing test before adding one, no tests of constants/types/re-exports/framework code, reach the 80% changed-line gate through behaviour only).
+Write the few tests that protect behaviour you added or changed, run the suite, report. Apply the test-value rule in `docs/CONSTITUTION.md` §4 (migrated projects without it: run `templatecentral:migrate` to add it).
 
 **Called by `templatecentral:scaffold`:** run the existing suite only (step 4) and report `Tests written: none (scaffold run)`. Template code ships with its own tests; do not load `templatecentral:add (test)`.
 
@@ -28,7 +28,7 @@ Run when the suite is slow or large, or when asked. Behaviour stays; case count 
 
 1. Measure: case count, runtime, and test-to-source line ratio. Record coverage first (`pnpm test:ci` / `pytest --cov=src`).
 2. Find tests exercising the same behaviour: near-identical bodies, same function with one changed input, one assertion per case across a table of inputs, tests of constants/types/re-exports/framework code, mocks asserting themselves.
-3. Merge sibling cases into `it.each` / `pytest.mark.parametrize`. Delete redundant and no-value tests. Split nothing back out.
+3. Merge sibling cases into `it.each` / `pytest.mark.parametrize` (no confirmation needed). List the proposed merges and deletions, wait for the user's confirmation before deleting any test, then delete the redundant and no-value tests. Split nothing back out.
 4. Re-run coverage. Changed-line coverage and each file's covered lines must not drop; if one does, restore the test that covered them.
 5. Report before/after counts and runtime. Never lower a gate, exclude files, or add ignore pragmas to compensate.
 

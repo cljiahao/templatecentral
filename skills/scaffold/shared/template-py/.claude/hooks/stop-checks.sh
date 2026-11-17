@@ -8,24 +8,58 @@ try: print('true' if json.loads(sys.stdin.read() or '{}').get('stop_hook_active'
 except Exception: print('false')" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-files=$( { git diff --name-only --relative --diff-filter=d HEAD; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+files=$( { git -c core.quotePath=false diff --name-only --relative HEAD; git -c core.quotePath=false ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+# Matches test modules that import the changed module, including multi-line "from x import (...)" forms.
+read -r -d '' IMPORT_MATCH <<'PYEOF' || true
+import os, re, sys
+dotted, stem = sys.argv[1:3]
+def hit(m):
+    return m in (dotted, stem) or m.endswith("." + stem) or m.endswith("." + dotted)
+frm = re.compile(r"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]*(\([^)]*\)|[^\n]*)", re.M)
+imp = re.compile(r"^[ \t]*import[ \t]+([^\n]*)", re.M)
+for root, _, names in os.walk("test"):
+    for n in names:
+        if not n.endswith(".py"):
+            continue
+        path = os.path.join(root, n)
+        try:
+            text = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        ok = False
+        for m in frm.finditer(text):
+            imported = [x.split(" as ")[0].strip() for x in re.sub(r"[()#\\]", "", m.group(2)).replace("\n", ",").split(",")]
+            if hit(m.group(1)) or stem in imported or dotted in imported:
+                ok = True
+                break
+        if not ok:
+            for m in imp.finditer(text):
+                if any(hit(x.split(" as ")[0].strip()) for x in m.group(1).split(",")):
+                    ok = True
+                    break
+        if ok:
+            print(path)
+PYEOF
 src_changed=""
 full=""
 tests=""
 while IFS= read -r f; do
-  [ -f "$f" ] || continue
+  [ -n "$f" ] || continue
   base=${f##*/}; stem=${base%.py}
   # Config, lock and shared-fixture files can break every test: typecheck and run all of test/.
   case "$base" in
-    pyproject.toml|uv.lock|requirements*.txt|pytest.ini|conftest.py) src_changed=1; full=1; continue ;;
+    pyproject.toml|uv.lock|requirements*.txt|pytest.ini|conftest.py|pyrightconfig.json|setup.cfg|tox.ini|.python-version) src_changed=1; full=1; continue ;;
   esac
   case "$f" in *.py) ;; *) continue ;; esac
+  # A deleted Python file has nothing to relate to: typecheck and run all of test/.
+  if [ ! -f "$f" ]; then src_changed=1; full=1; continue; fi
   case "$f" in
     test/*|*/test/*|tests/*|*/tests/*)
       case "$stem" in
         test_*|*_test) tests="$tests
 $f" ;;
-        *) full=1 ;;  # conftest.py, factories, helpers: any test may depend on them
+        # Helpers and factories: any test may depend on them.
+        *) full=1 ;;
       esac ;;
     *)
       src_changed=1
@@ -35,7 +69,7 @@ $f" ;;
       [ -n "$match" ] && tests="$tests
 $match"
       dotted=$(printf '%s' "${f%.py}" | sed 's|^src/||; s|/|.|g')
-      imp=$(grep -rlE --include='*.py' "^[[:space:]]*(from|import)[[:space:]]+(.*[[:space:].,])?(${dotted}|${stem})([[:space:].,]|$)" test 2>/dev/null)
+      imp=$(python3 -c "$IMPORT_MATCH" "$dotted" "$stem" 2>/dev/null)
       [ -n "$imp" ] && tests="$tests
 $imp" ;;
   esac

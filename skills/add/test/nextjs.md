@@ -254,7 +254,7 @@ function makeParams<T extends Record<string, string>>(values: T) {
 - Descriptive names — `it('should return 404 when project not found')`
 - Tests do not share mutable state
 - One 500 test per handler pattern that asserts the body does not echo the internal error message; not one per route
-- Parametrize sibling inputs (`it.each`) — e.g. several invalid bodies → 400 — instead of one test each
+- Parametrize sibling inputs per `docs/CONSTITUTION.md` §4 (`it.each`), e.g. several invalid bodies → 400
 
 ## After Writing Code
 

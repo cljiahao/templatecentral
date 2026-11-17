@@ -153,7 +153,7 @@ describe('POST /api/projects', () => {
 });
 ```
 
-One test per distinct behaviour (parametrize sibling invalid inputs with `it.each`); run `pnpm test`.
+Follow `docs/CONSTITUTION.md` §4 (parametrize sibling invalid inputs with `it.each`); run `pnpm test`.
 
 ### 6. Validate
 

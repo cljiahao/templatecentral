@@ -33,10 +33,8 @@ pythonpath = ["src", "test"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-markers = [
-    "unit: unit tests",
-    "end_to_end: end to end tests",
-]
+# Register a marker here before using it to select a subset (e.g. "integration: needs a running service").
+markers = []
 
 addopts = [
     "--import-mode=importlib",

@@ -75,9 +75,9 @@ Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, co
 - Do not use `@app.on_event("startup")` / `@app.on_event("shutdown")`: Starlette 1.0 removed them. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
 - **Starlette floor** (the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.
 
-### Backend Testing (mandatory)
+### Backend Testing
 
-Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `templatecentral:add (endpoint)`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `python -m pytest test/ -q` from project root before handoff.
+Test behaviour that can regress (`docs/CONSTITUTION.md` §4). Same-change pytest for new/changed routers, services, and API domain logic (`test/`, layout per `templatecentral:add (endpoint)`). Prefer `TestClient` for HTTP; unit-test pure logic directly. Run `python -m pytest test/ -q` from project root before handoff.
 
 Use `json=data` in test clients (not `content=json.dumps(data)`) — FastAPI enforces `Content-Type: application/json` by default (`strict_content_type=True`), and `json=` sets it automatically.
 
