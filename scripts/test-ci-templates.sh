@@ -111,48 +111,56 @@ files = {
 }
 GUARD = re.compile(r"\|\|\s*(true|:)|continue-on-error|condition:|succeededOrFailed\(|\balways\(\)|\bcancelled\(\)|\bfailure\(\)")
 errors = []
+def step_bounds(lines, n):
+    start = n
+    while start > 0 and not re.match(r"^\s*- ", lines[start]):
+        start -= 1
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    end = n + 1
+    while end < len(lines) and not (re.match(r"^\s*- ", lines[end]) and len(lines[end]) - len(lines[end].lstrip()) <= indent) and not re.match(r"^\s{0,2}\S", lines[end]):
+        end += 1
+    return start, end
+def job_has_condition(lines, n):
+    j = n
+    while j > 0 and not re.match(r"^  (-\s+job:\s*\S+|[A-Za-z_-]+:)\s*$", lines[j]):
+        j -= 1
+    k = j + 1
+    while k < len(lines) and not re.match(r"^  (-\s+job:|[A-Za-z_-]+:\s*$)", lines[k]) and not re.match(r"^\S", lines[k]):
+        if re.match(r"^    (if|condition):", lines[k]) and not re.search(r"pull_request", lines[k]):
+            return lines[k].strip()
+        k += 1
+    return None
+# Gate steps (merge, diff-cover, jscpd, nosonar) must always run and must fail the job: no step-level or job-level
+# if/condition/continueOnError, no inline guard. Allowed conditions elsewhere: `if: hashFiles('uv.lock') != ''` on the
+# optional setup-uv step (not a gate) and the job-level `github.event_name == 'pull_request'` on the PR-only gates.
+def gate_step_checks(rel, lines, what, needle, required=True):
+    hits = [i for i, l in enumerate(lines) if needle in l and not l.lstrip().startswith("#")]
+    if not hits:
+        if required:
+            errors.append(f"{rel}: missing {what} ({needle})")
+        return
+    for n in hits:
+        if re.search(r"\|\||;\s*\S|\bif\b.*\bthen\b", re.sub(r"\s#\s.*$", "", lines[n])):
+            errors.append(f"{rel}:{n + 1}: {what} is guarded inline: {lines[n].strip()}")
+        a, b = step_bounds(lines, n)
+        for k in range(a, b):
+            if re.match(r"^\s*(- )?(if|condition|continueOnError):", lines[k]):
+                errors.append(f"{rel}:{k + 1}: {what} step has a run condition: {lines[k].strip()}")
+        c = job_has_condition(lines, n)
+        if c:
+            errors.append(f"{rel}:{n + 1}: {what} job has a run condition: {c}")
 for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
-        if re.search(r"\|\|\s*(true\b|:(?![\w/.-]))|continue-on-error|succeededOrFailed\(|\balways\(\)", code):
+        if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
             errors.append(f"{rel}:{i + 1}: gate-neutralising construct: {l.strip()}")
         if re.match(r"^\s*condition:\s*(always|succeededOrFailed)", l):
             errors.append(f"{rel}:{i + 1}: condition that runs after failure: {l.strip()}")
-    def step_bounds(n):
-        start = n
-        while start > 0 and not re.match(r"^\s*- ", lines[start]):
-            start -= 1
-        indent = len(lines[start]) - len(lines[start].lstrip())
-        end = n + 1
-        while end < len(lines) and not (re.match(r"^\s*- ", lines[end]) and len(lines[end]) - len(lines[end].lstrip()) <= indent) and not re.match(r"^\s{0,2}\S", lines[end]):
-            end += 1
-        return start, end
-    def job_has_condition(n):
-        j = n
-        while j > 0 and not re.match(r"^  (-\s+job:\s*\S+|[A-Za-z_-]+:)\s*$", lines[j]):
-            j -= 1
-        k = j + 1
-        while k < len(lines) and not re.match(r"^  (-\s+job:|[A-Za-z_-]+:\s*$)", lines[k]) and not re.match(r"^\S", lines[k]):
-            if re.match(r"^    (if|condition):", lines[k]) and not re.search(r"pull_request", lines[k]):
-                return lines[k].strip()
-            k += 1
-        return None
-    for what, needle in (("merge command", merge), ("diff-cover", "diff-cover")):
-        hits = [i for i, l in enumerate(lines) if needle in l and not l.lstrip().startswith("#")]
-        if not hits:
-            errors.append(f"{rel}: missing {what} ({needle})")
-            continue
-        for n in hits:
-            if re.search(r"\|\||;\s*\S|\bif\b.*\bthen\b", re.sub(r"\s#\s.*$", "", lines[n])):
-                errors.append(f"{rel}:{n + 1}: {what} is guarded inline: {lines[n].strip()}")
-            a, b = step_bounds(n)
-            for k in range(a, b):
-                if re.match(r"^\s*(- )?(if|condition|continueOnError):", lines[k]):
-                    errors.append(f"{rel}:{k + 1}: {what} step has a run condition: {lines[k].strip()}")
-            c = job_has_condition(n)
-            if c:
-                errors.append(f"{rel}:{n + 1}: {what} job has a run condition: {c}")
+    for what, needle in (("merge command", merge), ("diff-cover", "diff-cover"), ("jscpd step", "jscpd")):
+        gate_step_checks(rel, lines, what, needle)
+    if host.startswith("github"):
+        gate_step_checks(rel, lines, "nosonar step", "ci-gates.sh nosonar")
     code_lines = [l for l in lines if not l.lstrip().startswith("#")]
     for n, l in enumerate(lines):
         if re.search(r"pipx run\s+(\"?)diff-cover", l) and not re.search(r"pipx run\s+\"diff-cover==(\$\{DIFF_COVER_VERSION\}|\$\(diffCoverVersion\)|\$\(DIFF_COVER_VERSION\))\"", l):
@@ -170,7 +178,7 @@ for host, (rel, merge) in files.items():
         errors.append(f"{nosonar_file}: missing the `ci-gates.sh nosonar` step (used by {rel})")
     for n, l in enumerate(lines):
         if "upload-artifact" in l and "uses:" in l:
-            a, b = step_bounds(n)
+            a, b = step_bounds(lines, n)
             if not any(re.match(r"^\s*if-no-files-found:\s*error\s*$", lines[k]) for k in range(a, b)):
                 errors.append(f"{rel}:{n + 1}: upload-artifact step must keep `if-no-files-found: error`")
     if not any("diff-cover" in l and "--fail-under=80" in l for l in lines):
@@ -178,8 +186,9 @@ for host, (rel, merge) in files.items():
 gates = "azure/azure-pipelines/templatecentral-gates.yml"
 for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
     code = re.sub(r"\s#\s.*$", "", l)
-    if re.search(r"\|\|\s*(true\b|:(?![\w/.-]))|continue-on-error|succeededOrFailed\(|\balways\(\)|^\s*condition:", code):
+    if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)|^\s*condition:", code):
         errors.append(f"{gates}:{i + 1}: gate-neutralising construct: {l.strip()}")
+gate_step_checks(gates, open(f"{root}/{gates}").read().split("\n"), "nosonar step", "ci-gates.sh nosonar")
 print("\n".join(errors))
 sys.exit(1 if errors else 0)
 PY
@@ -216,6 +225,16 @@ mutate "|| true inside the Azure merge script (azure-ts)" azure-ts/azure-pipelin
 mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "run: '[ \"\$(find blob" "run: 'true || [ \"\$(find blob" github
 mutate "|| true mid-command before a following command (github-ts nosonar)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: bash .claude/ci-gates.sh nosonar || true; echo done' static
 mutate "|| : mid-command (azure gates nosonar)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || : ; echo done' static
+mutate "|| exit 0 after the jscpd step (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: pnpm exec jscpd || exit 0' static
+mutate "|| echo after diff-cover (azure-py)" azure-py/azure-pipelines.yml '--fail-under=80' '--fail-under=80 || echo ignored' static
+mutate "|| exit 0 after nosonar (azure gates)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || exit 0' static
+mutate "|| echo after the merge command (github-py pytest is the merge) " github-py/.github/workflows/ci.yml '--cov-report=xml -q' '--cov-report=xml -q || echo ignored' static
+mutate "if: false on the jscpd step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' '      - if: false\n        name: Duplication (production source <= 3%, per .jscpd.json)\n        run: pnpm exec jscpd' static
+mutate "if: false on the nosonar step (github-py)" github-py/.github/workflows/ci.yml '      - name: No NOSONAR suppression markers' '      - if: false\n        name: No NOSONAR suppression markers' static
+mutate "if: false on the merge step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Merge shard reports (writes coverage/cobertura-coverage.xml)' '      - if: false\n        name: Merge shard reports (writes coverage/cobertura-coverage.xml)' static
+mutate "if: false on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: false\n        name: Changed-line coverage (>= 80%)' static
+mutate "condition: false on the jscpd step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Duplication (production source <= 3%, per .jscpd.json)' '        condition: false\n        displayName: Duplication (production source <= 3%, per .jscpd.json)' static
+mutate "condition: false on the nosonar step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: No NOSONAR suppression markers' '    condition: false\n    displayName: No NOSONAR suppression markers' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
 mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
