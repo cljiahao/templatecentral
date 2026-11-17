@@ -91,7 +91,7 @@ Point the tool at `dist/agents-skills/` (or copy it into the tool's skill direct
 
 A non-Claude-Code user gets the full scaffold logic, the `AGENTS.md` routing/conventions, and the
 git-hook + CI enforcement. The in-agent live guards (prompt-injection/credential firewall,
-secret-file and git-bypass guards, typecheck-on-edit, the Stop test gate, session recovery) are
+secret-file and git-bypass guards, typecheck-on-edit, the Stop typecheck and related-tests gate, session recovery) are
 Claude Code-specific. The OpenCode adapter ports the secret-file, git-bypass, and typecheck guards;
 see its [README](../adapters/opencode/README.md) for what is not ported.
 

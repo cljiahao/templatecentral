@@ -75,7 +75,7 @@ The CI file is not part of this copy: Step B3 picks the host and copies it. Ever
 
 | Stack | JSON-parsing runtime | Typecheck feedback cmd | Stop-checks test cmd | Verify-skill name(s) | Quality-gate line in CONSTITUTION §6 |
 |-------|----------------------|------------------------|----------------------|----------------------|---------------------------------------|
-| **fastapi** | `python3` | `python -m pyright src/` (errors → `additionalContext`) | changed/matching test files, else `--lf --lfnf=none` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
+| **fastapi** | `python3` | `python -m pyright src/` (errors → `additionalContext`) | changed test files, name-matched then import-matched tests, else all of `test/` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
 | **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `nest-verify` | `pnpm check` |
 | **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `next-verify` + `next-migrate` | `pnpm check` |
 | **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` | `vite-verify` | `pnpm check` |

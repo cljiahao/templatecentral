@@ -36,7 +36,7 @@ The Next.js template uses `globals: false` in Vitest — always import `describe
 
 Import route handler functions directly and call them with `NextRequest` objects — no HTTP server needed.
 
-> **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) keeps one 401 test per route; a check shared through a helper is tested once.
+> **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) keeps one 401 test per route; a check shared through a helper or guard is tested once (CONSTITUTION §4).
 
 > **Always pass a `NextRequest`, never a plain `Request`.** `withLogging` handlers are typed against `NextRequest`, so a plain `Request` or a zero-argument `GET()` fails `pnpm check`.
 

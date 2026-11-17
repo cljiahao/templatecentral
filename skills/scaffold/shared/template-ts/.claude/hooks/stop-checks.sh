@@ -16,6 +16,7 @@ $files
 EOF2
 [ "$#" -gt 0 ] || exit 0
 command -v pnpm >/dev/null 2>&1 || { echo "pnpm unavailable — skipping Stop gate" >&2; exit 0; }
+pnpm exec tsc --version >/dev/null 2>&1 || { echo "tsc unavailable — skipping Stop gate" >&2; exit 0; }
 OUTPUT=$(pnpm exec tsc --noEmit --incremental 2>&1); EC=$?
 if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 pnpm exec vitest --version >/dev/null 2>&1 || { echo "vitest unavailable — skipping Stop gate" >&2; exit 0; }

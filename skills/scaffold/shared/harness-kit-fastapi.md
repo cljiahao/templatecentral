@@ -38,7 +38,7 @@ FastAPI: identical shape to the TS body; `UserPromptSubmit` runs `python3` on `u
 
 ---
 
-`.claude/hooks/stop-checks.sh` (typecheck, then only tests related to changed files). It exits at once when no code file changed (or the work is already committed — pre-commit/pre-push and CI gate that path); the full suite runs in pre-push and CI only; Claude Code also caps consecutive Stop-hook continuations at 8 by default (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). Step 0 copies it from `<skill-dir>/shared/template-py/.claude/hooks/stop-checks.sh` (uses `python3` + `pytest`, `pyright`).
+`.claude/hooks/stop-checks.sh` (typecheck, then only tests related to changed files: name match, then tests importing the module, else all of `test/`; a `conftest.py`/factory change also runs all of `test/`). It exits at once when no code file changed (or the work is already committed — pre-commit/pre-push and CI gate that path); the full suite runs in pre-push and CI only; Claude Code also caps consecutive Stop-hook continuations at 8 by default (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). Step 0 copies it from `<skill-dir>/shared/template-py/.claude/hooks/stop-checks.sh` (uses `python3` + `pytest`, `pyright`).
 
 ---
 

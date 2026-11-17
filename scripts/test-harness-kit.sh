@@ -426,7 +426,7 @@ MOCK_TSC_OK="$T/tsc_ok"
 cat > "$MOCK/pnpm" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
-  "exec tsc --version") echo "Version 6.0.0"; exit 0 ;;
+  "exec tsc --version") [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
     [ -f "$MOCK_TSC_OK" ] && exit 0
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
@@ -444,8 +444,7 @@ case "$*" in
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
-  "-m pytest -q test/test_a.py") echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
-  "-m pytest -q --lf --lfnf=none") echo "pytest $*" >> "$MOCK_LOG"; exit 0 ;;
+  "-m pytest -q test/test_a.py"|"-m pytest -q test/test_b.py"|"-m pytest -q test") echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
 esac
 exit 0
 MOCK
@@ -531,7 +530,46 @@ echo 'def test_a(): pass' > "$PROJ/test/test_a.py"
 : > "$MOCK_LOG"
 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'pytest -q test/test_a.py' "$MOCK_LOG")" "stop-checks.py runs the test file matching a changed module"
-rm -f "$PROJ/src/a.py" "$PROJ/test/test_a.py"
+rm -f "$PROJ/test/test_a.py"
+# Import match: test_b.py imports the changed module without sharing its name.
+echo 'from a import x' > "$PROJ/test/test_b.py"
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest -q test/test_b.py' "$MOCK_LOG")" "stop-checks.py runs a test that imports the changed module"
+# No match at all: a source change still runs all of test/.
+echo 'def test_c(): pass' > "$PROJ/test/test_b.py"
+git -C "$PROJ" add test/test_b.py
+git -C "$PROJ" "${GIT_ID[@]}" commit -qm test-b
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest -q test$' "$MOCK_LOG")" "stop-checks.py falls back to all of test/ when nothing matches"
+rm -f "$PROJ/src/a.py"
+git -C "$PROJ" rm -qf test/test_b.py
+git -C "$PROJ" "${GIT_ID[@]}" commit -qm rm-test-b
+# Test-support-only change (conftest.py) runs all of test/.
+mkdir -p "$PROJ/test"
+echo 'import pytest' > "$PROJ/test/conftest.py"
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest -q test$' "$MOCK_LOG")" "stop-checks.py runs all of test/ on a conftest-only change"
+rm -f "$PROJ/test/conftest.py"
+# Deleted tracked file: nothing on disk to run, exit 0.
+echo 'x = 1' > "$PROJ/src/gone.py"
+git -C "$PROJ" add src/gone.py
+git -C "$PROJ" "${GIT_ID[@]}" commit -qm gone
+rm -f "$PROJ/src/gone.py"
+: > "$MOCK_LOG"
+for v in ts py; do
+  run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{}'
+  check 0 "$EC" "stop-checks.$v deleted-file-only change exits 0"
+done
+check no "$(ok_if test -s "$MOCK_LOG")" "stop-checks deleted-file-only change runs no tool"
+git -C "$PROJ" rm -q --cached src/gone.py 2>/dev/null; git -C "$PROJ" "${GIT_ID[@]}" commit -qm rm-gone 2>/dev/null
+# tsc unavailable: skip with a message, never exit 2.
+echo 'export const a = 1' > "$PROJ/a.ts"
+MOCK_NO_TSC=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "0 yes" "$EC $(ok_if grep -q 'tsc unavailable' "$T/err")" "stop-checks.ts skips when tsc is unavailable"
+rm -f "$PROJ/a.ts"
 rm -rf "$PROJ/src" "$PROJ/test" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
