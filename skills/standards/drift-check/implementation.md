@@ -4,7 +4,7 @@
 
 # Drift Check
 
-Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, measure code quality, and optionally run dependency and security checks. Read-only: this guide writes no project file.
+Compare the project's recorded templateCentral install version to the current plugin version, report convention drift, measure code quality, and optionally run dependency and security checks. Read-only except for run artefacts the measurements leave (deleted afterwards) and the scratch directory they use.
 
 ## Step 1 — Confirm a templateCentral project
 
@@ -27,11 +27,11 @@ No marker → not a templateCentral project. Exit silently.
 
 > "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
 
-Skip Steps 3–4 and continue at Step 5 (quality).
+Skip Steps 3–4. Continue at Step 5 only if the request asked for a quality check; otherwise exit.
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. Go to Step 5 if the request asked for a quality check, and to Step 6 if `AGENTS.md` contains `<!-- templateCentral-check-deps -->`; otherwise exit silently.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
@@ -40,11 +40,11 @@ Read `<skill-dir>/../../CHANGELOG.md`. Extract every entry newer than the projec
 
 Report the project and plugin versions, then the changelog lines since the install (grouped by version, stack-relevant only; never invent entries), then each stack floor the project does not meet (package, project value, floor). Convention updates are manual: say so.
 
-## Step 5 — Quality (read-only)
+## Step 5 — Quality (opt-in)
 
-Take the measurements in `cat "<skill-dir>/../migrate/general/quality-baseline.md"`, with its rules: measure only, change nothing, `n/a` for an absent tool. Skip its report-file step. Print the metric table, then a short list of the worst offenders per category (up to five, each with a file path). If `docs/quality-baseline.md` exists, add a column with its recorded values and mark every metric that moved the wrong way.
+When reached from Step 4 (drift) or a quality request, ask first and state the cost: the measurements run the project's lint, typecheck, tests and coverage (up to 10 minutes each) and, where tools exist, complexity and duplication. Skip this step when the user declines.
 
-Against the target in that file, name each metric that misses it and recommend `templatecentral:migrate` for the fix.
+On yes, take the measurements in `cat "<skill-dir>/../migrate/general/quality-baseline.md"`, with its rules and without its report step. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else the baseline values) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
 
 ## Step 6 — Dependency drift (optional)
 

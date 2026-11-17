@@ -4,17 +4,17 @@
 
 # Migrate — Phase 4 (harness seed / upgrade)
 
-Phase 5 (health check + safe re-sync) is `phase-5-health-check.md`. The quality pass that follows this phase is `quality-pass.md`.
+Phase 5 (health check + safe re-sync) is `phase-5-health-check.md`.
 
 ---
 
-## Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)
+## Phase 4 — Upgrade to the current harness (agent, autonomous after the gate)
 
-Run only after the user chose full adoption or the upgrade at the gate (Phase 0 or Phase 2).
+Run only after the user chose A at the gate in `implementation.md`.
 
 **Step 4a: Read AGENTS.md and detect stack**
 
-Read `AGENTS.md`; take `<stack>` from the line-1 marker, or from Phase 1 for a project with no marker yet.
+If `AGENTS.md` does not exist, create it with the line-1 marker only, so the backup in Step 4b has a file to copy. Read `AGENTS.md`; take `<stack>` from the line-1 marker, or from Phase 1 for a project with no marker yet.
 
 **Step 4b: Back up and replace AGENTS.md**
 
@@ -29,7 +29,7 @@ If the upgrade fails at any point, restore with `cp AGENTS.md.bak AGENTS.md`. Fo
 cp "<skill-dir>/../scaffold/nextjs/template-agents/AGENTS.md" AGENTS.md
 ```
 
-With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one line). Then move any project-specific notes from `AGENTS.md.bak` under `## Project-Specific Notes`.
+With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one line). Then move any project-specific notes from `AGENTS.md.bak` under `## Project-Specific Notes`. The backup and the note-move also cover an `AGENTS.md` the user wrote before adoption; for nextjs, show the user what the replacement drops and wait for a go-ahead.
 
 For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G writes the `## AI Harness` tail between its `templatecentral-tail` markers; write nothing of it by hand.
 
@@ -156,4 +156,4 @@ Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.
 
 **Step 4g: Print summary**
 
-List the files written or merged by this phase, grouped by area, and the plugin release (`version` in `.claude-plugin/plugin.json`). Tell the user to commit them together: the harness enforces only as a complete set. Then run the quality pass (`quality-pass.md`) and print its before/after table.
+List the files written or merged by this phase, grouped by area, and the plugin release (`version` in `.claude-plugin/plugin.json`). Tell the user to commit them together: the harness enforces only as a complete set. Return to `implementation.md`.

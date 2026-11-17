@@ -40,7 +40,7 @@ Print a header (plugin release from `version` in `.claude-plugin/plugin.json`, s
 - `CLAUDE.md` lacks the import (rule in `phase-4-upgrade.md` Step 4c): Claude Code loads `AGENTS.md` only through `@AGENTS.md`; Step 5d can append it;
 - a file is `MISSING`: templateCentral skills may misbehave; Step 5d re-seeds it.
 
-Then run the baseline (`quality-baseline.md`), print its report, and offer the quality pass (`quality-pass.md`) if any number misses the target.
+The baseline was already printed in `implementation.md` Phase 2; do not re-run it, including in the re-check after 5d.
 
 **Step 5d: Safe re-sync (3-way merge) ⛔ GATE**
 

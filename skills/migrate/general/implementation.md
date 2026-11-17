@@ -6,16 +6,16 @@
 
 Goal: bring an existing project up to the templateCentral standard — harness seeded, code measured, findings fixed, result proven. Detect the stack, ask the user once, then run autonomously.
 
-**Marker.** Line 1 of `AGENTS.md` is `<!-- templateCentral: <stack>@6.0.0 -->`. The `@6.0.0` is the harness schema floor, not the plugin version, so it does not go stale when the plugin updates. The installed plugin version lives in `.claude/harness.json` (`templatecentral_version`). Only a schema change moves the marker; "the Step 4b marker update" sets it to `@6.0.0`.
+**Marker.** Line 1 of `AGENTS.md` is `<!-- templateCentral: <stack>@6.0.0 -->`. `@6.0.0` is the harness schema version, not the plugin version; it moves only on a schema change. The installed plugin version is `templatecentral_version` in `.claude/harness.json`.
 
 **Loading.** The shared kits load here, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
 
-**Baseline** (every route, before any write):
+**Baseline** (every route except a clean Phase 5, before any write):
 ```bash
 cat "<skill-dir>/general/quality-baseline.md"
 ```
 
-**Quality pass** (full adoption only, after the seed):
+**Quality pass** (only after the separate consent in Phase 3):
 ```bash
 cat "<skill-dir>/general/quality-pass.md"
 ```
@@ -44,13 +44,13 @@ Read `AGENTS.md` line 1.
 
 | Marker | Route |
 |---|---|
-| none | Phase 1 → Phase 2 gate |
-| `@6.0.0` or later, `.claude/harness.json` present | already on the current schema: Phase 5 (5a–5c, offer 5d), then offer the quality pass |
-| `@6.0.0` or later, no `.claude/harness.json` | adopted but never seeded: Phase 1, baseline, offer the full seed |
-| `@5.x` | hooks are inert (array-valued `command`, which Claude Code skips); offer a re-seed in exec form (`"command"` + `"args"`, `${CLAUDE_PROJECT_DIR}` paths) |
-| earlier than `@4.0.0`, or `@4.x` | offer the upgrade: v4 adds the harness layer, v5 converts skills to directory form and fixes hooks |
+| none | Phase 1, baseline, gate |
+| `@6.0.0` or later, `.claude/harness.json` present | Phase 5 (5a–5c); a *clean* Phase 5 (every file `UNCHANGED`, plugin version equals `templatecentral_version`, `@AGENTS.md` import present) ends there; otherwise baseline, gate with 5d as the A step |
+| `@6.0.0` or later, no `.claude/harness.json` | adopted, never seeded: baseline, gate with the seed as the A step |
+| `@5.x` | hooks are inert (array-valued `command`, which Claude Code skips); baseline, gate with a re-seed in exec form (`"command"` + `"args"`, `${CLAUDE_PROJECT_DIR}` paths) as the A step |
+| `@4.x` or earlier | baseline, gate with the upgrade (v4 adds the harness layer, v5 converts skills to directory form and fixes hooks) as the A step |
 
-For every route except a clean Phase 5, take the stack from the marker (or Phase 1), run the **baseline**, print the report, then ask once: proceed (A) or skip (B). On B write nothing but the baseline report and exit. On A: `@5.x` with a harness runs Step 4b's marker update first (before anything hashes `AGENTS.md`), then Phase 5 and 5d; every other route runs Phase 4, then the **quality pass**, then the before/after table.
+Take the stack from the marker or Phase 1.
 
 ## Phase 1 — Detect stack (agent, autonomous)
 
@@ -63,18 +63,18 @@ For every route except a clean Phase 5, take the stack from the marker (or Phase
 
 Several signals (likely a monorepo root) → ask which subdirectory to adopt first and work there. No signal → say so and exit. Ambiguous (for example `vite.config.ts` without the React plugin) → ask.
 
-## Phase 2 — Gate ⛔
+## Phase 2 — Baseline, then gate ⛔
 
-Show the baseline report, then ask which to run; do not proceed until the user answers.
+Run the baseline and print its report; nothing is written yet. Running the project's own lint, typecheck and tests is read-only measurement; when a command is missing, record `n/a` and do not invent one. Then ask one question, do not proceed before the answer, and use the same three choices on every route:
 
-- **A. Full adoption** — Phase 4 (harness seed), lint alignment and the quality pass, then re-measure. Done only when lint, typecheck and tests pass and no number regressed.
-- **B. Light adoption** — marker plus the baseline report only. Code and config stay as they are; the report shows the gap.
+- **A. Adopt** — the harness step for this route (Phase 4 seed or upgrade, or 5d). Then a separate question about the quality pass (Phase 3).
+- **B. Light** — marker plus the baseline report only; nothing else changes.
 - **C. Stop** — write nothing.
 
 ## Phase 3 — Execute (agent, autonomous after the gate)
 
-**A** — Phase 4 with the stack from Phase 1, then the quality pass, then the before/after table. Existing CI, sharding and stricter coverage thresholds found by the baseline are adapted to, not duplicated or lowered.
+**A** — Run the route's harness step, adapting to the CI, sharding and coverage thresholds the baseline found (never duplicating a pipeline, never lowering a threshold). Write `docs/quality-baseline.md`. Then ask separately whether to run the quality pass, which changes code and tests. On yes, load and follow `quality-pass.md` (this is its only trigger), then print the before/after table.
 
-**B** — Make `<!-- templateCentral: <stack>@6.0.0 -->` the first line of `AGENTS.md` (create the file with that line if absent), write the baseline report, and return control to the invoking skill: it continues from Step 1, treating structural differences from templateCentral conventions as review points.
+**B** — Set line 1 of `AGENTS.md` to the marker (create the file if absent) and write `docs/quality-baseline.md`. Add a short list of structural differences between the project and the Architecture section of `<skill-dir>/../../.claude/rules/<stack>.md`. Return control to the invoking skill, which continues from Step 1 and reviews generated files where the layout differs.
 
-**C** — Make no change, and tell the invoking skill to exit without generating files.
+**C** — Change nothing and tell the invoking skill to exit without generating files.

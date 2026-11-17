@@ -1,30 +1,30 @@
 <!-- ref: migrate/general/quality-pass.md
      loaded-by: migrate/general/implementation.md → migrate/SKILL.md
-     prereq: Baseline recorded and the user chose the full pass. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
+     prereq: Baseline recorded and the user separately agreed to the quality pass. Do not invoke this file directly — it is loaded at runtime by the templatecentral:migrate skill. -->
 
 # Quality pass (lint alignment, then fixes)
 
-Goal: the project meets the quality target in `quality-baseline.md` with no workaround. Fix the cause. Never add a suppression, ignore or exclusion to get green.
+This pass changes user code, tests and config. It adds no suppression and no exclusion, ever: fix the cause. Show every batch as a list or diff and get the user's confirmation before you apply it, at each stage below.
+
+**Done** means all three hold: lint, typecheck and tests pass; no baseline metric regressed (`quality-baseline.md`); the code the pass touched meets the new-code gate (target in that file). The legacy remainder is not a loop.
 
 ## Lint alignment
 
-Merge the scaffold's quality rules into the project's existing lint config:
+Merge the scaffold's rules into the existing config (`<skill-dir>/../scaffold/<stack>/template/eslint.config.mjs`, or the Ruff section of `<skill-dir>/../scaffold/fastapi/template/pyproject.toml`):
 
-- Source: `<skill-dir>/../scaffold/<stack>/template/eslint.config.mjs` (TypeScript stacks) or `<skill-dir>/../scaffold/fastapi/template/pyproject.toml` (Ruff section).
-- Keep every project-specific rule and ignore the user wrote; show the merged diff and ask before replacing a rule the project sets differently.
-- A project with no lint config takes the scaffold file as is.
-- Add any missing lint plugin to the dev dependencies with the project's package manager.
+- Where the project and the scaffold both set a rule, the stricter wins; a higher complexity limit does not survive.
+- Keep project-specific rules. A project ignore survives only for generated or third-party code.
+- No config: take the scaffold file. A new lint plugin changes the lockfile: install it with the project's package manager and say so.
+- In a monorepo, align each package's config separately and report per package.
 
-Then fix the new findings at the cause.
+## Stages
 
-## Order
+Work one directory per batch. Per stage: apply the confirmed batch, run lint, typecheck and tests, allow one fix-and-verify retry, then stop the stage. Put what is left into the report as a backlog ranked by impact; do not loop.
 
-Stop after each stage if lint, typecheck or tests fail, and fix before the next. In a large project, work one directory at a time and let the user stop between batches. Delete user code only after the user confirms.
+1. **Lint and type findings.** Fix at the cause. Remove each existing suppression unless it is a confirmed false positive or a third-party constraint; a kept one is one line, one rule, with the reason.
+2. **Complexity and duplication.** Confirm each refactor before applying it.
+3. **Tests** (user code; confirm every deletion and merge). Rules: `<skill-dir>/../test/SKILL.md`. Merge tests of one behaviour into parametrized cases; delete tests of constants, types and framework behaviour. Coverage must not drop.
+4. **Comments.** Apply `<skill-dir>/../standards/code-standards/comments.md`, leaving an ADR id where an ADR explains the code.
+5. **Exclusions.** Remove coverage, lint and Sonar exclusions that exist only to pass a gate (confirm the list first); keep one only for generated or third-party code, with the reason beside it. Never lower an existing coverage threshold.
 
-1. **Lint and type findings.** Review every existing suppression: remove it where the cause can be fixed; keep one only with a stated reason.
-2. **Complexity and duplication.** Split functions over the complexity limit; merge duplicated blocks into one shared unit.
-3. **Test consolidation.** Follow `<skill-dir>/../test/SKILL.md` for the test rules. Merge tests of the same behaviour into parametrized cases. Delete tests of constants, types and framework behaviour. Fewer tests, same coverage: re-run coverage and confirm it did not drop.
-4. **Comments.** Apply `<skill-dir>/../standards/code-standards/comments.md`. Where an ADR explains the code, leave the ADR id as a pointer.
-5. **Exclusions.** Remove coverage, lint and Sonar exclusions that exist only to pass a gate, then add tests or fix the code until the gate passes. Keep an exclusion only for generated or third-party code, with the reason beside it.
-
-Keep an existing coverage threshold above 80%; never lower one.
+Finish with the before/after table and the backlog.
