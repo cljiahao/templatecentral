@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|readme|comments|deps|nosonar> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -92,6 +92,15 @@ case "$gate" in
       bypassed skip-comment-check && exit 0
       printf '%s\n' "$flagged"
       fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
+    fi
+    ;;
+  nosonar)
+    # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
+    hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' ':!.claude') && rc=0 || rc=$?
+    [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
+    if [ -n "$hits" ]; then
+      printf '%s\n' "$hits" >&2
+      fail "NOSONAR markers found (listed above). Fix the finding instead of suppressing it."
     fi
     ;;
   deps)
@@ -254,7 +263,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|readme|comments|deps> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|readme|comments|deps|nosonar> [base-branch]" >&2
     exit 2
     ;;
 esac

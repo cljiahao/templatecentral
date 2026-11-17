@@ -853,6 +853,15 @@ out=$(cd "$FEAT" && TF_BUILD=True PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-ga
 check 1 "$(grep -c '^##vso\[task.logissue type=error\]' <<<"$out")" "ci-gates reports errors in Azure Pipelines format"
 bash "$KIT/ci-gates.sh" nope >/dev/null 2>&1
 check 2 "$?" "ci-gates rejects an unknown gate"
+NSR=$(new_repo nosonar)
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 0 "$?" "ci-gates nosonar passes on clean source"
+mkdir -p "$NSR/src"; printf 'x = 1  # NOSONAR\n' > "$NSR/src/a.py"; git -C "$NSR" add src/a.py
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in Python"
+printf 'const x = 1; // nosonar\n' > "$NSR/src/b.ts"; git -C "$NSR" rm -qf --cached src/a.py; git -C "$NSR" add src/b.ts
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 1 "$?" "ci-gates nosonar fails on a lower-case marker in TypeScript"
 for g in changelog readme comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"

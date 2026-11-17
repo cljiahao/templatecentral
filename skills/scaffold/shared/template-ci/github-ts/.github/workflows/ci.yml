@@ -35,9 +35,15 @@ jobs:
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
+      - name: No NOSONAR suppression markers
+        run: bash .claude/ci-gates.sh nosonar
       - run: pnpm run check                      # format:check + lint + typecheck
       - name: Duplication (production source <= 3%, per .jscpd.json)
         run: pnpm exec jscpd
+      - name: End-to-end tests (only when package.json defines test:e2e)
+        run: |
+          set -euo pipefail
+          if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then pnpm run test:e2e; fi
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -57,7 +63,7 @@ jobs:
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}, coverage in the blob report)
-        run: pnpm exec vitest run --coverage --reporter=blob --outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ env.SHARD_COUNT }}"
+        run: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ env.SHARD_COUNT }}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-blob-${{ matrix.shard }}

@@ -31,6 +31,8 @@ jobs:
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
+      - name: No NOSONAR suppression markers
+        run: bash .claude/ci-gates.sh nosonar
       - run: ruff check src/ && ruff format --check src/
       - run: python -m pyright src/
       - name: Duplication (production source <= 3%, per .jscpd.json)

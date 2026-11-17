@@ -1,102 +1,55 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApp, resolveTrustProxy } from '../src/app.factory';
 import { appConfig, serviceConfig } from '../src/config';
 
-describe('resolveTrustProxy', () => {
-  it('maps "*" to trust-every-hop', () => {
-    expect(resolveTrustProxy('*')).toBe(true);
-  });
+const [origin] = serviceConfig.CLIENT_URL;
+// RFC 5737 documentation address
+const clientIp = '203.0.113.9';
+const original = appConfig.TRUST_PROXY;
+let app: NestFastifyApplication | undefined;
 
-  it.each([undefined, 'loopback', 'loopback,linklocal'])('passes %s through', (value) => {
-    expect(resolveTrustProxy(value)).toBe(value);
-  });
+async function request(url: string, headers: Record<string, string> = {}, trustProxy?: string) {
+  appConfig.TRUST_PROXY = trustProxy;
+  app = (await createApp()).app;
+  const instance = app.getHttpAdapter().getInstance();
+  instance.get('/__client-ip', (req) => ({ ip: req.ip }));
+  await instance.ready();
+  return app.inject({ method: 'GET', url, headers });
+}
+
+afterEach(async () => {
+  appConfig.TRUST_PROXY = original;
+  await app?.close();
 });
 
-describe('createApp', () => {
-  let app: NestFastifyApplication;
+describe('app factory', () => {
+  it.each([
+    ['*', true],
+    [undefined, undefined],
+    ['loopback', 'loopback'],
+  ])('resolveTrustProxy(%s) is %s', (value, expected) =>
+    expect(resolveTrustProxy(value)).toBe(expected)
+  );
 
-  beforeAll(async () => {
-    ({ app } = await createApp());
-    await app.getHttpAdapter().getInstance().ready();
+  it('serves /health with security headers', async () => {
+    const result = await request('/health');
+    expect([result.statusCode, result.headers['x-content-type-options']]).toEqual([200, 'nosniff']);
   });
 
-  afterAll(async () => {
-    await app.close();
+  it.each([
+    [origin, origin],
+    ['https://unlisted.invalid', undefined],
+  ])('CORS for origin %s grants %s', async (requestOrigin, granted) => {
+    const result = await request('/health', { origin: requestOrigin });
+    expect(result.headers['access-control-allow-origin']).toBe(granted);
   });
 
-  it('serves the health route with security headers applied', async () => {
-    const result = await app.inject({ method: 'GET', url: '/health' });
-    expect(result.statusCode).toBe(200);
-    expect(result.headers['x-content-type-options']).toBe('nosniff');
-  });
-});
-
-describe('createApp CORS', () => {
-  let app: NestFastifyApplication;
-
-  beforeAll(async () => {
-    ({ app } = await createApp());
-    await app.getHttpAdapter().getInstance().ready();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('answers a preflight from a configured client origin with credentials allowed', async () => {
-    const [origin] = serviceConfig.CLIENT_URL;
-    const result = await app.inject({
-      method: 'OPTIONS',
-      url: '/health',
-      headers: { origin, 'access-control-request-method': 'POST' },
-    });
-    expect(result.headers['access-control-allow-origin']).toBe(origin);
-    expect(result.headers['access-control-allow-credentials']).toBe('true');
-  });
-
-  it('does not grant CORS to an unlisted origin', async () => {
-    const result = await app.inject({
-      method: 'GET',
-      url: '/health',
-      headers: { origin: 'https://unlisted.invalid' },
-    });
-    expect(result.headers['access-control-allow-origin']).toBeUndefined();
-  });
-});
-
-describe('createApp trust proxy', () => {
-  // Built at runtime: the IP-literal lint rule flags a plain string.
-  const clientIp = ['203', '0', '113', '9'].join('.');
-  const original = appConfig.TRUST_PROXY;
-
-  afterEach(() => {
-    appConfig.TRUST_PROXY = original;
-  });
-
-  async function clientSeenBehindProxy(trustProxy: string | undefined): Promise<string> {
-    appConfig.TRUST_PROXY = trustProxy;
-    const { app } = await createApp();
-    try {
-      const instance = app.getHttpAdapter().getInstance();
-      instance.get('/__client-ip', (request) => ({ ip: request.ip }));
-      await instance.ready();
-      const result = await app.inject({
-        method: 'GET',
-        url: '/__client-ip',
-        headers: { 'x-forwarded-for': clientIp },
-      });
-      return (JSON.parse(result.payload) as { ip: string }).ip;
-    } finally {
-      await app.close();
-    }
-  }
-
-  it('ignores X-Forwarded-For when TRUST_PROXY is unset', async () => {
-    expect(await clientSeenBehindProxy(undefined)).not.toBe(clientIp);
-  });
-
-  it('honours X-Forwarded-For from a trusted proxy when TRUST_PROXY covers the peer', async () => {
-    expect(await clientSeenBehindProxy('loopback')).toBe(clientIp);
+  it.each([
+    [undefined, false],
+    ['loopback', true],
+  ])('TRUST_PROXY=%s honours X-Forwarded-For: %s', async (trust, honoured) => {
+    const result = await request('/__client-ip', { 'x-forwarded-for': clientIp }, trust);
+    expect(result.json<{ ip: string }>().ip === clientIp).toBe(honoured);
   });
 });

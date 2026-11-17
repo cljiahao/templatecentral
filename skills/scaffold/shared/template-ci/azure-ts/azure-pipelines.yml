@@ -25,6 +25,10 @@ jobs:
       - template: azure-pipelines/templatecentral-gates.yml
       - bash: pnpm run check                    # format:check + lint + typecheck
         displayName: Format, lint and typecheck
+      - bash: |
+          set -euo pipefail
+          if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then pnpm run test:e2e; fi
+        displayName: End-to-end tests (only when package.json defines test:e2e)
       - bash: pnpm exec jscpd
         displayName: Duplication (production source <= 3%, per .jscpd.json)
   - job: test
@@ -40,7 +44,7 @@ jobs:
         displayName: pnpm (the version pinned in packageManager)
       - bash: pnpm install --frozen-lockfile
         displayName: Install deps
-      - bash: pnpm exec vitest run --coverage --reporter=blob --outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" --shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"
+      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" --shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"
         displayName: Tests (this shard, coverage in the blob report)
       - task: PublishPipelineArtifact@1
         inputs: { targetPath: blob, artifact: "vitest-blob-$(System.JobPositionInPhase)" }

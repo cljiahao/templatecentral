@@ -11,6 +11,8 @@ steps:
     displayName: Secret scan (gitleaks CLI, checksum-verified)
   - bash: bash .claude/ci-gates.sh deps
     displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
+  - bash: bash .claude/ci-gates.sh nosonar
+    displayName: No NOSONAR suppression markers
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
     env: { LABELS: $(LABELS) }
