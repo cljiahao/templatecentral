@@ -1391,8 +1391,8 @@ check_template_security_defaults() {
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|referrerPolicy: \{|NestJS helmet referrerPolicy" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|frameguard: .*action: 'deny'|NestJS frameguard deny default" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|portal \?\? \"'none'\"|NestJS frame-ancestors 'none' fallback" \
-    "scaffold/nestjs/template/src/main.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
-    "scaffold/nestjs/template/src/main.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
+    "scaffold/nestjs/template/src/app.factory.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
+    "scaffold/nestjs/template/src/app.factory.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
     "scaffold/nestjs/template/package.json|\"nestjs-zod\"|NestJS nestjs-zod dependency" \
     "scaffold/fastapi/template/src/app.py|^class SecurityHeadersMiddleware|FastAPI SecurityHeadersMiddleware" \
     "scaffold/fastapi/template/src/app.py|add_middleware\(SecurityHeadersMiddleware\)|FastAPI SecurityHeadersMiddleware registered" \
