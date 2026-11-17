@@ -7,8 +7,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 env:
-  JSCPD_VERSION: "5.4.3"    # duplication scanner; bump deliberately, it decides what fails the build. `npx jscpd@<version>` pins jscpd only, not its transitive dependencies
-  DIFF_COVER_VERSION: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
+  # duplication scanner; bump deliberately, it decides what fails the build. `npx jscpd@<version>` pins jscpd only, not its transitive dependencies
+  JSCPD_VERSION: "5.4.3"
+  # changed-line coverage tool; bump deliberately, it decides what fails the build
+  DIFF_COVER_VERSION: "11.0.3"
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -37,7 +39,7 @@ jobs:
       - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -m pyright src/
       - name: Duplication (production source <= 3%, per .jscpd.json)
-        # Pinned by version (JSCPD_VERSION); bump it deliberately.
+        # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}
       - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)
         run: python -m pytest test/ -n auto --cov=src --cov-report=xml -q
@@ -45,7 +47,8 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
-      - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
+      # PR: the PR's commits; push: full history
+      - name: Secret scan (gitleaks CLI, checksum-verified)
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh secrets "$BASE_REF"

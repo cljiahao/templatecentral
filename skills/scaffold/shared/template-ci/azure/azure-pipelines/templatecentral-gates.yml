@@ -1,9 +1,4 @@
-# templateCentral merge gates. Include from the PR pipeline after a full-history checkout:
-#   - checkout: self
-#     fetchDepth: 0
-#   - template: templatecentral-gates.yml   # path is relative to the including file
-# The deps step needs the project's package manager (pnpm or uv) and pipx on PATH: include the template after the pipeline's install steps.
-# Bypass a PR-only gate by queueing the run with variable LABELS=skip-changelog (or skip-readme-check / skip-comment-check).
+# Include after a full-history checkout and the install steps; skip a PR-only gate with variable LABELS=skip-changelog, skip-readme-check or skip-comment-check.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity

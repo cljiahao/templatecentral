@@ -656,7 +656,8 @@ check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out"
 mkdir -p "$GT/skills/scaffold/shared/template-ci/github-ts"
 printf 'k: 1  # note\n' > "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments skips template-ci" "$gate_out"
+check "1 yes" "$gate_ec $(ok_if grep -q 'template-ci/github-ts/ci.yml:1: trailing comment' <<<"$gate_out")" "check-template-comments scans template-ci" "$gate_out"
+rm "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
 printf '%s\n' 'text' '```py' 'a = 1  # note' '```' > "$GT/skills/add/foo.md"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'skills/add/foo.md:3: trailing comment' <<<"$gate_out")" "check-template-comments maps a guide fence finding to its markdown line" "$gate_out"

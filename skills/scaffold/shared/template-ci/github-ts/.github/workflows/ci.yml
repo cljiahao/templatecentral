@@ -7,9 +7,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 env:
-  DIFF_COVER_VERSION: "11.0.3"    # changed-line coverage tool; bump deliberately, it decides what fails the build
-  SHARD_COUNT: "2"    # the one knob for test sharding: raise it to split the suite across more runners
-  NODE_OPTIONS: --max-old-space-size=4096    # caps each Node process (the test workers inherit it)
+  # changed-line coverage tool; bump deliberately, it decides what fails the build
+  DIFF_COVER_VERSION: "11.0.3"
+  # the one knob for test sharding: raise it to split the suite across more runners
+  SHARD_COUNT: "2"
+  # caps each Node process; the test workers inherit it
+  NODE_OPTIONS: --max-old-space-size=4096
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -26,26 +29,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — SHA-pinned per Skills Security; re-verify/bump via the review utility, don't hand-edit
-        with: { fetch-depth: 0 }    # diff-cover needs full history
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 — no `version:`; reads packageManager from package.json
+      # SHA-pinned per Skills Security; re-verify or bump via the review utility, do not hand-edit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # diff-cover needs full history
+        with: { fetch-depth: 0 }
+      # No `version:` input: pnpm/action-setup reads packageManager from package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24", cache: pnpm }
-      - run: pnpm install --frozen-lockfile     # lockfile-in-sync gate
+      # lockfile-in-sync gate
+      - run: pnpm install --frozen-lockfile
       - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
-      - run: pnpm run check                      # format:check + lint + typecheck
+      # format:check + lint + typecheck
+      - run: pnpm run check
       - name: Duplication (production source <= 3%, per .jscpd.json)
         run: pnpm exec jscpd
       - name: End-to-end tests (only when package.json defines test:e2e)
         run: |
           set -euo pipefail
           if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then pnpm run test:e2e; fi
-      - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
+      # PR: the PR's commits; push: full history
+      - name: Secret scan (gitleaks CLI, checksum-verified)
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash .claude/ci-gates.sh secrets "$BASE_REF"
@@ -59,7 +68,7 @@ jobs:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 — no `version:`; reads packageManager from package.json
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24", cache: pnpm }
       - run: pnpm install --frozen-lockfile
@@ -77,7 +86,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }    # diff-cover needs full history
+        # diff-cover needs full history
+        with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24", cache: pnpm }

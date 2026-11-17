@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Runs the post-edit comment scanner once per language over every template file and every code fence in the guides; fails on any finding.
 # Scope: ts/js/py template sources and guide fences (add, scaffold, migrate, standards, review), plus .yml/.yaml template files.
-# Skipped: skills/scaffold/shared/template-ci/ (swept in a follow-up change).
 set -u
 cd "$(dirname "$0")/.." || exit 2
 TS=skills/scaffold/shared/template-ts/.claude/hooks/post-edit-comment-check.sh
 PY=skills/scaffold/shared/template-py/.claude/hooks/post-edit-comment-check.sh
 export COMMENT_HYGIENE_PATTERNS=skills/scaffold/shared/template/.claude/comment-hygiene-patterns.txt
 export COMMENT_HYGIENE_CAP=1000000
-SKIP_CI=skills/scaffold/shared/template-ci/
 die() { echo "check-template-comments: $*" >&2; exit 2; }
 for f in "$TS" "$PY" "$COMMENT_HYGIENE_PATTERNS"; do
   [ -s "$f" ] || die "missing or empty input: $f"
@@ -19,7 +17,7 @@ trap 'rm -rf "$work"' EXIT
 {
   find skills/scaffold -path '*/template*/*' -type f
   find skills/add skills/migrate -path '*template*/*' -type f
-} | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|yml|yaml)$' | grep -v '/node_modules/' | grep -vF "$SKIP_CI" | sort -u >"$work/files"
+} | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|yml|yaml)$' | grep -v '/node_modules/' | sort -u >"$work/files"
 
 nfiles=$(wc -l <"$work/files" | tr -d ' ')
 [ "$nfiles" -gt 0 ] || die "no template files found to scan"
