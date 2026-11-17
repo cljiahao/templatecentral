@@ -190,4 +190,9 @@ mutate "job-level if: always() on the coverage job (github-ts)" github-ts/.githu
 mutate "|| true inside the Azure merge script (azure-ts)" azure-ts/azure-pipelines.yml 'vitest run --merge-reports=blob --coverage' 'vitest run --merge-reports=blob --coverage || true' static
 mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "run: '[ \"\$(find blob" "run: 'true || [ \"\$(find blob" github
 
-[[ $fail -eq 0 ]] && echo "test-ci-templates: all passed" || { echo "test-ci-templates: failures" >&2; exit 1; }
+if [[ $fail -eq 0 ]]; then
+  echo "test-ci-templates: all passed"
+else
+  echo "test-ci-templates: failures" >&2
+  exit 1
+fi
