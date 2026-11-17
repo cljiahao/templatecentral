@@ -1,0 +1,6 @@
+{
+  "path": ["src"],
+  "threshold": 3,
+  "reporters": ["console"],
+  "ignore": ["**/test/**", "**/__pycache__/**", "**/.venv/**"]
+}

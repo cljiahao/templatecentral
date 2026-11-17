@@ -25,8 +25,8 @@ jobs:
       - template: azure-pipelines/templatecentral-gates.yml
       - bash: pnpm run check                    # format:check + lint + typecheck
         displayName: Format, lint and typecheck
-      - bash: pnpm exec jscpd src --threshold 3 --reporters console
-        displayName: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
+      - bash: pnpm exec jscpd
+        displayName: Duplication (production source <= 3%, per .jscpd.json)
   - job: test
     timeoutInMinutes: 20
     strategy:

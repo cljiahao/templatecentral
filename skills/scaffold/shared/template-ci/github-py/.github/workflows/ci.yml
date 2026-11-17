@@ -26,16 +26,16 @@ jobs:
         run: |
           set -euo pipefail
           pip install -r requirements.txt
-          [ -f requirements-dev.txt ] && pip install -r requirements-dev.txt || true
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
       - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: ruff check src/ && ruff format --check src/
       - run: python -m pyright src/
-      - name: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
+      - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by version (JSCPD_VERSION); bump it deliberately.
-        run: npx --yes jscpd@${JSCPD_VERSION} src --threshold 3 --reporters console
+        run: npx --yes jscpd@${JSCPD_VERSION}
       - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)
         run: python -m pytest test/ -n auto --cov=src --cov-report=xml -q
       - name: Changed-line coverage (>= 80%)

@@ -79,7 +79,7 @@ Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pn
 Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15 per function. Local and CI mirror it:
 
 - `eslint.config.mjs` runs `sonarjs.configs.recommended` at `error`, with `sonarjs/cognitive-complexity` at 15 and `no-warning-comments` banning `NOSONAR`. Overrides: `src/components/ui/**` (generated shadcn) turns off `prefer-read-only-props`; test files turn off `no-hardcoded-secrets` / `no-clear-text-protocols`. Fix findings; do not add disable comments or raise limits.
-- CI runs `jscpd src --threshold 3` (whole-tree duplication <= 3%, stricter than Sonar's new-code 3%), Vitest sharded (GitHub `SHARD_COUNT`, Azure `shardCount`; default 2) with coverage merged from shard blob reports, then `diff-cover --fail-under=80` on changed lines.
+- CI runs `jscpd` with the seeded `.jscpd.json` (duplication <= 3% on production source only; Sonar also measures production code, and duplicate tests fall under the test-value rule), Vitest sharded (GitHub `SHARD_COUNT`, Azure `shardCount`; default 2) with coverage merged from shard blob reports, then `diff-cover --fail-under=80` on changed lines.
 - Seeded `sonar-project.properties` points the scanner at `src`/`test` and `coverage/lcov.info`. There are no coverage exclusions. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: run it in the `coverage` job after the merge step (`coverage/lcov.info` exists only there), with both as CI secrets.
 
 ### Security (Next.js)

@@ -29,8 +29,8 @@ jobs:
       - bash: python -m pyright src/
         displayName: Typecheck
       # Pinned by version (JSCPD_VERSION); bump it deliberately.
-      - bash: npx --yes jscpd@$(JSCPD_VERSION) src --threshold 3 --reporters console
-        displayName: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
+      - bash: npx --yes jscpd@$(JSCPD_VERSION)
+        displayName: Duplication (production source <= 3%, per .jscpd.json)
       - bash: python -m pytest test/ -n auto --cov=src --cov-report=xml -q    # xdist workers; pytest-cov combines their data into coverage.xml
         displayName: Tests with coverage
       - bash: |

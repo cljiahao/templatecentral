@@ -36,8 +36,8 @@ jobs:
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: pnpm run check                      # format:check + lint + typecheck
-      - name: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
-        run: pnpm exec jscpd src --threshold 3 --reporters console
+      - name: Duplication (production source <= 3%, per .jscpd.json)
+        run: pnpm exec jscpd
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
           BASE_REF: ${{ github.base_ref }}

@@ -4,11 +4,11 @@
 #      last command's status; without it an earlier failure is swallowed);
 #   2. the Azure shard-count assertion really fails when a shard report is missing.
 # Usage: bash scripts/test-ci-templates.sh   (needs bash, python3)
-set -uo pipefail
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CI_DIR="$REPO_ROOT/skills/scaffold/shared/template-ci"
-T=$(mktemp -d)
+T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
 fail=0
 ok()  { echo "ok   $1"; }
@@ -45,10 +45,29 @@ open(sys.argv[2], "w").write(text.replace("$(shardCount)", "2"))
 PY
 mkdir -p "$T/run/blob"
 echo '[]' > "$T/run/blob/a.json"
-( cd "$T/run" && bash "$T/assert.sh" ) >"$T/missing.log" 2>&1; rc=$?
+rc=0; ( cd "$T/run" && bash "$T/assert.sh" ) >"$T/missing.log" 2>&1 || rc=$?
 if [[ $rc -ne 0 ]]; then ok "azure assertion fails with a missing shard (exit $rc)"; else bad "azure assertion passed with one of two shard reports missing"; fi
 echo '[]' > "$T/run/blob/b.json"
-( cd "$T/run" && bash "$T/assert.sh" ) >"$T/full.log" 2>&1; rc=$?
+rc=0; ( cd "$T/run" && bash "$T/assert.sh" ) >"$T/full.log" 2>&1 || rc=$?
 if [[ $rc -eq 0 ]]; then ok "azure assertion passes with all shards"; else bad "azure assertion failed with all shard reports present"; fi
+
+# 3. Azure collect step: cp with no matching blob must fail the step
+python3 - "$PIPE" "$T/collect.sh" <<'PY'
+import re, sys
+lines = open(sys.argv[1]).read().split("\n")
+idx = next(i for i, l in enumerate(lines) if l.strip() == "displayName: Collect shard reports")
+start = max(i for i in range(idx) if re.match(r"^\s*- bash: \|\s*$", lines[i]))
+body = lines[start + 1:idx]
+indent = len(body[0]) - len(body[0].lstrip())
+text = "\n".join(l[indent:] for l in body) + "\n"
+open(sys.argv[2], "w").write(text.replace("$(Pipeline.Workspace)", "$WS"))
+PY
+mkdir -p "$T/ws/blobs/vitest-blob-1" "$T/empty"
+rc=0; ( cd "$T/empty" && WS="$T/ws" bash "$T/collect.sh" ) >"$T/collect-none.log" 2>&1 || rc=$?
+if [[ $rc -ne 0 ]]; then ok "azure collect step fails when no blob matches (exit $rc)"; else bad "azure collect step passed with no blob"; fi
+echo '[]' > "$T/ws/blobs/vitest-blob-1/a.json"
+rm -rf "$T/empty" && mkdir -p "$T/empty"
+rc=0; ( cd "$T/empty" && WS="$T/ws" bash "$T/collect.sh" ) >"$T/collect-ok.log" 2>&1 || rc=$?
+if [[ $rc -eq 0 ]]; then ok "azure collect step passes with a blob"; else bad "azure collect step failed with a blob present"; fi
 
 [[ $fail -eq 0 ]] && echo "test-ci-templates: all passed" || { echo "test-ci-templates: failures" >&2; exit 1; }
