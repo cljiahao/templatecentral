@@ -32,7 +32,7 @@ const config = [
       'sonarjs/no-commented-code': 'error',
       // SonarQube's default quality gate: cognitive complexity 15 per function.
       'sonarjs/cognitive-complexity': ['error', 15],
-      // NOSONAR hides findings from the server's quality gate; fix the finding instead.
+      // Sonar's inline suppression marker hides findings from the server's quality gate; fix the finding instead.
       'no-warning-comments': ['error', { terms: ['nosonar'], location: 'anywhere' }],
       // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',

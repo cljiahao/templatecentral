@@ -10,7 +10,7 @@ const envSchema = z.object({
   ENVIRONMENT: z.enum(['dev', 'uat', 'prod']).default('dev'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   CLIENT_URL: z.string().min(1).default('http://localhost:3000'),
-  // Comma-separated IPs/CIDRs or "*"; see resolveTrustProxy() in main.ts.
+  // Comma-separated IPs/CIDRs or "*"; see resolveTrustProxy() in app.factory.ts.
   TRUST_PROXY: z.string().optional(),
   // Not validated here: an invalid value must deny framing, not fail boot.
   APPCENTRAL_PORTAL_ORIGIN: z.string().optional(),

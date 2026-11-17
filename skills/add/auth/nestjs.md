@@ -278,7 +278,7 @@ Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/src/modules/auth/a
 
 `/session` needs no CSRF token: its body must be JSON (Fastify answers 415 to a body with no Content-Type and hands `text/plain` to Zod as a string → 400 — the e2e test pins both), and a cross-origin JSON `fetch` must pass a CORS preflight the allowlist rejects (OWASP's custom-request-header defense). `@Throttle` applies once the Rate Limiting step below installs `@nestjs/throttler`.
 
-**7. `test/auth-cookie.e2e-spec.ts`** — calls `setupSecurity`/`setupCors` like `main.ts` (suites that skip them still get a clean 401 from the guard):
+**7. `test/auth-cookie.e2e-spec.ts`** — calls `setupSecurity`/`setupCors` like `app.factory.ts` (suites that skip them still get a clean 401 from the guard):
 
 Copied verbatim from `<skill-dir>/auth/nestjs/template-cookie/test/auth-cookie.e2e-spec.ts` by the copy step; do not re-type it.
 

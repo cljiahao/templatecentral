@@ -46,7 +46,7 @@ describe('Auth cookie mode (e2e)', () => {
       // Add the same .overrideProvider(...) calls as auth.e2e-spec.ts.
       .compile();
     app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    // Registers @fastify/cookie and CORS exactly as main.ts does.
+    // Registers @fastify/cookie and CORS exactly as app.factory.ts does.
     await setupSecurity(app);
     setupCors(app);
     await app.init();

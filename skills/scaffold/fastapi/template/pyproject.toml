@@ -20,6 +20,7 @@ select = [
 max-complexity = 15
 
 [tool.ruff.lint.pylint]
+# Sonar rule python:S107 (too many parameters), whose default maximum is 7.
 max-args = 7
 
 [tool.ruff.lint.per-file-ignores]

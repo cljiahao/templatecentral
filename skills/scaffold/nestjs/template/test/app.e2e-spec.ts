@@ -11,7 +11,7 @@ describe('AppController (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    // Mirrors main.ts's adapter options so request IDs behave as in the running app.
+    // Mirrors app.factory.ts's adapter options so request IDs behave as in the running app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );

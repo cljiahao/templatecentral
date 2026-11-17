@@ -125,7 +125,7 @@ describe('My Feature (e2e)', () => {
       .useValue({})
       .compile();
 
-    // Same adapter options as main.ts, so request IDs and log correlation match the real app.
+    // Same adapter options as app.factory.ts, so request IDs and log correlation match the real app.
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter({ genReqId: () => crypto.randomUUID() })
     );

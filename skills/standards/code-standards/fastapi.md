@@ -48,16 +48,29 @@
 - Docstrings only on public APIs the signature does not explain: see `comments.md`.
 - Keep Ruff's comment rules in `pyproject.toml` (`comments.md` → Enforcement).
 
+### Function Design
+
+- Prefer small, pure, single-purpose functions; isolate mutation in `-> None` functions.
+- Dict dispatch over long `if/elif` for key-based branching.
+
 ### Quality gate (SonarQube default "Sonar way")
 
-Target: new-code coverage >= 80%, duplication on new code <= 3%, cognitive complexity <= 15 per function, no new bugs, vulnerabilities or hotspots. Local and CI mirror it:
+Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15 per function. Local and CI mirror it:
 
-- `ruff` `select` in `pyproject.toml` (not `extend-select`, which adds to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`), and Sonar parity: `C901` (max 15), `PLR0911`/`PLR0912`/`PLR0913` (max 7 args)/`PLR0915`, `ARG`, `PLW0602`/`PLW0603`/`PLW2901`, `PLR1714`, `PLR5501`. Fix findings; do not add `noqa` or raise limits. Prefix a deliberately unused argument with `_`. `S101`/`S105` are off under `test/**`.
-- CI runs `jscpd src --threshold 3` (whole tree) and `python -m pytest -n auto` with pytest-cov (xdist workers combine into `coverage.xml`), then `diff-cover --fail-under=80` on changed lines.
-- Seeded `sonar-project.properties` points the scanner at `src`, `test` and `coverage.xml`, with no coverage exclusions. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: add one after the test step, with both as CI secrets.
+- `ruff` `select` in `pyproject.toml` (not `extend-select`, which adds to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`), and Sonar parity: `C901` (max 15), `PLR0911`/`PLR0912`/`PLR0913` (max 7 args, Sonar S107)/`PLR0915`, `ARG`, `PLW0602`/`PLW0603`/`PLW2901`, `PLR1714`, `PLR5501`. Fix findings; do not add `noqa` or raise limits. Prefix a deliberately unused argument with `_`. `S101`/`S105` are off under `test/**`.
+- CI runs `jscpd src --threshold 3` (whole-tree duplication <= 3%, stricter than Sonar's new-code 3%) and `python -m pytest -n auto` with pytest-cov (xdist workers combine into `coverage.xml`), then `diff-cover --fail-under=80` on changed lines.
+- Seeded `sonar-project.properties` points the scanner at `src`, `test` and `coverage.xml`, with no coverage exclusions. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: add one after the pytest step, with both as CI secrets.
+
+### Constants
+
+- Include units when helpful (e.g. `HARD_LIMIT_CENTS`).
+- Use underscores in numeric literals: `1_000_000`.
+- Keep related constants grouped.
 
 ### Tooling
 
+- **Ruff** — linting + isort (line-length 88, target version configured in `pyproject.toml` under `[tool.ruff]`).
+- **pytest** — testing framework.
 - **Pydantic v2** — API schemas with `BaseSchema` (camelCase aliases, `extra="forbid"`).
 - Do not use `@app.on_event("startup")` / `@app.on_event("shutdown")`: Starlette 1.0 removed them. Use the `lifespan` context manager (`@asynccontextmanager async def lifespan(app): ...`) passed to `FastAPI(lifespan=lifespan)` instead.
 - **Starlette floor** (the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`): older Starlette lets a malformed `Host` header corrupt `request.url.path`, bypassing middleware path-matching auth. Prefer endpoint-level `Depends()`/`Security()` for auth-critical routes; read `scope["path"]` if middleware must match paths.

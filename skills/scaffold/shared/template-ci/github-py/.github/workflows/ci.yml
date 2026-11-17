@@ -32,7 +32,8 @@ jobs:
         run: bash .claude/verify-harness.sh
       - run: ruff check src/ && ruff format --check src/
       - run: python -m pyright src/
-      - name: Duplication (<= 3%, the SonarQube new-code gate)
+      - name: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
+        # Pinned by version (JSCPD_VERSION); bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION} src --threshold 3 --reporters console
       - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)
         run: python -m pytest test/ -n auto --cov=src --cov-report=xml -q

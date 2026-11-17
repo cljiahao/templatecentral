@@ -35,7 +35,7 @@ jobs:
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
       - run: pnpm run check                      # format:check + lint + typecheck
-      - name: Duplication (<= 3%, the SonarQube new-code gate)
+      - name: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
         run: pnpm exec jscpd src --threshold 3 --reporters console
       - name: Secret scan (gitleaks CLI, checksum-verified)   # PR: the PR's commits; push: full history
         env:
@@ -61,6 +61,7 @@ jobs:
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: blob
+          if-no-files-found: error
           retention-days: 1
   coverage:
     needs: test
@@ -78,6 +79,8 @@ jobs:
           pattern: vitest-blob-*
           path: blob
           merge-multiple: true
+      - name: Require one blob report per shard (a missing shard must fail, not shrink coverage)
+        run: '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'
       - name: Merge shard reports (writes coverage/cobertura-coverage.xml)
         run: pnpm exec vitest run --merge-reports=blob --coverage
       - name: Changed-line coverage (>= 80%)

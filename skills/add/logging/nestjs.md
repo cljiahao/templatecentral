@@ -8,7 +8,7 @@
 Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 **What already exists in the template:**
-- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `main.ts`)
+- `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `app.factory.ts`)
 - `main.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true` and logs startup — no bootstrap changes needed
 - pino-http auto-logs every request/response (Tier 1 request logging is automatic)
 - `new Logger('X')` pattern works throughout

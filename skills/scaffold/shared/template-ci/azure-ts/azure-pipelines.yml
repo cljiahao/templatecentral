@@ -26,7 +26,7 @@ jobs:
       - bash: pnpm run check                    # format:check + lint + typecheck
         displayName: Format, lint and typecheck
       - bash: pnpm exec jscpd src --threshold 3 --reporters console
-        displayName: Duplication (<= 3%, the SonarQube new-code gate)
+        displayName: Duplication (whole tree <= 3%, stricter than Sonar new-code 3%)
   - job: test
     timeoutInMinutes: 20
     strategy:
@@ -62,8 +62,12 @@ jobs:
         inputs: { patterns: "vitest-blob-*/**", path: "$(Pipeline.Workspace)/blobs" }
         displayName: Download shard reports
       - bash: |
+          # No artifact name: the task puts each artifact in its own subfolder (<path>/<artifact>/*.json), per
+          # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/download-pipeline-artifact-v2
           mkdir -p blob
           cp "$(Pipeline.Workspace)"/blobs/*/*.json blob/
+          # A missing shard must fail the job, not shrink coverage.
+          [ "$(find blob -name '*.json' | wc -l)" -eq "$(shardCount)" ]
           pnpm exec vitest run --merge-reports=blob --coverage    # writes coverage/cobertura-coverage.xml
         displayName: Merge shard reports
       - bash: |
