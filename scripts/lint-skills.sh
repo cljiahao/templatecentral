@@ -1379,6 +1379,62 @@ check_security_seeds_present() {
     "Deps gate and authz seeds present"
 }
 
+check_template_security_defaults() {
+  # Security defaults the audit used to verify by hand, now greped in the shipped template trees so a
+  # drop fails the lint. Each row is "<file under skills/>|<ERE>|<what it guards>"; a missing file or a
+  # pattern that no longer matches fails. ABSENT rows fail when the pattern is present.
+  header "Template security defaults present (JWT alg, proxy trust, headers, anti-clickjacking, pnpm)"
+  local missing="" row file pattern what f s="$SKILLS_DIR" sc="$SKILLS_DIR/scaffold"
+  for row in \
+    "add/auth/nestjs/template/src/modules/auth/jwt.strategy.ts|algorithms: \['HS256'\]|NestJS JWT algorithm whitelist" \
+    "scaffold/nestjs/template/src/config/setups/security.setup.ts|referrerPolicy: \{|NestJS helmet referrerPolicy" \
+    "scaffold/nestjs/template/src/config/setups/security.setup.ts|frameguard: .*action: 'deny'|NestJS frameguard deny default" \
+    "scaffold/nestjs/template/src/config/setups/security.setup.ts|\"'none'\"\]|NestJS frame-ancestors 'none' default" \
+    "scaffold/nestjs/template/src/main.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
+    "scaffold/nestjs/template/src/main.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
+    "scaffold/nestjs/template/package.json|\"nestjs-zod\"|NestJS nestjs-zod dependency" \
+    "scaffold/fastapi/template/src/app.py|^class SecurityHeadersMiddleware|FastAPI SecurityHeadersMiddleware" \
+    "scaffold/fastapi/template/src/app.py|add_middleware\(SecurityHeadersMiddleware\)|FastAPI SecurityHeadersMiddleware registered" \
+    "scaffold/fastapi/template/src/app.py|if not api_settings\.TRUST_PROXY:|FastAPI proxy headers gated by TRUST_PROXY" \
+    "scaffold/fastapi/template/src/core/security_headers.py|frame-ancestors|FastAPI frame-ancestors" \
+    "scaffold/fastapi/template/src/core/security_headers.py|portal or b\"'none'\"|FastAPI frame-ancestors 'none' default" \
+    "scaffold/fastapi/template/src/core/security_headers.py|b\"x-frame-options\", b\"DENY\"|FastAPI X-Frame-Options DENY default" \
+    "scaffold/nextjs/template/src/lib/security/frame-protection.ts|frame-ancestors 'none'|Next.js frame-ancestors 'none' default" \
+    "scaffold/nextjs/template/src/lib/security/frame-protection.ts|'X-Frame-Options', 'DENY'|Next.js X-Frame-Options DENY default" \
+    "scaffold/nextjs/template/src/lib/utils/request-origin.ts|export function getAppOrigin|Next.js getAppOrigin" \
+    "scaffold/nextjs/template/src/lib/utils/request-origin.ts|process\.env\.TRUST_PROXY|Next.js getAppOrigin gated by TRUST_PROXY" \
+    "scaffold/vite-react/template/pnpm-workspace.yaml|^blockExoticSubdeps: true$|Vite blockExoticSubdeps" \
+    "scaffold/vite-react/template/docker/15-frame-protection.envsh|TC_FRAME_ANCESTORS=\"'none'\"|Vite frame-ancestors 'none' default" \
+    "scaffold/vite-react/template/docker/15-frame-protection.envsh|TC_X_FRAME_OPTIONS=\"DENY\"|Vite X-Frame-Options DENY default" \
+    "scaffold/vite-react/template/nginx.conf.template|add_header X-Frame-Options|Vite nginx X-Frame-Options" \
+    "scaffold/vite-react/template/nginx.conf.template|frame-ancestors \\$\{TC_FRAME_ANCESTORS\}|Vite nginx frame-ancestors" \
+    "scaffold/nextjs/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |Next.js Dockerfile copies pnpm-workspace.yaml" \
+    "scaffold/nestjs/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |NestJS Dockerfile copies pnpm-workspace.yaml" \
+    "scaffold/vite-react/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |Vite Dockerfile copies pnpm-workspace.yaml"; do
+    file="$s/${row%%|*}"; what="${row##*|}"; pattern="${row#*|}"; pattern="${pattern%|*}"
+    if [[ ! -f "$file" ]]; then missing+=$'\n'"$file: file not found ($what)"; continue; fi
+    grep -qE -- "$pattern" "$file" || missing+=$'\n'"$file: $what — /$pattern/ not found"
+  done
+  # Absent rows: the CSP is set in one place (applyFrameProtection), not also in next.config.ts; the
+  # NestJS template must not bring in class-validator (nestjs-zod is the validator).
+  if [[ -f "$sc/nextjs/template/next.config.ts" ]]; then
+    grep -qE "key: 'Content-Security-Policy'|key: 'X-Frame-Options'" "$sc/nextjs/template/next.config.ts" \
+      && missing+=$'\n'"$sc/nextjs/template/next.config.ts: sets CSP or X-Frame-Options; applyFrameProtection must be the only source"
+  else
+    missing+=$'\n'"$sc/nextjs/template/next.config.ts: file not found"
+  fi
+  if [[ -f "$sc/nestjs/template/package.json" ]]; then
+    grep -qE '"class-validator"|"class-transformer"' "$sc/nestjs/template/package.json" \
+      && missing+=$'\n'"$sc/nestjs/template/package.json: class-validator/class-transformer present; use nestjs-zod"
+  fi
+  f="$sc/nextjs/template/src/proxy.ts"
+  [[ -f "$f" ]] && { grep -q 'applyFrameProtection' "$f" || missing+=$'\n'"$f: applyFrameProtection not applied"; } \
+    || missing+=$'\n'"$f: file not found"
+  report "${missing#$'\n'}" \
+    "A shipped security default is missing — restore it in the template (these were manual tc-audit steps)" \
+    "Template security defaults present"
+}
+
 # tree_problems <root> <tree>... — one line per disagreement between <root>/template.manifest and
 # the files in the named trees under <root> (path and mode), plus a line for each empty or missing tree.
 tree_problems() {
@@ -1727,6 +1783,7 @@ check_no_tanstack_isInitialLoading
 check_no_starlette_startup_events
 check_no_fastapi_orjson_response
 check_security_seeds_present
+check_template_security_defaults
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 echo ""

@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOOK="$REPO_ROOT/scripts/post-edit-lint.sh"
 command -v jq >/dev/null 2>&1 || { echo "post-edit-lint.test: jq missing, skipped"; exit 0; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/post-edit-lint.XXXXXX")
+TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 
 PASS=0
@@ -22,11 +23,13 @@ run() { rm -f "$TMP/ran"; printf '{"tool_input":{"file_path":"%s"}}' "$1" | CLAU
 
 out=$(run "$TMP/skills/a.md"); check output "$out" "skills edit reports lint failure"
 case "$out" in *'"hookEventName":"PostToolUse"'*"skills/a.md:1: bad"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: additionalContext carries the hit lines"; esac
-for f in README.md CHANGELOG.md AGENTS.md .claude-plugin/plugin.json scripts/other.sh src/x.ts; do
+for f in README.md CHANGELOG.md AGENTS.md .claude-plugin/plugin.json scripts/other.py src/x.ts; do
   out=$(run "$TMP/$f"); check empty "$out" "$f skips lint"
   if [[ -e "$TMP/ran" ]]; then FAIL=$((FAIL + 1)); echo "FAIL: lint ran for $f"; else PASS=$((PASS + 1)); fi
 done
 out=$(run "$TMP/scripts/lint-skills.sh"); check output "$out" "lint script edit runs lint"
+out=$(run "$TMP/scripts/other.sh"); check output "$out" "any scripts/*.sh edit runs lint (comment-narration scan)"
+out=$(run "$TMP/scripts/check-fences.py"); check output "$out" "check-fences.py edit runs lint"
 
 echo "post-edit-lint.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

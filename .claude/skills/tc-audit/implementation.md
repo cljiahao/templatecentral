@@ -25,9 +25,13 @@ Fix every failure first. The lint script is the single source of truth for grepp
 bash scripts/measure-outcomes.sh
 ```
 
-Static, no installs: one table per stack template (`skills/scaffold/*/template`) with comment lines, multi-line and parenthetical comments, suppressions (`eslint-disable`, `noqa`, `type: ignore`, `@ts-expect-error`, `NOSONAR`, coverage pragmas), test files and cases versus source files and LOC, lint/coverage/Sonar exclusions, and whether each CI template carries sharding/parallel settings and the `diff-cover` 80% gate. Exit 1 means a number crossed a threshold at the top of the script.
+Static, no installs. One table per stack template (`skills/scaffold/*/template`), counting: comment lines, multi-line and parenthetical comments, trailing inline comments, suppressions (`eslint-disable`, `noqa`, `type: ignore`, `@ts-expect-error`, `NOSONAR`, coverage pragmas), source LOC, test LOC and the test:source ratio, test cases, orphan test files, lint/coverage/Sonar exclusions (`sonar.exclusions`, `sonar.coverage.exclusions`, `sonar.cpd.exclusions`, counted separately; "no Sonar file" when absent), and whether each CI template has sharding/parallel settings and the `diff-cover` 80% gate. Comments are counted in source files only (tests and configs excluded). Exit 1: a number crossed a threshold; exit 2: unusable path or script error.
 
-Target is SonarQube's default gate on new code: cognitive complexity ≤ 15, duplication ≤ 3%, coverage ≥ 80%. A failing number is a finding: fix the template, never loosen a threshold to pass. Tighten a threshold whenever the real numbers drop well under it.
+`bash scripts/measure-outcomes.sh PROJECT_DIR` runs the same measurement on a scaffolded or adopted project: stack detected from project files, `.gitignore` honoured, `node_modules`, `.venv`, `build`, `dist`, `.next`, `coverage` skipped.
+
+The script does **not** measure cognitive complexity, duplication or coverage. Those are enforced by the lint configs and CI gates the templates ship; the script only checks that the gates are present. Target is SonarQube's default gate on new code: complexity ≤ 15, duplication ≤ 3%, coverage ≥ 80%.
+
+Thresholds are a ratchet set just above today's numbers, not targets. The test:source ratio is a floor-plus-ceiling band: too low means untested code, too high means tests that outgrew the code. A failing number is a finding: fix the template, never raise a threshold to pass. Lower a threshold when the real numbers fall well under it. Known gap: the FastAPI template carries ~24% comment lines against 3-8% on the TypeScript stacks; the threshold is not tuned to it.
 
 ### 2b — Deeper check (optional; needs network and installs)
 
@@ -54,7 +58,7 @@ Mark each file CLEAN or list issues with line references.
 
 ### 3H — Harness checks (guard real failures only)
 
-`scripts/lint-skills.sh` and `scripts/test-harness-kit.sh` cover hook wiring. Check these by hand only when the hook templates changed:
+`scripts/lint-skills.sh` covers hook wiring and, in `check_template_security_defaults`, the shipped security defaults (JWT algorithm whitelist, helmet and `SecurityHeadersMiddleware`, `TRUST_PROXY` wiring, DENY and `frame-ancestors 'none'` in all four stacks, `blockExoticSubdeps`, Dockerfile `pnpm-workspace.yaml`, no `class-validator`). `scripts/test-harness-kit.sh` tests the seeded hooks. Check these by hand only when the hook templates changed:
 
 - **Hook delivery**: PostToolUse hooks capture output and return `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":...}}`, always exit 0. Plain stdout on exit 0 never reaches Claude.
 - **Stop hook**: runs tests, prints to stderr and exits 2 only on failure, and exits 0 first when `stop_hook_active` is true. The block cap is a backstop; never raise `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` in seeds.
@@ -97,7 +101,7 @@ bash scripts/validate-manifest.sh
 
 Markers: the AGENTS.md line-1 `@X.Y.Z` is a migration schema floor pinned at `HARNESS_SCHEMA_VERSION` in `lint-skills.sh`; never bump it on a normal release. `templatecentral_version` tracks `.claude-plugin/plugin.json`.
 
-Narrative docs (`README.md`, `EXAMPLES.md`, `AGENTS.md` capability row, `CONTRIBUTING.md`, `FUTURE.md`, `SECURITY.md`): verify counts and command names mechanically (`ls skills/*/SKILL.md | wc -l`, `ls skills/add/`), and draft replacements for stale spans for the user to approve.
+Run `bash scripts/check-doc-sync.sh` (README skill count, `templatecentral:*` references in `EXAMPLES.md`, `AGENTS.md` capability row against `skills/add/`). Versions (README badge, plugin.json, harness.json) are covered by `validate-manifest.sh` above. Read `CONTRIBUTING.md`, `FUTURE.md` and `SECURITY.md` only if the diff touched them, and draft replacements for stale spans for the user to approve.
 
 ---
 
