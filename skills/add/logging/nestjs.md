@@ -9,7 +9,7 @@ Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `temp
 
 **What already exists in the template:**
 - `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `app.factory.ts`)
-- `main.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true` and logs startup — no bootstrap changes needed
+- `createApp()` in `src/app.factory.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true`, and `main.ts` logs startup — no bootstrap changes needed
 - pino-http auto-logs every request/response (Tier 1 request logging is automatic)
 - `new Logger('X')` pattern works throughout
 
@@ -50,7 +50,7 @@ if (isServerError) {
 }
 ```
 
-Startup is already logged by `bootstrap()`. nestjs-pino's `Logger` keeps Nest's `(message, context)` signature — interpolate values into the message, since a second string becomes the context.
+Startup is already logged by `main.ts` (`bootstrap()` calls `createApp()` from `src/app.factory.ts`). nestjs-pino's `Logger` keeps Nest's `(message, context)` signature — interpolate values into the message, since a second string becomes the context.
 
 #### Tier 2 — Standard (+ Tier 1)
 

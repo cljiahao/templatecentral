@@ -62,15 +62,27 @@ jobs:
         inputs: { patterns: "vitest-blob-*/**", path: "$(Pipeline.Workspace)/blobs" }
         displayName: Download shard reports
       - bash: |
+          set -euo pipefail
           # No artifact name: the task puts each artifact in its own subfolder (<path>/<artifact>/*.json), per
           # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/download-pipeline-artifact-v2
           mkdir -p blob
           cp "$(Pipeline.Workspace)"/blobs/*/*.json blob/
-          # A missing shard must fail the job, not shrink coverage.
-          [ "$(find blob -name '*.json' | wc -l)" -eq "$(shardCount)" ]
+        displayName: Collect shard reports
+      # Own step: a missing shard must fail the job, not shrink coverage.
+      - bash: |
+          set -euo pipefail
+          count=$(find blob -name '*.json' | wc -l)
+          if [ "$count" -ne "$(shardCount)" ]; then
+            echo "expected $(shardCount) shard reports, found $count" >&2
+            exit 1
+          fi
+        displayName: Assert all shard reports present
+      - bash: |
+          set -euo pipefail
           pnpm exec vitest run --merge-reports=blob --coverage    # writes coverage/cobertura-coverage.xml
         displayName: Merge shard reports
       - bash: |
+          set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
           pipx run diff-cover coverage/cobertura-coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
         displayName: Changed-line coverage (>= 80%)

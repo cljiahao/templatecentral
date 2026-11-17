@@ -18,6 +18,7 @@ jobs:
     steps:
       - id: shards
         run: |
+          set -euo pipefail
           list=$(node -p 'JSON.stringify(Array.from({ length: Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')
           echo "list=$list" >> "$GITHUB_OUTPUT"
   quality:

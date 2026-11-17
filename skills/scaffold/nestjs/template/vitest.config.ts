@@ -12,7 +12,8 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'cobertura', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['**/*.spec.ts', '**/*.d.ts'],
+      // Production source only: test files are not measured.
+      exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'],
     },
   },
 });

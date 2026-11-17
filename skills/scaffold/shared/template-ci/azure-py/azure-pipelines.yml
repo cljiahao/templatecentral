@@ -18,6 +18,7 @@ jobs:
         inputs: { versionSpec: "3.14" }
         displayName: Python 3.14
       - bash: |
+          set -euo pipefail
           python -m pip install -r requirements.txt
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
           if [ -f uv.lock ]; then python -m pip install uv; fi    # the deps gate exports uv.lock with uv
@@ -33,6 +34,7 @@ jobs:
       - bash: python -m pytest test/ -n auto --cov=src --cov-report=xml -q    # xdist workers; pytest-cov combines their data into coverage.xml
         displayName: Tests with coverage
       - bash: |
+          set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}
           pipx run diff-cover coverage.xml --compare-branch="origin/${target#refs/heads/}" --fail-under=80
         displayName: Changed-line coverage (>= 80%)
