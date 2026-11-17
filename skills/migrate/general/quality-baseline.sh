@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Quality baseline: measure a project, change nothing in it.
-# Usage: quality-baseline.sh <project-dir> [--label before|after]
+# Usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full]
+#   --static (default) counts files and lines only. It runs no project code and no tool, uses no network, installs nothing.
+#   --full   also runs the project's lint, typecheck and tests, and installs pinned scratch tools into its own scratch directory
+#            (network access). Project code runs: tests execute. Nothing is written under the project; the last row proves it.
 # Prints one markdown table on stdout. Exit 0 when measured, 2 on a usage error.
 # Needs bash 3.2+, BSD or GNU coreutils, git; python3 or node reads the JSON/XML reports.
 set -u
@@ -10,16 +13,20 @@ ESLINT_VERSION=10.15.0
 TSESLINT_VERSION=8.73.0
 SONARJS_VERSION=4.2.2
 JSCPD_VERSION=5.4.3
+DIFFCOVER_VERSION=10.0.0   # used by quality-pass.md
 COMPLEXITY_LIMIT=15
-RUN_LIMIT=600
+RUN_LIMIT=${QB_RUN_LIMIT:-600}
 
-usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after]" >&2; exit 2; }
+usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full]" >&2; exit 2; }
 
 LABEL=before
+MODE=static
 PROJECT=
 while [ $# -gt 0 ]; do
   case "$1" in
     --label) [ $# -ge 2 ] || usage; LABEL=$2; shift 2 ;;
+    --static) MODE=static; shift ;;
+    --full) MODE=full; shift ;;
     -*) usage ;;
     *) [ -z "$PROJECT" ] || usage; PROJECT=$1; shift ;;
   esac
@@ -42,15 +49,15 @@ ROWS=
 row() { ROWS="${ROWS}| $1 | $2 |
 "; }
 
-# limited <out-file> <cmd...>: run in the project dir, stdin closed, output to a file, killed after RUN_LIMIT seconds.
-# Sets RC; 124 means timeout.
+# limited <out-file> <cmd...>: run in the project dir, stdin closed, stdout to the file and stderr to <file>.err,
+# killed after RUN_LIMIT seconds. Sets RC; 124 means timeout.
 limited() {
   local out=$1; shift
-  ( cd "$P" && exec "$@" ) </dev/null >"$out" 2>&1 &
+  ( cd "$P" && exec "$@" ) </dev/null >"$out" 2>"$out.err" &
   local pid=$!
   ( sleep "$RUN_LIMIT"; pkill -P "$pid" 2>/dev/null; kill "$pid" 2>/dev/null; : >"$out.timeout" ) >/dev/null 2>&1 &
   local watcher=$!
-  wait "$pid"; RC=$?
+  { wait "$pid"; RC=$?; } 2>/dev/null
   pkill -P "$watcher" 2>/dev/null; kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null
   if [ -f "$out.timeout" ]; then RC=124; fi
   return 0
@@ -121,12 +128,31 @@ list_files() {
 
 is_git() { ( cd "$P" && git rev-parse --is-inside-work-tree ) >/dev/null 2>&1; }
 
-status_snapshot() { if is_git; then ( cd "$P" && git status --porcelain -z --untracked-files=all ) | tr '\0' '\n'; fi; }
+# Everything a run could have written to the project: git status, a hash of the working diff, and any file
+# newer than a stamp (this also catches caches in ignored directories and non-git projects).
+status_snapshot() {
+  if is_git; then
+    ( cd "$P" && git status --porcelain -z --untracked-files=all ) | tr '\0' '\n'
+    ( cd "$P" && git diff HEAD 2>/dev/null | cksum )
+  fi
+}
+newer_files() { find "$P" -type f -newer "$S/stamp" -not -path '*/.git/*' -not -path "$S/*" 2>/dev/null; }
 
-# copy_tree <dest>: working-tree copy, including uncommitted and untracked files, excluding ignored ones.
+# code_files: the code files of list_files (no config, no env file, no key, no registry credential), NUL separated.
+code_files() {
+  local f
+  while IFS= read -r -d '' f; do
+    printf '%s' "$f" | grep -Eq "$CODERE" || continue
+    printf '%s' "$f" | grep -Eq "$SKIPRE" && continue
+    printf '%s\0' "$f"
+  done < <(list_files)
+}
+
+# copy_tree <dest>: scratch copy of the working tree's code files, including uncommitted and untracked ones.
+# Configs, .npmrc, .env*, keys and other secrets are never copied.
 copy_tree() {
   mkdir -p "$1" || return 1
-  list_files | ( cd "$P" && tar --null -T - -cf - 2>/dev/null ) | tar -x -C "$1"
+  code_files | ( cd "$P" && tar --null -T - -cf - 2>/dev/null ) | tar -x -C "$1"
 }
 
 STACK=unknown
@@ -139,6 +165,7 @@ for d in src app lib; do [ -d "$P/$d" ] && { SRC=$d; break; }; done
 [ -n "$SRC" ] || SRC=.
 
 BEFORE=$(status_snapshot)
+: >"$S/stamp"
 
 NA_NOSTACK="n/a (no package.json, pyproject.toml or requirements file)"
 LINT=$NA_NOSTACK TYPES=$NA_NOSTACK TESTS=$NA_NOSTACK TESTRC=$NA_NOSTACK SECS=$NA_NOSTACK COV=$NA_NOSTACK CPLX=$NA_NOSTACK DUP=$NA_NOSTACK
@@ -160,7 +187,11 @@ measure_typescript() {
 
   # Types: tsc has no machine-readable output; count its own `error TS` lines from the captured file.
   if [ -f "$P/tsconfig.json" ]; then
-    limited "$S/tsc.log" pnpm exec tsc --noEmit
+    # Never write build info into the project: composite needs incremental, so point its file into scratch.
+    local tscflags="--noEmit --incremental false"
+    grep -Eq '"composite"[[:space:]]*:[[:space:]]*true' "$P/tsconfig.json" && tscflags="--noEmit --tsBuildInfoFile $S/tsbuildinfo"
+    # shellcheck disable=SC2086
+    limited "$S/tsc.log" pnpm exec tsc $tscflags
     if [ "$RC" -eq 124 ]; then TYPES="n/a (timeout)"
     elif [ "$RC" -eq 0 ]; then TYPES=0
     elif grep -q 'error TS' "$S/tsc.log"; then TYPES=$(grep -c 'error TS' "$S/tsc.log")
@@ -171,7 +202,7 @@ measure_typescript() {
   local t0 t1
   t0=$(date +%s)
   if grep -q '"vitest"' "$P/package.json"; then
-    limited "$S/test.log" pnpm exec vitest run --coverage --coverage.reporter=cobertura --coverage.reportsDirectory="$S/cov" --reporter=json --outputFile="$S/vitest.json"
+    limited "$S/test.log" pnpm exec vitest run --cache=false --coverage --coverage.reporter=cobertura --coverage.reportsDirectory="$S/cov" --reporter=json --outputFile="$S/vitest.json"
     t1=$(date +%s)
     local r; r=$(jval vitest "$S/vitest.json")
     if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
@@ -211,7 +242,7 @@ export default [
 ];
 CFG
   ( cd "$cc" && pnpm add -D --ignore-workspace --ignore-scripts --save-exact "eslint@$ESLINT_VERSION" "typescript-eslint@$TSESLINT_VERSION" "eslint-plugin-sonarjs@$SONARJS_VERSION" ) </dev/null >"$S/cc-install.log" 2>&1 \
-    || { CPLX="n/a (could not install the scratch lint tools)"; return; }
+    || { CPLX="n/a (private registry or no network: could not install the scratch lint tools)"; return; }
   ( cd "$cc" && pnpm exec eslint -c cc.eslint.config.mjs --no-inline-config . -f json -o "$S/cc.json" ) </dev/null >"$S/cc-run.log" 2>&1
   local n; n=$(jval sonar "$S/cc.json")
   if [ -n "$n" ]; then CPLX=$n; else CPLX="n/a (complexity run failed)"; fi
@@ -228,7 +259,7 @@ measure_python() {
   py=$(py_bin python); [ -n "$py" ] || py=$(py_bin python3)
 
   if [ -n "$ruff" ]; then
-    limited "$S/ruff.log" "$ruff" check --output-format json -o "$S/ruff.json" .
+    limited "$S/ruff.log" "$ruff" check --no-cache --output-format json -o "$S/ruff.json" .
     local n; n=$(jval list "$S/ruff.json")
     if [ -n "$n" ]; then LINT=$n; else LINT="n/a (ruff failed, exit $RC)"; fi
     TOOLS="${TOOLS}$("$ruff" --version 2>/dev/null); "
@@ -241,17 +272,17 @@ measure_python() {
     local n; n=$(jval pyright "$S/pyright.json")
     if [ -n "$n" ]; then TYPES=$n; else TYPES="n/a (pyright failed, exit $RC)"; fi
   elif [ -n "$mypy" ] && { [ -f "$P/mypy.ini" ] || grep -q 'tool.mypy' "$P/pyproject.toml" 2>/dev/null; }; then
-    limited "$S/mypy.log" "$mypy" .
+    limited "$S/mypy.log" "$mypy" --cache-dir "$S/mypy" .
     if [ "$RC" -eq 124 ]; then TYPES="n/a (timeout)"; else TYPES=$(grep -c ': error:' "$S/mypy.log"); fi
   else TYPES="n/a (no configured type checker on PATH or in .venv)"; fi
 
   if [ -z "$py" ]; then TESTS="n/a (no python)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
   if ! "$py" -c 'import pytest' >/dev/null 2>&1; then TESTS="n/a (pytest not installed)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
-  local covarg="--cov=$SRC" t0 t1
+  local covarg="--cov=$SRC --cov-report=xml:$S/coverage.xml" t0 t1
   "$py" -c 'import pytest_cov' >/dev/null 2>&1 || covarg=
   t0=$(date +%s)
   # shellcheck disable=SC2086
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE="$S/.coverage" limited "$S/pytest.log" "$py" -m pytest --junitxml="$S/junit.xml" -q -p no:cacheprovider $covarg --cov-report="xml:$S/coverage.xml"
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE="$S/.coverage" limited "$S/pytest.log" "$py" -m pytest --junitxml="$S/junit.xml" -q -p no:cacheprovider $covarg
   t1=$(date +%s)
   local r; r=$(jval junit "$S/junit.xml")
   if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
@@ -276,14 +307,17 @@ complexity_python() {
 
 # ---------------------------------------------------------------- Duplication
 measure_duplication() {
+  [ "$SRC" != . ] || { DUP="n/a (no src, app or lib directory)"; return; }
   local runner
   if have pnpm && [ "$STACK" = typescript ]; then runner="pnpm dlx"
   elif have npx; then runner="npx --yes"
   elif have pnpm; then runner="pnpm dlx"
   else DUP="n/a (no pnpm or npx)"; return; fi
+  # Code formats only; tests, generated output, lock files, JSON and markdown are out.
   # shellcheck disable=SC2086
   limited "$S/jscpd.log" $runner "jscpd@$JSCPD_VERSION" --reporters json --output "$S/jscpd" \
-    --ignore '**/node_modules/**,**/.next/**,**/dist/**,**/coverage/**,**/.venv/**,**/__pycache__/**' "$SRC"
+    --format "typescript,tsx,javascript,jsx,python" \
+    --ignore '**/node_modules/**,**/.next/**,**/dist/**,**/build/**,**/coverage/**,**/.venv/**,**/__pycache__/**,**/*.json,**/*.md,**/*.lock,**/*.d.ts,**/*.test.*,**/*.spec.*,**/__tests__/**,**/tests/**,**/test/**' "$SRC"
   local n; n=$(jval jscpd "$S/jscpd/jscpd-report.json")
   if [ -n "$n" ]; then DUP="$n%"; else DUP="n/a (jscpd failed, exit $RC)"; fi
 }
@@ -292,7 +326,7 @@ measure_duplication() {
 TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.py$|_test\.py$)'
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|dist|\.next|\.venv)/)'
-SUPPRESS='eslint-disable|noqa|type: ignore|@ts-expect-error|@ts-ignore|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover'
+SUPPRESS='eslint-disable|noqa|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover'
 EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|^[[:space:]]*ignores[[:space:]]*:'
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
@@ -322,17 +356,33 @@ count_static() {
 }
 
 # ---------------------------------------------------------------- Run
-case "$STACK" in
-  typescript) measure_typescript; complexity_typescript
-    TOOLS="${TOOLS}eslint $ESLINT_VERSION, typescript-eslint $TSESLINT_VERSION, eslint-plugin-sonarjs $SONARJS_VERSION, jscpd $JSCPD_VERSION" ;;
-  python) measure_python; complexity_python
-    TOOLS="${TOOLS}jscpd $JSCPD_VERSION" ;;
-esac
-[ "$STACK" = unknown ] || measure_duplication
+NA_STATIC="n/a (static mode: nothing was run)"
+if [ "$MODE" = full ]; then
+  case "$STACK" in
+    typescript) measure_typescript; complexity_typescript
+      TOOLS="${TOOLS}eslint $ESLINT_VERSION, typescript-eslint $TSESLINT_VERSION, eslint-plugin-sonarjs $SONARJS_VERSION" ;;
+    python) measure_python; complexity_python ;;
+  esac
+  [ "$STACK" = unknown ] || { measure_duplication; TOOLS="${TOOLS:+$TOOLS, }jscpd $JSCPD_VERSION"; }
+  [ "$STACK" = unknown ] || TOOLS="${TOOLS:+$TOOLS, }diff-cover $DIFFCOVER_VERSION (quality pass)"
+elif [ "$STACK" != unknown ]; then
+  LINT=$NA_STATIC TYPES=$NA_STATIC TESTS=$NA_STATIC TESTRC=$NA_STATIC SECS=$NA_STATIC COV=$NA_STATIC CPLX=$NA_STATIC DUP=$NA_STATIC
+fi
 count_static
 
 AFTER=$(status_snapshot)
-if [ "$BEFORE" = "$AFTER" ]; then TREE="unchanged"; else TREE="CHANGED (a measurement wrote into the project; inspect git status)"; fi
+NEWER=$(newer_files)
+# Files a run wrote that git ignores (logs, caches) are listed apart from changes git can see.
+VISIBLE=; IGN=
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  if is_git && ( cd "$P" && git check-ignore -q -- "$f" ); then IGN="${IGN}${f#"$P"/} "; else VISIBLE="${VISIBLE}${f#"$P"/} "; fi
+done <<EOF
+$NEWER
+EOF
+if [ "$BEFORE" != "$AFTER" ] || [ -n "$VISIBLE" ]; then TREE="CHANGED (git state differs or files written: ${VISIBLE:-see git status})"
+elif [ -n "$IGN" ]; then TREE="unchanged in git; the run wrote ignored files: ${IGN%% *} (and $(printf '%s' "$IGN" | wc -w | tr -d ' ') in all)"
+else TREE="unchanged"; fi
 
 row "stack" "$STACK"
 row "lint findings" "$LINT"
@@ -350,7 +400,8 @@ row "test cases (static count; a parametrized case counts once)" "$CASES"
 row "suppressions (code files)" "$SUPP"
 row "coverage, lint and Sonar exclusions" "$EXCL"
 row "coverage thresholds configured" "$THR"
-row "scratch tool versions" "${TOOLS:-n/a}"
+row "mode" "$MODE"
+row "scratch tool versions" "${TOOLS:-none (static mode)}"
 row "project tree after the run" "$TREE"
 
 printf '| Metric | %s |\n|---|---|\n%s' "$LABEL" "$ROWS"
