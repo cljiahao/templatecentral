@@ -4,9 +4,22 @@
 
 # Migrate or Adopt Project
 
-Detects the stack, asks the user once, then runs autonomously.
+Goal: bring an existing project up to the templateCentral standard — harness seeded, code measured, findings fixed, result proven. Detects the stack, asks the user once, then runs autonomously.
 
 **Phase files.** Phases 0–3 are below. Load Phase 4 or 5 only when Phase 0 routes to it. The shared kits load **here**, so every chain stays within two `cat` hops (CONVENTIONS §2). `<variant-file>` is `harness-kit-ts.md` for nestjs / nextjs / vite-react and `harness-kit-fastapi.md` for fastapi — load only that one.
+
+**Baseline** (static counts only; loaded only on the no-marker path, after Phase 1):
+```bash
+cat "<skill-dir>/general/quality-baseline.md"
+```
+
+**Quality pass** (only after its own question, see "Quality pass (opt-in)" below; the test and comment rules load with it):
+```bash
+cat "<skill-dir>/general/quality-baseline.md"
+cat "<skill-dir>/general/quality-pass.md"
+cat "<skill-dir>/../test/implementation.md"
+cat "<skill-dir>/../standards/code-standards/comments.md"
+```
 
 **Phase 4** — full harness seed / v4–v6 upgrade:
 ```bash
@@ -131,6 +144,8 @@ Please run this skill from a project directory, not a parent folder." Exit.
 
 If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
 
+**Static baseline.** Once the stack and the project directory are resolved, and before the Phase 2 gate, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as plain information. It runs no project script, test or hook and no tool, uses no network and installs nothing. Git reads the tree and may run filters that the user's git config defines. The script does not intentionally write; its last row reports any write. It is not part of the gate message and asks nothing. Routes that skip Phase 1 (a marker is present, Phase 0) run no baseline.
+
 ---
 
 ## Phase 2 — Human Decision ⛔ GATE
@@ -217,3 +232,7 @@ Print: "No changes made."
 Return control; the invoking skill must exit without generating any files.
 
 ---
+
+## Quality pass (opt-in)
+
+Only when migrate was invoked directly (no invoking skill waits for control) and adoption has finished with a clean tree (Phase 3 A, Phase 4, or an approved Phase 5 re-sync): ask once, separately from every approval above: "Run the quality pass? It runs the project's lint, typecheck and tests, then changes code, tests and config, and needs a clean tree." Never ask on the Phase 3 A return path, on B or Skip. On yes, load the files listed under "Quality pass" above and follow `quality-pass.md`. On no, print "Quality pass skipped." and finish.

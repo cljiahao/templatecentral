@@ -27,11 +27,11 @@ No marker → not a templateCentral project. Exit silently.
 
 > "`.claude/harness.json` not found — this project has no recorded install version. To adopt the templateCentral harness, run `templatecentral:migrate`."
 
-Then exit.
+Then exit, unless the request asked for a quality check: then go to Step 7.
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently, unless the request asked for a quality check: then go to Step 7.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
@@ -76,3 +76,9 @@ If accepted:
 - **FastAPI**: if `pip-audit --version` succeeds, run `pip-audit -r requirements.txt`; otherwise report "pip-audit not installed — security advisory check skipped". Review `.claude/dep-audit-allow.txt` the same way.
 
 Zero findings → "No known vulnerabilities found." Otherwise list package, severity, advisory ID, and whether a fixed version exists, and recommend the review utility's `update` operation. Never auto-upgrade.
+
+## Step 7 — Quality (optional)
+
+Run only when the request asked for a quality check, or after Step 6. Ask first and state the cost: the run executes the project's tests with coverage plus lint, typecheck, complexity and duplication (up to 10 minutes per tool). Skip this step when the user declines.
+
+On yes, load `cat "<skill-dir>/../migrate/general/quality-baseline.md"` and run its script with `--full`, only because the user said yes above. The script runs no project script, test or hook of its own; git reads the tree and may run filters that the user's git config defines. Its last row reports any write to the project. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else `before`) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
