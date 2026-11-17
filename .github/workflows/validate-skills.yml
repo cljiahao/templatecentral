@@ -183,6 +183,8 @@ jobs:
         run: bash scripts/check-golden.sh
       - name: Golden scaffold tree check (template trees)
         run: bash scripts/check-golden.sh --from-templates
+      - name: Template and guide comment policy
+        run: bash scripts/check-template-comments.sh
       - name: Template copy tests
         run: bash scripts/test-template-copy.sh
       - name: Token counter tests

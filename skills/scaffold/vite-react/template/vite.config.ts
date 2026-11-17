@@ -16,8 +16,7 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    // Same-origin `/api` proxy to the backend (`server.proxy`, required by cookie auth) is added
-    // by templatecentral:standards (full-stack-pairing).
+    // templatecentral:standards full-stack-pairing adds the same-origin /api server.proxy that cookie auth needs.
   },
   preview: {
     port: 3000,
@@ -30,7 +29,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
-    // CI has no .env (gitignored), and getApiBaseUrl() throws without it — pin one for tests.
+    // CI has no .env and getApiBaseUrl() throws without one, so pin it for tests.
     env: { VITE_API_BASE_URL: 'http://api.test' },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,

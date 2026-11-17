@@ -153,11 +153,13 @@ config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 This URL carries no password, so online migrations must connect through the shared `engine` from `database.session` — it holds the `do_connect` token listener and `verify-full` TLS. A fresh `engine_from_config()` (the `alembic init` default) would fail authentication:
 
 ```python
+import importlib
+
 from database.base import Base
 from database.session import engine
 
-# Autogenerate only sees tables whose model modules were imported — list every one.
-from models import project  # noqa: F401
+# Autogenerate only sees tables whose model modules were imported: import every one.
+importlib.import_module("models.project")
 
 target_metadata = Base.metadata
 

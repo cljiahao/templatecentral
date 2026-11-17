@@ -571,6 +571,48 @@ cc_case py "multi-line docstring" "docstring of 2" $'def f():\n    """Summary.\n
 cc_case py "one-line docstring" - $'def f():\n    """Summary."""\n'
 cc_case py "aside in a docstring body" "parenthetical" $'def f():\n    """Returns x (never None)."""\n'
 cc_case py "hash inside a multi-line string" - $'q = """\nselect 1 # not a comment\n"""\n'
+cc_case ts "trailing comment after case colon" "trailing comment" $'switch (a) {\n  case 1: // note\n    break\n}\n'
+cc_case ts "comment after object key colon" "comment" $'const o = {\n  k: // why\n    1,\n}\n'
+cc_case ts "trailing comment after a string value" "trailing comment" $'const o = {\n  k: "v", // note\n}\n'
+cc_case ts "trailing comment after a ternary template" "trailing comment" $'const a = b ? `q` : `w` // t\n'
+cc_case ts "url without a space after colon" - $'const u = { href: "https://x.test" }\n'
+cc_case ts "template literal holding the marker" - $'const a = `x // y`\n'
+cc_case ts "multi-line template holding the marker" - $'const a = `\nx // y\n`\n'
+cc_case ts "regex literal holding slashes" - $'const r = /a\\/\\/b/\n'
+cc_case ts "regex literal after a colon" - $'const o = { r: /a\\/\\/b/ }\n'
+cc_case ts "regex with a class holding a slash" - $'const r = /[/]x/.test(s)\n'
+cc_case ts "single-quoted string holding the marker" - $'const a = \'x // y\'\n'
+cc_case ts "single-quoted string holding a hash" - $'const a = \'#was\'\n'
+cc_case ts "trailing block comment" "trailing comment" $'const a = 1 /* note */\n'
+cc_case ts "JSX comment on its own line" - $'<div>\n  {/* note */}\n</div>\n'
+cc_case ts "JSX text holding slashes" - $'<p>see //foo</p>\n'
+cc_case ts "JSX apostrophe text then trailing comment" "trailing comment" $'<p>It\'s ok</p> // tr\n'
+cc_case ts "SHA pin with version annotation" - $'import x from "a@0123456789abcdef0123456789abcdef01234567" // v4\n'
+cc_case ts "quoted SHA pin with version annotation" - $'const u = "a@0123456789abcdef0123456789abcdef01234567" // v4\n'
+cc_case ts "short hash is not a SHA pin" "trailing comment" $'const u = "a@abc123" // v4\n'
+cc_case ts "HS256 key id is not a ticket" - $'// HS-256 signs it\nconst a = 1\n'
+cc_case ts "RS256 key id is not a ticket" - $'// RS-256 signs it\nconst a = 1\n'
+cc_case ts "ES256 key id is not a ticket" - $'// ES-256 signs it\nconst a = 1\n'
+cc_case ts "PS256 key id is not a ticket" - $'// PS-256 signs it\nconst a = 1\n'
+cc_case ts "EC-P256 key id is not a ticket" - $'// EC-P256 key\nconst a = 1\n'
+cc_case ts "PKCS-8 key format is not a ticket" - $'// PKCS-8 key\nconst a = 1\n'
+cc_case ts "licence header after code" "comment block of 2" $'const a = 1\n// Copyright 2026 Acme\n// Licensed under the MIT licence\nconst b = 2\n'
+cc_case py "licence header after code" "comment block of 2" $'a = 1\n# Copyright 2026 Acme\n# Licensed under the MIT licence\nb = 2\n'
+cc_case py "licence header after a shebang" - $'#!/usr/bin/env python3\n# Copyright 2026 Acme\n# Licensed under the MIT licence\na = 1\n'
+cc_case py "SHA pin with version annotation" - $'uses: a@0123456789abcdef0123456789abcdef01234567  # v4\n'
+cc_case py "short hash is not a SHA pin" "trailing comment" $'uses: a@abc123  # v4\n'
+cc_case py "single-quoted string holding the marker" - $'a = \'x # y\'\n'
+cc_case py "HS256 key id is not a ticket" - $'# HS-256 signs it\na = 1\n'
+cc_case py "PKCS-8 key format is not a ticket" - $'# PKCS-8 key\na = 1\n'
+big=$(awk 'BEGIN { for (i = 0; i < 20000; i++) print "a = 1  # note" }')
+for v in ts py; do
+  if [ "$v" = ts ]; then bx=${big//#/\/\/}; else bx=$big; fi
+  printf '%s\n' "$bx" > "$CC/big.$v"
+  cap_out=$(cd "$CC" && bash "$KIT/post-edit-comment-check.$v.sh" --scan "big.$v" 2>&1)
+  check "51 yes" "$(wc -l <<<"$cap_out" | tr -d ' ') $(ok_if grep -q 'and 19950 more findings' <<<"$cap_out")" "post-edit-comment-check.$v --scan caps findings at 50 plus a count" "$(tail -n 2 <<<"$cap_out")"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CC" "{\"tool_input\":{\"file_path\":\"big.$v\"}}"
+  check "0 yes" "$EC $(ok_if json_has "'more findings' in d['additionalContext']")" "post-edit-comment-check.$v hook output survives 20000 findings" "$(printf '%s' "$OUT" | tail -c 200)"
+done
 
 # check-template-comments.sh: run it against a minimal tree, clean then with one trailing comment planted
 GT="$T/gate"
@@ -584,6 +626,23 @@ check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-c
 printf 'a = 1  # note\n' > "$GT/skills/scaffold/fastapi/template/src/bad.py"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'bad.py:1: trailing comment' <<<"$gate_out")" "check-template-comments fails on a trailing comment and names the file" "$gate_out"
+rm "$GT/skills/scaffold/fastapi/template/src/bad.py"
+printf 'k: 1  # note\n' > "$GT/skills/scaffold/fastapi/template/cfg.yml"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'cfg.yml:1: trailing comment' <<<"$gate_out")" "check-template-comments scans yaml template files" "$gate_out"
+printf 'uses: a@0123456789abcdef0123456789abcdef01234567  # v4\n' > "$GT/skills/scaffold/fastapi/template/cfg.yml"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments allows a SHA-pin version annotation" "$gate_out"
+mkdir -p "$GT/skills/scaffold/shared/template-ci/github-ts"
+printf 'k: 1  # note\n' > "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments skips template-ci" "$gate_out"
+printf 'text\n```py\na = 1  # note\n```\n' > "$GT/skills/add/foo.md"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "1 yes" "$gate_ec $(ok_if grep -q 'skills/add/foo.md:3: trailing comment' <<<"$gate_out")" "check-template-comments maps a guide fence finding to its markdown line" "$gate_out"
+printf 'skills/add/foo.md:3 reason text\n' > "$GT/scripts/check-template-comments.exempt"
+gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
+check "0 yes" "$gate_ec $(ok_if grep -q 'ok$' <<<"$gate_out")" "check-template-comments honours a per-line exemption" "$gate_out"
 
 # ── session-context.sh ────────────────────────────────────────────────────────
 

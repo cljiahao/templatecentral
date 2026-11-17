@@ -1,4 +1,4 @@
-# Git-hook layer. Install once: pnpm exec lefthook install (auto-run by the "prepare" script).
+# Git-hook layer. Install once with pnpm exec lefthook install; the prepare script runs it automatically.
 pre-commit:
   # Sequential: the lockfile step's pnpm install rewrites node_modules and would race tsc/eslint/prettier.
   parallel: false
@@ -42,7 +42,7 @@ pre-commit:
         fi
         exit 0
     comment-hygiene:
-      # Warn-only (never blocks). Patterns come from .claude/comment-hygiene-patterns.txt.
+      # Warn-only, never blocks. Patterns come from .claude/comment-hygiene-patterns.txt.
       run: |
         patterns=".claude/comment-hygiene-patterns.txt"
         [ -f "$patterns" ] || exit 0

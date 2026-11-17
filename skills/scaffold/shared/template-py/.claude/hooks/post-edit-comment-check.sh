@@ -3,11 +3,16 @@
 AWK_TAG=py
 read -r -d '' AWK <<'AWKEOF' || true
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
-function note(n, m) { if (emit == "find") printf "%d\t%s\n", n, m }
-function txt(n, t) { if (emit == "text") printf "%d\t%s\n", n, t }
+function note(n, m) { if (emit == "find") printf "%s\t%d\t%s\n", curfile, n, m }
+function txt(n, t) { if (emit == "text") printf "%s\t%d\t%s\n", curfile, n, t }
 function isdir(t) {
   if (lang == "ts") return t ~ /^(eslint-|@ts-|prettier-|istanbul |c8 |v8 |NOSONAR|@vitest-environment|@jest-environment)/
   return t ~ /^(noqa|type:|pyright:|pragma|ruff:|fmt:|pylint:|isort:|mypy:|NOSONAR|-\*-)/
+}
+function pinned(code,   s) {
+  if (!match(code, /@[0-9a-f]+["']?[ \t]*$/)) return 0
+  s = substr(code, RSTART + 1, RLENGTH - 1); sub(/[ \t]+$/, "", s); sub(/["']$/, "", s)
+  return length(s) == 40
 }
 function islic(t) { return t ~ /^(Copyright|\(c\)|SPDX-License-Identifier|Licensed under|The MIT License|Permission is hereby|Apache License)/ }
 function chk(n, t,   x) {
@@ -25,12 +30,12 @@ function endrun() {
 function fullline(n, t) {
   fl = 1
   if (isdir(t)) { fl = 0; return }
-  if (run_len == 0) { run_start = n; run_lic = (islic(t) && n <= 3) }
+  if (run_len == 0) { run_start = n; run_lic = (islic(t) && !code_seen) }
   run_len++; chk(n, t)
 }
 function trailing(n, code, t) {
   if (isdir(t)) return
-  if (code ~ /@[0-9a-f]+[ \t]*$/ && t ~ /^v[0-9]/) return
+  if (pinned(code) && t ~ /^v[0-9]/) return
   note(n, "trailing comment: move it above the code or delete it")
   chk(n, t)
 }
@@ -39,7 +44,7 @@ function blkline(n, t) {
   if (t == "") return
   if (isdir(t)) return
   blk_len++
-  if (blk_len == 1) blk_lic = (islic(t) && n <= 3)
+  if (blk_len == 1) blk_lic = (islic(t) && !code_seen)
   chk(n, t)
 }
 function blkend() {
@@ -105,20 +110,24 @@ function scan_py(line, n,   i, L, c, d, q, has, text, rest, e, doc, t, delim) {
       if (e > 0) {
         t = trim(substr(rest, 1, e - 1))
         if (doc && t != "") chk(n, t)
-        i += 5 + e; has = 1; continue
+        i += 5 + e; has = 1; code_seen = 1; continue
       }
       in_str3 = delim; str3_doc = doc; doc_start = n; doc_len = 0
       t = trim(rest)
       if (doc && t != "") { doc_len++; chk(n, t) }
       return
     }
-    if (c == "\"" || c == SQ) { q = c; has = 1; i++; continue }
-    has = 1; i++
+    if (c == "\"" || c == SQ) { q = c; has = 1; code_seen = 1; i++; continue }
+    has = 1; code_seen = 1; i++
   }
 }
 BEGIN { SQ = sprintf("%c", 39) }
 {
-  n = NR; line = $0; sub(/\r$/, "", line); fl = 0
+  if (FNR == 1) {
+    endrun(); if (in_blk) blkend()
+    in_tpl = 0; in_str3 = ""; code_seen = 0; curfile = FILENAME
+  }
+  n = FNR; line = $0; sub(/\r$/, "", line); fl = 0
   if (n == 1 && line ~ /^#!/) next
   if (lang == "ts" && in_blk) {
     e = index(line, "*/")
@@ -143,23 +152,27 @@ END { endrun() }
 AWKEOF
 
 scan() {
-  awk -v lang="$AWK_TAG" -v emit=find "$AWK" "$1"
-  texts=$(awk -v lang="$AWK_TAG" -v emit=text "$AWK" "$1")
+  awk -v lang="$AWK_TAG" -v emit=find "$AWK" "$@"
+  texts=$(awk -v lang="$AWK_TAG" -v emit=text "$AWK" "$@")
   [ -n "$texts" ] || return 0
-  printf '%s\n' "$texts" | cut -f2- | grep -nEf "$patterns" | while IFS= read -r m; do
+  keep=$(printf '%s\n' "$texts" | cut -f3- | grep -nEf "$patterns" | while IFS= read -r m; do
     body=${m#*:}
-    case "$body" in UTF-*|SHA-*|AES-*|RSA-*|ISO-*|RFC-*|TLS-*|SSL-*|HTTP-*|DES-*|MD-*|HMAC-*|CRC-*|ECDSA-*|PBKDF-*|BASE-*) continue ;; esac
-    ln=$(printf '%s\n' "$texts" | sed -n "${m%%:*}p" | cut -f1)
-    printf '%s\tnarration or reference: %s\n' "$ln" "$body"
-  done
+    case "$body" in (UTF-*|SHA-*|AES-*|RSA-*|ISO-*|RFC-*|TLS-*|SSL-*|HTTP-*|DES-*|MD-*|HMAC-*|CRC-*|ECDSA-*|PBKDF-*|BASE-*|HS-*|RS-*|ES-*|PS-*|EC-*|PKCS-*) continue ;; esac
+    printf '%s ' "${m%%:*}"
+  done)
+  [ -n "$keep" ] || return 0
+  printf '%s\n' "$texts" | awk -v keep="$keep" 'BEGIN { n = split(keep, a, " "); for (i = 1; i <= n; i++) w[a[i]] = 1 }
+    (NR in w) { p = index($0, "\t"); q = p + index(substr($0, p + 1), "\t"); print substr($0, 1, q) "narration or reference: " substr($0, q + 1) }'
 }
 
 patterns="${COMMENT_HYGIENE_PATTERNS:-.claude/comment-hygiene-patterns.txt}"
 if [ "${1:-}" = "--scan" ]; then
-  [ -f "${2:-}" ] && [ -f "$patterns" ] || exit 0
-  found=$(scan "$2" | sort -s -t "$(printf '\t')" -k1,1n)
+  [ -f "$patterns" ] || exit 0
+  shift
+  [ "$#" -gt 0 ] || exit 0
+  found=$(scan "$@" | sort -s -t "$(printf '\t')" -k1,1 -k2,2n)
   [ -n "$found" ] || exit 0
-  printf '%s\n' "$found" | awk -F'\t' -v f="$2" '{ printf "%s:%s: %s\n", f, $1, $2 }'
+  printf '%s\n' "$found" | awk -F'\t' -v cap="${COMMENT_HYGIENE_CAP:-50}" 'NR <= cap { printf "%s:%s: %s\n", $1, $2, $3 } END { if (NR > cap) printf "... and %d more findings\n", NR - cap }'
   exit 1
 fi
 
@@ -175,10 +188,10 @@ case "$file" in *.py) ;; *) exit 0 ;; esac
 [ -f "$file" ] || exit 0
 [ -f "$patterns" ] || exit 0
 
-found=$(scan "$file" | sort -s -t "$(printf '\t')" -k1,1n)
+found=$(scan "$file" | sort -s -t "$(printf '\t')" -k1,1 -k2,2n)
 if [ -n "$found" ]; then
   msg="⚠ comment hygiene (see standards/code-standards/comments.md):
-$(printf '%s\n' "$found" | awk -F'\t' '{ printf "  - line %s: %s\n", $1, $2 }')"
+$(printf '%s\n' "$found" | awk -F'\t' 'NR <= 50 { printf "  - line %s: %s\n", $2, $3 } END { if (NR > 50) printf "  - ... and %d more findings\n", NR - 50 }')"
   python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':sys.argv[1]}}))" "$msg"
 fi
 exit 0

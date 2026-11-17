@@ -1,12 +1,13 @@
-# pnpm-workspace.yaml: pnpm 12 settings. Auth and registry settings belong in .npmrc.
-# pnpm 12 errors on unknown keys (ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS): use documented names only.
+# pnpm 12 fails with ERR_PNPM_UNRECOGNIZED_WORKSPACE_SETTINGS on unknown keys; auth and registry settings belong in .npmrc.
 
 # Block git-URL, tarball and local-path dependencies: the main defence against dependency confusion.
 blockExoticSubdeps: true
 
 # Allowlist packages permitted to run install scripts; pnpm >=11 blocks all by default.
 allowBuilds:
-  sharp: true          # Next.js image optimisation
-  unrs-resolver: true  # required by eslint-config-next resolver
+  # Next.js image optimisation.
+  sharp: true
+  # Required by the eslint-config-next resolver.
+  unrs-resolver: true
   # lefthook ships its binary via optional deps; pnpm still needs an explicit decision or install fails with ERR_PNPM_IGNORED_BUILDS.
   lefthook: false

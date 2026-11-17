@@ -129,7 +129,6 @@ async function ingestDocument(content: string, source: string, expectedHash?: st
   if (expectedHash && hash !== expectedHash) {
     throw new Error('Document hash mismatch — possible content tampering');
   }
-  // Regex-stripping HTML is not a control, being bypassable; rendering safety is LLM05's job.
   await embedAndStore(content, { source, sha256: hash });
 }
 ```
@@ -170,7 +169,7 @@ Treat all LLM output as untrusted user input. Never evaluate, exec, or render it
 // ❌ Never render raw LLM output as HTML
 return <div dangerouslySetInnerHTML={{ __html: llmOutput }} />;
 
-// ✅ Sanitise or use text-only rendering
+// ✅ Sanitise or use text-only rendering; regex-stripping HTML is bypassable, so it is not a control
 import DOMPurify from 'dompurify';
 return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(llmOutput) }} />;
 

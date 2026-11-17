@@ -103,7 +103,7 @@ def configure_proxy_headers(app: FastAPI) -> None:
 
 def start_application() -> FastAPI:
     """Builds the configured FastAPI application."""
-    # Dev-only docs; openapi_url=None alone leaves /docs and /redoc, so all three are set explicitly.
+    # Docs are dev-only: openapi_url=None already disables the docs routes; all three are set explicitly.
     is_dev = common_settings.ENVIRONMENT == "dev"
     app = FastAPI(
         title=common_settings.PROJECT_NAME,

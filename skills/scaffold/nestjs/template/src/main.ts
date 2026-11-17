@@ -9,7 +9,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { appConfig, setupCors, setupSecurity, setupSwagger } from './config';
 
-// Numeric hops trust nothing since fastify 5.12.1: list proxy CIDRs; '*' trusts every hop so client X-Forwarded-For wins.
+// Fastify 5.12.1+: numeric hops trust nothing; list CIDRs covering every proxy hop. '*' lets client X-Forwarded-For win.
 function resolveTrustProxy(value: string | undefined): boolean | string | undefined {
   return value === '*' ? true : value;
 }

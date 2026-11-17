@@ -4,10 +4,10 @@
 4b6a070d2492ee4ba9936ec8c5ca6533b46a79723f4d5e2c3cd1ee696bbcd4f8	skills/add/ai-security/implementation.md	LLM01 — Prompt Injection	2	python
 79a92d056e7bc457446b5bd00631f4efef8fab4619ca379903b427ced0f03560	skills/add/ai-security/implementation.md	LLM02 — Sensitive Information Disclosure	0	ts
 41bae4f2db1d4fac2ff5826956d2b84ac8f463cdddc595287a3cc4c8403459b9	skills/add/ai-security/implementation.md	LLM03 — Supply Chain	0	ts
-f9c49ac876256c4cd1eb542492f7e1f2f5e9950652feb0b11aaa26cf26145d86	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	0	ts
+ca905867eccaf8edcba6c351533a55d1db4005757345f801007cf08a7edfdfdc	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	0	ts
 5104f43d5de602996188f014da82be2649d9e546cfdc2be5d207db59e8b41939	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	1	python
 29b472f17a8b4469d29d6eaf4044bba1181c75896edfa04b1f5a2d500e17a89b	skills/add/ai-security/implementation.md	LLM04 — Data and Model Poisoning	2	ts
-af3bb3dc4656694c0b458a097f4f12d576a043430bb2b6905ec9e9cf8f929c00	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	0	ts
+f7f1df9d809247b0d660f09e1849a6ef1b25e0067271dd46c97fe3e56e9937a7	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	0	ts
 03823f9f1af91c45337aa54db3ea3a3528a9920b07b594bd67ed4490173ea618	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	1	ts
 bf1b5e828658a7735f383729560da2fb65009345b8c7b1ea673366ad83074ca9	skills/add/ai-security/implementation.md	LLM05 — Improper Output Handling	2	python
 eaa288abd355269dda87591921b5babb8386de0743d94e09e5ebf95fbdd31412	skills/add/ai-security/implementation.md	LLM06 — Excessive Agency (applies once any tool/function is wired)	0	ts
@@ -146,7 +146,7 @@ a8625a5a21cd404469fafe47c5edf9132b64df877f3655b2f1825d1da6042fb8	skills/add/data
 46d980976d66e5c5ea612f9b8f35b0023c80702e8ccb017a9448e2888e5d7c3d	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	1	-
 510cf5a911e12717fb77d1d6409705a4678bdcd477001cacdaca5868d3a8d8b8	skills/add/database/python/sqlalchemy-iam.md	A5. Add IAM fields to `src/core/config.py`	2	python
 ea4e65cc01a59a1450085773a50a9df425cd39ab5108d3972c41ca6133499e02	skills/add/database/python/sqlalchemy-iam.md	A6. Update `alembic/env.py` for IAM fields	0	python
-0e4b492e0a06eec0b5810d94972be0df60e4beb4ac04c0703a861c9670cb939c	skills/add/database/python/sqlalchemy-iam.md	A6. Update `alembic/env.py` for IAM fields	1	python
+89b95322c82f7a2222e3b05d401ffba148b9d98512bd2771f1020f73e2baa621	skills/add/database/python/sqlalchemy-iam.md	A6. Update `alembic/env.py` for IAM fields	1	python
 4f8dec438dca7602b89ea3c2018a1628684474a12c6fbee31821e7338638638d	skills/add/database/python/sqlalchemy-iam.md	A7. Create a Model	0	python
 8c7fd1aee9f061560193a1ce4f15004e9c4e1065dc94b77a00a061bcc679f4a9	skills/add/database/python/sqlalchemy-iam.md	A9. Usage	0	python
 58e3b8daed00417d9bb814e0dcccaa1f4361cd34450f54b01c4c5850952f3ebb	skills/add/database/python/sqlalchemy.md	A1. Install Dependencies	0	-
