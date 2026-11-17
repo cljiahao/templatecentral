@@ -166,7 +166,7 @@ check_no_comment_narration() {
     return
   fi
   local tmp matches
-  tmp=$(mktemp -d)
+  tmp=$(mktemp -d) || exit 2
   # This check blocks CI (lint-patterns has no bypass label), so — like the CI gate seeded into
   # scaffolded projects — it reads only the first 10 (anchored keyword) lines, never the last 3
   # (date/ticket/issue-ref), which false-positive on legitimate terms like UTF-8/SHA-256/RFC-7231.

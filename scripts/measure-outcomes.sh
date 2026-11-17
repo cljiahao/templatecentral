@@ -15,7 +15,11 @@
 #   Project mode is a report: each metric prints beside its template reference value and is marked
 #   WARN outside it; WARN never changes the exit code. Exit 1 only on a hard failure: an app with
 #   zero test cases, no CI file enforcing the coverage gate (`diff-cover ... --fail-under=80` in at
-#   least one CI file), or, with --compare, a ratchet number above its baseline. Exit 2: the tool
+#   least one CI file), or, with --compare, a ratchet number above its baseline or a baseline app
+#   that no longer matches any measured app. A plain run and a --baseline run keep exit 1 for a
+#   project with no coverage gate; with --compare the missing gate is a hard failure only when the
+#   baseline recorded project.coverage_gate=1 (the gate disappeared), otherwise it stays a WARN in
+#   every report until the gate exists. Root-directory apps are keyed <stack>@root. Exit 2: the tool
 #   itself failed (unusable path or file, crash).
 #   --baseline writes plain key=value lines (one per app and metric: suppressions, multiline, paren,
 #   trailing; plus project.sonar_entries and project.coverage_gate). --compare reads that file and
@@ -443,6 +447,8 @@ def run_project(failures):
         has_py = any(p.endswith(".py") for p in list_files(root))
         found = [(root, ("unknown", "py" if has_py else "ts"))]
     warns, current = [], {}
+    base = parse_kv(compare_in) if compare_in else None
+    base_gate = base.get("project.coverage_gate") if base is not None else None
     sonar_props = 0
     for c, (stack, kind) in found:
         children = [x for x, _ in found if x != c and x.startswith(c + os.sep)]
@@ -452,7 +458,7 @@ def run_project(failures):
         print_app(label, m, app_values(m, lint, cov, sonar), lint, cov, sonar, sonar_file, False, warns, failures)
         if m["tests"] == 0:
             failures.append(f"{label}: zero test cases")
-        key = f"{stack}@{rel}"
+        key = f"{stack}@{'root' if rel == '.' else rel}"
         current.update({f"{key}.suppressions": m["supp"], f"{key}.multiline": m["runs"],
                         f"{key}.paren": m["paren"], f"{key}.trailing": m["trail"]})
         sonar_props += sum(len(v) for v in sonar.values())
@@ -465,6 +471,9 @@ def run_project(failures):
     gate_files = [d for d, _, dc in rows if dc]
     if gate_files:
         print(f"  coverage gate (diff-cover --fail-under=80): found in {', '.join(gate_files)}")
+    elif base_gate == 0:
+        print("  WARN: no CI file enforces the coverage gate (diff-cover --fail-under=80); the baseline recorded none either")
+        warns.append("project: no coverage gate in CI")
     else:
         failures.append("project: no CI file enforces the coverage gate (diff-cover --fail-under=80)")
     ci_entries = sum(len(e) for _, _, _, e in sonar_ci)
@@ -479,17 +488,20 @@ def run_project(failures):
             fh.writelines(f"{k}={v}\n" for k, v in sorted(current.items()))
         print(f"\nbaseline written to {baseline_out} ({len(current)} values)")
     if compare_in:
-        base = parse_kv(compare_in)
         print(f"\n== ratchet vs {compare_in} ==")
+        unmatched = []
         for k, v in sorted(base.items()):
             cur = current.get(k)
             if cur is None:
                 print(f"  {k}: not measured now (baseline {v})")
+                unmatched.append(k)
                 continue
             worse = cur < v if k.endswith("coverage_gate") else cur > v
             print(f"  {k}: {cur} (baseline {v}) {'WORSE' if worse else 'ok'}")
             if worse:
                 failures.append(f"ratchet: {k} {cur} is worse than baseline {v}")
+        if unmatched:
+            failures.append("ratchet: baseline keys with no match in this project (other stack or path?): " + ", ".join(unmatched))
     if warns:
         print(f"\n{len(warns)} WARN (report only, exit code unaffected): " + "; ".join(warns))
 
