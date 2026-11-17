@@ -1389,14 +1389,13 @@ check_template_security_defaults() {
     "add/auth/nestjs/template/src/modules/auth/jwt.strategy.ts|algorithms: \['HS256'\]|NestJS JWT algorithm whitelist" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|referrerPolicy: \{|NestJS helmet referrerPolicy" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|frameguard: .*action: 'deny'|NestJS frameguard deny default" \
-    "scaffold/nestjs/template/src/config/setups/security.setup.ts|\"'none'\"\]|NestJS frame-ancestors 'none' default" \
+    "scaffold/nestjs/template/src/config/setups/security.setup.ts|portal \?\? \"'none'\"|NestJS frame-ancestors 'none' fallback" \
     "scaffold/nestjs/template/src/main.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
     "scaffold/nestjs/template/src/main.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
     "scaffold/nestjs/template/package.json|\"nestjs-zod\"|NestJS nestjs-zod dependency" \
     "scaffold/fastapi/template/src/app.py|^class SecurityHeadersMiddleware|FastAPI SecurityHeadersMiddleware" \
     "scaffold/fastapi/template/src/app.py|add_middleware\(SecurityHeadersMiddleware\)|FastAPI SecurityHeadersMiddleware registered" \
     "scaffold/fastapi/template/src/app.py|if not api_settings\.TRUST_PROXY:|FastAPI proxy headers gated by TRUST_PROXY" \
-    "scaffold/fastapi/template/src/core/security_headers.py|frame-ancestors|FastAPI frame-ancestors" \
     "scaffold/fastapi/template/src/core/security_headers.py|portal or b\"'none'\"|FastAPI frame-ancestors 'none' default" \
     "scaffold/fastapi/template/src/core/security_headers.py|b\"x-frame-options\", b\"DENY\"|FastAPI X-Frame-Options DENY default" \
     "scaffold/nextjs/template/src/lib/security/frame-protection.ts|frame-ancestors 'none'|Next.js frame-ancestors 'none' default" \
@@ -1409,7 +1408,6 @@ check_template_security_defaults() {
     "scaffold/vite-react/template/nginx.conf.template|add_header X-Frame-Options|Vite nginx X-Frame-Options" \
     "scaffold/vite-react/template/nginx.conf.template|frame-ancestors \\$\{TC_FRAME_ANCESTORS\}|Vite nginx frame-ancestors" \
     "scaffold/nextjs/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |Next.js Dockerfile copies pnpm-workspace.yaml" \
-    "scaffold/nestjs/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |NestJS Dockerfile copies pnpm-workspace.yaml" \
     "scaffold/vite-react/template/Dockerfile|COPY .*pnpm-workspace\.yaml\* |Vite Dockerfile copies pnpm-workspace.yaml"; do
     file="$s/${row%%|*}"; what="${row##*|}"; pattern="${row#*|}"; pattern="${pattern%|*}"
     if [[ ! -f "$file" ]]; then missing+=$'\n'"$file: file not found ($what)"; continue; fi
@@ -1422,6 +1420,17 @@ check_template_security_defaults() {
       && missing+=$'\n'"$sc/nextjs/template/next.config.ts: sets CSP or X-Frame-Options; applyFrameProtection must be the only source"
   else
     missing+=$'\n'"$sc/nextjs/template/next.config.ts: file not found"
+  fi
+  # The NestJS Dockerfile has a build stage and a prod stage; both must copy pnpm-workspace.yaml.
+  f="$sc/nestjs/template/Dockerfile"
+  if [[ -f "$f" ]]; then
+    [[ $(grep -cE 'COPY .*pnpm-workspace\.yaml\* ' "$f") -ge 2 ]] \
+      || missing+=$'\n'"$f: NestJS Dockerfile must copy pnpm-workspace.yaml in both stages (need >= 2 COPY lines)"
+  else
+    missing+=$'\n'"$f: file not found"
+  fi
+  if [[ -d "$sc/nestjs/template/src" ]] && grep -rqE "from ['\"](class-validator|class-transformer)['\"]" "$sc/nestjs/template/src"; then
+    missing+=$'\n'"$sc/nestjs/template/src: imports class-validator/class-transformer; use nestjs-zod"
   fi
   if [[ -f "$sc/nestjs/template/package.json" ]]; then
     grep -qE '"class-validator"|"class-transformer"' "$sc/nestjs/template/package.json" \

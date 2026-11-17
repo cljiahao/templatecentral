@@ -6,7 +6,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOOK="$REPO_ROOT/scripts/post-edit-lint.sh"
 command -v jq >/dev/null 2>&1 || { echo "post-edit-lint.test: jq missing, skipped"; exit 0; }
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/post-edit-lint.XXXXXX")
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/post-edit-lint.XXXXXX") || exit 1
 TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 

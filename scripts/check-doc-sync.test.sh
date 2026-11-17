@@ -2,7 +2,7 @@
 # scripts/check-doc-sync.test.sh — check-doc-sync.sh passes on a synced fixture and fails on each drift.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+T=$(mktemp -d) || exit 1; trap 'rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 t() { # t <name> <want rc> <mutation cmd>
   local w="$T/$1"; mkdir -p "$w/skills/add/auth" "$w/skills/add/page" "$w/skills/scaffold"

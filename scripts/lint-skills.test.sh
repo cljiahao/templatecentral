@@ -1279,6 +1279,12 @@ fails security_defaults_next_origin_gate "$H_SEC" sec_next_origin "gated by TRUS
 fails security_defaults_next_deny "$H_SEC" sec_next_deny "X-Frame-Options DENY"
 fails security_defaults_vite_block_exotic "$H_SEC" sec_vite_exotic "blockExoticSubdeps"
 fails security_defaults_vite_envsh_deny "$H_SEC" sec_vite_envsh "X-Frame-Options DENY"
+sec_nest_fallback() { sed -i.bak "s/portal ?? \"'none'\"/portal ?? \"'self'\"/" "$S/scaffold/nestjs/template/src/config/setups/security.setup.ts"; }
+sec_nest_dockerfile_one() { perl -0pi -e 's/pnpm-workspace\.yaml\* //' "$S/scaffold/nestjs/template/Dockerfile"; }
+sec_nest_import() { printf "import { IsString } from 'class-validator';\n" >> "$S/scaffold/nestjs/template/src/main.ts"; }
+fails security_defaults_nest_frame_ancestors_fallback_only "$H_SEC" sec_nest_fallback "frame-ancestors 'none' fallback"
+fails security_defaults_nest_dockerfile_one_stage "$H_SEC" sec_nest_dockerfile_one "both stages"
+fails security_defaults_nest_class_validator_import "$H_SEC" sec_nest_import "imports class-validator"
 fails security_defaults_dockerfile_workspace "$H_SEC" sec_dockerfile "Dockerfile copies pnpm-workspace.yaml"
 
 # ── check_owasp_llm_sections_complete ────────────────────────────────────────────────────────

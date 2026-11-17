@@ -5,7 +5,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEASURE="$REPO_ROOT/scripts/measure-outcomes.sh"
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/measure-outcomes.XXXXXX")
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/measure-outcomes.XXXXXX") || exit 1
 trap 'chmod -R u+rw "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 PASS=0
@@ -105,9 +105,13 @@ for i in 1 2 3 4 5 6 7 8 9 10; do printf 'export const a%s = %s;\n' "$i" "$i"; d
 printf "it('a', () => {\n  expect(1).toBe(1);\n});\n" > "$P/test/a.test.ts"
 printf '// eslint-disable\n' > "$P/node_modules/x/i.ts"
 printf '// eslint-disable\n' > "$P/build/o.ts"
-out=$(bash "$MEASURE" "$P" 2>&1); check 0 $? "project mode passes on a small project (no CI files is not a failure)"
+out=$(bash "$MEASURE" "$P" 2>&1); check 1 $? "project without a CI coverage gate is a hard failure"
+has "$out" "no CI file enforces the coverage gate" "missing gate named"
+mkdir -p "$P/.github/workflows"
+echo 'run: pipx run diff-cover c.xml --fail-under=80' > "$P/.github/workflows/ci.yml"
+out=$(bash "$MEASURE" "$P" 2>&1); check 0 $? "project with tests and a gate passes"
 has "$out" "== nextjs (.) ==" "stack detected from project files"
-has "$out" "CI: no CI files found" "no CI stated"
+has "$out" "found in .github/workflows/ci.yml" "gate file named"
 MO_MAX_SUPPRESSIONS=0 bash "$MEASURE" "$P" >/dev/null 2>&1; check 0 $? "node_modules and build skipped"
 printf 'sonar.exclusions=**/gen/**, **/*.d.ts\nsonar.coverage.exclusions=src/main.ts \\\n  ,src/boot.ts\nsonar.cpd.exclusions=**/*.test.ts\n' > "$P/sonar-project.properties"
 out=$(bash "$MEASURE" "$P" 2>&1)
@@ -120,6 +124,81 @@ git -C "$P" init -q 2>/dev/null && { printf 'src/ignored.ts\n' > "$P/.gitignore"
   out=$(bash "$MEASURE" "$P" 2>&1); has "$out" "source files 1," ".gitignore honoured in a git work tree"; }
 rm -rf "$P/test"
 bash "$MEASURE" "$P" >/dev/null 2>&1; check 1 $? "project without tests fails"
+
+# project mode is a report: out-of-reference values WARN, exit code unaffected
+R="$TMP/rep"; mkdir -p "$R/src" "$R/test" "$R/.github/workflows"
+echo '{}' > "$R/next.config.ts"
+for i in 1 2 3 4 5 6 7 8 9 10; do printf 'export const a%s = %s; // x\n' "$i" "$i"; done > "$R/src/a.ts"
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do printf "it('t%s', () => {\n  expect(1).toBe(1);\n});\n" "$i"; done > "$R/test/a.test.ts"
+echo 'run: pipx run diff-cover c.xml --fail-under=80' > "$R/.github/workflows/ci.yml"
+out=$(bash "$MEASURE" "$R" 2>&1); check 0 $? "WARN values do not fail a project"
+has "$out" "WARN" "values outside the reference are marked"
+has "$out" "consolidate duplicate tests, not to delete coverage" "high ratio explained"
+has "$out" "OK: no hard failure" "report ends OK"
+
+# gate in one of many CI files is enough; the file is named
+mkdir -p "$R/.claude/hooks" "$R/.claude/.harness-base"
+echo 'run: x' > "$R/.github/workflows/lint.yml"; echo 'run: y' > "$R/.github/workflows/build.yml"
+out=$(bash "$MEASURE" "$R" 2>&1); check 0 $? "gate in one of several CI files passes"
+has "$out" "found in .github/workflows/ci.yml" "only the file with the gate is named"
+printf '// eslint-disable\n' > "$R/.claude/hooks/h.ts"; printf '// eslint-disable\n' > "$R/.claude/.harness-base/b.ts"
+out=$(MO_MAX_SUPPRESSIONS=0 bash "$MEASURE" "$R" 2>&1); lacks "$out" "suppressions                  1.00" ".claude/hooks and .harness-base are not scanned"
+
+# mixed-language project: each app counted in its own language only
+M="$TMP/mixed"; mkdir -p "$M/backend/src/static" "$M/backend/test" "$M/web/src" "$M/web/test" "$M/.github/workflows"
+echo 'fastapi' > "$M/backend/requirements.txt"; echo '{}' > "$M/web/next.config.ts"
+for i in 1 2 3 4 5; do printf 'def f%s():\n    return 1\n' "$i"; done > "$M/backend/src/a.py"
+for i in $(seq 1 50); do printf 'var a%s = 1;\n' "$i"; done > "$M/backend/src/static/app.js"
+printf 'def test_a():\n    assert True\n' > "$M/backend/test/test_a.py"
+for i in 1 2 3; do printf 'export const w%s = 1;\n' "$i"; done > "$M/web/src/a.ts"
+printf 'def not_counted():\n    pass\n' > "$M/web/src/x.py"
+printf "it('w', () => {\n  expect(1).toBe(1);\n});\n" > "$M/web/test/a.test.ts"
+echo 'run: pipx run diff-cover c.xml --fail-under=80' > "$M/.github/workflows/ci.yml"
+out=$(bash "$MEASURE" "$M" 2>&1); check 0 $? "mixed project passes"
+has "$out" "== fastapi (backend) ==" "python app reported on its own"
+has "$out" "== nextjs (web) ==" "ts app reported on its own"
+has "$out" "source files 1, source LOC 10," "python app ignores .js files"
+has "$out" "source files 1, source LOC 3," "ts app ignores .py files"
+
+# hard failure: zero test cases
+Z="$TMP/zero"; mkdir -p "$Z/src" "$Z/.github/workflows"; echo '{}' > "$Z/next.config.ts"; echo 'export const a = 1;' > "$Z/src/a.ts"
+echo 'run: pipx run diff-cover c.xml --fail-under=80' > "$Z/.github/workflows/ci.yml"
+out=$(bash "$MEASURE" "$Z" 2>&1); check 1 $? "zero test cases is a hard failure"
+has "$out" "zero test cases" "reason named"
+
+# --baseline then --compare ratchet
+B="$TMP/rat"; cp -R "$R" "$B"; rm -rf "$B/.claude"
+bash "$MEASURE" --baseline "$TMP/base.txt" "$B" >/dev/null 2>&1; check 0 $? "--baseline writes and exits 0"
+has "$(cat "$TMP/base.txt")" "nextjs@..suppressions=0" "baseline is plain key=value"
+has "$(cat "$TMP/base.txt")" "project.coverage_gate=1" "gate recorded"
+out=$(bash "$MEASURE" --compare "$TMP/base.txt" "$B" 2>&1); check 0 $? "--compare passes when nothing got worse"
+printf 'export const s = 1; // eslint-disable-line\n' >> "$B/src/a.ts"
+out=$(bash "$MEASURE" --compare "$TMP/base.txt" "$B" 2>&1); check 1 $? "--compare fails when suppressions rise"
+has "$out" "ratchet: nextjs@..suppressions" "regression named"
+cp -R "$R" "$TMP/rat2"; rm -rf "$TMP/rat2/.claude"
+printf '// a\n// b\n\nconst k = 1;\n' >> "$TMP/rat2/src/a.ts"
+bash "$MEASURE" --compare "$TMP/base.txt" "$TMP/rat2" >/dev/null 2>&1; check 1 $? "--compare fails when comment blocks rise"
+rm -rf "$TMP/rat3"; cp -R "$R" "$TMP/rat3"; rm -rf "$TMP/rat3/.claude" "$TMP/rat3/.github"
+bash "$MEASURE" --compare "$TMP/base.txt" "$TMP/rat3" >/dev/null 2>&1; check 1 $? "--compare fails when the coverage gate disappears"
+bash "$MEASURE" --compare "$TMP/missing.txt" "$B" >/dev/null 2>&1; check 2 $? "unreadable baseline exits 2"
+bash "$MEASURE" --baseline "$TMP/x.txt" >/dev/null 2>&1; check 2 $? "--baseline without a project is a usage error"
+
+# Sonar exclusions passed in the pipeline are reported with file:line
+S="$TMP/sonarci"; cp -R "$R" "$S"; rm -rf "$S/.claude"
+printf 'steps:\n  - script: sonar-scanner -Dsonar.exclusions=**/gen/**,**/*.d.ts -Dsonar.coverage.exclusions=src/main.ts\n  - task: SonarQubePrepare@5\n    inputs:\n      extraProperties: |\n        sonar.cpd.exclusions=**/*.test.ts\n' > "$S/azure-pipelines.yml"
+out=$(bash "$MEASURE" "$S" 2>&1)
+has "$out" "azure-pipelines.yml:2 sonar.exclusions: **/gen/**, **/*.d.ts" "-D exclusions listed with file:line"
+has "$out" "azure-pipelines.yml:2 sonar.coverage.exclusions: src/main.ts" "second -D key on the same line"
+has "$out" "azure-pipelines.yml:6 sonar.cpd.exclusions: **/*.test.ts" "extraProperties entry listed"
+has "$out" "passed in CI: 4" "CI entries counted"
+bash "$MEASURE" --baseline "$TMP/sb.txt" "$S" >/dev/null 2>&1
+has "$(cat "$TMP/sb.txt")" "project.sonar_entries=4" "CI Sonar entries recorded in the baseline"
+
+# TS test-case regex skips commented-out cases; it.each is one case
+T2="$TMP/tcc"; mkdir -p "$T2/src" "$T2/test" "$T2/.github/workflows"; echo '{}' > "$T2/next.config.ts"; echo 'export const a = 1;' > "$T2/src/a.ts"
+echo 'run: pipx run diff-cover c.xml --fail-under=80' > "$T2/.github/workflows/ci.yml"
+printf "// it('old', () => {});\n/* test('x', () => {}); */\nit.each([1, 2])('n %%s', () => {});\nit('real', () => {});\n" > "$T2/test/a.test.ts"
+out=$(bash "$MEASURE" "$T2" 2>&1); has "$out" "test cases 2," "commented-out cases skipped, it.each is one"
 
 # usage and crash exit codes
 bash "$MEASURE" "$TMP/nope" >/dev/null 2>&1; check 2 $? "unusable path exits 2"
