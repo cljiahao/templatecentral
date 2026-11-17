@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do
     *) [ -z "$PROJECT" ] || usage; PROJECT=$1; shift ;;
   esac
 done
-[ -n "$PROJECT" ] && [ -d "$PROJECT" ] || usage
+if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then usage; fi
 case "$LABEL" in before|after) ;; *) usage ;; esac
 P=$(cd "$PROJECT" && pwd -P) || usage
 if [ -n "$KEEP" ]; then
@@ -67,7 +67,6 @@ g() { GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false "$@"; }
 S=$(mktemp -d "${TMPDIR:-/tmp}/qbaseline.XXXXXX") || { echo "cannot create a scratch directory" >&2; exit 2; }
 # `limited` starts each background job in its own process group (set -m), so a signal reaches the tool's children too.
 CHILD=; WATCH=
-# shellcheck disable=SC2329
 cleanup() {
   local p
   if [ -n "$CHILD$WATCH" ]; then
@@ -76,7 +75,7 @@ cleanup() {
     for p in $CHILD $WATCH; do kill -KILL -- "-$p" 2>/dev/null; done
   fi
   case "${S:-}" in
-    */qbaseline.*) [ -d "$S" ] && rm -rf "$S" ;;
+    */qbaseline.*) if [ -d "$S" ]; then rm -rf "$S"; fi ;;
   esac
 }
 trap cleanup EXIT
@@ -463,4 +462,6 @@ row "scratch tool versions" "${TOOLS:-none (static mode)}"
 row "project tree after the run" "$TREE"
 
 printf '| Metric | %s |\n|---|---|\n%s' "$LABEL" "$ROWS"
+# Normal exit: clean up here as well as in the EXIT trap; the function is idempotent.
+cleanup
 exit 0
