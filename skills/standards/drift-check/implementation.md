@@ -42,9 +42,9 @@ Report the project and plugin versions, then the changelog lines since the insta
 
 ## Step 5 — Quality (opt-in)
 
-When reached from Step 4 (drift) or a quality request, ask first and state the cost: the measurements run the project's lint, typecheck, tests and coverage (up to 10 minutes each) and, where tools exist, complexity and duplication. Skip this step when the user declines.
+Ask first and state the cost: the run executes the project's tests with coverage plus lint, typecheck, complexity and duplication (up to 10 minutes per tool). Skip this step when the user declines.
 
-On yes, take the measurements in `cat "<skill-dir>/../migrate/general/quality-baseline.md"`, with its rules and without its report step. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else the baseline values) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
+On yes, load `cat "<skill-dir>/../migrate/general/quality-baseline.md"` and run its script. Print the metric table, then up to five worst offenders per category with file paths. If `docs/quality-baseline.md` exists, compare against its latest column (`after` if present, else the baseline values) and mark each metric that moved the wrong way. Name each metric that misses the target and recommend `templatecentral:migrate` for the fix.
 
 ## Step 6 — Dependency drift (optional)
 

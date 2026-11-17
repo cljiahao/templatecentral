@@ -187,6 +187,7 @@ jobs:
         run: bash scripts/test-template-copy.sh
       - name: Token counter tests
         run: bash scripts/count-load.test.sh
+<<<<<<< HEAD
       - name: Outcome measurement tests
         run: bash scripts/measure-outcomes.test.sh
       - name: Template outcome metrics (comments, suppressions, test band, CI gates)
@@ -197,6 +198,17 @@ jobs:
         run: bash scripts/check-doc-sync.test.sh
       - name: Doc sync (README, EXAMPLES, AGENTS capability row)
         run: bash scripts/check-doc-sync.sh
+=======
+      - name: Quality baseline script parses and passes shellcheck
+        run: |
+          set -euo pipefail
+          f=skills/migrate/general/quality-baseline.sh
+          [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
+          bash -n "$f"
+          shellcheck "$f"
+      - name: Quality baseline script tests
+        run: bash scripts/quality-baseline.test.sh
+>>>>>>> 756d0c3 (feat(migrate): bundle the quality baseline as a script and harden the quality pass)
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests

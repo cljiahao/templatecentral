@@ -19,6 +19,7 @@ d33f75d573493e46535431562a634bfc820abac99255296ca0d6bae19279dfef	skills/migrate/
 6221af3404985699b2973c74e78b3bfcb95b20b451adb93b47bfd69537e15d29	skills/migrate/database/nextjs.md	Step 6 — Create `src/integrations/database/migrate.ts`	0	typescript
 964536177d74a84a2d944d6277a36dcd444554b2ec21bb15cb122e45759036d1	skills/migrate/database/nextjs.md	Step 7 — Update `src/integrations/database/index.ts`	0	typescript
 bcbe89886d774fd454e93e146887439679957c043fe6f3299cc2f9c8b4fb04d4	skills/migrate/database/nextjs.md	Step 9 — Update query code in API routes and Server Components	0	typescript
+adee108920e9a32d921a20a1c2b30c58701fbbca418c709558ce182e6a53e674	skills/migrate/general/implementation.md	Phase 2 — Human Decision ⛔ GATE	0	-
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after the gate)	0	-
 9927eac45673a62f7f33c93c76d097fc948dc4fb1a4c8a623f408163d093f838	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after the gate)	1	markdown
 1b14ad6ef54edfb3096e056a0dc82a51f8b6f6149e7c354bcfe5cb538911c89f	skills/migrate/general/phase-4-upgrade.md	Phase 4 — Upgrade to the current harness (agent, autonomous after the gate)	2	markdown

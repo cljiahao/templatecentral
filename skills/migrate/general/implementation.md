@@ -14,10 +14,13 @@ Goal: bring an existing project up to the templateCentral standard — harness s
 ```bash
 cat "<skill-dir>/general/quality-baseline.md"
 ```
+It tells you to run `<skill-dir>/general/quality-baseline.sh`.
 
-**Quality pass** (only after the separate consent in Phase 3):
+**Quality pass** (only after the separate consent in Phase 3; the test and comment rules load with it, so the chain stays at two hops):
 ```bash
 cat "<skill-dir>/general/quality-pass.md"
+cat "<skill-dir>/../test/SKILL.md"
+cat "<skill-dir>/../standards/code-standards/comments.md"
 ```
 
 **Phase 4** — full harness seed / v4–v6 upgrade:
@@ -63,18 +66,45 @@ Take the stack from the marker or Phase 1.
 
 Several signals (likely a monorepo root) → ask which subdirectory to adopt first and work there. No signal → say so and exit. Ambiguous (for example `vite.config.ts` without the React plugin) → ask.
 
-## Phase 2 — Baseline, then gate ⛔
+## Phase 2 — Human Decision ⛔ GATE
 
-Run the baseline and print its report; nothing is written yet. Running the project's own lint, typecheck and tests is read-only measurement; when a command is missing, record `n/a` and do not invent one. Then ask one question, do not proceed before the answer, and use the same three choices on every route:
+Run the baseline (`quality-baseline.sh` reads the project and writes nothing) and print its table. Do not proceed until the user responds. Present exactly this message, substituting the detected stack, the marker status line (`This project has no templateCentral marker.`, or its current marker and what it means) and the route's A line from the table below it:
 
-- **A. Adopt** — the harness step for this route (Phase 4 seed or upgrade, or 5d): choosing A is the one approval for it, 5d does not ask again. Then a separate question about the quality pass (Phase 3).
-  - Marker route none or `@6.0.0`+ without `harness.json`: A seeds the full harness. `@5.x` / `@4.x`: A re-seeds or upgrades the harness. `@6.0.0`+ with `harness.json`: A runs the 5d re-sync.
-- **B. Light** — marker plus the baseline report only; nothing else changes.
-- **C. Stop** — write nothing.
+```
+⚠️ <marker status>
+
+Detected stack: <stack>
+
+Baseline: <the metric table above>
+
+Choose how to proceed:
+
+A) Adopt
+   <A line for this route>
+   The harness step shows its own plan first and needs its own yes.
+
+B) Light
+   Adds the marker and docs/quality-baseline.md. Your code and config
+   stay as they are.
+
+C) Stop
+   Exit without changes. Run `templatecentral:scaffold` to start a fresh
+   project, or proceed manually.
+
+Which would you prefer? (A / B / C)
+```
+
+| Route | A line |
+|---|---|
+| none, or `@6.0.0` or later without `.claude/harness.json` | Seeds the full harness (hooks, skills, CI gates, docs). |
+| `@5.x` without `harness.json`, or `@4.x` and earlier | Upgrades the harness to the current schema (v4 adds the harness layer, v5 converts skills to directory form and fixes hooks). |
+| `@5.x` or `@6.0.0` or later with `harness.json` | Re-syncs the seeded files with a 3-way merge (Phase 5, Step 5d). |
+
+Choosing A selects the route only. The harness step then presents its dry-run plan (per file: action and diff preview) and writes nothing until the user says yes to that plan. Afterwards a separate question covers the quality pass (Phase 3).
 
 ## Phase 3 — Execute (agent, autonomous after the gate)
 
-**A** — Run the route's harness step, adapting to the CI, sharding and coverage thresholds the baseline found (never duplicating a pipeline, never lowering a threshold). Write the baseline to `docs/quality-baseline.md`. Then ask separately whether to run the quality pass, which changes code and tests. On yes, load and follow `quality-pass.md` (this is its only trigger), then add an `after` column to `docs/quality-baseline.md` from a full re-measurement and print the before/after table.
+**A** — Run the route's harness step, adapting to the CI, sharding and coverage thresholds the baseline found (never duplicating a pipeline, never lowering a threshold). Write the baseline to `docs/quality-baseline.md`. Then ask separately whether to run the quality pass, which changes code and tests and needs a clean tree: commit the migration changes only on the user's explicit instruction. On yes, load and follow `quality-pass.md` (this is its only trigger), then run `quality-baseline.sh <project-dir> --label after`, add its column as `after` in `docs/quality-baseline.md` and print the before/after table.
 
 **B** — Set line 1 of `AGENTS.md` to the marker (create the file if absent) and write `docs/quality-baseline.md`. Add a short list of structural differences between the project and the Architecture section of `<skill-dir>/../../.claude/rules/<stack>.md`. Return control to the invoking skill, which continues from Step 1 and reviews generated files where the layout differs.
 

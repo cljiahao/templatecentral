@@ -4,51 +4,34 @@
 
 # Quality baseline (measure only)
 
-Measure the project as it stands; change no source, config or CI file. Run from the project root, or from each package of a monorepo, and report per package.
-
 **Target.** Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%. Cognitive complexity 15 is the rule threshold behind "0 new issues".
 
-**Rules of the run.**
-- Call each tool directly, with the arguments below. Never run a project script whose body contains `--fix` or `--write`. Use the project's own lint targets and config, and read its `package.json` or `pyproject.toml` for them.
-- Write machine output with `-o <file>` (or the tool's output flag) into `$TMPDIR`, never parse another command's stdout. A missing tool or command is `n/a`, never a guess.
-- Limit each command to 10 minutes and record `timeout`. Before and after the run compare `git status --porcelain`; delete only the files the run created.
-- Pin the scratch tools to exact versions and record them in the report: for `pnpm add -D --save-exact`, read the resolved versions with `pnpm ls --depth 0`; for jscpd, pick one release at least two weeks old.
+## When to run
 
-## Commands
+- Before any write (`implementation.md` Phase 2), with `--label before`.
+- After a quality pass, with `--label after`, to fill the `after` column.
+- From `standards/drift-check` Step 5, with the label `before` and no file written.
 
-Set `TMPDIR` to a writable directory first. The `jq` one-liner is the number; if `jq` is missing, use the fallback.
+## Run
 
-| Metric | TypeScript stacks (pnpm) | FastAPI (virtualenv active) |
-|---|---|---|
-| Lint | `pnpm exec eslint <project lint targets> -f json -o "$TMPDIR/eslint.json"`; count `jq '[.[].messages\|length]\|add' "$TMPDIR/eslint.json"`; fallback `node -e "console.log(require(process.argv[1]).reduce((n,f)=>n+f.messages.length,0))" "$TMPDIR/eslint.json"` | `ruff check --output-format json -o "$TMPDIR/ruff.json" .`; count `jq length "$TMPDIR/ruff.json"`; fallback `python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$TMPDIR/ruff.json"` |
-| Types | `pnpm exec tsc --noEmit` (error count = `error TS` lines) | `pyright` (or the project's `mypy`) |
-| Tests and runtime | `pnpm exec vitest run --reporter=json --outputFile="$TMPDIR/vitest.json"`; read `jq '{tests:.numTotalTests,failed:.numFailedTests}'`; time is wall clock | `python -m pytest -q` |
-| Coverage | `pnpm exec vitest run --coverage --coverage.reporter=json-summary --coverage.reportsDirectory="$TMPDIR/cov"`; `jq .total.lines.pct "$TMPDIR/cov/coverage-summary.json"` (Jest: `pnpm exec jest --coverage`) | `python -m pytest --cov=<src dir> --cov-report=term --cov-report=xml:"$TMPDIR/cov.xml"` (needs `pytest-cov`) |
-| Complexity (> 15) | the project's `sonarjs/cognitive-complexity` if configured; else a scratch run below | `ruff check --isolated --select C901 --config 'lint.mccabe.max-complexity = 15' --output-format json -o "$TMPDIR/c901.json" .` run in the scratch copy; count as for lint (cyclomatic proxy, not cognitive) |
-| Duplication | `pnpm dlx jscpd@<exact version> --reporters json --output "$TMPDIR/jscpd" --ignore "**/node_modules/**,**/dist/**" src`; `jq .statistics.total.percentage "$TMPDIR/jscpd/jscpd-report.json"` | `npx jscpd@<exact version> --reporters json --output "$TMPDIR/jscpd" --ignore "**/.venv/**,**/__pycache__/**" <src dir>` (`npx` replaces `pnpm dlx` on a Python project) |
-
-**Scratch copy** (complexity runs; copies the working tree, including uncommitted and untracked files, but not ignored ones):
+From the project root, or once per package of a monorepo, with the project's virtualenv active for FastAPI:
 
 ```bash
-mkdir -p "$TMPDIR/scratch" && git ls-files -z --cached --others --exclude-standard | tar --null -T - -cf - | tar -x -C "$TMPDIR/scratch"
+bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --label before
 ```
 
-TypeScript: in `$TMPDIR/scratch` run `pnpm add -D --ignore-workspace --save-exact eslint typescript-eslint eslint-plugin-sonarjs`, write `cc.eslint.config.mjs` that sets only `sonarjs/cognitive-complexity` to `['error', 15]` with the `typescript-eslint` parser for `**/*.{ts,tsx}` and ignores `**/node_modules/**` and `**/dist/**`, then `pnpm exec eslint -c cc.eslint.config.mjs . -f json -o "$TMPDIR/cc.json"` and count with `jq '[.[].messages[]\|select(.ruleId=="sonarjs/cognitive-complexity")]\|length' "$TMPDIR/cc.json"`. If the lockfile or install blocks the scratch run, record `n/a`.
+From the drift-check skill the path is `<skill-dir>/../migrate/general/quality-baseline.sh`. The script reads and writes nothing in the project, creates and removes its own scratch directory, never runs a project script, and calls each tool directly with the project's own config. It prints one markdown table; exit 2 is a usage error. A run can take several minutes; each tool is limited to 10 minutes.
 
-## Counts
+## Read the output
 
-Exclude lockfiles, generated code, fixtures and snapshots. Run from the package root.
+- A number is the measurement. `n/a (reason)` means the tool or its input is absent; record it as it is, never estimate it. In the report, name the missing tool and offer to add it in the quality pass (a dependency change needs its own confirmation).
+- `complexity over 15` for FastAPI is cyclomatic (Ruff C901), a proxy for Sonar's cognitive rule.
+- `test cases` is a static count; a parametrized case counts once.
+- `project tree after the run` must say `unchanged`. If it says `CHANGED`, stop, show `git status`, and tell the user which files a measurement wrote.
+- The tool versions row is the pin; a later `after` run uses the same ones.
 
-- **Test:source LOC ratio:** with `T='(\.(test|spec)\.tsx?$|(^|/)(__tests__|tests?)/)'` for TypeScript (`T='(^|/)(test_[^/]*|[^/]*_test)\.py$|(^|/)tests?/'` for FastAPI): `t=$(git ls-files | grep -E "$T" | xargs cat | grep -c .)`, `s=$(git ls-files | grep -E '\.(ts|tsx|py)$' | grep -vE "$T" | xargs cat | grep -c .)`, ratio `t/s`.
-- **Suppressions:** `git grep -cE 'eslint-disable|noqa|type: ignore|@ts-expect-error|@ts-ignore|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover' -- . ':!*lock*' | awk -F: '{s+=$NF} END{print s+0}'`.
-- **Exclusions:** `git grep -nE 'coverage\.exclude|collectCoverageFrom|coverageThreshold|coveragePathIgnorePatterns|\[tool\.coverage|omit *=|sonar\.(coverage\.|cpd\.)?exclusions|ignores *:' -- . ':!*lock*'`; report the lines.
-- **Comment noise:** block comments of 2 or more lines and runs of 3 or more consecutive line comments outside the leading licence header; report any other pattern you see (long parentheticals, ADR text repeated in comments) without scoring it.
-- **Sonar:** read `sonar-project.properties`, the pipeline step and any local report on disk (`.scannerwork/`); call no remote service.
+## Around the run
 
-## Existing setup
-
-Record what later steps adapt to and never replace: test sharding or matrix jobs, a coverage threshold above 80% (keep it), an existing Sonar or quality pipeline, workspace layout, another git-hook manager.
-
-## Report
-
-Print one table (metric, value) per package, then the exclusions and up to five worst offenders per category with file paths, and the tool versions used. `implementation.md` writes it to `docs/quality-baseline.md` (under 60 lines) in Phase 3; this guide never writes it, and a quality pass adds an `after` column there. A metric that moved the wrong way is a regression.
+- Record what later steps adapt to and never replace: test sharding or matrix jobs, a coverage threshold above 80% (keep it), an existing Sonar or quality pipeline (read `sonar-project.properties`, the pipeline step and any local `.scannerwork/` report; call no remote service), workspace layout, another git-hook manager.
+- For each non-zero count, list up to five worst offenders with file paths from the tool's own output (run that tool once, read-only).
+- Print one table per package. The report written to `docs/quality-baseline.md` stays under 60 lines.
