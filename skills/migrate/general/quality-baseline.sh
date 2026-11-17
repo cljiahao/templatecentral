@@ -415,8 +415,15 @@ if [ -n "$KEEP" ] && [ "$MODE" = full ]; then
   KEPT="n/a (no coverage report)"
   for x in "$S/cov/cobertura-coverage.xml" "$S/coverage.xml"; do
     [ -f "$x" ] || continue
-    if [ -L "$KEEP/cobertura.xml" ]; then KEPT="n/a ($KEEP/cobertura.xml is a symlink)"; break; fi
-    mkdir -p "$KEEP" && cp "$x" "$KEEP/cobertura.xml" && { KEPT="$KEEP/cobertura.xml"; break; }
+    # Create and resolve the directory, re-check it, copy to a temporary name inside it, then rename into place.
+    # rename(2) replaces a destination symlink instead of following it, and the link is refused first anyway.
+    mkdir -p "$KEEP" || { KEPT="n/a (cannot create $KEEP)"; break; }
+    KEEP=$(cd "$KEEP" && pwd -P) || { KEPT="n/a (cannot resolve $KEEP)"; break; }
+    if inside_project "$KEEP"; then KEPT="n/a ($KEEP is inside the project)"; break; fi
+    tmpcov=$(mktemp "$KEEP/.cobertura.XXXXXX") || { KEPT="n/a (cannot write in $KEEP)"; break; }
+    if [ -L "$KEEP/cobertura.xml" ]; then rm -f "$tmpcov"; KEPT="n/a ($KEEP/cobertura.xml is a symlink)"; break; fi
+    if cp "$x" "$tmpcov" && mv -f "$tmpcov" "$KEEP/cobertura.xml"; then KEPT="$KEEP/cobertura.xml"; else rm -f "$tmpcov"; KEPT="n/a (could not write $KEEP/cobertura.xml)"; fi
+    break
   done
 fi
 

@@ -216,5 +216,9 @@ mkdir -p "$T/keep2"; echo victim >"$T/victim"; ln -s "$T/victim" "$T/keep2/cober
 outl=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/keep2")
 contains "a symlinked cobertura.xml is not written through" "is a symlink" "$(value 'coverage xml kept' "$outl")"
 check "the symlink target is untouched" victim "$(cat "$T/victim")"
+check "a refused write leaves no temporary file" 0 "$(find "$T/keep2" -name '.cobertura.*' | wc -l | tr -d ' ')"
+outk=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/keep")
+check "a rerun overwrites the kept file" "$(cd "$T/keep" && pwd -P)/cobertura.xml" "$(value 'coverage xml kept' "$outk")"
+check "a successful write leaves no temporary file" 0 "$(find "$T/keep" -name '.cobertura.*' | wc -l | tr -d ' ')"
 
 exit $fail
