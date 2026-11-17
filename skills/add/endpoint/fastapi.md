@@ -123,38 +123,31 @@ router.include_router(my_thing.router, tags=[APITags.MY_TAG])
 
 ### 5. Add Tests
 
-Create `test/test_api/test_my_thing.py`:
+Apply the test-value rule (`docs/CONSTITUTION.md` §4): one test per distinct behaviour, parametrize sibling inputs. Create `test/test_api/test_my_thing.py`:
 
 ```python
-import pytest
 from fastapi.testclient import TestClient
 
 
-@pytest.mark.unit
 def test_create_my_thing_success(client: TestClient) -> None:
-    """POST /my-thing returns expected result."""
     response = client.post("/my-thing", json={"fieldName": "value"})
     assert response.status_code == 201
     assert response.json()["result"] == "VALUE"
 ```
 
-When the route is protected (see Rules), pass the `auth_headers` fixture from `templatecentral:add` (auth) and pin the guard with a 401 test:
+When the route is protected (see Rules), pass the `auth_headers` fixture from `templatecentral:add` (auth) and keep one 401 test for the route (a shared guard is tested once, not per route):
 
 ```python
-@pytest.mark.unit
 def test_create_my_thing_success(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
-    """POST /my-thing returns expected result."""
     response = client.post(
         "/my-thing", json={"fieldName": "value"}, headers=auth_headers
     )
     assert response.status_code == 201
 
 
-@pytest.mark.unit
 def test_create_my_thing_requires_auth(client: TestClient) -> None:
-    """POST /my-thing without a token is 401."""
     assert client.post("/my-thing", json={"fieldName": "value"}).status_code == 401
 ```
 
@@ -168,7 +161,7 @@ After creating all files:
 
 ## Rules
 
-- **Tests are mandatory** — never add or change an endpoint, service, or router without new or updated pytest coverage under `test/` in the same change.
+- **Tests ride with the change** — new or changed behaviour gets a test in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
 - **Services contain business logic** — parse schemas → process → serialize response.
 - **One service function per endpoint**.
 - **Apply auth by default when the project has it** — if `src/api/dependencies/auth.py` exists, add the project's auth dependency (`user_id: Annotated[str, Depends(get_current_user)]` — Ruff `FAST002` rejects the bare `= Depends(...)` default) to new endpoints unless the route is deliberately public. Use `status_code=201` on create endpoints.

@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
-# Stop — run the test suite; exit 2 (stderr to Claude) forces a fix before the turn ends.
-# stop_hook_active guard: prevents re-entry when Claude re-runs after a Stop exit-2 block.
+# Stop — typecheck + run only the tests related to changed files; exit 2 (stderr to Claude) forces a fix.
+# The full suite runs in pre-push and CI. stop_hook_active guard prevents re-entry after an exit-2 block.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
 input=$(cat)
 active=$(printf '%s' "$input" | node -e "let b='';process.stdin.on('data',c=>b+=c);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(b||'{}').stop_hook_active===true?'true':'false')}catch(e){process.stdout.write('false')}})" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
-# Nothing uncommitted (no tracked diff vs HEAD, no new untracked files) → nothing new to test this turn.
-if git rev-parse --verify -q HEAD >/dev/null 2>&1 && git diff --quiet HEAD -- . 2>/dev/null \
-   && [ -z "$(git ls-files --others --exclude-standard 2>/dev/null | head -1)" ]; then
-  exit 0
-fi
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+# Working-tree code files (tracked diff plus untracked) present on disk.
+files=$( { git diff --name-only --relative --diff-filter=d HEAD; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+set --
+while IFS= read -r f; do
+  case "$f" in *.ts|*.tsx|*.mts|*.cts|*.js|*.jsx|*.mjs|*.cjs) [ -f "$f" ] && set -- "$@" "$f" ;; esac
+done <<EOF2
+$files
+EOF2
+[ "$#" -gt 0 ] || exit 0
 command -v pnpm >/dev/null 2>&1 || { echo "pnpm unavailable — skipping Stop gate" >&2; exit 0; }
-OUTPUT=$(pnpm test 2>&1); EC=$?
+OUTPUT=$(pnpm exec tsc --noEmit --incremental 2>&1); EC=$?
+if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
+pnpm exec vitest --version >/dev/null 2>&1 || { echo "vitest unavailable — skipping Stop gate" >&2; exit 0; }
+OUTPUT=$(pnpm exec vitest related --run --passWithNoTests "$@" 2>&1); EC=$?
 if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
 exit 0

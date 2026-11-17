@@ -432,6 +432,7 @@ case "$*" in
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
   "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "exec vitest related --run --passWithNoTests"*) echo "related $*" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
 esac
 exit 0
 MOCK
@@ -439,9 +440,12 @@ cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
   "-m pyright --version") echo pyright 1.1; exit 0 ;;
-  "-m pyright src/") echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
+  "-m pyright src/") [ -f "$MOCK_TSC_OK" ] && exit 0
+    echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest -q test/test_a.py") echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest -q --lf --lfnf=none") echo "pytest $*" >> "$MOCK_LOG"; exit 0 ;;
 esac
 exit 0
 MOCK
@@ -507,6 +511,28 @@ git -C "$PROJ" "${GIT_ID[@]}" commit -qm gitignore
 touch "$PROJ/ignored.log"
 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check 0 "$EC" "stop-checks.ts treats a gitignored-only change as clean"
+# Related-only runs: docs-only change runs nothing; changed code runs only its related tests.
+: > "$MOCK_LOG"
+echo '# notes' > "$PROJ/notes.md"
+for v in ts py; do
+  run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{}'
+  check 0 "$EC" "stop-checks.$v docs-only change skips everything"
+done
+check no "$(ok_if test -s "$MOCK_LOG")" "stop-checks docs-only change runs no tool"
+rm -f "$PROJ/notes.md"
+touch "$MOCK_TSC_OK"
+echo 'export const a = 1' > "$PROJ/a.ts"
+run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'related --run --passWithNoTests a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
+rm -f "$PROJ/a.ts"
+mkdir -p "$PROJ/src" "$PROJ/test"
+echo 'x = 1' > "$PROJ/src/a.py"
+echo 'def test_a(): pass' > "$PROJ/test/test_a.py"
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest -q test/test_a.py' "$MOCK_LOG")" "stop-checks.py runs the test file matching a changed module"
+rm -f "$PROJ/src/a.py" "$PROJ/test/test_a.py"
+rm -rf "$PROJ/src" "$PROJ/test" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
 # ── post-edit-comment-check.sh ────────────────────────────────────────────────

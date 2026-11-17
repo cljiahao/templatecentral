@@ -255,7 +255,7 @@ import { BaseModule, ExampleModule, TaskModule } from './modules';
 
 ### 9. Add Tests
 
-Create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
+Apply the test-value rule (`docs/CONSTITUTION.md` §4): extend an existing spec when one covers the module. Otherwise create `test/modules/<name>.controller.spec.ts` (`<name>` = module name, e.g. `task`):
 
 ```typescript
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -299,7 +299,7 @@ After creating all files:
 
 ## Rules
 
-- **Tests are mandatory** — never add or change a module's HTTP surface (controller/service/repository) without new or updated Vitest tests in `test/` in the same change.
+- **Tests ride with the change** — new or changed behaviour gets a Vitest test in `test/` in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
 - Register the module in `app.module.ts` and export it from `modules/index.ts`
 
 ## After Writing Code

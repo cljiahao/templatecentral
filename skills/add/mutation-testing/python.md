@@ -3,7 +3,7 @@
      prereq: Stack identified as FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Mutation Testing (mutmut)
 
-Report-only mutation testing with mutmut.
+Report-only mutation testing with mutmut. Run it on changed modules or one named module (`mutmut run "<module>*"`), not as a blanket gate.
 
 > **Report-only by default.** The CI job uses `continue-on-error: true` — results appear in output without failing the build. To enforce a floor, run `mutmut export-cicd-stats` and threshold `killed / (total - skipped)` from `mutants/mutmut-cicd-stats.json` (`mutmut results` only lists surviving mutants).
 

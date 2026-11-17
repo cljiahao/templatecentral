@@ -22,9 +22,15 @@ an explicit `## Human Approval Override` section in the PR description.
 
 ## 4. Testing Invariants
 
-- New services must have integration tests (success, error, at least one edge case).
-- New API routes must have route tests covering 200 and at least one error path, plus 401 once
-  authentication exists.
+**Test-value rule** — the one rule for what to test; skills and `AGENTS.md` point here.
+
+- Test behaviour that can regress. One test per distinct behaviour.
+- Parametrize sibling cases (`it.each`, `pytest.mark.parametrize`) instead of copy-pasting them.
+- Before adding a test, check whether an existing one already covers the behaviour; extend it.
+- No tests for constants, types, re-exports, framework behaviour, or mocks asserting themselves.
+- Meet the changed-line coverage gate (80%) with behaviour tests, never by excluding files or adding ignore pragmas.
+- Security minimum: an authenticated route keeps one unauthenticated-rejected test. Shared auth guards are tested once, not per route.
+- Scaffolded template code ships with its own tests; add tests only for code you add or change.
 - CI must stay green — no PR may be merged with failing tests.
 
 ## 5. Git & PR Invariants

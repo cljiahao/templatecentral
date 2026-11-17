@@ -119,9 +119,9 @@ export const API_ROUTES = {
 } as const;
 ```
 
-### 5. Add tests (mandatory)
+### 5. Add tests
 
-Create Vitest files under `test/api/` mirroring the route structure. Import handlers from the route module (same pattern as `test/api/health.test.ts`).
+Apply the test-value rule (`docs/CONSTITUTION.md` §4). Create Vitest files under `test/api/` mirroring the route structure, or extend the existing file. Import handlers from the route module (same pattern as `test/api/health.test.ts`).
 
 Example for `src/app/api/projects/route.ts`:
 
@@ -153,7 +153,7 @@ describe('POST /api/projects', () => {
 });
 ```
 
-Cover success and every validation/error path; run `pnpm test`.
+One test per distinct behaviour (parametrize sibling invalid inputs with `it.each`); run `pnpm test`.
 
 ### 6. Validate
 
@@ -173,7 +173,7 @@ Build and tests pass; the route answers correctly via `curl` or the browser.
 
 ## Rules
 
-- **Tests are mandatory** — never add or change `src/app/api/**` without new or updated tests under `test/api/` in the same change.
+- **Tests ride with the change** — new or changed behaviour under `src/app/api/**` gets a test under `test/api/` in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
 - Keep handlers thin; business logic lives elsewhere
 - Use `handleApiError()` for errors; do not return raw errors or stack traces
 - Use `NextResponse.json()` for all responses

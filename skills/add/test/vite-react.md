@@ -3,6 +3,8 @@
      prereq: Stack = Vite + React. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React
 
+Apply the test-value rule (`docs/CONSTITUTION.md` §4): test behaviour that can regress, one test per behaviour, parametrize siblings, extend an existing test before adding one.
+
 ### Steps
 
 #### Step 0 — Verify context
@@ -64,13 +66,9 @@ describe('ProjectCard', () => {
     description: 'First project',
   };
 
-  it('renders the project name', () => {
+  it('renders the project name and description', () => {
     render(<ProjectCard project={mockProject} />);
     expect(screen.getByText('Alpha')).toBeInTheDocument();
-  });
-
-  it('renders the project description', () => {
-    render(<ProjectCard project={mockProject} />);
     expect(screen.getByText('First project')).toBeInTheDocument();
   });
 });
@@ -245,8 +243,8 @@ Confirm the build succeeds and all tests pass.
 - Prefer `userEvent.setup()` over `fireEvent`
 - Reset in `afterEach`: `vi.resetAllMocks()` when the file uses `vi.fn()` / `vi.mock` (`vi.restoreAllMocks()` only undoes `vi.spyOn`, so queued values leak), `vi.restoreAllMocks()` for `vi.spyOn`, plus `vi.unstubAllGlobals()` after `vi.stubGlobal`
 - Fresh `QueryClient` per test
-- Test what the user sees or the caller gets, not implementation details
-- Test your use of third-party code, not its behavior
+- Test what the user sees or the caller gets; test your use of third-party code, not its behavior
+- `it.each` for sibling inputs; no snapshot or markup tests of static presentation
 - Tests do not share mutable state
 
 ## After Writing Code

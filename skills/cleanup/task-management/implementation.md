@@ -19,7 +19,7 @@ Skip this protocol when:
 - Single-file changes (rename, add a constant, fix a typo)
 - The user asks for something quick and specific
 
-For **test coverage workflow**, run the writing pass and the reviewing pass as separate AI sessions: one session writes the tests, a fresh session reviews them against the implementation without the first session's context. Complementary to this protocol, not a replacement.
+For **test work**, write only what the test-value rule (`docs/CONSTITUTION.md` §4) calls for. A fresh session may review the tests against the implementation, checking for duplicated or no-value cases to merge or delete, not for more coverage. Complementary to this protocol, not a replacement.
 
 ## The 6 Steps
 

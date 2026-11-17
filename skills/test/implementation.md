@@ -4,9 +4,9 @@
 
 # Test Agent
 
-Write tests for newly added code using the stack's `templatecentral:add (test)` skill conventions. Run the full test suite. Report failures with context.
+Write the few tests that protect behaviour you added or changed, run the suite, report. Apply the test-value rule in `docs/CONSTITUTION.md` §4 (migrated projects without it: one test per distinct behaviour, parametrize siblings, extend an existing test before adding one, no tests of constants/types/re-exports/framework code, reach the 80% changed-line gate through behaviour only).
 
-**Called by `templatecentral:scaffold`:** only run the existing suite (step 4) and report (step 5). Write no new tests and do not load `templatecentral:add (test)`: every file is a copied template, and the template's own tests cover it. Report `Tests written: none (scaffold run)`.
+**Called by `templatecentral:scaffold`:** run the existing suite only (step 4) and report `Tests written: none (scaffold run)`. Template code ships with its own tests; do not load `templatecentral:add (test)`.
 
 ## Stack Detection
 
@@ -15,45 +15,36 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 ## Steps
 
 1. Detect stack
-2. Load the stack's test conventions via `templatecentral:add (test)`
-3. Identify code added in this session and write tests for it following those conventions
-4. Run the full test suite:
+2. Load the stack's conventions via `templatecentral:add (test)`
+3. For code added or changed this session: list its distinct behaviours, check which existing tests already cover them, extend those, write new tests only for the gap
+4. Run the suite:
    - Next.js / Vite-React / NestJS: `pnpm test`
    - FastAPI: `python -m pytest test/ -q`
-5. Report results (see Reporting below)
+5. Report (see Reporting)
+
+## Dedupe pass
+
+Run when the suite is slow or large, or when asked. Behaviour stays; case count drops.
+
+1. Measure: case count, runtime, and test-to-source line ratio. Record coverage first (`pnpm test:ci` / `pytest --cov=src`).
+2. Find tests exercising the same behaviour: near-identical bodies, same function with one changed input, one assertion per case across a table of inputs, tests of constants/types/re-exports/framework code, mocks asserting themselves.
+3. Merge sibling cases into `it.each` / `pytest.mark.parametrize`. Delete redundant and no-value tests. Split nothing back out.
+4. Re-run coverage. Changed-line coverage and each file's covered lines must not drop; if one does, restore the test that covered them.
+5. Report before/after counts and runtime. Never lower a gate, exclude files, or add ignore pragmas to compensate.
 
 ## Reporting
 
-**On success:**
 ```
-Test agent — Next.js
+Test agent — <stack>
 
 Tests written:
-- test/api/projects.test.ts (6 tests — GET /api/projects, POST /api/projects, error cases)
+- <file> (<n> tests — behaviours covered)
+Extended: <file> (<what>)
 
-Suite: 42 passed, 0 failed
+Suite: <passed> passed, <failed> failed
 ```
 
-**On failure:**
-```
-Test agent — Next.js
-
-Tests written:
-- test/api/projects.test.ts (6 tests)
-
-Suite: 39 passed, 3 failed
-
-Failures:
-- test/api/projects.test.ts:34 — POST /api/projects returns 400 on missing name
-  Expected: 400
-  Received: 500
-  Error: Cannot read properties of undefined (reading 'name')
-```
-
-Rules:
-- List every new test file with test count and brief description
-- Every failure: `file:line — test description`, expected vs received, error message
-- Do not auto-fix failing tests — report only
+On failure add, per failure: `file:line — test name`, expected vs received, error message. Do not auto-fix failing tests — report only.
 
 ## Callers
 
