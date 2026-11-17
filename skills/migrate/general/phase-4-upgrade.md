@@ -33,7 +33,7 @@ With the Edit tool, replace `__TC_PROJECT_TITLE__` with the project title (one l
 
 For fastapi, nestjs and vite-react: keep the existing content and set line 1 to `<!-- templateCentral: <stack>@6.0.0 -->`. The marker must be final here: Step 4f hashes `AGENTS.md`, so a later edit leaves a stale `origin_hash`. Step G writes the `## AI Harness` tail between its `templatecentral-tail` markers; write nothing of it by hand.
 
-Every stack's rules section must carry the comment doctrine; if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Lint alignment is not optional: the quality pass (`quality-pass.md`) merges the scaffold's lint rules into the existing config after the seed, without overwriting project rules.
+Every stack's rules section must carry the comment doctrine; if absent, add: *"Comments explain why, not what — no commented-out code, no change-narration; own-line over trailing. See `templatecentral:standards (code-standards)`."* Lint alignment belongs to the opt-in quality pass (`quality-pass.md`), not to this seed; do not change the project's lint config here.
 
 **Step 4c: Create `CLAUDE.md`**
 

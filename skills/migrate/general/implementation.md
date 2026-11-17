@@ -47,7 +47,7 @@ Read `AGENTS.md` line 1.
 | none | Phase 1, baseline, gate |
 | `@6.0.0` or later, `.claude/harness.json` present | Phase 5 (5a–5c); a *clean* Phase 5 (every file `UNCHANGED`, plugin version equals `templatecentral_version`, `@AGENTS.md` import present) ends there; otherwise baseline, gate with 5d as the A step |
 | `@6.0.0` or later, no `.claude/harness.json` | adopted, never seeded: baseline, gate with the seed as the A step |
-| `@5.x` | hooks are inert (array-valued `command`, which Claude Code skips); baseline, gate with a re-seed in exec form (`"command"` + `"args"`, `${CLAUDE_PROJECT_DIR}` paths) as the A step |
+| `@5.x` | hooks are inert (array-valued `command`, which Claude Code skips). With `.claude/harness.json`: baseline, gate with Phase 5 5d as the A step; 5d sets the marker first, before anything hashes `AGENTS.md`. Without it: baseline, gate with a re-seed in exec form (`"command"` + `"args"`, `${CLAUDE_PROJECT_DIR}` paths) as the A step, marker first |
 | `@4.x` or earlier | baseline, gate with the upgrade (v4 adds the harness layer, v5 converts skills to directory form and fixes hooks) as the A step |
 
 Take the stack from the marker or Phase 1.
@@ -67,13 +67,14 @@ Several signals (likely a monorepo root) → ask which subdirectory to adopt fir
 
 Run the baseline and print its report; nothing is written yet. Running the project's own lint, typecheck and tests is read-only measurement; when a command is missing, record `n/a` and do not invent one. Then ask one question, do not proceed before the answer, and use the same three choices on every route:
 
-- **A. Adopt** — the harness step for this route (Phase 4 seed or upgrade, or 5d). Then a separate question about the quality pass (Phase 3).
+- **A. Adopt** — the harness step for this route (Phase 4 seed or upgrade, or 5d): choosing A is the one approval for it, 5d does not ask again. Then a separate question about the quality pass (Phase 3).
+  - Marker route none or `@6.0.0`+ without `harness.json`: A seeds the full harness. `@5.x` / `@4.x`: A re-seeds or upgrades the harness. `@6.0.0`+ with `harness.json`: A runs the 5d re-sync.
 - **B. Light** — marker plus the baseline report only; nothing else changes.
 - **C. Stop** — write nothing.
 
 ## Phase 3 — Execute (agent, autonomous after the gate)
 
-**A** — Run the route's harness step, adapting to the CI, sharding and coverage thresholds the baseline found (never duplicating a pipeline, never lowering a threshold). Write `docs/quality-baseline.md`. Then ask separately whether to run the quality pass, which changes code and tests. On yes, load and follow `quality-pass.md` (this is its only trigger), then print the before/after table.
+**A** — Run the route's harness step, adapting to the CI, sharding and coverage thresholds the baseline found (never duplicating a pipeline, never lowering a threshold). Write the baseline to `docs/quality-baseline.md`. Then ask separately whether to run the quality pass, which changes code and tests. On yes, load and follow `quality-pass.md` (this is its only trigger), then add an `after` column to `docs/quality-baseline.md` from a full re-measurement and print the before/after table.
 
 **B** — Set line 1 of `AGENTS.md` to the marker (create the file if absent) and write `docs/quality-baseline.md`. Add a short list of structural differences between the project and the Architecture section of `<skill-dir>/../../.claude/rules/<stack>.md`. Return control to the invoking skill, which continues from Step 1 and reviews generated files where the layout differs.
 

@@ -17,4 +17,4 @@ description: Use when adopting or upgrading a project, switching its DB access l
 
 `cat "<skill-dir>/<path>"`
 
-**Step 3** — Follow the loaded guide.
+**Step 3** — Follow the loaded guide exactly.

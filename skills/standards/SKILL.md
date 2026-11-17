@@ -16,4 +16,4 @@ Stacks: `fastapi`, `nestjs`, `nextjs`, `vite-react`
 
 **Step 2** — Run `cat "<skill-dir>/<path>"`. `<skill-dir>` is this skill's directory, shown as "Base directory for this skill" when it loads; substitute the absolute path (it is **not** a shell variable).
 
-**Step 3** — Follow the loaded guide.
+**Step 3** — Follow the loaded guide exactly.
