@@ -16,7 +16,10 @@ cmd=$(printf '%s\n' "$cmd" | awk '
   { print; l = $0; gsub(/<<</, "", l)
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
-block() { echo "BLOCKED: $1" >&2; exit 2; }
+# cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
+cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
+# block <message>: message capped at 200 bytes.
+block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 protected='main|uat|develop'
 root=$PWD
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
@@ -183,7 +186,7 @@ while IFS= read -r seg; do
         if [ -z "$cdir" ] || [[ "$x" == /* ]]; then cdir=$x; else cdir="$cdir/$x"; fi
         i=$((i + 2)); continue ;;
       -c|--config-env)
-        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer — the same bypass as --no-verify. Fix the failure instead."
+        printf '%s' "${t[$((i + 1))]:-}" | grep -qi 'core\.hookspath' && block "'git -c core.hooksPath=…' disables the git-hook layer, the same bypass as --no-verify."
         i=$((i + 2)); continue ;;
       --git-dir|--work-tree) redir=1; i=$((i + 2)); continue ;;
       --git-dir=*|--work-tree=*) redir=1 ;;
@@ -246,7 +249,7 @@ while IFS= read -r seg; do
       if [ "$explicit" -eq 0 ]; then
         [ -n "$(protected_branch)" ] && target=1
       fi
-      [ "$force" -eq 1 ] && [ "$target" -eq 1 ] && block "force-push/delete on a protected branch (--force, --force-with-lease, -f, +refspec, HEAD:main). Open a PR instead."
+      [ "$force" -eq 1 ] && [ "$target" -eq 1 ] && block "force-push/delete on a protected branch (--force, -f, +refspec, HEAD:main). Open a PR instead."
       ;;
     config)
       if printf '%s ' "${args[@]}" | grep -qi 'core\.hookspath' && ! printf ' %s ' "${args[@]}" | grep -qE ' (--get|--get-all|--get-regexp|get|-l|--list) '; then
@@ -254,7 +257,7 @@ while IFS= read -r seg; do
       fi ;;
     checkout|restore)
       if printf ' %s' "${args[@]}" | grep -qE '[[:space:]](\./)?(\.claude/|\.claude([[:space:]]|$)|\.lefthook/|\.github/|lefthook\.yml|\.gitleaks\.toml|AGENTS\.md|CLAUDE\.md|docs/CONSTITUTION\.md)'; then
-        block "'git checkout/restore' on a guard-layer file discards enforcement config (this is how settings.json gets silently wiped). Confirm with a human first."
+        block "'git checkout/restore' on a guard-layer file discards enforcement config. Confirm with a human first."
       fi ;;
   esac
 done <<< "$segments"

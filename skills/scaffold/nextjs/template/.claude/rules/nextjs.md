@@ -1,0 +1,11 @@
+---
+paths:
+  - "src/components/ui/**"
+  - "src/proxy.ts"
+  - "src/lib/auth.ts"
+  - "src/features/**"
+  - "src/integrations/**"
+---
+- `src/components/ui/` is shadcn, CLI-managed: add with `npx shadcn@latest add`, never edit by hand.
+- `src/proxy.ts` holds frame protection (`APPCENTRAL_PORTAL_ORIGIN`); route protection joins it after `templatecentral:add (auth)`. `src/lib/auth.ts` is the auth layer, `src/integrations/database/` the database layer, both added by their skills.
+- Form types use `z.input<typeof Schema>`; post-parse output uses `z.infer`.

@@ -11,6 +11,7 @@
 # seams         comma-separated [[post-harness]] markers the file carries, or - for none
 template-agents/AGENTS.md 644 __TC_PROJECT_TITLE__ [[post-harness]]
 template-tail/task-management.md 644 - -
+template/.claude/rules/vite-react.md 644 - -
 template/.claude/skills/vite-verify/SKILL.md.tmpl 644 - -
 template/.dockerignore 644 - -
 template/.env.example 644 - -

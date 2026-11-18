@@ -5,48 +5,23 @@
 FastAPI 0.136+ · Python 3.14 · Pydantic v2 · Uvicorn · Ruff · pytest · pyright
 
 ## Commands
-```bash
-python src/main.py            # dev server (http://localhost:8000)
-python -m pytest test/ -v     # run tests (from project root)
-ruff check src/               # lint
-ruff format src/              # format
-python -m pyright src/        # type check
-```
+`python src/main.py` (localhost:8000) · `python -m pytest test/ -v` · `ruff check src/` · `ruff format src/` · `python -m pyright src/`
 
 ## Architecture
-- Layered flow: `src/api/` (routers → services) → `src/models/` (never reversed)
-- Pydantic schemas with camelCase aliases (`BaseSchema`)
-- Centralized exception → HTTP response mapping in `error_handler.py`
-- Routers are thin — accept body, call service, return result
+- Layered api → models; details in `.claude/rules/fastapi.md`
+- Binding invariants (win on conflict): `docs/CONSTITUTION.md`. Path-specific guidance: `.claude/rules/`
+
+## Rules
+- Type annotations on all public parameters and return types
+- Validate all input with Pydantic at every boundary; `response_model` strips internal fields
+- snake_case files, functions, variables; PascalCase classes; UPPER_SNAKE_CASE constants
+- No secrets in code: env vars, documented in `.env.example`
+- Comments: default none; at most one short why-line above the code
+- Tests: one per behaviour, parametrize siblings, none for constants, types or framework behaviour
+- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15, every security hotspot reviewed; fix the code, never exclude or suppress
 
 ## Skills
-
-### Project skills — check here first
-Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
-
-| Skill | What it does |
-|-------|-------------|
-| `/api-verify` | pyright + ruff + tests in one pass |
-
-Add new project skills here whenever you repeat a workflow more than once.
-
-### templateCentral plugin skills — framework-level operations
-| Skill | When to use |
-|-------|-------------|
-| `templatecentral:add (auth)` | JWT/OAuth/session auth |
-| `templatecentral:add (database)` | connect SQLAlchemy/MongoDB |
-| `templatecentral:add (endpoint)` | new route + schema + service method |
-| `templatecentral:migrate` | DB migrations or framework upgrades |
-| `templatecentral:standards` | drift check, validation patterns |
-
-## Rules (always)
-- Type annotations on all public function parameters and return types
-- All user input validated with Pydantic at every boundary; use `response_model` to strip internal fields
-- snake_case files/functions/variables; PascalCase classes; UPPER_SNAKE_CASE constants
-- No secrets in code — use env vars; document in `.env.example`
-- Comments: default none; at most one short line above the code giving the non-obvious reason; cite an ADR by id only (`# ADR-0049`); fix the cause before suppressing. Full policy: `templatecentral:standards (code-standards)` → `comments.md`
-- Tests: one per distinct behaviour; parametrize sibling cases; extend an existing test before adding one; no tests for constants, types or framework behaviour.
-- Quality gate: Sonar way on new code — 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15. Meet it by fixing code, not by excluding or suppressing.
+Plugin: `templatecentral:add` (auth, database, endpoint), `templatecentral:migrate`, `templatecentral:standards`. Project: `/api-verify`.
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for meta-harness integration (see FUTURE.md) -->

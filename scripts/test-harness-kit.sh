@@ -455,16 +455,19 @@ MOCK_LOG="$T/mock.log"
 MOCK_TSC_OK="$T/tsc_ok"
 cat > "$MOCK/pnpm" <<'MOCK'
 #!/usr/bin/env bash
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
 case "$*" in
   "exec tsc --version") [ "$MOCK_HANG_PROBE" = tsc ] && exec sleep 30; [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
     [ -n "$MOCK_HANG" ] && exec sleep 30
     [ -f "$MOCK_TSC_OK" ] && exit 0
+    [ -n "$MOCK_MANY" ] && { many 'src/a.ts(1,7): error TS2322:'; exit 2; }
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
-  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "test") [ -n "$MOCK_MANY" ] && { many "1 test failed"; exit 1; }; echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
   "exec vitest --version") [ "$MOCK_HANG_PROBE" = vitest ] && exec sleep 30; [ -n "$MOCK_NO_VITEST" ] && exit 1; exit 0 ;;
   "exec vitest related --run"*) echo "related $*" >> "$MOCK_LOG"
+    [ -n "$MOCK_MANY" ] && { many "test failed"; exit 1; }
     [ -n "$MOCK_RELATED_NONE" ] && { echo "No test files found, exiting with code 1"; exit 1; }
     echo "1 test failed"; exit 1 ;;
 esac
@@ -472,13 +475,16 @@ exit 0
 MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
 case "$*" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
+    [ -n "$MOCK_MANY" ] && { many '/p/src/a.py:1:5 - error: "x" is not defined'; exit 1; }
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") [ "$MOCK_HANG_PROBE" = pytest ] && exec sleep 30; [ -n "$MOCK_NO_PYTEST" ] && exit 1; exit 0 ;;
-  "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest test/ -q") [ -n "$MOCK_MANY" ] && { many "1 failed"; exit 1; }; echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
   "-m pytest -q"*) [ -n "$MOCK_HANG" ] && exec sleep 30
+    [ -n "$MOCK_MANY" ] && { many "1 failed"; exit 1; }
     echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit "${MOCK_PYTEST_RC:-1}" ;;
 esac
 exit 0
@@ -550,6 +556,123 @@ for v in ts py; do
   run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":true}'
   check 0 "$EC" "stop-checks.$v stop_hook_active"
 done
+
+# Output caps: more findings than the cap keep the exit code, stay within the cap and name the dropped count.
+CCM=$(new_repo feat)
+mkdir -p "$CCM/.claude"
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$CCM/.claude/comment-hygiene-patterns.txt"
+printf '# Batched to stay under the API rate limit\na = 1\n' > "$CCM/clean.py"
+printf '// Retries because the upstream drops idle sockets\nconst a = 1\n' > "$CCM/clean.ts"
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; else tcfile=src/a.py; fi
+  MOCK_MANY=1 run_hook "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+  check "0 yes yes" "$EC $(ok_if json_has "len(d['additionalContext']) <= 2000") $(ok_if json_has "'more lines not shown' in d['additionalContext']")" "post-edit-typecheck.$v caps output at 2000 chars and names the dropped lines"
+  MOCK_MANY=1 run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":false}'
+  check "2 yes yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "stop-checks.$v caps output at 2000 chars, names the dropped lines, keeps exit 2"
+  MOCK_MANY=1 run_hook "$KIT/subagent-stop.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+  check "2 yes yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "subagent-stop.$v caps output at 2000 chars, names the dropped lines, keeps exit 2"
+done
+for v in ts py; do
+  for hk in stop-checks subagent-stop; do
+    MOCK_MANY=1 run_hook "$KIT/$hk.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+    check "yes" "$(python3 - "$T/err" <<'PYT' && echo yes || echo no
+import re, sys
+L = open(sys.argv[1]).read().rstrip("\n").split("\n")
+m = [i for i, l in enumerate(L) if "more lines not shown" in l]
+ok = len(m) == 1 and 0 < m[0] < len(L) - 1 and re.search(r" line 1 ", L[0]) and re.search(r" line 60 ", L[-1])
+sys.exit(0 if ok else 1)
+PYT
+)" "$hk.$v keeps the first line and the tail, with the dropped count between" "$(head -c 300 "$T/err")"
+  done
+done
+for v in ts py; do
+  if [ "$v" = ts ]; then bc='//'; else bc='#'; fi
+  awk -v c="$bc" 'BEGIN { for (i = 0; i < 40; i++) printf "%s Added retry loop %d for the feature %0200d\nx = 1\n", c, i, 0 }' > "$CCM/many.$v"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"many.$v\"}}"
+  check "0 yes yes yes" "$EC $(ok_if json_has "len(d['additionalContext'].split('\n')) == 12") $(ok_if json_has "max(len(l) for l in d['additionalContext'].split('\n')[1:]) <= 175") $(ok_if json_has "'and 30 more findings' in d['additionalContext']")" "post-edit-comment-check.$v caps the hook at 10 findings of 160 chars plus a count"
+  check "yes" "$(ok_if json_has "all(l.endswith('...') for l in d['additionalContext'].split('\n')[1:11])")" "post-edit-comment-check.$v marks a finding cut at 160 chars with an ellipsis"
+  printf '%s Added retry loop for the short feature\nx = 1\n' "$bc" > "$CCM/short.$v"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"short.$v\"}}"
+  check "0 yes yes" "$EC $(ok_if json_has "'Added retry loop' in d['additionalContext']") $(ok_if json_has "'...' not in d['additionalContext']")" "post-edit-comment-check.$v leaves a short finding unmarked"
+done
+longpath=$(printf 'd%.0s' $(seq 1 150))
+for v in ts py; do
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$longpath/.claude/settings.json")"
+  check "0 yes" "$EC $(ok_if json_has "len(d['permissionDecisionReason']) <= 200")" "protect-files.$v ask message stays within 200 chars"
+  check "0 yes yes" "$EC $(ok_if json_has "d['permissionDecisionReason'].endswith('harness config — an edit can silently disable hooks or add permissions. Human approval needed.')") $(ok_if json_has "'…' in d['permissionDecisionReason']")" "protect-files.$v keeps the reason and the approval phrase and shortens the path in the middle" "$OUT"
+  emoji=$(python3 -c 'print("\U0001F600" * 150)')
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$emoji/.claude/settings.json")"
+  check "0 yes yes" "$EC $(ok_if json_has "len(d['permissionDecisionReason']) <= 200") $(ok_if json_has "d['permissionDecisionReason'].encode('utf-8') and d['permissionDecisionReason'].endswith('Human approval needed.')")" "protect-files.$v cuts a multi-byte path by code point, never inside a surrogate pair" "$OUT"
+  printf '%s' "$OUT" > "$T/protect.$v.out"
+  for cmd in "git -c core.hooksPath=/dev/null commit -m x" "git push --force-with-lease origin main" "git checkout -- .claude/settings.json" "git commit --no-verify -m x"; do
+    run_hook "$KIT/block-no-verify.$v.sh" "$PROJ" "$(tool_json Bash command "$cmd")"
+    check "2 yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 201)" "block-no-verify.$v message for '$cmd' stays within 200 chars"
+  done
+done
+same_reason() { python3 -c 'import json, sys; r = [json.load(open(f))["hookSpecificOutput"]["permissionDecisionReason"] for f in sys.argv[1:]]; sys.exit(0 if r[0] == r[1] else 1)' "$@"; }
+check yes "$(ok_if same_reason "$T/protect.ts.out" "$T/protect.py.out")" "protect-files twins give the same message for a multi-byte path"
+# UTF-8 safety of every cap, in the C locale and a UTF-8 locale: valid UTF-8 out, within the cap, JSON round-trips, same decision as uncapped.
+utf8_ok() { python3 -c 'import sys; sys.stdin.buffer.read().decode("utf-8")'; }
+utf8_file() { utf8_ok < "$1"; }
+bytes_of() { wc -c < "$1" | tr -d ' '; }
+run_hook_loc() { # <locale> <script> <project> <stdin>
+  printf '%s' "$4" > "$T/stdin"
+  OUT=$(cd / && LC_ALL="$1" CLAUDE_PROJECT_DIR="$3" bash "$2" < "$T/stdin" 2>"$T/err")
+  EC=$?
+}
+UTF8L=C.UTF-8; case "$(locale -a 2>/dev/null)" in *en_US.UTF-8*) UTF8L=en_US.UTF-8 ;; esac
+CCU=$(new_repo feat)
+mkdir -p "$CCU/.claude"
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$CCU/.claude/comment-hygiene-patterns.txt"
+wide=$(python3 -c 'print("日" * 100)')
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; bc='//'; else tcfile=src/a.py; bc='#'; fi
+  for i in $(seq 1 12); do printf '%s Added \303\251 retry loop %d for \346\227\245\346\234\254\350\252\236 feature %s\nx = 1\n' "$bc" "$i" "$wide"; done > "$CCU/m.$v"
+  for L in C "$UTF8L"; do
+    tag="$v [$L]"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":false}'
+    check "2 yes yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "stop-checks $tag: UTF-8 stderr within the cap, exit 2 kept"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/subagent-stop.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+    check "2 yes yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "subagent-stop $tag: UTF-8 stderr within the cap, exit 2 kept"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+    check "0 yes yes yes" "$EC $(ok_if json_has "d['additionalContext'].encode('utf-8')") $(ok_if json_has "len(d['additionalContext'].encode('utf-8')) <= 2000") $(ok_if json_has "'more lines not shown' in d['additionalContext']")" "post-edit-typecheck $tag: JSON re-encodes to UTF-8 within the cap, decision kept"
+    run_hook_loc "$L" "$KIT/post-edit-comment-check.$v.sh" "$CCU" "{\"tool_input\":{\"file_path\":\"m.$v\"}}"
+    check "0 yes yes yes yes" "$EC $(ok_if json_has "d['additionalContext'].encode('utf-8')") $(ok_if json_has "max(len(l.encode('utf-8')) for l in d['additionalContext'].split('\n')[1:]) <= 175") $(ok_if json_has "'and 2 more findings' in d['additionalContext']") $(ok_if json_has "d['additionalContext'].count('line ') >= 10")" "post-edit-comment-check $tag: JSON re-encodes to UTF-8 within the cap, findings kept"
+    emo=$(python3 -c 'print("日" * 3000)')
+    for p in "secrets/$emo" "$emo/.env.local" "$(printf 'y%.0s' $(seq 1 5000)).pem" ".env$(printf 'y%.0s' $(seq 1 5000))"; do
+      run_hook_loc "$L" "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$p")"
+      check "2 yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 200)" "protect-files $tag: hard-block message for a ${#p}-char path is valid UTF-8 and within 200 bytes" "$(head -c 120 "$T/err")"
+    done
+    run_hook_loc "$L" "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$emo/.claude/settings.json")"
+    check "0 yes yes" "$EC $(ok_if json_has "d['permissionDecisionReason'].encode('utf-8')") $(ok_if json_has "len(d['permissionDecisionReason']) <= 200")" "protect-files $tag: ask JSON re-encodes to UTF-8 within the cap"
+    # block-no-verify: the cut is 200 BYTES even when the shell runs in a UTF-8 locale.
+    cutfn=$(grep '^cut200()' "$KIT/block-no-verify.$v.sh")
+    for body in 'a' '€' '日'; do
+      cut_out=$(LC_ALL="$L" bash -c "$cutfn"'
+        s=$(python3 -c "import sys; sys.stdout.write(\"a\" * 199 + sys.argv[1] * 40)" "$0"); cut200 "$s" | python3 -c "import sys; d = sys.stdin.buffer.read(); d.decode(\"utf-8\"); print(len(d))"' "$body" 2>&1)
+      want=200; [ "$body" = '€' ] && want=199; [ "$body" = '日' ] && want=199
+      check "$want" "$cut_out" "block-no-verify $tag: cut200 keeps 199 ASCII + '$body' to <=200 bytes on a boundary"
+    done
+  done
+done
+# Seeded text agrees with what is seeded.
+check yes "$(ok_if grep -q '^  - "src/error_handler.py"$' "$TPL/../fastapi/template/.claude/rules/fastapi.md")" "the fastapi rule's globs cover the error_handler.py its text names"
+check 0 "$(grep -c 'Skill capture' "$TPL/template-late/.claude/skills/skill-audit/SKILL.md.tmpl")" "skill-audit points at no AGENTS.md section that is gone"
+check 0 "$(grep -c 'lazy per directory' "$TPL/template-late/docs/harness.md")" "harness.md does not call rule loading lazy per directory"
+# Silence on success: a passing check and an unrelated file print nothing.
+touch "$MOCK_TSC_OK"
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; else tcfile=src/a.py; fi
+  run_hook "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "post-edit-typecheck.$v is silent when the check passes"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"clean.$v\"}}"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "post-edit-comment-check.$v is silent on a clean file"
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path src/ok.$v)"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "protect-files.$v is silent on an ordinary file"
+  run_hook "$KIT/block-no-verify.$v.sh" "$PROJ" "$(tool_json Bash command 'ls -la')"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "block-no-verify.$v is silent on an ordinary command"
+done
+rm -f "$MOCK_TSC_OK"
 rm -f "$PROJ/a.ts" "$PROJ/a.py"
 : > "$MOCK_LOG"
 for v in ts py; do
@@ -1230,14 +1353,19 @@ done
 # ── session-context.sh ────────────────────────────────────────────────────────
 
 printf '# Project AGENTS\nrouting line\n' > "$CC/AGENTS.md"
-run_hook "$KIT/session-context.sh" "$CC" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'Always-on invariants' <<<"$OUT")" "session-context.sh prints the invariants block"
-check "0 yes" "$EC $(ok_if test -z "$(grep -n 'routing line' <<<"$OUT")")" "session_context_no_agents_head: AGENTS.md is not printed (the @AGENTS.md import loads it)"
-check 0 "$(grep -c 'AGENTS.md 2>' "$KIT/session-context.sh")" "session-context.sh does not head AGENTS.md"
-printf '# Constitution\nbinding rule\n' > "$CC/docs-constitution.tmp"
-mkdir -p "$CC/docs" && mv "$CC/docs-constitution.tmp" "$CC/docs/CONSTITUTION.md"
-run_hook "$KIT/session-context.sh" "$CC" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'binding rule' <<<"$OUT")" "session-context.sh re-injects docs/CONSTITUTION.md"
+mkdir -p "$CC/docs" && printf '# Constitution\nbinding rule\n' > "$CC/docs/CONSTITUTION.md"
+run_hook "$KIT/session-context.sh" "$CC" '{"source":"startup"}'
+check "0:" "$EC:$OUT" "session-context.sh is silent on startup off a protected branch"
+for src in resume clear; do
+  run_hook "$KIT/session-context.sh" "$CC" "{\"source\":\"$src\"}"
+  check "0:" "$EC:$OUT" "session-context.sh is silent on $src off a protected branch"
+done
+run_hook "$KIT/session-context.sh" "$CC" '{"source":"compact"}'
+check "0 3 yes yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'docs/CONSTITUTION.md' <<<"$OUT") $(ok_if test -z "$(grep -En 'routing line|binding rule' <<<"$OUT")")" "session-context.sh prints three invariant lines on compact and neither AGENTS.md nor the CONSTITUTION"
+PR=$(new_repo main)
+run_hook "$KIT/session-context.sh" "$PR" '{"source":"startup"}'
+check "0 1 yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'protected branch main' <<<"$OUT")" "session-context.sh names a protected branch on startup"
+check 1 "$(grep -c 'CONSTITUTION' "$KIT/session-context.sh")" "session-context.sh points to the CONSTITUTION once"
 rm -rf "$CC/docs"
 
 # ── skill-usage-log.sh (node, then python3-only PATH) ─────────────────────────

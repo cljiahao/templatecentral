@@ -200,6 +200,10 @@ jobs:
         run: bash scripts/measure-outcomes.test.sh
       - name: Template outcome metrics (comments, suppressions, test band, CI gates)
         run: bash scripts/measure-outcomes.sh
+      - name: Seeded load measurement tests
+        run: bash scripts/measure-seeded-load.test.sh
+      - name: Seeded load (always-loaded bytes, duplicates, hook output caps)
+        run: bash scripts/measure-seeded-load.sh
       - name: Post-edit lint hook tests
         run: bash scripts/post-edit-lint.test.sh
       - name: Docs check tests

@@ -1,12 +1,12 @@
 # Harness reference
 
-Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Security`, `## Git Workflow`, `## Skill capture`). `AGENTS.md` keeps the rules an agent obeys on every turn; this file keeps the explanation. Seeded by templateCentral and safe to extend.
+Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Security`, `## Git Workflow`). `AGENTS.md` keeps the rules an agent obeys on every turn; this file keeps the explanation. Seeded by templateCentral and safe to extend.
 
 ## AI Harness
 
 **PreToolUse (Edit/Write/NotebookEdit):** blocks secrets only (exit 2): `.env*` (except `.env.example`), `secrets` folders, cert files (`.pem`/`.key`/`.secret`), `credentials.json`/`.netrc`. It asks for human approval before editing CI/CD definitions (the `.github` and `.azuredevops` folders, the `azure-pipelines` folder, `azure-pipelines*.y[a]ml`, `.gitlab-ci.yml`, `Jenkinsfile`) and governance files (AGENTS.md, CLAUDE.md, `.claude/settings.json`, `.claude/hooks/`). Project-specific guards live in a `local` folder under `.claude/hooks`, which re-sync never overwrites. A second Bash guard blocks `--no-verify`, hook-layer bypasses (`LEFTHOOK=0`, `git -c core.hooksPath=…`, `git config core.hooksPath`), commits to protected branches, and force-pushes to them (including `--force-with-lease`, `HEAD:main`). Skills, specs and all app code are unrestricted.
 
-**SessionStart (startup/resume/clear/compact):** re-injects the CONSTITUTION and the universal invariants so they survive compaction. PostCompact stdout is also injected as context and fires after compaction, but SessionStart additionally covers resume/startup, so it is the seeded mechanism here.
+**SessionStart (startup/resume/clear/compact):** `AGENTS.md` is already loaded, so the hook prints only what it cannot say: a line when the checkout is on `main`/`uat`/`develop`, and on compact three invariant lines that point at `docs/CONSTITUTION.md`. The CONSTITUTION itself is read on demand, not injected.
 
 **UserPromptSubmit:** pattern-checks incoming prompts for injection phrases; exit 2 blocks the prompt.
 
@@ -27,7 +27,7 @@ GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sy
 
 **Files:** project skills in `.claude/skills/`; manifest in `.claude/harness.json`.
 
-**Context load order** (context only, not enforcement; broad to specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → `AGENTS.md` → `.claude/rules/*.md` (lazy per directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
+**Context load order** (context only, not enforcement; broad to specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → `AGENTS.md` → `.claude/rules/**/*.md` without `paths:` (loaded at launch) → rules with `paths:` (loaded when a matching file is read or edited). `docs/CONSTITUTION.md` is read on demand and is not injected at session start; its security invariants that no hook or CI check enforces are restated in `AGENTS.md` (`## Security`, `## Skills Security`). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
 ## Skills Security
 

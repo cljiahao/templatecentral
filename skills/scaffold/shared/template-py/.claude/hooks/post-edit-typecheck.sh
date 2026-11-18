@@ -47,8 +47,10 @@ run python -m pyright src/
 [ "$EC" -eq 124 ] && timed_out
 [ "$EC" -eq 0 ] && exit 0
 out=$OUTPUT
-errs=$(printf '%s\n' "$out" | grep -E ' - error' | head -20)
-[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | tail -20)
+# cap <bytes>: keep leading lines (each cut to 200 bytes on a UTF-8 boundary) within the budget, then count the dropped ones.
+cap() { LC_ALL=C awk -v cap="$1" 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } { l = ucut($0, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
+errs=$(printf '%s\n' "$out" | grep -E ' - error' | cap 1700)
+[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | cap 1700)
 [ -n "$errs" ] || exit 0
-python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+sys.argv[1])[:9000]}}))' "$errs" 2>/dev/null
+python3 -c 'import json,sys,os; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+os.fsencode(sys.argv[1]).decode("utf-8","replace"))[:2000]}}))' "$errs" 2>/dev/null
 exit 0
