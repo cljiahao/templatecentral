@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/check-golden.sh — compare scaffold output against the golden sha256 manifests.
 #
-# Usage: bash scripts/check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]
+# Usage: bash scripts/check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [--emit-hashes DIR] [COMBO ...]
 #   COMBO is <stack>-<ci> (default: all 8 stack x ci combinations).
 #   Default mode hashes the output of scripts/extract-fences.py plus the template trees:
 #   a path held in a template tree comes from the templates, every other path from the
@@ -28,6 +28,8 @@
 #   template.manifest by test-template-copy.sh and lint-skills.sh instead.
 # A path in tests/golden/exceptions.txt suppresses STALE-EXPECTED, MISSING, MISMATCH and EXTRA
 # for that path.
+#   --emit-hashes DIR writes the hashes the check would compare, one <combo>.sha256 body per combo (exceptions dropped),
+#   instead of comparing; scripts/regen-golden.sh builds the goldens from it, so both share one hashing path.
 # Prints MISMATCH|MISSING|EXTRA <combo> <path> per difference; exit 1 if any, else 0.
 # tests/golden/exceptions.txt lines (<combo|*> <path> # <reason>) suppress a path.
 set -uo pipefail
@@ -40,20 +42,21 @@ SCAFFOLD_DIR="$REPO_ROOT/skills/scaffold"
 GOLDEN_DIR="$REPO_ROOT/tests/golden"
 FROM_TEMPLATES=0
 TREE=""
+EMIT=""
 COMBOS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from-templates) FROM_TEMPLATES=1 ;;
     -h | --help)
-      echo "Usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]"
+      echo "Usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [--emit-hashes DIR] [COMBO ...]"
       echo "  COMBO is <stack>-<ci>: stack nextjs, vite-react, fastapi or nestjs; ci github or azure."
       exit 0 ;;
-    --golden-dir | --tree)
+    --golden-dir | --tree | --emit-hashes)
       if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
-        echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [COMBO ...]" >&2
+        echo "usage: check-golden.sh [--from-templates] [--golden-dir DIR] [--tree DIR] [--emit-hashes DIR] [COMBO ...]" >&2
         exit 2
       fi
-      if [[ "$1" == "--tree" ]]; then TREE="$2"; else GOLDEN_DIR="$2"; fi
+      case "$1" in --tree) TREE="$2" ;; --emit-hashes) EMIT="$2" ;; *) GOLDEN_DIR="$2" ;; esac
       shift ;;
     -*) echo "check-golden: unknown option $1" >&2; exit 2 ;;
     *) COMBOS+=("$1") ;;
@@ -76,12 +79,16 @@ if [[ -n "$TREE" && ${#COMBOS[@]} -ne 1 ]]; then
   echo "check-golden: --tree needs exactly one COMBO" >&2
   exit 2
 fi
+if [[ -n "$EMIT" && ( -n "$TREE" || $FROM_TEMPLATES -eq 1 ) ]]; then
+  echo "check-golden: --emit-hashes is exclusive with --tree and --from-templates" >&2
+  exit 2
+fi
 if [[ -n "$TREE" && $FROM_TEMPLATES -eq 1 ]]; then
   echo "check-golden: --tree and --from-templates are exclusive" >&2
   exit 2
 fi
 
-T=$(mktemp -d) || exit 2
+T=$(mktemp -d "${TMPDIR:-/tmp}/check-golden.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
 sha_of() { # sha_of <file> — portable sha256, read from stdin because GNU sha256sum escapes a file name that holds a backslash and prefixes the hash with one
@@ -395,6 +402,19 @@ fail=0
 ok=0
 for combo in "${COMBOS[@]}"; do
   golden="$GOLDEN_DIR/$combo.sha256"
+  if [[ -n "$EMIT" ]]; then
+    stack="${combo%-*}"
+    ci="${combo##*-}"
+    if ! actual_hashes "$stack" "$ci" "$T/actual-$combo"; then echo "check-golden: could not build $combo" >&2; fail=1; continue; fi
+    if [[ -s "$T/dups-$stack-$ci" ]]; then
+      while IFS= read -r line; do excepted "$combo" "${line##* }" || { echo "$line"; fail=1; }; done < "$T/dups-$stack-$ci"
+    fi
+    while IFS= read -r line; do
+      excepted "$combo" "${line#*  }" || printf '%s\n' "$line"
+    done < "$T/actual-$combo" > "$EMIT/$combo.sha256"
+    ok=$((ok + 1))
+    continue
+  fi
   if [[ ! -f "$golden" ]]; then echo "check-golden: missing golden $golden" >&2; fail=1; continue; fi
   stack="${combo%-*}"
   ci="${combo##*-}"

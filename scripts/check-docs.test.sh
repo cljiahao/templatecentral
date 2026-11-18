@@ -252,7 +252,7 @@ check 1 "$([[ $elapsed -lt 10 ]] && echo 1 || echo 0)" "speed_2000_broken: finis
 
 # a URL scheme is external whatever its case
 d=$(bare_project schemes)
-printf '# p\n\n[a](HTTPS://X.com/missing) [b](Mailto:a@b.c) [c](custom+x-1.y:rest) [d](FTP://h/f)\n' > "$d/README.md"
+printf '# p\n\n[a](HTTPS://X.com/missing) [b](Mailto:a@b.c) [c](custom+x-1.y://rest) [d](FTP://h/f)\n' > "$d/README.md"
 run_check "$d"
 check 0 "$EC" "url_schemes_any_case: external links pass ($OUT)"
 printf '\n[e](Docs/Gone.md)\n' >> "$d/README.md"
@@ -423,6 +423,84 @@ expect_finding "$d" "extensionless_stem" '^README\.md:1: path does not exist: sr
 check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "extensionless_stem: only the missing path is reported ($OUT)"
 printf '[l](src/lib/db)\n' > "$d/README.md"
 expect_finding "$d" "extensionless_link_stays_exact" '^README\.md:1: broken link: src/lib/db$'
+
+# link-like prose is not a link: subscripts, escaped brackets, regex text and code spans
+d=$(proj link-prose)
+printf 'idx arr[0](1) and \\[x\\](nope.md) and [a-z](\\d+) and %s[x](nope.md)%s.\n' "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "link_like_prose: not reported ($OUT)"
+printf '[![i](src/gone.ts)](src/real.ts) [t](src/real.ts "title") [p](src/real.ts)\n' > "$d/README.md"
+expect_finding "$d" "nested_image_link" '^README\.md:1: broken link: src/gone\.ts$'
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "nested_image_link: only the missing target is reported ($OUT)"
+
+# a target with a colon is a path unless it has a real scheme
+d=$(proj schemes-narrow)
+printf '[x](nope.md:3) [y](src/real.ts:3)\n' > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -cE '^README\.md:1: broken link: (nope\.md|src/real\.ts):3$')" "path_line_is_a_path: path:line is checked as a path ($OUT)"
+printf '[a](custom+x-1.y://h/p) [b](tel:+123) [c](data:text/plain,x) [d](urn:isbn:1) [e](javascript:void(0)) [f](git+ssh://h/r)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "real_schemes: external forms pass ($OUT)"
+
+# an unterminated link is not a link
+d=$(proj unterminated)
+printf '[b](nope.md\n[c](nope.md "title\n[d](<nope.md\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "unterminated_link: not reported ($OUT)"
+
+# a label with prose is not a reference definition; a backticked path before . or ) is checked as written
+d=$(proj status-label)
+printf '[Status]: Done\n[Status]: Done.\n[Owner]: team\n(see %ssrc/real.ts%s). Then %ssrc/real.ts%s.\n' "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "status_label_and_trailing_punctuation: not reported ($OUT)"
+printf '[r]: gone.md\n(see %ssrc/gone.ts%s).\n' "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -cE 'broken link: gone\.md$|path does not exist: src/gone\.ts$')" "real_definition_and_span_before_paren: reported ($OUT)"
+
+# an indented line right after a heading is indented code
+d=$(proj heading-indent)
+printf '# T\n    [i](src/ind.ts)\n## U\n\t[t](src/tab.ts)\nText\n    [lazy](src/lazy.ts)\n' > "$d/README.md"
+expect_finding "$d" "indent_after_heading" '^README\.md:6: broken link: src/lazy\.ts$'
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "indent_after_heading: only the paragraph continuation is scanned ($OUT)"
+
+# a byte-order mark does not hide the Contents heading rule on the first line
+d=$(proj bom)
+printf '\357\273\277## Contents\n' > "$d/README.md"
+expect_finding "$d" "bom_contents_heading" '^README\.md:1: README has a Contents heading'
+printf '\357\273\277[x](src/gone.ts)\n' > "$d/README.md"
+expect_finding "$d" "bom_first_line_link" '^README\.md:1: broken link: src/gone\.ts$'
+
+# path rule: a path a doc names that does not exist is stale, unless it is an example (placeholder, ellipsis, path/to)
+d=$(proj stale-rule)
+printf '%ssrc/utils%s %ssrc/lib/missing%s\n' "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -cE 'path does not exist: (src/utils|src/lib/missing)$')" "stale_path: a missing path under an existing folder is reported ($OUT)"
+printf '%snolib/utils%s %spath/to/file.ts%s %ssrc/<name>/x.ts%s %ssrc/.../x.ts%s\n' "$BT" "$BT" "$BT" "$BT" "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "example_paths: unknown folder, path/to, placeholder and ellipsis pass ($OUT)"
+
+# arguments resolve against the caller's folder; absolute paths inside the project work; outside paths are refused
+d=$(proj args)
+printf '# p\n\n[gone](nope.md)\n' > "$d/README.md"
+OUT=$(cd "$T" && bash "$d/scripts/check-docs.sh" "$d/README.md" 2>&1)
+EC=$?
+check 1 "$EC" "absolute_argument: exits 1 ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^README\.md:3: broken link: nope\.md$')" "absolute_argument: reported against the project path ($OUT)"
+OUT=$(cd "$d/docs" && bash ../scripts/check-docs.sh ../README.md 2>&1)
+EC=$?
+check 1 "$EC" "caller_relative_argument: exits 1 ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^README\.md:3: broken link: nope\.md$')" "caller_relative_argument: resolved against the caller folder ($OUT)"
+ln -s "$d" "$T/args-link"
+OUT=$(cd "$T" && bash "$T/args-link/scripts/check-docs.sh" "$d/README.md" 2>&1)
+EC=$?
+check 1 "$EC" "symlinked_project_path: exits 1 ($OUT)"
+printf '# o\n' > "$T/outside.md"
+for arg in "$T/outside.md" ../outside.md; do
+  OUT=$(cd "$d" && bash scripts/check-docs.sh "$arg" 2>&1)
+  EC=$?
+  check 2 "$EC" "outside_argument[$arg]: exits 2"
+  check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: outside the project: ')" "outside_argument[$arg]: one clear line ($OUT)"
+done
 
 # the retired gate and its opt-in appear nowhere in the seeded layer or the kit
 old=$(grep -rnE 'readme-coupling|readme-freshness|skip-readme-check|ci-gates\.sh readme|richReadme|TC_RICH_README|README freshness' \
