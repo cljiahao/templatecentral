@@ -426,22 +426,30 @@ MOCK_TSC_OK="$T/tsc_ok"
 cat > "$MOCK/pnpm" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
-  "exec tsc --version") echo "Version 6.0.0"; exit 0 ;;
+  "exec tsc --version") [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
+    [ -n "$MOCK_HANG" ] && exec sleep 30
     [ -f "$MOCK_TSC_OK" ] && exit 0
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
-  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "exec vitest --version") [ -n "$MOCK_NO_VITEST" ] && exit 1; exit 0 ;;
+  "exec vitest related --run"*) echo "related $*" >> "$MOCK_LOG"
+    [ -n "$MOCK_RELATED_NONE" ] && { echo "No test files found, exiting with code 1"; exit 1; }
+    echo "1 test failed"; exit 1 ;;
 esac
 exit 0
 MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
-  "-m pyright --version") echo pyright 1.1; exit 0 ;;
-  "-m pyright src/") echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
-  "-m pytest --version") exit 0 ;;
+  "-m pyright --version") [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
+  "-m pyright src/") echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
+    echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
+  "-m pytest --version") [ -n "$MOCK_NO_PYTEST" ] && exit 1; exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest -q"*) [ -n "$MOCK_HANG" ] && exec sleep 30
+    echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit "${MOCK_PYTEST_RC:-1}" ;;
 esac
 exit 0
 MOCK
@@ -507,6 +515,374 @@ git -C "$PROJ" "${GIT_ID[@]}" commit -qm gitignore
 touch "$PROJ/ignored.log"
 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check 0 "$EC" "stop-checks.ts treats a gitignored-only change as clean"
+# Related-only runs: docs-only change runs nothing; changed code runs only its related tests.
+: > "$MOCK_LOG"
+echo '# notes' > "$PROJ/notes.md"
+for v in ts py; do
+  run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{}'
+  check 0 "$EC" "stop-checks.$v docs-only change skips everything"
+done
+check no "$(ok_if test -s "$MOCK_LOG")" "stop-checks docs-only change runs no tool"
+rm -f "$PROJ/notes.md"
+touch "$MOCK_TSC_OK"
+echo 'export const a = 1' > "$PROJ/a.ts"
+run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'related --run ./a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
+rm -f "$PROJ/a.ts"
+# Fixtures are committed first so that only the intended files count as changed; each case asserts the
+# exact tool arguments (grep -x), so over- and under-selection both fail.
+commit_all() { git -C "$PROJ" add -A; git -C "$PROJ" "${GIT_ID[@]}" commit -qm "$1"; }
+mk() { mkdir -p "$PROJ/src" "$PROJ/test"; }
+reset_proj() { git -C "$PROJ" reset -q --hard; git -C "$PROJ" clean -fdq; mk; : > "$MOCK_LOG"; }
+# put <path> [content]: write a file, creating its directory.
+put() { mkdir -p "$(dirname "$PROJ/$1")"; printf '%s\n' "${2:-x}" > "$PROJ/$1"; }
+# py_runs <expected pytest args> <name>: the hook blocks (exit 2) and pytest got exactly these args.
+py_runs() {
+  run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+  check "2 yes" "$EC $(ok_if grep -qxF "pytest -m pytest -q $1" "$MOCK_LOG")" "$2" "$(cat "$MOCK_LOG")"
+}
+py_pyright() { check "$1" "$(ok_if grep -qx pyright "$MOCK_LOG")" "$2"; }
+# ts_runs <log line> <name>: the hook blocks (exit 2) and the mock logged exactly this line.
+ts_runs() {
+  run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+  check "2 yes" "$EC $(ok_if grep -qxF "$1" "$MOCK_LOG")" "$2" "$(cat "$MOCK_LOG")"
+}
+# quiet <hook> <name>: exit 0 and no tool ran.
+quiet() {
+  run_hook "$KIT/stop-checks.$1.sh" "$PROJ" '{}'
+  check "0 no" "$EC $(ok_if test -s "$MOCK_LOG")" "$2"
+}
+
+# ── Python: a test-files-only change runs those files; anything else runs all of test/ ──
+mkdir -p "$PROJ/src" "$PROJ/test"
+echo 'x = 1' > "$PROJ/src/util.py"
+printf 'from util import x\ny = x\n' > "$PROJ/src/svc.py"
+echo 'from svc import y' > "$PROJ/test/test_svc.py"
+echo 'def test_a(): pass' > "$PROJ/test/test_a.py"
+echo 'def test_m(): pass' > "$PROJ/test/test_my mod.py"
+echo 'def test_c(): pass' > "$PROJ/test/test_café.py"
+commit_all py-fixture
+reset_proj
+echo 'x = 2' > "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when util.py changes and only svc.py (not util.py) is imported by a test"
+reset_proj
+echo 'def test_a(): assert 1' > "$PROJ/test/test_a.py"
+py_runs ./test/test_a.py "stop-checks.py runs only the changed test file"
+py_pyright no "stop-checks.py skips pyright on a test-files-only change"
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+echo '# e' >> "$PROJ/test/test_svc.py"
+put test/test_new.py 'def test_n(): pass'
+py_runs "./test/test_a.py ./test/test_new.py ./test/test_svc.py" "stop-checks.py runs exactly the changed and new test files"
+reset_proj
+echo '# e' >> "$PROJ/test/test_my mod.py"
+py_runs "./test/test_my mod.py" "stop-checks.py handles a test file name with a space"
+reset_proj
+echo '# e' >> "$PROJ/test/test_café.py"
+py_runs "./test/test_café.py" "stop-checks.py handles a non-ASCII test file name"
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+echo 'x = 3' > "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when a test file and a source file change together"
+py_pyright yes "stop-checks.py typechecks when a source file changes"
+reset_proj
+put src/new_mod.py 'z = 1'
+py_runs test "stop-checks.py runs all of test/ for a new source file"
+reset_proj
+rm -f "$PROJ/src/util.py"
+py_runs test "stop-checks.py runs all of test/ when a source file is deleted"
+py_pyright yes "stop-checks.py typechecks when a source file is deleted"
+reset_proj
+git -C "$PROJ" mv src/util.py src/util2.py
+py_runs test "stop-checks.py runs all of test/ when a source file is renamed"
+reset_proj
+rm -f "$PROJ/test/test_a.py"
+py_runs test "stop-checks.py runs all of test/ when only a test-pattern file is deleted"
+for f in test/conftest.py test/helpers.py test/data/case.json test/__init__.py; do
+  reset_proj
+  put "$f" 'x = 1'
+  py_runs test "stop-checks.py runs all of test/ for a $f change"
+done
+# Config files that can change every test: typecheck and run all of test/.
+for f in pyproject.toml uv.lock requirements-dev.txt pytest.ini pyrightconfig.json setup.cfg tox.ini .python-version; do
+  reset_proj
+  put "$f" 'x'
+  commit_all "py-cfg-$f"
+  reset_proj
+  echo y >> "$PROJ/$f"
+  py_runs test "stop-checks.py runs all of test/ on a $f change"
+  py_pyright yes "stop-checks.py typechecks on a $f change"
+done
+# Anything that is not documentation or an image runs the full suite.
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json test/__snapshots__/a.snap sub/docs/a.txt src/docs/handler.py test/data/x.md src/prompt.md src/logo.svg logo.png photo.jpg docs/guide.txt docs/icon.svg sub/README.md src/docs/x.md; do
+  reset_proj
+  put "$f"
+  py_runs test "stop-checks.py runs all of test/ for a $f change"
+done
+for f in README.md docs/guide.md docs/img/logo.png docs/a/b.md docs/anim.gif docs/favicon.ico LICENSE LICENSE.txt CHANGELOG.md CHANGELOG.rst; do
+  reset_proj
+  put "$f"
+  quiet py "stop-checks.py ignores $f"
+done
+# pytest exit 5: fine on a test-files-only run, a failure on the full suite.
+reset_proj
+echo '# e' >> "$PROJ/test/test_a.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check 0 "$EC" "stop-checks.py accepts pytest exit 5 on a test-files-only run"
+reset_proj
+echo 'x = 9' > "$PROJ/src/util.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
+check 2 "$EC" "stop-checks.py rejects pytest exit 5 on the full suite"
+# Bulk changes: more than 50 files run the full suite in one pass; 50 inert files stay quiet.
+reset_proj
+for i in $(seq 1 51); do put "docs/n$i.md"; done
+py_runs test "stop-checks.py runs all of test/ when more than 50 files changed"
+reset_proj
+for i in $(seq 1 50); do put "docs/n$i.md"; done
+quiet py "stop-checks.py ignores exactly 50 inert files"
+
+# ── TS: changed code files run vitest related; anything else runs pnpm test ──
+reset_proj
+echo 'export const d = 1' > "$PROJ/d.ts"
+echo 'export const c = 1' > "$PROJ/café2.ts"
+commit_all ts-fixture
+reset_proj
+put a.ts 'export const a = 1'
+ts_runs 'related exec vitest related --run ./a.ts' "stop-checks.ts runs vitest related on a changed code file"
+check no "$(ok_if grep -qx pnpm-test "$MOCK_LOG")" "stop-checks.ts does not run pnpm test for a related-only change"
+reset_proj
+rm -f "$PROJ/d.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a code file is deleted"
+reset_proj
+git -C "$PROJ" mv d.ts d2.ts
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a code file is renamed"
+reset_proj
+echo 'export const c = 2' > "$PROJ/café2.ts"
+ts_runs 'related exec vitest related --run ./café2.ts' "stop-checks.ts handles a tracked non-ASCII file name"
+reset_proj
+put café.ts 'export const c = 1'
+ts_runs 'related exec vitest related --run ./café.ts' "stop-checks.ts handles an untracked non-ASCII file name"
+reset_proj
+put n.ts 'export const n = 1'
+MOCK_RELATED_NONE=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -qx pnpm-test "$MOCK_LOG")" "stop-checks.ts falls back to pnpm test when related finds no test"
+for f in tsconfig.json vitest.config.ts vite.config.ts vitest.workspace.ts package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc test/setup.ts src/test/setup.ts; do
+  reset_proj
+  put "$f" 'x'
+  commit_all "ts-cfg-$f"
+  reset_proj
+  echo y >> "$PROJ/$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test on a $f change"
+done
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json src/__snapshots__/a.snap src/prompt.md test/data/x.md src/logo.svg sub/docs/a.txt logo.png docs/guide.txt sub/README.md; do
+  reset_proj
+  put "$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test for a $f change"
+done
+for f in README.md docs/guide.md docs/img/logo.png docs/anim.gif LICENSE CHANGELOG.md; do
+  reset_proj
+  put "$f"
+  quiet ts "stop-checks.ts ignores $f"
+done
+reset_proj
+for i in $(seq 1 51); do put "docs/n$i.md"; done
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when more than 50 files changed"
+reset_proj
+for i in $(seq 1 50); do put "docs/n$i.md"; done
+quiet ts "stop-checks.ts ignores exactly 50 inert files"
+# TS: code under a docs-named directory and root/nested config files.
+reset_proj
+put src/docs/page.tsx 'export const p = 1'
+ts_runs 'related exec vitest related --run ./src/docs/page.tsx' "stop-checks.ts relates a code file under src/docs"
+reset_proj
+put src/foo.config.ts 'export const f = 1'
+ts_runs 'related exec vitest related --run ./src/foo.config.ts' "stop-checks.ts relates a nested foo.config.ts"
+for f in next.config.ts playwright.config.ts eslint.config.mjs postcss.config.js; do
+  reset_proj
+  put "$f" 'export default {}'
+  commit_all "ts-rootcfg-$f"
+  reset_proj
+  echo 'export const z = 1' >> "$PROJ/$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test on a root $f change"
+done
+reset_proj
+put vitest.config.ts "export default { test: { setupFiles: ['./test/boot.ts'] } }"
+put test/boot.ts 'export const b = 1'
+commit_all ts-setupfiles
+reset_proj
+echo 'export const b = 2' >> "$PROJ/test/boot.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a vitest setupFiles file changes"
+# TS: a missing tool fails closed.
+reset_proj
+put a.ts 'export const a = 1'
+MOCK_NO_TSC=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'tsc is unavailable' "$T/err")" "stop-checks.ts blocks when tsc is unavailable"
+MOCK_NO_VITEST=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'vitest is unavailable' "$T/err")" "stop-checks.ts blocks when vitest is unavailable"
+PATH=/usr/bin:/bin run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pnpm is unavailable' "$T/err")" "stop-checks.ts blocks when pnpm is unavailable"
+# Time limit: a hung tool is killed and the hook blocks with a message naming the step.
+touch "$MOCK_TSC_OK"
+STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running tsc' "$T/err")" "stop-checks.ts blocks on a tsc timeout"
+# Repository with no commit: tracked and untracked files count as changed.
+NOHEAD="$T/nohead"
+mkdir -p "$NOHEAD/src" "$NOHEAD/test"
+git -C "$NOHEAD" init -q
+printf 'export const a = 1\n' > "$NOHEAD/src/a.ts"
+git -C "$NOHEAD" add -A
+SAVE_PROJ=$PROJ; PROJ=$NOHEAD
+: > "$MOCK_LOG"
+ts_runs 'related exec vitest related --run ./src/a.ts' "stop-checks.ts reads the changed set of a repository with no commit"
+: > "$MOCK_LOG"
+rm -rf "$NOHEAD/src"; git -C "$NOHEAD" rm -rfq --cached . ; echo '# hi' > "$NOHEAD/README.md"
+quiet ts "stop-checks.ts ignores a docs-only repository with no commit"
+rm -f "$NOHEAD/README.md"
+mkdir -p "$NOHEAD/src"; echo 'x = 1' > "$NOHEAD/src/x.py"; echo 'def test_x(): pass' > "$NOHEAD/test/test_x.py"
+git -C "$NOHEAD" add -A
+: > "$MOCK_LOG"
+py_runs test "stop-checks.py runs the suite in a repository with no commit"
+git -C "$NOHEAD" rm -rfq --cached . ; rm -rf "$NOHEAD/src" "$NOHEAD/test"; echo '# hi' > "$NOHEAD/README.md"
+: > "$MOCK_LOG"
+quiet py "stop-checks.py ignores a docs-only repository with no commit"
+PROJ=$SAVE_PROJ
+# Python: a tests/ directory, no test directory, a missing tool, a time limit.
+TP=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$TP
+mkdir -p "$TP/src" "$TP/tests"
+echo 'x = 1' > "$TP/src/u.py"; echo 'def test_a(): pass' > "$TP/tests/test_a.py"
+commit_all tests-dir-fixture
+: > "$MOCK_LOG"
+echo 'x = 2' > "$TP/src/u.py"
+py_runs tests "stop-checks.py runs all of tests/ when source changes"
+git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
+echo '# e' >> "$TP/tests/test_a.py"
+py_runs ./tests/test_a.py "stop-checks.py runs only a changed file under tests/"
+git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
+echo 'x = 3' > "$TP/src/u.py"
+MOCK_NO_PYTEST=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest is unavailable' "$T/err")" "stop-checks.py blocks when pytest is unavailable"
+MOCK_NO_PYRIGHT=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pyright is unavailable' "$T/err")" "stop-checks.py blocks when pyright is unavailable"
+touch "$MOCK_TSC_OK"
+STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running pytest' "$T/err")" "stop-checks.py blocks on a pytest timeout"
+rm -rf "$TP/tests"
+git -C "$TP" add -A; git -C "$TP" "${GIT_ID[@]}" commit -qm notests
+echo 'x = 4' > "$TP/src/u.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'collected no tests' "$T/err")" "stop-checks.py blocks when no tests exist and a source file changed"
+PROJ=$SAVE_PROJ
+# Change detection never fails open: an unreadable index or a broken git inside a repository blocks (exit 2).
+FR=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$FR
+mkdir -p "$FR/src" "$FR/test"
+echo 'x = 1' > "$FR/src/a.py"; echo 'export const a = 1' > "$FR/src/a.ts"
+echo 'def test_a(): pass' > "$FR/test/test_a.py"; echo '# fixtures' > "$FR/test/conftest.py"
+echo 'export const h = 1' > "$FR/test/helpers.ts"; echo 'export const s = 1' > "$FR/test/setup.ts"
+commit_all fail-closed-fixture
+touch "$MOCK_TSC_OK"
+for v in ts py; do
+  src=src/a.$v
+  git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+  echo '// e' >> "$FR/$src"
+  cp "$FR/.git/index" "$T/index.good"
+  head -c 20 /dev/urandom > "$FR/.git/index"
+  run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks on a corrupt git index" "$(cat "$T/err")"
+  cp "$T/index.good" "$FR/.git/index"
+  chmod 000 "$FR/.git/index"
+  run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks on an unreadable git index" "$(cat "$T/err")"
+  chmod 644 "$FR/.git/index"
+  mkdir -p "$T/gitshim"; printf '#!/bin/sh\nexit 128\n' > "$T/gitshim/git"; chmod +x "$T/gitshim/git"
+  PATH="$T/gitshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks when git exits 128" "$(cat "$T/err")"
+  NOGIT=$(mktemp -d "$T/nogit.XXXX"); echo 'x = 1' > "$NOGIT/a.py"
+  run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  check 0 "$EC" "stop-checks.$v still exits 0 in a directory that is not a git repository"
+done
+# A path that starts with "-" reaches vitest as ./-y.ts, never as an option.
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+echo 'export const y = 1' > "$FR/-y.ts"
+ts_runs 'related exec vitest related --run ./-y.ts' "stop-checks.ts passes a file named -y.ts as ./-y.ts"
+# Deleting a test-pattern file alone runs nothing; deleting conftest.py or a setup/helper file runs the full suite.
+git -C "$FR" reset -q --hard; git -C "$FR" clean -fdq; : > "$MOCK_LOG"
+rm -f "$FR/test/conftest.py"
+py_runs test "stop-checks.py runs all of test/ when conftest.py is deleted"
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+rm -f "$FR/test/setup.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when test/setup.ts is deleted"
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+rm -f "$FR/test/helpers.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a test helper is deleted"
+PROJ=$SAVE_PROJ
+# Fail-closed branches: the project dir is a subdirectory of a repository, git is missing, the project dir is unreadable,
+# and a git shim that fails only one named command.
+SR=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$SR
+mkdir -p "$SR/app/src" "$SR/app/test"
+echo 'export const a = 1' > "$SR/app/src/a.ts"; echo 'x = 1' > "$SR/app/src/a.py"
+echo 'def test_a(): pass' > "$SR/app/test/test_a.py"; echo 'def test_u(): pass' > "$SR/app/test/test_utils.py"
+commit_all subdir-fixture
+touch "$MOCK_TSC_OK"
+REAL_GIT=$(command -v git)
+mkdir -p "$T/nogit-bin"
+for tool in bash cat node python3; do ln -sf "$(command -v $tool)" "$T/nogit-bin/$tool"; done
+mkdir -p "$T/partshim"
+cat > "$T/partshim/git" <<SHIM
+#!/bin/sh
+case " \$* " in *" \$FAIL_PAT "*) exit 128 ;; esac
+exec "$REAL_GIT" "\$@"
+SHIM
+chmod +x "$T/partshim/git"
+# blocked <v> <project dir> <name> <stderr needle>: exit 2, the message, and no tool ran.
+blocked() {
+  check "2 yes no" "$EC $(ok_if grep -q "$4" "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$1 $3" "$(cat "$T/err")"
+}
+for v in ts py; do
+  git -C "$SR" reset -q --hard; git -C "$SR" clean -fdq; : > "$MOCK_LOG"
+  echo '# e' >> "$SR/app/src/a.$v"
+  cp "$SR/.git/HEAD" "$T/HEAD.good"
+  echo garbage > "$SR/.git/HEAD"
+  run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+  blocked "$v" "$SR/app" "blocks in a subdirectory project when the repository HEAD is broken" 'cannot read changed files'
+  PATH="$T/nogit-bin" run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+  blocked "$v" "$SR/app" "blocks in a subdirectory project when git is not on PATH" 'git is not on PATH'
+  cp "$T/HEAD.good" "$SR/.git/HEAD"
+  NOGIT=$(mktemp -d "$T/nogit.XXXX")
+  PATH="$T/nogit-bin" run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  blocked "$v" "$NOGIT" "blocks outside any repository when git is not on PATH" 'git is not on PATH'
+  run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  check 0 "$EC" "stop-checks.$v exits 0 for a directory with no .git here or in any parent"
+  run_hook "$KIT/stop-checks.$v.sh" "$T/does-not-exist" '{}'
+  blocked "$v" "$T/does-not-exist" "blocks when the project dir does not exist" 'cannot enter project directory'
+  run_hook "$KIT/stop-checks.$v.sh" "$T/does-not-exist" '{"stop_hook_active":true}'
+  check 0 "$EC" "stop-checks.$v stop_hook_active wins over a missing project dir"
+  UNR=$(mktemp -d "$T/unreadable.XXXX"); chmod 000 "$UNR"
+  run_hook "$KIT/stop-checks.$v.sh" "$UNR" '{}'
+  blocked "$v" "$UNR" "blocks when the project dir is unreadable" 'cannot enter project directory'
+  chmod 755 "$UNR"
+  for pat in diff ls-files --verify; do
+    git -C "$SR" reset -q --hard; : > "$MOCK_LOG"
+    echo '# e' >> "$SR/app/src/a.$v"
+    FAIL_PAT=$pat PATH="$T/partshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+    blocked "$v" "$SR/app" "blocks when only git $pat fails" 'cannot read changed files'
+  done
+  NH=$(mktemp -d "$T/nohead.XXXX"); git -C "$NH" init -q; echo 'x = 1' > "$NH/a.py"; echo 'export const a = 1' > "$NH/a.ts"; git -C "$NH" add -A
+  : > "$MOCK_LOG"
+  FAIL_PAT=ls-files PATH="$T/partshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$NH" '{}'
+  blocked "$v" "$NH" "blocks when git ls-files fails in a repository with no commit" 'cannot read changed files'
+done
+git -C "$SR" reset -q --hard
+# A deleted test-pattern file may be a helper other tests import: the full suite runs (py).
+rm -f "$SR/app/test/test_utils.py"
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$SR/app" '{}'
+check "2 yes" "$EC $(ok_if grep -qxF "pytest -m pytest -q test" "$MOCK_LOG")" "stop-checks.py runs all of test/ when test/test_utils.py is deleted in a subdirectory project" "$(cat "$MOCK_LOG")"
+PROJ=$SAVE_PROJ
+reset_proj
+rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/docs" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
 # ── post-edit-comment-check.sh ────────────────────────────────────────────────

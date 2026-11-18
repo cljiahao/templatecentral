@@ -36,7 +36,7 @@ Per-stack content for kit Steps A, B, and B2 (TS stacks (nestjs / nextjs / vite-
 
 ---
 
-`.claude/hooks/stop-checks.sh` (test command differs by stack — see delta table). The early exit on a clean tree means a turn that changed nothing (or already committed its work — pre-commit/pre-push and CI gate that path) never pays for a test run; Claude Code also caps consecutive Stop-hook continuations at 8 by default (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/stop-checks.sh` (uses `node` + `pnpm test`).
+`.claude/hooks/stop-checks.sh` (typecheck, then `vitest related` for changed code files; any config or setup file (including every root `*.config.*` and vitest `setupFiles`), data, other non-code file, a deletion, a rename, or more than 50 changed files runs `pnpm test`; root docs and top-level `docs/` are ignored). A missing `pnpm`, `tsc` or `vitest`, or a run past 270 s, blocks with a message. It exits at once when nothing but those docs changed (or the work is already committed — pre-commit/pre-push and CI gate that path); Claude Code also caps consecutive Stop-hook continuations at 8 by default (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`). Step 0 copies it from `<skill-dir>/shared/template-ts/.claude/hooks/stop-checks.sh` (uses `node` + `vitest related`).
 
 ---
 

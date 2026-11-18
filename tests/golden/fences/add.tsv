@@ -254,8 +254,8 @@ d1b7fdf4d17fbc7395f41b3367c55ecc39fc40c5b6d59a87bd33a4151d855027	skills/add/endp
 77ba896893e4c7d832bddf9c9ef118be4afeda4e68c28433255525c97ceb0c9f	skills/add/endpoint/fastapi.md	3. Add Router	0	python
 f98aeee67451e15d952b7e31e2135c7657e6c9b91d2622a56e1380b6f733fb5a	skills/add/endpoint/fastapi.md	4. Register the Router	0	python
 e801d431e216b5177b249467e47ef2effc9dfebaf08f81619b4fe885eda0b512	skills/add/endpoint/fastapi.md	4. Register the Router	1	python
-5f5786af62c93317abbaa61b94a8537fd1f86691e95d4b0ce2ff04d8fef2d360	skills/add/endpoint/fastapi.md	5. Add Tests	0	python
-91a7eb3b7c13c183bde5d1667cb153d4addd37385d04a58bc120c9e103510171	skills/add/endpoint/fastapi.md	5. Add Tests	1	python
+144f72170b2805fb498e757f9d187c391a5830dd7d90a3f59cfaa241d5fff400	skills/add/endpoint/fastapi.md	5. Add Tests	0	python
+6e8ff65b8cb3bd7b202378cc60108f54ab8323bd43c0a63f82990db1c4e69ea9	skills/add/endpoint/fastapi.md	5. Add Tests	1	python
 18ba8b14c35ac33b89fb9f3ec7f604640747525951c63e68f0a49d6ebcf34801	skills/add/endpoint/nestjs.md	2. Define Types	0	typescript
 44a5b6f2d59bf61f3166c50757e7731c5e0fcbccd07351de1cb580b175c88233	skills/add/endpoint/nestjs.md	3. Define DTOs	0	typescript
 0bcf33313f551a5fe61abfa16e5ef88c681935e6be74d9417d4c01f4174fb7a1	skills/add/endpoint/nestjs.md	4. Create Repository	0	typescript
@@ -270,7 +270,6 @@ ae44c31a2c750b73094a8590ef612dfac5899377228f15999ddb880df8a7c0ba	skills/add/endp
 12caecc444bcfa50c68e6d6d6c5bcb84452d6c880f0c10c8580ef0e00a213c69	skills/add/endpoint/nextjs.md	2. Implement the Route Handler	0	ts
 97153b753d29f7d18ccd7708af551ec3f09623d4539b216f1e4af71b254e8627	skills/add/endpoint/nextjs.md	3. Dynamic Segments	0	ts
 78a0d75c1ca4efcc44f9eec795ecc7658646976e91d9b2a192e036f9549f0fc0	skills/add/endpoint/nextjs.md	4. Update Routes Constant	0	ts
-06d839f2cd3cba038b6b395fcd637c9af304c8147c16e437a3ff9685184f28fa	skills/add/endpoint/nextjs.md	5. Add tests (mandatory)	0	ts
 dc0b6a98cde94f2104fd8269990dd86c8281c4d8682b9767cd394da797f21790	skills/add/error-handling/fastapi.md	Step 0 — Verify context	0	python
 3b67497985359cc05122206dfab3933b1b5f05460e57fa13c71606feb4c0a067	skills/add/error-handling/fastapi.md	Step 0 — Verify context	1	python
 25b77f77831c1a561a82fc87f435271ed216df826ba37f2d47884d1aacb4257b	skills/add/error-handling/fastapi.md	Step 0 — Verify context	2	python
@@ -454,8 +453,8 @@ f4b94b239e0c87db966a4e620c49218ef5d2010a6aff6aa87e3864e203c92829	skills/add/reda
 49c061900b40165a39190eeb9581e01f32edbd94336769c2656d9ccbea5c66aa	skills/add/test/fastapi.md	Factories	0	python
 2eed193efcfca22b82da83734564eec0b7ded92ba9361e48f1025a1bfe735dca	skills/add/test/fastapi.md	Fixtures	0	python
 f40903a2ddbcd7fa911b889de8a7c993d802c3b05966ca728774834015434462	skills/add/test/fastapi.md	Fixtures	1	python
-280e9aa28c2c42297746bc0db565682b7db2d76dba00f914aa1649b1e59273e7	skills/add/test/fastapi.md	Naming	0	python
-1e7b200fee34bfad8ce3407d8c2b4b8a74a838f8199fff0b26563fbfcb6092a8	skills/add/test/fastapi.md	Parametrize	0	python
+7711683e7ee0f47434e4b435179f6e6331a331f3700f4cdcd6406e85a36e80a4	skills/add/test/fastapi.md	Naming	0	python
+060e539f16498419e5698d24128c7822aeed98fa08f18bd3e048be92e98872fa	skills/add/test/fastapi.md	Parametrize	0	python
 127c8544c201f7afda65c1016aa81a93bd1032511dd233b743706820b0cbdb3f	skills/add/test/fastapi.md	Test Structure	0	-
 8833a7347db19452a2a9f35319d2be31845288f77dd09d242b42df2b05aead73	skills/add/test/nestjs.md	Controller Test	0	typescript
 6afb7a406b9834494575754b0aa7d1604c8b0ed9053ba7a61cb31325f3fa8b44	skills/add/test/nestjs.md	E2E Tests	0	typescript
@@ -468,9 +467,10 @@ f40903a2ddbcd7fa911b889de8a7c993d802c3b05966ca728774834015434462	skills/add/test
 2396fd7c1652534b8ffe55f37cdb54a63cf04e4b1d06567395205f9c25cacdea	skills/add/test/nextjs.md	Params Factory	0	ts
 464a35ad8fadc7610fb845847655ef205d9dc86fa376780cf3aa75560a80a9c4	skills/add/test/nextjs.md	Request Factory	0	ts
 86bfd768ce52d32b08b868134bfcf5653dea60261041e75b6ec75d2ce62e63bb	skills/add/test/nextjs.md	Test Structure	0	-
-774b2cabefc35b0da36335211da00373124c4f62fba27e64ef95e6b24a872818	skills/add/test/vite-react.md	Component Tests	0	tsx
+eef1cc5964c789ad3c6ba4a5bbda20071fa5e2f40c1e8cb0ed0fd28fcb56820b	skills/add/test/vite-react.md	Component Tests	0	tsx
 4da0ca041242f54e275b02c880e89c1949f21405157b33983c71d8adc3b798c3	skills/add/test/vite-react.md	Component Tests with User Interaction	0	tsx
 6f6375fcf51b8b5314ba4321271fb74eba44c272e692dee525a7d8d625d080fd	skills/add/test/vite-react.md	Integration Service Tests (External APIs)	0	ts
 549b01c38e52a2c97997574ee4d3cee2639ac342f1f9c09bfe6872ca2e5c29da	skills/add/test/vite-react.md	React Query Hook Tests	0	tsx
 1c5897e7ea0ec82e9b26aade5b9b0e842d6a53e67efc64e8f074f4ef7f54f6fd	skills/add/test/vite-react.md	Service Tests	0	ts
 488fcc9f11630f1c2014d74685cfffb4e5e118c2a7ef4da49ec97cd1584045ad	skills/add/test/vite-react.md	Test Structure	0	-
+06d839f2cd3cba038b6b395fcd637c9af304c8147c16e437a3ff9685184f28fa	skills/add/endpoint/nextjs.md	5. Add tests	0	ts

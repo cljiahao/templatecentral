@@ -29,7 +29,7 @@ Work one directory per batch. Per stage: apply the confirmed batch, run lint, ty
 
 1. **Lint and type findings.** Fix at the cause. Never add a suppression. Remove each existing one unless it is a confirmed false positive or a third-party constraint; a kept one is one line, one rule, with the reason.
 2. **Complexity and duplication.** Confirm each refactor before applying it.
-3. **Tests** (user code; confirm every deletion and merge). Rules: the test guide loaded with this file. Merge tests of one behaviour into parametrized cases; delete tests of constants, types and framework behaviour. Run coverage before and after each merge or deletion batch; a lower covered-line count for the target files reverts the batch.
+3. **Tests** (user code; confirm every deletion and merge). Rules: the test guide loaded with this file. Merge tests of one behaviour into parametrized cases; delete tests that only restate constants, types or framework behaviour (they add no coverage or behaviour value; never delete a test of a real code path). Run coverage before and after each merge or deletion batch; a lower covered-line count for the target files reverts the batch.
 4. **Comments.** Apply the comment rules loaded with this file, leaving an ADR id where an ADR explains the code.
 5. **Exclusions.** Remove coverage, lint and Sonar exclusions that exist only to pass a gate (confirm the list first); keep one only for generated or third-party code, with the reason beside it. Never lower an existing coverage threshold.
 

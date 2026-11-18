@@ -75,10 +75,10 @@ The CI file is not part of this copy: Step B3 picks the host and copies it. Ever
 
 | Stack | JSON-parsing runtime | Typecheck feedback cmd | Stop-checks test cmd | Verify-skill name(s) | Quality-gate line in CONSTITUTION §6 |
 |-------|----------------------|------------------------|----------------------|----------------------|---------------------------------------|
-| **fastapi** | `python3` | `python -m pyright src/` (errors → `additionalContext`) | `python -m pytest test/ -q` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
-| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `pnpm test` | `nest-verify` | `pnpm check` |
-| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `pnpm test` | `next-verify` + `next-migrate` | `pnpm check` |
-| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `pnpm test` | `vite-verify` | `pnpm check` |
+| **fastapi** | `python3` | `python -m pyright src/` (errors → `additionalContext`) | only the changed test files when every changed file is a test file, else all of `test/` and `tests/` | `api-verify` | `python -m pyright src/ && ruff check src/ && python -m pytest test/ -q` (the `/api-verify` skill) |
+| **nestjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `nest-verify` | `pnpm check` |
+| **nextjs** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `next-verify` + `next-migrate` | `pnpm check` |
+| **vite-react** | `node` | `pnpm exec tsc --noEmit --incremental` (errors → `additionalContext`) | `vitest related --run` for code files (full `pnpm test` for config, setup, data or any non-code change) | `vite-verify` | `pnpm check` |
 
 **Additional per-stack notes:**
 - `user-prompt-guard` filename: `user-prompt-guard.py` for **fastapi**; `user-prompt-guard.cjs` for all TS stacks (`.cjs`, not `.js`: `"type": "module"` would load `.js` as ESM and break `require()`).

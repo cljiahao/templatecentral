@@ -5,7 +5,7 @@
 
 Tests for Next.js API route handlers only — not frontend components.
 
-**Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope.
+**Policy**: Same-change Vitest tests under `test/api/` for `src/app/api/**` (see root `AGENTS.md`, `code-standards/`). Frontend out of scope. Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 
@@ -36,7 +36,7 @@ The Next.js template uses `globals: false` in Vitest — always import `describe
 
 Import route handler functions directly and call them with `NextRequest` objects — no HTTP server needed.
 
-> **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) must get its own 401 test.
+> **`proxy.ts` is not exercised.** Calling a handler directly bypasses the proxy, so session checks enforced there are untested here. Any auth check inside the handler itself (e.g. `auth.api.getSession`) keeps one 401 test per route; a check shared through a helper or guard is tested once (CONSTITUTION §4).
 
 > **Always pass a `NextRequest`, never a plain `Request`.** `withLogging` handlers are typed against `NextRequest`, so a plain `Request` or a zero-argument `GET()` fails `pnpm check`.
 
@@ -252,10 +252,9 @@ function makeParams<T extends Record<string, string>>(values: T) {
 - Use `vi.mock()` at module level and `vi.mocked()` for type-safe mock access
 - Call `vi.resetAllMocks()` in `afterEach` (or set `mockReset: true` in `vitest.config.ts`). `vi.restoreAllMocks()` only restores `vi.spyOn` spies, so values queued on `vi.mock` factory `vi.fn()`s leak into the next test.
 - Descriptive names — `it('should return 404 when project not found')`
-- Assert status and body, not implementation details
 - Tests do not share mutable state
-- Test the error paths: what happens when services throw, and assert the 500 body does not echo the internal error message
-- Assert the response shape and status code, not hardcoded URLs
+- One 500 test per handler pattern that asserts the body does not echo the internal error message; not one per route
+- Parametrize sibling inputs per `docs/CONSTITUTION.md` §4 (`it.each`), e.g. several invalid bodies → 400
 
 ## After Writing Code
 

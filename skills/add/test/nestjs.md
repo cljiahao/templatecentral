@@ -3,7 +3,7 @@
      prereq: Stack = NestJS. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS
 
-**Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`).
+**Policy**: Same-change Vitest for new/changed controllers, services, repositories (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 
@@ -53,7 +53,7 @@ describe('MyController', () => {
 });
 ```
 
-Guarded controller (`add (auth)`)? Chain `.overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })` before `.compile()` — the guard's own deps (Passport strategy, `PinoLogger`) are not in this module, and the 401 path belongs in an e2e test.
+Guarded controller (`add (auth)`)? Chain `.overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })` before `.compile()` — the guard's own deps (Passport strategy, `PinoLogger`) are not in this module, and the 401 path belongs in one e2e test, not one per controller (the guard is tested once).
 
 #### Service Test with Mocked Repository
 
@@ -184,14 +184,13 @@ pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 ### Rules
 
 - One behavior per `it()`
-- Descriptive names — `it('should throw NotFoundException for missing item')`
+- Descriptive names — `it('should throw NotFoundException for missing item')`; `it.each` for sibling inputs
 - Mock at boundaries — mock repositories in service tests, not internals
 - Use NestJS testing module — `Test.createTestingModule()` for proper DI
 - E2E tests use Fastify — `app.inject()` for HTTP assertions, not `supertest`
-- Test behavior and outcomes, not implementation details
 - Tests do not share mutable state; each `beforeEach` creates a fresh module
 - Mock the service in controller tests only to exercise error paths
-- Always `afterAll(() => app.close())` in e2e tests
+- `afterAll(() => app.close())` in e2e tests
 - Tests pass in any order
 
 ## After Writing Code

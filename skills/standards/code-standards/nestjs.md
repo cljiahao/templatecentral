@@ -93,9 +93,9 @@ export class UpdateItemDto extends createZodDto(CreateItemSchema.partial()) {}
 - **Vitest** — testing framework.
 - **Fastify `app.inject()`** — HTTP assertions for e2e tests (Supertest does not work with the Fastify adapter).
 
-### Backend Testing (mandatory)
+### Backend Testing
 
-Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change. Vitest does not load `.env`: every required `envSchema` field gets a placeholder in `test.env` of both Vitest configs, and e2e suites without a live database override the DB provider (see the `add (database)` guide).
+Test behaviour that can regress (`docs/CONSTITUTION.md` §4). Same-change Vitest for controllers, services, repositories, HTTP guards/pipes (`test/modules/*.spec.ts`; e2e per `templatecentral:add (endpoint)` / `templatecentral:add (test)`). Run `pnpm test` and `pnpm test:e2e` when request flows change. Vitest does not load `.env`: every required `envSchema` field gets a placeholder in `test.env` of both Vitest configs, and e2e suites without a live database override the DB provider (see the `add (database)` guide).
 
 ### Comments
 

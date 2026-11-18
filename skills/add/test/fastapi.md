@@ -3,7 +3,7 @@
      prereq: Stack = FastAPI. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI
 
-**Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`).
+**Policy**: Same-change pytest for new/changed API code (root `AGENTS.md`, `code-standards/`). Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 
@@ -89,21 +89,12 @@ def db_client() -> Generator[TestClient]:
     engine.dispose()
 ```
 
-### Test File Layout
-
-1. Module docstring
-2. Imports (stdlib → third-party → local)
-3. File-local fixtures
-4. Test functions
-
 ### Naming
 
-- Functions: `test_<subject>_<scenario>`
+- Functions: `test_<subject>_<scenario>`. No docstring or marker needed when the name says it; add a marker only to select a subset. `unit` and `integration` are registered in `pyproject.toml`; register any other in `markers` first.
 
 ```python
-@pytest.mark.unit
 def test_example_rejects_invalid_payload(client: TestClient) -> None:
-    """POST /example with missing required field returns 422."""
     response = client.post("/example", json={})
     assert response.status_code == 422
     errors = response.json()["detail"]
@@ -133,11 +124,11 @@ Rules:
 
 - One main concept per test.
 - Assert before and after when testing mutations.
-- Use `pytest.raises(..., match="...")` for exceptions — always include `match`.
+- `pytest.raises(..., match=...)` unless the message is not part of the contract.
 
 ### Parametrize
 
-Use for tests that differ only by input/output:
+Default for tests that differ only by input/output (never copy-paste siblings):
 
 ```python
 @pytest.mark.parametrize(
@@ -146,7 +137,6 @@ Use for tests that differ only by input/output:
     ids=["below-55", "at-55", "at-65"],
 )
 def test_is_eligible(age: int, expected: bool) -> None:
-    """Eligibility check based on age."""
     assert is_eligible(age) == expected
 ```
 
@@ -154,8 +144,6 @@ def test_is_eligible(age: int, expected: bool) -> None:
 
 ```bash
 python -m pytest test/                    # All tests
-python -m pytest test/ -m unit            # Unit tests only
-python -m pytest test/ -m end_to_end      # E2E tests only
 python -m pytest test/test_api/           # API tests only
 ```
 

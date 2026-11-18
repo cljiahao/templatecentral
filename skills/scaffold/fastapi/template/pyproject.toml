@@ -33,9 +33,10 @@ pythonpath = ["src", "test"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
+# Register a marker here before using it, so nothing warns.
 markers = [
-    "unit: unit tests",
-    "end_to_end: end to end tests",
+  "unit: fast tests with no external service",
+  "integration: needs a running service",
 ]
 
 addopts = [

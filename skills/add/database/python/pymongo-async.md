@@ -178,7 +178,7 @@ volumes:
   mongo-data:
 ```
 
-Add `"integration: needs a running MongoDB"` to `markers` in `pyproject.toml`.
+The `integration` marker is already registered in `pyproject.toml`.
 
 **`test/conftest.py`** — seed placeholder settings (CI has no `src/.env`) and build the client without `with` so unit tests never connect. Merge, keeping existing seeding and fixtures (`SECRET_KEY` and `auth_headers` from `templatecentral:add` (auth)):
 

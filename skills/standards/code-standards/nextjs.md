@@ -64,9 +64,9 @@ Reach for `React.memo`, `useCallback` and `useMemo` only after profiling shows a
 
 Each feature and shared folder has an `index.ts`. Prefer `import { X } from '@/features/project'` over deep imports.
 
-### Backend Testing (mandatory for API code)
+### Backend Testing (API code)
 
-Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pnpm build` before handoff.
+Test behaviour that can regress (`docs/CONSTITUTION.md` §4). Vitest tests under `test/api/` mirroring `src/app/api/`. Run `pnpm test` and `pnpm build` before handoff.
 
 ### Comments
 
