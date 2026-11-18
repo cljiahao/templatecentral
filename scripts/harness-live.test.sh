@@ -359,8 +359,8 @@ gl_mixed m16 'gitleaks git --staged || exit 1'
 gl_mixed m17 $'|\n        set +e\n        gitleaks git --staged'
 gl_mixed m18 $'|\n        gitleaks git --staged\n        true'
 gl_ok a1 'gitleaks git --pre-commit --staged # scan staged files'
-gl_ok a2 'gitleaks git --staged --config "my;rules.toml"'
-gl_ok a3 "gitleaks git --staged --config 'a&b(c).toml'"
+gl_ok a2 'gitleaks git --staged --config ".gitleaks.toml"'
+gl_ok a3 "gitleaks git --staged --config '.gitleaks.toml'"
 gl_ok a4 $'|\n        # scan staged\n\n        gitleaks git --pre-commit --staged'
 gl_ok a6 '"gitleaks git --pre-commit --staged"'
 gl_ok a7 'gitleaks git --pre-commit --staged' 1
@@ -431,7 +431,7 @@ gl_msg e1 'GITLEAKS_CONFIG=/dev/null gitleaks git --staged' "is not accepted"
 gl_msg e2 'FOO=1 npx gitleaks git --staged' "is not accepted"
 # shellcheck disable=SC2016
 gl_msg e3 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest git --staged /repo' '"$PWD"'
-gl_ok f1 'gitleaks protect --staged -v --verbose --no-color --log-level debug --redact=50 --config ok.toml'
+gl_ok f1 'gitleaks protect --staged -v --verbose --no-color --log-level debug --redact=50 --config .gitleaks.toml'
 gl_ok f2 'gitleaks detect --redact 20 --no-banner'
 
 # round 8: a structural allow-list; every key or YAML form outside it fails closed
@@ -482,9 +482,9 @@ gl_raw f14 $'pre-commit:\n  commands: {sec: {run: gitleaks git --staged}}\n' 1 "
 gl_raw k1 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      file_types: [text]\n' 1 "file_types: $NOKEY"
 gl_raw t1 $'exclude_tags: [sec]\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "exclude_tags: $NOKEY"
 gl_raw t2 $'output: [success]\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 0 ""
-gl_raw d1n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n    sec:\n      run: true\n' 1 "name that holds gitleaks is repeated"
-gl_raw d2n $'pre-commit:\n  commands:\n    sec:\n      run: true\n    sec:\n      run: gitleaks git --staged\n' 1 "name that holds gitleaks is repeated"
-gl_raw d3n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\npre-commit:\n  commands:\n    other:\n      run: true\n' 1 "pre-commit: appears more than once"
+gl_raw d1n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n    sec:\n      run: true\n' 1 "command name under commands: is repeated"
+gl_raw d2n $'pre-commit:\n  commands:\n    sec:\n      run: true\n    sec:\n      run: gitleaks git --staged\n' 1 "command name under commands: is repeated"
+gl_raw d3n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\npre-commit:\n  commands:\n    other:\n      run: true\n' 1 "appears more than once"
 gl_raw o1 $'extends:\n  - a.yml\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "can change the pre-commit hook"
 gl_raw o2 $'remotes:\n  - git_url: x\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "can change the pre-commit hook"
 seed "$T/o3"; printf 'pre-commit:\n  commands:\n    x:\n      run: true\n' >"$T/o3/lefthook-local.yml"; out=$(run "$T/o3"); check "lefthook-local.yml present fails" 1 $?; contains "overlay message" "can change the pre-commit hook" "$out"
@@ -500,4 +500,24 @@ gl_raw crlf3 "$(printf 'pre-commit:\r\n  skip: true\r\n  commands:\r\n    sec:\r
 gl_raw w1 $'pre-commit:\n    commands:\n        sec:\n            run: gitleaks git --staged\n' 1 "two-space indentation"
 gl_raw w2 $'pre-commit:\n  commands:\n    sec: {run: gitleaks git --staged}\n' 1 "YAML form the check cannot read"
 gl_msg w3 'gitleaks dir .' "positional path is accepted only in the docker form"
+# round 9: an allow-list for the config path, backslashes, structural duplicates and runner prefixes
+# shellcheck disable=SC2016
+for cfg in '-c //dev/null' '-c /de?/null' '-c /tmp/../dev/null' '-c /./dev/null' '-c a/../.gitleaks.toml' '-c missing.toml' '-c src' '--config=/etc/hosts' '-c "a;b.toml"' '-c .gitleaks.toml -c .gitleaks.toml'; do gl_msg "cfg9-${cfg// /_}" "gitleaks git --staged $cfg" "is not accepted"; done
+gl_msg cfg9e "gitleaks git --staged -c empty.toml" "is not accepted"
+gl_variant "$T/cfg9s" 'gitleaks git --staged -c empty.toml' 0; : >"$T/cfg9s/empty.toml"; out=$(run "$T/cfg9s"); check "empty config file fails" 1 $?; contains "empty config named" "argument --config empty.toml is not accepted" "$out"
+gl_variant "$T/cfg9l" 'gitleaks git --staged -c link.toml' 0; ln -s /dev/null "$T/cfg9l/link.toml"; out=$(run "$T/cfg9l"); check "symlinked config fails" 1 $?
+gl_variant "$T/cfg9g" 'gitleaks git --staged -c conf/x.toml' 0; mkdir "$T/cfg9g/conf"; cp "$T/cfg9g/.gitleaks.toml" "$T/cfg9g/conf/x.toml"; out=$(run "$T/cfg9g"); check "config in a subfolder passes" 0 $?
+gl_raw bs1 $'pre-commit:\n  commands:\n    sec:\n      run: "gitleaks git --pre-commit --staged -c /de\\x76/null"\n' 1 "YAML form the check cannot read"
+gl_raw bs2 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged \\--redact\n' 1 "YAML form the check cannot read"
+gl_raw bs3 $'pre-commit:\n  commands:\n    sec:\n      run: |\n        gitleaks git --staged \\--redact\n' 1 "YAML form the check cannot read"
+gl_raw dk1 $'pre-commit:\n  commands:\n    secrets:\n      run: gitleaks git --staged\n    secrets:\n      name: other\n      run: echo hi\n' 1 "command name under commands: is repeated"
+gl_raw dk2 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n  commands:\n    other:\n      run: echo hi\n' 1 "appears more than once"
+gl_raw dk3 $'pre-commit:\n  parallel: true\n  parallel: false\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "appears more than once"
+gl_raw dk4 $'pre-commit:\n  commands:\n    sec:\n      name: other\n      run: gitleaks git --staged\n' 0 ""
+for rn in 'npm run gitleaks git --staged' 'pnpm run gitleaks git --staged' 'yarn run gitleaks git --staged' 'bun run gitleaks git --staged' 'tools/gitleaks git --staged' './gitleaks git --staged' '/usr/bin/gitleaks git --staged' 'npx tools/gitleaks git --staged'; do gl_msg "rn9-${rn// /_}" "$rn" "is not accepted"; done
+gl_ok rn1 'npm exec gitleaks git --staged'
+gl_ok rn2 'yarn exec gitleaks git --staged'
+gl_ok rn3 'bunx gitleaks git --staged'
+gl_ok rn4 'pnpx gitleaks git --staged'
+gl_ok rn5 'npm exec -- gitleaks git --staged'
 exit $fail
