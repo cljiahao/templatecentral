@@ -428,6 +428,7 @@ cat > "$MOCK/pnpm" <<'MOCK'
 case "$*" in
   "exec tsc --version") [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
+    [ -n "$MOCK_HANG" ] && exec sleep 30
     [ -f "$MOCK_TSC_OK" ] && exit 0
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
@@ -442,12 +443,13 @@ MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
-  "-m pyright --version") echo pyright 1.1; exit 0 ;;
+  "-m pyright --version") [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
-  "-m pytest --version") exit 0 ;;
+  "-m pytest --version") [ -n "$MOCK_NO_PYTEST" ] && exit 1; exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
-  "-m pytest -q"*) echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit "${MOCK_PYTEST_RC:-1}" ;;
+  "-m pytest -q"*) [ -n "$MOCK_HANG" ] && exec sleep 30
+    echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit "${MOCK_PYTEST_RC:-1}" ;;
 esac
 exit 0
 MOCK
@@ -612,12 +614,12 @@ for f in pyproject.toml uv.lock requirements-dev.txt pytest.ini pyrightconfig.js
   py_pyright yes "stop-checks.py typechecks on a $f change"
 done
 # Anything that is not documentation or an image runs the full suite.
-for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json test/__snapshots__/a.snap; do
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json test/__snapshots__/a.snap sub/docs/a.txt src/docs/handler.py test/data/x.md src/prompt.md src/logo.svg logo.png photo.jpg docs/guide.txt docs/icon.svg sub/README.md src/docs/x.md; do
   reset_proj
   put "$f"
   py_runs test "stop-checks.py runs all of test/ for a $f change"
 done
-for f in README.md docs/guide.txt sub/docs/a.txt logo.png photo.JPG.jpg anim.gif icon.svg favicon.ico LICENSE CHANGELOG.rst; do
+for f in README.md docs/guide.md docs/img/logo.png docs/a/b.md docs/anim.gif docs/favicon.ico LICENSE LICENSE.txt CHANGELOG.md CHANGELOG.rst; do
   reset_proj
   put "$f"
   quiet py "stop-checks.py ignores $f"
@@ -633,10 +635,10 @@ MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$PROJ" '{}'
 check 2 "$EC" "stop-checks.py rejects pytest exit 5 on the full suite"
 # Bulk changes: more than 50 files run the full suite in one pass; 50 inert files stay quiet.
 reset_proj
-for i in $(seq 1 51); do put "notes/n$i.md"; done
+for i in $(seq 1 51); do put "docs/n$i.md"; done
 py_runs test "stop-checks.py runs all of test/ when more than 50 files changed"
 reset_proj
-for i in $(seq 1 50); do put "notes/n$i.md"; done
+for i in $(seq 1 50); do put "docs/n$i.md"; done
 quiet py "stop-checks.py ignores exactly 50 inert files"
 
 # ── TS: changed code files run vitest related; anything else runs pnpm test ──
@@ -672,31 +674,107 @@ for f in tsconfig.json vitest.config.ts vite.config.ts vitest.workspace.ts packa
   echo y >> "$PROJ/$f"
   ts_runs pnpm-test "stop-checks.ts runs pnpm test on a $f change"
 done
-for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json src/__snapshots__/a.snap; do
+for f in config.yaml query.sql notes.txt page.html schema.prisma src/data.json src/__snapshots__/a.snap src/prompt.md test/data/x.md src/logo.svg sub/docs/a.txt logo.png docs/guide.txt sub/README.md; do
   reset_proj
   put "$f"
   ts_runs pnpm-test "stop-checks.ts runs pnpm test for a $f change"
 done
-for f in README.md docs/guide.txt sub/docs/a.txt logo.png photo.jpeg anim.gif icon.svg favicon.ico LICENSE CHANGELOG.md; do
+for f in README.md docs/guide.md docs/img/logo.png docs/anim.gif LICENSE CHANGELOG.md; do
   reset_proj
   put "$f"
   quiet ts "stop-checks.ts ignores $f"
 done
 reset_proj
-for i in $(seq 1 51); do put "notes/n$i.md"; done
+for i in $(seq 1 51); do put "docs/n$i.md"; done
 ts_runs pnpm-test "stop-checks.ts runs pnpm test when more than 50 files changed"
 reset_proj
-for i in $(seq 1 50); do put "notes/n$i.md"; done
+for i in $(seq 1 50); do put "docs/n$i.md"; done
 quiet ts "stop-checks.ts ignores exactly 50 inert files"
-# TS: tsc and vitest availability guards skip with a message, never exit 2.
+# TS: code under a docs-named directory and root/nested config files.
+reset_proj
+put src/docs/page.tsx 'export const p = 1'
+ts_runs 'related exec vitest related --run src/docs/page.tsx' "stop-checks.ts relates a code file under src/docs"
+reset_proj
+put src/foo.config.ts 'export const f = 1'
+ts_runs 'related exec vitest related --run src/foo.config.ts' "stop-checks.ts relates a nested foo.config.ts"
+for f in next.config.ts playwright.config.ts eslint.config.mjs postcss.config.js; do
+  reset_proj
+  put "$f" 'export default {}'
+  commit_all "ts-rootcfg-$f"
+  reset_proj
+  echo 'export const z = 1' >> "$PROJ/$f"
+  ts_runs pnpm-test "stop-checks.ts runs pnpm test on a root $f change"
+done
+reset_proj
+put vitest.config.ts "export default { test: { setupFiles: ['./test/boot.ts'] } }"
+put test/boot.ts 'export const b = 1'
+commit_all ts-setupfiles
+reset_proj
+echo 'export const b = 2' >> "$PROJ/test/boot.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a vitest setupFiles file changes"
+# TS: a missing tool fails closed.
 reset_proj
 put a.ts 'export const a = 1'
 MOCK_NO_TSC=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'tsc unavailable' "$T/err")" "stop-checks.ts skips when tsc is unavailable"
+check "2 yes" "$EC $(ok_if grep -q 'tsc is unavailable' "$T/err")" "stop-checks.ts blocks when tsc is unavailable"
 MOCK_NO_VITEST=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'vitest unavailable' "$T/err")" "stop-checks.ts skips when vitest is unavailable"
+check "2 yes" "$EC $(ok_if grep -q 'vitest is unavailable' "$T/err")" "stop-checks.ts blocks when vitest is unavailable"
+PATH=/usr/bin:/bin run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pnpm is unavailable' "$T/err")" "stop-checks.ts blocks when pnpm is unavailable"
+# Time limit: a hung tool is killed and the hook blocks with a message naming the step.
+touch "$MOCK_TSC_OK"
+STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running tsc' "$T/err")" "stop-checks.ts blocks on a tsc timeout"
+# Repository with no commit: tracked and untracked files count as changed.
+NOHEAD="$T/nohead"
+mkdir -p "$NOHEAD/src" "$NOHEAD/test"
+git -C "$NOHEAD" init -q
+printf 'export const a = 1\n' > "$NOHEAD/src/a.ts"
+git -C "$NOHEAD" add -A
+SAVE_PROJ=$PROJ; PROJ=$NOHEAD
+: > "$MOCK_LOG"
+ts_runs 'related exec vitest related --run src/a.ts' "stop-checks.ts reads the changed set of a repository with no commit"
+: > "$MOCK_LOG"
+rm -rf "$NOHEAD/src"; git -C "$NOHEAD" rm -rfq --cached . ; echo '# hi' > "$NOHEAD/README.md"
+quiet ts "stop-checks.ts ignores a docs-only repository with no commit"
+rm -f "$NOHEAD/README.md"
+mkdir -p "$NOHEAD/src"; echo 'x = 1' > "$NOHEAD/src/x.py"; echo 'def test_x(): pass' > "$NOHEAD/test/test_x.py"
+git -C "$NOHEAD" add -A
+: > "$MOCK_LOG"
+py_runs test "stop-checks.py runs the suite in a repository with no commit"
+git -C "$NOHEAD" rm -rfq --cached . ; rm -rf "$NOHEAD/src" "$NOHEAD/test"; echo '# hi' > "$NOHEAD/README.md"
+: > "$MOCK_LOG"
+quiet py "stop-checks.py ignores a docs-only repository with no commit"
+PROJ=$SAVE_PROJ
+# Python: a tests/ directory, no test directory, a missing tool, a time limit.
+TP=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$TP
+mkdir -p "$TP/src" "$TP/tests"
+echo 'x = 1' > "$TP/src/u.py"; echo 'def test_a(): pass' > "$TP/tests/test_a.py"
+commit_all tests-dir-fixture
+: > "$MOCK_LOG"
+echo 'x = 2' > "$TP/src/u.py"
+py_runs tests "stop-checks.py runs all of tests/ when source changes"
+git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
+echo '# e' >> "$TP/tests/test_a.py"
+py_runs tests/test_a.py "stop-checks.py runs only a changed file under tests/"
+git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
+echo 'x = 3' > "$TP/src/u.py"
+MOCK_NO_PYTEST=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pytest is unavailable' "$T/err")" "stop-checks.py blocks when pytest is unavailable"
+MOCK_NO_PYRIGHT=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'pyright is unavailable' "$T/err")" "stop-checks.py blocks when pyright is unavailable"
+touch "$MOCK_TSC_OK"
+STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running pytest' "$T/err")" "stop-checks.py blocks on a pytest timeout"
+rm -rf "$TP/tests"
+git -C "$TP" add -A; git -C "$TP" "${GIT_ID[@]}" commit -qm notests
+echo 'x = 4' > "$TP/src/u.py"
+MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'collected no tests' "$T/err")" "stop-checks.py blocks when no tests exist and a source file changed"
+PROJ=$SAVE_PROJ
 reset_proj
-rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/notes" "$MOCK_TSC_OK"
+rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/docs" "$MOCK_TSC_OK"
 export PATH=$ORIG_PATH
 
 # ── post-edit-comment-check.sh ────────────────────────────────────────────────
