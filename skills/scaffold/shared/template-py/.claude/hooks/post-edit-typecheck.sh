@@ -10,8 +10,43 @@ except Exception:
     print('')" 2>/dev/null)
 case "$file" in *.py|*.pyi) ;; *) exit 0 ;; esac
 [ -f .venv/bin/activate ] && . .venv/bin/activate
-python -m pyright --version >/dev/null 2>&1 || exit 0
-out=$(python -m pyright src/ 2>&1) && exit 0
+# Own deadline (TYPECHECK_LIMIT seconds, default 45, under the 60 s settings timeout); a timeout is reported, never blocking.
+LIMIT=${TYPECHECK_LIMIT:-45}
+DEADLINE=$(( $(date +%s) + LIMIT ))
+OUT=$(mktemp "${TMPDIR:-/tmp}/typecheck.XXXXXX") || exit 0
+CHILD=; WATCH=; p=
+trap 'for p in $CHILD $WATCH; do kill -KILL -- "-$p" 2>/dev/null; done; rm -f "$OUT" "$OUT.timeout"' EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+# run <cmd...>: stdin closed, own process group, killed when the shared deadline passes. Sets EC (124 = timeout) and OUTPUT.
+run() {
+  local left=$(( DEADLINE - $(date +%s) ))
+  rm -f "$OUT.timeout"
+  if [ "$left" -le 0 ]; then EC=124; OUTPUT=""; return 0; fi
+  set -m
+  { "$@" </dev/null >"$OUT" 2>&1 & CHILD=$!; } 2>/dev/null
+  { ( sleep "$left"; : >"$OUT.timeout"; kill -TERM -- "-$CHILD"; sleep 2; kill -KILL -- "-$CHILD" ) >/dev/null 2>&1 & WATCH=$!; } 2>/dev/null
+  set +m
+  { wait "$CHILD"; EC=$?; } 2>/dev/null
+  kill -KILL -- "-$WATCH" 2>/dev/null; wait "$WATCH" 2>/dev/null
+  kill -KILL -- "-$CHILD" 2>/dev/null
+  CHILD=; WATCH=
+  if [ -f "$OUT.timeout" ]; then EC=124; fi
+  OUTPUT=$(cat "$OUT" 2>/dev/null)
+  return 0
+}
+# timed_out: tell the agent the typecheck produced no result, then exit without blocking.
+timed_out() {
+  python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"pyright timed out after "+sys.argv[1]+"s: no type result for this edit; run it manually."}}))' "$LIMIT" 2>/dev/null
+  exit 0
+}
+run python -m pyright --version
+[ "$EC" -eq 124 ] && timed_out
+[ "$EC" -eq 0 ] || exit 0
+run python -m pyright src/
+[ "$EC" -eq 124 ] && timed_out
+[ "$EC" -eq 0 ] && exit 0
+out=$OUTPUT
 errs=$(printf '%s\n' "$out" | grep -E ' - error' | head -20)
 [ -n "$errs" ] || errs=$(printf '%s\n' "$out" | tail -20)
 [ -n "$errs" ] || exit 0
