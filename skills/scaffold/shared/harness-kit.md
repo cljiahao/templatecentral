@@ -31,7 +31,7 @@ The loader cats this index plus exactly three part files — the stack's **one**
 | B4 | harness integrity verifier (`verify-harness.sh`, `regen-harness.sh`, copied in Step 0) | enforcement |
 | B5 | `/skill-audit` project skill | enforcement |
 | C, D | `FUTURE.md`, `docs/CONSTITUTION.md`, `docs/harness.md` (copied with `TC_PART=late`, together with the `/skill-audit` skill of Step B5) | finalize |
-| E, E2, E3 | `.claude/harness.json`, base snapshot, per-folder docs | finalize |
+| E, E2, E3 | `.claude/harness.json`, base snapshot, project docs | finalize |
 | F, G, H | `.agents` symlink, post-scaffold workflow, plugins | finalize |
 
 For Step A the enforcement file's section is the step: run `tc-copy.sh` with `TC_PART=settings` as part of it. Steps B and B2 only add rules and notes to the files Step 0 already copied.
@@ -56,7 +56,7 @@ TC_STACK=<stack> TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 | `late` | Step C, after the stack's `AGENTS.md` step (which follows its verification gate) | `template-late`: `FUTURE.md`, `docs/CONSTITUTION.md`, `docs/harness.md`, `.claude/skills/skill-audit/SKILL.md` (stored as `SKILL.md.tmpl`; prettier would reformat the first two at an earlier format pass) |
 | `stack`, `agents` | the stack's `source-files.md`, when it says | `<skill-dir>/<STACK>/template` and `template-agents`, per `<skill-dir>/<STACK>/template.manifest` |
 | `leaf` | an `add` or `migrate` leaf that names its own template tree | `TC_LEAF=<add or migrate>/<leaf stem>` (for example `add/auth/nestjs`) copies every `template*` tree beside that leaf per its `template.manifest`, or only `TC_TREE=<tree>`; `TC_STACK` is not used. Same refusals and `STOP:` line as the other parts |
-| `manifest` | Step E, after the verify skills and Steps A–D | writes `.claude/harness.json`: one `seeded_files` entry per seeded file present, `templatecentral_version` from the plugin's `plugin.json`, `adoWiki` / `richReadme` from `TC_ADO_WIKI` / `TC_RICH_README`; refuses when the file exists |
+| `manifest` | Step E, after the verify skills and Steps A–D | writes `.claude/harness.json`: one `seeded_files` entry per seeded file present, `templatecentral_version` from the plugin's `plugin.json`, `adoWiki` from `TC_ADO_WIKI`; refuses when the file exists |
 | `tail` | Step G, after the stack's `AGENTS.md` step | appends `template-tail/AGENTS-tail.md` to the project's `AGENTS.md` with the stack's typecheck command filled in; it writes nothing else |
 
 `settings`, `late` and `ci` with `TC_CI=github` or `TC_CI=azure` refuse unless the project's `lefthook.yml` is the one `base` copied for this `TC_STACK`, so run `base` first (`TC_CI=none` returns before that check: it only removes a file, and compares it with the template's). `settings`, `late` and `tail` also refuse until `AGENTS.md` exists, which keeps them behind the verification gate and the format pass in every stack.

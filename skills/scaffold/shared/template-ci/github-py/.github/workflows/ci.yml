@@ -34,6 +34,8 @@ jobs:
         run: bash .claude/ci-gates.sh deps
       - name: Harness integrity
         run: bash .claude/verify-harness.sh
+      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)
+        run: bash scripts/check-docs.sh
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
       - run: ruff check src/ test/ && ruff format --check src/ test/
@@ -64,18 +66,6 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: bash .claude/ci-gates.sh changelog "$BASE_REF"
-  readme-freshness:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
-      - name: Require README.md update for changed folders (apply 'skip-readme-check' label to bypass)
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-        run: bash .claude/ci-gates.sh readme "$BASE_REF"
   comment-hygiene:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

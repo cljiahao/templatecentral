@@ -38,10 +38,10 @@ It must print nothing.
 Write `.claude/harness.json` with the copy script. It hashes every seeded file present (`AGENTS.md`, `CLAUDE.md` if the stack's CLAUDE.md step created it, `settings.json`, the verify skills of the delta table, `/skill-audit`, every file under `.claude/hooks/` including `local/`, the git-hook layer, the CI files Step B3 seeded and the harness scripts), takes `templatecentral_version` from the plugin's `.claude-plugin/plugin.json`, and refuses when the file already exists or a verify skill is missing:
 
 ```bash
-TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> TC_RICH_README=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
+TC_STACK=<stack> TC_PART=manifest TC_ADO_WIKI=<true|false> bash "<skill-dir>/shared/tc-copy.sh" "<target>"
 ```
 
-`TC_ADO_WIKI` and `TC_RICH_README` are the Step E3 documentation choices (both default to `false`). In a scaffold, set them from the scaffold Step 1 answers on the Azure DevOps Code Wiki (`adoWiki`) and rich READMEs (`richReadme`), so Step E3 reads them and asks nothing. A migration has no scaffold Step 1: reuse the `adoWiki` and `richReadme` values of the project's previous manifest when it has them, and otherwise ask the user both questions, worded as in `documentation-kit.md` Steps 1a and 1b, before running the script. They become the top-level `adoWiki` and `richReadme` fields that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
+`TC_ADO_WIKI` is the Step E3 documentation choice (default `false`). In a scaffold, set it from the scaffold Step 1 answer on the wiki (`adoWiki`), so Step E3 reads it and asks nothing. A migration has no scaffold Step 1: reuse the `adoWiki` value of the project's previous manifest when it has one, and otherwise ask the user, worded as in `documentation-kit.md` Step 1, before running the script. It becomes the top-level `adoWiki` field that `documentation-kit.md` reads. The `AGENTS.md` and `CLAUDE.md` hashes are provisional: Step G appends the AGENTS.md tail and runs the final format pass, then re-hashes every entry and refreshes `.claude/.harness-base/`. A file seeded later (a hook added to `.claude/hooks/local/`) gets its own `seeded_files` entry in the same `{ "origin_hash": …, "path": … }` shape.
 
 ---
 
@@ -64,9 +64,9 @@ Keep `.claude/.harness-base/` tracked: it goes in with the project's first commi
 
 ---
 
-## Step E3. Generate per-folder documentation
+## Step E3. Seed the project docs
 
-Seed the per-folder README convention (and opt-in Azure DevOps Code Wiki `.order` files) now that every file exists:
+Seed the root README, the architecture codemap, boundary READMEs and the opt-in wiki ordering file now that every file exists, then run the docs check:
 
 ```bash
 cat "<skill-dir>/shared/documentation-kit.md"   # migrate: <skill-dir>/../scaffold/shared/documentation-kit.md
@@ -121,7 +121,7 @@ Then run these agent skills in order. They are **on by default** — skipping re
 1. the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"` — verify the scaffold compiles clean
 2. the test utility — load it with: `cat "<skill-dir>/../test/SKILL.md"` — run the existing suite and confirm it passes. At scaffold time it writes no new tests and does not load `templatecentral:add (test)`: the template's tests already cover the copied code.
 3. the review utility (update operation) — load it with: `cat "<skill-dir>/../review/SKILL.md"` — freshen any deps that have newer compatible versions
-4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — review only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the generated READMEs. The copied templates are not in scope; they are reviewed when the plugin is released. The project has no commit yet, so this review writes no `.claude/review-baseline.md`; the first review after the project's first commit writes it.
+4. the review utility — load it with: `cat "<skill-dir>/../review/SKILL.md"` — review only the files the agent edited by hand during the scaffold: the stack guide's Step 1 and Step 2 edits (project name, branding, settings), the filled-in `docs/CONSTITUTION.md` and the project docs (README, `docs/architecture.md`, boundary READMEs). The copied templates are not in scope; they are reviewed when the plugin is released. The project has no commit yet, so this review writes no `.claude/review-baseline.md`; the first review after the project's first commit writes it.
 
 **Skipping these steps:** use the scaffold Step 1 answer on post-scaffold checks. If the user asks to skip and has not already confirmed it, warn: "Skipping post-scaffold validation means undetected issues may exist in the project. This is not recommended." Ask for explicit confirmation before proceeding. Only skip these steps if the user confirms.
 

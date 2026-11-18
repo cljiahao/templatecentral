@@ -149,7 +149,7 @@ cat "<skill-dir>/fastapi/template-tail/task-management.md" >> AGENTS.md
 
 #### Finish the harness (required, whatever the answer above)
 
-Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E, with the `api-verify` hash), the base snapshot (E2), per-folder documentation (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
+Execute kit Steps **E through H** using the **fastapi** row: harness.json (Step E, with the `api-verify` hash), the base snapshot (E2), project docs (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
 ### 9. Remove example code (optional)
 

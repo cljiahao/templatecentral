@@ -83,7 +83,7 @@ The `.claude/hooks/*` above guard the agent. This step seeds **git** hooks that 
 
 ## Step B3. Seed the CI quality gates (GitHub Actions or Azure Pipelines)
 
-CI is the **hard gate** that can't be skipped before merge. Seed the gate script plus one CI file for the host: **changed-line coverage**, **lockfile-in-sync**, **changelog-touched**, **readme-freshness**, and a **dependency-audit** gate. (For GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
+CI is the **hard gate** that can't be skipped before merge. Seed the gate script plus one CI file for the host: **changed-line coverage**, **lockfile-in-sync**, **changelog-touched**, a **docs check** (`scripts/check-docs.sh`, a plain script step) and a **dependency-audit** gate. (For GitLab CI, call the same `ci-gates.sh` gates from `.gitlab-ci.yml`.)
 
 **Coverage reporter:** `diff-cover` reads Cobertura XML, which both runners emit.
 - **TS stacks** — the Vitest coverage reporters must include `cobertura` (the scaffold's `vitest.config.ts` already does; keep global thresholds lenient or unset, since the diff gate enforces *changed* lines): `coverage: { provider: 'v8', reporter: ['text', 'cobertura', 'lcov'] }` → writes `coverage/cobertura-coverage.xml`.
@@ -107,9 +107,9 @@ The template needs `refs/remotes/origin/<target>` (Azure PR builds fetch every b
 
 **The comment gate reads added lines only**, so pre-existing narration in migrated projects does not fail every PR; the warn-only surfaces scan whole files.
 
-**The readme gates skip CI folders (`.github/`, `.azuredevops/`, `azure-pipelines/`), `.claude/`, and secrets dirs:** `documentation-kit.md` never seeds a README there.
+**The docs check skips CI folders (`.github/`, `.azuredevops/`, `azure-pipelines/`), `.claude/`, and secrets dirs.** It is offline, so it needs no CI variable and no label to skip it.
 
-**FastAPI:** the GitHub workflow is `template-ci/github-py/` (its Python `quality` job replaces the TS one; the `changelog`, `readme-freshness`, and `comment-hygiene` jobs are identical); `harness-kit-fastapi.md` **Step B3** describes it.
+**FastAPI:** the GitHub workflow is `template-ci/github-py/` (its Python `quality` job replaces the TS one; the `changelog` and `comment-hygiene` jobs are identical); `harness-kit-fastapi.md` **Step B3** describes it.
 
 **Notes:**
 - **Pin tactics:** caret floors + committed lockfile; `pnpm install --frozen-lockfile` in `ci.yml` is the lockfile-in-sync gate. No caret ban.

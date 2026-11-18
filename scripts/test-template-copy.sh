@@ -177,7 +177,7 @@ for combo in $COMBOS; do
   out=$(run_copy "$tgt" "$v" "$h"); ec=$?
   check 0 "$ec" "copy_keeps_dotfiles[$combo]: copy exits 0 ($out)"
   ci_file=.github/workflows/ci.yml; [[ $h == azure ]] && ci_file="azure-pipelines/templatecentral-gates.yml azure-pipelines.yml"
-  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh lefthook.yml $ci_file"
+  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh scripts/check-docs.sh lefthook.yml $ci_file"
   missing=""
   for p in $want; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
   check "" "$missing" "copy_keeps_dotfiles[$combo]: dotfiles and CI file arrived"
@@ -1264,10 +1264,10 @@ for st in nextjs fastapi; do
   tgt="$T/manifest-$st"; mkdir -p "$tgt"
   for part in stack base agents settings late; do TC_STACK=$st TC_PART=$part bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1; done
   TC_STACK=$st TC_PART=ci TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" > /dev/null 2>&1
-  out=$(TC_STACK=$st TC_PART=manifest TC_RICH_README=true bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
+  out=$(TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
   check 0 "$ec" "part_manifest[$st]: exits 0 ($out)"
-  got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); print(j["templatecentral_version"], j["stack"], j["adoWiki"], j["richReadme"], "AGENTS.md" in j["seeded_files"], ".claude/hooks/protect-files.sh" in j["seeded_files"], "CLAUDE.md" in j["seeded_files"])' "$tgt/.claude/harness.json" 2>&1)
-  check "$pv $st False True True True False" "$got" "part_manifest[$st]: version from plugin.json, flags, core and hook entries, no CLAUDE.md entry when absent"
+  got=$(python3 -c 'import json, sys; j = json.load(open(sys.argv[1])); print(j["templatecentral_version"], j["stack"], j["adoWiki"], "AGENTS.md" in j["seeded_files"], ".claude/hooks/protect-files.sh" in j["seeded_files"], "CLAUDE.md" in j["seeded_files"])' "$tgt/.claude/harness.json" 2>&1)
+  check "$pv $st False True True False" "$got" "part_manifest[$st]: version from plugin.json, flags, core and hook entries, no CLAUDE.md entry when absent"
   vh=$(cd "$tgt" && bash .claude/verify-harness.sh 2>&1); ec=$?
   check 0 "$ec" "part_manifest[$st]: verify-harness passes on the written manifest ($vh)"
   out=$(TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
@@ -1290,7 +1290,7 @@ out=$(TC_STACK=nextjs TC_PART=manifest bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); e
 check 1 "$([[ $ec -ne 0 && "$out" == *"verify-skill step"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_without_verify_skill ($out)"
 rm -rf "$tgt/.claude/harness.json"; mkdir -p "$tgt/.claude/skills/next-verify" "$tgt/.claude/skills/next-migrate"; : > "$tgt/.claude/skills/next-verify/SKILL.md"; : > "$tgt/.claude/skills/next-migrate/SKILL.md"
 out=$(TC_STACK=nextjs TC_PART=manifest TC_ADO_WIKI=yes bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
-check 1 "$([[ $ec -ne 0 && "$out" == *"take true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
+check 1 "$([[ $ec -ne 0 && "$out" == *"takes true or false"* && ! -e "$tgt/.claude/harness.json" ]] && echo 1 || echo 0)" "part_manifest_refuses_a_bad_flag ($out)"
 out=$(TC_STACK=nextjs TC_PART=manifest TC_CI=github bash "$SHARED/tc-copy.sh" "$tgt" 2>&1); ec=$?
 check 1 "$([[ $ec -ne 0 && "$out" == *"TC_CI must stay empty"* ]] && echo 1 || echo 0)" "part_manifest_refuses_ci ($out)"
 

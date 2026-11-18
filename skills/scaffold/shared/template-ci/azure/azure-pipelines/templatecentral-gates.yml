@@ -1,7 +1,9 @@
-# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog, skip-readme-check or skip-comment-check skips a PR-only gate.
+# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog or skip-comment-check skips a PR-only gate.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity
+  - bash: bash scripts/check-docs.sh
+    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)
   - bash: bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Secret scan (gitleaks CLI, checksum-verified)
   - bash: bash .claude/ci-gates.sh deps
@@ -10,9 +12,6 @@ steps:
     displayName: No NOSONAR suppression markers
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
-    env: { LABELS: $(LABELS) }
-  - bash: bash .claude/ci-gates.sh readme "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
-    displayName: README freshness gate
     env: { LABELS: $(LABELS) }
   - bash: bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Comment hygiene gate

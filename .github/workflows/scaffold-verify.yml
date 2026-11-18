@@ -84,7 +84,6 @@ jobs:
             - task management: no
             - remove example code: no
             - adoWiki: false
-            - richReadme: false
             - post-scaffold checks (kit Step G utilities): skip. You confirm the skip here; the quality gates below replace them.
             - Claude Code plugins (kit Step H): no. The run must not touch ~/.claude.
             The repo guard blocks creating env files. Where the guide documents the headless
