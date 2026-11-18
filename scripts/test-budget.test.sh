@@ -357,18 +357,17 @@ check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "long_lines: one line with
 run "$d" -v
 has "1 test-file lines over 300 bytes (count only)" "$OUT" "long_lines: -v counts them"
 
-# an unreadable file is skipped with one stderr warning; the ratio rule still decides the exit
+# an unreadable file fails closed: exit 2, one line naming it, even when the rest is within budget
 d=$T/ts-unreadable
 ts_project "$d" 40
 put "$d" src/ok.test.ts "it('ok', () => { expect(1).toBe(1); });"
 put "$d" src/locked.test.ts "it('locked', () => { expect(1).toBe(1); });"
 chmod 000 "$d/src/locked.test.ts"
 if [[ ! -r "$d/src/locked.test.ts" ]]; then
-  OUT=$(bash "$BUDGET" "$d" 2> "$T/unreadable.err")
-  check 0 "$?" "unreadable: exits 0 within the ratio"
-  check 1 "$(wc -l < "$T/unreadable.err" | tr -d ' ')" "unreadable: one warning line"
-  has "1 unreadable file(s)" "$(cat "$T/unreadable.err")" "unreadable: warning counts them"
-  has "1 test files" "$OUT" "unreadable: the locked file is not counted"
+  OUT=$(bash "$BUDGET" "$d" 2>&1)
+  check 2 "$?" "unreadable: exits 2"
+  check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "unreadable: one line"
+  has "cannot read src/locked.test.ts" "$OUT" "unreadable: names the file"
 fi
 chmod 644 "$d/src/locked.test.ts"
 

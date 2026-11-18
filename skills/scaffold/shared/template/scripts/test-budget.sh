@@ -4,7 +4,7 @@
 # Only one thing fails: test LOC per 100 source LOC above TEST_BUDGET_MAX_RATIO (default 35; set but empty is an error).
 # Likely duplicates (a title repeated in one file or across files, near-identical assertion sets, a unit and an e2e
 # file naming the same route or imported function) are reported and never fail; -v lists them, plus a count of
-# test-file lines over 300 bytes. Unreadable files are skipped with one warning on stderr.
+# test-file lines over 300 bytes. An unreadable file fails closed: exit 2 with one line naming it.
 # Counting rules mirror the plugin's gate: a test file sits under test, tests or __tests__ or is named *.test.*, *.spec.*,
 # test_*, *_test.py; source is code under src (any non-test code when the project has no src folder); a line counts
 # when it is not blank and not a comment; one app per detected stack folder (root plus first-level folders).
@@ -313,7 +313,7 @@ BEGIN {
       }
     }
     close(full)
-    if (r < 0) { nU++; FA[nf] = 0 }
+    if (r < 0) { nU++; if (UN == "") UN = disp; FA[nf] = 0 }
     FK[nf] = loc
   }
   for (a = 1; a <= nA; a++) {
@@ -381,7 +381,7 @@ BEGIN {
   for (a = 1; a <= nA; a++) print "S\t" S[a]
   for (j = 1; j <= nR; j++) print "B\t" RR[j]
   for (j = 1; j <= nV; j++) print "V\t" VR[j]
-  print "U\t" nU + 0
+  print "U\t" nU + 0 "\t" UN
   print "D\t" totDup + 0
 }
 AWK
@@ -396,6 +396,7 @@ awk -v APPS="$apps" -v LIST="$list" -v ROOT="$root" -v LIM="$LIMIT" -f "$wd/p.aw
 summary=
 dups=0
 unreadable=0
+unreadable_first=
 nb=0
 nv=0
 : > "$wd/b"
@@ -406,11 +407,15 @@ while IFS="$TAB" read -r tag text; do
     B) printf '%s\n' "$text" >> "$wd/b"; nb=$((nb + 1)) ;;
     V) printf '%s\n' "$text" >> "$wd/v"; nv=$((nv + 1)) ;;
     D) dups=$text ;;
-    U) unreadable=$text ;;
+    U) unreadable=${text%%"$TAB"*}; unreadable_first=${text#*"$TAB"} ;;
   esac
 done < "$wd/result"
 
-[ "$unreadable" -eq 0 ] || printf 'test-budget: warning: %s unreadable file(s) skipped\n' "$unreadable" >&2
+if [ "$unreadable" -gt 0 ]; then
+  more=
+  [ "$unreadable" -eq 1 ] || more=" and $((unreadable - 1)) more"
+  die "cannot read $unreadable_first$more (an unreadable file could hide a breach)"
+fi
 
 if [ "$nb" -gt 0 ]; then
   printf 'test-budget: FAIL, %s breach(es); fix per ADR-0001 (test each behaviour once)\n' "$nb"

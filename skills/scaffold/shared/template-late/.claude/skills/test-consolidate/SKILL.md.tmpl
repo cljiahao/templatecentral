@@ -29,18 +29,18 @@ Record before touching a test:
 For each likely duplicate choose one:
 - **keep**: it is the only test of a distinct behaviour;
 - **merge**: sibling cases with different inputs become one `it.each` or `pytest.mark.parametrize`;
-- **delete**: a higher-level test proves the same behaviour; delete the lower duplicate, or the higher one when the lower proves it alone and faster. Never keep both.
+- **delete**: a higher-level test proves the same behaviour; delete one of the two, never keep both.
 
-List the merges and deletions and wait for the user's confirmation before deleting any test.
+Before any file changes, map each test to delete to the remaining test asserting the same behaviour, list merges and deletions with that mapping, and wait for the user's confirmation.
 
 ## 4. Prove
 
 After the change, show:
 - total and per-file coverage not lower, total at or above 80%;
 - mutation score not lower, where measured;
-- the behaviour list from step 2, each still asserted, with the test that asserts it;
+- the step 3 mapping holds: each deleted test's behaviour is still asserted by its mapped test;
 - `bash scripts/test-budget.sh` exits 0.
 
 ## Stop conditions
 
-Stop and report instead of continuing when coverage or the mutation score drops, a behaviour is no longer asserted, or the only way to pass is to lower a threshold, add an exclude or raise `TEST_BUDGET_MAX_RATIO`. Restore the test that covered the lost lines.
+Stop and report instead of continuing when coverage or the mutation score drops, a behaviour is no longer asserted, or the only way to pass is to lower a threshold, add an exclude or raise `TEST_BUDGET_MAX_RATIO`.
