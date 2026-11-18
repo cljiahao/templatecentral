@@ -87,7 +87,7 @@ flowchart LR
 | 5 | **Commit and push** (git hooks) | Commit-message format and pre-commit checks; pre-push re-checks the harness hashes |
 | 6 | **Pull request** (CI gates) | Secret scan, dependency audit, harness integrity; no label bypass |
 
-**Context recovery** (`SessionStart`) re-injects `docs/CONSTITUTION.md` and the universal invariants on start, resume, clear and compact, so the rules survive long sessions. Checkpoints 5 and 6 run in git and CI, so they still hold when someone works without the agent.
+**Context recovery** (`SessionStart`) warns when the checkout sits on a protected branch and, after compaction, restates the three universal invariants and points at `docs/CONSTITUTION.md`, so the rules survive long sessions without loading the constitution every time. Checkpoints 5 and 6 run in git and CI, so they still hold when someone works without the agent.
 
 The details, such as how the branch guard reads the right folder in a worktree, how every bypass spelling is closed and how upgrades keep your local rules, are in [docs/HARNESS.md](docs/HARNESS.md).
 
@@ -138,7 +138,7 @@ Optional: [caveman](https://github.com/JuliusBrussee/caveman) cuts output tokens
 
 | Area | Ordinary harness | templatecentral |
 |:---|:---|:---|
-| Rules | `CLAUDE.md` the agent may ignore | Hooks that block, plus a constitution re-injected after compaction |
+| Rules | `CLAUDE.md` the agent may ignore | Hooks that block, plus invariants restated after compaction |
 | Hook bypass | Usually only `--no-verify` | All known bypass spellings, judged by the folder the command runs in |
 | Hook tampering | Agent can edit the hook | Edits ask a human; hash drift fails push and CI |
 | Secrets | `.gitignore` | Writes hard-blocked; reads denied in `permissions.deny` |

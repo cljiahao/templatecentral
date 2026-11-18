@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# SessionStart(startup|resume|clear|compact): re-inject the constitution and invariants; plain stdout survives compaction.
+# SessionStart(startup|resume|clear|compact): AGENTS.md is already loaded, so print only what it cannot know.
+# Every source: a line when the checkout sits on a protected branch. Compact: three invariant lines.
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-# If a CONSTITUTION.md exists, re-inject it (project binding invariants survive compaction)
-if [ -f docs/CONSTITUTION.md ]; then
-  echo ""
-  echo "=== Project invariants (docs/CONSTITUTION.md) ==="
-  cat docs/CONSTITUTION.md
+input=$(cat)
+branch=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+case "$branch" in
+  main|uat|develop) echo "On protected branch $branch: commits here are blocked; branch off a fresh main before editing." ;;
+esac
+if printf '%s' "$input" | grep -Eq '"source"[[:space:]]*:[[:space:]]*"compact"'; then
+  echo "Never read or write secrets (.env*, secrets/); never commit to main/uat/develop."
+  echo "Run the quality gate before declaring a task done."
+  echo "Binding invariants and the protected-file list: docs/CONSTITUTION.md."
 fi
-
-cat <<'EOF'
-
-## Always-on invariants (survive compaction)
-1. Secrets are never read or written by the agent — .env*, secrets/** and .secrets/** are guarded.
-2. Run the quality gate (typecheck + tests) before declaring any task done.
-3. Work on a feature branch — never commit directly to main/uat/develop.
-4. Protected files — AGENTS.md, CLAUDE.md, Dockerfile, .claude/settings.json, .claude/hooks/*, docs/CONSTITUTION.md — require human approval.
-5. Respect the architecture/dependency boundaries documented in AGENTS.md and docs/CONSTITUTION.md.
-EOF
+exit 0

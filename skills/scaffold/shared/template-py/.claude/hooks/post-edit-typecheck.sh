@@ -47,8 +47,10 @@ run python -m pyright src/
 [ "$EC" -eq 124 ] && timed_out
 [ "$EC" -eq 0 ] && exit 0
 out=$OUTPUT
-errs=$(printf '%s\n' "$out" | grep -E ' - error' | head -20)
-[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | tail -20)
+# cap <chars>: keep leading lines (each cut to 200 chars) within the budget, then count the dropped ones.
+cap() { awk -v cap="$1" '{ l = substr($0, 1, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
+errs=$(printf '%s\n' "$out" | grep -E ' - error' | cap 1700)
+[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | cap 1700)
 [ -n "$errs" ] || exit 0
-python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+sys.argv[1])[:9000]}}))' "$errs" 2>/dev/null
+python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":("pyright reports type errors after this edit — fix them before moving on:\n"+sys.argv[1])[:2000]}}))' "$errs" 2>/dev/null
 exit 0

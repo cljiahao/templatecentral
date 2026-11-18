@@ -90,10 +90,12 @@ run() {
   OUTPUT=$(cat "$OUT" 2>/dev/null)
   return 0
 }
+# cap <chars>: keep leading lines (each cut to 200 chars) within the budget, then count the dropped ones.
+cap() { awk -v cap="$1" '{ l = substr($0, 1, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
 # fail <label>: report a failed or timed-out step and block.
 fail() {
   if [ "$EC" -eq 124 ]; then echo "Stop gate timed out after ${LIMIT}s while running $1; run it manually (pre-push and CI still gate this change)." >&2
-  else echo "$OUTPUT" | tail -20 >&2; fi
+  else printf '%s\n' "$OUTPUT" | cap 1900 >&2; fi
   exit 2
 }
 # probe <label> <message> <cmd...>: version probe under the shared deadline; a timeout reports like any step, a failure prints the message.

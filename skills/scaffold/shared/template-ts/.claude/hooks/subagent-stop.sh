@@ -13,5 +13,7 @@ changed=$( { git diff --name-only HEAD; git diff --cached --name-only; git ls-fi
 [ -n "$changed" ] || exit 0
 pnpm exec tsc --version >/dev/null 2>&1 || exit 0
 OUTPUT=$(pnpm exec tsc --noEmit --incremental 2>&1); EC=$?
-if [ "$EC" -ne 0 ]; then echo "$OUTPUT" | tail -20 >&2; exit 2; fi
+# cap <chars>: keep leading lines (each cut to 200 chars) within the budget, then count the dropped ones.
+cap() { awk -v cap="$1" '{ l = substr($0, 1, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
+if [ "$EC" -ne 0 ]; then printf '%s\n' "$OUTPUT" | cap 1900 >&2; exit 2; fi
 exit 0

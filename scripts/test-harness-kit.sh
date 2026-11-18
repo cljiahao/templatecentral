@@ -455,16 +455,19 @@ MOCK_LOG="$T/mock.log"
 MOCK_TSC_OK="$T/tsc_ok"
 cat > "$MOCK/pnpm" <<'MOCK'
 #!/usr/bin/env bash
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); printf '%s line %d %0200d\n' "$1" "$i" 0; done; }
 case "$*" in
   "exec tsc --version") [ "$MOCK_HANG_PROBE" = tsc ] && exec sleep 30; [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
     [ -n "$MOCK_HANG" ] && exec sleep 30
     [ -f "$MOCK_TSC_OK" ] && exit 0
+    [ -n "$MOCK_MANY" ] && { many 'src/a.ts(1,7): error TS2322:'; exit 2; }
     printf 'src/a.ts(1,7): error TS2322: Type "string" is not assignable to type '"'"'number'"'"'.\\n\tx\nFound 1 error.\n'
     echo "cwd=$PWD" >> "$MOCK_LOG"; exit 2 ;;
-  "test") echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
+  "test") [ -n "$MOCK_MANY" ] && { many "1 test failed"; exit 1; }; echo "cwd=$PWD" >> "$MOCK_LOG"; echo pnpm-test >> "$MOCK_LOG"; echo "1 test failed"; exit 1 ;;
   "exec vitest --version") [ "$MOCK_HANG_PROBE" = vitest ] && exec sleep 30; [ -n "$MOCK_NO_VITEST" ] && exit 1; exit 0 ;;
   "exec vitest related --run"*) echo "related $*" >> "$MOCK_LOG"
+    [ -n "$MOCK_MANY" ] && { many "test failed"; exit 1; }
     [ -n "$MOCK_RELATED_NONE" ] && { echo "No test files found, exiting with code 1"; exit 1; }
     echo "1 test failed"; exit 1 ;;
 esac
@@ -472,13 +475,16 @@ exit 0
 MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); printf '%s line %d %0200d\n' "$1" "$i" 0; done; }
 case "$*" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
+    [ -n "$MOCK_MANY" ] && { many '/p/src/a.py:1:5 - error: "x" is not defined'; exit 1; }
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") [ "$MOCK_HANG_PROBE" = pytest ] && exec sleep 30; [ -n "$MOCK_NO_PYTEST" ] && exit 1; exit 0 ;;
-  "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
+  "-m pytest test/ -q") [ -n "$MOCK_MANY" ] && { many "1 failed"; exit 1; }; echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
   "-m pytest -q"*) [ -n "$MOCK_HANG" ] && exec sleep 30
+    [ -n "$MOCK_MANY" ] && { many "1 failed"; exit 1; }
     echo "pytest $*" >> "$MOCK_LOG"; echo "1 failed"; exit "${MOCK_PYTEST_RC:-1}" ;;
 esac
 exit 0
@@ -550,6 +556,51 @@ for v in ts py; do
   run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":true}'
   check 0 "$EC" "stop-checks.$v stop_hook_active"
 done
+
+# Output caps: more findings than the cap keep the exit code, stay within the cap and name the dropped count.
+CCM=$(new_repo feat)
+mkdir -p "$CCM/.claude"
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$CCM/.claude/comment-hygiene-patterns.txt"
+printf '# Batched to stay under the API rate limit\na = 1\n' > "$CCM/clean.py"
+printf '// Retries because the upstream drops idle sockets\nconst a = 1\n' > "$CCM/clean.ts"
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; else tcfile=src/a.py; fi
+  MOCK_MANY=1 run_hook "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+  check "0 yes yes" "$EC $(ok_if json_has "len(d['additionalContext']) <= 2000") $(ok_if json_has "'more lines not shown' in d['additionalContext']")" "post-edit-typecheck.$v caps output at 2000 chars and names the dropped lines"
+  MOCK_MANY=1 run_hook "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":false}'
+  check "2 yes yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "stop-checks.$v caps output at 2000 chars, names the dropped lines, keeps exit 2"
+  MOCK_MANY=1 run_hook "$KIT/subagent-stop.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+  check "2 yes yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "subagent-stop.$v caps output at 2000 chars, names the dropped lines, keeps exit 2"
+done
+for v in ts py; do
+  if [ "$v" = ts ]; then bc='//'; else bc='#'; fi
+  awk -v c="$bc" 'BEGIN { for (i = 0; i < 40; i++) printf "%s Added retry loop %d for the feature %0200d\nx = 1\n", c, i, 0 }' > "$CCM/many.$v"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"many.$v\"}}"
+  check "0 yes yes yes" "$EC $(ok_if json_has "len(d['additionalContext'].split('\n')) == 12") $(ok_if json_has "max(len(l) for l in d['additionalContext'].split('\n')[1:]) <= 175") $(ok_if json_has "'and 30 more findings' in d['additionalContext']")" "post-edit-comment-check.$v caps the hook at 10 findings of 160 chars plus a count"
+done
+longpath=$(printf 'd%.0s' $(seq 1 150))
+for v in ts py; do
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$longpath/.claude/settings.json")"
+  check "0 yes" "$EC $(ok_if json_has "len(d['permissionDecisionReason']) <= 200")" "protect-files.$v ask message stays within 200 chars"
+  for cmd in "git -c core.hooksPath=/dev/null commit -m x" "git push --force-with-lease origin main" "git checkout -- .claude/settings.json" "git commit --no-verify -m x"; do
+    run_hook "$KIT/block-no-verify.$v.sh" "$PROJ" "$(tool_json Bash command "$cmd")"
+    check "2 yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 201)" "block-no-verify.$v message for '$cmd' stays within 200 chars"
+  done
+done
+# Silence on success: a passing check and an unrelated file print nothing.
+touch "$MOCK_TSC_OK"
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; else tcfile=src/a.py; fi
+  run_hook "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "post-edit-typecheck.$v is silent when the check passes"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"clean.$v\"}}"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "post-edit-comment-check.$v is silent on a clean file"
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path src/ok.$v)"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "protect-files.$v is silent on an ordinary file"
+  run_hook "$KIT/block-no-verify.$v.sh" "$PROJ" "$(tool_json Bash command 'ls -la')"
+  check "0:" "$EC:$OUT$(cat "$T/err")" "block-no-verify.$v is silent on an ordinary command"
+done
+rm -f "$MOCK_TSC_OK"
 rm -f "$PROJ/a.ts" "$PROJ/a.py"
 : > "$MOCK_LOG"
 for v in ts py; do
@@ -1230,14 +1281,19 @@ done
 # ── session-context.sh ────────────────────────────────────────────────────────
 
 printf '# Project AGENTS\nrouting line\n' > "$CC/AGENTS.md"
-run_hook "$KIT/session-context.sh" "$CC" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'Always-on invariants' <<<"$OUT")" "session-context.sh prints the invariants block"
-check "0 yes" "$EC $(ok_if test -z "$(grep -n 'routing line' <<<"$OUT")")" "session_context_no_agents_head: AGENTS.md is not printed (the @AGENTS.md import loads it)"
-check 0 "$(grep -c 'AGENTS.md 2>' "$KIT/session-context.sh")" "session-context.sh does not head AGENTS.md"
-printf '# Constitution\nbinding rule\n' > "$CC/docs-constitution.tmp"
-mkdir -p "$CC/docs" && mv "$CC/docs-constitution.tmp" "$CC/docs/CONSTITUTION.md"
-run_hook "$KIT/session-context.sh" "$CC" '{}'
-check "0 yes" "$EC $(ok_if grep -q 'binding rule' <<<"$OUT")" "session-context.sh re-injects docs/CONSTITUTION.md"
+mkdir -p "$CC/docs" && printf '# Constitution\nbinding rule\n' > "$CC/docs/CONSTITUTION.md"
+run_hook "$KIT/session-context.sh" "$CC" '{"source":"startup"}'
+check "0:" "$EC:$OUT" "session-context.sh is silent on startup off a protected branch"
+for src in resume clear; do
+  run_hook "$KIT/session-context.sh" "$CC" "{\"source\":\"$src\"}"
+  check "0:" "$EC:$OUT" "session-context.sh is silent on $src off a protected branch"
+done
+run_hook "$KIT/session-context.sh" "$CC" '{"source":"compact"}'
+check "0 3 yes yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'docs/CONSTITUTION.md' <<<"$OUT") $(ok_if test -z "$(grep -En 'routing line|binding rule' <<<"$OUT")")" "session-context.sh prints three invariant lines on compact and neither AGENTS.md nor the CONSTITUTION"
+PR=$(new_repo main)
+run_hook "$KIT/session-context.sh" "$PR" '{"source":"startup"}'
+check "0 1 yes" "$EC $(wc -l <<<"$OUT" | tr -d ' ') $(ok_if grep -q 'protected branch main' <<<"$OUT")" "session-context.sh names a protected branch on startup"
+check 1 "$(grep -c 'CONSTITUTION' "$KIT/session-context.sh")" "session-context.sh points to the CONSTITUTION once"
 rm -rf "$CC/docs"
 
 # ── skill-usage-log.sh (node, then python3-only PATH) ─────────────────────────

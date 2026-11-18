@@ -44,17 +44,17 @@ fi
 reason=""
 case "$rel" in
   AGENTS.md|*/AGENTS.md|CLAUDE.md|*/CLAUDE.md) reason="agent instruction file — prompt-injection attack surface" ;;
-  docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants document — changes affect all agents and this project's behaviour" ;;
-  .claude/settings.json|*/.claude/settings.json|.claude/settings.local.json|*/.claude/settings.local.json) reason="harness config — editing it can silently disable every hook or add permissive perms (settings.local.json takes precedence over settings.json)" ;;
+  docs/CONSTITUTION.md|*/docs/CONSTITUTION.md) reason="binding invariants — changes affect every agent" ;;
+  .claude/settings.json|*/.claude/settings.json|.claude/settings.local.json|*/.claude/settings.local.json) reason="harness config — an edit can silently disable hooks or add permissions" ;;
   .claude/hooks/*|*/.claude/hooks/*) reason="enforcement hook script — editing it can weaken or disable a guard" ;;
   .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
   .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
-  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh) reason="harness integrity baseline/verifier or CI gate script — editing it can defeat drift detection or a merge gate" ;;
-  .claude/dep-audit-allow.txt|*/.claude/dep-audit-allow.txt) reason="dependency-audit allowlist — editing it can silently suppress a known vulnerability" ;;
+  .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh) reason="harness integrity or CI gate script — an edit can defeat drift detection" ;;
+  .claude/dep-audit-allow.txt|*/.claude/dep-audit-allow.txt) reason="dependency-audit allowlist — an edit can suppress a known vulnerability" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
   lefthook.yml|*/lefthook.yml|.gitleaks.toml|*/.gitleaks.toml) reason="git-hook enforcement config — editing it can weaken commit-time guards" ;;
-  .claude/comment-hygiene-patterns.txt|*/.claude/comment-hygiene-patterns.txt) reason="comment-hygiene enforcement pattern list — editing it can silently weaken the CI hard gate" ;;
+  .claude/comment-hygiene-patterns.txt|*/.claude/comment-hygiene-patterns.txt) reason="comment-hygiene pattern list — an edit can weaken the CI gate" ;;
   .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
   .github/workflows/*|.github/actions/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) reason="CI/CD pipeline definition — changes skip or weaken the merge gates" ;;
 esac
@@ -64,7 +64,7 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
 fi
 if [ -n "$reason" ]; then
   # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
-  node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:"PROTECTED FILE: "+process.argv[1]+" — "+process.argv[2]+". Confirm human approval and note it in the PR."}})+"\n")' "$rel" "$reason" \
+  node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:("PROTECTED FILE: "+process.argv[1]+" — "+process.argv[2]+". Human approval needed.").slice(0,200)}})+"\n")' "$rel" "$reason" \
     || { echo "BLOCKED: $rel is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0
 fi

@@ -2,53 +2,27 @@
 # AGENTS.md — __TC_PROJECT_TITLE__
 
 ## Stack
-Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8
-TanStack React Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥24
-Client-side SPA — no SSR, no API route handlers.
+Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8 · TanStack Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥24. Client-side SPA: no SSR, no API handlers.
 
 ## Commands
-```bash
-pnpm dev          # dev server
-pnpm build        # production build (tsc -b && vite build)
-pnpm test         # run tests
-pnpm check        # format + lint + typecheck
-```
+`pnpm dev` · `pnpm build` (tsc -b && vite build) · `pnpm test` · `pnpm check` (format + lint + typecheck)
 
-## File Layout
-src/features/<name>/    — feature modules (api/, components/, hooks/, types.ts)
-src/components/ui/      — shadcn primitives (CLI-managed, do not edit directly)
-src/components/widgets/ — reusable composed components (project-owned)
-src/router.tsx          — route definitions (not filesystem convention)
-src/lib/constants/env.ts — centralized VITE_* env access
+## Layout
+- `src/features/<name>/` (api/, components/, hooks/, types.ts); `src/router.tsx` route definitions
+- `src/components/widgets/` shared components; `src/components/ui/` is shadcn (see `.claude/rules/vite-react.md`)
+- `src/lib/constants/env.ts` centralizes `VITE_*` access. Path-specific guidance: `.claude/rules/`
+- Binding invariants (win on conflict): `docs/CONSTITUTION.md`
+
+## Rules
+- `VITE_*` ships to the browser: no keys, tokens or secrets in it or in code; sensitive calls go through a server-side proxy
+- Zod-validate all user input and API responses at every boundary
+- Named exports only (except tooling configs); `function` declarations for components
+- Comments: default none; at most one short why-line above the code
+- Tests: one per behaviour, parametrize siblings, none for constants, types or framework behaviour
+- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15; fix the code, never exclude or suppress
 
 ## Skills
-
-### Project skills — check here first
-Skills in `.claude/skills/` are scoped to this project. Invoke with `/skill-name`.
-
-| Skill | What it does |
-|-------|-------------|
-| `/vite-verify` | typecheck + lint + test in one pass |
-
-Add new project skills here whenever you repeat a workflow more than once.
-
-### templateCentral plugin skills — framework-level operations
-| Skill | When to use |
-|-------|-------------|
-| `templatecentral:add (feature)` | full feature: page + query hook + components (includes components) |
-| `templatecentral:add (page)` | new route + page component |
-| `templatecentral:add (form)` | React Hook Form + Zod form |
-| `templatecentral:add (auth)` | auth flow integration |
-| `templatecentral:standards` | drift check, validation patterns |
-
-## Rules (always)
-- `VITE_*` env vars are shipped to the browser — never API keys, tokens, or secrets
-- All user input / API responses validated with Zod at every boundary
-- Named exports only (except tooling configs); `function` declarations for components
-- No secrets in code or `VITE_*` vars — use server-side proxy for sensitive calls
-- Comments: default none; at most one short line above the code giving the non-obvious reason; cite an ADR by id only (`// ADR-0049`); fix the cause before suppressing. Full policy: `templatecentral:standards (code-standards)` → `comments.md`
-- Tests: one per distinct behaviour; parametrize sibling cases; extend an existing test before adding one; no tests for constants, types or framework behaviour.
-- Quality gate: Sonar way on new code — 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15. Meet it by fixing code, not by excluding or suppressing.
+Plugin: `templatecentral:add` (feature, page, form, auth), `templatecentral:standards`. Project: `/vite-verify`.
 
 ## Project-Specific Notes
 <!-- [[post-harness]] — reserved for meta-harness integration (see FUTURE.md) -->

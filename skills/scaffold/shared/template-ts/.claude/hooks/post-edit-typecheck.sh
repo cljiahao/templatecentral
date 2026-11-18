@@ -42,8 +42,10 @@ run pnpm exec tsc --noEmit --incremental
 [ "$EC" -eq 124 ] && timed_out
 [ "$EC" -eq 0 ] && exit 0
 out=$OUTPUT
-errs=$(printf '%s\n' "$out" | grep -E 'error TS[0-9]+' | head -20)
-[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | tail -20)
+# cap <chars>: keep leading lines (each cut to 200 chars) within the budget, then count the dropped ones.
+cap() { awk -v cap="$1" '{ l = substr($0, 1, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
+errs=$(printf '%s\n' "$out" | grep -E 'error TS[0-9]+' | cap 1700)
+[ -n "$errs" ] || errs=$(printf '%s\n' "$out" | cap 1700)
 [ -n "$errs" ] || exit 0
-node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:("tsc --noEmit reports type errors after this edit — fix them before moving on:\n"+process.argv[1]).slice(0,9000)}}))' "$errs" 2>/dev/null
+node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:("tsc --noEmit reports type errors after this edit — fix them before moving on:\n"+process.argv[1]).slice(0,2000)}}))' "$errs" 2>/dev/null
 exit 0
