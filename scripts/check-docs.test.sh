@@ -220,7 +220,11 @@ git init -q "$d"
 printf '# p\n\n[gone](nope.md)\n' > "$d/README.md"
 stub="$T/stub-git"
 mkdir -p "$stub"
-printf '#!/bin/sh\nif [ "$1" = check-ignore ]; then echo "fatal: boom" >&2; exit 128; fi\nexec "%s" "$@"\n' "$(command -v git)" > "$stub/git"
+cat > "$stub/git" <<EOF
+#!/bin/sh
+if [ "\$1" = check-ignore ]; then echo "fatal: boom" >&2; exit 128; fi
+exec "$(command -v git)" "\$@"
+EOF
 chmod +x "$stub/git"
 OUT=$(cd "$d" && PATH="$stub:$PATH" bash scripts/check-docs.sh 2>&1)
 EC=$?
@@ -257,7 +261,7 @@ expect_finding "$d" "url_schemes_relative_still_checked" '^README\.md:[0-9]+: br
 # a fence closes only on the same character with at least the opening length
 d=$(bare_project fences)
 {
-  printf '# p\n\n````md\n```\n[inner](gone-inner.md)\n```\n[still](gone-still.md)\n~~~\n[tilde](gone-tilde.md)\n````\n\n'
+  printf '# p\n\n%smd\n%s\n[inner](gone-inner.md)\n%s\n[still](gone-still.md)\n~~~\n[tilde](gone-tilde.md)\n%s\n\n' "$BT$BT$BT$BT" "$BT$BT$BT" "$BT$BT$BT" "$BT$BT$BT$BT"
   printf '[after](gone-after.md)\n'
 } > "$d/README.md"
 run_check "$d"
@@ -267,7 +271,7 @@ check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "fence_length: nothing ins
 
 # double-backtick spans, even around a single backtick, are not scanned
 d=$(bare_project spans)
-printf '# p\n\nA ``see %ssrc/not/there.ts%s here`` and ``[x](gone.md)`` and %s%s%s.\n' "$BT" "$BT" "$BT$BT" "$BT" "$BT$BT" > "$d/README.md"
+printf '# p\n\nA %ssee %ssrc/not/there.ts%s here%s and %s[x](gone.md)%s and %s%s%s.\n' "$BT$BT" "$BT" "$BT" "$BT$BT" "$BT$BT" "$BT$BT" "$BT$BT" "$BT" "$BT$BT" > "$d/README.md"
 printf 'Plain %ssrc/not/there.ts%s stays checked.\n' "$BT" "$BT" >> "$d/README.md"
 expect_finding "$d" "double_backtick_spans" '^README\.md:4: path does not exist: src/not/there\.ts$'
 check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "double_backtick_spans: only the plain span is reported ($OUT)"
