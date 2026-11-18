@@ -1,4 +1,4 @@
-# Include after a full-history checkout and the install steps; skip a PR-only gate with variable LABELS=skip-changelog, skip-readme-check or skip-comment-check.
+# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog, skip-readme-check or skip-comment-check skips a PR-only gate.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity

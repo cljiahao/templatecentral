@@ -120,15 +120,37 @@ def step_bounds(lines, n):
     while end < len(lines) and not (re.match(r"^\s*- ", lines[end]) and len(lines[end]) - len(lines[end].lstrip()) <= indent) and not re.match(r"^\s{0,2}\S", lines[end]):
         end += 1
     return start, end
+# Only the PR-only gates may carry a job-level condition, and only this exact one: the gates themselves skip
+# off-PR runs, so any other job-level if/condition could silently switch a gate off on pushes or PRs.
+PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
+PR_ONLY_IF = "if: github.event_name == 'pull_request'"
+JOB_HEAD = re.compile(r"^  (?:-\s+(?:job|stage):\s*(\S+)|([A-Za-z_-]+):)\s*$")
+def job_blocks(lines):
+    start = next((i for i, l in enumerate(lines) if re.match(r"^(jobs|stages):\s*$", l)), None)
+    if start is None:
+        return
+    heads = [i for i in range(start + 1, len(lines)) if JOB_HEAD.match(lines[i])]
+    for idx, h in enumerate(heads):
+        end = heads[idx + 1] if idx + 1 < len(heads) else len(lines)
+        for k in range(h + 1, end):
+            if re.match(r"^\S", lines[k]):
+                end = k
+                break
+        m = JOB_HEAD.match(lines[h])
+        yield (m.group(1) or m.group(2)), h, end
+def job_condition_errors(rel, lines):
+    for name, h, end in job_blocks(lines):
+        for k in range(h + 1, end):
+            if re.match(r"^    (if|condition):", lines[k]):
+                text = lines[k].strip()
+                if not (name in PR_ONLY_JOBS and text == PR_ONLY_IF and lines[k] == "    " + PR_ONLY_IF):
+                    errors.append(f"{rel}:{k + 1}: job {name} has a run condition: {text}")
 def job_has_condition(lines, n):
-    j = n
-    while j > 0 and not re.match(r"^  (-\s+job:\s*\S+|[A-Za-z_-]+:)\s*$", lines[j]):
-        j -= 1
-    k = j + 1
-    while k < len(lines) and not re.match(r"^  (-\s+job:|[A-Za-z_-]+:\s*$)", lines[k]) and not re.match(r"^\S", lines[k]):
-        if re.match(r"^    (if|condition):", lines[k]) and not re.search(r"pull_request", lines[k]):
-            return lines[k].strip()
-        k += 1
+    for name, h, end in job_blocks(lines):
+        if h <= n < end:
+            for k in range(h + 1, end):
+                if re.match(r"^    (if|condition):", lines[k]) and not (name in PR_ONLY_JOBS and lines[k] == "    " + PR_ONLY_IF):
+                    return lines[k].strip()
     return None
 # Gate steps (merge, diff-cover, jscpd, nosonar) must always run and must fail the job: no step-level or job-level
 # if/condition/continueOnError, no inline guard. Allowed conditions elsewhere: `if: hashFiles('uv.lock') != ''` on the
@@ -151,6 +173,7 @@ def gate_step_checks(rel, lines, what, needle, required=True):
             errors.append(f"{rel}:{n + 1}: {what} job has a run condition: {c}")
 for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
+    job_condition_errors(rel, lines)
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
@@ -235,6 +258,13 @@ mutate "if: false on the merge step (github-ts)" github-ts/.github/workflows/ci.
 mutate "if: false on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: false\n        name: Changed-line coverage (>= 80%)' static
 mutate "condition: false on the jscpd step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Duplication (production source <= 3%, per .jscpd.json)' '        condition: false\n        displayName: Duplication (production source <= 3%, per .jscpd.json)' static
 mutate "condition: false on the nosonar step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: No NOSONAR suppression markers' '    condition: false\n    displayName: No NOSONAR suppression markers' static
+mutate "job-level if != pull_request on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' "  coverage:\n    if: github.event_name != 'pull_request'\n    needs: test\n" static
+mutate "job-level if != pull_request on the quality job (github-py)" github-py/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name != 'pull_request'\n    runs-on: ubuntu-latest\n" static
+mutate "job-level if: false on a PR-only job (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog:\n    if: false' static
+mutate "different condition on a PR-only job (github-py readme-freshness)" github-py/.github/workflows/ci.yml "  readme-freshness:\n    if: github.event_name == 'pull_request'" "  readme-freshness:\n    if: github.event_name != 'push'" static
+mutate "PR-only condition on a non-PR-only job (github-ts quality)" github-ts/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n" static
+mutate "job-level condition: false on the coverage job (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage\n    condition: false\n' static
+mutate "job-level condition on the quality job (azure-py)" azure-py/azure-pipelines.yml '  - job: quality\n' "  - job: quality\n    condition: ne(variables['Build.Reason'], 'PullRequest')\n" static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
 mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
