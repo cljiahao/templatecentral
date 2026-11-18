@@ -128,7 +128,7 @@ def step_bounds(lines, n):
 # Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
 # skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
-PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
+PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene", "dependency-review"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
 # Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
 # no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
@@ -257,7 +257,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'coverage': ['test'],
                          'changelog': [],
                          'readme-freshness': [],
-                         'comment-hygiene': []},
+                         'comment-hygiene': [],
+                         'dependency-review': []},
                'gates': [('shard plan',
                           'plan',
                           'run',
@@ -286,9 +287,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
-                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"')]},
+                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('dependency review at high',
+                          'dependency-review',
+                          'uses',
+                          'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'github-py': {'file': 'github-py/.github/workflows/ci.yml',
-               'needs': {'quality': [], 'changelog': [], 'readme-freshness': [], 'comment-hygiene': []},
+               'needs': {'quality': [], 'changelog': [], 'readme-freshness': [], 'comment-hygiene': [], 'dependency-review': []},
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
@@ -304,7 +309,11 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
-                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"')]},
+                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('dependency review at high',
+                          'dependency-review',
+                          'uses',
+                          'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'azure-ts': {'file': 'azure-ts/azure-pipelines.yml',
               'needs': {'quality': [], 'test': [], 'coverage': ['test']},
               'gates': [('format, lint and typecheck', 'quality', 'bash', 'pnpm run check'),
@@ -384,6 +393,241 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '(gates include)',
                             'bash',
                             'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
+
+# Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
+# permissions, defaults, env, container) and the full ordered list of steps with every key except name/displayName; a
+# `uses` is compared by action name, its SHA is checked separately. Anything added, removed, reordered or changed,
+# so an inserted rewrite step, a gate-step env/working-directory/target or a shorter hard-coded shard list, fails.
+PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
+                                 'timeout-minutes': 2,
+                                 'outputs': {'shards': '${{ steps.shards.outputs.list }}'}},
+                        'quality': {'runs-on': 'ubuntu-latest', 'timeout-minutes': 20},
+                        'test': {'needs': 'plan',
+                                 'runs-on': 'ubuntu-latest',
+                                 'timeout-minutes': 20,
+                                 'strategy': {'fail-fast': False,
+                                              'matrix': {'shard': '${{ fromJSON(needs.plan.outputs.shards) }}'}}},
+                        'coverage': {'needs': 'test', 'runs-on': 'ubuntu-latest', 'timeout-minutes': 10},
+                        'changelog': {'if': "github.event_name == 'pull_request'",
+                                      'runs-on': 'ubuntu-latest',
+                                      'timeout-minutes': 5},
+                        'readme-freshness': {'if': "github.event_name == 'pull_request'",
+                                             'runs-on': 'ubuntu-latest',
+                                             'timeout-minutes': 5},
+                        'comment-hygiene': {'if': "github.event_name == 'pull_request'",
+                                            'runs-on': 'ubuntu-latest',
+                                            'timeout-minutes': 5},
+                        'dependency-review': {'if': "github.event_name == 'pull_request'",
+                                              'runs-on': 'ubuntu-latest',
+                                              'timeout-minutes': 5}},
+               'steps': {'plan': [{'id': 'shards',
+                                   'run': 'set -euo pipefail\n'
+                                          "list=$(node -p 'JSON.stringify(Array.from({ length: "
+                                          "Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')\n"
+                                          'echo "list=$list" >> "$GITHUB_OUTPUT"\n'}],
+                         'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                     {'uses': 'pnpm/action-setup'},
+                                     {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                     {'run': 'pnpm install --frozen-lockfile'},
+                                     {'run': 'bash .claude/ci-gates.sh deps'},
+                                     {'run': 'bash .claude/verify-harness.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh nosonar'},
+                                     {'run': 'pnpm run check'},
+                                     {'run': 'pnpm exec jscpd'},
+                                     {'run': 'set -euo pipefail\n'
+                                             'if node -e '
+                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
+                                             ': 1)"; then pnpm run test:e2e; fi\n'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
+                         'test': [{'uses': 'actions/checkout'},
+                                  {'uses': 'pnpm/action-setup'},
+                                  {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                  {'run': 'pnpm install --frozen-lockfile'},
+                                  {'run': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                                          '--outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ '
+                                          'matrix.shard }}/${{ env.SHARD_COUNT }}"'},
+                                  {'uses': 'actions/upload-artifact',
+                                   'with': {'name': 'vitest-blob-${{ matrix.shard }}',
+                                            'path': 'blob',
+                                            'if-no-files-found': 'error',
+                                            'retention-days': 1}}],
+                         'coverage': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                      {'uses': 'pnpm/action-setup'},
+                                      {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                      {'run': 'pnpm install --frozen-lockfile'},
+                                      {'uses': 'actions/download-artifact',
+                                       'with': {'pattern': 'vitest-blob-*', 'path': 'blob', 'merge-multiple': True}},
+                                      {'run': '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'},
+                                      {'run': 'pnpm exec vitest run --merge-reports=blob --coverage'},
+                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                       'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" '
+                                              'coverage/cobertura-coverage.xml '
+                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'}],
+                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                       {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
+                                                          '}}'},
+                                        'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
+                         'readme-freshness': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                       'LABELS': '${{ join(github.event.pull_request.labels.*.name, '
+                                                                 "' ') }}"},
+                                               'run': 'bash .claude/ci-gates.sh readme "$BASE_REF"'}],
+                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                             {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                      'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                                "') }}"},
+                                              'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'dependency-review': [{'uses': 'actions/dependency-review-action',
+                                                'with': {'fail-on-severity': 'high'}}]}},
+ 'azure-ts': {'jobs': {'quality': {'timeoutInMinutes': 20},
+                       'test': {'timeoutInMinutes': 20, 'strategy': {'parallel': '${{ variables.shardCount }}'}},
+                       'coverage': {'dependsOn': 'test', 'timeoutInMinutes': 10}},
+              'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
+                                    {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                    {'bash': 'npm install -g "$(node -p '
+                                             '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
+                                    {'bash': 'pnpm install --frozen-lockfile'},
+                                    {'template': 'azure-pipelines/templatecentral-gates.yml'},
+                                    {'bash': 'pnpm run check'},
+                                    {'bash': 'set -euo pipefail\n'
+                                             'if node -e '
+                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
+                                             ': 1)"; then pnpm run test:e2e; fi\n'},
+                                    {'bash': 'pnpm exec jscpd'}],
+                        'test': [{'checkout': 'self'},
+                                 {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                 {'bash': 'npm install -g "$(node -p '
+                                          '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
+                                 {'bash': 'pnpm install --frozen-lockfile'},
+                                 {'bash': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                                          '--outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" '
+                                          '--shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"'},
+                                 {'task': 'PublishPipelineArtifact@1',
+                                  'inputs': {'targetPath': 'blob',
+                                             'artifact': 'vitest-blob-$(System.JobPositionInPhase)'}}],
+                        'coverage': [{'checkout': 'self', 'fetchDepth': 0},
+                                     {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                     {'bash': 'npm install -g "$(node -p '
+                                              '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
+                                     {'bash': 'pnpm install --frozen-lockfile'},
+                                     {'task': 'DownloadPipelineArtifact@2',
+                                      'inputs': {'patterns': 'vitest-blob-*/**',
+                                                 'path': '$(Pipeline.Workspace)/blobs'}},
+                                     {'bash': 'set -euo pipefail\n'
+                                              '# No artifact name, so the task puts each artifact in its own '
+                                              'subfolder: <path>/<artifact>/*.json.\n'
+                                              'mkdir -p blob\n'
+                                              'cp "$(Pipeline.Workspace)"/blobs/*/*.json blob/\n'},
+                                     {'bash': 'set -euo pipefail\n'
+                                              "count=$(find blob -name '*.json' | wc -l)\n"
+                                              'if [ "$count" -ne "$(shardCount)" ]; then\n'
+                                              '  echo "expected $(shardCount) shard reports, found $count" >&2\n'
+                                              '  exit 1\n'
+                                              'fi\n'},
+                                     {'bash': 'set -euo pipefail\n'
+                                              '# writes coverage/cobertura-coverage.xml\n'
+                                              'pnpm exec vitest run --merge-reports=blob --coverage\n'},
+                                     {'bash': 'set -euo pipefail\n'
+                                              'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
+                                              'pipx run "diff-cover==$(diffCoverVersion)" '
+                                              'coverage/cobertura-coverage.xml '
+                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
+ 'github-py': {'jobs': {'quality': {'runs-on': 'ubuntu-latest', 'timeout-minutes': 20},
+                        'changelog': {'if': "github.event_name == 'pull_request'",
+                                      'runs-on': 'ubuntu-latest',
+                                      'timeout-minutes': 5},
+                        'readme-freshness': {'if': "github.event_name == 'pull_request'",
+                                             'runs-on': 'ubuntu-latest',
+                                             'timeout-minutes': 5},
+                        'comment-hygiene': {'if': "github.event_name == 'pull_request'",
+                                            'runs-on': 'ubuntu-latest',
+                                            'timeout-minutes': 5},
+                        'dependency-review': {'if': "github.event_name == 'pull_request'",
+                                              'runs-on': 'ubuntu-latest',
+                                              'timeout-minutes': 5}},
+               'steps': {'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                     {'uses': 'actions/setup-python',
+                                      'with': {'python-version': '3.14',
+                                               'cache': 'pip',
+                                               'cache-dependency-path': 'requirements*.txt'}},
+                                     {'if': "hashFiles('uv.lock') != ''", 'uses': 'astral-sh/setup-uv'},
+                                     {'run': 'set -euo pipefail\n'
+                                             'pip install -r requirements.txt\n'
+                                             'if [ -f requirements-dev.txt ]; then pip install -r '
+                                             'requirements-dev.txt; fi\n'},
+                                     {'run': 'bash .claude/ci-gates.sh deps'},
+                                     {'run': 'bash .claude/verify-harness.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh nosonar'},
+                                     {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
+                                     {'run': 'python -m pyright src/'},
+                                     {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
+                                     {'run': 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
+                                             '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'},
+                                     {'env': {'BASE_REF': '${{ github.base_ref }}'},
+                                      'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
+                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                       {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
+                                                          '}}'},
+                                        'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
+                         'readme-freshness': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                       'LABELS': '${{ join(github.event.pull_request.labels.*.name, '
+                                                                 "' ') }}"},
+                                               'run': 'bash .claude/ci-gates.sh readme "$BASE_REF"'}],
+                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                             {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                      'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                                "') }}"},
+                                              'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'dependency-review': [{'uses': 'actions/dependency-review-action',
+                                                'with': {'fail-on-severity': 'high'}}]}},
+ 'azure-py': {'jobs': {'quality': {'timeoutInMinutes': 20}},
+              'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
+                                    {'task': 'UsePythonVersion@0', 'inputs': {'versionSpec': '3.14'}},
+                                    {'bash': 'set -euo pipefail\n'
+                                             'python -m pip install -r requirements.txt\n'
+                                             'if [ -f requirements-dev.txt ]; then python -m pip install -r '
+                                             'requirements-dev.txt; fi\n'
+                                             '# the deps gate exports uv.lock with uv\n'
+                                             'if [ -f uv.lock ]; then python -m pip install uv; fi\n'},
+                                    {'template': 'azure-pipelines/templatecentral-gates.yml'},
+                                    {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
+                                    {'bash': 'python -m pyright src/'},
+                                    {'bash': 'npx --yes jscpd@$(JSCPD_VERSION)'},
+                                    {'bash': 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'},
+                                    {'bash': 'set -euo pipefail\n'
+                                             'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
+                                             'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml '
+                                             '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
+ 'azure-gates': {'steps': {'(gates include)': [{'bash': 'bash .claude/verify-harness.sh'},
+                                               {'bash': 'bash .claude/ci-gates.sh secrets '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
+                                               {'bash': 'bash .claude/ci-gates.sh deps'},
+                                               {'bash': 'bash .claude/ci-gates.sh nosonar'},
+                                               {'bash': 'bash .claude/ci-gates.sh changelog '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                                'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/ci-gates.sh readme '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                                'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/ci-gates.sh comments '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                                'env': {'LABELS': '$(LABELS)'}}]}}}
+
+for _h, _p in PINNED.items():
+    MANIFEST[_h]["pins"] = _p
+def norm_step(st):
+    if not isinstance(st, dict):
+        return st
+    d = {k: v for k, v in st.items() if k not in ("name", "displayName")}
+    if isinstance(d.get("uses"), str):
+        d["uses"] = d["uses"].split("@")[0]
+    return d
 def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
     if gate_file:
         jobs = {"(gates include)": {"steps": doc.get("steps") if isinstance(doc, dict) else None}}
@@ -406,6 +650,23 @@ def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
             got = [got] if isinstance(got, str) else got
             if sorted(got) != sorted(expected):
                 errors.append(f"{rel}: job {name} must have {needs_key} {expected}, found {got}")
+    pins = entry["pins"]
+    for name, node in jobs.items():
+        if not gate_file and isinstance(node, dict) and name in pins["jobs"]:
+            meta = {k: v for k, v in node.items() if k not in ("steps", "job")}
+            want = pins["jobs"][name]
+            for k in sorted(set(meta) | set(want), key=str):
+                if meta.get(k) != want.get(k):
+                    errors.append(f"{rel}: job {name} key {k} must be {want.get(k)!r}, found {meta.get(k)!r}")
+    for name, want in pins["steps"].items():
+        node = jobs.get(name)
+        steps = node.get("steps") if isinstance(node, dict) else None
+        if not isinstance(steps, list):
+            continue
+        got = [norm_step(st) for st in steps]
+        if got != want:
+            at = next((i for i in range(min(len(got), len(want))) if got[i] != want[i]), min(len(got), len(want)))
+            errors.append(f"{rel}: job {name} steps differ from the pinned ordered list at step {at + 1}: expected {want[at] if at < len(want) else 'end of list'}, found {got[at] if at < len(got) else 'end of list'}")
     for gate, job, key, text in entry["gates"]:
         node = jobs.get(job)
         steps = node.get("steps") if isinstance(node, dict) else None
@@ -415,6 +676,30 @@ def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
         for st in found:
             if "shell" in st:
                 errors.append(f"{rel}: required gate '{gate}' in job {job} must not set shell: {st['shell']}")
+GH_ENV_KEYS = {"DIFF_COVER_VERSION", "JSCPD_VERSION", "SHARD_COUNT", "NODE_OPTIONS"}
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:")
+USES_PINNED = re.compile(r"^\s*(?:-\s+)?uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d[\w.+-]*\s*$")
+def workflow_errors(rel, doc, lines):
+    if "defaults" in doc:
+        errors.append(f"{rel}: workflow-level defaults is not allowed: {doc['defaults']}")
+    if doc.get("permissions") != {"contents": "read"}:
+        errors.append(f"{rel}: workflow permissions must be exactly {{contents: read}}, found {doc.get('permissions')!r}")
+    triggers = doc.get(True, doc.get("on"))
+    if not isinstance(triggers, dict) or set(triggers) != {"pull_request", "push"}:
+        errors.append(f"{rel}: workflow triggers must be exactly pull_request and push, found {triggers!r}")
+    env = doc.get("env")
+    if not isinstance(env, dict) or not set(env) <= GH_ENV_KEYS:
+        errors.append(f"{rel}: workflow env keys must be within {sorted(GH_ENV_KEYS)}, found {env!r}")
+    for i, l in enumerate(lines):
+        if "pull_request_target" in l:
+            errors.append(f"{rel}:{i + 1}: pull_request_target is not allowed: {l.strip()}")
+        if USES_LINE.match(l) and not USES_PINNED.match(l):
+            errors.append(f"{rel}:{i + 1}: uses must be pinned to a full commit SHA with the version in a trailing comment: {l.strip()}")
+    for name, job in (doc.get("jobs") or {}).items():
+        for st in (job.get("steps") or []) if isinstance(job, dict) else []:
+            run = st.get("run") if isinstance(st, dict) else None
+            if isinstance(run, str) and re.search(r"\$\{\{\s*(secrets\.|github\.token)|\b(echo|printf)\b[^\n]*(TOKEN|SECRET|PASSWORD|API_KEY)", run):
+                errors.append(f"{rel}: job {name} step prints or interpolates a secret in run: {run.splitlines()[0]}")
 def load_yaml(rel, path):
     try:
         return yaml.load(open(path).read(), Loader=UniqueKeyLoader)
@@ -429,6 +714,8 @@ for host, rel in files.items():
     if doc is not None:
         condition_errors(rel, doc, host)
         manifest_errors(rel, doc, MANIFEST[host], "needs" if host.startswith("github") else "dependsOn")
+        if host.startswith("github"):
+            workflow_errors(rel, doc, lines)
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
@@ -452,6 +739,8 @@ for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
 gate_doc = load_yaml(gates, f"{root}/{gates}")
 if gate_doc is not None:
     gate_include_errors(gates, gate_doc)
+    if set(gate_doc) != {"steps"}:
+        errors.append(f"{gates}: the gates include must hold only a steps list (a parameters block can switch a gate off), found keys {sorted(map(str, gate_doc))}")
     manifest_errors(gates, gate_doc, MANIFEST["azure-gates"], None, True)
 print("\n".join(errors))
 sys.exit(1 if errors else 0)
@@ -460,8 +749,8 @@ static_check() { python3 "$T/static.py" "$1"; }
 if out=$(static_check "$CI_DIR" 2>&1); then ok "static guards: no gate-neutralising construct, merge and diff-cover present and unguarded"; else bad "static guards flagged the shipped templates: $out"; fi
 
 # 6. mutation proof: each mutation of a copy must be caught
-mutate() { # mutate <label> <relative file> <old text> <new text> <static|github>; \n in the texts is a newline
-  local label=$1 rel=$2 kind=$5
+mutate() { # mutate <label> <relative file> <old text> <new text> <static|github> [expected message substring]; \n in the texts is a newline
+  local label=$1 rel=$2 kind=$5 want=${6:-}
   rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
   python3 - "$T/mut/$rel" "$3" "$4" <<'PY'
 import sys
@@ -472,7 +761,9 @@ if old not in s:
 open(p, "w").write(s.replace(old, new))
 PY
   if [[ $kind == static ]]; then
-    if out=$(static_check "$T/mut" 2>&1); then bad "mutation not caught: $label"; else ok "mutation caught: $label -> $(head -1 <<<"$out")"; fi
+    if out=$(static_check "$T/mut" 2>&1); then bad "mutation not caught: $label"
+    elif [[ -n "$want" && "$out" != *"$want"* ]]; then bad "mutation caught by the wrong check, expected '$want': $label -> $(head -1 <<<"$out")"
+    else ok "mutation caught: $label -> $(head -1 <<<"$out")"; fi
   else
     res=$(gh_behaviour "$T/mut")
     if [[ "$res" =~ ^missing=0 ]]; then ok "mutation caught: $label -> $res"; else bad "mutation not caught: $label ($res)"; fi
@@ -580,6 +871,88 @@ mutate "diff-cover version variable removed (azure-ts)" azure-ts/azure-pipelines
 mutate "jscpd version range instead of exact (azure-py)" azure-py/azure-pipelines.yml 'JSCPD_VERSION: "5.4.3"' 'JSCPD_VERSION: "^5"' static
 mutate "nosonar step removed (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: echo skipped' static
 mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'echo skipped' static
+
+# 6b. pinned step options, defaults, step order, shard matrix, gate-include parameters
+mutate "working-directory on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)\n        env:' '      - name: Changed-line coverage (>= 80%)\n        working-directory: docs\n        env:' static "differ from the pinned ordered list"
+mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: pipx run" "          BASE_REF: HEAD\n        run: pipx run" "static" "differ from the pinned ordered list"
+mutate "env added on the tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)\n' '      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)\n        env: { PYTEST_ADDOPTS: --co }\n' static "differ from the pinned ordered list"
+mutate "workingDirectory on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage (>= 80%)' '        workingDirectory: docs\n        displayName: Changed-line coverage (>= 80%)' static "differ from the pinned ordered list"
+mutate "target on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        target: host\n        displayName: Merge shard reports' static "differ from the pinned ordered list"
+mutate "LABELS env changed on the changelog gate (azure gates)" "azure/azure-pipelines/templatecentral-gates.yml" "    displayName: Changelog gate\n    env: { LABELS: \$(LABELS) }" "    displayName: Changelog gate\n    env: { LABELS: skip-changelog }" "static" "differ from the pinned ordered list"
+mutate "workflow-level defaults with a working-directory (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }\n' 'permissions: { contents: read }\ndefaults:\n  run:\n    working-directory: docs\n' static "workflow-level defaults"
+mutate "job-level defaults with a working-directory (github-py quality)" github-py/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' '  quality:\n    defaults:\n      run:\n        working-directory: docs\n    runs-on: ubuntu-latest\n' static "key defaults must be None"
+mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: test\n' static "key env must be None"
+mutate "step inserted before the first gate (github-ts quality)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '      - run: echo "{}" > .claude/dep-audit-allow.txt\n      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' static "differ from the pinned ordered list"
+mutate "step inserted between install and the gates (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - bash: rm -f .jscpd.json\n      - template: azure-pipelines/templatecentral-gates.yml\n' static "differ from the pinned ordered list"
+mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
+mutate "gates reordered (github-py, secret scan before tests)" "github-py/.github/workflows/ci.yml" "      # PR: the PR's commits; push: full history\n      - name: Secret scan (gitleaks CLI, checksum-verified)\n        env:\n          BASE_REF: \${{ github.base_ref }}\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\n" "" "static"
+mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/ci.yml" "shard: \${{ fromJSON(needs.plan.outputs.shards) }}" "shard: [1]" "static" "key strategy must be"
+mutate "hard-coded parallel count (azure-ts)" "azure-ts/azure-pipelines.yml" "parallel: \${{ variables.shardCount }}" "parallel: 1" "static" "key strategy must be"
+mutate "parameters passed to the gates include (azure-ts)" azure-ts/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { skipDeps: true }\n' static "differ from the pinned ordered list"
+mutate "parameters passed to the gates include (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { runDeps: false }\n' static "differ from the pinned ordered list"
+mutate "parameters block declared in the gates include" azure/azure-pipelines/templatecentral-gates.yml 'steps:\n' 'parameters:\n  - name: runDeps\n    default: true\nsteps:\n' static "only a steps list"
+
+# 6c. supply chain: SHA pins, least-privilege token, no pull_request_target, no secret output, dependency review
+mutate "action pinned by tag instead of SHA (github-ts)" github-ts/.github/workflows/ci.yml 'uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0' 'uses: actions/setup-node@v7' static "full commit SHA"
+mutate "SHA pin without a version comment (github-py)" github-py/.github/workflows/ci.yml 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0' 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97' static "full commit SHA"
+mutate "workflow permissions raised to write (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }' 'permissions: { contents: write }' static "permissions must be exactly"
+mutate "workflow permissions removed (github-py)" github-py/.github/workflows/ci.yml 'permissions: { contents: read }\n' '' static "permissions must be exactly"
+mutate "pull_request_target trigger (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request_target: { branches: [main, uat, develop] }' static "pull_request_target"
+mutate "secret echoed in a run step (github-py)" "github-py/.github/workflows/ci.yml" "        run: bash .claude/ci-gates.sh nosonar" "        run: bash .claude/ci-gates.sh nosonar && echo \"\${{ secrets.DEPLOY_TOKEN }}\"" "static" "secret in run"
+mutate "dependency-review job removed (github-ts)" github-ts/.github/workflows/ci.yml '  dependency-review:\n    if: github.event_name == '"'"'pull_request'"'"'\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      # fails the PR when it adds a dependency with a high or critical advisory\n      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0\n        with: { fail-on-severity: high }\n' '' static "required job dependency-review is missing"
+mutate "dependency-review threshold lowered to critical (github-py)" github-py/.github/workflows/ci.yml 'fail-on-severity: high' 'fail-on-severity: critical' static "differ from the pinned ordered list"
+mutate "dependency-review warn-only (github-ts)" github-ts/.github/workflows/ci.yml 'with: { fail-on-severity: high }' 'with: { fail-on-severity: high, warn-only: true }' static "differ from the pinned ordered list"
+mutate "dependency-review action swapped for echo (github-py)" github-py/.github/workflows/ci.yml 'uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0\n        with: { fail-on-severity: high }' 'run: echo skipped' static "dependency review at high"
+
+# 9. Dependabot templates: version 2, the stack's ecosystem plus github-actions, weekly, minor and patch grouped
+dependabot_check() { # dependabot_check <template-ci dir>
+  python3 - "$1" <<'PY'
+import sys
+import yaml
+want = {"github-ts": "npm", "github-py": "pip"}
+bad = []
+for host, eco in want.items():
+    rel = f"{sys.argv[1]}/{host}/.github/dependabot.yml"
+    try:
+        doc = yaml.safe_load(open(rel))
+    except (OSError, yaml.YAMLError) as e:
+        bad.append(f"{rel}: unreadable: {e}")
+        continue
+    ups = doc.get("updates") if isinstance(doc, dict) else None
+    if not isinstance(doc, dict) or doc.get("version") != 2 or not isinstance(ups, list):
+        bad.append(f"{rel}: expected version 2 and an updates list")
+        continue
+    if sorted(u.get("package-ecosystem") for u in ups if isinstance(u, dict)) != sorted([eco, "github-actions"]):
+        bad.append(f"{rel}: updates must cover exactly {eco} and github-actions")
+    for u in ups:
+        if not isinstance(u, dict):
+            continue
+        grp = (u.get("groups") or {}).get("minor-and-patch") or {}
+        if (u.get("schedule") or {}).get("interval") != "weekly" or u.get("directory") != "/":
+            bad.append(f"{rel}: {u.get('package-ecosystem')} must update / weekly")
+        if sorted(grp.get("update-types") or []) != ["minor", "patch"] or grp.get("patterns") != ["*"]:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} must group minor and patch updates over *")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+}
+if out=$(dependabot_check "$CI_DIR" 2>&1); then ok "dependabot templates: stack ecosystem plus github-actions, weekly, minor and patch grouped"; else bad "dependabot templates drifted: $out"; fi
+dep_mutate() { # dep_mutate <label> <host> <old> <new>
+  rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut"
+  python3 - "$T/mut/$2/.github/dependabot.yml" "$3" "$4" <<'PY'
+import sys
+p, old, new = sys.argv[1], sys.argv[2].replace("\\n", "\n"), sys.argv[3].replace("\\n", "\n")
+s = open(p).read()
+if old not in s:
+    sys.exit("mutation target not found: " + old)
+open(p, "w").write(s.replace(old, new))
+PY
+  if out=$(dependabot_check "$T/mut" 2>&1); then bad "mutation not caught: $1"; else ok "mutation caught: $1 -> $(head -1 <<<"$out")"; fi
+}
+dep_mutate "github-actions ecosystem removed (github-ts)" github-ts '  - package-ecosystem: github-actions' '  - package-ecosystem: docker'
+dep_mutate "daily instead of weekly (github-py)" github-py 'interval: weekly' 'interval: daily'
+dep_mutate "major updates grouped (github-ts)" github-ts 'update-types: [minor, patch]' 'update-types: [minor, patch, major]'
+dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: pip' 'package-ecosystem: npm'
 
 # 7. passWithNoTests must not appear anywhere in the seeded templates (a shard with no test files would pass silently)
 nopass_check() { # nopass_check <scaffold dir>
