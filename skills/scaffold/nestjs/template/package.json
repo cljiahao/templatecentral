@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@12.19.0",
   "engines": {
-    "node": ">=24.22.1"
+    "node": ">=26.12.1"
   },
   "scripts": {
     "build": "nest build",
@@ -46,7 +46,7 @@
     "@nestjs/cli": "^12.0.12",
     "@nestjs/schematics": "^12.0.13",
     "@nestjs/testing": "^12.4.2",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",

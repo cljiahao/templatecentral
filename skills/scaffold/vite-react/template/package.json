@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@12.19.0",
   "engines": {
-    "node": ">=24.22.1"
+    "node": ">=26.12.1"
   },
   "scripts": {
     "dev": "vite",
@@ -41,7 +41,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",

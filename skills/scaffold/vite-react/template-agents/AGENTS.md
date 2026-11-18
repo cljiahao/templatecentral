@@ -2,7 +2,7 @@
 # AGENTS.md — __TC_PROJECT_TITLE__
 
 ## Stack
-Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8 · TanStack Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥24.22.1 Client-side SPA: no SSR, no API handlers.
+Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8 · TanStack Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥26.12.1 Client-side SPA: no SSR, no API handlers.
 
 ## Commands
 `pnpm dev` · `pnpm build` (tsc -b && vite build) · `pnpm test` · `pnpm check` (format + lint + typecheck)
