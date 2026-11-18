@@ -88,3 +88,11 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: bash .claude/ci-gates.sh comments "$BASE_REF"
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # fails the PR when it adds a dependency with a high or critical advisory
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with: { fail-on-severity: high }
