@@ -16,8 +16,8 @@
 set -u
 
 # Scratch tool versions are pinned so a before run and an after run measure with identical tools.
-ESLINT_VERSION=10.12.0
-TSESLINT_VERSION=8.60.1
+ESLINT_VERSION=10.14.0
+TSESLINT_VERSION=8.72.2
 SONARJS_VERSION=4.2.2
 JSCPD_VERSION=5.4.3
 DIFFCOVER_VERSION=11.0.3   # used by quality-pass.md
