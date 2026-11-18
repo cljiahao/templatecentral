@@ -28,7 +28,7 @@ image  python python:3.14.10-slim
 image  nginx  nginx:1.30.5-alpine3.24
 image  beanie-python python:3.13.16-slim   # held on 3.13 (beanie declares <3.14), used only by add/database/python/beanie.md
 
-tool   DIFF_COVER  11.0.1
+tool   DIFF_COVER  11.0.3
 tool   GITLEAKS    8.30.1
 tool   PIP_AUDIT   2.10.1
 tool   JSCPD       npm:jscpd
@@ -46,25 +46,27 @@ action pnpm/action-setup              73e46992e05b19abd31f2f3c20e0e7370d762115 v
 action astral-sh/setup-uv             68559e99cc807c1eb7e9238fd43a15bba460eec2 v10.3.3
 action anthropics/claude-code-action  4fa93a88de49bbef68b10eb15aabedf28ca0e1ed v1.0.271
 
-# held: typescript-eslint 8.72.2 peers typescript <6.1.0 and @nestjs/swagger 12.1.1 peers ^5.5 || ^6,
-# so TypeScript stays on 6.0.x until both support 7.
+# held: typescript-eslint 8.72.2 peers typescript <6.1.0, so TypeScript stays on 6.0.x until it supports 7.
+# note: DIFF_COVER is 11.0.3 (2026-11-17), newer than the 7-day rule: main already carried 11.0.3 and 11.0.1 was an unintended downgrade.
 # held: vitest and @vitest/coverage-v8 move together (the coverage package peers the exact vitest version).
-# held: nestjs-zod is pinned exactly (no caret). No release supports Nest 12: 5.6.0 peers @nestjs/common ^10||^11
-# and @nestjs/swagger ^7.4.2||^8||^11, the template runs Nest 12 and pnpm install warns (verified working),
-# no override. An exact pin keeps a later 5.x from changing behaviour unseen.
+# held: all @nestjs/* packages stay on major 11 (swagger 11.4.8) because nestjs-zod 5.6.0, the latest release,
+# peers @nestjs/common ^10||^11 and @nestjs/swagger ^7.4.2||^8||^11 and no release declares a later Nest major;
+# running a later major would leave those peers unmet. Nest 11 still gets security backports (11.2.10 and
+# 11.2.11, 2026-11). Lift the hold when a nestjs-zod release peers the next Nest and Swagger majors.
+# held: nestjs-zod is pinned exactly (no caret), so a later 5.x cannot change behaviour unseen.
 # held: the beanie-python image is python 3.13 on purpose: beanie 2.x declares Requires-Python <3.14.
 npm @eslint-community/eslint-plugin-eslint-comments ^4.8.1
 npm @eslint/js                    ^10.0.1
 npm @fastify/helmet               ^13.2.0
 npm @fastify/static               ^10.1.10
 npm @hookform/resolvers           ^7.0.6
-npm @nestjs/cli                   ^12.0.12
-npm @nestjs/common                ^12.4.2
-npm @nestjs/core                  ^12.4.2
-npm @nestjs/platform-fastify      ^12.4.2
-npm @nestjs/schematics            ^12.0.13
-npm @nestjs/swagger               ^12.1.1
-npm @nestjs/testing               ^12.4.2
+npm @nestjs/cli                   ^11.0.24
+npm @nestjs/common                ^11.2.11
+npm @nestjs/core                  ^11.2.11
+npm @nestjs/platform-fastify      ^11.2.11
+npm @nestjs/schematics            ^11.1.0
+npm @nestjs/swagger               ^11.4.8
+npm @nestjs/testing               ^11.2.11
 npm @tailwindcss/postcss          ^4.3.5
 npm @tailwindcss/typography       ^0.5.20
 npm @tanstack/react-query         ^5.107.1

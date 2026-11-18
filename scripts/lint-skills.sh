@@ -1129,7 +1129,7 @@ check_no_version_pins() {
   # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs and jscpd are the exact pins by design
   # (sonarjs: its enabled-rule set changes across minor versions; jscpd: the CI duplication gate pins
   # the same version, so a local run and CI measure alike).
-  # nestjs-zod: no release supports Nest 12, so an exact pin keeps a later 5.x from changing behaviour unseen.
+  # nestjs-zod: an exact pin keeps a later 5.x from changing behaviour unseen.
   header "Template package.json dependencies use floors, not exact pins"
   local pj pins="" n=0
   while IFS= read -r pj; do

@@ -2,7 +2,7 @@
 # AGENTS.md — __TC_PROJECT_TITLE__
 
 ## Stack
-NestJS 12 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vitest · pnpm · Node ≥26.12.1
+NestJS 11 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vitest · pnpm · Node ≥26.12.1
 
 ## Commands
 `pnpm start:dev` · `pnpm build` · `pnpm test` · `pnpm test:e2e` · `pnpm check` (format + lint + typecheck)

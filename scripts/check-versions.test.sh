@@ -70,6 +70,9 @@ t prose_floor_below_pin 0 "printf '\nNext.js ≥16.3.8 fixes an advisory.\n' >> 
 t prose_floor_above_pin 1 "printf '\nNext.js ≥99.0 is required.\n' >> $DOC" "prose says Next.js 99.0"
 t prose_current_claim 1 "printf '\nNext.js 16.2 is current.\n' >> $DOC" "current/latest"
 t prose_latest_claim 1 "printf '\nThe latest FastAPI 0.100 does this.\n' >> $DOC" "current/latest"
+t prose_nest_held_stray_major 1 "printf '\nThe stack is Nest 12 here.\n' >> $DOC" "prose says Nest 12"
+t prose_nest_held_stray_nestjs 1 "printf '\nRuns NestJS 12 today.\n' >> $DOC" "prose says NestJS 12"
+t prose_nest_held_major_ok 0 "printf '\nRuns NestJS 11 today.\n' >> $DOC"
 t prose_floor_in_rules 1 "printf '\nReact 99 is the floor.\n' >> .claude/rules/nextjs.md" "prose says React 99"
 t prose_floor_in_template_agents 1 "printf '\nPydantic >=99 only.\n' >> skills/scaffold/fastapi/template-agents/AGENTS.md" "prose says Pydantic 99"
 # versions.txt: sub-keys and kinds are exact; a BOM or CRLF line ends are fine; one name under pip and npm is legal

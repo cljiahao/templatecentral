@@ -31,20 +31,31 @@ describe('AppController (e2e)', () => {
     expect([result.statusCode, result.payload]).toEqual([200, payload]);
   });
 
+  // nestjs-zod hooks into Nest's pipes and Swagger's document; these three tests prove that.
   it('POST /examples rejects an invalid body with 400 in the project error shape (ZodValidationPipe)', async () => {
     const result = await app.inject({ method: 'POST', url: '/examples', payload: { name: '' } });
-    expect([result.statusCode, result.json()]).toMatchObject([400, { statusCode: 400 }]);
+    const body = result.json<{ statusCode: number; message: string }>();
+    expect([result.statusCode, body.statusCode, typeof body.message]).toEqual([400, 400, 'string']);
   });
 
   it('creates, reads, updates and deletes an example, serialising each response (createZodDto)', async () => {
-    const res = await app.inject({ method: 'POST', url: '/examples', payload: { name: 'a' } });
-    const { id } = res.json<{ id: string }>();
-    const send = (method: 'GET' | 'PUT' | 'DELETE', payload?: object) =>
-      app.inject({ method, url: `/examples/${id}`, payload });
-    expect([res.statusCode, (await send('GET')).json()]).toMatchObject([201, { id, name: 'a' }]);
-    expect((await send('PUT', { name: 'b' })).json()).toMatchObject({ id, name: 'b' });
+    const list = () => app.inject({ method: 'GET', url: '/examples' });
+    expect((await list()).json()).toEqual([]);
+    const payload = { name: 'a', description: 'd' };
+    const created = await app.inject({ method: 'POST', url: '/examples', payload });
+    const { id } = created.json<{ id: string }>();
+    const send = (method: 'GET' | 'PUT' | 'DELETE', body?: object) =>
+      app.inject({ method, url: `/examples/${id}`, payload: body });
+    const read = await send('GET');
+    expect([created.statusCode, read.statusCode, read.json()]).toMatchObject([
+      201,
+      200,
+      { id, ...payload },
+    ]);
+    const updated = await send('PUT', { name: 'b' });
+    expect([updated.statusCode, updated.json()]).toMatchObject([200, { id, name: 'b' }]);
     expect((await send('DELETE')).statusCode).toBe(204);
-    expect((await app.inject({ method: 'GET', url: '/examples' })).json()).toEqual([]);
+    expect((await list()).json()).toEqual([]);
   });
 
   it('builds an OpenAPI document that carries the DTO schema after cleanupOpenApiDoc', () => {
