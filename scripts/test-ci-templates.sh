@@ -6,13 +6,14 @@
 #   3. no gate step can be neutralised (`|| true`, continue-on-error, always()/succeededOrFailed(), if/condition), and
 #      every template keeps its merge command and `diff-cover --fail-under=80` unguarded;
 #   4. each of those static checks and the GitHub assertion is proven by mutating a copy of the templates.
-# Usage: bash scripts/test-ci-templates.sh   (needs bash, python3)
+# Usage: bash scripts/test-ci-templates.sh   (needs bash, python3 and PyYAML)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CI_DIR="$REPO_ROOT/skills/scaffold/shared/template-ci"
 T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
+python3 -c 'import yaml' 2>/dev/null || { echo "test-ci-templates: PyYAML is required: pip install pyyaml==6.0.3" >&2; exit 1; }
 fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1" >&2; fail=1; }
@@ -102,6 +103,10 @@ if [[ "$res" =~ ^missing=[1-9][0-9]*\ full=0$ ]]; then ok "github assertion fail
 # 5. static guards over all four templates
 cat > "$T/static.py" <<'PY'
 import re, sys
+try:
+    import yaml
+except ImportError:
+    sys.exit("PyYAML is required by the job-condition guard: pip install pyyaml==6.0.3")
 root = sys.argv[1]
 files = {
     "github-ts": ("github-ts/.github/workflows/ci.yml", "--merge-reports=blob --coverage"),
@@ -120,52 +125,57 @@ def step_bounds(lines, n):
     while end < len(lines) and not (re.match(r"^\s*- ", lines[end]) and len(lines[end]) - len(lines[end].lstrip()) <= indent) and not re.match(r"^\s{0,2}\S", lines[end]):
         end += 1
     return start, end
-# Only the PR-only gates may carry a job-level condition, and only this exact one: the gates themselves skip
-# off-PR runs, so any other job-level if/condition could silently switch a gate off on pushes or PRs.
+# Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
+# skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
+# parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
 PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
-PR_ONLY_IF = "if: github.event_name == 'pull_request'"
-JOB_HEAD = re.compile(r"^  (?:-\s+job:\s*(\S+)|([A-Za-z_-]+):)\s*(?:#.*)?$")
-def job_blocks(lines, rel=None):
-    if rel is not None and any(re.match(r"^stages:", l) for l in lines):
-        errors.append(f"{rel}: stages: is not supported by the job-condition guard; extend it before using stages")
-    start = next((i for i, l in enumerate(lines) if re.match(r"^jobs:\s*(#.*)?$", l)), None)
-    if start is None:
-        if rel is not None:
-            errors.append(f"{rel}: no `jobs:` block the job-condition guard can read")
+PR_ONLY_IF = "github.event_name == 'pull_request'"
+class UniqueKeyLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        keys = [self.construct_object(k, deep=True) for k, _ in node.value]
+        dupes = sorted({str(k) for k in keys if keys.count(k) > 1})
+        if dupes:
+            raise yaml.constructor.ConstructorError(None, None, "duplicate key " + ", ".join(dupes), node.start_mark)
+        return super().construct_mapping(node, deep)
+def condition_errors(rel, doc):
+    def check(kind, name, node, allowed):
+        if not isinstance(node, dict):
+            errors.append(f"{rel}: {kind} {name} is not a mapping the job-condition guard can read")
+            return
+        for key in ("if", "condition"):
+            if key in node and not (allowed and key == "if" and node[key] == PR_ONLY_IF):
+                errors.append(f"{rel}: {kind} {name} has a run condition: {key}: {node[key]}")
+    def azure_jobs(owner, jobs):
+        if not isinstance(jobs, list):
+            errors.append(f"{rel}: {owner} jobs is not a list the job-condition guard can read")
+            return
+        for entry in jobs:
+            name = entry.get("job") or entry.get("deployment") or entry.get("template") if isinstance(entry, dict) else None
+            check("job", name or "?", entry, False)
+    if not isinstance(doc, dict):
+        errors.append(f"{rel}: not a YAML mapping the job-condition guard can read")
         return
-    heads = []
-    for i in range(start + 1, len(lines)):
-        if re.match(r"^\S", lines[i]):
-            break
-        if re.match(r"^  \S", lines[i]) and not lines[i].startswith("  #"):
-            if JOB_HEAD.match(lines[i]):
-                heads.append(i)
-            elif rel is not None:
-                errors.append(f"{rel}:{i + 1}: job head the job-condition guard cannot read: {lines[i].strip()}")
-    if not heads and rel is not None:
-        errors.append(f"{rel}: no jobs found by the job-condition guard")
-    for idx, h in enumerate(heads):
-        end = heads[idx + 1] if idx + 1 < len(heads) else len(lines)
-        for k in range(h + 1, end):
-            if re.match(r"^\S", lines[k]):
-                end = k
-                break
-        m = JOB_HEAD.match(lines[h])
-        yield (m.group(1) or m.group(2)), h, end
-def job_condition_errors(rel, lines):
-    for name, h, end in job_blocks(lines, rel):
-        for k in range(h + 1, end):
-            if re.match(r"^    (if|condition):", lines[k]):
-                text = lines[k].strip()
-                if not (name in PR_ONLY_JOBS and text == PR_ONLY_IF and lines[k] == "    " + PR_ONLY_IF):
-                    errors.append(f"{rel}:{k + 1}: job {name} has a run condition: {text}")
-def job_has_condition(lines, n):
-    for name, h, end in job_blocks(lines):
-        if h <= n < end:
-            for k in range(h + 1, end):
-                if re.match(r"^    (if|condition):", lines[k]) and not (name in PR_ONLY_JOBS and lines[k] == "    " + PR_ONLY_IF):
-                    return lines[k].strip()
-    return None
+    seen = False
+    jobs = doc.get("jobs")
+    if isinstance(jobs, dict):
+        seen = True
+        for name, node in jobs.items():
+            check("job", name, node, name in PR_ONLY_JOBS)
+    elif jobs is not None:
+        seen = True
+        azure_jobs("top-level", jobs)
+    stages = doc.get("stages")
+    if stages is not None:
+        seen = True
+        if not isinstance(stages, list):
+            errors.append(f"{rel}: stages is not a list the job-condition guard can read")
+        else:
+            for stage in stages:
+                check("stage", stage.get("stage", "?") if isinstance(stage, dict) else "?", stage, False)
+                if isinstance(stage, dict) and "jobs" in stage:
+                    azure_jobs("stage " + str(stage.get("stage", "?")), stage["jobs"])
+    if not seen:
+        errors.append(f"{rel}: no jobs or stages the job-condition guard can read")
 # Gate steps (merge, diff-cover, jscpd, nosonar) must always run and must fail the job: no step-level or job-level
 # if/condition/continueOnError, no inline guard. Allowed conditions elsewhere: `if: hashFiles('uv.lock') != ''` on the
 # optional setup-uv step (not a gate) and the job-level `github.event_name == 'pull_request'` on the PR-only gates.
@@ -182,12 +192,12 @@ def gate_step_checks(rel, lines, what, needle, required=True):
         for k in range(a, b):
             if re.match(r"^\s*(- )?(if|condition|continueOnError):", lines[k]):
                 errors.append(f"{rel}:{k + 1}: {what} step has a run condition: {lines[k].strip()}")
-        c = job_has_condition(lines, n)
-        if c:
-            errors.append(f"{rel}:{n + 1}: {what} job has a run condition: {c}")
 for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
-    job_condition_errors(rel, lines)
+    try:
+        condition_errors(rel, yaml.load(open(f"{root}/{rel}").read(), Loader=UniqueKeyLoader))
+    except yaml.YAMLError as e:
+        errors.append(f"{rel}: not parseable YAML, so the job-condition guard cannot check it: {e}")
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
@@ -279,11 +289,18 @@ mutate "different condition on a PR-only job (github-py readme-freshness)" githu
 mutate "PR-only condition on a non-PR-only job (github-ts quality)" github-ts/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n" static
 mutate "job-level condition: false on the coverage job (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage\n    condition: false\n' static
 mutate "job-level condition on the quality job (azure-py)" azure-py/azure-pipelines.yml '  - job: quality\n' "  - job: quality\n    condition: ne(variables['Build.Reason'], 'PullRequest')\n" static
-mutate "job-level if != pull_request after timeout-minutes on the diff-cover job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' "    timeout-minutes: 20\n    if: github.event_name != 'pull_request'\n" static
+mutate "explicit if: github.event_name != pull_request on the diff-cover (coverage) job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' "    timeout-minutes: 20\n    if: github.event_name != 'pull_request'\n" static
 mutate "job head with a trailing comment and a forbidden if (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog: # PR only\n    if: false' static
 mutate "job head with a trailing comment and a forbidden condition (azure-ts coverage)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage # merge\n    condition: false\n' static
-mutate "Azure stages: template with a stage-level condition (azure-py)" azure-py/azure-pipelines.yml 'jobs:\n  - job: quality\n' "stages:\n  - stage: build\n    condition: false\n    jobs:\n      - job: quality\n" static
-mutate "unreadable job head (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test }\n  extra:\n    needs: test\n' static
+mutate "Azure stages: template with a stage-level condition (azure-py)" azure-py/azure-pipelines.yml 'trigger:' "stages:\n  - stage: s\n    condition: false\n    jobs:\n      - job: x\n        steps: []\ntrigger:" static
+mutate "quoted \"stages\" key with a stage-level condition (azure-py)" azure-py/azure-pipelines.yml 'trigger:' '"stages":\n  - stage: s\n    "condition": false\n    jobs:\n      - job: x\n        steps: []\ntrigger:' static
+mutate "space before the colon in stages : and a stage condition (azure-py)" azure-py/azure-pipelines.yml 'trigger:' 'stages :\n  - stage: s\n    condition : false\n    jobs:\n      - job: x\n        steps: []\ntrigger:' static
+mutate "double-quoted \"if\" key on a job (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog:\n    "if": false' static
+mutate "single-quoted 'if' key on a job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' "    timeout-minutes: 20\n    'if': false\n" static
+mutate "space before the colon in if : false on a job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' '    timeout-minutes: 20\n    if : false\n' static
+mutate "job key at column 6 after -   job: with a condition (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  -   job: zz\n      condition: false\n      steps: []\n  - job: coverage\n' static
+mutate "duplicate if key hiding a forbidden value (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" "  changelog:\n    if: false\n    if: github.event_name == 'pull_request'" static
+mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test, if: false }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
 mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
