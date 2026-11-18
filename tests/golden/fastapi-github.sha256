@@ -1,22 +1,23 @@
 # Golden scaffold output hashes for fastapi on github CI.
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
-# Exception to the source commit: .claude/hooks/session-context.sh no longer prints head -30 AGENTS.md (the @AGENTS.md import loads it).
+# Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
 db10ddde02fd7561bbf541bc9b1cdeedb46b4004d5b44d1c583d34641884a6bf  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
-9a88cb51486504237b22d61ca47720fe591f1125d23953c050852a5480c1e372  .claude/hooks/block-no-verify.sh
-4a79a04b1e682585234d193ac68aa74f0e85a8131bc7860a417f2ccfcdd6ec49  .claude/hooks/post-edit-comment-check.sh
-dbfc9b113181ea93d2984c585a0e408413013931ad4eafcf68cc435a414b383f  .claude/hooks/post-edit-typecheck.sh
-33db78f6184f5ad91931303ccdcdd6c962cb3957f92393458b61c33f2a875e3c  .claude/hooks/protect-files.sh
-f1c11506667c110afd1e920e2b1b37ce059e97a91f69fec61096e26961e0dc09  .claude/hooks/session-context.sh
+5441a9ed222e3290677f436ea154a144e51412f033f14e1d081a0a6b6c273c21  .claude/hooks/block-no-verify.sh
+df37035423cac38a0a12a0d3a09b463dcf14d5a0e1153f429222a0ae1c104b8f  .claude/hooks/post-edit-comment-check.sh
+89fcab0bdabad8832f2f795563eda9b30a168f368c72b04b692ee28394d858e3  .claude/hooks/post-edit-typecheck.sh
+1509f092fbc58efe825350304fb19e32862dcd5137cbeaf0631d1e2b97483238  .claude/hooks/protect-files.sh
+4e517dcc5ce3a9cc41828cded849f4734a5b9c8bdf89d7d0d2122476e9054171  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
-af5dbf1b2ccf65b3bf13af43f713347e02302c131d22ff5e4334aa2397eac9b5  .claude/hooks/stop-checks.sh
-2187460f60dd2e5443737cf97711d4f08f8a59a000d814c39520b95a0a384afb  .claude/hooks/subagent-stop.sh
+06f0a68618f9be29ccaf03744d3b61b918ad33517f837c2da1127d8fc9b607fa  .claude/hooks/stop-checks.sh
+98fbbc31be1422e45115f6972ea7faff15c734708413b6f05a5efea199063a65  .claude/hooks/subagent-stop.sh
 7a85f50f78f2821a870dbe3bd6c89709f32d315d89ad91a55f50aa8c259bd9d3  .claude/hooks/user-prompt-guard.py
 c9819579dba2e4f3d1259620e1cda67d2effdaaf4cddaf0e64e06ff2644b29e6  .claude/regen-harness.sh
+3851819b0e6dfc1930276dbc8181f5f03f44d8803f8cc17de11f6f036bc4a5ee  .claude/rules/fastapi.md
 ed4f4db45cc99fe8059910abac42ebafd66a1906a3dbd2b6e973156d7e6ef1ab  .claude/settings.json
 51283eeb6d52ffc88f66a852cb5dca2a93655f5456fdc43d27dee927ed336888  .claude/skills/api-verify/SKILL.md
-de500da1818c1726c4276be0911b1f1ffc5b7132926c82f4f46ba9d47d74d254  .claude/skills/skill-audit/SKILL.md
+8436a463b24cffbcfcbba9e6f9d88e1aee3048957c54424deef018d0b024a5b4  .claude/skills/skill-audit/SKILL.md
 f982226eaa82f369106eacdb44bc0b7a2e2ad6a539081ee94f5c6d6e56d57157  .claude/verify-harness.sh
 f653017b648f781dcb87349a24e97dffeb70609921c093f860cc7f021a58df41  .dockerignore
 a97615c61d170790b07cc942d2cc7ba151dda0d6761a31b1d81a55cd50ee75f4  .env.example
@@ -26,14 +27,14 @@ d6c671f1736718eeb910cfe8b3e3afff6c2cf69c8e63a0f95e9e785b77afafb3  .github/depend
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 62c219b862a518b702784f4f9087984d08788bfa6241ab72da280026de019e7c  .jscpd.json
 c66dad01d734dacc5092b980035b9901ec518e1ecbfb5db270a35d39750a27f0  .lefthook/commit-msg.sh
-7cc3dc05e0a7047727b104c2b938f76ca1a005022306edeb3989a6a77c8902b8  AGENTS.md
+ca53f3514292994681c39c0f9d8c45fcd78708bef35cf2c786885944e25cb2c8  AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  CLAUDE.md
 baf511505c77c2bdad4c1fee3cdf5f6aa0f84278e525a058202c83af19f8a97e  Dockerfile
 d403fc06dd3807b7bd8c330f396f973962523086e8ca65150e6d01ac37379ff8  FUTURE.md
 4174391cb3afea88f9e116db0967791aca49da374c86e91b17ac667ed917d350  docker-entrypoint.sh
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 66a649febfc52d831936f2f1e93a53011839dd0204a2be57ca89c7748a495929  docs/architecture.md
-951e2f0603997192c8b13e7d53a2aab5c1f303a8941e521a7f7eafbcffa250ce  docs/harness.md
+3a8efb78f729ac3b610c8ce1b273eb0bfc885a5a5ea93305af9e8928050fcca6  docs/harness.md
 c6e9a6801d95c012010ba6f050bfe3d5b2a6c380e298c0a1792c2a6eca542a4c  lefthook.yml
 bc0876fb5a4780062f49f5491e7baf542161c59c28b65475011c215225239e2c  pyproject.toml
 3b0ac975a7fdec02ad26e5e8b0c8444fcc8d0efac12f925aa22811fb4cdb91fb  pyrightconfig.json
