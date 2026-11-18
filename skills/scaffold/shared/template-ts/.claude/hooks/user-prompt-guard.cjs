@@ -9,15 +9,8 @@ const injection = [
   'ignore previous instructions',
   'ignore all instructions',
   'forget your instructions',
-  'new instructions:',
-  'system prompt:',
-  'your real instructions',
-  'you are now a different ai',
-  'you are no longer bound',
-  'pretend you are not bound',
   'pretend you have no restrictions',
   'act as if you have no restrictions',
-  'developer mode enabled',
 ];
 // Only the agent's own instructions count as the object; "override your config defaults" is ordinary work.
 const injectionRe = /\b(disregard|override)\s+(all\s+)?(of\s+)?your\s+((previous|prior|original|current)\s+)?(instructions|rules|system\s+prompt|guidelines)\b/;
