@@ -4,14 +4,14 @@
 # Format: <sha256>  <path>
 db10ddde02fd7561bbf541bc9b1cdeedb46b4004d5b44d1c583d34641884a6bf  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
-5441a9ed222e3290677f436ea154a144e51412f033f14e1d081a0a6b6c273c21  .claude/hooks/block-no-verify.sh
-df37035423cac38a0a12a0d3a09b463dcf14d5a0e1153f429222a0ae1c104b8f  .claude/hooks/post-edit-comment-check.sh
-89fcab0bdabad8832f2f795563eda9b30a168f368c72b04b692ee28394d858e3  .claude/hooks/post-edit-typecheck.sh
-1509f092fbc58efe825350304fb19e32862dcd5137cbeaf0631d1e2b97483238  .claude/hooks/protect-files.sh
+f2999526a7230160997249fd5d317cf9e58379e951ba64b6cc9f2eb006de4445  .claude/hooks/block-no-verify.sh
+3436c6ce2786fe71ed70d7354e12d4fab35bc758af4d667f646433f55d46b297  .claude/hooks/post-edit-comment-check.sh
+aa3386ffc3698e7946b2dc96e036d8760b6d26cee8a7d2f8b959b17178e62fc5  .claude/hooks/post-edit-typecheck.sh
+cbf5354483f4f50385aeffb5e228501be5441fd844608241dea0245fcb8cd2a7  .claude/hooks/protect-files.sh
 4e517dcc5ce3a9cc41828cded849f4734a5b9c8bdf89d7d0d2122476e9054171  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
-06f0a68618f9be29ccaf03744d3b61b918ad33517f837c2da1127d8fc9b607fa  .claude/hooks/stop-checks.sh
-98fbbc31be1422e45115f6972ea7faff15c734708413b6f05a5efea199063a65  .claude/hooks/subagent-stop.sh
+8ca81ff5b537323843d81df1d326dfe860dd8b5a0ff1516ea35faeab5f04a8cf  .claude/hooks/stop-checks.sh
+cf8896b94f7e0bc68d41193b11c003094c6ee7f6f1935c01d103c4de1307546d  .claude/hooks/subagent-stop.sh
 7a85f50f78f2821a870dbe3bd6c89709f32d315d89ad91a55f50aa8c259bd9d3  .claude/hooks/user-prompt-guard.py
 c9819579dba2e4f3d1259620e1cda67d2effdaaf4cddaf0e64e06ff2644b29e6  .claude/regen-harness.sh
 3851819b0e6dfc1930276dbc8181f5f03f44d8803f8cc17de11f6f036bc4a5ee  .claude/rules/fastapi.md
