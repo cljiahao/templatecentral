@@ -1,8 +1,8 @@
-pytest
-pytest-asyncio
-pytest-cov
-pytest-xdist
-httpx2
-ruff
-pyright
-lefthook
+pytest>=9.2.0
+pytest-asyncio>=1.4.1
+pytest-cov>=7.1.0
+pytest-xdist>=3.8.0
+httpx2>=2.16.0
+ruff>=0.17.4
+pyright>=1.1.414
+lefthook>=2.2.2

@@ -10,7 +10,7 @@ PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer â€
 Add to `requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
 
 ```
-pymongo>=4.13
+pymongo>=4.19.0
 ```
 
 `email-validator` is also needed for `EmailStr` â€” skip if `templatecentral:add` (auth) already added it.

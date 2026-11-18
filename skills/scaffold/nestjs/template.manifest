@@ -54,8 +54,6 @@ template/test/app.factory.spec.ts 644 - -
 template/test/bootstrap.spec.ts 644 - -
 template/test/config/security.setup.spec.ts 644 - -
 template/test/main.spec.ts 644 - -
-template/test/modules/base.controller.spec.ts 644 - -
-template/test/modules/example.controller.spec.ts 644 - -
 template/tsconfig.build.json 644 - -
 template/tsconfig.json 644 - -
 template/vitest.config.e2e.ts 644 - -

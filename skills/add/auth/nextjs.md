@@ -29,7 +29,7 @@ AGENTS.md                            ← adds auth architecture notes
 #### 1. Install better-auth
 
 ```bash
-pnpm add "better-auth@^1.7.7"
+pnpm add "better-auth@^1.7.21"
 ```
 
 Then run `TC_PART=leaf TC_LEAF=add/auth/nextjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nextjs/template/` into the project per `<skill-dir>/auth/nextjs/template.manifest` — the files of Steps 2, 3, 5, 7, 10 and 14 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
@@ -359,7 +359,7 @@ socialProviders: {
 
 All providers: https://www.better-auth.com/docs/authentication/social-sign-on
 
-> **Acting as an OIDC provider** (issuing tokens to third parties): use `@better-auth/oauth-provider`; MCP is `@better-auth/mcp`; generic OAuth goes through `signIn.social` (PKCE on). The `oidcProvider` plugin was removed in better-auth 1.7. See https://www.better-auth.com/docs/plugins/oauth-provider.
+> **Acting as an OIDC provider** (issuing tokens to third parties): use `@better-auth/oauth-provider`; MCP is `@better-auth/mcp`; generic OAuth goes through `signIn.social` (PKCE on). The `oidcProvider` plugin was removed in recent better-auth releases (see `.claude/rules/nextjs.md`). See https://www.better-auth.com/docs/plugins/oauth-provider.
 
 ### Rate Limiting (Required for Production)
 

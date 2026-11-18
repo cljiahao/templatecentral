@@ -22,7 +22,7 @@ Add to `requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.cl
 
 ```
 beanie>=2.2,<3
-pymongo>=4.13
+pymongo>=4.19.0
 ```
 
 > Beanie 2.x runs on PyMongo's `AsyncMongoClient` — never add Motor (deprecated).

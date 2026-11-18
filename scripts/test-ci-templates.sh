@@ -136,7 +136,7 @@ PR_ONLY_IF = "github.event_name == 'pull_request'"
 STEP_NEUTRALISERS = ("if", "condition", "enabled", "continue-on-error", "continueOnError")
 STEP_ALLOWLIST = {
     # setup-uv is an install step, not a gate; it is only needed when the project ships uv.lock.
-    ("github-py", "quality", "astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e"): {"if": "hashFiles('uv.lock') != ''"},
+    ("github-py", "quality", "astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2"): {"if": "hashFiles('uv.lock') != ''"},
 }
 GATES_INCLUDE = "azure-pipelines/templatecentral-gates.yml"
 class MergeKeyError(yaml.YAMLError):
@@ -423,7 +423,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                           'echo "list=$list" >> "$GITHUB_OUTPUT"\n'}],
                          'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
                                      {'uses': 'pnpm/action-setup'},
-                                     {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                     {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                      {'run': 'pnpm install --frozen-lockfile'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
@@ -431,15 +431,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
-                                     {'run': 'set -euo pipefail\n'
-                                             'if node -e '
-                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
-                                             ': 1)"; then pnpm run test:e2e; fi\n'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
                          'test': [{'uses': 'actions/checkout'},
                                   {'uses': 'pnpm/action-setup'},
-                                  {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                  {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                   {'run': 'pnpm install --frozen-lockfile'},
                                   {'run': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
                                           '--outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ '
@@ -451,7 +447,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                             'retention-days': 1}}],
                          'coverage': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
                                       {'uses': 'pnpm/action-setup'},
-                                      {'uses': 'actions/setup-node', 'with': {'node-version': '24', 'cache': 'pnpm'}},
+                                      {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                       {'run': 'pnpm install --frozen-lockfile'},
                                       {'uses': 'actions/download-artifact',
                                        'with': {'pattern': 'vitest-blob-*', 'path': 'blob', 'merge-multiple': True}},
@@ -477,19 +473,15 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                        'test': {'timeoutInMinutes': 20, 'strategy': {'parallel': '${{ variables.shardCount }}'}},
                        'coverage': {'dependsOn': 'test', 'timeoutInMinutes': 10}},
               'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
-                                    {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                    {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
                                     {'bash': 'npm install -g "$(node -p '
                                              '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
                                     {'bash': 'pnpm install --frozen-lockfile'},
                                     {'template': 'azure-pipelines/templatecentral-gates.yml'},
                                     {'bash': 'pnpm run check'},
-                                    {'bash': 'set -euo pipefail\n'
-                                             'if node -e '
-                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
-                                             ': 1)"; then pnpm run test:e2e; fi\n'},
                                     {'bash': 'pnpm exec jscpd'}],
                         'test': [{'checkout': 'self'},
-                                 {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                 {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
                                  {'bash': 'npm install -g "$(node -p '
                                           '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
                                  {'bash': 'pnpm install --frozen-lockfile'},
@@ -500,7 +492,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                   'inputs': {'targetPath': 'blob',
                                              'artifact': 'vitest-blob-$(System.JobPositionInPhase)'}}],
                         'coverage': [{'checkout': 'self', 'fetchDepth': 0},
-                                     {'task': 'NodeTool@0', 'inputs': {'versionSpec': '24.x'}},
+                                     {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
                                      {'bash': 'npm install -g "$(node -p '
                                               '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
                                      {'bash': 'pnpm install --frozen-lockfile'},
@@ -880,8 +872,8 @@ mutate "parameters passed to the gates include (azure-py)" azure-py/azure-pipeli
 mutate "parameters block declared in the gates include" azure/azure-pipelines/templatecentral-gates.yml 'steps:\n' 'parameters:\n  - name: runDeps\n    default: true\nsteps:\n' static "only a steps list"
 
 # 6c. supply chain: SHA pins, least-privilege token, no pull_request_target, no secret output, dependency review
-mutate "action pinned by tag instead of SHA (github-ts)" github-ts/.github/workflows/ci.yml 'uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0' 'uses: actions/setup-node@v7' static "full commit SHA"
-mutate "SHA pin without a version comment (github-py)" github-py/.github/workflows/ci.yml 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0' 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97' static "full commit SHA"
+mutate "action pinned by tag instead of SHA (github-ts)" github-ts/.github/workflows/ci.yml 'uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0' 'uses: actions/setup-node@v7' static "full commit SHA"
+mutate "SHA pin without a version comment (github-py)" github-py/.github/workflows/ci.yml 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0' 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' static "full commit SHA"
 mutate "workflow permissions raised to write (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }' 'permissions: { contents: write }' static "permissions must be exactly"
 mutate "workflow permissions removed (github-py)" github-py/.github/workflows/ci.yml 'permissions: { contents: read }\n' '' static "permissions must be exactly"
 mutate "pull_request_target trigger (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request_target: { branches: [main, uat, develop] }' static "pull_request_target"

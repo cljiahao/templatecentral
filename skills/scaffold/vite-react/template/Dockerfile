@@ -9,8 +9,8 @@
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
 # Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
 # `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG NODE_BUILD=node:24-alpine
-ARG NGINX=nginx:1.30.2-alpine3.23
+ARG NODE_BUILD=node:26-alpine
+ARG NGINX=nginx:1.30.5-alpine3.24
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user

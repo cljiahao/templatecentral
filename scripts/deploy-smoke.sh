@@ -82,7 +82,7 @@ case "$STACK" in
     step install bash -c '
       set -e
       python3.14 -m venv .venv && . .venv/bin/activate
-      pip install "fastapi>=0.136" "uvicorn[standard]" "pydantic>=2.12" pydantic-settings python-dotenv "python-multipart>=0.0.31" "structlog>=25.1" "starlette>=1.3.1" "certifi>=2026.10.19"
+      pip install "fastapi>=0.162.5" "uvicorn[standard]" "pydantic>=2.14.3" pydantic-settings python-dotenv "python-multipart>=0.0.33" "structlog>=26.1.0" "starlette>=1.10.0" "certifi>=2026.10.23"
       pip freeze > requirements.txt
       pip install -r requirements-dev.txt
       pip check' ;;

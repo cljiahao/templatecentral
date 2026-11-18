@@ -12,7 +12,7 @@ Report-only mutation testing with mutmut. Run it on changed modules or one named
 Add to `requirements-dev.txt` (create the file if absent):
 
 ```
-mutmut>=3.6.0
+mutmut>=3.8.1
 ```
 
 > The floor and why it is there: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`.
@@ -55,7 +55,7 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
           cache: "pip"
