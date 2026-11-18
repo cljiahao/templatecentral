@@ -10,6 +10,7 @@
 #            refuses once moved.d holds a row, and that refusal is passed on (exit 2).
 # It always acts on its own repo root (the folder above scripts/), never on the caller's folder. With --write every
 # result is computed first and nothing under tests/golden/ changes unless every step succeeded.
+# A failed replace stops the run at once, names the files already replaced, and removes the staging files left.
 # Hashes come from `check-golden.sh --emit-hashes`, the code path the check compares with. A file keeps its
 # leading '#' comment lines. Exit 0 ok, 1 when a golden or snapshot could not be built, 2 on a usage error or a refusal.
 set -uo pipefail
@@ -23,18 +24,22 @@ for a in "$@"; do
   case "$a" in
     --write) WRITE=1 ;;
     --fences) FENCES=1 ;;
-    -h | --help) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "regen-golden: unknown option $a (want --write, --fences)" >&2; exit 2 ;;
     *) COMBOS+=("$a") ;;
   esac
 done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/regen-golden.XXXXXX") || exit 2
-trap 'rm -rf "$T"' EXIT
+# EXIT removes the scratch folder and any staging file this run left under tests/golden/.
+trap 'rm -rf "$T"; find "$GOLDEN" -type f -name "*.regen.$$" -exec rm -f {} + 2> /dev/null' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 fail=0
 STAGED_NEW=()
 STAGED_DEST=()
+replaced=()
 
 # stage <new> <dest> — queues a file that differs from its regenerated form; nothing is written here.
 stage() {
@@ -89,13 +94,15 @@ while [[ $i -lt $changed ]]; do
 done
 
 if [[ $WRITE -eq 1 ]]; then
-  if [[ $fail -ne 0 ]]; then
-    for d in ${STAGED_DEST[@]+"${STAGED_DEST[@]}"}; do rm -f "$d.regen.$$"; done
-    exit 1
-  fi
+  [[ $fail -eq 0 ]] || exit 1
   i=0
   while [[ $i -lt $changed ]]; do
-    mv -f "${STAGED_DEST[i]}.regen.$$" "${STAGED_DEST[i]}" || fail=1
+    if ! mv -f "${STAGED_DEST[i]}.regen.$$" "${STAGED_DEST[i]}"; then
+      echo "regen-golden: cannot replace ${STAGED_DEST[i]#"$REPO_ROOT"/}; stopped" >&2
+      echo "regen-golden: already replaced: $(printf '%s ' "${replaced[@]+"${replaced[@]}"}")" >&2
+      exit 1
+    fi
+    replaced[${#replaced[@]}]=${STAGED_DEST[i]#"$REPO_ROOT"/}
     echo "wrote ${STAGED_DEST[i]#"$REPO_ROOT"/}"
     i=$((i + 1))
   done

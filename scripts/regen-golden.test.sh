@@ -69,6 +69,32 @@ check 2 "$EC" "atomic_write: refused with exit 2 ($OUT)"
 check 0 "$(printf '%s\n' "$OUT" | grep -c '^wrote ')" "atomic_write: nothing reported as written ($OUT)"
 check "$golden_now" "$(snap "$S/tests/golden")" "atomic_write: no golden file changes when the snapshot fails"
 
+# a failed replace stops at once, names the files already replaced and leaves no staging file; TERM also cleans up
+printf '# changed third\n' >> "$S/skills/scaffold/shared/template/scripts/check-docs.sh"
+golden_now=$(snap "$S/tests/golden")
+mkdir -p "$T/fakebin"
+cat > "$T/fakebin/mv" << 'EOF'
+#!/bin/bash
+case "$*" in
+  *nestjs-azure.sha256*) [ "${FAKE_MV:-}" = term ] && kill -TERM "$PPID"; [ "${FAKE_MV:-}" = fail ] && exit 1 ;;
+esac
+exec /bin/mv "$@"
+EOF
+chmod +x "$T/fakebin/mv"
+OUT=$(cd "$S" && PATH="$T/fakebin:$PATH" FAKE_MV=fail bash scripts/regen-golden.sh --write 2>&1)
+EC=$?
+check 1 "$EC" "mv_failure: exits 1 ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'cannot replace tests/golden/nestjs-azure\.sha256')" "mv_failure: names the file that failed ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'already replaced: tests/golden/fastapi-azure\.sha256 tests/golden/fastapi-github\.sha256 $')" "mv_failure: names the files already replaced ($OUT)"
+check 0 "$(printf '%s\n' "$OUT" | grep -c '^wrote tests/golden/\(nestjs\|nextjs\|vite\)')" "mv_failure: stops at once ($OUT)"
+check 0 "$(find "$S/tests/golden" -name '*.regen.*' | wc -l | tr -d ' ')" "mv_failure: no staging file is left"
+OUT=$(cd "$S" && PATH="$T/fakebin:$PATH" FAKE_MV=term bash scripts/regen-golden.sh --write 2>&1)
+EC=$?
+check 143 "$EC" "term_signal: exits 143 ($OUT)"
+check 0 "$(find "$S/tests/golden" -name '*.regen.*' | wc -l | tr -d ' ')" "term_signal: no staging file is left"
+regen --write
+check 0 "$EC" "after_failures: a clean run writes the rest ($OUT)"
+
 # with moved.d empty, --fences lists the snapshot change in a dry run and writes it with --write
 rm -f "$S"/tests/golden/fences/moved.d/*.tsv
 fences_before=$(snap "$S/tests/golden/fences")
