@@ -359,10 +359,9 @@ gl_mixed m16 'gitleaks git --staged || exit 1'
 gl_mixed m17 $'|\n        set +e\n        gitleaks git --staged'
 gl_mixed m18 $'|\n        gitleaks git --staged\n        true'
 gl_ok a1 'gitleaks git --pre-commit --staged # scan staged files'
-gl_ok a2 'gitleaks git --staged --regexp "a|b;c"'
-gl_ok a3 "gitleaks git --staged --regexp 'a&b(c)'"
+gl_ok a2 'gitleaks git --staged --config "my;rules.toml"'
+gl_ok a3 "gitleaks git --staged --config 'a&b(c).toml'"
 gl_ok a4 $'|\n        # scan staged\n\n        gitleaks git --pre-commit --staged'
-gl_ok a5 'GITLEAKS_LOG=1 gitleaks git --staged'
 gl_ok a6 '"gitleaks git --pre-commit --staged"'
 gl_ok a7 'gitleaks git --pre-commit --staged' 1
 seed "$T/n6"; python3 - "$T/n6/lefthook.yml" <<'PY8'
@@ -401,4 +400,36 @@ seed "$T/s2"; printf '{ "hooks": {}, "note": "marker-77c1" }' >"$T/s2/.claude/se
 out=$(run "$T/s2"); check "valid settings.local.json passes" 0 $?
 case "$out" in *marker-77c1*) echo "FAIL valid settings.local.json contents printed"; fail=1 ;; *) echo "ok   valid settings.local.json contents not printed" ;; esac
 
+
+# round 7: plain-scalar continuation folds into the run value
+for j in 0 1; do
+gl_mixed_j() { gl_variant "$T/$1" "$2" "$3"; out=$(run "$T/$1"); check "gitleaks line not alone fails: $2 jobs=$3" 1 $?; contains "only-command message: $2 jobs=$3" "the gitleaks command must be the only command in the run line" "$out"; }
+gl_mixed_j c1$j $'gitleaks git --staged\n          || true' $j
+gl_mixed_j c2$j $'gitleaks git --staged\n          ; exit 0' $j
+gl_mixed_j c3$j $'gitleaks git --staged\n          | true' $j
+gl_mixed_j c4$j $'gitleaks git --staged \\\n          || true' $j
+gl_mixed_j c5$j $'gitleaks git --staged\n\n          || true' $j
+gl_mixed_j c6$j $'gitleaks git --staged \\' $j
+done
+gl_ok c7 $'gitleaks git --pre-commit\n          --staged'
+gl_ok c8 $'gitleaks git --pre-commit\n          --staged # note'
+# round 7: duplicate run key, gating keys
+gl_msg() { gl_variant "$T/$1" "$2" 0; out=$(run "$T/$1"); check "fails: $2" 1 $?; contains "message for: $2" "$3" "$out"; }
+gl_msg d1 $'gitleaks git --staged\n      run: true' "more than one run:"
+for k in "skip: true" "skip: CI" "only: false" "exclude: '*'" "glob: '*.nothing'" "files: echo" "env: {A: b}"; do
+  gl_msg "k-${k%%:*}-${k##* }" "$(printf 'gitleaks git --staged\n      %s' "$k")" "sets ${k%%:*}:"
+done
+gl_ok kf $'gitleaks git --staged\n      skip: false'
+gl_ok kt $'gitleaks git --staged\n      tags: security\n      stage_fixed: true\n      fail_text: stop\n      priority: 1\n      root: ./'
+# round 7: neutering arguments
+i=0
+for a in '--exit-code 0' '--exit-code=0' '--no-git' '--baseline-path x.json' '--max-target-megabytes 1' '--log-opts=-1' '--enable-rule x' '-c /dev/null' '--config /dev/null' '--config=/dev/null' '--config ""' '-c' '--bogus'; do
+  i=$((i+1)); gl_msg "x$i" "gitleaks git --staged $a" "is not accepted"
+done
+gl_msg e1 'GITLEAKS_CONFIG=/dev/null gitleaks git --staged' "is not accepted"
+gl_msg e2 'FOO=1 npx gitleaks git --staged' "is not accepted"
+# shellcheck disable=SC2016
+gl_msg e3 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest git --staged /repo' '"$PWD"'
+gl_ok f1 'gitleaks protect --staged -v --verbose --no-color --log-level debug --redact=50 --config ok.toml'
+gl_ok f2 'gitleaks detect --redact 20 --no-banner'
 exit $fail

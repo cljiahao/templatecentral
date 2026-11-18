@@ -34,6 +34,6 @@ Note what later steps adapt to and never replace: test sharding, a coverage thre
 
 ## Not measured
 
-The exclusion count is a best-effort count of known forms; the gate configuration change list is what catches the rest, so read every file it names by hand.
+The exclusion count counts items, not lines: an empty array is 0, one entry is 1 and two entries are 2, in every config kind, so the first entry added to an empty array raises the count. It is a best-effort count of known forms; the gate configuration change list is what catches the rest, so read every file it names by hand.
 
 Known uncounted forms: a `globalIgnores(...)` argument that is not a literal array (it keeps its one key count; the gate configuration change list reports the file); vitest or jest entries built from a variable, spread or regex literal, and jest `watchPathIgnorePatterns` and `transformIgnorePatterns`; ESLint rule objects held in a variable and flat-config `ignores` built from a variable or spread; Biome `recommended: false`; `mypy.ini` `ignore_errors`; `.c8rc*`, `.nycrc.yml` and `codecov.yml` ignores; `pyrightconfig.json` ignores and `typeCheckingMode: off`; `conftest.py` `collect_ignore`; `[tool.pylint] disable` in array form; lowered thresholds (`fail_under`, `coverageThreshold`); scope narrowing (coverage `include` or `source`, vitest `coverage.include`, tsconfig `include`, `strict: false`); unquoted regex literals inside a list.

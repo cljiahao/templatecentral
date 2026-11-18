@@ -156,7 +156,7 @@ Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.
 
 **Step 4f-4: Prove the harness is live**
 
-Run `bash "<skill-dir>/general/harness-live.sh" <project-dir>`. It reports PASS or FAIL per item (lefthook installed and the git hooks wired, gitleaks resolvable, each hook executable and registered, CI running the gates) and exits non-zero on any FAIL. Fix each FAIL at its cause, for example install the missing tool or rerun lefthook install, and rerun until it exits 0; a hash match alone proves nothing. A tool the user must install (gitleaks, lefthook) is named in the summary, not skipped.
+Run `bash "<skill-dir>/general/harness-live.sh" <project-dir>`. It reports PASS or FAIL per item (lefthook installed and the git hooks wired, gitleaks resolvable, each hook executable and registered, CI running the gates) and exits non-zero on any FAIL. Fix each FAIL at its cause, for example install the missing tool or rerun lefthook install, and rerun until it exits 0; a hash match alone proves nothing. A tool the user must install (gitleaks, lefthook) is named in the summary, not skipped. The gitleaks check accepts only one plain scan command (`git`, `protect`, `detect` or `dir` with `--pre-commit`, `--staged`, `--redact`, `-v`, `--no-banner`, `--no-color`, `--log-level` and a `--config` file), alone in its `run:` value including continuation lines, with no env prefix and no `skip`, `only`, `exclude`, `glob`, `files` or `env` key; anything else is a FAIL that names the argument or key.
 
 **Step 4g: Print summary**
 

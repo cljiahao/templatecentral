@@ -358,7 +358,6 @@ excl_form .eslintignore 'src/legacy'
 excl_form eslint.config.mjs 'ignorePatterns: ["src"]'
 excl_form .jscpd.json '"ignore": ["src"]'
 excl_form ruff.toml 'extend-exclude = ["src"]'
-excl_form ruff.toml 'per-file-ignores = {}'
 excl_form vitest.config.ts 'export default { test: { coverage: { exclude: ["src"] } } };'
 excl_form eslint.config.mjs 'export default [{ ignores: ["src"] }];'
 excl_form ruff.toml 'ignore = ["E501"]'
@@ -551,7 +550,7 @@ omit = [
   "a/*", # keep "q/*" out
   "b/*",
   "c/*",
-]' 3 4
+]' 2 3
 excl_delta jest.config.js 'module.exports = { watchPathIgnorePatterns: ["a"], transformIgnorePatterns: ["b"] };' 0
 
 # round 5: the gate configuration section and exit 3
@@ -682,5 +681,42 @@ if grep -q 'exits 1 when it is in the after table and 2 when it is in the before
 qp="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-pass.md"
 if grep -q 'no suppression, exclusion or threshold change is added' "$qp"; then echo "FAIL quality-pass.md still forbids every suppression"; fail=1; else echo "ok   quality-pass.md has no absolute suppression ban"; fi
 if grep -q 'comments.md. allows, and .--compare. must still pass' "$qp"; then echo "ok   quality-pass.md defers to comments.md and compare"; else echo "FAIL quality-pass.md lacks the comments.md and compare wording"; fail=1; fi
+
+excl_delta ruff.toml 'per-file-ignores = {}' 0
+
+# round 7: count items, not lines; an empty inline array is 0, one item 1, two items 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [] } } };' 0
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a"] } } };' 1
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a","b"] } } };' 2
+excl_delta eslint.config.mjs 'export default [globalIgnores([])];' 0
+excl_delta eslint.config.mjs 'export default [globalIgnores(["a"])];' 1
+excl_delta eslint.config.mjs 'export default [globalIgnores(["a","b"])];' 2
+excl_delta ruff.toml 'extend-exclude = []' 0
+excl_delta ruff.toml 'extend-exclude = ["a"]' 1
+excl_delta ruff.toml 'extend-exclude = ["a","b"]' 2
+excl_delta .eslintrc.yml 'ignorePatterns: []' 0
+excl_delta .eslintrc.yml 'ignorePatterns: ["a"]' 1
+excl_delta .eslintrc.yml 'ignorePatterns: ["a","b"]' 2
+excl_delta .eslintrc.json '{ "ignorePatterns": [] }' 0
+excl_delta .eslintrc.json '{ "ignorePatterns": ["a"] }' 1
+excl_delta .eslintrc.json '{ "ignorePatterns": ["a","b"] }' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = []' 0
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = ["a"]' 1
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = ["a","b"]' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = [
+  "a",
+  "b",
+]' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = [
+]' 0
+excl_delta setup.cfg '[coverage:run]
+omit = a/*, b/*' 2
+excl_pair "empty inline exclude gets its first entry" vitest.config.ts 'export default { test: { coverage: { exclude: [] } } };' 'export default { test: { coverage: { exclude: ["a"] } } };' 0 1
+excl_pair "empty ruff list gets its first entry" ruff.toml 'extend-exclude = []' 'extend-exclude = ["a"]' 0 1
 
 exit $fail

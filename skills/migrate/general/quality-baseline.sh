@@ -573,7 +573,7 @@ excl_entries() {
   { if [ "$kind" = js ]; then strip_comments "$1"; else cat "$1"; fi; } | RE="$EXCLUDE" KIND="$kind" PKG="$pkg" awk -v q="'" '
     function strip(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     function items(s,  m, parts, k, n) {
-      sub(/[ \t]+[#;].*$/, "", s); m = split(s, parts, ","); n = 0
+      sub(/[ \t]+[#;].*$/, "", s); gsub(/[][]/, "", s); m = split(s, parts, ","); n = 0
       for (k = 1; k <= m; k++) if (strip(parts[k]) != "") n++
       return n }
     function scan(s, ng,  i, n, ch, e, f) {
@@ -588,7 +588,8 @@ excl_entries() {
           i = e; continue }
         if (ch == "#" || (ch == "/" && substr(s, i + 1, 1) == "/")) break
         if (ch == "[" || ch == "{") { dep++; opened = 1; continue }
-        if (ch == "]" || ch == "}") { dep--; if (opened && dep <= 0) { inl = 0; rest = substr(s, i + 1); return } }
+        if (ch == "]" || ch == "}") { dep--; if (opened && dep <= 0) { inl = 0; rest = substr(s, i + 1); return } continue }
+        if (opened && dep > 0 && ch !~ /[ \t,]/) oth++
       }
       inl = (opened && dep > 0) }
     function ocount(s, pat,  k, n) { n = 0; while ((k = match(s, pat)) > 0) { n++; s = substr(s, RSTART + RLENGTH) } return n }
@@ -636,21 +637,22 @@ excl_entries() {
       line = $0
       if (tsec) {
         if (line ~ /^[ \t]*\[/) tsec = 0
-        else { got = 0; dep = 0; opened = 0; scan(line, 0); if (got == 0 && line ~ /=/) c++; next }
+        else { got = 0; oth = 0; dep = 0; opened = 0; scan(line, 0); if (got == 0 && line ~ /=/) c++; next }
       }
       if (inl) { scan(line, ng); line = inl ? "" : rest; if (line == "") next }
-      if (pend && line ~ /[^ \t]/) { pend = 0; got = 0; dep = 0; opened = 0; scan(line, png); if (got == 0 && !inl && !png) c++; line = inl ? "" : rest; if (line == "") next }
+      if (pend && line ~ /[^ \t]/) { pend = 0; got = 0; oth = 0; dep = 0; opened = 0; scan(line, png); if (got == 0 && !inl && !png && !(opened && oth == 0)) c++; line = inl ? "" : rest; if (line == "") next }
       if (line ~ /^[ \t]*\[[^]]*per-file-ignores[^]]*\][ \t]*$/) { tsec = 1; next }
       while (line != "" && match(line, re)) {
         key = substr(line, RSTART, RLENGTH); rem = substr(line, RSTART + RLENGTH); quoted = (key ~ /["'"'"']/ && key !~ /\[tool/)
         ng = (key ~ /collectCoverageFrom|includes/)
         if (key ~ /--ignore/) { c += 1; line = rem; continue }
+        if (key ~ /^\[tool/) { line = ""; continue }
         sub(/^["'"'"']?[ \t]*[:=]/, "", rem)
         if (pkg && quoted && rem ~ /^[ \t]*["'"'"']/) { line = rem; continue }
-        got = 0; dep = 0; opened = 0; inl = 0
+        got = 0; oth = 0; dep = 0; opened = 0; inl = 0
         if (rem !~ /[^ \t]/) { pend = 1; png = ng; line = ""; continue }
         scan(rem, ng)
-        if (got == 0 && !inl && !ng) c++
+        if (got == 0 && !inl && !ng && !(opened && oth == 0)) c++
         line = inl ? "" : rest
       }
     }
