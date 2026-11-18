@@ -55,7 +55,7 @@ If found → proceed to the section for your detected stack below.
 
 ## NestJS
 
-1. Delete `src/modules/example/` and `test/modules/example.controller.spec.ts`
+1. Delete `src/modules/example/`; in `test/app.e2e-spec.ts` delete the three example-module tests (invalid body, create/read/update/delete, OpenAPI document) and their `@nestjs/swagger` and `nestjs-zod` imports
 2. Edit `src/modules/index.ts` — remove `export * from './example/example.module'`
 3. Edit `src/app.module.ts` — remove `ExampleModule` from both the top-level `import` and the `@Module({ imports: [...] })` array
 4. Verify no remaining imports reference the example module

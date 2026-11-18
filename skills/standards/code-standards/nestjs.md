@@ -15,7 +15,7 @@
 | Files | `kebab-case` (dot-separated) | `example.controller.ts` |
 | Directories | `kebab-case` | `common/` |
 | DTOs, modules, controllers, services, repositories | `PascalCase` + role suffix | `CreateExampleDto`, `ExampleModule`, `ExampleRepository` |
-| Tests | `<name>.spec.ts` / `<name>.e2e-spec.ts` | `example.controller.spec.ts` |
+| Tests | `<name>.spec.ts` / `<name>.e2e-spec.ts` | `base.controller.spec.ts` |
 
 ### Module Structure
 
