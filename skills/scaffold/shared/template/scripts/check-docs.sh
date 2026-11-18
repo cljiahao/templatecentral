@@ -4,6 +4,15 @@
 # Checks README.md, AGENTS.md, docs/**/*.md and boundary READMEs: relative links and backticked repo paths must exist,
 # and a README must not carry a `## Contents` heading or a list naming every child of its own folder.
 # With arguments only those files are checked (pre-commit); without, the whole project (pre-push, CI).
+# An argument is a path from the caller's folder (relative or absolute) and must sit inside the project; one outside it exits 2.
+# Path rule: a path a doc names that does not exist is stale and reported, unless it is an example: a placeholder
+# (<name>, {a}, *), an ellipsis, a path/to/... prefix, or an extensionless two-part name whose first folder does not exist.
+# A link needs an opening bracket, a target and a closing parenthesis on one line. A target is not a repository path,
+# and is never checked, when it is scheme://..., user@host:path, host:port (name, colon, digits, optional /path; the name
+# has no known file extension), or letters followed by a colon and a non-digit (mailto:, slack:, vscode:). Everything
+# else with a colon, such as nope.md:3 or custom+x-1.y:rest, is checked as a path. A target starting with a slash or
+# holding a backslash is never checked. A target is trimmed of spaces inside the parentheses.
+# A finding shows at most 120 bytes of a target, cut on a character boundary and ended with three dots.
 set -uo pipefail
 
 # Prints one line naming the cause and exits 2; exit 1 is reserved for findings.
@@ -12,11 +21,60 @@ die() {
   exit 2
 }
 
+# Sets REPLY to an absolute path with . and .. resolved by text, without touching the disk.
+abs_path() {
+  local p=$1 seg out=
+  case "$p" in /*) ;; *) p=$PWD/$p ;; esac
+  local IFS=/
+  set -f
+  for seg in $p; do
+    case "$seg" in
+      '' | .) ;;
+      ..) out=${out%/*} ;;
+      *) out=$out/$seg ;;
+    esac
+  done
+  set +f
+  REPLY=${out:-/}
+}
+
+ABS_ARGS=()
+for arg in "$@"; do
+  abs_path "$arg"
+  ABS_ARGS[${#ABS_ARGS[@]}]=$REPLY
+done
+
 case "$0" in
   */*) here=${0%/*} ;;
   *) here=. ;;
 esac
 cd "$here/.." || die "cannot enter the project folder ($here/..)"
+root=$PWD
+root_phys=$(pwd -P)
+
+# Sets REPLY to the project-relative form of an absolute path, or returns 1 when the path is outside the project.
+rel_to_root() {
+  local a=$1 dir phys
+  case "$a" in
+    "$root"/*) REPLY=${a#"$root"/}; return 0 ;;
+  esac
+  dir=${a%/*}
+  [ -n "$dir" ] || dir=/
+  phys=$(cd "$dir" 2> /dev/null && pwd -P) || return 1
+  case "$phys/${a##*/}" in
+    "$root_phys"/*) REPLY=${phys#"$root_phys"}/${a##*/}; REPLY=${REPLY#/}; return 0 ;;
+  esac
+  return 1
+}
+
+args=()
+i=0
+for arg in "$@"; do
+  rel_to_root "${ABS_ARGS[i]}" || die "outside the project: $arg"
+  args[${#args[@]}]=$REPLY
+  i=$((i + 1))
+done
+set -- ${args[@]+"${args[@]}"}
 
 for tool in awk mktemp rm; do
   command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
@@ -82,7 +140,11 @@ list_files() {
 # A link starting with a slash is a site route, not a repository path: it is never checked.
 scan_all() {
   awk -v EXTS="$EXTS" '
-    BEGIN { SQ = sprintf("%c", 39) }
+    BEGIN {
+      SQ = sprintf("%c", 39)
+      BOM = "\357\273\277"
+      ELL = "\342\200\246"
+    }
     function emit(kind, t) {
       printf "%s\t%d\t%s\t%s\n", file, FNR, kind, t
     }
@@ -90,14 +152,29 @@ scan_all() {
       sub(/#.*$/, "", t)
       sub(/\?.*$/, "", t)
       if (t == "") return
-      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:/ || substr(t, 1, 1) == "/") return
+      if (substr(t, 1, 1) == "/" || index(t, "\\") > 0 || has_scheme(t)) return
       emit("link", t)
+    }
+    function has_scheme(t,   host) {
+      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\//) return 1
+      if (t ~ /^[^\/@ ]+@[^\/ ]+:/) return 1
+      if (t ~ /^[A-Za-z]+:[^0-9]/) return 1
+      if (t ~ /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*:[0-9]+(\/|$)/) {
+        host = substr(t, 1, index(t, ":") - 1)
+        return !(host ~ ("\\.(" EXTS ")$"))
+      }
+      return 0
+    }
+    function ellipsis_segment(t,   n, parts, i) {
+      n = split(t, parts, "/")
+      for (i = 1; i <= n; i++) if (parts[i] == "..." || parts[i] ~ (ELL "$")) return 1
+      return 0
     }
     function emit_span(t,   base, last, trail) {
       if (index(t, "/") == 0) return
       if (t ~ /[[:space:]<>*{}$|;&:"=?!,~]/ || index(t, SQ) > 0) return
       if (substr(t, 1, 1) == "/" || substr(t, 1, 4) == "http") return
-      if (substr(t, 1, 3) == "..." || (length(t) >= 3 && substr(t, length(t) - 2) == "...")) return
+      if (ellipsis_segment(t) || t ~ /^path\/to(\/|$)/) return
       base = t
       sub(/#.*$/, "", base)
       trail = (substr(t, length(t), 1) == "/")
@@ -193,7 +270,7 @@ scan_all() {
       }
       return out
     }
-    function ref_def(s,   t, first) {
+    function ref_def(s,   t, first, j) {
       if (s ~ /^[ \t]*\[\^/) return
       if (s !~ /^[ \t]*\[[^]]+\]:[ \t]*[^ \t]/) return
       t = s
@@ -206,30 +283,88 @@ scan_all() {
       }
       first = t
       sub(/[ \t].*$/, "", first)
-      if (first != t && first !~ /[\/.]/) return
+      if (first !~ /\/|(^|[^.])\.[A-Za-z0-9]/) return
       emit_link(first)
     }
-    function scan_links(s,   n, parts, k, part, j, m, c, depth, t) {
-      n = split(s, parts, "\\]\\(")
-      for (k = 2; k <= n; k++) {
-        part = parts[k]
-        if (substr(part, 1, 1) == "<") {
-          j = index(part, ">")
-          if (j == 0) continue
-          t = substr(part, 2, j - 2)
-        } else {
-          depth = 0
-          t = ""
-          m = length(part)
-          for (j = 1; j <= m; j++) {
-            c = substr(part, j, 1)
-            if (c == "(") depth++
-            else if (c == ")") { if (depth == 0) break; depth-- }
-            else if (c == " " || c == "\t") break
-            t = t c
-          }
+    function track(t,   i, m, c) {
+      esc_end = 0
+      m = length(t)
+      for (i = 1; i <= m; i++) {
+        c = substr(t, i, 1)
+        if (c == "\\") {
+          if (i == m) esc_end = 1
+          i++
+          prevc = substr(t, i, 1)
+          continue
         }
-        emit_link(t)
+        if (c == "[") {
+          sp++
+          wordpre[sp] = (prevc ~ /[A-Za-z0-9_]/)
+        } else if (c == "]" && sp > 0) sp--
+        prevc = c
+      }
+    }
+    function parse_dest(part,   j, m, c, depth, t) {
+      dest_ok = 0
+      dest = ""
+      m = 0
+      while (substr(part, m + 1, 1) == " " || substr(part, m + 1, 1) == "\t") m++
+      if (m > 0) {
+        part = substr(part, m + 1)
+        c = substr(part, 1, 1)
+        if (c == "\"" || c == SQ) { rest = part; return }
+      }
+      rest = part
+      if (substr(part, 1, 1) == "<") {
+        j = index(part, ">")
+        if (j == 0) return
+        t = substr(part, 2, j - 2)
+        m = index(substr(part, j + 1), ")")
+        if (m == 0) return
+        dest = t
+        dest_ok = 1
+        rest = substr(part, j + m + 1)
+        return
+      }
+      depth = 0
+      t = ""
+      m = length(part)
+      for (j = 1; j <= m; j++) {
+        c = substr(part, j, 1)
+        if (c == "(") depth++
+        else if (c == ")") {
+          if (depth == 0) { dest = t; dest_ok = 1; rest = substr(part, j + 1); return }
+          depth--
+        } else if (c == " " || c == "\t") {
+          m = index(substr(part, j), ")")
+          if (m == 0) return
+          dest = t
+          dest_ok = 1
+          rest = substr(part, j + m)
+          return
+        }
+        t = t c
+      }
+    }
+    function scan_links(s,   n, parts, k, t, op_ok) {
+      if (index(s, "](") == 0) return
+      n = split(s, parts, "\\]\\(")
+      sp = 0
+      prevc = ""
+      t = parts[1]
+      for (k = 2; k <= n; k++) {
+        track(t)
+        if (sp > 0 && !esc_end) {
+          op_ok = !wordpre[sp]
+          sp--
+          parse_dest(parts[k])
+          if (op_ok && dest_ok && dest != "") emit_link(dest)
+          t = rest
+          prevc = ")"
+        } else {
+          t = parts[k]
+          prevc = "("
+        }
       }
     }
     FNR == 1 {
@@ -239,16 +374,19 @@ scan_all() {
       fence = 0
       comment = 0
       prevblank = 1
+      prevhead = 0
       inlist = 0
       incode = 0
     }
     {
       line = $0
       sub(/\r$/, "", line)
+      if (FNR == 1 && index(line, BOM) == 1) line = substr(line, length(BOM) + 1)
       while (match(line, /^[ \t]*>[ \t]?/)) line = substr(line, RLENGTH + 1)
-      wasblank = prevblank
+      wasblank = prevblank || prevhead
       prevblank = (line ~ /^[ \t]*$/)
       if (!fence) {
+        prevhead = (line ~ /^( |  |   )?#+([ \t]|$)/)
         if (!prevblank) {
           indented = (line ~ /^(    |\t)/)
           if (indented && !inlist && (wasblank || incode)) { incode = 1; next }
@@ -326,6 +464,23 @@ decode_percent() {
   REPLY=$out$s
 }
 
+# Sets REPLY to the string cut at 120 bytes on a character boundary, with three dots added when it was cut.
+clip() {
+  local s=$1 next
+  local LC_ALL=C
+  if [ "${#s}" -le 120 ]; then
+    REPLY=$s
+    return 0
+  fi
+  next=${s:120:1}
+  s=${s:0:120}
+  while [[ $next == [$'\200'-$'\277'] ]] && [ -n "$s" ]; do
+    next=${s: -1}
+    s=${s%?}
+  done
+  REPLY=$s...
+}
+
 # Checks one link target that is already stripped of fragment and query; web links never reach it.
 check_link() {
   local file=$1 ln=$2 t chk dir
@@ -335,7 +490,8 @@ check_link() {
   exists_as "$file" "$t" && return 0
   dir=${file%/*}
   if [ "$dir" = "$file" ]; then chk=$t; else chk=$dir/$t; fi
-  miss "$file" "$ln" "broken link: $t" "$chk"
+  clip "$t"
+  miss "$file" "$ln" "broken link: $REPLY" "$chk"
 }
 
 # Checks one backticked repo path. A soft span has no known extension or trailing slash: it counts only when its
@@ -354,7 +510,8 @@ check_span() {
   fi
   [ -e "$base" ] && return 0
   exists_as "$file" "$base" && return 0
-  miss "$file" "$ln" "path does not exist: $t" "$base"
+  clip "$t"
+  miss "$file" "$ln" "path does not exist: $REPLY" "$base"
 }
 
 # Flags a README whose list items or table rows name every child of its own folder, however the name is marked up
