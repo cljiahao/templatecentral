@@ -5,7 +5,7 @@
 # Needs bash 3.2+, git, and python3 or node to read .claude/settings.json.
 set -u
 
-[ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: harness-live.sh <project-dir>" >&2; exit 2; }
+if ! { [ $# -eq 1 ] && [ -d "$1" ]; }; then echo "usage: harness-live.sh <project-dir>" >&2; exit 2; fi
 P=$(cd "$1" && pwd -P) || exit 2
 
 FAILS=0

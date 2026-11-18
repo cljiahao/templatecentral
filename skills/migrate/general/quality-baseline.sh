@@ -108,8 +108,9 @@ compare_main() {
   if [ $# -eq 1 ] && [ "$(vcount "$bf")" -lt 2 ]; then
     echo "--compare: $bf has one value column; pass a second file or a file with before and after columns" >&2; exit 2
   fi
-  [ "$(row_of "$bf" first mode)" = full ] && [ "$(row_of "$af" last mode)" = full ] || {
-    echo "--compare: both tables must come from --full runs (mode row full); a --static table measures no lint, type, test or coverage number" >&2; exit 2; }
+  if ! { [ "$(row_of "$bf" first mode)" = full ] && [ "$(row_of "$af" last mode)" = full ]; }; then
+    echo "--compare: both tables must come from --full runs (mode row full); a --static table measures no lint, type, test or coverage number" >&2; exit 2
+  fi
   commits_ok "$bf" "$af" || exit 2
   { vals "$bf" first; echo "---"; vals "$af" last; } | awk -F'\t' '
     function has(v) { return v ~ /^[0-9]+(\.[0-9]+)?( |%|$)/ }
@@ -731,7 +732,7 @@ gate_config_rows() {
   if ! have shasum && ! have sha256sum; then row "gate config files" "n/a (no shasum or sha256sum)"; return; fi
   while IFS= read -r -d '' f; do
     f=${f#./}
-    is_gate_config "$f" && [ -f "$P/$f" ] && [ ! -L "$P/$f" ] || continue
+    if ! { is_gate_config "$f" && [ -f "$P/$f" ] && [ ! -L "$P/$f" ]; }; then continue; fi
     h=$(sha256_stdin <"$P/$f" 2>/dev/null | cut -c1-16)
     [ -n "$h" ] && list="${list}gate config: $f|$h
 "

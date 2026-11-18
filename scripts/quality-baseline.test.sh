@@ -152,7 +152,7 @@ FAKE_SLEEP=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full >/dev/null 2>&1 &
 spid=$!
 n=0; while [ ! -s "$T/sleep.pid" ] && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
 kill -TERM "$spid"; wait "$spid" 2>/dev/null; check "TERM exits 143" 143 $?
-alive() { kill -0 "$(cat "$1")" 2>/dev/null && echo alive || echo dead; }
+alive() { if kill -0 "$(cat "$1")" 2>/dev/null; then echo alive; else echo dead; fi; }
 n=0; while [ "$(alive "$T/sleep.pid")" = alive ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 check "TERM kills the tool" dead "$(alive "$T/ruff.pid")"
 check "TERM kills the tool's child" dead "$(alive "$T/sleep.pid")"
@@ -197,14 +197,14 @@ check "ts duplication" "1.5%" "$(value 'duplication' "$outs")"
 check "ts tree unchanged" unchanged "$(value 'project tree after the run' "$outs")"
 contains "composite tsconfig points build info into scratch" "--tsBuildInfoFile" "$(grep 'exec tsc --noEmit' "$T/pnpm2.log")"
 contains "environment reaches the tool" "ENV=passed" "$(grep 'exec eslint' "$T/pnpm2.log" | head -1)"
-check "kept coverage xml exists" yes "$([ -f "$T/keep/cov/cobertura.xml" ] && echo yes || echo no)"
+check "kept coverage xml exists" yes "$(if [ -f "$T/keep/cov/cobertura.xml" ]; then echo yes; else echo no; fi)"
 check "kept coverage row" "$(cd "$T/keep" && pwd -P)/cov/cobertura.xml" "$(value 'coverage xml kept' "$outs")"
 
 # --keep-coverage validation
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/p/cov" >/dev/null 2>&1; check "keep dir inside project exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --static --keep-coverage "$T/keep/x" >/dev/null 2>&1; check "keep without --full exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/missing/x" >/dev/null 2>&1; check "keep with missing parent exits 2" 2 $?
-check "nothing created inside the project" no "$([ -e "$T/p/cov" ] && echo yes || echo no)"
+check "nothing created inside the project" no "$(if [ -e "$T/p/cov" ]; then echo yes; else echo no; fi)"
 ln -s "$T/p" "$T/lnk"
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk" >/dev/null 2>&1; check "keep symlink to the project exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk/cov" >/dev/null 2>&1; check "keep under a symlink into the project exits 2" 2 $?
