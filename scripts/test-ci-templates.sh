@@ -130,6 +130,15 @@ def step_bounds(lines, n):
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
 PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
+# Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
+# no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
+# unnamed); the value is the exact key/value allowed, nothing is matched by pattern or prefix.
+STEP_NEUTRALISERS = ("if", "condition", "enabled", "continue-on-error", "continueOnError")
+STEP_ALLOWLIST = {
+    # setup-uv is an install step, not a gate; it is only needed when the project ships uv.lock.
+    ("github-py", "quality", "astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e"): {"if": "hashFiles('uv.lock') != ''"},
+}
+GATES_INCLUDE = "azure-pipelines/templatecentral-gates.yml"
 class MergeKeyError(yaml.YAMLError):
     pass
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -141,7 +150,35 @@ class UniqueKeyLoader(yaml.SafeLoader):
         if dupes:
             raise yaml.constructor.ConstructorError(None, None, "duplicate key " + ", ".join(dupes), node.start_mark)
         return super().construct_mapping(node, deep)
-def condition_errors(rel, doc):
+def condition_errors(rel, doc, tmpl):
+    def step_ident(step):
+        for key in ("name", "displayName"):
+            if isinstance(step.get(key), str):
+                return step[key]
+        for key in ("uses", "task", "script", "bash", "run", "template"):
+            if isinstance(step.get(key), str):
+                return step[key].split("\n")[0]
+        return "?"
+    def check_steps(job, steps):
+        if steps is None:
+            return
+        if not isinstance(steps, list):
+            errors.append(f"{rel}: job {job} steps is not a list the step guard can read")
+            return
+        for step in steps:
+            if not isinstance(step, dict):
+                errors.append(f"{rel}: job {job} has a step that is not a mapping the step guard can read")
+                continue
+            ident = step_ident(step)
+            if "template" in step and step["template"] != GATES_INCLUDE:
+                errors.append(f"{rel}: job {job} step includes template {step['template']}; only {GATES_INCLUDE} is checked")
+            allowed = STEP_ALLOWLIST.get((tmpl, job, ident), {})
+            for key in STEP_NEUTRALISERS:
+                if key in step and not (key in allowed and step[key] == allowed[key]):
+                    errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
+            for key in ("timeout-minutes", "timeoutInMinutes"):
+                if key in step and not (isinstance(step[key], int) and not isinstance(step[key], bool) and step[key] > 0):
+                    errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
     def check(kind, name, node, allowed):
         if not isinstance(node, dict):
             errors.append(f"{rel}: {kind} {name} is not a mapping the job-condition guard can read")
@@ -149,6 +186,11 @@ def condition_errors(rel, doc):
         for key in ("if", "condition"):
             if key in node and not (allowed and key == "if" and node[key] == PR_ONLY_IF):
                 errors.append(f"{rel}: {kind} {name} has a run condition: {key}: {node[key]}")
+        for key in ("continue-on-error", "continueOnError"):
+            if key in node:
+                errors.append(f"{rel}: {kind} {name} has {key}: {node[key]}")
+        if kind == "job":
+            check_steps(name, node.get("steps"))
     count = [0]
     def azure_jobs(owner, jobs):
         if isinstance(jobs, list):
@@ -163,6 +205,10 @@ def condition_errors(rel, doc):
         errors.append(f"{rel}: not a YAML mapping the job-condition guard can read")
         return
     seen = False
+    if "steps" in doc:
+        seen = True
+        count[0] += 1
+        check_steps("(top-level)", doc["steps"])
     jobs = doc.get("jobs")
     if isinstance(jobs, dict):
         seen = True
@@ -211,14 +257,10 @@ def gate_step_checks(rel, lines, what, needle, required=True):
     for n in hits:
         if re.search(r"\|\||;\s*\S|\bif\b.*\bthen\b", re.sub(r"\s#\s.*$", "", lines[n])):
             errors.append(f"{rel}:{n + 1}: {what} is guarded inline: {lines[n].strip()}")
-        a, b = step_bounds(lines, n)
-        for k in range(a, b):
-            if re.match(r"^\s*(- )?(if|condition|continueOnError):", lines[k]):
-                errors.append(f"{rel}:{k + 1}: {what} step has a run condition: {lines[k].strip()}")
 for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
     try:
-        condition_errors(rel, yaml.load(open(f"{root}/{rel}").read(), Loader=UniqueKeyLoader))
+        condition_errors(rel, yaml.load(open(f"{root}/{rel}").read(), Loader=UniqueKeyLoader), host)
     except MergeKeyError as e:
         errors.append(f"{rel}: {e}")
     except yaml.YAMLError as e:
@@ -227,8 +269,6 @@ for host, (rel, merge) in files.items():
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
             errors.append(f"{rel}:{i + 1}: gate-neutralising construct: {l.strip()}")
-        if re.match(r"^\s*condition:\s*(always|succeededOrFailed)", l):
-            errors.append(f"{rel}:{i + 1}: condition that runs after failure: {l.strip()}")
     for what, needle in (("merge command", merge), ("diff-cover", "diff-cover"), ("jscpd step", "jscpd")):
         gate_step_checks(rel, lines, what, needle)
     if host.startswith("github"):
@@ -258,7 +298,7 @@ for host, (rel, merge) in files.items():
 gates = "azure/azure-pipelines/templatecentral-gates.yml"
 for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
     code = re.sub(r"\s#\s.*$", "", l)
-    if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)|^\s*condition:", code):
+    if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
         errors.append(f"{gates}:{i + 1}: gate-neutralising construct: {l.strip()}")
 gate_step_checks(gates, open(f"{root}/{gates}").read().split("\n"), "nosonar step", "ci-gates.sh nosonar")
 try:
@@ -340,6 +380,31 @@ mutate "condition: false on the secrets step (azure gates)" azure/azure-pipeline
 mutate "enabled: false on the dependency step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)' '    enabled: false\n    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)' static
 mutate "quoted \"condition\" on the secrets step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Secret scan (gitleaks CLI, checksum-verified)' '    "condition": false\n    displayName: Secret scan (gitleaks CLI, checksum-verified)' static
 mutate "continueOnError on the changelog step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Changelog gate' '    continueOnError: true\n    displayName: Changelog gate' static
+mutate "step-level if: false on Dependency audit (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit' '      - if: false\n        name: Dependency audit' static
+mutate "step-level if: false on Harness integrity (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Harness integrity' '      - if: false\n        name: Harness integrity' static
+mutate "step-level if: false on Secret scan (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Secret scan' '      - if: false\n        name: Secret scan' static
+mutate "step-level if: false on Require one blob report per shard (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require one blob report per shard' '      - if: false\n        name: Require one blob report per shard' static
+mutate "step-level if: false on the Tests step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Tests (shard' '      - if: false\n        name: Tests (shard' static
+mutate "step-level if: false on the changelog step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require CHANGELOG for src changes' '      - if: false\n        name: Require CHANGELOG for src changes' static
+mutate "step-level if: false on the readme step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require README.md update' '      - if: false\n        name: Require README.md update' static
+mutate "step-level if: false on the comment step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require no change-narration comments' '      - if: false\n        name: Require no change-narration comments' static
+mutate "step-level if: false on Dependency audit (github-py)" github-py/.github/workflows/ci.yml '      - name: Dependency audit' '      - if: false\n        name: Dependency audit' static
+mutate "step-level if: false on Secret scan (github-py)" github-py/.github/workflows/ci.yml '      - name: Secret scan' '      - if: false\n        name: Secret scan' static
+mutate "step-level if: false on the Tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (pytest-xdist' '      - if: false\n        name: Tests (pytest-xdist' static
+mutate "step-level if: false on the changelog step (github-py)" github-py/.github/workflows/ci.yml '      - name: Require CHANGELOG for src changes' '      - if: false\n        name: Require CHANGELOG for src changes' static
+mutate "enabled: false on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        enabled: false\n        displayName: Merge shard reports' static
+mutate "enabled: false on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage' '        enabled: false\n        displayName: Changed-line coverage' static
+mutate "enabled: false on the diff-cover step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Changed-line coverage' '        enabled: false\n        displayName: Changed-line coverage' static
+mutate "condition: false on Assert all shard reports present (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Assert all shard reports present' '        condition: false\n        displayName: Assert all shard reports present' static
+mutate "condition: false on the Tests step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Tests (this shard' '        condition: false\n        displayName: Tests (this shard' static
+mutate "continueOnError: true on the Tests step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Tests (this shard' '        continueOnError: true\n        displayName: Tests (this shard' static
+mutate "condition: false on the Tests step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Tests with coverage' '        condition: false\n        displayName: Tests with coverage' static
+mutate "timeoutInMinutes: 0 on the Tests step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Tests (this shard' '        timeoutInMinutes: 0\n        displayName: Tests (this shard' static
+mutate "job-level continue-on-error (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    continue-on-error: true\n    needs: test\n' static
+mutate "job-level continueOnError (azure-py quality)" azure-py/azure-pipelines.yml '  - job: quality\n' '  - job: quality\n    continueOnError: true\n' static
+mutate "step include of an unchecked template (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml' '      - template: azure-pipelines/other.yml' static
+mutate "allowlisted setup-uv step with a changed if value (github-py)" github-py/.github/workflows/ci.yml "      - if: hashFiles('uv.lock') != ''" "      - if: hashFiles('other.lock') != ''" static
+mutate "allowlisted setup-uv step with an extra neutraliser (github-py)" github-py/.github/workflows/ci.yml "      - if: hashFiles('uv.lock') != ''" "      - continue-on-error: true\n        if: hashFiles('uv.lock') != ''" static
 mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test, if: false }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
