@@ -221,4 +221,45 @@ outk=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage
 check "a rerun overwrites the kept file" "$(cd "$T/keep" && pwd -P)/cobertura.xml" "$(value 'coverage xml kept' "$outk")"
 check "a successful write leaves no temporary file" 0 "$(find "$T/keep" -name '.cobertura.*' | wc -l | tr -d ' ')"
 
+# --- --compare: a verdict table, exit 1 when any measured number got worse
+tbl() { # tbl <label> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
+  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | 0 failed of 3 |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | 1 |\n' "$@"
+}
+tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b.md"
+tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/same.md"
+tbl after 1 0 90.5% "2 (cyclomatic proxy)" 1.0% 0 0 >"$T/better.md"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/same.md"); check "compare equal exits 0" 0 $?
+contains "compare equal says OK" "OK: no measured number got worse" "$outc"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md"); check "compare improved exits 0" 0 $?
+contains "compare names an improvement" "improved" "$outc"
+regress() { # regress <name> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
+  local n=$1; shift
+  tbl after "$@" >"$T/r.md"
+  outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "compare fails on worse $n" 1 $?
+  contains "compare table marks $n WORSE" "WORSE" "$outc"
+}
+regress "lint findings" 5 2 80.0% 3 1.5% 2 1
+regress "type errors" 4 3 80.0% 3 1.5% 2 1
+regress "coverage" 4 2 79.9% 3 1.5% 2 1
+regress "complexity" 4 2 80.0% 4 1.5% 2 1
+regress "duplication" 4 2 80.0% 3 1.6% 2 1
+regress "suppressions" 4 2 80.0% 3 1.5% 3 1
+regress "exclusions" 4 2 80.0% 3 1.5% 2 2
+tbl after 4 2 "n/a (no coverage report)" 3 1.5% 2 1 >"$T/r.md"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "a number no longer measured fails" 1 $?
+contains "not measured after is named" "not measured after" "$outc"
+tbl before "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" 2 1 >"$T/nb.md"
+outc=$(bash "$SCRIPT" --compare "$T/nb.md" "$T/better.md"); check "numbers not measured before are skipped" 0 $?
+contains "skipped rows are named" "skipped (no number before)" "$outc"
+printf '| Metric | before |\n|---|---|\n| lint findings | n/a (none) |\n' >"$T/none.md"
+bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null; check "nothing comparable fails closed" 1 $?
+{ head -2 "$T/b.md"; sed 1,2d "$T/b.md" | sed 's/ |$/ | 9 |/'; } >"$T/two.md"
+bash "$SCRIPT" --compare "$T/two.md" >/dev/null; check "one file with before and after columns compares them" 1 $?
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md")
+printf '%s\n' "$outc" | sed '/^$/,$d' >"$T/rec.md"
+bash "$SCRIPT" --compare "$T/rec.md" >/dev/null 2>&1; check "a saved compare table re-compares before with after, ignoring the verdict column" 0 $?
+bash "$SCRIPT" --compare "$T/b.md" >/dev/null 2>&1; check "one single-column file exits 2" 2 $?
+bash "$SCRIPT" --compare "$T/b.md" "$T/nope.md" >/dev/null 2>&1; check "compare with a missing file exits 2" 2 $?
+bash "$SCRIPT" --compare >/dev/null 2>&1; check "compare without files exits 2" 2 $?
+
 exit $fail

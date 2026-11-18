@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Quality baseline: measure a project. It does not intentionally write to it; the last row reports any write.
 # Usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]]
+#        quality-baseline.sh --compare <before-file> [<after-file>]
+#   --compare  reads two saved tables (or one table with before and after columns), prints a verdict table and exits 1
+#            when lint or type findings, tests failed, suppressions, exclusions, duplication or complexity rose, or
+#            coverage or configured thresholds fell, or a number that was measured is no longer measured.
 #   --static (default) counts files and lines only. It runs no project code and no tool, uses no network, installs nothing.
 #   --full   also runs the project's lint, typecheck and tests, and installs pinned scratch tools into its own scratch directory
 #            (network access). Project code runs: tests execute.
@@ -19,7 +23,69 @@ DIFFCOVER_VERSION=10.0.0   # used by quality-pass.md
 COMPLEXITY_LIMIT=15
 RUN_LIMIT=${QB_RUN_LIMIT:-600}
 
-usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]]" >&2; exit 2; }
+usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]] | --compare <before-file> [<after-file>]" >&2; exit 2; }
+
+# vals <file> <first|last>: print "metric<TAB>value" for each table row, from the first or the last value column.
+# A trailing "verdict" column (this script's own compare output) is not a value column.
+vals() {
+  awk -F'|' -v which="$2" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    NF >= 4 {
+      if (trim($2) == "Metric") off = (trim($(NF - 1)) == "verdict") ? 1 : 0
+      k = trim($2); v = trim(which == "first" ? $3 : $(NF - 1 - off))
+      if (k != "") print k "\t" v
+    }' "$1"
+}
+
+# vcount <file>: number of value columns in the table.
+vcount() {
+  awk -F'|' '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    NF >= 4 { n = NF - 3; if (trim($2) == "Metric" && trim($(NF - 1)) == "verdict") n-- }
+    END { print n + 0 }' "$1"
+}
+
+# compare_main <before-file> [<after-file>]: print a verdict table; exit 1 when a number got worse or is no longer measured.
+compare_main() {
+  local bf=$1 af=${2:-$1} f
+  for f in "$bf" "$af"; do [ -f "$f" ] || { echo "--compare: cannot read $f" >&2; exit 2; }; done
+  if [ $# -eq 1 ] && [ "$(vcount "$bf")" -lt 2 ]; then
+    echo "--compare: $bf has one value column; pass a second file or a file with before and after columns" >&2; exit 2
+  fi
+  { vals "$bf" first; echo "---"; vals "$af" last; } | awk -F'\t' '
+    function has(v) { return match(v, /^[0-9]+(\.[0-9]+)?/) > 0 }
+    function num(v) { match(v, /^[0-9]+(\.[0-9]+)?/); return substr(v, RSTART, RLENGTH) + 0 }
+    function key(k) { return k ~ /^complexity over/ ? "complexity" : k }
+    $0 == "---" { seen = 1; next }
+    !seen { b[key($1)] = $2; next }
+    { a[key($1)] = $2 }
+    END {
+      n = split("lint findings:-1;type errors:-1;tests failed:-1;complexity:-1;duplication:-1;suppression lines matching (code files):-1;coverage, lint and Sonar exclusions:-1;line coverage:1;coverage thresholds configured:1", spec, ";")
+      print "| Metric | before | after | verdict |"; print "|---|---|---|---|"
+      cmp = 0; bad = 0
+      for (i = 1; i <= n; i++) {
+        split(spec[i], p, ":"); m = p[1]; dir = p[2]
+        bv = (m in b) ? b[m] : "n/a (absent)"; av = (m in a) ? a[m] : "n/a (absent)"
+        if (!has(bv)) v = "skipped (no number before)"
+        else if (!has(av)) { v = "WORSE (not measured after)"; bad++; cmp++ }
+        else {
+          cmp++; d = (num(av) - num(bv)) * dir
+          if (d < 0) { v = "WORSE"; bad++ } else if (d > 0) v = "improved"; else v = "same"
+        }
+        printf "| %s | %s | %s | %s |\n", m, bv, av, v
+      }
+      if (cmp == 0) { print "\nNothing comparable: the before table has no measured number."; exit 1 }
+      if (bad > 0) { printf "\nFAIL: %d metric(s) got worse.\n", bad; exit 1 }
+      print "\nOK: no measured number got worse."
+    }'
+}
+
+if [ "${1:-}" = --compare ]; then
+  shift
+  { [ $# -ge 1 ] && [ $# -le 2 ]; } || usage
+  compare_main "$@"
+  exit $?
+fi
 
 LABEL=before
 MODE=static

@@ -10,7 +10,7 @@ Phase 5 (health check + safe re-sync) is `phase-5-health-check.md`.
 
 ## Phase 4 — Upgrade to the current harness (agent, autonomous after Phase 0 gate)
 
-Run only when the user chose A in Phase 0. Never for unmarked projects.
+Run when the user chose A in Phase 0, or full adoption in the Phase 2 gate (the marker is already written).
 
 **Step 4a: Read AGENTS.md and detect stack**
 
@@ -154,42 +154,10 @@ ln -s .claude .agents
 
 Execute kit **Step G** up to its post-scaffold utilities list: write the AGENTS.md tail between its markers (an existing generic tail with no markers must be wrapped in them by hand first; the script refuses otherwise; here the script is `<skill-dir>/../scaffold/shared/tc-copy.sh`; use that path in the kit's `TC_PART=tail` call), then the re-baseline block. Run Prettier (TS) only on files this phase wrote (`pnpm exec prettier --write AGENTS.md FUTURE.md docs/CONSTITUTION.md docs/harness.md <each README.md written by Step E3>`), never `.`. Then wire the git hooks per kit Step B2's re-sync note (`pnpm exec lefthook install` / `lefthook install` in the venv). Once `verify-harness.sh` passes, delete `AGENTS.md.bak`.
 
+**Step 4f-4: Prove the harness is live**
+
+Run `bash "<skill-dir>/general/harness-live.sh" <project-dir>`. It reports PASS or FAIL per item (lefthook installed and the git hooks wired, gitleaks resolvable, each hook executable and registered, CI running the gates) and exits non-zero on any FAIL. Fix each FAIL at its cause, for example install the missing tool or rerun lefthook install, and rerun until it exits 0; a hash match alone proves nothing. A tool the user must install (gitleaks, lefthook) is named in the summary, not skipped.
+
 **Step 4g: Print summary**
 
-In the first line, `<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory.
-
-```
-✓ Upgraded to templateCentral <version>.
-
-Changes made:
-  AGENTS.md                      — Marker @6.0.0 + shared tail (nextjs: compressed template)
-  CLAUDE.md                      — Created (@AGENTS.md one-liner)
-  .claude/settings.json          — Created/merged: permissions.deny secret-read block,
-                                   skillListingBudgetFraction, 6 hook events
-                                   (exec form: "command" + "args")
-  .claude/hooks/*.sh             — 9 scripts: protect-files, block-no-verify,
-                                   user-prompt-guard, post-edit-typecheck,
-                                   post-edit-comment-check, stop-checks,
-                                   subagent-stop, session-context, skill-usage-log
-  .claude/hooks/post-tool-failure.sh — Deleted if present (no longer seeded; its
-                                   PostToolUseFailure settings entry removed)
-  .claude/comment-hygiene-patterns.txt — canonical pattern list (hook + lefthook + CI)
-  lefthook.yml                   — git-hook layer
-  .lefthook/commit-msg.sh        — Conventional Commits gate
-  .gitleaks.toml                 — secret-scan config
-  .claude/ci-gates.sh            — PR merge gates (secrets, changelog, readme, comments, deps)
-  .github/workflows/ci.yml       — CI quality gates (GitHub) — or
-  azure-pipelines/templatecentral-gates.yml — steps template (Azure DevOps)
-  .claude/verify-harness.sh      — harness integrity verifier
-  .claude/regen-harness.sh       — human-run baseline re-bless (never agent-run)
-  .claude/skills/skill-audit/    — repeat-workflow surfacing skill
-  .claude/skills/<stack>-verify/SKILL.md   (converted to directory form if previously flat)
-  (nextjs only) .claude/skills/next-migrate/SKILL.md   (converted to directory form if previously flat)
-  .claude/harness.json           — Created with origin hashes for every file above
-  .claude/.harness-base/         — as-seeded snapshot (3-way-merge base for Phase 5d)
-  FUTURE.md                      — deferred-work log
-  docs/CONSTITUTION.md           — project invariants
-  README.md (per folder)         — created/refreshed via documentation-kit.md
-
-Commit these files together — the harness only enforces as a complete set.
-```
+`<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory. Print `✓ Upgraded to templateCentral <version>.`, then one line per file or tree written, grouped as: `AGENTS.md` (marker `@6.0.0` plus shared tail; nextjs: compressed template), `CLAUDE.md` (`@AGENTS.md` import), `.claude/settings.json` (merged: secret-read deny block, `skillListingBudgetFraction`, 6 hook events in exec form), the 9 `.claude/hooks/*.sh` scripts, `.claude/comment-hygiene-patterns.txt`, the git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`), the CI gates (`.claude/ci-gates.sh` plus the host's CI file), `.claude/verify-harness.sh` and `regen-harness.sh`, the `skill-audit` and `<stack>-verify` skills (nextjs also `next-migrate`), `.claude/harness.json` and `.claude/.harness-base/`, `FUTURE.md`, `docs/CONSTITUTION.md`, per-folder `README.md`, and any deletion (`post-tool-failure.sh`). End with the live check's last line and: "Commit these files together — the harness only enforces as a complete set."

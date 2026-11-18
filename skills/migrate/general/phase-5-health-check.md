@@ -49,7 +49,9 @@ into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way
 it does not clobber.
 ```
 
-If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version **and** the `AGENTS.md` import is present, print:
+Then run `bash "<skill-dir>/general/harness-live.sh" <project-dir>` and print its output: matching hashes show the files are canonical, not that the harness is wired. Each FAIL is a wiring gap; list it for Step 5d or for the user (a missing tool).
+
+If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version, the `AGENTS.md` import is present **and** the live check exits 0, print:
 ```
 ✓ All harness files match their templateCentral origin and are up to date. No action needed.
 ```
@@ -106,6 +108,7 @@ Offer this when there is something to apply: a `MODIFIED`/`MISSING` file, a miss
 for p in <files written>; do mkdir -p ".claude/.harness-base/$(dirname "$p")"; cp "$p" ".claude/.harness-base/$p"; done
 # recompute origin_hash for each in harness.json, and bump templatecentral_version to "$PLUGIN_VER"
 bash .claude/verify-harness.sh   # confirm the enforcement layer is clean post-sync
+bash "<skill-dir>/general/harness-live.sh" .   # confirm it is still wired
 ```
 
 If a reseed created a new directory outside the paths documentation-kit.md Step 2 prunes (`.lefthook/` or `docs/` count; `.claude/`, `.github/` and secrets directories do not), re-run the documentation kit for it (loaded by the phase table in `implementation.md`).
