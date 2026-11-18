@@ -11,7 +11,7 @@ try: print('true' if json.loads(sys.stdin.read() or '{}').get('stop_hook_active'
 except Exception: print('false')" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-# Changed paths: deletions and renames as separate paths, untracked included; without a HEAD commit, everything tracked or untracked.
+# Paths in the diff: deletions and renames as separate paths, untracked included; without a HEAD commit, everything tracked or untracked.
 if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
   files=$( { git -c core.quotePath=false diff --name-only --no-renames HEAD; git -c core.quotePath=false ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
 else
