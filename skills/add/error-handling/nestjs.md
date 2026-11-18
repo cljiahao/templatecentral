@@ -106,4 +106,6 @@ Document the error statuses each route can return so Swagger consumers see the `
 @ApiResponse({ status: 404, description: 'Resource not found' })
 ```
 
+Run `pnpm test:e2e` as well as `pnpm test`: e2e tests assert the error body.
+
 Any test asserting the old `{ statusCode, message }` body must be updated in the same change.

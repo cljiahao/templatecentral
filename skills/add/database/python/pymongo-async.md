@@ -31,7 +31,6 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(default=..., description="MongoDB database name")
 ```
 
-
 Ask the user to add both to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 
 ```

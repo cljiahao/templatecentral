@@ -2,6 +2,10 @@
      loaded-by: add/SKILL.md
      prereq: Stack identified; project already has the templateCentral harness seeded (scaffold or migrate). Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 
+## Step 0 — Verify context
+
+Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate` (its Phase 5 health check runs on its own), and if still absent, stop without writing files.
+
 ## Step 1 — Backfill per-folder documentation
 
 ```bash

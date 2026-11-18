@@ -112,7 +112,6 @@ class APISettings(BaseSettings):
     )
 ```
 
-
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 
 ```

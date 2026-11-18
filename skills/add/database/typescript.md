@@ -35,4 +35,4 @@ Use password auth and the standard guides unless the user requires AWS IAM; then
 
 NestJS + Drizzle carries its own auth and IAM sections, so it has no add-on files. The Next.js guides need no auth add-on: better-auth keeps its own session store.
 
-Run the chosen `cat`(s); follow the guide(s).
+Run the chosen `cat`(s); follow the guide(s) exactly.

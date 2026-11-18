@@ -16,5 +16,5 @@ description: Use when adding any capability to a FastAPI, NestJS, Next.js, or Vi
 
 2. Need `<!-- templateCentral: <stack>@` on `AGENTS.md` line 1 (`redaction` and `documentation` need the harness instead; see their guide); if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 3. Run `cat "<skill-dir>/<path>"` — `<skill-dir>` is this skill's "Base directory for this skill" (an absolute path, **not** a shell variable).
-4. Follow the loaded guide; for `database` it names the next `cat`. In the guides, `<target>` is the project root: the directory whose `AGENTS.md` carries the templateCentral marker.
-5. When the code is written, `cat "<skill-dir>/../build/SKILL.md"`, then `cat "<skill-dir>/../review/SKILL.md"`.
+4. Follow the loaded guide exactly; for `database` it names the next `cat`. In the guides, `<target>` is the project root: the directory whose `AGENTS.md` carries the templateCentral marker.
+5. When the code is written, `cat "<skill-dir>/../build/SKILL.md"`, then `cat "<skill-dir>/../review/SKILL.md"`. If the guide added or changed tests, or changed behaviour that existing tests assert, also `cat "<skill-dir>/../test/SKILL.md"` and run the suite.

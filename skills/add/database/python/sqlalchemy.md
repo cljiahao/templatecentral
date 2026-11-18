@@ -38,7 +38,6 @@ class APISettings(BaseSettings):
     )
 ```
 
-
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 ```
 DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
