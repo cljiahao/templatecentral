@@ -615,6 +615,14 @@ check yes "$(ok_if same_reason "$T/protect.ts.out" "$T/protect.py.out")" "protec
 check yes "$(ok_if grep -q '^  - "src/error_handler.py"$' "$TPL/../fastapi/template/.claude/rules/fastapi.md")" "the fastapi rule's globs cover the error_handler.py its text names"
 check 0 "$(grep -c 'Skill capture' "$TPL/template-late/.claude/skills/skill-audit/SKILL.md.tmpl")" "skill-audit points at no AGENTS.md section that is gone"
 check 0 "$(grep -c 'lazy per directory' "$TPL/template-late/docs/harness.md")" "harness.md does not call rule loading lazy per directory"
+# block-no-verify cuts by UTF-8 sequence in the C locale too: 199 ASCII bytes then a 3-byte char must not leave a partial char.
+for v in ts py; do
+  cutfn=$(sed -n '/^cut200() {$/,/^}$/p' "$KIT/block-no-verify.$v.sh")
+  cut_out=$(LC_ALL=C bash -c "$cutfn"'
+    printf "%s" "$(python3 -c "print(\"a\" * 199 + \"\u20ac\" * 3)")" > "$0"
+    cut200 "$(cat "$0")" | python3 -c "import sys; d = sys.stdin.buffer.read(); d.decode(\"utf-8\"); print(len(d))"' "$T/mb.in" 2>&1)
+  check "199" "$cut_out" "block-no-verify.$v cuts a multi-byte message on a character boundary in the C locale"
+done
 # Silence on success: a passing check and an unrelated file print nothing.
 touch "$MOCK_TSC_OK"
 for v in ts py; do

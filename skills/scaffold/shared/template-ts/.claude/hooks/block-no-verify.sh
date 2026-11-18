@@ -16,8 +16,21 @@ cmd=$(printf '%s\n' "$cmd" | awk '
   { print; l = $0; gsub(/<<</, "", l)
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
-# block <message>: message capped at 200 chars.
-block() { local m="BLOCKED: $1"; echo "${m:0:200}" >&2; exit 2; }
+# cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale.
+cut200() {
+  local LC_ALL=C s="${1:0:200}" n i b len
+  n=${#s}; i=$n
+  while [ "$i" -gt 0 ] && [ "$i" -gt $((n - 4)) ]; do
+    i=$((i - 1)); printf -v b '%d' "'${s:i:1}"; b=$((b & 255))
+    [ $((b & 192)) -eq 128 ] && continue
+    if [ "$b" -ge 240 ]; then len=4; elif [ "$b" -ge 224 ]; then len=3; elif [ "$b" -ge 192 ]; then len=2; else len=1; fi
+    [ $((n - i)) -lt "$len" ] && s="${s:0:i}"
+    break
+  done
+  printf '%s' "$s"
+}
+# block <message>: message capped at 200 bytes.
+block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 protected='main|uat|develop'
 root=$PWD
 # Directories a bare commit/push may land on: the cwd plus literal cd targets; anything unresolved adds the project root.
