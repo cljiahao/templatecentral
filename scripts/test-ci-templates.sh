@@ -109,10 +109,10 @@ except ImportError:
     sys.exit("PyYAML is required by the job-condition guard: pip install pyyaml==6.0.3")
 root = sys.argv[1]
 files = {
-    "github-ts": ("github-ts/.github/workflows/ci.yml", "--merge-reports=blob --coverage"),
-    "azure-ts": ("azure-ts/azure-pipelines.yml", "--merge-reports=blob --coverage"),
-    "github-py": ("github-py/.github/workflows/ci.yml", "--cov=src --cov-report=xml"),
-    "azure-py": ("azure-py/azure-pipelines.yml", "--cov=src --cov-report=xml"),
+    "github-ts": "github-ts/.github/workflows/ci.yml",
+    "azure-ts": "azure-ts/azure-pipelines.yml",
+    "github-py": "github-py/.github/workflows/ci.yml",
+    "azure-py": "azure-py/azure-pipelines.yml",
 }
 GUARD = re.compile(r"\|\|\s*(true|:)|continue-on-error|condition:|succeededOrFailed\(|\balways\(\)|\bcancelled\(\)|\bfailure\(\)")
 errors = []
@@ -245,68 +245,214 @@ def gate_include_errors(rel, doc):
         for key in ("condition", "enabled", "continueOnError", "if"):
             if key in step:
                 errors.append(f"{rel}: gate step {name} has {key}: {step[key]}; every step in the gates include must always run and fail the job")
-# Gate steps (merge, diff-cover, jscpd, nosonar) must always run and must fail the job: no step-level or job-level
-# if/condition/continueOnError, no inline guard. Allowed conditions elsewhere: `if: hashFiles('uv.lock') != ''` on the
-# optional setup-uv step (not a gate) and the job-level `github.event_name == 'pull_request'` on the PR-only gates.
-def gate_step_checks(rel, lines, what, needle, required=True):
-    hits = [i for i, l in enumerate(lines) if needle in l and not l.lstrip().startswith("#")]
-    if not hits:
-        if required:
-            errors.append(f"{rel}: missing {what} ({needle})")
-        return
-    for n in hits:
-        if re.search(r"\|\||;\s*\S|\bif\b.*\bthen\b", re.sub(r"\s#\s.*$", "", lines[n])):
-            errors.append(f"{rel}:{n + 1}: {what} is guarded inline: {lines[n].strip()}")
-for host, (rel, merge) in files.items():
-    lines = open(f"{root}/{rel}").read().split("\n")
+# Required-gate manifest, one entry per template: for each required gate the job it lives in and the exact `run`/`bash`/
+# `uses`/`task`/`template` value of its step (compared on the parsed value, trailing whitespace trimmed), plus the exact
+# needs/dependsOn edges of every job. A missing step, a changed command, a step in the wrong job, an unlisted job or a
+# missing edge fails and names the gate. Exact text also rules out `set +e`, `exit 0` and `|| true` in a gate command.
+# The github and azure variants differ only where the platform differs (task vs uses, $(var) vs ${VAR}), each recorded.
+MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
+               'needs': {'plan': [],
+                         'quality': [],
+                         'test': ['plan'],
+                         'coverage': ['test'],
+                         'changelog': [],
+                         'readme-freshness': [],
+                         'comment-hygiene': []},
+               'gates': [('shard plan',
+                          'plan',
+                          'run',
+                          'set -euo pipefail\n'
+                          "list=$(node -p 'JSON.stringify(Array.from({ length: Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')\n"
+                          'echo "list=$list" >> "$GITHUB_OUTPUT"\n'),
+                         ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
+                         ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
+                         ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
+                         ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
+                         ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
+                         ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('tests',
+                          'test',
+                          'run',
+                          'pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ '
+                          'matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ env.SHARD_COUNT }}"'),
+                         ('shard upload', 'test', 'uses', 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'),
+                         ('shard download', 'coverage', 'uses', 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'),
+                         ('shard count assertion', 'coverage', 'run', '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'),
+                         ('coverage merge', 'coverage', 'run', 'pnpm exec vitest run --merge-reports=blob --coverage'),
+                         ('diff-cover at 80',
+                          'coverage',
+                          'run',
+                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
+                          '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
+                         ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
+                         ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
+                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"')]},
+ 'github-py': {'file': 'github-py/.github/workflows/ci.yml',
+               'needs': {'quality': [], 'changelog': [], 'readme-freshness': [], 'comment-hygiene': []},
+               'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
+                         ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
+                         ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
+                         ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
+                         ('typecheck', 'quality', 'run', 'python -m pyright src/'),
+                         ('jscpd', 'quality', 'run', 'npx --yes jscpd@${JSCPD_VERSION}'),
+                         ('tests', 'quality', 'run', 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'),
+                         ('diff-cover at 80',
+                          'quality',
+                          'run',
+                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" '
+                          '--fail-under=80'),
+                         ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
+                         ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
+                         ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
+                         ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"')]},
+ 'azure-ts': {'file': 'azure-ts/azure-pipelines.yml',
+              'needs': {'quality': [], 'test': [], 'coverage': ['test']},
+              'gates': [('format, lint and typecheck', 'quality', 'bash', 'pnpm run check'),
+                        ('jscpd', 'quality', 'bash', 'pnpm exec jscpd'),
+                        ('gates include', 'quality', 'template', 'azure-pipelines/templatecentral-gates.yml'),
+                        ('tests',
+                         'test',
+                         'bash',
+                         'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
+                         '--outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" '
+                         '--shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"'),
+                        ('shard upload', 'test', 'task', 'PublishPipelineArtifact@1'),
+                        ('shard download', 'coverage', 'task', 'DownloadPipelineArtifact@2'),
+                        ('shard collect',
+                         'coverage',
+                         'bash',
+                         'set -euo pipefail\n'
+                         '# No artifact name, so the task puts each artifact in its own subfolder: <path>/<artifact>/*.json.\n'
+                         'mkdir -p blob\n'
+                         'cp "$(Pipeline.Workspace)"/blobs/*/*.json blob/\n'),
+                        ('shard count assertion',
+                         'coverage',
+                         'bash',
+                         'set -euo pipefail\n'
+                         "count=$(find blob -name '*.json' | wc -l)\n"
+                         'if [ "$count" -ne "$(shardCount)" ]; then\n'
+                         '  echo "expected $(shardCount) shard reports, found $count" >&2\n'
+                         '  exit 1\n'
+                         'fi\n'),
+                        ('coverage merge',
+                         'coverage',
+                         'bash',
+                         'set -euo pipefail\n'
+                         '# writes coverage/cobertura-coverage.xml\n'
+                         'pnpm exec vitest run --merge-reports=blob --coverage\n'),
+                        ('diff-cover at 80',
+                         'coverage',
+                         'bash',
+                         'set -euo pipefail\n'
+                         'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
+                         'pipx run "diff-cover==$(diffCoverVersion)" coverage/cobertura-coverage.xml '
+                         '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n')]},
+ 'azure-py': {'file': 'azure-py/azure-pipelines.yml',
+              'needs': {'quality': []},
+              'gates': [('lint and format', 'quality', 'bash', 'ruff check src/ test/ && ruff format --check src/ test/'),
+                        ('typecheck', 'quality', 'bash', 'python -m pyright src/'),
+                        ('jscpd', 'quality', 'bash', 'npx --yes jscpd@$(JSCPD_VERSION)'),
+                        ('gates include', 'quality', 'template', 'azure-pipelines/templatecentral-gates.yml'),
+                        ('tests', 'quality', 'bash', 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'),
+                        ('diff-cover at 80',
+                         'quality',
+                         'bash',
+                         'set -euo pipefail\n'
+                         'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
+                         'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml --compare-branch="origin/${target#refs/heads/}" '
+                         '--fail-under=80\n')]},
+ 'azure-gates': {'file': 'azure/azure-pipelines/templatecentral-gates.yml',
+                 'gates': [('Harness integrity', '(gates include)', 'bash', 'bash .claude/verify-harness.sh'),
+                           ('Secret scan (gitleaks CLI, checksum-verified)',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh deps'),
+                           ('No NOSONAR suppression markers', '(gates include)', 'bash', 'bash .claude/ci-gates.sh nosonar'),
+                           ('Changelog gate',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('README freshness gate',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh readme "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Comment hygiene gate',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
+def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
+    if gate_file:
+        jobs = {"(gates include)": {"steps": doc.get("steps") if isinstance(doc, dict) else None}}
+    elif isinstance(doc.get("jobs"), dict):
+        jobs = doc["jobs"]
+    elif isinstance(doc.get("jobs"), list):
+        jobs = {j.get("job"): j for j in doc["jobs"] if isinstance(j, dict)}
+    else:
+        jobs = {}
+    if not gate_file:
+        for name, node in jobs.items():
+            if name not in entry["needs"]:
+                errors.append(f"{rel}: job {name} is not in the required-gate manifest")
+        for name, expected in entry["needs"].items():
+            node = jobs.get(name)
+            if node is None:
+                errors.append(f"{rel}: required job {name} is missing")
+                continue
+            got = node.get(needs_key) or []
+            got = [got] if isinstance(got, str) else got
+            if sorted(got) != sorted(expected):
+                errors.append(f"{rel}: job {name} must have {needs_key} {expected}, found {got}")
+    for gate, job, key, text in entry["gates"]:
+        node = jobs.get(job)
+        steps = node.get("steps") if isinstance(node, dict) else None
+        found = [st for st in steps if isinstance(st, dict) and isinstance(st.get(key), str) and st[key].rstrip() == text.rstrip()] if isinstance(steps, list) else []
+        if not found:
+            errors.append(f"{rel}: required gate '{gate}' is missing from job {job}: expected {key}: {text.splitlines()[0] if text else text}")
+        for st in found:
+            if "shell" in st:
+                errors.append(f"{rel}: required gate '{gate}' in job {job} must not set shell: {st['shell']}")
+def load_yaml(rel, path):
     try:
-        condition_errors(rel, yaml.load(open(f"{root}/{rel}").read(), Loader=UniqueKeyLoader), host)
+        return yaml.load(open(path).read(), Loader=UniqueKeyLoader)
     except MergeKeyError as e:
         errors.append(f"{rel}: {e}")
     except yaml.YAMLError as e:
-        errors.append(f"{rel}: not parseable YAML, so the job-condition guard cannot check it: {e}")
+        errors.append(f"{rel}: not parseable YAML, so the guards cannot check it: {e}")
+    return None
+for host, rel in files.items():
+    lines = open(f"{root}/{rel}").read().split("\n")
+    doc = load_yaml(rel, f"{root}/{rel}")
+    if doc is not None:
+        condition_errors(rel, doc, host)
+        manifest_errors(rel, doc, MANIFEST[host], "needs" if host.startswith("github") else "dependsOn")
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
             errors.append(f"{rel}:{i + 1}: gate-neutralising construct: {l.strip()}")
-    for what, needle in (("merge command", merge), ("diff-cover", "diff-cover"), ("jscpd step", "jscpd")):
-        gate_step_checks(rel, lines, what, needle)
-    if host.startswith("github"):
-        gate_step_checks(rel, lines, "nosonar step", "ci-gates.sh nosonar")
-    code_lines = [l for l in lines if not l.lstrip().startswith("#")]
-    for n, l in enumerate(lines):
-        if re.search(r"pipx run\s+(\"?)diff-cover", l) and not re.search(r"pipx run\s+\"diff-cover==(\$\{DIFF_COVER_VERSION\}|\$\(diffCoverVersion\)|\$\(DIFF_COVER_VERSION\))\"", l):
-            errors.append(f"{rel}:{n + 1}: diff-cover must run pinned as \"diff-cover==<version variable>\": {l.strip()}")
     pins = [(n, l) for n, l in enumerate(lines) if re.match(r"^\s*(DIFF_COVER_VERSION|diffCoverVersion|JSCPD_VERSION):", l)]
     if not any("diff" in l.lower() for _, l in pins):
         errors.append(f"{rel}: missing the diff-cover version variable")
     for n, l in pins:
         if not re.match(r"^\s*\w+:\s*\"\d+\.\d+\.\d+\"(\s|$)", l):
             errors.append(f"{rel}:{n + 1}: tool version must be an exact x.y.z string: {l.strip()}")
-    if not any(re.search(r"(pnpm exec jscpd|npx --yes jscpd@)", l) for l in code_lines):
-        errors.append(f"{rel}: missing the jscpd duplication step")
-    nosonar_file = rel if host.startswith("github") else "azure/azure-pipelines/templatecentral-gates.yml"
-    if "ci-gates.sh nosonar" not in open(f"{root}/{nosonar_file}").read():
-        errors.append(f"{nosonar_file}: missing the `ci-gates.sh nosonar` step (used by {rel})")
     for n, l in enumerate(lines):
         if "upload-artifact" in l and "uses:" in l:
             a, b = step_bounds(lines, n)
             if not any(re.match(r"^\s*if-no-files-found:\s*error\s*$", lines[k]) for k in range(a, b)):
                 errors.append(f"{rel}:{n + 1}: upload-artifact step must keep `if-no-files-found: error`")
-    if not any("diff-cover" in l and "--fail-under=80" in l for l in lines):
-        errors.append(f"{rel}: diff-cover must run with --fail-under=80")
 gates = "azure/azure-pipelines/templatecentral-gates.yml"
 for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
     code = re.sub(r"\s#\s.*$", "", l)
     if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
         errors.append(f"{gates}:{i + 1}: gate-neutralising construct: {l.strip()}")
-gate_step_checks(gates, open(f"{root}/{gates}").read().split("\n"), "nosonar step", "ci-gates.sh nosonar")
-try:
-    gate_include_errors(gates, yaml.load(open(f"{root}/{gates}").read(), Loader=UniqueKeyLoader))
-except MergeKeyError as e:
-    errors.append(f"{gates}: {e}")
-except yaml.YAMLError as e:
-    errors.append(f"{gates}: not parseable YAML, so the gate guard cannot check it: {e}")
+gate_doc = load_yaml(gates, f"{root}/{gates}")
+if gate_doc is not None:
+    gate_include_errors(gates, gate_doc)
+    manifest_errors(gates, gate_doc, MANIFEST["azure-gates"], None, True)
 print("\n".join(errors))
 sys.exit(1 if errors else 0)
 PY
@@ -405,6 +551,21 @@ mutate "job-level continueOnError (azure-py quality)" azure-py/azure-pipelines.y
 mutate "step include of an unchecked template (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml' '      - template: azure-pipelines/other.yml' static
 mutate "allowlisted setup-uv step with a changed if value (github-py)" github-py/.github/workflows/ci.yml "      - if: hashFiles('uv.lock') != ''" "      - if: hashFiles('other.lock') != ''" static
 mutate "allowlisted setup-uv step with an extra neutraliser (github-py)" github-py/.github/workflows/ci.yml "      - if: hashFiles('uv.lock') != ''" "      - continue-on-error: true\n        if: hashFiles('uv.lock') != ''" static
+mutate "secret scan deleted (github-ts)" github-ts/.github/workflows/ci.yml "      - name: Secret scan (gitleaks CLI, checksum-verified)\\n        env:\\n          BASE_REF: \${{ github.base_ref }}\\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\\n" "" static
+mutate "dependency audit deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '' static
+mutate "harness integrity deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Harness integrity\n        run: bash .claude/verify-harness.sh\n' '' static
+mutate "secret scan deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml "  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\\n" "" static
+mutate "harness integrity deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n' '' static
+mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(System.JobPositionInPhase).json\" --shard=\"\$(System.JobPositionInPhase)/\$(System.TotalJobsInPhase)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
+mutate "needs: test removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n' static
+mutate "dependsOn: test removed from coverage (azure-ts)" azure-ts/azure-pipelines.yml '    dependsOn: test\n' '' static
+mutate "set +e prefixed to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec vitest run --coverage --reporter=default' 'run: set +e; pnpm exec vitest run --coverage --reporter=default' static
+mutate "&& exit 0 appended to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml "--shard=\"\${{ matrix.shard }}/\${{ env.SHARD_COUNT }}\"\\n" "--shard=\"\${{ matrix.shard }}/\${{ env.SHARD_COUNT }}\" && exit 0\\n" static
+mutate "shell: bash {0} on the dependency audit (github-ts)" github-ts/.github/workflows/ci.yml '        run: bash .claude/ci-gates.sh deps\n' '        run: bash .claude/ci-gates.sh deps\n        shell: bash {0}\n' static
+mutate "dependency audit run replaced by echo skip (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh deps' 'run: echo skip' static
+mutate "needs edge removed from test (github-ts)" github-ts/.github/workflows/ci.yml '  test:\n    needs: plan\n' '  test:\n' static
+mutate "unlisted extra job (github-py)" github-py/.github/workflows/ci.yml '  changelog:\n' '  extra:\n    runs-on: ubuntu-latest\n    steps: []\n  changelog:\n' static
+mutate "gates include removed from the quality job (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '' static
 mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test, if: false }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
