@@ -4,7 +4,7 @@
 
 # Quality pass (lint alignment, then fixes)
 
-This pass changes user code, tests and config. It adds no suppression and no exclusion, ever: fix the cause. Show every batch as a list or diff and get the user's confirmation before you apply it, at each stage below.
+This pass changes user code, tests and config. It adds no suppression and no exclusion: fix the code first (suppression rule: `comments.md`). Show every batch as a list or diff and get the user's confirmation before you apply it, at each stage below.
 
 **Scratch.** The pass's scratch directory is a new directory in the session scratch area, outside the project. Batch lists, file copies, reports and coverage XML live there.
 

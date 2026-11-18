@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Harness live check: prove the seeded harness is wired in a project, not only present. Read-only.
+# Harness live check: prove the seeded harness is wired and fires in a project, not only present. It never writes to the project.
 # Usage: harness-live.sh <project-dir>
 # Prints PASS or FAIL per item; exits 1 when any item fails, 2 on a usage error. It reads no environment or key file.
 # Needs bash 3.2+, git, and python3 or node to read .claude/settings.json.
@@ -22,12 +22,13 @@ resolve() {
   command -v "$1"
 }
 
-# settings_hooks: one "<event> <command> <first-arg>" line per registered hook; command is ARRAY when not a string.
+# settings_hooks: a "__disable__ <true|false>" line, then one "<event> <command> <first-arg>" line per registered hook; command is ARRAY when not a string.
 settings_hooks() {
   if have python3; then
     python3 - "$P/.claude/settings.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
+print("__disable__", str(d.get("disableAllHooks", False)).lower(), "")
 for ev, groups in d.get("hooks", {}).items():
     for g in groups:
         for h in g.get("hooks", []):
@@ -37,6 +38,7 @@ PY
   elif have node; then
     node - "$P/.claude/settings.json" <<'JS'
 const d = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
+console.log("__disable__", String(d.disableAllHooks === true), "");
 for (const [ev, groups] of Object.entries(d.hooks || {}))
   for (const g of groups) for (const h of g.hooks || []) {
     const a = h.args && h.args.length ? h.args[0] : "";
@@ -50,12 +52,16 @@ JS
 lh=$(resolve lefthook)
 if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH"; fi
 if [ -f "$P/lefthook.yml" ]; then
+  for h in pre-commit pre-push; do
+    grep -Eq "^$h:" "$P/lefthook.yml" || fail "lefthook.yml $h" "no $h section"
+  done
+  grep -v '^[[:space:]]*#' "$P/lefthook.yml" | grep -q gitleaks || fail "lefthook.yml gitleaks" "no gitleaks command outside a comment"
   if git -C "$P" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     hooks_dir=$(git -C "$P" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
     for h in pre-commit commit-msg pre-push; do
       grep -Eq "^$h:" "$P/lefthook.yml" || continue
-      if [ -f "$hooks_dir/$h" ] && grep -qi lefthook "$hooks_dir/$h"; then pass "git hook $h wired to lefthook"
-      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h does not call lefthook; run lefthook install"; fi
+      if [ -f "$hooks_dir/$h" ] && grep -v '^[[:space:]]*#' "$hooks_dir/$h" | grep -qi lefthook; then pass "git hook $h wired to lefthook"
+      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h has no line outside a comment that calls lefthook; run lefthook install"; fi
     done
   else fail "git hooks" "not a git repository"; fi
 else fail "lefthook.yml" "missing"; fi
@@ -65,22 +71,53 @@ gl=$(resolve gitleaks)
 if [ -n "$gl" ]; then pass "gitleaks binary ($gl)"; else fail "gitleaks binary" "not resolvable; install it"; fi
 if [ -f "$P/.gitleaks.toml" ]; then pass ".gitleaks.toml present"; else fail ".gitleaks.toml" "missing"; fi
 
-# 3. agent hooks: seeded, executable when run as scripts, registered in settings.json in exec form
+# 3. agent hooks: seeded, executable when run as scripts, registered under the right event in settings.json in exec form
+# fire <hook-file> <payload>: run a guard in the project on a synthetic payload; prints "<exit status> <stderr>". The guards only read.
+fire() {
+  local out rc
+  case "$1" in
+    *.sh) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" bash "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
+    *.py) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" python3 "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
+    *) out=$(cd "$P" && CLAUDE_PROJECT_DIR="$P" node "$1" 2>&1 >/dev/null <<<"$2"); rc=$? ;;
+  esac
+  echo "$rc $out"
+}
 if [ -f "$P/.claude/settings.json" ]; then
   reg=$(settings_hooks) || reg=FAILED
   if [ "$reg" = FAILED ]; then fail ".claude/settings.json" "unreadable, or neither python3 nor node is available"; reg=; fi
+  if printf '%s\n' "$reg" | grep -q '^__disable__ true'; then fail "settings.json disableAllHooks" "true turns every hook off"; fi
   if printf '%s\n' "$reg" | grep -q ' ARRAY '; then fail "settings.json hooks" "an array-valued command never runs; use exec form (command + args)"; fi
-  for name in protect-files block-no-verify user-prompt-guard post-edit-typecheck post-edit-comment-check stop-checks subagent-stop session-context skill-usage-log; do
+  for pair in protect-files:PreToolUse block-no-verify:PreToolUse user-prompt-guard:UserPromptSubmit post-edit-typecheck:PostToolUse post-edit-comment-check:PostToolUse stop-checks:Stop subagent-stop:SubagentStop session-context:SessionStart skill-usage-log:PostToolUse; do
+    name=${pair%%:*}; event=${pair#*:}
     file=$(find "$P/.claude/hooks" -maxdepth 1 -name "$name.*" 2>/dev/null | head -1)
     if [ -z "$file" ]; then fail "hook $name" "script missing under .claude/hooks"; continue; fi
     case "$file" in
       *.sh) [ -x "$file" ] || { fail "hook $name" "$(basename "$file") is not executable"; continue; } ;;
     esac
     want="/.claude/hooks/$(basename "$file")"
-    if printf '%s\n' "$reg" | awk -v w="$want" '{ n = length($NF) - length(w) + 1; if (n > 0 && substr($NF, n) == w) f = 1 } END { exit !f }'; then pass "hook $name executable and registered"
-    else fail "hook $name" "not registered in .claude/settings.json"; fi
+    if printf '%s\n' "$reg" | awk -v w="$want" -v e="$event" '$1 == e { n = length($NF) - length(w) + 1; if (n > 0 && substr($NF, n) == w) f = 1 } END { exit !f }'; then pass "hook $name executable and registered under $event"
+    else fail "hook $name" "not registered under $event in .claude/settings.json"; fi
   done
 else fail ".claude/settings.json" "missing"; fi
+
+# 3b. fire the two blocking guards on a synthetic payload; a no-op script passes the checks above but not this
+guard_file() { find "$P/.claude/hooks" -maxdepth 1 -name "$1.*" 2>/dev/null | head -1; }
+gf=$(guard_file protect-files)
+if [ -n "$gf" ]; then
+  r=$(fire "$gf" '{"tool_name":"Write","tool_input":{"file_path":".env","content":"x"}}') # PAYLOAD: synthetic, never read
+  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "protect-files blocks a write to an environment file"; else fail "protect-files guard" "a synthetic secret write was not blocked (exit ${r%% *})"; fi
+fi
+gf=$(guard_file block-no-verify)
+if [ -n "$gf" ]; then
+  r=$(fire "$gf" '{"tool_name":"Bash","tool_input":{"command":"git commit --no-verify -m x"}}')
+  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "block-no-verify blocks git commit --no-verify"; else fail "block-no-verify guard" "a synthetic --no-verify commit was not blocked (exit ${r%% *})"; fi
+fi
+
+# 3c. integrity: seeded guard files still hash to their origin, which also catches a hook replaced by a no-op
+if [ -f "$P/.claude/verify-harness.sh" ]; then
+  if vout=$(cd "$P" && bash .claude/verify-harness.sh 2>&1); then pass "verify-harness.sh: enforcement files match their origin hashes"
+  else fail "verify-harness.sh" "$(printf '%s' "$vout" | tr '\n' ' ' | cut -c1-200)"; fi
+else fail ".claude/verify-harness.sh" "missing"; fi
 
 # 4. CI workflow runs the gates
 ci=()
@@ -89,8 +126,8 @@ for f in "$P"/.github/workflows/*.yml "$P"/.github/workflows/*.yaml "$P"/azure-p
 done
 if [ "${#ci[@]}" -eq 0 ]; then fail "CI workflow" "no .github/workflows or azure-pipelines file"
 else
-  if grep -qs 'ci-gates.sh' "${ci[@]}"; then pass "CI runs .claude/ci-gates.sh"; else fail "CI gates" "no workflow runs .claude/ci-gates.sh"; fi
-  if grep -qs 'verify-harness.sh' "${ci[@]}"; then pass "CI runs .claude/verify-harness.sh"; else fail "CI harness check" "no workflow runs .claude/verify-harness.sh"; fi
+  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'ci-gates.sh'; then pass "CI runs .claude/ci-gates.sh"; else fail "CI gates" "no workflow line outside a comment runs .claude/ci-gates.sh"; fi
+  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'verify-harness.sh'; then pass "CI runs .claude/verify-harness.sh"; else fail "CI harness check" "no workflow line outside a comment runs .claude/verify-harness.sh"; fi
 fi
 [ -f "$P/.claude/ci-gates.sh" ] || fail ".claude/ci-gates.sh" "missing"
 

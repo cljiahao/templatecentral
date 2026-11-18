@@ -51,6 +51,8 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 **If no marker** → skip to Phase 1 (stack detection).
 
+**Baseline on every route that changes project files** (no marker, the seed or re-sync of a light adoption, `@5.x`, `@4.x`): after the user's yes and before the first write, run the Phase 3 A step 1 `--full` before-run; after the last write, run the Phase 3 A step 5 `--compare`. Phases 1–3 may be skipped, this step may not. The no-change `@6.0.0` route takes none.
+
 **If marker present, version `@6.0.0` or later** → check whether `.claude/harness.json` exists:
 
 - **`.claude/harness.json` exists** → print:

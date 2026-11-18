@@ -221,20 +221,25 @@ outk=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage
 check "a rerun overwrites the kept file" "$(cd "$T/keep" && pwd -P)/cobertura.xml" "$(value 'coverage xml kept' "$outk")"
 check "a successful write leaves no temporary file" 0 "$(find "$T/keep" -name '.cobertura.*' | wc -l | tr -d ' ')"
 
-# --- --compare: a verdict table, exit 1 when any measured number got worse
+# --- --compare: a verdict table, exit 1 when any measured number got worse, 2 on a table it cannot trust
+mkdir -p "$T/g" && (cd "$T/g" && git init -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m one && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m two)
+H1=$(git -C "$T/g" rev-parse HEAD~1); H2=$(git -C "$T/g" rev-parse HEAD)
+export QB_REPO="$T/g"
+TBL_MODE=full TBL_HEAD=$H1 TBL_TREE=clean
 tbl() { # tbl <label> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
-  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | 0 failed of 3 |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | 1 |\n' "$@"
+  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | 0 failed of 3 |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | 1 |\n| mode | %s |\n| git head | %s |\n| git tree | %s |\n' "$@" "$TBL_MODE" "$TBL_HEAD" "$TBL_TREE"
 }
 tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b.md"
-tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/same.md"
-tbl after 1 0 90.5% "2 (cyclomatic proxy)" 1.0% 0 0 >"$T/better.md"
+TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/same.md"
+TBL_TREE=dirty tbl after 1 0 90.5% "2 (cyclomatic proxy)" 1.0% 0 0 >"$T/better.md"
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/same.md"); check "compare equal exits 0" 0 $?
 contains "compare equal says OK" "OK: no measured number got worse" "$outc"
+contains "compare prints both commits" "commits: before ${H1:0:9} (clean), after ${H1:0:9} (dirty)" "$outc"
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md"); check "compare improved exits 0" 0 $?
 contains "compare names an improvement" "improved" "$outc"
 regress() { # regress <name> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
   local n=$1; shift
-  tbl after "$@" >"$T/r.md"
+  TBL_TREE=dirty tbl after "$@" >"$T/r.md"
   outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "compare fails on worse $n" 1 $?
   contains "compare table marks $n WORSE" "WORSE" "$outc"
 }
@@ -245,21 +250,80 @@ regress "complexity" 4 2 80.0% 4 1.5% 2 1
 regress "duplication" 4 2 80.0% 3 1.6% 2 1
 regress "suppressions" 4 2 80.0% 3 1.5% 3 1
 regress "exclusions" 4 2 80.0% 3 1.5% 2 2
-tbl after 4 2 "n/a (no coverage report)" 3 1.5% 2 1 >"$T/r.md"
+TBL_TREE=dirty tbl after 4 2 "n/a (no coverage report)" 3 1.5% 2 1 >"$T/r.md"
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "a number no longer measured fails" 1 $?
 contains "not measured after is named" "not measured after" "$outc"
-tbl before "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" "n/a (no pnpm)" 2 1 >"$T/nb.md"
-outc=$(bash "$SCRIPT" --compare "$T/nb.md" "$T/better.md"); check "numbers not measured before are skipped" 0 $?
-contains "skipped rows are named" "skipped (no number before)" "$outc"
-printf '| Metric | before |\n|---|---|\n| lint findings | n/a (none) |\n' >"$T/none.md"
-bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null; check "nothing comparable fails closed" 1 $?
-{ head -2 "$T/b.md"; sed 1,2d "$T/b.md" | sed 's/ |$/ | 9 |/'; } >"$T/two.md"
-bash "$SCRIPT" --compare "$T/two.md" >/dev/null; check "one file with before and after columns compares them" 1 $?
+# a tool absent before and present after is newly measured, not silently skipped
+tbl before "n/a (no eslint.config.*)" "n/a (no tsconfig.json)" "n/a (no vitest or jest in package.json)" "n/a (ruff not installed)" "n/a (no pnpm or npx)" 2 1 >"$T/nb.md"
+outc=$(bash "$SCRIPT" --compare "$T/nb.md" "$T/better.md"); check "numbers absent before are allowed" 0 $?
+contains "newly measured rows carry the value" "newly measured (90.5%)" "$outc"
+# n/a before for any other reason is not a baseline
+tbl before "n/a (eslint failed, exit 2)" 2 80.0% 3 1.5% 2 1 >"$T/failed.md"
+bash "$SCRIPT" --compare "$T/failed.md" "$T/better.md" >/dev/null 2>&1; check "a failed before run exits 2" 2 $?
+# a static before table cannot be a baseline
+TBL_MODE=static tbl before "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" 2 1 >"$T/static.md"
+TBL_TREE=dirty tbl after 99 99 1.0% 99 50% 9 9 >"$T/bad.md"
+bash "$SCRIPT" --compare "$T/static.md" "$T/bad.md" >/dev/null 2>&1; check "a static before table exits 2, not 0" 2 $?
+TBL_MODE=static TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/staticafter.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/staticafter.md" >/dev/null 2>&1; check "a static after table exits 2" 2 $?
+# malformed numbers are not a pass
+for bad in "1.5e0%" "1.5.2%" ".5%" "NaN" "-1"; do
+  TBL_TREE=dirty tbl after 4 2 80.0% 3 "$bad" 2 1 >"$T/r.md"
+  bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "malformed duplication [$bad] exits 2" 2 $?
+done
+# the tie to a commit
+TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "one commit, both trees clean exits 2" 2 $?
+TBL_HEAD=$H2 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "a later commit is accepted" 0 $?
+TBL_HEAD=$H2 TBL_TREE=clean tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b2.md"
+TBL_HEAD=$H1 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b2.md" "$T/r.md" >/dev/null 2>&1; check "a before commit that is not an ancestor exits 2" 2 $?
+TBL_HEAD="no git" TBL_TREE="no git" tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/ng.md"
+TBL_HEAD="no git" TBL_TREE="no git" tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/ng2.md"
+outc=$(bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md"); check "outside git the comparison still runs" 0 $?
+contains "outside git is stated" "no git" "$outc"
+TBL_TREE=dirty
+printf '| Metric | before |\n|---|---|\n| lint findings | n/a (no eslint.config.*) |\n| mode | full |\n| git head | no git |\n| git tree | no git |\n' >"$T/none.md"
+bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null 2>&1; check "a table missing its metric rows exits 2" 2 $?
+bash "$SCRIPT" --compare "$T/b.md" >/dev/null 2>&1; check "one single-column file exits 2" 2 $?
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md")
 printf '%s\n' "$outc" | sed '/^$/,$d' >"$T/rec.md"
 bash "$SCRIPT" --compare "$T/rec.md" >/dev/null 2>&1; check "a saved compare table re-compares before with after, ignoring the verdict column" 0 $?
-bash "$SCRIPT" --compare "$T/b.md" >/dev/null 2>&1; check "one single-column file exits 2" 2 $?
 bash "$SCRIPT" --compare "$T/b.md" "$T/nope.md" >/dev/null 2>&1; check "compare with a missing file exits 2" 2 $?
 bash "$SCRIPT" --compare >/dev/null 2>&1; check "compare without files exits 2" 2 $?
+
+# the table records the commit and tree state, and the wider suppression and exclusion forms are counted
+gp="$T/gp"; mkdir -p "$gp/src"; printf 'const a = 1;\n' >"$gp/src/a.ts"; printf '{}\n' >"$gp/tsconfig.json"; printf '{"name":"g"}\n' >"$gp/package.json"
+(cd "$gp" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init)
+outc=$(bash "$SCRIPT" "$gp" --static)
+check "table records the head" "$(git -C "$gp" rev-parse HEAD)" "$(value "git head" "$outc")"
+check "table records a clean tree" "clean" "$(value "git tree" "$outc")"
+printf 'x\n' >"$gp/src/u.ts"
+outc=$(bash "$SCRIPT" "$gp" --static); check "table records a dirty tree" "dirty" "$(value "git tree" "$outc")"
+rm -f "$gp/src/u.ts"
+base_supp=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
+for form in '# pylint: disable=x' '// biome-ignore lint: x' '# nosec' '# pragma: no cover' '# pragma: no branch' '/* v8 ignore next */' '/* istanbul ignore next */' '// @ts-expect-error' '// @ts-nocheck' '# type: ignore' '# noqa' '// NOSONAR' '@SuppressWarnings("x")'; do
+  printf 'x = 1 %s\n' "$form" >"$gp/src/s.ts"
+  now=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
+  check "suppression form counted: $form" "$((base_supp + 1))" "$now"
+done
+rm -f "$gp/src/s.ts"
+base_excl=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+excl_form() { # excl_form <file> <line>
+  printf '%s\n' "$2" >"$gp/$1"
+  now=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  check "exclusion form counted: $1 $2" "$((base_excl + 1))" "$now"
+  rm -f "$gp/$1"
+}
+excl_form sonar-project.properties 'sonar.exclusions=src/**'
+excl_form sonar-project.properties 'sonar.coverage.exclusions=src/**'
+excl_form vitest.config.ts '    exclude: ["src/**"],'
+excl_form .coveragerc 'omit = src/*'
+excl_form .eslintignore 'src/legacy'
+excl_form eslint.config.mjs 'ignorePatterns: ["src"]'
+excl_form .jscpd.json '"ignore": ["src"]'
+excl_form ruff.toml 'extend-exclude = ["src"]'
+excl_form ruff.toml 'per-file-ignores = {}'
 
 exit $fail

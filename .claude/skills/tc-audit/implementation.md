@@ -43,7 +43,7 @@ One stack per run, rotating: `stack=$(set -- nextjs vite-react nestjs fastapi; s
 d=$(mktemp -d "${TMPDIR:-/tmp}/tc-audit.XXXXXX")
 TC_STACK="$stack" TC_PART=stack bash skills/scaffold/shared/tc-copy.sh "$d"
 (cd "$d" && git init -q && git add -A && git -c user.email=a@a -c user.name=a commit -qm init)
-(cd "$d" && if [ -f package.json ]; then pnpm install --ignore-scripts; else python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt; fi)
+(cd "$d" && if [ -f package.json ]; then pnpm install --ignore-scripts; elif [ -f requirements-dev.txt ]; then python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt; else echo "tc-audit: no package.json and no requirements-dev.txt in $d" >&2; exit 1; fi)
 bash skills/migrate/general/quality-baseline.sh "$d" --full --label audit
 ```
 

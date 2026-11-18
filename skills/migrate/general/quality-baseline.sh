@@ -45,35 +45,73 @@ vcount() {
     END { print n + 0 }' "$1"
 }
 
-# compare_main <before-file> [<after-file>]: print a verdict table; exit 1 when a number got worse or is no longer measured.
+# row_of <file> <first|last> <metric>: one metric's value from the first or the last value column.
+row_of() { vals "$1" "$2" | awk -F'\t' -v k="$3" '$1 == k { print $2; exit }'; }
+
+# commits_ok <before-file> <after-file>: tie the two tables to commits; print a line, return 2 when they are not a before and an after.
+commits_ok() {
+  local bh ah bt at repo=${QB_REPO:-.}
+  bh=$(row_of "$1" first "git head"); ah=$(row_of "$2" last "git head")
+  bt=$(row_of "$1" first "git tree"); at=$(row_of "$2" last "git tree")
+  if ! printf '%s' "$bh" | grep -Eqx '[0-9a-f]{40}|no git' || ! printf '%s' "$ah" | grep -Eqx '[0-9a-f]{40}|no git'; then
+    echo "--compare: a table has no git head row; take both runs with this script's --full mode" >&2; return 2
+  fi
+  if [ "$bh" = "no git" ] || [ "$ah" = "no git" ]; then echo "commits: no git, the tie to a commit is not checked"; return 0; fi
+  echo "commits: before ${bh:0:9} ($bt), after ${ah:0:9} ($at)"
+  if [ "$bh" = "$ah" ]; then
+    if [ "$bt" = clean ] && [ "$at" = clean ]; then
+      echo "--compare: both runs are at one commit with a clean tree, so the before run was not taken before the change" >&2; return 2
+    fi
+  elif git -C "$repo" cat-file -e "$bh^{commit}" 2>/dev/null && git -C "$repo" cat-file -e "$ah^{commit}" 2>/dev/null; then
+    git -C "$repo" merge-base --is-ancestor "$bh" "$ah" || { echo "--compare: the before commit is not an ancestor of the after commit" >&2; return 2; }
+  else
+    echo "commits: ancestry not checked, the commits are not in $repo (run --compare inside the project)"
+  fi
+  return 0
+}
+
+# compare_main <before-file> [<after-file>]: print a verdict table; exit 1 when a number got worse or is no longer measured, 2 on a table it cannot trust.
 compare_main() {
   local bf=$1 af=${2:-$1} f
   for f in "$bf" "$af"; do [ -f "$f" ] || { echo "--compare: cannot read $f" >&2; exit 2; }; done
   if [ $# -eq 1 ] && [ "$(vcount "$bf")" -lt 2 ]; then
     echo "--compare: $bf has one value column; pass a second file or a file with before and after columns" >&2; exit 2
   fi
+  [ "$(row_of "$bf" first mode)" = full ] && [ "$(row_of "$af" last mode)" = full ] || {
+    echo "--compare: both tables must come from --full runs (mode row full); a --static table measures no lint, type, test or coverage number" >&2; exit 2; }
+  commits_ok "$bf" "$af" || exit 2
   { vals "$bf" first; echo "---"; vals "$af" last; } | awk -F'\t' '
-    function has(v) { return match(v, /^[0-9]+(\.[0-9]+)?/) > 0 }
+    function has(v) { return v ~ /^[0-9]+(\.[0-9]+)?( |%|$)/ }
     function num(v) { match(v, /^[0-9]+(\.[0-9]+)?/); return substr(v, RSTART, RLENGTH) + 0 }
+    function na(v) { return v ~ /^n\/a( |$)/ }
+    function absent(v) { return v ~ /^n\/a \((no |dependencies not installed|.* not installed)/ }
     function key(k) { return k ~ /^complexity over/ ? "complexity" : k }
     $0 == "---" { seen = 1; next }
     !seen { b[key($1)] = $2; next }
     { a[key($1)] = $2 }
     END {
       n = split("lint findings:-1;type errors:-1;tests failed:-1;complexity:-1;duplication:-1;suppression lines matching (code files):-1;coverage, lint and Sonar exclusions:-1;line coverage:1;coverage thresholds configured:1", spec, ";")
+      for (i = 1; i <= n; i++) {
+        split(spec[i], p, ":"); m = p[1]
+        if (!(m in b) || !(m in a)) { printf "--compare: the table has no %s row\n", m > "/dev/stderr"; exit 2 }
+        if (!has(b[m]) && !na(b[m])) { printf "--compare: malformed %s value before: %s\n", m, b[m] > "/dev/stderr"; exit 2 }
+        if (!has(a[m]) && !na(a[m])) { printf "--compare: malformed %s value after: %s\n", m, a[m] > "/dev/stderr"; exit 2 }
+        if (na(b[m]) && !absent(b[m])) { printf "--compare: %s was not measured before for a reason other than an absent tool: %s\n", m, b[m] > "/dev/stderr"; exit 2 }
+      }
       print "| Metric | before | after | verdict |"; print "|---|---|---|---|"
       cmp = 0; bad = 0
       for (i = 1; i <= n; i++) {
-        split(spec[i], p, ":"); m = p[1]; dir = p[2]
-        bv = (m in b) ? b[m] : "n/a (absent)"; av = (m in a) ? a[m] : "n/a (absent)"
-        if (!has(bv)) v = "skipped (no number before)"
-        else if (!has(av)) { v = "WORSE (not measured after)"; bad++; cmp++ }
+        split(spec[i], p, ":"); m = p[1]; dir = p[2]; bv = b[m]; av = a[m]
+        if (na(bv)) v = has(av) ? "newly measured (" av ")" : "skipped (tool absent before and after)"
+        else if (na(av)) { v = "WORSE (not measured after)"; bad++; cmp++ }
         else {
           cmp++; d = (num(av) - num(bv)) * dir
           if (d < 0) { v = "WORSE"; bad++ } else if (d > 0) v = "improved"; else v = "same"
         }
         printf "| %s | %s | %s | %s |\n", m, bv, av, v
       }
+      split("mode;git head;git tree", extra, ";")
+      for (i = 1; i <= 3; i++) printf "| %s | %s | %s | - |\n", extra[i], b[extra[i]], a[extra[i]]
       if (cmp == 0) { print "\nNothing comparable: the before table has no measured number."; exit 1 }
       if (bad > 0) { printf "\nFAIL: %d metric(s) got worse.\n", bad; exit 1 }
       print "\nOK: no measured number got worse."
@@ -272,6 +310,14 @@ for d in src app lib; do [ -d "$P/$d" ] && { SRC=$d; break; }; done
 [ -n "$SRC" ] || SRC=.
 
 BEFORE=$(status_snapshot)
+# The commit and tree state the table was taken at; --compare ties a before and an after run to them.
+GITHEAD="no git"; GITTREE="no git"
+if is_git; then
+  h=$( cd "$P" && g rev-parse HEAD 2>/dev/null ) && [ -n "$h" ] && GITHEAD=$h
+  if [ "$GITHEAD" != "no git" ]; then
+    if [ -n "$( cd "$P" && g status --porcelain --untracked-files=all 2>/dev/null )" ]; then GITTREE=dirty; else GITTREE=clean; fi
+  fi
+fi
 : >"$S/stamp"
 
 NA_NOSTACK="n/a (no package.json, pyproject.toml or requirements file)"
@@ -432,8 +478,8 @@ measure_duplication() {
 TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.py$|_test\.py$)'
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|dist|\.next|\.venv)/)'
-SUPPRESS='eslint-disable|noqa|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|istanbul ignore|c8 ignore|pragma: no cover'
-EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|^[[:space:]]*ignores[[:space:]]*:'
+SUPPRESS='eslint-disable|biome-ignore|noqa|nosec|pylint: disable|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul ignore|c8 ignore|v8 ignore|pragma: no (cover|branch)'
+EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|^[[:space:]]*ignores[[:space:]]*:|ignorePatterns|"ignore"[[:space:]]*:|extend-exclude|per-file-ignores|exclude_lines|exclude_also|^[[:space:]]*exclude[[:space:]]*[=:]'
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
 
@@ -452,7 +498,9 @@ count_static() {
       n=$(grep -cE "$SUPPRESS" "$P/$f" 2>/dev/null); supp=$((supp + ${n:-0}))
     fi
     case "$(basename "$f")" in
-      vitest.config.*|jest.config.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.eslintignore|pytest.ini|setup.cfg)
+      .eslintignore)
+        n=$(grep -cvE '^[[:space:]]*(#|$)' "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;;
+      vitest.config.*|vite.config.*|jest.config.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pytest.ini|setup.cfg)
         n=$(grep -cE "$EXCLUDE" "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0}))
         n=$(grep -cE "$THRESH" "$P/$f" 2>/dev/null); thr=$((thr + ${n:-0})) ;;
     esac
@@ -523,6 +571,8 @@ row "suppression lines matching (code files)" "$SUPP"
 row "coverage, lint and Sonar exclusions" "$EXCL"
 row "coverage thresholds configured" "$THR"
 row "mode" "$MODE"
+row "git head" "$GITHEAD"
+row "git tree" "$GITTREE"
 [ -z "$KEEP" ] || row "coverage xml kept" "$KEPT"
 row "scratch tool versions" "${TOOLS:-none (static mode)}"
 row "project tree after the run" "$TREE"
