@@ -7,12 +7,13 @@
 #   name+description of every model-invocable
 #   skill, and the stdout of session-context.sh for each SessionStart source. Bytes; tokens are an estimate, bytes/4.
 # Fails (exit 1) when
-#   - a stack's always-loaded bytes (startup source) exceed LOAD_MAX_BYTES (4000, 1,000 tokens), or its AGENTS.md exceeds
+#   - a stack's always-loaded bytes (startup source) exceed LOAD_MAX_BYTES (4000, 1,000 tokens; the message names the 3 largest files), or its AGENTS.md exceeds
 #     AGENTS_MAX_BYTES (3100: about 2,400 for the stack file plus 700 for the shared tail);
 #   - session-context.sh prints more than three lines on compact (the branch line aside) or more than one elsewhere;
 #   - a sentence of 8 or more words appears in two always-loaded files;
 #   - a hook fixture exceeds its cap: type-check, Stop and SubagentStop output 2,000 chars; comment-check 10 findings
 #     of 160 chars plus one "more" line; PreToolUse deny/ask message 200 chars; a silent hook prints anything.
+# MEASURE_STACKS="nextjs ..." limits the stacks and MEASURE_HOOKS=0 skips the hook fixtures (the test script uses both to stay fast); the defaults check everything.
 # Needs git, node, python3. No network, no keys.
 set -uo pipefail
 
@@ -61,13 +62,32 @@ def front(text):
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)
     return m.group(1) if m else ""
 files = {"CLAUDE.md": open(os.path.join(d, "CLAUDE.md")).read(), "AGENTS.md": open(os.path.join(d, "AGENTS.md")).read()}
+sizes = {"CLAUDE.md": size(os.path.join(d, "CLAUDE.md")), "AGENTS.md": size(os.path.join(d, "AGENTS.md"))}
+# A rule is path-scoped only when `paths:` carries at least one real pattern; an empty `paths:`, `paths: []` or `paths: ""` loads at launch (fail safe: when in doubt, count it).
+def scoped(fm):
+    lines = fm.split("\n")
+    for i, l in enumerate(lines):
+        m = re.match(r"paths:(.*)$", l)
+        if not m:
+            continue
+        if re.sub(r"[\s\[\]\"',]|null|~", "", m.group(1)):
+            return True
+        for x in lines[i + 1:]:
+            if x.strip() and not re.match(r"\s|-", x):
+                break
+            m = re.match(r"\s*-(.*)$", x)
+            if m and re.sub(r"[\s\"']", "", m.group(1)).strip("#") and not m.group(1).strip().startswith("#"):
+                return True
+        return False
+    return False
 rules = 0
 for p in sorted(glob.glob(os.path.join(d, ".claude/rules/**/*.md"), recursive=True)):
     t = open(p).read()
-    if not re.search(r"^paths:", front(t), re.M):
+    if not scoped(front(t)):
         files[os.path.relpath(p, d)] = t
+        sizes[os.path.relpath(p, d)] = len(t.encode())
         rules += len(t.encode())
-# Follow @path imports from CLAUDE.md and AGENTS.md: each file once, relative to the importer, at most 4 hops.
+# Follow @path imports from CLAUDE.md and AGENTS.md: each file once, relative to the importer, at most 4 hops (docs, code.claude.com/docs/en/memory: \"Imported files can recursively import other files, with a maximum depth of four hops.\"). AGENTS.md's own imports start at hop 1 here, one hop more generous than the docs: a deliberate over-count.
 def imports_of(text):
     text = re.sub(r"```.*?```", "", text, flags=re.S)
     text = re.sub(r"`[^`\n]*`", "", text)
@@ -86,6 +106,7 @@ while queue:
         seen_files.add(p)
         t = open(p).read()
         files[os.path.relpath(p, d)] = t
+        sizes[os.path.relpath(p, d)] = len(t.encode())
         imported += len(t.encode())
         queue.append((p, depth + 1))
 skills = 0
@@ -95,18 +116,21 @@ for p in sorted(glob.glob(os.path.join(d, ".claude/skills/*/SKILL.md"))):
         continue
     keep = [l for l in fm.split("\n") if l.startswith(("name:", "description:"))]
     skills += len("\n".join(keep).encode()) + 1
+    sizes[os.path.relpath(p, d)] = len("\n".join(keep).encode()) + 1
     desc = next((l[len("description:"):].strip() for l in keep if l.startswith("description:")), "")
     files[os.path.relpath(p, d)] = desc
 out = {s: open(os.path.join(outdir, s)).read() for s in ("startup", "resume", "clear", "compact")}
 claude, agents = size(os.path.join(d, "CLAUDE.md")), size(os.path.join(d, "AGENTS.md"))
 startup = len(out["startup"].encode())
+sizes["session-context.sh startup output"] = startup
 total = claude + agents + rules + imported + skills + startup
 row = "%-11s CLAUDE %4d  AGENTS %5d  rules %4d  imports %4d  skills %4d  session start/resume/clear/compact %d/%d/%d/%d  total %5d bytes = est. %4d tokens (bytes/4)"
 print(row % (stack, claude, agents, rules, imported, skills, startup, len(out["resume"].encode()), len(out["clear"].encode()), len(out["compact"].encode()), total, total // 4))
 bad = 0
 def fail(m):
     global bad; bad += 1; print("FAIL: %s: %s" % (stack, m))
-if total > load_max: fail("always-loaded %d bytes exceeds %d" % (total, load_max))
+top = ", ".join("%s %d" % kv for kv in sorted(sizes.items(), key=lambda kv: -kv[1])[:3])
+if total > load_max: fail("always-loaded %d bytes exceeds %d; largest: %s" % (total, load_max, top))
 if agents > agents_max: fail("AGENTS.md %d bytes exceeds %d" % (agents, agents_max))
 for s in ("startup", "resume", "clear"):
     if len([l for l in out[s].split("\n") if l]) > 1: fail("session-context.sh prints more than one line on %s" % s)
@@ -209,14 +233,14 @@ PY
   [[ -z "$out" ]] || fail "$stack: post-edit-typecheck.sh is not silent on an unrelated file"
 }
 
-for stack in nextjs vite-react fastapi nestjs; do
+for stack in ${MEASURE_STACKS:-nextjs vite-react fastapi nestjs}; do
   dir="$W/$stack"
   scaffold "$stack" "$dir" || continue
   mkdir -p "$W/out.$stack"
   for s in startup resume clear compact; do source_out "$dir" "$s" > "$W/out.$stack/$s"; done
   table_and_dups "$dir" "$stack" || FAILS=$((FAILS + 1))
   ext=ts; [[ "$stack" == fastapi ]] && ext=py
-  hook_fixtures "$stack" "$dir" "$ext"
+  [[ "${MEASURE_HOOKS:-1}" == 0 ]] || hook_fixtures "$stack" "$dir" "$ext"
 done
 
 if [[ "$FAILS" -gt 0 ]]; then echo "measure-seeded-load: $FAILS failure(s)"; exit 1; fi

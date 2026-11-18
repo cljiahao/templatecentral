@@ -16,19 +16,8 @@ cmd=$(printf '%s\n' "$cmd" | awk '
   { print; l = $0; gsub(/<<</, "", l)
     if (match(l, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
       w = substr(l, RSTART, RLENGTH); tabs = (w ~ /^<<-/); sub(/^<<-?[[:space:]]*["\047]?/, "", w); inh = 1 } }')
-# cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale.
-cut200() {
-  local LC_ALL=C s="${1:0:200}" n i b len
-  n=${#s}; i=$n
-  while [ "$i" -gt 0 ] && [ "$i" -gt $((n - 4)) ]; do
-    i=$((i - 1)); printf -v b '%d' "'${s:i:1}"; b=$((b & 255))
-    [ $((b & 192)) -eq 128 ] && continue
-    if [ "$b" -ge 240 ]; then len=4; elif [ "$b" -ge 224 ]; then len=3; elif [ "$b" -ge 192 ]; then len=2; else len=1; fi
-    [ $((n - i)) -lt "$len" ] && s="${s:0:i}"
-    break
-  done
-  printf '%s' "$s"
-}
+# cut200 <text>: at most 200 bytes, never inside a UTF-8 sequence, in any locale and with any awk (same ucut as every other hook cap).
+cut200() { S=$1 LC_ALL=C awk 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { printf "%s", ucut(ENVIRON["S"], 200) }' || printf 'BLOCKED'; }
 # block <message>: message capped at 200 bytes.
 block() { echo "$(cut200 "BLOCKED: $1")" >&2; exit 2; }
 protected='main|uat|develop'

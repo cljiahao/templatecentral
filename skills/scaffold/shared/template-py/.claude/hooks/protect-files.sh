@@ -9,6 +9,8 @@ try:
 except Exception:
     print('')" 2>/dev/null)
 [ -z "$file" ] && exit 0
+# shortp <path> <bytes>: path cut to <bytes> on a UTF-8 boundary with a trailing …, so a hostile long path cannot bloat a block message.
+shortp() { S=$1 LC_ALL=C awk -v n="$2" 'function ucut(s, n) { if (length(s) <= n) return s; s = substr(s, 1, n); sub(/[\300-\337]$/, "", s); sub(/[\340-\357][\200-\277]?$/, "", s); sub(/[\360-\367]([\200-\277]([\200-\277])?)?$/, "", s); return s } BEGIN { s = ENVIRON["S"]; t = ucut(s, n); printf "%s%s", t, (t == s ? "" : "…") }' || printf '%s' "$1"; }
 # Case-insensitive: macOS treats .ENV and .env as one file.
 shopt -s nocasematch
 while [[ "$file" == ./* ]]; do file="${file#./}"; done
@@ -16,7 +18,7 @@ base="${file##*/}"
 
 # Hard block: .env* except the committed templates
 if [[ "$base" == .env* && "$base" != ".env.example" && "$base" != ".env.default" ]]; then
-  echo "BLOCKED: writing $base is not allowed. Add placeholders to .env.example; keep real secrets out of the repo." >&2
+  echo "BLOCKED: writing $(shortp "$base" 80) is not allowed. Add placeholders to .env.example; keep real secrets out of the repo." >&2
   exit 2
 fi
 
@@ -39,10 +41,10 @@ abs=$(canon "$abs"); abs=$(canon "$abs")
 rel="${abs#"$root"/}"
 
 if [[ "$rel" == secrets/* || "$rel" == .secrets/* ]]; then
-  echo "BLOCKED: $rel is inside a secrets directory — must never be written by the agent." >&2
+  echo "BLOCKED: $(shortp "$rel" 80) is inside a secrets directory — must never be written by the agent." >&2
   exit 2
 elif [[ "$base" =~ \.(pem|key|p12|pfx|secret)$ ]] || [[ "$base" == "credentials.json" || "$base" == ".netrc" || "$base" == ".secrets" ]]; then
-  echo "BLOCKED: $rel is a certificate or credential file — must never be committed." >&2
+  echo "BLOCKED: $(shortp "$rel" 80) is a certificate or credential file — must never be committed." >&2
   exit 2
 fi
 
@@ -69,8 +71,8 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
 fi
 if [ -n "$reason" ]; then
   # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
-  python3 -c 'import json,sys; head="PROTECTED FILE: "; tail=" — "+sys.argv[2]+". Human approval needed."; a=sys.argv[1]; room=max(0,200-len(head)-len(tail)); k=max(0,room-1); h=-(-k//2); a=a if len(a)<=room else a[:h]+"…"+(a[len(a)-(k-h):] if k>h else ""); print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":(head+a+tail)[:200]}}))' "$rel" "$reason" \
-    || { echo "BLOCKED: $rel is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
+  python3 -c 'import json,sys,os; d=lambda s: os.fsencode(s).decode("utf-8","replace"); head="PROTECTED FILE: "; tail=" — "+d(sys.argv[2])+". Human approval needed."; a=d(sys.argv[1]); room=max(0,200-len(head)-len(tail)); k=max(0,room-1); h=-(-k//2); a=a if len(a)<=room else a[:h]+"…"+(a[len(a)-(k-h):] if k>h else ""); print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":(head+a+tail)[:200]}}))' "$rel" "$reason" \
+    || { echo "BLOCKED: $(shortp "$rel" 80) is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0
 fi
 exit 0

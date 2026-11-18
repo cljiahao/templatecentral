@@ -455,7 +455,7 @@ MOCK_LOG="$T/mock.log"
 MOCK_TSC_OK="$T/tsc_ok"
 cat > "$MOCK/pnpm" <<'MOCK'
 #!/usr/bin/env bash
-many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); printf '%s line %d %0200d\n' "$1" "$i" 0; done; }
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
 case "$*" in
   "exec tsc --version") [ "$MOCK_HANG_PROBE" = tsc ] && exec sleep 30; [ -n "$MOCK_NO_TSC" ] && exit 1; echo "Version 6.0.0"; exit 0 ;;
   "exec tsc --noEmit --incremental")
@@ -475,7 +475,7 @@ exit 0
 MOCK
 cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
-many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); printf '%s line %d %0200d\n' "$1" "$i" 0; done; }
+many() { i=0; while [ "$i" -lt 60 ]; do i=$((i + 1)); if [ -n "$MOCK_UNI" ]; then printf '%s line %d a\303\251 ' "$1" "$i"; j=0; while [ "$j" -lt 150 ]; do j=$((j + 1)); printf '\346\227\245'; done; echo; else printf '%s line %d %0200d\n' "$1" "$i" 0; fi; done; }
 case "$*" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
   "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
@@ -611,18 +611,54 @@ for v in ts py; do
 done
 same_reason() { python3 -c 'import json, sys; r = [json.load(open(f))["hookSpecificOutput"]["permissionDecisionReason"] for f in sys.argv[1:]]; sys.exit(0 if r[0] == r[1] else 1)' "$@"; }
 check yes "$(ok_if same_reason "$T/protect.ts.out" "$T/protect.py.out")" "protect-files twins give the same message for a multi-byte path"
+# UTF-8 safety of every cap, in the C locale and a UTF-8 locale: valid UTF-8 out, within the cap, JSON round-trips, same decision as uncapped.
+utf8_ok() { python3 -c 'import sys; sys.stdin.buffer.read().decode("utf-8")'; }
+utf8_file() { utf8_ok < "$1"; }
+bytes_of() { wc -c < "$1" | tr -d ' '; }
+run_hook_loc() { # <locale> <script> <project> <stdin>
+  printf '%s' "$4" > "$T/stdin"
+  OUT=$(cd / && LC_ALL="$1" CLAUDE_PROJECT_DIR="$3" bash "$2" < "$T/stdin" 2>"$T/err")
+  EC=$?
+}
+UTF8L=C.UTF-8; case "$(locale -a 2>/dev/null)" in *en_US.UTF-8*) UTF8L=en_US.UTF-8 ;; esac
+CCU=$(new_repo feat)
+mkdir -p "$CCU/.claude"
+cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$CCU/.claude/comment-hygiene-patterns.txt"
+wide=$(python3 -c 'print("日" * 100)')
+for v in ts py; do
+  if [ "$v" = ts ]; then tcfile=src/a.ts; bc='//'; else tcfile=src/a.py; bc='#'; fi
+  for i in $(seq 1 12); do printf '%s Added \303\251 retry loop %d for \346\227\245\346\234\254\350\252\236 feature %s\nx = 1\n' "$bc" "$i" "$wide"; done > "$CCU/m.$v"
+  for L in C "$UTF8L"; do
+    tag="$v [$L]"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/stop-checks.$v.sh" "$PROJ" '{"stop_hook_active":false}'
+    check "2 yes yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "stop-checks $tag: UTF-8 stderr within the cap, exit 2 kept"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/subagent-stop.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+    check "2 yes yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "subagent-stop $tag: UTF-8 stderr within the cap, exit 2 kept"
+    MOCK_MANY=1 MOCK_UNI=1 run_hook_loc "$L" "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$tcfile\"}}"
+    check "0 yes yes yes" "$EC $(ok_if json_has "d['additionalContext'].encode('utf-8')") $(ok_if json_has "len(d['additionalContext'].encode('utf-8')) <= 2000") $(ok_if json_has "'more lines not shown' in d['additionalContext']")" "post-edit-typecheck $tag: JSON re-encodes to UTF-8 within the cap, decision kept"
+    run_hook_loc "$L" "$KIT/post-edit-comment-check.$v.sh" "$CCU" "{\"tool_input\":{\"file_path\":\"m.$v\"}}"
+    check "0 yes yes yes yes" "$EC $(ok_if json_has "d['additionalContext'].encode('utf-8')") $(ok_if json_has "max(len(l.encode('utf-8')) for l in d['additionalContext'].split('\n')[1:]) <= 175") $(ok_if json_has "'and 2 more findings' in d['additionalContext']") $(ok_if json_has "d['additionalContext'].count('line ') >= 10")" "post-edit-comment-check $tag: JSON re-encodes to UTF-8 within the cap, findings kept"
+    emo=$(python3 -c 'print("日" * 3000)')
+    for p in "secrets/$emo" "$emo/.env.local" "$(printf 'y%.0s' $(seq 1 5000)).pem" ".env$(printf 'y%.0s' $(seq 1 5000))"; do
+      run_hook_loc "$L" "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$p")"
+      check "2 yes yes" "$EC $(ok_if utf8_file "$T/err") $(ok_if test "$(bytes_of "$T/err")" -le 200)" "protect-files $tag: hard-block message for a ${#p}-char path is valid UTF-8 and within 200 bytes" "$(head -c 120 "$T/err")"
+    done
+    run_hook_loc "$L" "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$emo/.claude/settings.json")"
+    check "0 yes yes" "$EC $(ok_if json_has "d['permissionDecisionReason'].encode('utf-8')") $(ok_if json_has "len(d['permissionDecisionReason']) <= 200")" "protect-files $tag: ask JSON re-encodes to UTF-8 within the cap"
+    # block-no-verify: the cut is 200 BYTES even when the shell runs in a UTF-8 locale.
+    cutfn=$(grep '^cut200()' "$KIT/block-no-verify.$v.sh")
+    for body in 'a' '€' '日'; do
+      cut_out=$(LC_ALL="$L" bash -c "$cutfn"'
+        s=$(python3 -c "import sys; sys.stdout.write(\"a\" * 199 + sys.argv[1] * 40)" "$0"); cut200 "$s" | python3 -c "import sys; d = sys.stdin.buffer.read(); d.decode(\"utf-8\"); print(len(d))"' "$body" 2>&1)
+      want=200; [ "$body" = '€' ] && want=199; [ "$body" = '日' ] && want=199
+      check "$want" "$cut_out" "block-no-verify $tag: cut200 keeps 199 ASCII + '$body' to <=200 bytes on a boundary"
+    done
+  done
+done
 # Seeded text agrees with what is seeded.
 check yes "$(ok_if grep -q '^  - "src/error_handler.py"$' "$TPL/../fastapi/template/.claude/rules/fastapi.md")" "the fastapi rule's globs cover the error_handler.py its text names"
 check 0 "$(grep -c 'Skill capture' "$TPL/template-late/.claude/skills/skill-audit/SKILL.md.tmpl")" "skill-audit points at no AGENTS.md section that is gone"
 check 0 "$(grep -c 'lazy per directory' "$TPL/template-late/docs/harness.md")" "harness.md does not call rule loading lazy per directory"
-# block-no-verify cuts by UTF-8 sequence in the C locale too: 199 ASCII bytes then a 3-byte char must not leave a partial char.
-for v in ts py; do
-  cutfn=$(sed -n '/^cut200() {$/,/^}$/p' "$KIT/block-no-verify.$v.sh")
-  cut_out=$(LC_ALL=C bash -c "$cutfn"'
-    printf "%s" "$(python3 -c "print(\"a\" * 199 + \"\u20ac\" * 3)")" > "$0"
-    cut200 "$(cat "$0")" | python3 -c "import sys; d = sys.stdin.buffer.read(); d.decode(\"utf-8\"); print(len(d))"' "$T/mb.in" 2>&1)
-  check "199" "$cut_out" "block-no-verify.$v cuts a multi-byte message on a character boundary in the C locale"
-done
 # Silence on success: a passing check and an unrelated file print nothing.
 touch "$MOCK_TSC_OK"
 for v in ts py; do

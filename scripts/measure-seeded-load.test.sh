@@ -21,10 +21,11 @@ fresh_root() {
   cp -Rp "$REPO_ROOT/skills/scaffold" "$T/$1/skills/scaffold"
 }
 
-# run <root>: exit code and output of the measure script against that root.
-run() { OUT=$(bash "$MEASURE" --root "$1" 2>&1); EC=$?; }
+# run <root> [stacks]: exit code and output of the measure script against that root. Planted cases name the one stack they touch and skip the hook fixtures; the first case runs everything.
+run() { OUT=$(MEASURE_STACKS="${2:-nextjs}" MEASURE_HOOKS=0 bash "$MEASURE" --root "$1" 2>&1); EC=$?; }
 
-run "$REPO_ROOT"
+
+OUT=$(bash "$MEASURE" --root "$REPO_ROOT" 2>&1); EC=$?
 check 0 "$EC" "the repository is within budget"
 check 4 "$(printf '%s\n' "$OUT" | grep -c '^[a-z-]* *CLAUDE ')" "one table row per stack"
 
@@ -43,7 +44,7 @@ p, s = sys.argv[1:]
 t = open(p).read()
 open(p, "w").write(re.sub(r"^description:.*$", lambda m: "description: " + s + " " + m.group(0)[len("description:"):].lstrip(), t, count=1, flags=re.M))
 PY
-run "$T/dup"
+run "$T/dup" vite-react
 check 1 "$EC" "a sentence in two always-loaded files fails"
 check 1 "$(printf '%s\n' "$OUT" | grep -c 'FAIL: vite-react: sentence in')" "the duplicated sentence is reported"
 
@@ -91,6 +92,23 @@ run "$T/cycle"
 check 0 "$EC" "an import cycle ends and passes"
 check 1 "$(printf '%s\n' "$OUT" | grep -c 'nextjs .*imports   *[1-9]')" "the cycle's files are counted"
 
+# The failure names the largest contributing files.
+fresh_root top
+plant_doc "$T/top" BIG.md "$(python3 -c 'print("Imported words that bloat the context. " * 150)')"
+printf '\n@docs/BIG.md\n' >> "$T/top/skills/scaffold/nextjs/template-agents/AGENTS.md"
+run "$T/top"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'FAIL: nextjs: always-loaded .*largest: .*docs/BIG.md [0-9]')" "an over-budget failure names the largest files"
+
+# A rule with an empty or missing paths list loads at launch and is counted.
+for fm in 'paths:' 'paths: []' 'paths: ""' 'paths:
+other: x'; do
+  fresh_root emptypaths
+  plant_rule "$T/emptypaths" deep/big.md "$fm"
+  run "$T/emptypaths"
+  check 1 "$EC" "a rule with $(printf '%s' "$fm" | head -1 | tr -d '\n') and no patterns counts as always-loaded"
+  rm -rf "$T/emptypaths"
+done
+
 # Unenforced invariants stay in the always-loaded layer, and the docs say the constitution is read on demand.
 SH="$REPO_ROOT/skills/scaffold/shared"
 check 1 "$(grep -c 'Authenticate every route that reads or changes user data' "$SH/template-tail/AGENTS-tail.md")" "the tail keeps the authenticate-before-logic line"
@@ -99,5 +117,5 @@ check 4 "$(grep -l 'every security hotspot reviewed' "$REPO_ROOT"/skills/scaffol
 check 1 "$(grep -c 'is read on demand and is not injected at session start' "$SH/template-late/docs/harness.md")" "harness.md says the constitution is read on demand"
 check 1 "$(grep -c 'read on demand and is not injected at session start' "$REPO_ROOT/CHANGELOG.md")" "CHANGELOG says the constitution is read on demand"
 
-echo "measure-seeded-load.test.sh: $PASS passed, $FAIL failed"
+echo "measure-seeded-load.test.sh: $PASS passed, $FAIL failed in ${SECONDS}s"
 [[ "$FAIL" -eq 0 ]]
