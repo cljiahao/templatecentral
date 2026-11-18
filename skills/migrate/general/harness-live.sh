@@ -60,8 +60,9 @@ gitleaks_state() {
       sub_ = "[ \t]+(git|detect|protect|dir|stdin)"
       direct = pre run "([^ \t]*/)?gitleaks" sub_
       docker = pre "docker[ \t]+run[ \t]+[^;&|]*gitleaks[^ \t]*" sub_
+      masked = "(\\|\\|[ \t]*(true|:)|;[ \t]*true)[ \t\"\047]*$"
     }
-    function check(v) { if (v ~ direct || v ~ docker) has[cmd] = 1 }
+    function check(v) { if ((v ~ direct || v ~ docker) && v !~ masked) has[cmd] = 1 }
     /^  skip:[ \t]*true/ { hookskip = 1 }
     /^    -[ \t]/ { cmd = "job" NR; inrun = 0; sub(/^    -[ \t]+/, "      ") }
     /^    [A-Za-z0-9_-]+:[ \t]*$/ { cmd = $1; inrun = 0; next }
@@ -71,6 +72,8 @@ gitleaks_state() {
     /^      run:/ { v = $0; sub(/^[ \t]*run:[ \t]*/, "", v); if (v ~ /^[|>][-+]?[ \t]*$/) inrun = 1; else { sub(/^["\047]/, "", v); check(v) } }
     END { for (k in has) { if (!sk[k] && !hookskip) found = 1; else skipped = 1 } print found ? "ok" : (skipped ? "skip" : "none") }'
 }
+
+# Limits of gitleaks_state: a run line ending in `|| true`, `|| :` or `; true` is rejected, but a line in an unreachable branch (`if false; then gitleaks git; fi`) or a glob that never matches still counts. Like hook_runs_lefthook below it proves a plain setup, not a deliberately defeated one.
 
 # hook_runs_lefthook <file>: proves the hook file calls lefthook at top level or through the generated call_lefthook function with no top-level exit before it; it does not prove a deliberately obfuscated hook is live.
 hook_runs_lefthook() {

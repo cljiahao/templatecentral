@@ -326,6 +326,7 @@ gl_no() { gl_variant "$T/$1" "$2" "${3:-0}"; out=$(run "$T/$1"); check "gitleaks
 gl_ok r1 'npx gitleaks git --pre-commit --staged'
 gl_ok r2 'pnpm exec gitleaks git --pre-commit --staged'
 gl_ok r3 'pnpm dlx gitleaks git --pre-commit --staged'
+# shellcheck disable=SC2016  # the run line is literal text for the fixture
 gl_ok r4 'docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest git --pre-commit --staged /repo'
 gl_ok r5 'gitleaks git --pre-commit --staged' 1
 gl_ok r6 'npx gitleaks git --pre-commit --staged' 1
@@ -334,6 +335,11 @@ gl_no n2 'gitleaks --help'
 gl_no n3 'echo gitleaks git'
 gl_no n4 'gitleaks version' 1
 gl_no n5 'echo gitleaks git' 1
+gl_no n6 'gitleaks git --pre-commit --staged || true'
+gl_no n7 'gitleaks git --pre-commit --staged || :'
+gl_no n8 'gitleaks git --pre-commit --staged; true'
+gl_no n9 'gitleaks git --pre-commit --staged || true' 1
+gl_ok r7 'gitleaks git --pre-commit --staged || exit 1'
 seed "$T/n6"; python3 - "$T/n6/lefthook.yml" <<'PY8'
 import re, sys
 p = sys.argv[1]; s = open(p).read()

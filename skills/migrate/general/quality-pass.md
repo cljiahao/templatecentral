@@ -33,4 +33,4 @@ Work one directory per batch. Per stage: apply the confirmed batch, run lint, ty
 4. **Comments.** Apply the comment rules loaded with this file, leaving an ADR id where an ADR explains the code.
 5. **Exclusions.** Remove coverage, lint and Sonar exclusions that exist only to pass a gate (confirm the list first); keep one only for generated or third-party code, with the reason beside it. Never lower an existing coverage threshold.
 
-Finish with the close-the-loop step of `implementation.md` Phase 3 A (the `after` run with `--keep-coverage <scratch>/cov-after`, then `--compare`, saved to `docs/quality-baseline.md`); a non-zero compare fails the pass. Print the table with the backlog.
+Finish with the close-the-loop step of `implementation.md` Phase 3 A (the `after` run with `--keep-coverage <scratch>/cov-after`, then `--compare`, saved to `docs/quality-baseline.md`); a non-zero compare fails the pass; on exit 3 show the changed gate configuration list and, for each file, state what changed and why, never calling a threshold, scope or rule change neutral. Print the table with the backlog.

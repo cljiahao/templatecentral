@@ -11,6 +11,7 @@
 #   --keep-coverage <dir>  with --full: copy the Cobertura XML to <dir>/cobertura.xml; <dir> must be outside the project
 #            and its parent must exist.
 # Prints one markdown table on stdout. Exit 0 when measured, 2 on a usage error.
+# --compare exits 0 when nothing got worse and no gate configuration file changed, 1 when a number got worse, 2 on unusable input, 3 when a gate configuration file changed and nothing got worse.
 # Needs bash 3.2+, BSD or GNU coreutils, git; python3 or node reads the JSON/XML reports.
 set -u
 
@@ -22,6 +23,24 @@ JSCPD_VERSION=5.4.3
 DIFFCOVER_VERSION=10.0.0   # used by quality-pass.md
 COMPLEXITY_LIMIT=15
 RUN_LIMIT=${QB_RUN_LIMIT:-600}
+
+# Gate configuration files whose content hash goes into the table; matched on the project-relative path, never on contents.
+is_gate_config() {
+  case "$1" in
+    *'|'*|*$'\n'*|node_modules/*|*/node_modules/*|.venv/*|*/.venv/*|venv/*|*/venv/*|dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|.git/*|*/.git/*|coverage/*|*/coverage/*|*/__pycache__/*) return 1 ;;
+    secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 1 ;;
+    .github/workflows/*.yml|.github/workflows/*.yaml|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) return 0 ;;
+  esac
+  case "$(basename "$1")" in
+    .env*|*.pem|*.key|*.p12|*.pfx|*secret*|*credential*|id_rsa*|*.token) return 1 ;;
+    eslint.config.*|.eslintrc|.eslintrc.*|.eslintignore|.prettierrc|.prettierrc.*|prettier.config.*|.prettierignore|.editorconfig|biome.json|biome.jsonc) return 0 ;;
+    tsconfig*.json|jsconfig.json|next.config.*|nest-cli.json|vite.config.*|vitest.config.*|vitest.workspace.*|jest.config.*|.nycrc|.nycrc.*|.c8rc|.c8rc.*|c8.config.*) return 0 ;;
+    codecov.yml|.codecov.yml|.jscpd.json|sonar-project.properties|stryker.conf.*|stryker.config.*|.stryker.conf.*|.stryker.config.*) return 0 ;;
+    ruff.toml|.ruff.toml|mypy.ini|.mypy.ini|pyrightconfig.json|.flake8|.pylintrc|pylintrc|pytest.ini|.coveragerc|conftest.py|setup.cfg|tox.ini|pyproject.toml|package.json) return 0 ;;
+    lefthook.yml|lefthook.yaml|.gitleaks.toml|gitleaks.toml|.gitleaksignore|.pre-commit-config.yaml|.gitlab-ci.yml|azure-pipelines.yml|Jenkinsfile) return 0 ;;
+  esac
+  return 1
+}
 
 usage() { echo "usage: quality-baseline.sh <project-dir> [--label before|after] [--static|--full [--keep-coverage <dir>]] | --compare <before-file> [<after-file>]" >&2; exit 2; }
 
@@ -106,6 +125,15 @@ compare_main() {
         if (!has(a[m]) && !na(a[m])) { printf "--compare: malformed %s value after: %s\n", m, a[m] > "/dev/stderr"; exit 2 }
         if (na(b[m]) && !absent(b[m])) { printf "--compare: %s was not measured before for a reason other than an absent tool: %s\n", m, b[m] > "/dev/stderr"; exit 2 }
       }
+      for (w = 1; w <= 2; w++) {
+        t = (w == 1) ? "before" : "after"; gv = (w == 1) ? b["gate config files"] : a["gate config files"]
+        if (gv == "") { printf "--compare: the %s table has no gate configuration section; retake the baseline with this version of the script\n", t > "/dev/stderr"; exit 2 }
+        if (!has(gv)) { printf "--compare: gate configuration files were not hashed in the %s table: %s\n", t, gv > "/dev/stderr"; exit 2 }
+      }
+      gn = 0
+      for (k in b) if (index(k, "gate config: ") == 1 && b[k] != "-") seen_g[k] = 1
+      for (k in a) if (index(k, "gate config: ") == 1 && a[k] != "-") seen_g[k] = 1
+      for (k in seen_g) { j = ++gn; while (j > 1 && gl[j - 1] > k) { gl[j] = gl[j - 1]; j-- } gl[j] = k }
       print "| Metric | before | after | verdict |"; print "|---|---|---|---|"
       cmp = 0; bad = 0
       for (i = 1; i <= n; i++) {
@@ -115,6 +143,7 @@ compare_main() {
         else {
           cmp++; d = (num(av) - num(bv)) * dir
           if (d < 0) { v = "WORSE"; bad++ } else if (d > 0) v = "improved"; else v = "same"
+          if (m ~ /^suppression/ && d < 0) supbad = 1
           if (m == "tests failed" && total(bv) >= 0 && total(av) >= 0 && total(av) < total(bv)) {
             v = "WORSE (test total fell " total(bv) " to " total(av) "; a deliberate, confirmed consolidation is recorded by the user retaking the baseline, not by the agent)"; if (d >= 0) bad++
           }
@@ -123,8 +152,19 @@ compare_main() {
       }
       split("mode;git head;git tree", extra, ";")
       for (i = 1; i <= 3; i++) printf "| %s | %s | %s | - |\n", extra[i], b[extra[i]], a[extra[i]]
+      printf "| gate config files | %s | %s | - |\n", b["gate config files"], a["gate config files"]
+      gc = 0
+      for (i = 1; i <= gn; i++) {
+        k = gl[i]; bv = (k in b && b[k] != "-") ? b[k] : "-"; av = (k in a && a[k] != "-") ? a[k] : "-"
+        st = (bv == "-") ? "added" : (av == "-") ? "removed" : (bv == av) ? "same" : "changed"
+        printf "| %s | %s | %s | %s |\n", k, bv, av, st
+        if (st != "same") { gc++; gstate[gc] = st; gpath[gc] = substr(k, 14) }
+      }
+      if (gc > 0) { printf "\nGate configuration changed (%d):\n", gc; for (i = 1; i <= gc; i++) printf "  %s: %s\n", gstate[i], gpath[i] }
+      if (supbad) print "\nSuppressions rose: a user-approved suppression is recorded by the user retaking the baseline with the reason; the agent never retakes it."
       if (cmp == 0) { print "\nNothing comparable: the before table has no measured number."; exit 1 }
       if (bad > 0) { printf "\nFAIL: %d metric(s) got worse.\n", bad; exit 1 }
+      if (gc > 0) { printf "\nREVIEW: %d gate configuration file(s) changed; show this list to the user before reporting the migration as done.\n", gc; exit 3 }
       print "\nOK: no measured number got worse."
     }'
 }
@@ -493,7 +533,7 @@ TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|vendor|dist|\.next|\.venv)/)'
 SUPPRESS='eslint-disable|biome-ignore|[Nn][Oo][Qq][Aa]|nosec|pylint:[[:space:]]*disable|type:[[:space:]]*ignore|pyright:[[:space:]]*ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul[[:space:]]+ignore|c8[[:space:]]+ignore|v8[[:space:]]+ignore|pragma:[[:space:]]*no[[:space:]]+(cover|branch)'
-EXCLUDE="coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|coverage:[[:space:]]*\{[^}]*exclude|ignore_errors|ignorePatterns|extend-exclude|exclude_lines|exclude_also|per-file-ignores|--ignore[= ]|^[[:space:]]*(ignore|extend-ignore|exclude|omit)[[:space:]]*[=:]|(^|[^A-Za-z_])ignores[[:space:]]*:|[\"'](exclude|excludes|ignore|ignores|omit|includes)[\"'][[:space:]]*:"
+EXCLUDE="coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|testPathIgnorePatterns|modulePathIgnorePatterns|globalIgnores[[:space:]]*\(|\[tool\.coverage|coverage:[[:space:]]*\{[^}]*exclude|ignore_errors|ignorePatterns|extend-exclude|exclude_lines|exclude_also|per-file-ignores|--ignore[= ]|^[[:space:]]*(lint\.)?(ignore|extend-ignore|exclude|omit)[[:space:]]*[=:]|(^|[^A-Za-z_])ignores[[:space:]]*:|[\"'](exclude|excludes|ignore|ignores|omit|includes)[\"'][[:space:]]*:"
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
 
@@ -623,6 +663,28 @@ eslint_off() {
     END { print c + 0 }' "$1"
 }
 
+# sha256_stdin: the SHA-256 of standard input.
+sha256_stdin() { if have shasum; then shasum -a 256; else sha256sum; fi; }
+
+# gate_config_rows: one row per gate configuration file with the first 16 hex digits of its SHA-256, and a count row; only paths and hashes are printed.
+gate_config_rows() {
+  local f h list=
+  if ! have shasum && ! have sha256sum; then row "gate config files" "n/a (no shasum or sha256sum)"; return; fi
+  while IFS= read -r -d '' f; do
+    f=${f#./}
+    is_gate_config "$f" && [ -f "$P/$f" ] && [ ! -L "$P/$f" ] || continue
+    h=$(sha256_stdin <"$P/$f" 2>/dev/null | cut -c1-16)
+    [ -n "$h" ] && list="${list}gate config: $f|$h
+"
+  done < <(list_files)
+  row "gate config files" "$(printf '%s' "$list" | awk 'END { print NR }')"
+  while IFS='|' read -r f h; do
+    [ -n "$f" ] && row "$f" "$h"
+  done <<EOF
+$(printf '%s' "$list" | LC_ALL=C sort)
+EOF
+}
+
 count_static() {
   local f tl=0 sl=0 cases=0 supp=0 excl=0 thr=0 n base kind
   while IFS= read -r -d '' f; do
@@ -725,6 +787,7 @@ row "test cases (static count; a parametrized case counts once)" "$CASES"
 row "suppression lines matching (code files)" "$SUPP"
 row "coverage, lint and Sonar exclusions" "$EXCL"
 row "coverage thresholds configured" "$THR"
+gate_config_rows
 row "mode" "$MODE"
 row "git head" "$GITHEAD"
 row "git tree" "$GITTREE"
