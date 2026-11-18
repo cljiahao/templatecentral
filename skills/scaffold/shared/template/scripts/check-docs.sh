@@ -7,8 +7,12 @@
 # An argument is a path from the caller's folder (relative or absolute) and must sit inside the project; one outside it exits 2.
 # Path rule: a path a doc names that does not exist is stale and reported, unless it is an example: a placeholder
 # (<name>, {a}, *), an ellipsis, a path/to/... prefix, or an extensionless two-part name whose first folder does not exist.
-# A link needs an opening bracket, a target and a closing parenthesis on one line; a target with a real scheme
-# (scheme://, mailto:, tel:, data: and the like) is external, so name:3 is checked as a path.
+# A link needs an opening bracket, a target and a closing parenthesis on one line. A target is not a repository path,
+# and is never checked, when it is scheme://..., user@host:path, host:port (name, colon, digits, optional /path; the name
+# has no known file extension), or letters followed by a colon and a non-digit (mailto:, slack:, vscode:). Everything
+# else with a colon, such as nope.md:3 or custom+x-1.y:rest, is checked as a path. A target starting with a slash or
+# holding a backslash is never checked. A target is trimmed of spaces inside the parentheses.
+# A finding shows at most 120 bytes of a target, cut on a character boundary and ended with three dots.
 set -uo pipefail
 
 # Prints one line naming the cause and exits 2; exit 1 is reserved for findings.
@@ -139,7 +143,7 @@ scan_all() {
     BEGIN {
       SQ = sprintf("%c", 39)
       BOM = "\357\273\277"
-      OPAQUE = " mailto tel sms data javascript urn news magnet geo sip sips xmpp callto facetime skype bitcoin "
+      ELL = "\342\200\246"
     }
     function emit(kind, t) {
       printf "%s\t%d\t%s\t%s\n", file, FNR, kind, t
@@ -151,17 +155,26 @@ scan_all() {
       if (substr(t, 1, 1) == "/" || index(t, "\\") > 0 || has_scheme(t)) return
       emit("link", t)
     }
-    function has_scheme(t,   name) {
+    function has_scheme(t,   host) {
       if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\//) return 1
-      if (t !~ /^[A-Za-z][A-Za-z0-9+.-]*:[^ ]/) return 0
-      name = tolower(substr(t, 1, index(t, ":") - 1))
-      return index(OPAQUE, " " name " ") > 0
+      if (t ~ /^[^\/@ ]+@[^\/ ]+:/) return 1
+      if (t ~ /^[A-Za-z]+:[^0-9]/) return 1
+      if (t ~ /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*:[0-9]+(\/|$)/) {
+        host = substr(t, 1, index(t, ":") - 1)
+        return !(host ~ ("\\.(" EXTS ")$"))
+      }
+      return 0
+    }
+    function ellipsis_segment(t,   n, parts, i) {
+      n = split(t, parts, "/")
+      for (i = 1; i <= n; i++) if (parts[i] == "..." || parts[i] ~ (ELL "$")) return 1
+      return 0
     }
     function emit_span(t,   base, last, trail) {
       if (index(t, "/") == 0) return
       if (t ~ /[[:space:]<>*{}$|;&:"=?!,~]/ || index(t, SQ) > 0) return
       if (substr(t, 1, 1) == "/" || substr(t, 1, 4) == "http") return
-      if (index(t, "...") > 0 || t ~ /^path\/to(\/|$)/) return
+      if (ellipsis_segment(t) || t ~ /^path\/to(\/|$)/) return
       base = t
       sub(/#.*$/, "", base)
       trail = (substr(t, length(t), 1) == "/")
@@ -294,6 +307,13 @@ scan_all() {
     function parse_dest(part,   j, m, c, depth, t) {
       dest_ok = 0
       dest = ""
+      m = 0
+      while (substr(part, m + 1, 1) == " " || substr(part, m + 1, 1) == "\t") m++
+      if (m > 0) {
+        part = substr(part, m + 1)
+        c = substr(part, 1, 1)
+        if (c == "\"" || c == SQ) { rest = part; return }
+      }
       rest = part
       if (substr(part, 1, 1) == "<") {
         j = index(part, ">")
@@ -444,6 +464,23 @@ decode_percent() {
   REPLY=$out$s
 }
 
+# Sets REPLY to the string cut at 120 bytes on a character boundary, with three dots added when it was cut.
+clip() {
+  local s=$1 next
+  local LC_ALL=C
+  if [ "${#s}" -le 120 ]; then
+    REPLY=$s
+    return 0
+  fi
+  next=${s:120:1}
+  s=${s:0:120}
+  while [[ $next == [$'\200'-$'\277'] ]] && [ -n "$s" ]; do
+    next=${s: -1}
+    s=${s%?}
+  done
+  REPLY=$s...
+}
+
 # Checks one link target that is already stripped of fragment and query; web links never reach it.
 check_link() {
   local file=$1 ln=$2 t chk dir
@@ -453,7 +490,8 @@ check_link() {
   exists_as "$file" "$t" && return 0
   dir=${file%/*}
   if [ "$dir" = "$file" ]; then chk=$t; else chk=$dir/$t; fi
-  miss "$file" "$ln" "broken link: $t" "$chk"
+  clip "$t"
+  miss "$file" "$ln" "broken link: $REPLY" "$chk"
 }
 
 # Checks one backticked repo path. A soft span has no known extension or trailing slash: it counts only when its
@@ -472,7 +510,8 @@ check_span() {
   fi
   [ -e "$base" ] && return 0
   exists_as "$file" "$base" && return 0
-  miss "$file" "$ln" "path does not exist: $t" "$base"
+  clip "$t"
+  miss "$file" "$ln" "path does not exist: $REPLY" "$base"
 }
 
 # Flags a README whose list items or table rows name every child of its own folder, however the name is marked up

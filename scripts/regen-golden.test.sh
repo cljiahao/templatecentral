@@ -61,6 +61,14 @@ check 2 "$EC" "fences_with_moved_rows: refused with exit 2 ($OUT)"
 check 1 "$(printf '%s\n' "$OUT" | grep -c 'moved.d has rows')" "fences_with_moved_rows: the refusal is passed on ($OUT)"
 check "$fences_before" "$(snap "$S/tests/golden/fences")" "fences_with_moved_rows: snapshots unchanged"
 
+# --write --fences is all or nothing: a refused snapshot leaves the goldens as they were
+printf '# changed again\n' >> "$S/skills/scaffold/shared/template/scripts/check-docs.sh"
+golden_now=$(snap "$S/tests/golden")
+regen --write --fences nextjs-github
+check 2 "$EC" "atomic_write: refused with exit 2 ($OUT)"
+check 0 "$(printf '%s\n' "$OUT" | grep -c '^wrote ')" "atomic_write: nothing reported as written ($OUT)"
+check "$golden_now" "$(snap "$S/tests/golden")" "atomic_write: no golden file changes when the snapshot fails"
+
 # with moved.d empty, --fences lists the snapshot change in a dry run and writes it with --write
 rm -f "$S"/tests/golden/fences/moved.d/*.tsv
 fences_before=$(snap "$S/tests/golden/fences")

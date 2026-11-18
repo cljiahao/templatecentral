@@ -502,6 +502,52 @@ for arg in "$T/outside.md" ../outside.md; do
   check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: outside the project: ')" "outside_argument[$arg]: one clear line ($OUT)"
 done
 
+# a link target that is not a repository path is skipped: host:port, user@host:path, scheme: with a non-digit
+d=$(proj link-targets)
+printf '[a](localhost:3000) [b](localhost:3000/x) [c](example.com:8080) [d](slack:open) [e](vscode:extension/x) [f](obsidian:open) [g](git@host:o/r)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "non_path_targets: host:port, user@host, scheme: pass ($OUT)"
+printf '[a](nope.md:3) [b](custom+x-1.y:rest) [c](src/real.ts:3) [d](note: text)\n' > "$d/README.md"
+run_check "$d"
+check 4 "$(printf '%s\n' "$OUT" | grep -cE '^README\.md:1: broken link: (nope\.md:3|custom\+x-1\.y:rest|src/real\.ts:3|note:)$')" "path_like_colon_targets: still checked as paths ($OUT)"
+
+# a space inside the parentheses does not hide the target
+d=$(proj link-spaces)
+printf '[x]( missing.md )\n[y](  src/gone.ts  "t")\n[z]( src/real.ts )\n' > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -cE '^README\.md:[12]: broken link: (missing\.md|src/gone\.ts)$')" "link_with_inner_spaces: trimmed and checked ($OUT)"
+check 1 "$EC" "link_with_inner_spaces: exits 1"
+
+# an ellipsis exempts only a whole path segment
+d=$(proj ellipsis)
+printf '%ssrc/x...y.ts%s %ssrc/lib/gone.ts...%s\n' "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -cE 'path does not exist: (src/x\.\.\.y\.ts|src/lib/gone\.ts\.\.\.)$')" "ellipsis_inside_name: reported ($OUT)"
+printf '%ssrc/.../x.ts%s %ssrc/lib/foo\342\200\246/x.ts%s %s.../x.ts%s\n' "$BT" "$BT" "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "ellipsis_segment: whole-segment examples pass ($OUT)"
+
+# a long target is cut in the report, on a character boundary
+d=$(proj long-target)
+long=$(awk 'BEGIN { for (i = 0; i < 20000; i++) printf "aaaaaaaaaa"; }')
+printf '[x](%s.md)\n' "$long" > "$d/README.md"
+run_check "$d"
+check 1 "$EC" "long_target: exits 1"
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "long_target: one line"
+check 1 "$([ "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" -le 200 ] && echo 1 || echo 0)" "long_target: the line stays short ($(printf '%s' "$OUT" | wc -c))"
+mb=$(awk 'BEGIN { for (i = 0; i < 100; i++) printf "\303\251"; }')
+printf '[x](a%s.md)\n' "$mb" > "$d/README.md"
+run_check "$d"
+want="README.md:1: broken link: a$(awk 'BEGIN { for (i = 0; i < 59; i++) printf "\303\251"; }')..."
+check "$want" "$OUT" "long_target_utf8: cut between characters"
+check 0 "$(printf '%s' "$OUT" | iconv -f UTF-8 -t UTF-8 > /dev/null 2>&1; echo $?)" "long_target_utf8: output is valid UTF-8"
+
+# a target with a backslash is not checked
+d=$(proj backslash)
+printf '[a](docs\\real.md) [b](C:\\x)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "backslash_targets: not checked ($OUT)"
+
 # the retired gate and its opt-in appear nowhere in the seeded layer or the kit
 old=$(grep -rnE 'readme-coupling|readme-freshness|skip-readme-check|ci-gates\.sh readme|richReadme|TC_RICH_README|README freshness' \
   "$REPO_ROOT/skills/scaffold" "$REPO_ROOT/skills/add" "$REPO_ROOT/skills/cleanup" "$REPO_ROOT/skills/review" "$REPO_ROOT/skills/standards" 2>/dev/null)
