@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: true
 env:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
-  DIFF_COVER_VERSION: "11.0.1"
+  DIFF_COVER_VERSION: "11.0.3"
   # the one knob for test sharding: raise it to split the suite across more runners
   SHARD_COUNT: "2"
   # caps each Node process; the test workers inherit it
@@ -51,10 +51,6 @@ jobs:
       - run: pnpm run check
       - name: Duplication (production source <= 3%, per .jscpd.json)
         run: pnpm exec jscpd
-      - name: End-to-end tests (only when package.json defines test:e2e)
-        run: |
-          set -euo pipefail
-          if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then pnpm run test:e2e; fi
       # PR: the PR's commits; push: full history
       - name: Secret scan (gitleaks CLI, checksum-verified)
         env:

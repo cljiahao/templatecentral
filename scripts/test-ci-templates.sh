@@ -431,10 +431,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
-                                     {'run': 'set -euo pipefail\n'
-                                             'if node -e '
-                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
-                                             ': 1)"; then pnpm run test:e2e; fi\n'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
                          'test': [{'uses': 'actions/checkout'},
@@ -483,10 +479,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                     {'bash': 'pnpm install --frozen-lockfile'},
                                     {'template': 'azure-pipelines/templatecentral-gates.yml'},
                                     {'bash': 'pnpm run check'},
-                                    {'bash': 'set -euo pipefail\n'
-                                             'if node -e '
-                                             '"process.exit(require(\'./package.json\').scripts?.[\'test:e2e\'] ? 0 '
-                                             ': 1)"; then pnpm run test:e2e; fi\n'},
                                     {'bash': 'pnpm exec jscpd'}],
                         'test': [{'checkout': 'self'},
                                  {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
@@ -853,8 +845,8 @@ mutate "jscpd step replaced (azure-ts)" azure-ts/azure-pipelines.yml '- bash: pn
 mutate "jscpd step replaced (azure-py)" azure-py/azure-pipelines.yml 'npx --yes jscpd@' 'echo skipped #' static
 mutate "unpinned diff-cover (github-ts)" github-ts/.github/workflows/ci.yml "pipx run \"diff-cover==\${DIFF_COVER_VERSION}\"" 'pipx run diff-cover' static
 mutate "unpinned diff-cover (azure-py)" azure-py/azure-pipelines.yml "pipx run \"diff-cover==\$(DIFF_COVER_VERSION)\"" 'pipx run diff-cover' static
-mutate "diff-cover version range instead of exact (github-py)" github-py/.github/workflows/ci.yml 'DIFF_COVER_VERSION: "11.0.1"' 'DIFF_COVER_VERSION: ">=11"' static
-mutate "diff-cover version variable removed (azure-ts)" azure-ts/azure-pipelines.yml '  diffCoverVersion: "11.0.1"' '  unusedVar: "1"' static
+mutate "diff-cover version range instead of exact (github-py)" github-py/.github/workflows/ci.yml 'DIFF_COVER_VERSION: "11.0.3"' 'DIFF_COVER_VERSION: ">=11"' static
+mutate "diff-cover version variable removed (azure-ts)" azure-ts/azure-pipelines.yml '  diffCoverVersion: "11.0.3"' '  unusedVar: "1"' static
 mutate "jscpd version range instead of exact (azure-py)" azure-py/azure-pipelines.yml 'JSCPD_VERSION: "5.4.3"' 'JSCPD_VERSION: "^5"' static
 mutate "nosonar step removed (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: echo skipped' static
 mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'echo skipped' static

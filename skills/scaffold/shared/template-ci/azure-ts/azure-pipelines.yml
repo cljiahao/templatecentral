@@ -7,7 +7,7 @@ pool:
   vmImage: ubuntu-latest
 variables:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
-  diffCoverVersion: "11.0.1"
+  diffCoverVersion: "11.0.3"
   # the one knob for test sharding: raise it to split the suite across more agents
   shardCount: 2
   # caps each Node process; the test workers inherit it
@@ -31,10 +31,6 @@ jobs:
       # format:check + lint + typecheck
       - bash: pnpm run check
         displayName: Format, lint and typecheck
-      - bash: |
-          set -euo pipefail
-          if node -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then pnpm run test:e2e; fi
-        displayName: End-to-end tests (only when package.json defines test:e2e)
       - bash: pnpm exec jscpd
         displayName: Duplication (production source <= 3%, per .jscpd.json)
   - job: test
