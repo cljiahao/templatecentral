@@ -124,12 +124,26 @@ def step_bounds(lines, n):
 # off-PR runs, so any other job-level if/condition could silently switch a gate off on pushes or PRs.
 PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
 PR_ONLY_IF = "if: github.event_name == 'pull_request'"
-JOB_HEAD = re.compile(r"^  (?:-\s+(?:job|stage):\s*(\S+)|([A-Za-z_-]+):)\s*$")
-def job_blocks(lines):
-    start = next((i for i, l in enumerate(lines) if re.match(r"^(jobs|stages):\s*$", l)), None)
+JOB_HEAD = re.compile(r"^  (?:-\s+job:\s*(\S+)|([A-Za-z_-]+):)\s*(?:#.*)?$")
+def job_blocks(lines, rel=None):
+    if rel is not None and any(re.match(r"^stages:", l) for l in lines):
+        errors.append(f"{rel}: stages: is not supported by the job-condition guard; extend it before using stages")
+    start = next((i for i, l in enumerate(lines) if re.match(r"^jobs:\s*(#.*)?$", l)), None)
     if start is None:
+        if rel is not None:
+            errors.append(f"{rel}: no `jobs:` block the job-condition guard can read")
         return
-    heads = [i for i in range(start + 1, len(lines)) if JOB_HEAD.match(lines[i])]
+    heads = []
+    for i in range(start + 1, len(lines)):
+        if re.match(r"^\S", lines[i]):
+            break
+        if re.match(r"^  \S", lines[i]) and not lines[i].startswith("  #"):
+            if JOB_HEAD.match(lines[i]):
+                heads.append(i)
+            elif rel is not None:
+                errors.append(f"{rel}:{i + 1}: job head the job-condition guard cannot read: {lines[i].strip()}")
+    if not heads and rel is not None:
+        errors.append(f"{rel}: no jobs found by the job-condition guard")
     for idx, h in enumerate(heads):
         end = heads[idx + 1] if idx + 1 < len(heads) else len(lines)
         for k in range(h + 1, end):
@@ -139,7 +153,7 @@ def job_blocks(lines):
         m = JOB_HEAD.match(lines[h])
         yield (m.group(1) or m.group(2)), h, end
 def job_condition_errors(rel, lines):
-    for name, h, end in job_blocks(lines):
+    for name, h, end in job_blocks(lines, rel):
         for k in range(h + 1, end):
             if re.match(r"^    (if|condition):", lines[k]):
                 text = lines[k].strip()
@@ -265,6 +279,11 @@ mutate "different condition on a PR-only job (github-py readme-freshness)" githu
 mutate "PR-only condition on a non-PR-only job (github-ts quality)" github-ts/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n" static
 mutate "job-level condition: false on the coverage job (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage\n    condition: false\n' static
 mutate "job-level condition on the quality job (azure-py)" azure-py/azure-pipelines.yml '  - job: quality\n' "  - job: quality\n    condition: ne(variables['Build.Reason'], 'PullRequest')\n" static
+mutate "job-level if != pull_request after timeout-minutes on the diff-cover job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' "    timeout-minutes: 20\n    if: github.event_name != 'pull_request'\n" static
+mutate "job head with a trailing comment and a forbidden if (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog: # PR only\n    if: false' static
+mutate "job head with a trailing comment and a forbidden condition (azure-ts coverage)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage # merge\n    condition: false\n' static
+mutate "Azure stages: template with a stage-level condition (azure-py)" azure-py/azure-pipelines.yml 'jobs:\n  - job: quality\n' "stages:\n  - stage: build\n    condition: false\n    jobs:\n      - job: quality\n" static
+mutate "unreadable job head (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
 mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
