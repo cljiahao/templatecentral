@@ -64,7 +64,4 @@ If found → proceed to the section for your detected stack below.
 
 - Always verify with a search (grep for `example` or `Example`) after cleanup — stale imports cause build failures.
 - After cleanup, run that stack's **tests and production build** — `pnpm test` + `pnpm build` for the TypeScript stacks, `python -m pytest` + a container build for FastAPI — the app must still compile and run with no errors.
-- Deleting the example directory removes its own `README.md` too, but the **parent** folder's `README.md` (e.g. `src/features/README.md`) still lists `example/` in its `Contents` section — refresh it:
-  ```bash
-  cat "<skill-dir>/../scaffold/shared/documentation-kit.md"
-  ```
+- Deleting the example directory removes its own README too. Then run `bash scripts/check-docs.sh`: a link or path in the README, AGENTS.md or `docs/` that still points at the example (the `docs/architecture.md` Reuse table, say) is reported with its file and line. Fix each one.

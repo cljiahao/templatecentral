@@ -1372,6 +1372,8 @@ out=$(cd "$FEAT" && TF_BUILD=True PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-ga
 check 1 "$(grep -c '^##vso\[task.logissue type=error\]' <<<"$out")" "ci-gates reports errors in Azure Pipelines format"
 bash "$KIT/ci-gates.sh" nope >/dev/null 2>&1
 check 2 "$?" "ci-gates rejects an unknown gate"
+bash "$KIT/ci-gates.sh" readme >/dev/null 2>&1
+check 2 "$?" "ci-gates no longer has a readme gate"
 NSR=$(new_repo nosonar)
 (cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
 check 0 "$?" "ci-gates nosonar passes on clean source"
@@ -1388,16 +1390,16 @@ for ext in js jsx mjs cjs; do
   check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in .$ext"
   git -C "$NSR" rm -qf --cached "src/c.$ext"
 done
-for g in changelog readme comments; do
+for g in changelog comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"
 done
-for g in changelog readme comments; do
+for g in changelog comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" no-such-branch) >/dev/null 2>&1
   check 1 "$?" "ci-gates $g fails closed when the base ref is missing"
 done
 
-# ── README gates (lefthook readme-coupling) + CI gates (ci-gates.sh) ──────────
+# ── CI gates (ci-gates.sh) ────────────────────────────────────────────────────
 
 # extract_run <kit_md> <anchor-regex> — the dedented `run: |` body after the anchor line.
 extract_run() {
@@ -1420,12 +1422,12 @@ for i, l in enumerate(lines):
     sys.exit()
 PY2
 }
-# gate_repo — a repo whose origin/main has src/a.ts + its README and harness/CI files.
+# gate_repo — a repo whose origin/main has src/a.ts and harness/CI files.
 gate_repo() {
   local r
   r=$(new_repo main)
   mkdir -p "$r/src" "$r/.claude/hooks" "$r/.github/workflows" "$r/azure-pipelines"
-  touch "$r/src/a.ts" "$r/src/README.md" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml" "$r/azure-pipelines/ci.yml"
+  touch "$r/src/a.ts" "$r/.claude/hooks/x.sh" "$r/.github/workflows/ci.yml" "$r/azure-pipelines/ci.yml"
   cp "$TPL/template/.claude/comment-hygiene-patterns.txt" "$r/.claude/comment-hygiene-patterns.txt"
   git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm base
   git -C "$r" update-ref refs/remotes/origin/main HEAD
@@ -1436,29 +1438,11 @@ expect_gate() {
   (cd "$3" && LABELS="${5:-}" bash "$KIT/ci-gates.sh" "$2" main) >/dev/null 2>&1
   check "$1" "$?" "ci-gates $2 $4"
 }
-# Harness-internal folders never get a README (documentation-kit prunes them), so a change
-# there must not trip either gate; an ordinary folder without its README still must.
-for kit_md in "${LEFTHOOKS[@]}"; do
-  k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")
-  body=$(extract_run "$kit_md" '^    readme-coupling:')
-  if [[ -z "$body" ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $k has no readme-coupling run body"; continue; fi
-  r=$(gate_repo)
-  echo 2 >> "$r/.claude/hooks/x.sh"; git -C "$r" add -A
-  out=$(cd "$r" && sh -c "$body" 2>&1)
-  check 0 "$(printf '%s' "$out" | grep -c '\.claude\|\.github')" "$k readme-coupling skips harness folders"
-  echo 1 >> "$r/src/a.ts"; git -C "$r" add -A
-  out=$(cd "$r" && sh -c "$body" 2>&1)
-  check 1 "$(printf '%s' "$out" | grep -c '  - src/')" "$k readme-coupling warns on src/ without README"
-done
-
 r=$(gate_repo)
 echo 1 >> "$r/.claude/hooks/x.sh"; echo 1 >> "$r/.github/workflows/ci.yml"; echo 1 >> "$r/azure-pipelines/ci.yml"
 git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm harness
-expect_gate 0 readme "$r" "passes a harness-only PR"
 expect_gate 0 changelog "$r" "passes a PR without src/ changes"
 echo 1 >> "$r/src/a.ts"; git -C "$r" add -A && git -C "$r" "${GIT_ID[@]}" commit -qm src
-expect_gate 1 readme "$r" "fails src/ without README"
-expect_gate 0 readme "$r" "honours skip-readme-check" "x skip-readme-check"
 expect_gate 1 changelog "$r" "fails src/ without CHANGELOG"
 big=$(gate_repo)
 for i in $(seq 1 3000); do echo "src/f$i.ts"; done | (cd "$big" && xargs touch)

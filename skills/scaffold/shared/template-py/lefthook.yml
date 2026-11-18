@@ -15,28 +15,10 @@ pre-commit:
     secret-scan:
       # Skips only when gitleaks isn't installed locally; CI is the hard gate, and a finding fails the commit.
       run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
-    readme-coupling:
-      # Warn-only: a folder with staged changes should stage its README.md too.
-      run: |
-        tmp=$(mktemp)
-        git diff --cached --name-only > "$tmp"
-        missing=""
-        while IFS= read -r f; do
-          case "$f" in */README.md|README.md) continue ;; esac
-          # documentation-kit.md never writes a README into these folders, so never demand one
-          case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|.lefthook/*|*/.lefthook/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
-          d=$(dirname "$f")
-          rm_path="README.md"
-          [ "$d" != "." ] && rm_path="$d/README.md"
-          grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
-        done < "$tmp"
-        rm -f "$tmp"
-        missing=$(printf '%b' "$missing" | sort -u)
-        if [ -n "$missing" ]; then
-          echo "⚠ folders changed without staging their README.md (commit still proceeds):"
-          printf '%s\n' "$missing"
-        fi
-        exit 0
+    docs-check:
+      # Fails on a broken link or path in staged docs; CI and pre-push run the full check.
+      glob: "*.md"
+      run: bash scripts/check-docs.sh {staged_files}
     comment-hygiene:
       # Warn-only, never blocks. Patterns come from .claude/comment-hygiene-patterns.txt.
       run: |
@@ -91,5 +73,7 @@ pre-push:
   commands:
     harness-integrity:
       run: bash .claude/verify-harness.sh
+    docs-check:
+      run: bash scripts/check-docs.sh
     verify:
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -m pyright src/ && python -m pytest test/ -q'

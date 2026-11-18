@@ -22,6 +22,7 @@ template/.prettierrc 644 - -
 template/Dockerfile 644 - -
 template/components.json 644 - -
 template/docker-entrypoint.sh 755 - -
+template/docs/architecture.md 644 - -
 template/eslint.config.mjs 644 - -
 template/next.config.ts 644 - -
 template/package.json 644 __TC_PROJECT_NAME__ -

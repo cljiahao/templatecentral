@@ -5,8 +5,8 @@
 #        TC_PART=leaf TC_LEAF=<add|migrate>/<path/to/leaf-stem> [TC_TREE=<tree>] bash tc-copy.sh <target>
 #   TC_STACK  nestjs | nextjs | vite-react | fastapi (not used by TC_PART=leaf)
 #   TC_PART   base | settings | ci | late | stack | agents | tail | manifest | leaf   (see skills/scaffold/shared/harness-kit.md, Step 0)
-#             manifest writes .claude/harness.json (kit Step E); TC_ADO_WIKI / TC_RICH_README (true|false,
-#             default false) set its adoWiki / richReadme fields
+#             manifest writes .claude/harness.json (kit Step E); TC_ADO_WIKI (true|false, default false)
+#             sets its adoWiki field
 #   TC_CI     github | azure | none; required for TC_PART=ci, empty for every other part
 #   TC_LEAF   for leaf: the leaf's stem under skills/, e.g. add/auth/nestjs; its template trees and
 #             template.manifest sit in skills/<TC_LEAF>/
@@ -203,9 +203,7 @@ if [ "$PART" = manifest ]; then
     vite-react) skills=vite-verify ;;
   esac
   for s in $skills; do [ -f "$TGT/.claude/skills/$s/SKILL.md" ] || stop "$TGT/.claude/skills/$s/SKILL.md is missing: the stack's verify-skill step comes before Step E"; done
-  for b in "${TC_ADO_WIKI:-false}" "${TC_RICH_README:-false}"; do
-    case "$b" in true | false) ;; *) stop "TC_ADO_WIKI and TC_RICH_README take true or false (got '$b')" ;; esac
-  done
+  case "${TC_ADO_WIKI:-false}" in true | false) ;; *) stop "TC_ADO_WIKI takes true or false (got '${TC_ADO_WIKI}')" ;; esac
   sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 -- "$1"; else sha256sum -- "$1"; fi | cut -d' ' -f1; }
   # Core seeded files, then every hook, in fixed order; absent files are left out.
   list=$(
@@ -215,7 +213,7 @@ if [ "$PART" = manifest ]; then
     (cd "$TGT" && find .claude/hooks -type f 2>/dev/null | LC_ALL=C sort)
     printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
       .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh \
-      .claude/verify-harness.sh .claude/regen-harness.sh
+      .claude/verify-harness.sh .claude/regen-harness.sh scripts/check-docs.sh
   )
   body=""
   while IFS= read -r p; do
@@ -232,7 +230,7 @@ TC_LIST
   tmp="$TGT/$mf.tmp.$$"
   {
     printf '{\n  "templatecentral_version": "%s",\n  "stack": "%s",\n  "seeded_at": "%s",\n' "$ver" "$STACK" "$(date -u +%Y-%m-%d)"
-    printf '  "adoWiki": %s,\n  "richReadme": %s,\n' "${TC_ADO_WIKI:-false}" "${TC_RICH_README:-false}"
+    printf '  "adoWiki": %s,\n' "${TC_ADO_WIKI:-false}"
     printf '  "seeded_files": {%s\n  }\n}\n' "${body#,}"
   } > "$tmp" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }
   mv -- "$tmp" "$TGT/$mf" || { rm -f -- "$tmp"; stop "writing $TGT/$mf failed"; }

@@ -202,6 +202,8 @@ jobs:
         run: bash scripts/measure-outcomes.sh
       - name: Post-edit lint hook tests
         run: bash scripts/post-edit-lint.test.sh
+      - name: Docs check tests
+        run: bash scripts/check-docs.test.sh
       - name: Doc sync tests
         run: bash scripts/check-doc-sync.test.sh
       - name: Doc sync (README, EXAMPLES, AGENTS capability row)

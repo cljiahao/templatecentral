@@ -54,3 +54,4 @@ template/.claude/regen-harness.sh 755 - -
 template/.claude/verify-harness.sh 755 - -
 template/.gitleaks.toml 644 - -
 template/.lefthook/commit-msg.sh 755 - -
+template/scripts/check-docs.sh 755 - -

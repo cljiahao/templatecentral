@@ -128,7 +128,7 @@ def step_bounds(lines, n):
 # Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
 # skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
-PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene", "dependency-review"}
+PR_ONLY_JOBS = {"changelog", "comment-hygiene", "dependency-review"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
 # Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
 # no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
@@ -256,7 +256,6 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'test': ['plan'],
                          'coverage': ['test'],
                          'changelog': [],
-                         'readme-freshness': [],
                          'comment-hygiene': [],
                          'dependency-review': []},
                'gates': [('shard plan',
@@ -267,6 +266,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'echo "list=$list" >> "$GITHUB_OUTPUT"\n'),
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
+                         ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
@@ -286,16 +286,16 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
                           '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
-                         ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
                           'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'github-py': {'file': 'github-py/.github/workflows/ci.yml',
-               'needs': {'quality': [], 'changelog': [], 'readme-freshness': [], 'comment-hygiene': [], 'dependency-review': []},
+               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'dependency-review': []},
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
+                         ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
@@ -308,7 +308,6 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--fail-under=80'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
-                         ('readme check', 'readme-freshness', 'run', 'bash .claude/ci-gates.sh readme "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
                          ('dependency review at high',
                           'dependency-review',
@@ -372,6 +371,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          '--fail-under=80\n')]},
  'azure-gates': {'file': 'azure/azure-pipelines/templatecentral-gates.yml',
                  'gates': [('Harness integrity', '(gates include)', 'bash', 'bash .claude/verify-harness.sh'),
+                           ('Docs check (links and paths in README.md, AGENTS.md, docs/)',
+                            '(gates include)',
+                            'bash',
+                            'bash scripts/check-docs.sh'),
                            ('Secret scan (gitleaks CLI, checksum-verified)',
                             '(gates include)',
                             'bash',
@@ -385,10 +388,6 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '(gates include)',
                             'bash',
                             'bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
-                           ('README freshness gate',
-                            '(gates include)',
-                            'bash',
-                            'bash .claude/ci-gates.sh readme "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
                            ('Comment hygiene gate',
                             '(gates include)',
                             'bash',
@@ -411,9 +410,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'changelog': {'if': "github.event_name == 'pull_request'",
                                       'runs-on': 'ubuntu-latest',
                                       'timeout-minutes': 5},
-                        'readme-freshness': {'if': "github.event_name == 'pull_request'",
-                                             'runs-on': 'ubuntu-latest',
-                                             'timeout-minutes': 5},
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
@@ -431,6 +427,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'pnpm install --frozen-lockfile'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
+                                     {'run': 'bash scripts/check-docs.sh'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
@@ -469,11 +466,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
                                                           '}}'},
                                         'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
-                         'readme-freshness': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
-                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
-                                                       'LABELS': '${{ join(github.event.pull_request.labels.*.name, '
-                                                                 "' ') }}"},
-                                               'run': 'bash .claude/ci-gates.sh readme "$BASE_REF"'}],
                          'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
@@ -538,9 +530,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'changelog': {'if': "github.event_name == 'pull_request'",
                                       'runs-on': 'ubuntu-latest',
                                       'timeout-minutes': 5},
-                        'readme-freshness': {'if': "github.event_name == 'pull_request'",
-                                             'runs-on': 'ubuntu-latest',
-                                             'timeout-minutes': 5},
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
@@ -559,6 +548,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              'requirements-dev.txt; fi\n'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
+                                     {'run': 'bash scripts/check-docs.sh'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
@@ -574,11 +564,6 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
                                                           '}}'},
                                         'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
-                         'readme-freshness': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
-                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
-                                                       'LABELS': '${{ join(github.event.pull_request.labels.*.name, '
-                                                                 "' ') }}"},
-                                               'run': 'bash .claude/ci-gates.sh readme "$BASE_REF"'}],
                          'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
@@ -605,14 +590,12 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml '
                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
  'azure-gates': {'steps': {'(gates include)': [{'bash': 'bash .claude/verify-harness.sh'},
+                                               {'bash': 'bash scripts/check-docs.sh'},
                                                {'bash': 'bash .claude/ci-gates.sh secrets '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh deps'},
                                                {'bash': 'bash .claude/ci-gates.sh nosonar'},
                                                {'bash': 'bash .claude/ci-gates.sh changelog '
-                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
-                                                'env': {'LABELS': '$(LABELS)'}},
-                                               {'bash': 'bash .claude/ci-gates.sh readme '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
                                                {'bash': 'bash .claude/ci-gates.sh comments '
@@ -793,7 +776,7 @@ mutate "condition: false on the nosonar step (azure gates)" azure/azure-pipeline
 mutate "job-level if != pull_request on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' "  coverage:\n    if: github.event_name != 'pull_request'\n    needs: test\n" static
 mutate "job-level if != pull_request on the quality job (github-py)" github-py/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name != 'pull_request'\n    runs-on: ubuntu-latest\n" static
 mutate "job-level if: false on a PR-only job (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog:\n    if: false' static
-mutate "different condition on a PR-only job (github-py readme-freshness)" github-py/.github/workflows/ci.yml "  readme-freshness:\n    if: github.event_name == 'pull_request'" "  readme-freshness:\n    if: github.event_name != 'push'" static
+mutate "different condition on a PR-only job (github-py comment-hygiene)" github-py/.github/workflows/ci.yml "  comment-hygiene:\n    if: github.event_name == 'pull_request'" "  comment-hygiene:\n    if: github.event_name != 'push'" static
 mutate "PR-only condition on a non-PR-only job (github-ts quality)" github-ts/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n" static
 mutate "job-level condition: false on the coverage job (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  - job: coverage\n    condition: false\n' static
 mutate "job-level condition on the quality job (azure-py)" azure-py/azure-pipelines.yml '  - job: quality\n' "  - job: quality\n    condition: ne(variables['Build.Reason'], 'PullRequest')\n" static
@@ -823,7 +806,7 @@ mutate "step-level if: false on Secret scan (github-ts)" github-ts/.github/workf
 mutate "step-level if: false on Require one blob report per shard (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require one blob report per shard' '      - if: false\n        name: Require one blob report per shard' static
 mutate "step-level if: false on the Tests step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Tests (shard' '      - if: false\n        name: Tests (shard' static
 mutate "step-level if: false on the changelog step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require CHANGELOG for src changes' '      - if: false\n        name: Require CHANGELOG for src changes' static
-mutate "step-level if: false on the readme step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require README.md update' '      - if: false\n        name: Require README.md update' static
+mutate "step-level if: false on the docs check step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)' '      - if: false\n        name: Docs check (links and paths in README.md, AGENTS.md, docs/)' static
 mutate "step-level if: false on the comment step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require no change-narration comments' '      - if: false\n        name: Require no change-narration comments' static
 mutate "step-level if: false on Dependency audit (github-py)" github-py/.github/workflows/ci.yml '      - name: Dependency audit' '      - if: false\n        name: Dependency audit' static
 mutate "step-level if: false on Secret scan (github-py)" github-py/.github/workflows/ci.yml '      - name: Secret scan' '      - if: false\n        name: Secret scan' static
@@ -847,6 +830,10 @@ mutate "dependency audit deleted (github-ts)" github-ts/.github/workflows/ci.yml
 mutate "harness integrity deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Harness integrity\n        run: bash .claude/verify-harness.sh\n' '' static
 mutate "secret scan deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml "  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\\n" "" static
 mutate "harness integrity deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n' '' static
+mutate "docs check deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
+mutate "docs check deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
+mutate "docs check deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n' '' static
+mutate "docs check made non-failing (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash scripts/check-docs.sh' 'run: bash scripts/check-docs.sh || true' static
 mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(System.JobPositionInPhase).json\" --shard=\"\$(System.JobPositionInPhase)/\$(System.TotalJobsInPhase)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
 mutate "needs: test removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n' static
 mutate "dependsOn: test removed from coverage (azure-ts)" azure-ts/azure-pipelines.yml '    dependsOn: test\n' '' static
@@ -884,7 +871,7 @@ mutate "job-level defaults with a working-directory (github-py quality)" github-
 mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: test\n' static "key env must be None"
 mutate "step inserted before the first gate (github-ts quality)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '      - run: echo "{}" > .claude/dep-audit-allow.txt\n      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' static "differ from the pinned ordered list"
 mutate "step inserted between install and the gates (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - bash: rm -f .jscpd.json\n      - template: azure-pipelines/templatecentral-gates.yml\n' static "differ from the pinned ordered list"
-mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
+mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
 mutate "gates reordered (github-py, secret scan before tests)" "github-py/.github/workflows/ci.yml" "      # PR: the PR's commits; push: full history\n      - name: Secret scan (gitleaks CLI, checksum-verified)\n        env:\n          BASE_REF: \${{ github.base_ref }}\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\n" "" "static"
 mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/ci.yml" "shard: \${{ fromJSON(needs.plan.outputs.shards) }}" "shard: [1]" "static" "key strategy must be"
 mutate "hard-coded parallel count (azure-ts)" "azure-ts/azure-pipelines.yml" "parallel: \${{ variables.shardCount }}" "parallel: 1" "static" "key strategy must be"

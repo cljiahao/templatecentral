@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|readme|comments|deps|nosonar> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -45,28 +45,6 @@ case "$gate" in
     if grep -qE '^src/' <<< "$changed" && ! grep -qx 'CHANGELOG.md' <<< "$changed"; then
       bypassed skip-changelog && exit 0
       fail "src/ changed but CHANGELOG.md was not updated. Add an entry or apply the 'skip-changelog' label."
-    fi
-    ;;
-  readme)
-    pr_only
-    tmp=$(mktemp)
-    git diff --name-only "$base"...HEAD > "$tmp" || fail "cannot diff against $base"
-    missing=""
-    while IFS= read -r f; do
-      case "$f" in */README.md|README.md) continue ;; esac
-      # documentation-kit.md never writes a README into these folders, so never demand one
-      case "$f" in .github/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*|.claude/*|*/.claude/*|.lefthook/*|*/.lefthook/*|secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) continue ;; esac
-      d=$(dirname "$f")
-      rm_path="README.md"
-      [ "$d" != "." ] && rm_path="$d/README.md"
-      grep -qxF "$rm_path" "$tmp" || missing="$missing\n  - $d/"
-    done < "$tmp"
-    rm -f "$tmp"
-    missing=$(printf '%b' "$missing" | sort -u)
-    if [ -n "$missing" ]; then
-      bypassed skip-readme-check && exit 0
-      printf '%s\n' "$missing"
-      fail "Folders changed without updating their README.md (listed above). Update them or apply the 'skip-readme-check' label."
     fi
     ;;
   comments)
@@ -263,7 +241,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|readme|comments|deps|nosonar> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]" >&2
     exit 2
     ;;
 esac

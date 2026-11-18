@@ -497,7 +497,7 @@ check_scaffold_seeds_complete_harness() {
   local shared_files=(
     .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/ci-gates.sh
     .claude/verify-harness.sh .claude/regen-harness.sh .claude/comment-hygiene-patterns.txt
-    .lefthook/commit-msg.sh .gitleaks.toml
+    .lefthook/commit-msg.sh .gitleaks.toml scripts/check-docs.sh
   )
   local variant_files=(
     .claude/hooks/protect-files.sh .claude/hooks/block-no-verify.sh .claude/hooks/post-edit-typecheck.sh

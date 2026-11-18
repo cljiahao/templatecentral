@@ -14,7 +14,7 @@ python -m pyright src/        # type check
 ```
 
 ## Architecture
-- Layered flow: `api/` (routers → services) → `models/` (never reversed)
+- Layered flow: `src/api/` (routers → services) → `src/models/` (never reversed)
 - Pydantic schemas with camelCase aliases (`BaseSchema`)
 - Centralized exception → HTTP response mapping in `error_handler.py`
 - Routers are thin — accept body, call service, return result

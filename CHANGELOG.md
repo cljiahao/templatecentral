@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Docs model for scaffolded projects, built once in the shared layer: a root `README.md` (what the project is, how to run, test and build it), one `docs/architecture.md` codemap per stack (layers, dependency direction, a "Reuse" section), and a short `README.md` only at a package, service or feature-module boundary. `docs/adr/` is left alone and the wiki stays opt-in, generated from `docs/`.
+- Seeded `scripts/check-docs.sh`: offline bash check that fails on a relative link or backticked repo path that does not exist, a `## Contents` heading, and a README that lists every file of its folder. It prints `file:line: message`, at most 20 lines, exits 1 on findings and exits 2 with one line naming the cause when it cannot run (no temp folder, unreadable file, missing tool, failed git call). It reads each Markdown file once, so 4,000 references take under a second. It treats CRLF files like LF, skips footnote definitions, prose labels, root-absolute site routes, blockquoted fences and indented code, and lets a backticked path without an extension match a file stem or folder. Lefthook runs it on staged Markdown at pre-commit and in full at pre-push; GitHub and Azure CI run it as a plain script step. The harness hashes it.
+- `scripts/check-docs.test.sh`: clean scaffold per stack and CI host, one planted fault per rule, ignored content, paths with spaces, the output cap, the internal-failure exit, a 4,000-reference time bound, URL schemes in any case, fence lengths, double-backtick spans, percent-decoding, listings as plain text, bold or table rows, the skipped folders, and the lefthook and CI wiring.
+- The AGENTS.md tail carries one line telling the agent to fix a stale README or doc in the same change, without asking.
 - Security guidance, prose only, no scaffold output change:
   - A "Cryptography and keys" validation rule and an upload malware-scan note.
   - AI security lines on provider data terms, safe model weight formats, upload safeguards, evaluation sets and an "output can be wrong" notice.
@@ -17,6 +21,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Harness-kit notes on repository settings (peer review, signed commits, protected default branch) and optional scanners and artefact signing a project may add to its own CI.
 
 ### Changed
+- The seeded README-in-every-folder rule and its touch-the-README gate are gone: the `readme-coupling` lefthook step, the `readme-freshness` CI job, the `ci-gates.sh readme` case, the `skip-readme-check` label and the `richReadme` opt-in. `scripts/check-docs.sh` is the only docs gate. The documentation kit no longer writes a README per folder, `## Contents` lists or `## Parent` links.
 - Step G (`TC_PART=tail`) is idempotent: it wraps the AGENTS.md tail in `templatecentral-tail` BEGIN/END markers and replaces that block on a re-run instead of appending a second copy. Malformed markers, or an `## AI Harness` heading without markers, stop with an error.
 - Step G's refusal message names the `## AI Harness` heading correctly, and Ctrl-C or SIGTERM during a replace now exits (status 130 / 143) after removing its temp files.
 - The Step G replace keeps a symlinked `AGENTS.md` (the temp file goes beside the real target), matches BEGIN and END as whole lines outside code fences, and cleans its temp files on failure or interrupt.
