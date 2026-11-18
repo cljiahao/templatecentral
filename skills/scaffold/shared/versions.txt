@@ -72,7 +72,7 @@ npm better-auth                   ^1.7.21
 npm axios                         ^1.21.1
 npm class-variance-authority      ^0.7.1
 npm clsx                          ^2.1.1
-npm dotenv                        ^17.4.2
+npm dotenv                        ^18.0.10
 npm eslint                        ^10.14.0
 npm eslint-config-next            ^16.4.6
 npm eslint-config-prettier        ^10.1.8

@@ -31,7 +31,7 @@
     "@nestjs/core": "^12.4.2",
     "@nestjs/platform-fastify": "^12.4.2",
     "@nestjs/swagger": "^12.1.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.10",
     "fastify": "^5.12.8",
     "nestjs-pino": "^5.3.1",
     "nestjs-zod": "^5.6.0",
