@@ -23,6 +23,7 @@ pnpm         12.19.0
 image  node   node:26-alpine
 image  python python:3.14.10-slim
 image  nginx  nginx:1.30.5-alpine3.24
+image  beanie-python python:3.13.16-slim   # held on 3.13 (beanie declares <3.14), used only by add/database/python/beanie.md
 
 tool   DIFF_COVER  11.0.1
 tool   GITLEAKS    8.30.1
@@ -45,7 +46,10 @@ action anthropics/claude-code-action  4fa93a88de49bbef68b10eb15aabedf28ca0e1ed v
 # held: typescript-eslint 8.72.2 peers typescript <6.1.0 and @nestjs/swagger 12.1.1 peers ^5.5 || ^6,
 # so TypeScript stays on 6.0.x until both support 7.
 # held: vitest and @vitest/coverage-v8 move together (the coverage package peers the exact vitest version).
-# held: nestjs-zod 5.6.0 still peers Nest <=11; the template runs Nest 12 and pnpm warns, no override.
+# held: nestjs-zod is pinned exactly (no caret). No release supports Nest 12: 5.6.0 peers @nestjs/common ^10||^11
+# and @nestjs/swagger ^7.4.2||^8||^11, the template runs Nest 12 and pnpm install warns (verified working),
+# no override. An exact pin keeps a later 5.x from changing behaviour unseen.
+# held: the beanie-python image is python 3.13 on purpose: beanie 2.x declares Requires-Python <3.14.
 npm @eslint-community/eslint-plugin-eslint-comments ^4.8.1
 npm @eslint/js                    ^10.0.1
 npm @fastify/helmet               ^13.2.0
@@ -61,6 +65,7 @@ npm @nestjs/testing               ^12.4.2
 npm @tailwindcss/postcss          ^4.3.5
 npm @tailwindcss/typography       ^0.5.20
 npm @tanstack/react-query         ^5.107.1
+npm @testing-library/dom          ^10.4.2
 npm @testing-library/jest-dom     ^7.0.1
 npm @testing-library/react        ^16.3.3
 npm @types/node                   ^26
@@ -86,7 +91,7 @@ npm jsdom                         ^31.0.0
 npm lefthook                      ^2.2.2
 npm lucide-react                  ^1.72.0
 npm nestjs-pino                   ^5.3.1
-npm nestjs-zod                    ^5.6.0
+npm nestjs-zod                    5.6.0
 npm next                          ^16.4.6
 npm next-themes                   ^0.4.6
 npm pino                          ^10.4.0

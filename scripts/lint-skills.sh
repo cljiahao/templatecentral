@@ -1129,17 +1129,18 @@ check_no_version_pins() {
   # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs and jscpd are the exact pins by design
   # (sonarjs: its enabled-rule set changes across minor versions; jscpd: the CI duplication gate pins
   # the same version, so a local run and CI measure alike).
+  # nestjs-zod: no release supports Nest 12, so an exact pin keeps a later 5.x from changing behaviour unseen.
   header "Template package.json dependencies use floors, not exact pins"
   local pj pins="" n=0
   while IFS= read -r pj; do
     n=$((n + 1))
     pins+=$(grep -nE '^[[:space:]]+"[^"]+":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$pj" \
-      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs|jscpd)"' | sed "s#^#$pj:#" || true)
+      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs|jscpd|nestjs-zod)"' | sed "s#^#$pj:#" || true)
   done < <(template_files | grep '/package\.json$' || true)
   [[ "$n" -gt 0 ]] || pins="no template package.json found — nothing to check"
   report "$pins" \
-    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs and jscpd are the only exact pins)" \
-    "Template package.json dependencies use floors (eslint-plugin-sonarjs and jscpd exact by design)"
+    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs, jscpd and nestjs-zod are the only exact pins)" \
+    "Template package.json dependencies use floors (eslint-plugin-sonarjs, jscpd and nestjs-zod exact by design)"
 
   # A floor written as prose (≥X.Y outside a fence and outside inline code) restates a rule that
   # .claude/rules/*.md owns, and drifts when the floor moves. Install commands and requirement lines

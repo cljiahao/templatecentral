@@ -34,11 +34,18 @@ def load(root):
     text = read(root / VERSIONS)
     if text is None:
         sys.exit(f"check-versions: {VERSIONS} not found under {root}")
+    seen, records = {}, 0
     for n, raw in enumerate(text.splitlines(), 1):
         f = raw.split("#", 1)[0].split()
         if not f:
             continue
         kind, rest = f[0], f[1:]
+        key = (kind, rest[0]) if rest and kind != "pnpm" else (kind,)
+        if key in seen:
+            err(VERSIONS, n, f"duplicate key {' '.join(key)} (first at line {seen[key]})")
+            continue
+        seen[key] = n
+        records += 1
         if kind in ("npm", "pip", "tool", "image") and len(rest) == 2:
             cfg[kind][rest[0]] = rest[1]
         elif kind in ("node", "python") and len(rest) == 2:
@@ -49,6 +56,8 @@ def load(root):
             cfg["action"][rest[0]] = (rest[1], rest[2])
         else:
             err(VERSIONS, n, f"unreadable record: {raw.strip()}")
+    if not records:
+        sys.exit(f"check-versions: {VERSIONS} has no records (empty or only comments)")
     for need in (("node", "major"), ("node", "min"), ("python", "minor")):
         if need[1] not in cfg[need[0]]:
             err(VERSIONS, 0, f"missing record: {need[0]} {need[1]}")
@@ -337,6 +346,64 @@ def check_pip_and_npm_in_text(cfg, root):
                 err(r, lineno(text, m.start()), f"prose states a version for {name}")
 
 
+ALIASES = {
+    "FastAPI": ("pip", "fastapi"), "Pydantic": ("pip", "pydantic"), "Starlette": ("pip", "starlette"),
+    "Next.js": ("npm", "next"), "NestJS": ("npm", "@nestjs/common"), "Nest": ("npm", "@nestjs/common"),
+    "React": ("npm", "react"), "Vite": ("npm", "vite"), "TypeScript": ("npm", "typescript"),
+    "Tailwind CSS": ("npm", "tailwindcss"), "Vitest": ("npm", "vitest"), "Zod": ("npm", "zod"),
+    "React Router": ("npm", "react-router"), "TanStack Query": ("npm", "@tanstack/react-query"),
+}
+CLAIM = re.compile(r"\b(?:current|latest|newest|most recent|up[- ]to[- ]date)\b", re.I)
+
+
+def vtuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def check_prose_floors(cfg, root):
+    """A version stated in prose for a listed package may not exceed the pinned version, and a
+    current/latest claim next to a number fails. Scope: .claude/rules, skills markdown, template AGENTS.md."""
+    names = {}
+    for name in list(cfg["npm"]) + list(cfg["pip"]):
+        names[name] = (("npm" if name in cfg["npm"] else "pip"), name)
+    names.update(ALIASES)
+    alts = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    rx = re.compile(r"(?<![\w@/.:\-])(" + alts + r")(?![\w\-/])[ \t]*(?:≥|>=|\^|~|==|v)?[ \t]*(\d+(?:\.\d+)*)(\+?)")
+    for p in files(root, ".claude/rules/*.md", "skills/**/*.md"):
+        text = read(p)
+        if text is None:
+            continue
+        mask = split_md(text)
+        r = rel(p, root)
+        for m in rx.finditer(text):
+            if mask[m.start()] == 1:
+                continue
+            kind, pkg = names[m.group(1)]
+            pin = cfg[kind].get(pkg)
+            if pin is None:
+                continue
+            n = lineno(text, m.start())
+            got = m.group(2)
+            if vtuple(got) > vtuple(base(pin).split(",")[0]):
+                err(r, n, f"prose says {m.group(1)} {got} but versions.txt pins {pkg} {pin}")
+            near = text[max(0, m.start() - 40):m.start()].split("\n")[-1] + text[m.start():m.end() + 60].split("\n")[0]
+            if CLAIM.search(near):
+                err(r, n, f"prose calls {m.group(1)} {got} current/latest; versions.txt owns the current version")
+
+
+def check_image_tokens_in_skills(cfg, root):
+    allowed = set(cfg["image"].values())
+    pat = re.compile(r"(?<![\w/.\-])(python|node|nginx):(\d[\w.\-]*)")
+    for p in files(root, "skills/**/*.md"):
+        text = read(p)
+        if text is None:
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            for m in pat.finditer(line):
+                if m.group(0) not in allowed and re.search(r"\d+\.\d+|-(?:alpine|slim)", m.group(2)):
+                    err(rel(p, root), n, f"{m.group(0)} is not an image in versions.txt")
+
+
 def main(argv):
     root = Path(__file__).resolve().parent.parent
     if "--root" in argv:
@@ -349,6 +416,8 @@ def main(argv):
     check_template_tokens(cfg, root)
     check_actions(cfg, root)
     check_pip_and_npm_in_text(cfg, root)
+    check_prose_floors(cfg, root)
+    check_image_tokens_in_skills(cfg, root)
     if errors:
         for e in sorted(set(errors)):
             print(e)

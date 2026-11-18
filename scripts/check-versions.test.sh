@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # scripts/check-versions.test.sh — check-versions.sh passes on a copy of the repo and fails on each planted drift.
+# Every mutation must change the copy: a sed pattern that no longer matches would otherwise pass silently.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T=$(mktemp -d) || exit 1; trap 'rm -rf "$T"' EXIT
@@ -7,28 +8,68 @@ PASS=0; FAIL=0
 base="$T/base"; mkdir -p "$base/scripts"
 cp -R "$REPO/skills" "$base/skills"
 [[ -d "$REPO/.github" ]] && cp -R "$REPO/.github" "$base/.github"
+[[ -d "$REPO/.claude/rules" ]] && { mkdir -p "$base/.claude"; cp -R "$REPO/.claude/rules" "$base/.claude/rules"; }
 cp "$REPO/scripts/deploy-smoke.sh" "$base/scripts/"
-t() { # t <name> <want rc> <mutation cmd run inside the copy>
+# sub <file> <sed expression>: portable in-place edit (BSD and GNU), no backup file left behind.
+sub() { sed "$2" "$1" > "$1.new" && mv "$1.new" "$1"; }
+t() { # t <name> <want rc> <mutation run inside the copy> [msg fragment the output must contain]
   local w="$T/$1"; cp -R "$base" "$w"
   (cd "$w" && eval "$3") >/dev/null 2>&1
-  bash "$REPO/scripts/check-versions.sh" --root "$w" >/dev/null 2>&1; local rc=$?
-  if [[ $rc -eq $2 ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $1 — want rc $2, got $rc"; fi
+  if [[ "$3" != "true" ]] && diff -rq "$base" "$w" >/dev/null 2>&1; then
+    FAIL=$((FAIL + 1)); echo "FAIL: $1 — the mutation changed nothing (pattern no longer matches)"; rm -rf "$w"; return
+  fi
+  local out; out=$(bash "$REPO/scripts/check-versions.sh" --root "$w" 2>&1); local rc=$?
+  if [[ $rc -ne $2 ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — want rc $2, got $rc"
+  elif [[ -n "${4:-}" && "$out" != *"$4"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $1 — output lacks '$4': $out"
+  else PASS=$((PASS + 1)); fi
   rm -rf "$w"
 }
+V=skills/scaffold/shared/versions.txt
 NJ=skills/scaffold/nextjs/template/package.json
+VR=skills/scaffold/vite-react/template/package.json
+NS=skills/scaffold/nestjs/template/package.json
 CI=skills/scaffold/shared/template-ci/github-ts/.github/workflows/ci.yml
-t baseline 0 true
-t npm_spec_drift 1 "sed -i.bak 's/\"vitest\": \"[^\"]*\"/\"vitest\": \"^1.0.0\"/' $NJ"
-t pnpm_drift 1 "sed -i.bak 's/pnpm@[0-9.]*/pnpm@1.0.0/' $NJ"
-t types_node_drift 1 "sed -i.bak 's/\"@types\\/node\": \"[^\"]*\"/\"@types\\/node\": \"^1\"/' $NJ"
-t unlisted_dependency 1 "sed -i.bak 's/\"vitest\":/\"left-pad\": \"^1.0.0\", \"vitest\":/' $NJ"
-t action_sha_drift 1 "perl -pi -e 's/checkout\@[0-9a-f]{40}/checkout\@0000000000000000000000000000000000000000/ and \$done++ if !\$done' $CI"
-t action_tag_drift 1 "perl -pi -e 's/# v7\\.0\\.1/# v0.0.1/ and \$done++ if !\$done' $CI"
-t tool_variable_drift 1 "sed -i.bak 's/DIFF_COVER_VERSION: \"[^\"]*\"/DIFF_COVER_VERSION: \"0.0.1\"/' $CI"
-t node_version_drift 1 "perl -pi -e 's/node-version: \"[0-9]+\"/node-version: \"1\"/ and \$done++ if !\$done' $CI"
-t gitleaks_drift 1 "sed -i.bak 's/GITLEAKS_VERSION=\"[^\"]*\"/GITLEAKS_VERSION=\"0.0.1\"/' skills/scaffold/shared/template/.claude/ci-gates.sh"
-t pip_requirement_drift 1 "sed -i.bak 's/^pytest>=.*/pytest>=1.0/' skills/scaffold/fastapi/template/requirements-dev.txt"
-t pip_spec_in_prose 1 "printf '\nUse pytest==9.0 here.\n' >> skills/add/test/SKILL.md"
-t package_pin_in_prose 1 "printf '\nInstall vitest@4.1.8 first.\n' >> skills/add/test/SKILL.md"
+CIPY=skills/scaffold/shared/template-ci/github-py/.github/workflows/ci.yml
+DOC=skills/add/test/nextjs.md
+t baseline 0 true "check-versions: ok"
+t npm_spec_drift 1 "sub $NJ 's/\"vitest\": \"[^\"]*\"/\"vitest\": \"^1.0.0\"/'"
+t pnpm_drift 1 "sub $NJ 's/pnpm@[0-9.]*/pnpm@1.0.0/'"
+t types_node_drift 1 "sub $NJ 's/\"@types\\/node\": \"[^\"]*\"/\"@types\\/node\": \"^1\"/'"
+t unlisted_dependency 1 "sub $NJ 's/\"vitest\":/\"left-pad\": \"^1.0.0\", \"vitest\":/'"
+t action_sha_drift 1 "sub $CI 's/checkout@[0-9a-f]\\{40\\}/checkout@0000000000000000000000000000000000000000/'"
+t action_tag_drift 1 "sub $CI 's/# v7\\.0\\.1/# v0.0.1/'"
+t tool_variable_drift 1 "sub $CI 's/DIFF_COVER_VERSION: \"[^\"]*\"/DIFF_COVER_VERSION: \"0.0.1\"/'"
+t node_version_drift 1 "sub $CI 's/node-version: \"[0-9][0-9]*\"/node-version: \"1\"/'"
+t gitleaks_drift 1 "sub skills/scaffold/shared/template/.claude/ci-gates.sh 's/GITLEAKS_VERSION=\"[^\"]*\"/GITLEAKS_VERSION=\"0.0.1\"/'"
+t pip_requirement_drift 1 "sub skills/scaffold/fastapi/template/requirements-dev.txt 's/^pytest>=.*/pytest>=1.0/'"
+t pip_spec_in_prose 1 "printf '\nUse pytest==9.0 here.\n' >> $DOC"
+t package_pin_in_prose 1 "printf '\nInstall vitest@4.1.8 first.\n' >> $DOC"
+# versions.txt itself
+t versions_missing 1 "rm $V" "not found"
+t versions_empty 1 ": > $V" "no records"
+t versions_comments_only 1 "printf '# nothing here\n\n' > $V" "no records"
+t versions_duplicate_key 1 "printf 'node major 27\n' >> $V" "duplicate key node major"
+t versions_duplicate_identical 1 "printf 'node major 26\n' >> $V" "duplicate key node major"
+t versions_duplicate_pnpm 1 "printf 'pnpm 1.0.0\n' >> $V" "duplicate key pnpm"
+t versions_malformed 1 "printf 'npm lonelyname\n' >> $V" "unreadable record"
+t versions_unknown_kind 1 "printf 'bogus a b\n' >> $V" "unreadable record"
+# templates and seeded files
+t dockerfile_image_drift 1 "sub skills/scaffold/nextjs/template/Dockerfile 's/node:26-alpine/node:20-alpine/'" "node:20-alpine"
+t engines_node_drift 1 "sub $NJ 's/\">=26\\.12\\.1\"/\">=20.0.0\"/'" "engines.node"
+t python_ci_version_drift 1 "sub $CIPY 's/python-version: \"3\\.14\"/python-version: \"3.12\"/'" "Python 3.12"
+t pyproject_target_drift 1 "sub skills/scaffold/fastapi/template/pyproject.toml 's/target-version = \"py314\"/target-version = \"py312\"/'" "ruff target"
+t nestjs_zod_caret_drift 1 "sub $NS 's/\"nestjs-zod\": \"5\\.6\\.0\"/\"nestjs-zod\": \"^5.6.0\"/'" "nestjs-zod"
+t testing_library_dom_drift 1 "sub $VR 's/\"@testing-library\\/dom\": \"[^\"]*\"/\"@testing-library\\/dom\": \"^9.0.0\"/'" "@testing-library/dom"
+t beanie_python_image_drift 1 "sub skills/add/database/python/beanie.md 's/python:3\\.13\\.16-slim/python:3.13.1-slim/'" "python:3.13.1-slim"
+t skill_fence_pip_drift 1 "printf '\n\`\`\`\npip install pytest>=1.0\n\`\`\`\n' >> $DOC" "pytest"
+t skill_fence_npm_drift 1 "printf '\n\`\`\`bash\npnpm add vitest@1.0.0\n\`\`\`\n' >> $DOC" "vitest@1.0.0"
+t skill_fence_action_drift 1 "printf '\n\`\`\`yaml\n- uses: actions/checkout@v4\n\`\`\`\n' >> $DOC" "actions/checkout"
+# prose version rule: below or at the pin passes, above the pin and current/latest claims fail
+t prose_floor_below_pin 0 "printf '\nNext.js ≥16.3.8 fixes an advisory.\n' >> $DOC"
+t prose_floor_above_pin 1 "printf '\nNext.js ≥99.0 is required.\n' >> $DOC" "prose says Next.js 99.0"
+t prose_current_claim 1 "printf '\nNext.js 16.2 is current.\n' >> $DOC" "current/latest"
+t prose_latest_claim 1 "printf '\nThe latest FastAPI 0.100 does this.\n' >> $DOC" "current/latest"
+t prose_floor_in_rules 1 "printf '\nReact 99 is the floor.\n' >> .claude/rules/nextjs.md" "prose says React 99"
+t prose_floor_in_template_agents 1 "printf '\nPydantic >=99 only.\n' >> skills/scaffold/fastapi/template-agents/AGENTS.md" "prose says Pydantic 99"
 echo "check-versions.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
