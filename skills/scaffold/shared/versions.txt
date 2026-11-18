@@ -61,12 +61,12 @@ npm @fastify/helmet               ^13.2.0
 npm @fastify/static               ^10.1.10
 npm @hookform/resolvers           ^7.0.6
 npm @nestjs/cli                   ^11.0.24
-npm @nestjs/common                ^11.2.11
-npm @nestjs/core                  ^11.2.11
-npm @nestjs/platform-fastify      ^11.2.11
+npm @nestjs/common                ^11.2.10
+npm @nestjs/core                  ^11.2.10
+npm @nestjs/platform-fastify      ^11.2.10
 npm @nestjs/schematics            ^11.1.0
 npm @nestjs/swagger               ^11.4.8
-npm @nestjs/testing               ^11.2.11
+npm @nestjs/testing               ^11.2.10
 npm @tailwindcss/postcss          ^4.3.5
 npm @tailwindcss/typography       ^0.5.20
 npm @tanstack/react-query         ^5.107.1
