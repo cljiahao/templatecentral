@@ -64,7 +64,7 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
 fi
 if [ -n "$reason" ]; then
   # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
-  node -e 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:("PROTECTED FILE: "+process.argv[1]+" — "+process.argv[2]+". Human approval needed.").slice(0,200)}})+"\n")' "$rel" "$reason" \
+  node -e 'const cp=s=>Array.from(s),head="PROTECTED FILE: ",tail=" — "+process.argv[2]+". Human approval needed.";let a=cp(process.argv[1]);const room=Math.max(0,200-cp(head).length-cp(tail).length);if(a.length>room){const k=Math.max(0,room-1),h=Math.ceil(k/2);a=a.slice(0,h).concat(["…"],a.slice(a.length-(k-h)))}process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:cp(head+a.join("")+tail).slice(0,200).join("")}})+"\n")' "$rel" "$reason" \
     || { echo "BLOCKED: $rel is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0
 fi

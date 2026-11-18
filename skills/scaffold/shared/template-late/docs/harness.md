@@ -27,7 +27,7 @@ GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sy
 
 **Files:** project skills in `.claude/skills/`; manifest in `.claude/harness.json`.
 
-**Context load order** (context only, not enforcement; broad to specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → `AGENTS.md` → `.claude/rules/*.md` (lazy per directory). Hard enforcement: PreToolUse hooks in `settings.json` only.
+**Context load order** (context only, not enforcement; broad to specific): managed policy → `~/.claude/CLAUDE.md` → `CLAUDE.md` `@AGENTS.md` (optional, Claude Code) → `AGENTS.md` → `.claude/rules/**/*.md` without `paths:` (loaded at launch) → rules with `paths:` (loaded when a matching file is read or edited). `docs/CONSTITUTION.md` is read on demand and is not injected at session start; its security invariants that no hook or CI check enforces are restated in `AGENTS.md` (`## Security`, `## Skills Security`). Hard enforcement: PreToolUse hooks in `settings.json` only.
 
 ## Skills Security
 

@@ -99,8 +99,8 @@ run() {
   OUTPUT=$(cat "$OUT" 2>/dev/null)
   return 0
 }
-# cap <chars>: keep leading lines (each cut to 200 chars) within the budget, then count the dropped ones.
-cap() { awk -v cap="$1" '{ l = substr($0, 1, 200); if (len + length(l) + 1 > cap) { drop++; next } print l; len += length(l) + 1 } END { if (drop) printf "... %d more lines not shown\n", drop }'; }
+# cap <chars>: lines cut to 200 chars; over budget keeps the first lines and the last ones (a runner's summary), with the dropped count between.
+cap() { awk -v cap="$1" '{ L[NR] = substr($0, 1, 200); T += length(L[NR]) + 1 } END { if (T <= cap) { for (i = 1; i <= NR; i++) print L[i]; exit } room = cap - 40; hb = int(room / 2); for (h = 0; h < NR && hl + length(L[h + 1]) + 1 <= hb; h++) hl += length(L[h + 1]) + 1; for (t = 0; NR - t > h && tl + length(L[NR - t]) + 1 <= room - hl; t++) tl += length(L[NR - t]) + 1; for (i = 1; i <= h; i++) print L[i]; printf "... %d more lines not shown\n", NR - h - t; for (i = NR - t + 1; i <= NR; i++) print L[i] }'; }
 # fail <label>: report a failed or timed-out step and block.
 fail() {
   if [ "$EC" -eq 124 ]; then echo "Stop gate timed out after ${LIMIT}s while running $1; run it manually (pre-push and CI still gate this change)." >&2

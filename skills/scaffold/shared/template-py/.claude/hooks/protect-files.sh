@@ -69,7 +69,7 @@ if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipe
 fi
 if [ -n "$reason" ]; then
   # Emit "ask": exit 1 on PreToolUse never blocks, and runtime-built JSON cannot be broken by a hostile path.
-  python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":("PROTECTED FILE: "+sys.argv[1]+" — "+sys.argv[2]+". Human approval needed.")[:200]}}))' "$rel" "$reason" \
+  python3 -c 'import json,sys; head="PROTECTED FILE: "; tail=" — "+sys.argv[2]+". Human approval needed."; a=sys.argv[1]; room=max(0,200-len(head)-len(tail)); k=max(0,room-1); h=-(-k//2); a=a if len(a)<=room else a[:h]+"…"+(a[len(a)-(k-h):] if k>h else ""); print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":(head+a+tail)[:200]}}))' "$rel" "$reason" \
     || { echo "BLOCKED: $rel is protected ($reason) and the approval prompt could not be built." >&2; exit 2; }
   exit 0
 fi

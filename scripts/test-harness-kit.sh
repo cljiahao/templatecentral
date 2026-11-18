@@ -573,20 +573,48 @@ for v in ts py; do
   check "2 yes yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 2000) $(ok_if grep -q 'more lines not shown' "$T/err")" "subagent-stop.$v caps output at 2000 chars, names the dropped lines, keeps exit 2"
 done
 for v in ts py; do
+  for hk in stop-checks subagent-stop; do
+    MOCK_MANY=1 run_hook "$KIT/$hk.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
+    check "yes" "$(python3 - "$T/err" <<'PYT' && echo yes || echo no
+import re, sys
+L = open(sys.argv[1]).read().rstrip("\n").split("\n")
+m = [i for i, l in enumerate(L) if "more lines not shown" in l]
+ok = len(m) == 1 and 0 < m[0] < len(L) - 1 and re.search(r" line 1 ", L[0]) and re.search(r" line 60 ", L[-1])
+sys.exit(0 if ok else 1)
+PYT
+)" "$hk.$v keeps the first line and the tail, with the dropped count between" "$(head -c 300 "$T/err")"
+  done
+done
+for v in ts py; do
   if [ "$v" = ts ]; then bc='//'; else bc='#'; fi
   awk -v c="$bc" 'BEGIN { for (i = 0; i < 40; i++) printf "%s Added retry loop %d for the feature %0200d\nx = 1\n", c, i, 0 }' > "$CCM/many.$v"
   run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"many.$v\"}}"
   check "0 yes yes yes" "$EC $(ok_if json_has "len(d['additionalContext'].split('\n')) == 12") $(ok_if json_has "max(len(l) for l in d['additionalContext'].split('\n')[1:]) <= 175") $(ok_if json_has "'and 30 more findings' in d['additionalContext']")" "post-edit-comment-check.$v caps the hook at 10 findings of 160 chars plus a count"
+  check "yes" "$(ok_if json_has "all(l.endswith('...') for l in d['additionalContext'].split('\n')[1:11])")" "post-edit-comment-check.$v marks a finding cut at 160 chars with an ellipsis"
+  printf '%s Added retry loop for the short feature\nx = 1\n' "$bc" > "$CCM/short.$v"
+  run_hook "$KIT/post-edit-comment-check.$v.sh" "$CCM" "{\"tool_input\":{\"file_path\":\"short.$v\"}}"
+  check "0 yes yes" "$EC $(ok_if json_has "'Added retry loop' in d['additionalContext']") $(ok_if json_has "'...' not in d['additionalContext']")" "post-edit-comment-check.$v leaves a short finding unmarked"
 done
 longpath=$(printf 'd%.0s' $(seq 1 150))
 for v in ts py; do
   run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$longpath/.claude/settings.json")"
   check "0 yes" "$EC $(ok_if json_has "len(d['permissionDecisionReason']) <= 200")" "protect-files.$v ask message stays within 200 chars"
+  check "0 yes yes" "$EC $(ok_if json_has "d['permissionDecisionReason'].endswith('harness config — an edit can silently disable hooks or add permissions. Human approval needed.')") $(ok_if json_has "'…' in d['permissionDecisionReason']")" "protect-files.$v keeps the reason and the approval phrase and shortens the path in the middle" "$OUT"
+  emoji=$(python3 -c 'print("\U0001F600" * 150)')
+  run_hook "$KIT/protect-files.$v.sh" "$PROJ" "$(tool_json Edit file_path "$emoji/.claude/settings.json")"
+  check "0 yes yes" "$EC $(ok_if json_has "len(d['permissionDecisionReason']) <= 200") $(ok_if json_has "d['permissionDecisionReason'].encode('utf-8') and d['permissionDecisionReason'].endswith('Human approval needed.')")" "protect-files.$v cuts a multi-byte path by code point, never inside a surrogate pair" "$OUT"
+  printf '%s' "$OUT" > "$T/protect.$v.out"
   for cmd in "git -c core.hooksPath=/dev/null commit -m x" "git push --force-with-lease origin main" "git checkout -- .claude/settings.json" "git commit --no-verify -m x"; do
     run_hook "$KIT/block-no-verify.$v.sh" "$PROJ" "$(tool_json Bash command "$cmd")"
     check "2 yes" "$EC $(ok_if test "$(wc -c < "$T/err" | tr -d ' ')" -le 201)" "block-no-verify.$v message for '$cmd' stays within 200 chars"
   done
 done
+same_reason() { python3 -c 'import json, sys; r = [json.load(open(f))["hookSpecificOutput"]["permissionDecisionReason"] for f in sys.argv[1:]]; sys.exit(0 if r[0] == r[1] else 1)' "$@"; }
+check yes "$(ok_if same_reason "$T/protect.ts.out" "$T/protect.py.out")" "protect-files twins give the same message for a multi-byte path"
+# Seeded text agrees with what is seeded.
+check yes "$(ok_if grep -q '^  - "src/error_handler.py"$' "$TPL/../fastapi/template/.claude/rules/fastapi.md")" "the fastapi rule's globs cover the error_handler.py its text names"
+check 0 "$(grep -c 'Skill capture' "$TPL/template-late/.claude/skills/skill-audit/SKILL.md.tmpl")" "skill-audit points at no AGENTS.md section that is gone"
+check 0 "$(grep -c 'lazy per directory' "$TPL/template-late/docs/harness.md")" "harness.md does not call rule loading lazy per directory"
 # Silence on success: a passing check and an unrelated file print nothing.
 touch "$MOCK_TSC_OK"
 for v in ts py; do

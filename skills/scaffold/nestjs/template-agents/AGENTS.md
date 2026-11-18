@@ -18,7 +18,7 @@ NestJS 12 · Fastify · Zod + nestjs-zod · Swagger · TypeScript strict · Vite
 - No secrets in code: env vars, documented in `.env.example`
 - Comments: default none; at most one short why-line above the code
 - Tests: one per behaviour, parametrize siblings, none for constants, types or framework behaviour
-- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15; fix the code, never exclude or suppress
+- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15, every security hotspot reviewed; fix the code, never exclude or suppress
 
 ## Skills
 Plugin: `templatecentral:add` (auth, database, endpoint), `templatecentral:migrate`, `templatecentral:standards`. Project: `/nest-verify`.

@@ -212,7 +212,7 @@ case "$file" in *.py) ;; *) exit 0 ;; esac
 found=$(scan "$file" | sort -s -t "$(printf '\t')" -k1,1 -k2,2n)
 if [ -n "$found" ]; then
   msg="⚠ comment hygiene (see standards/code-standards/comments.md):
-$(printf '%s\n' "$found" | awk -F'\t' 'NR <= 10 { printf "  - line %s: %s\n", $2, substr($3, 1, 160) } END { if (NR > 10) printf "  - ... and %d more findings\n", NR - 10 }')"
+$(printf '%s\n' "$found" | awk -F'\t' 'NR <= 10 { printf "  - line %s: %s\n", $2, (length($3) > 160 ? substr($3, 1, 157) "..." : $3) } END { if (NR > 10) printf "  - ... and %d more findings\n", NR - 10 }')"
   python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':sys.argv[1]}}))" "$msg"
 fi
 exit 0

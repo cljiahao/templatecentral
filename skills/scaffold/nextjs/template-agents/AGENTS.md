@@ -20,7 +20,7 @@ Next.js 16 App Router · TypeScript strict · shadcn/ui · TanStack Query v5 · 
 - No secrets in `NEXT_PUBLIC_*`
 - Comments: default none; at most one short why-line above the code
 - Tests: one per behaviour, parametrize siblings, none for constants, types or framework behaviour
-- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15; fix the code, never exclude or suppress
+- New-code gate: 0 new issues, coverage ≥80%, duplication ≤3%, cognitive complexity ≤15, every security hotspot reviewed; fix the code, never exclude or suppress
 
 ## Skills
 Plugin: `templatecentral:add` (auth, database, feature, endpoint), `templatecentral:migrate`, `templatecentral:standards`. Project: `/next-verify`, `/next-migrate`.

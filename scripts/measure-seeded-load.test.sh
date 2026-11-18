@@ -47,5 +47,57 @@ run "$T/dup"
 check 1 "$EC" "a sentence in two always-loaded files fails"
 check 1 "$(printf '%s\n' "$OUT" | grep -c 'FAIL: vite-react: sentence in')" "the duplicated sentence is reported"
 
+# plant_rule <root> <relpath> <frontmatter-or-empty>: a ~5 KB rule in the nextjs template, with its manifest row.
+plant_rule() {
+  local tpl="$1/skills/scaffold/nextjs" f="$1/skills/scaffold/nextjs/template/.claude/rules/$2"
+  mkdir -p "$(dirname "$f")"
+  { [[ -n "$3" ]] && printf -- '---\n%s\n---\n' "$3"; python3 -c 'print("".join("Rule line number %d says something unique. " % i for i in range(150)))'; } > "$f"
+  chmod 644 "$f"
+  printf 'template/.claude/rules/%s 644 - -\n' "$2" >> "$tpl/template.manifest"
+}
+
+fresh_root nested
+plant_rule "$T/nested" deep/big.md ""
+run "$T/nested"
+check 1 "$EC" "a nested unscoped rule over budget fails"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'FAIL: nextjs: always-loaded')" "the nested rule counts toward the nextjs load"
+
+fresh_root scoped
+plant_rule "$T/scoped" deep/big.md 'paths:
+  - "src/**/*.ts"'
+run "$T/scoped"
+check 0 "$EC" "a nested path-scoped rule is not counted"
+
+# plant_doc <root> <name> <content>: a seeded docs/ file in the nextjs template, with its manifest row.
+plant_doc() {
+  mkdir -p "$1/skills/scaffold/nextjs/template/docs"
+  printf '%s\n' "$3" > "$1/skills/scaffold/nextjs/template/docs/$2"
+  chmod 644 "$1/skills/scaffold/nextjs/template/docs/$2"
+  printf 'template/docs/%s 644 - -\n' "$2" >> "$1/skills/scaffold/nextjs/template.manifest"
+}
+
+fresh_root imp
+plant_doc "$T/imp" BIG.md "$(python3 -c 'print("Imported words that bloat the context. " * 150)')"
+printf '\n@docs/BIG.md\n' >> "$T/imp/skills/scaffold/nextjs/template-agents/AGENTS.md"
+run "$T/imp"
+check 1 "$EC" "an @import of a large file fails"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'FAIL: nextjs: always-loaded')" "the import counts toward the nextjs load"
+
+fresh_root cycle
+plant_doc "$T/cycle" A.md "$(printf 'Small file a.\n@B.md')"
+plant_doc "$T/cycle" B.md "$(printf 'Small file b.\n@A.md\n@../AGENTS.md')"
+printf '\n@docs/A.md\n' >> "$T/cycle/skills/scaffold/nextjs/template-agents/AGENTS.md"
+run "$T/cycle"
+check 0 "$EC" "an import cycle ends and passes"
+check 1 "$(printf '%s\n' "$OUT" | grep -c 'nextjs .*imports   *[1-9]')" "the cycle's files are counted"
+
+# Unenforced invariants stay in the always-loaded layer, and the docs say the constitution is read on demand.
+SH="$REPO_ROOT/skills/scaffold/shared"
+check 1 "$(grep -c 'Authenticate every route that reads or changes user data' "$SH/template-tail/AGENTS-tail.md")" "the tail keeps the authenticate-before-logic line"
+check 1 "$(grep -c 'never install one that hardcodes secrets or makes outbound calls' "$SH/template-tail/AGENTS-tail.md")" "the tail keeps the skills-security line"
+check 4 "$(grep -l 'every security hotspot reviewed' "$REPO_ROOT"/skills/scaffold/*/template-agents/AGENTS.md | wc -l | tr -d ' ')" "every stack gate line keeps the security-hotspot review"
+check 1 "$(grep -c 'is read on demand and is not injected at session start' "$SH/template-late/docs/harness.md")" "harness.md says the constitution is read on demand"
+check 1 "$(grep -c 'read on demand and is not injected at session start' "$REPO_ROOT/CHANGELOG.md")" "CHANGELOG says the constitution is read on demand"
+
 echo "measure-seeded-load.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

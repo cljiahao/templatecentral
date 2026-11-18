@@ -3,8 +3,9 @@
 #
 # Usage: bash scripts/measure-seeded-load.sh [--root DIR]    (DIR: a repo checkout, default this one)
 # Scaffolds each stack with tc-copy.sh into a temp folder, then prints one table per stack:
-#   CLAUDE.md, AGENTS.md (with the tail), unscoped .claude/rules/*.md, name+description of every model-invocable
-#   skill, and the stdout of session-context.sh for each SessionStart source. Bytes; tokens are bytes/4.
+#   CLAUDE.md, AGENTS.md (with the tail), unscoped .claude/rules/**/*.md, files they @import (once each, 4 hops),
+#   name+description of every model-invocable
+#   skill, and the stdout of session-context.sh for each SessionStart source. Bytes; tokens are an estimate, bytes/4.
 # Fails (exit 1) when
 #   - a stack's always-loaded bytes (startup source) exceed LOAD_MAX_BYTES (4000, 1,000 tokens), or its AGENTS.md exceeds
 #     AGENTS_MAX_BYTES (3100: about 2,400 for the stack file plus 700 for the shared tail);
@@ -61,11 +62,32 @@ def front(text):
     return m.group(1) if m else ""
 files = {"CLAUDE.md": open(os.path.join(d, "CLAUDE.md")).read(), "AGENTS.md": open(os.path.join(d, "AGENTS.md")).read()}
 rules = 0
-for p in sorted(glob.glob(os.path.join(d, ".claude/rules/*.md"))):
+for p in sorted(glob.glob(os.path.join(d, ".claude/rules/**/*.md"), recursive=True)):
     t = open(p).read()
     if not re.search(r"^paths:", front(t), re.M):
         files[os.path.relpath(p, d)] = t
         rules += len(t.encode())
+# Follow @path imports from CLAUDE.md and AGENTS.md: each file once, relative to the importer, at most 4 hops.
+def imports_of(text):
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    text = re.sub(r"`[^`\n]*`", "", text)
+    return re.findall(r"(?<!\S)@([^\s@]+)", text)
+imported = 0
+seen_files = {os.path.realpath(os.path.join(d, n)) for n in ("CLAUDE.md", "AGENTS.md")}
+queue = [(os.path.join(d, n), 0) for n in ("CLAUDE.md", "AGENTS.md")]
+while queue:
+    src, depth = queue.pop(0)
+    if depth >= 4:
+        continue
+    for ref in imports_of(open(src).read()):
+        p = os.path.realpath(os.path.join(os.path.dirname(src), os.path.expanduser(ref)))
+        if p in seen_files or not os.path.isfile(p):
+            continue
+        seen_files.add(p)
+        t = open(p).read()
+        files[os.path.relpath(p, d)] = t
+        imported += len(t.encode())
+        queue.append((p, depth + 1))
 skills = 0
 for p in sorted(glob.glob(os.path.join(d, ".claude/skills/*/SKILL.md"))):
     fm = front(open(p).read())
@@ -78,9 +100,9 @@ for p in sorted(glob.glob(os.path.join(d, ".claude/skills/*/SKILL.md"))):
 out = {s: open(os.path.join(outdir, s)).read() for s in ("startup", "resume", "clear", "compact")}
 claude, agents = size(os.path.join(d, "CLAUDE.md")), size(os.path.join(d, "AGENTS.md"))
 startup = len(out["startup"].encode())
-total = claude + agents + rules + skills + startup
-row = "%-11s CLAUDE %4d  AGENTS %5d  rules %4d  skills %4d  session start/resume/clear/compact %d/%d/%d/%d  total %5d bytes = %4d tokens"
-print(row % (stack, claude, agents, rules, skills, startup, len(out["resume"].encode()), len(out["clear"].encode()), len(out["compact"].encode()), total, total // 4))
+total = claude + agents + rules + imported + skills + startup
+row = "%-11s CLAUDE %4d  AGENTS %5d  rules %4d  imports %4d  skills %4d  session start/resume/clear/compact %d/%d/%d/%d  total %5d bytes = est. %4d tokens (bytes/4)"
+print(row % (stack, claude, agents, rules, imported, skills, startup, len(out["resume"].encode()), len(out["clear"].encode()), len(out["compact"].encode()), total, total // 4))
 bad = 0
 def fail(m):
     global bad; bad += 1; print("FAIL: %s: %s" % (stack, m))
