@@ -279,6 +279,15 @@ def check_actions(cfg, root):
             elif ref != want[0] or tag != want[1]:
                 err(rel(p, root), n, f"{repo}@{ref[:12]} # {tag} but versions.txt says {want[0][:12]} # {want[1]}")
 
+    sha_pat = re.compile(r"\b([\w.\-]+/[\w.\-]+)@([0-9a-f]{40})\b")
+    for p in files(root, "scripts/*.sh", "scripts/*.py"):
+        text = read(p)
+        for n, line in enumerate((text or "").splitlines(), 1):
+            for m in sha_pat.finditer(line):
+                want = cfg["action"].get(m.group(1))
+                if want is not None and m.group(2) != want[0]:
+                    err(rel(p, root), n, f"{m.group(1)}@{m.group(2)[:12]} but versions.txt says {want[0][:12]}")
+
 
 def check_pip_and_npm_in_text(cfg, root):
     pips = {name: pip_re(name) for name in cfg["pip"]}

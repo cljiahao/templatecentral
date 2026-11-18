@@ -9,7 +9,7 @@ variables:
   # duplication scanner; bump deliberately, it decides what fails the build. `npx jscpd@<version>` pins jscpd only, not its transitive dependencies
   JSCPD_VERSION: "5.4.3"
   # changed-line coverage tool; bump deliberately, it decides what fails the build
-  DIFF_COVER_VERSION: "11.0.3"
+  DIFF_COVER_VERSION: "11.0.1"
 jobs:
   - job: quality
     timeoutInMinutes: 20

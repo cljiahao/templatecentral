@@ -44,11 +44,11 @@ jobs:
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: '24'
       - run: corepack enable
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: '3.14'
       - name: Check Anthropic credentials
@@ -64,7 +64,7 @@ jobs:
             echo "::notice::No Anthropic credentials configured - skipping this loop. Add the ANTHROPIC_API_KEY secret (API) or CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token', Claude subscription) to enable it."
           fi
       - id: claude
-        uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b  # v1.0.247
+        uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed  # v1.0.271
         if: steps.creds.outputs.ok == 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -128,7 +128,7 @@ jobs:
       # (npx --no-install) from the generated tree to compare formatter-owned files.
       - name: Install prettier for the golden diff
         if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' && matrix.stack == 'fastapi' }}
-        run: npm install --no-save --no-audit --no-fund --prefix /tmp/scaffold-e2e 'prettier@^3.8.3'
+        run: npm install --no-save --no-audit --no-fund --prefix /tmp/scaffold-e2e 'prettier@^3.10.0'
       - name: Diff generated tree against the golden scaffold
         if: ${{ !cancelled() && steps.creds.outputs.ok == 'true' }}
         run: bash scripts/check-golden.sh --tree /tmp/scaffold-e2e "${{ matrix.stack }}-github"

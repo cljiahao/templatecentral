@@ -7,7 +7,7 @@ pool:
   vmImage: ubuntu-latest
 variables:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
-  diffCoverVersion: "11.0.3"
+  diffCoverVersion: "11.0.1"
   # the one knob for test sharding: raise it to split the suite across more agents
   shardCount: 2
   # caps each Node process; the test workers inherit it
