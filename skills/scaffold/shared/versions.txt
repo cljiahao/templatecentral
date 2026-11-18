@@ -53,6 +53,7 @@ action anthropics/claude-code-action  4fa93a88de49bbef68b10eb15aabedf28ca0e1ed v
 # peers @nestjs/common ^10||^11 and @nestjs/swagger ^7.4.2||^8||^11 and no release declares a later Nest major;
 # running a later major would leave those peers unmet. Nest 11 still gets security backports (11.2.10 and
 # 11.2.11, 2026-11). Lift the hold when a nestjs-zod release peers the next Nest and Swagger majors.
+# held: the Nest runtime floor is ^11.2.10, not a newer patch: a floor younger than pnpm's 7-day cooldown makes pnpm write minimumReleaseAgeExclude into pnpm-workspace.yaml, and 11.2.10 was already past it.
 # held: nestjs-zod is pinned exactly (no caret), so a later 5.x cannot change behaviour unseen.
 # held: the beanie-python image is python 3.13 on purpose: beanie 2.x declares Requires-Python <3.14.
 npm @eslint-community/eslint-plugin-eslint-comments ^4.8.1

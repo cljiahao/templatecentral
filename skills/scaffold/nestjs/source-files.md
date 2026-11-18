@@ -69,6 +69,8 @@ pnpm test
 pnpm test:e2e
 ```
 
+`pnpm test:e2e` and `vitest.config.e2e.ts` remain for local use; CI runs the single combined suite (`test:ci`).
+
 If any command fails, fix it before proceeding.
 
 ### 6. Write project AGENTS.md
