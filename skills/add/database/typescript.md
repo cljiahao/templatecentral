@@ -8,7 +8,7 @@ Migration intent ("migrate/upgrade to IAM") → stop and say "Run `templatecentr
 
 Stack from `AGENTS.md` line 1 (`nestjs@` or `nextjs@`). Ask *"SQL (PostgreSQL) or MongoDB?"* unless the user named a library.
 
-Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. Drizzle and Kysely guides are PostgreSQL-only; for MySQL or SQLite, say so and adapt driver, dialect and schema imports.
+Use password auth and the standard guides unless the user requires AWS IAM; then use the IAM variants and AWS SDK packages. Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. Drizzle and Kysely guides are PostgreSQL-only; for MySQL or SQLite, say so and adapt driver, dialect and schema imports.
 
 | Stack | Library | Load |
 |---|---|---|
@@ -35,4 +35,4 @@ Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`
 
 NestJS + Drizzle carries its own auth and IAM sections, so it has no add-on files. The Next.js guides need no auth add-on: better-auth keeps its own session store.
 
-Run the chosen `cat`(s); follow the guide(s) exactly.
+Run the chosen `cat`(s); follow the guide(s).

@@ -85,17 +85,3 @@ export function Providers({ children }: ProvidersProps) {
   );
 }
 ```
-
-## Validate
-
-```bash
-pnpm test
-pnpm build
-```
-
-## See Also
-
-- `templatecentral:add` (logging) — Integrate structured logging with error handlers
-- `templatecentral:standards` (validation-patterns) — Zod/Pydantic schemas for validation errors
-- Stack-specific `code-standards` — Security and error handling guidance
-- `templatecentral:add (endpoint)` — Use error handling in new routes

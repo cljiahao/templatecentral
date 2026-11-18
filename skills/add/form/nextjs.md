@@ -6,18 +6,6 @@
 
 Validated form with React Hook Form, Zod and the existing `CustomFormField` widget.
 
-## What the Template Already Provides
-
-| Dependency / Component | Location |
-|------------------------|----------|
-| `react-hook-form` | `package.json` |
-| `@hookform/resolvers` | `package.json` |
-| `zod` | `package.json` |
-| `Form` (FormProvider) | `src/components/ui/form.tsx` |
-| `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
-| `Input`, `Textarea`, `Select` | `src/components/ui/` |
-| `sonner` (Toaster) | `package.json` + `<Toaster />` mounted in `src/components/layout/providers.tsx` |
-
 ## Inputs
 
 - **Form name** — e.g., `contact`, `create-project`, `settings`

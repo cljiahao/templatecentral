@@ -198,7 +198,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 ## Rules
 
 - **Opt-in only** — add a database only on request.
-- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `KyselyService` and `DatabaseModule` in `src/database/`.
 - Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.

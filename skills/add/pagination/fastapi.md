@@ -105,15 +105,3 @@ def get_projects(
 ```
 
 If `src/api/routers/projects.py` exists, add this handler and its imports to it — do not replace the file. Register with an `APITags` tag in `src/api/routes.py` and, when `src/api/dependencies/auth.py` exists, add the auth dependency (see `add/endpoint/fastapi.md` Rules).
-
-## Validate
-
-```bash
-# Expect 200 with data.pagination
-curl 'http://localhost:8000/projects?page=1&limit=10'
-# Expect 422
-curl 'http://localhost:8000/projects?page=0&limit=10'
-# Expect 400
-curl 'http://localhost:8000/projects?sort=asc_bogus'
-python -m pytest test/ -v
-```

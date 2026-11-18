@@ -106,13 +106,4 @@ Document the error statuses each route can return so Swagger consumers see the `
 @ApiResponse({ status: 404, description: 'Resource not found' })
 ```
 
-## Validate
-
-```bash
-pnpm check && pnpm build && pnpm test && pnpm test:e2e
-pnpm start:dev
-curl -s -X POST localhost:3000/examples -H 'content-type: application/json' -d '{"name":""}'
-# Expect 400 {"error":"Validation failed","details":{"fieldErrors":{"name":[...]},"code":"VALIDATION_ERROR"}}
-```
-
 Any test asserting the old `{ statusCode, message }` body must be updated in the same change.

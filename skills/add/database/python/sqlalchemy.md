@@ -357,4 +357,3 @@ def get_me(
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
 - The `get_db` dependency ensures sessions are properly closed.
 - For async SQLAlchemy, use `create_async_engine` + `AsyncSession` from `sqlalchemy.ext.asyncio`.
-- **Default to password auth** — IAM only when the user requires it.

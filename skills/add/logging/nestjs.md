@@ -202,13 +202,6 @@ curl http://localhost:3000/health
 grep -iE '"(password|secret|token|access_token|api_key|authorization|cookie|email|phone|address|credit_card)"' <log-output>
 ```
 
-## See Also
-
-- `add/error-handling/nestjs` — Unified error response schema; `logError` integration
-- `standards/validation-patterns/nestjs` — Zod/Pydantic validation before any log call
-- Stack-specific `code-standards` — Logging rules within each stack's security guidelines
-- `templatecentral:add (endpoint)` — Apply logging when adding new routes
-
 ## Production Requirement
 
 Ship logs to a separate, tamper-evident system (CloudWatch, Datadog, OpenSearch Ingestion) — production logs must not live only on the app host.

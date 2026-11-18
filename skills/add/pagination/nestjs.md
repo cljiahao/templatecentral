@@ -254,12 +254,3 @@ The route is public as written — apply the authorization decision from `templa
 ## Tests
 
 Copied verbatim from `<skill-dir>/pagination/nestjs/template/test/common/pagination.service.spec.ts` by the copy step; do not re-type it.
-
-## Validate
-
-```bash
-pnpm check && pnpm build && pnpm test && pnpm test:e2e
-pnpm start:dev
-curl 'http://localhost:3000/projects?page=1&limit=10&sort=asc_name'   # 200
-curl 'http://localhost:3000/projects?page=-1'                         # 400 VALIDATION_ERROR
-```

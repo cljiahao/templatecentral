@@ -8,7 +8,7 @@ Migration intent ("migrate/upgrade to IAM") → stop and say "Run `templatecentr
 
 Ask *"SQL (PostgreSQL, MySQL, SQLite) or MongoDB?"* unless the user named a library.
 
-For SQL, detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth.
+For SQL, use password auth and the standard guide unless the user requires AWS IAM; then use the IAM variant. Detect high-security signals (`regulated`, `iam`, `no-password`, `audit-logging`, etc.) or ask. SQLite always uses standard auth.
 
 MongoDB defaults to PyMongo async (stays on Python 3.14). Load Beanie only when the user explicitly asks for Beanie or an ODM, warning first that it pins Python 3.13 (Beanie B0). Never add Motor (deprecated) or ODMantic (needs Motor).
 
@@ -25,4 +25,4 @@ MongoDB defaults to PyMongo async (stays on Python 3.14). Load Beanie only when 
 |---|---|
 | `src/api/services/auth_service.py` exists | `cat "<skill-dir>/database/python/pymongo-async-auth.md"` |
 
-Run the chosen `cat`(s); follow the guide(s) exactly.
+Run the chosen `cat`(s); follow the guide(s).

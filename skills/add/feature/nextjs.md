@@ -4,10 +4,6 @@
 
 # Add a Feature Module
 
-## Inputs
-
-- **Feature name** — The domain name (e.g., `project`, `auth`, `dashboard`)
-
 ## Steps
 
 ### 1. Create the Feature Directory Structure
