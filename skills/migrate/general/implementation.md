@@ -51,7 +51,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 **If no marker** → skip to Phase 1 (stack detection).
 
-**Baseline on every route that changes project files** (no marker, the seed or re-sync of a light adoption, `@5.x`, `@4.x`): after the user's yes and before the first write, run the Phase 3 A step 1 `--full` before-run; after the last write, run the Phase 3 A step 5 `--compare`. Phases 1–3 may be skipped, this step may not. The no-change `@6.0.0` route takes none.
+**Baseline on every route that changes project files** (no marker, the seed or re-sync of a light adoption, `@5.x`, `@4.x`): after the user's yes and before the first write, run the Phase 3 A step 1 `--full` before-run; after the last write, run the Phase 3 A step 5 `--compare`. Phases 1–3 may be skipped, this step may not. The Phase 3 A step 1 before-run is this same run: take it once. The no-change `@6.0.0` route takes none.
 
 **If marker present, version `@6.0.0` or later** → check whether `.claude/harness.json` exists:
 
@@ -93,7 +93,7 @@ The upgrade re-seeds the enforcement layer from the harness kit:
 
 Re-sync? (A) Yes  (B) Skip
 ```
-User A → first do the Step 4b marker update, before anything hashes `AGENTS.md` (or its
+User A → first the before-run of the baseline step above, then the Step 4b marker update, before anything hashes `AGENTS.md` (or its
 `origin_hash` goes stale). Then, if `.claude/harness.json` exists, run Phase 5 (5a–5c) and the
 Step 5d re-sync, which replaces the array-form entries; otherwise proceed to Phase 4.
 User B → print "No changes made — hooks remain inert until re-synced." Exit.
@@ -146,7 +146,7 @@ Please run this skill from a project directory, not a parent folder." Exit.
 
 If ambiguous (e.g. vite.config.ts without the React plugin) → ask the user to confirm the stack.
 
-**Static baseline.** Once the stack and project directory are resolved, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as information. It runs no project code and asks nothing. Routes that skip Phase 1 (a marker is present, Phase 0) run no baseline.
+**Static baseline.** Once the stack and project directory are resolved, run `bash "<skill-dir>/general/quality-baseline.sh" <project-dir> --static` and print its table as information. It runs no project code and asks nothing.
 
 ---
 

@@ -25,7 +25,7 @@ resolve() {
 # settings_hooks: a "__disable__ <true|false>" line, then one "<event> <command> <first-arg>" line per registered hook; command is ARRAY when not a string.
 settings_hooks() {
   if have python3; then
-    python3 - "$P/.claude/settings.json" <<'PY'
+    python3 - "${1:-$P/.claude/settings.json}" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 print("__disable__", str(d.get("disableAllHooks", False)).lower(), "")
@@ -36,7 +36,7 @@ for ev, groups in d.get("hooks", {}).items():
             print(ev, c if isinstance(c, str) else "ARRAY", a[0])
 PY
   elif have node; then
-    node - "$P/.claude/settings.json" <<'JS'
+    node - "${1:-$P/.claude/settings.json}" <<'JS'
 const d = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
 console.log("__disable__", String(d.disableAllHooks === true), "");
 for (const [ev, groups] of Object.entries(d.hooks || {}))
@@ -48,20 +48,24 @@ JS
   else return 3; fi
 }
 
+# section_lines <file> <key>: the non-comment lines of one top-level section of a YAML file.
+section_lines() { awk -v k="$2" '/^[^[:space:]#]/ { on = ($0 ~ "^" k ":") } on && !/^[[:space:]]*#/' "$1"; }
+
 # 1. lefthook binary, config and wired git hooks
 lh=$(resolve lefthook)
 if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH"; fi
 if [ -f "$P/lefthook.yml" ]; then
   for h in pre-commit pre-push; do
-    grep -Eq "^$h:" "$P/lefthook.yml" || fail "lefthook.yml $h" "no $h section"
+    if section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+commands:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}[A-Za-z0-9_-]+:'; then pass "lefthook.yml $h defines commands"
+    else fail "lefthook.yml $h" "no $h section with a non-empty commands block"; fi
   done
-  grep -v '^[[:space:]]*#' "$P/lefthook.yml" | grep -q gitleaks || fail "lefthook.yml gitleaks" "no gitleaks command outside a comment"
+  if section_lines "$P/lefthook.yml" pre-commit | grep -q gitleaks; then pass "lefthook.yml pre-commit runs gitleaks"; else fail "lefthook.yml gitleaks" "no gitleaks command or run line outside a comment in pre-commit"; fi
   if git -C "$P" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     hooks_dir=$(git -C "$P" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
     for h in pre-commit commit-msg pre-push; do
       grep -Eq "^$h:" "$P/lefthook.yml" || continue
-      if [ -f "$hooks_dir/$h" ] && grep -v '^[[:space:]]*#' "$hooks_dir/$h" | grep -qi lefthook; then pass "git hook $h wired to lefthook"
-      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h has no line outside a comment that calls lefthook; run lefthook install"; fi
+      if [ -f "$hooks_dir/$h" ] && [ -x "$hooks_dir/$h" ] && grep -Ev '^[[:space:]]*(#|echo|printf|:)' "$hooks_dir/$h" | grep -Eq 'lefthook[[:space:]]+(run|hook)|^[[:space:]]*(exec[[:space:]]+)?"?[^[:space:]"]*lefthook"?([[:space:]]|$)|call_lefthook'; then pass "git hook $h executable and calls lefthook"
+      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h is missing, not executable, or has no line outside a comment that runs lefthook; run lefthook install"; fi
     done
   else fail "git hooks" "not a git repository"; fi
 else fail "lefthook.yml" "missing"; fi
@@ -99,6 +103,10 @@ if [ -f "$P/.claude/settings.json" ]; then
     else fail "hook $name" "not registered under $event in .claude/settings.json"; fi
   done
 else fail ".claude/settings.json" "missing"; fi
+if [ -f "$P/.claude/settings.local.json" ]; then
+  if settings_hooks "$P/.claude/settings.local.json" 2>/dev/null | grep -q '^__disable__ true'; then fail "settings.local.json disableAllHooks" "true turns every hook off"
+  else pass "settings.local.json does not disable hooks"; fi
+fi
 
 # 3b. fire the two blocking guards on a synthetic payload; a no-op script passes the checks above but not this
 guard_file() { find "$P/.claude/hooks" -maxdepth 1 -name "$1.*" 2>/dev/null | head -1; }
@@ -112,6 +120,19 @@ if [ -n "$gf" ]; then
   r=$(fire "$gf" '{"tool_name":"Bash","tool_input":{"command":"git commit --no-verify -m x"}}')
   if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "block-no-verify blocks git commit --no-verify"; else fail "block-no-verify guard" "a synthetic --no-verify commit was not blocked (exit ${r%% *})"; fi
 fi
+
+# 3b2. each guard also lets a benign payload through, so a hook that always blocks does not pass
+gf=$(guard_file protect-files)
+if [ -n "$gf" ]; then
+  r=$(fire "$gf" '{"tool_name":"Write","tool_input":{"file_path":"src/x.txt","content":"x"}}')
+  if [ "${r%% *}" = 0 ]; then pass "protect-files allows an ordinary write"; else fail "protect-files guard" "an ordinary write was blocked (exit ${r%% *})"; fi
+fi
+gf=$(guard_file block-no-verify)
+if [ -n "$gf" ]; then
+  r=$(fire "$gf" '{"tool_name":"Bash","tool_input":{"command":"git status"}}')
+  if [ "${r%% *}" = 0 ]; then pass "block-no-verify allows git status"; else fail "block-no-verify guard" "git status was blocked (exit ${r%% *})"; fi
+fi
+echo "NOTE: the other hooks are not fired; their content is covered by the .claude/verify-harness.sh hash check below."
 
 # 3c. integrity: seeded guard files still hash to their origin, which also catches a hook replaced by a no-op
 if [ -f "$P/.claude/verify-harness.sh" ]; then

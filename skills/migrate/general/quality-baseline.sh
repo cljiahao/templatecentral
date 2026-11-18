@@ -50,22 +50,28 @@ row_of() { vals "$1" "$2" | awk -F'\t' -v k="$3" '$1 == k { print $2; exit }'; }
 
 # commits_ok <before-file> <after-file>: tie the two tables to commits; print a line, return 2 when they are not a before and an after.
 commits_ok() {
-  local bh ah bt at repo=${QB_REPO:-.}
+  local bh ah bt at repo=${QB_REPO:-.} inrepo=0
+  git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 && inrepo=1
   bh=$(row_of "$1" first "git head"); ah=$(row_of "$2" last "git head")
   bt=$(row_of "$1" first "git tree"); at=$(row_of "$2" last "git tree")
   if ! printf '%s' "$bh" | grep -Eqx '[0-9a-f]{40}|no git' || ! printf '%s' "$ah" | grep -Eqx '[0-9a-f]{40}|no git'; then
     echo "--compare: a table has no git head row; take both runs with this script's --full mode" >&2; return 2
   fi
-  if [ "$bh" = "no git" ] || [ "$ah" = "no git" ]; then echo "commits: no git, the tie to a commit is not checked"; return 0; fi
+  if [ "$bh" = "no git" ] || [ "$ah" = "no git" ]; then
+    if [ "$inrepo" -eq 1 ]; then echo "--compare: a table says no git but $repo is a git repository; retake the baseline with this script inside the repository" >&2; return 2; fi
+    echo "commits: no git, the tie to a commit is not checked"; return 0
+  fi
   echo "commits: before ${bh:0:9} ($bt), after ${ah:0:9} ($at)"
+  if [ "$inrepo" -eq 0 ]; then echo "commits: ancestry not checked, $repo is not a git repository"; return 0; fi
+  if ! git -C "$repo" cat-file -e "$bh^{commit}" 2>/dev/null || ! git -C "$repo" cat-file -e "$ah^{commit}" 2>/dev/null; then
+    echo "--compare: a commit named in a table is not in $repo, so the tie cannot be checked" >&2; return 2
+  fi
   if [ "$bh" = "$ah" ]; then
     if [ "$bt" = clean ] && [ "$at" = clean ]; then
       echo "--compare: both runs are at one commit with a clean tree, so the before run was not taken before the change" >&2; return 2
     fi
-  elif git -C "$repo" cat-file -e "$bh^{commit}" 2>/dev/null && git -C "$repo" cat-file -e "$ah^{commit}" 2>/dev/null; then
-    git -C "$repo" merge-base --is-ancestor "$bh" "$ah" || { echo "--compare: the before commit is not an ancestor of the after commit" >&2; return 2; }
   else
-    echo "commits: ancestry not checked, the commits are not in $repo (run --compare inside the project)"
+    git -C "$repo" merge-base --is-ancestor "$bh" "$ah" || { echo "--compare: the before commit is not an ancestor of the after commit" >&2; return 2; }
   fi
   return 0
 }
@@ -84,11 +90,12 @@ compare_main() {
     function has(v) { return v ~ /^[0-9]+(\.[0-9]+)?( |%|$)/ }
     function num(v) { match(v, /^[0-9]+(\.[0-9]+)?/); return substr(v, RSTART, RLENGTH) + 0 }
     function na(v) { return v ~ /^n\/a( |$)/ }
-    function absent(v) { return v ~ /^n\/a \((no |dependencies not installed|.* not installed)/ }
+    function absent(v) { return v ~ /^n\/a \((no pnpm|dependencies not installed: no node_modules|no eslint\.config\.\*|no tsconfig\.json|no vitest or jest in package\.json|ruff not installed|no configured type checker on PATH or in \.venv|no python|pytest not installed|pytest-cov not installed|no src, app or lib directory|no pnpm or npx|no package\.json, pyproject\.toml or requirements file)\)$/ }
+    function total(v) { return match(v, / of [0-9]+$/) ? substr(v, RSTART + 4) + 0 : -1 }
     function key(k) { return k ~ /^complexity over/ ? "complexity" : k }
     $0 == "---" { seen = 1; next }
-    !seen { b[key($1)] = $2; next }
-    { a[key($1)] = $2 }
+    !seen { if (key($1) in b) { printf "--compare: the before table has more than one %s row\n", key($1) > "/dev/stderr"; exit 2 } b[key($1)] = $2; next }
+    { if (key($1) in a) { printf "--compare: the after table has more than one %s row\n", key($1) > "/dev/stderr"; exit 2 } a[key($1)] = $2 }
     END {
       n = split("lint findings:-1;type errors:-1;tests failed:-1;complexity:-1;duplication:-1;suppression lines matching (code files):-1;coverage, lint and Sonar exclusions:-1;line coverage:1;coverage thresholds configured:1", spec, ";")
       for (i = 1; i <= n; i++) {
@@ -107,6 +114,9 @@ compare_main() {
         else {
           cmp++; d = (num(av) - num(bv)) * dir
           if (d < 0) { v = "WORSE"; bad++ } else if (d > 0) v = "improved"; else v = "same"
+          if (m == "tests failed" && total(bv) >= 0 && total(av) >= 0 && total(av) < total(bv)) {
+            v = "WORSE (test total fell " total(bv) " to " total(av) "; a deliberate, confirmed consolidation is recorded by the user retaking the baseline, not by the agent)"; if (d >= 0) bad++
+          }
         }
         printf "| %s | %s | %s | %s |\n", m, bv, av, v
       }
@@ -335,7 +345,7 @@ measure_typescript() {
   if ls "$P"/eslint.config.* >/dev/null 2>&1; then
     limited "$S/eslint.log" pnpm exec eslint . -f json -o "$S/eslint.json"
     local n; n=$(jval eslint "$S/eslint.json")
-    if [ -n "$n" ]; then LINT=$n; else LINT="n/a (eslint failed, exit $RC)"; fi
+    if [ -n "$n" ]; then LINT=$n; else LINT="n/a (failed: eslint failed, exit $RC)"; fi
   else LINT="n/a (no eslint.config.*)"; fi
 
   # Types: tsc has no machine-readable output; count its own `error TS` lines from the captured file.
@@ -346,10 +356,10 @@ measure_typescript() {
     limited "$S/tsconfig.shown" pnpm exec tsc --showConfig
     grep -Eq '"composite"[[:space:]]*:[[:space:]]*true' "$S/tsconfig.shown" && tscflags=(--noEmit --tsBuildInfoFile "$S/tsbuildinfo")
     limited "$S/tsc.log" pnpm exec tsc "${tscflags[@]}"
-    if [ "$RC" -eq 124 ]; then TYPES="n/a (timeout)"
+    if [ "$RC" -eq 124 ]; then TYPES="n/a (failed: timeout)"
     elif [ "$RC" -eq 0 ]; then TYPES=0
     elif grep -q 'error TS' "$S/tsc.log"; then TYPES=$(grep -c 'error TS' "$S/tsc.log")
-    else TYPES="n/a (tsc failed, exit $RC)"; fi
+    else TYPES="n/a (failed: tsc failed, exit $RC)"; fi
   else TYPES="n/a (no tsconfig.json)"; fi
 
   # Tests and coverage in one run.
@@ -359,26 +369,26 @@ measure_typescript() {
     limited "$S/test.log" pnpm exec vitest run --cache=false --coverage --coverage.reporter=cobertura --coverage.reportsDirectory="$S/cov" --reporter=json --outputFile="$S/vitest.json"
     t1=$(date +%s)
     local r; r=$(jval vitest "$S/vitest.json")
-    if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
+    if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (failed: no test report, exit $RC)"; fi
   elif grep -q '"jest"' "$P/package.json"; then
     limited "$S/test.log" pnpm exec jest --coverage --coverageReporters=cobertura --coverageDirectory="$S/cov" --json --outputFile="$S/jest.json"
     t1=$(date +%s)
     local jt
     jt=$(jval vitest "$S/jest.json")   # jest --json uses the same numFailedTests / numTotalTests keys
-    if [ -n "$jt" ]; then TESTS="${jt% *} failed of ${jt#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
+    if [ -n "$jt" ]; then TESTS="${jt% *} failed of ${jt#* }"; else TESTS="n/a (failed: no test report, exit $RC)"; fi
   else
     TESTS="n/a (no vitest or jest in package.json)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return
   fi
   if [ "$RC" -eq 124 ]; then TESTRC="timeout"; else TESTRC=$RC; fi
   SECS=$((t1 - t0))
   local c; c=$(jval cobertura "$S/cov/cobertura-coverage.xml")
-  if [ -n "$c" ]; then COV="$c%"; else COV="n/a (no coverage report; is a coverage provider installed?)"; fi
+  if [ -n "$c" ]; then COV="$c%"; else COV="n/a (failed: no coverage report; is a coverage provider installed?)"; fi
 }
 
 complexity_typescript() {
   have pnpm || { CPLX="n/a (no pnpm)"; return; }
   local cc="$S/cc"
-  copy_tree "$cc" || { CPLX="n/a (could not copy the working tree)"; return; }
+  copy_tree "$cc" || { CPLX="n/a (failed: could not copy the working tree)"; return; }
   # A minimal manifest: the scratch run needs the three lint packages and no project dependency.
   rm -f "$cc/pnpm-lock.yaml" "$cc/pnpm-workspace.yaml" "$cc/package-lock.json" "$cc/yarn.lock"
   printf '{"name":"qbaseline-scratch","private":true}\n' >"$cc/package.json"
@@ -396,10 +406,10 @@ export default [
 ];
 CFG
   ( cd "$cc" && pnpm add -D --ignore-workspace --ignore-scripts --save-exact "eslint@$ESLINT_VERSION" "typescript-eslint@$TSESLINT_VERSION" "eslint-plugin-sonarjs@$SONARJS_VERSION" ) </dev/null >"$S/cc-install.log" 2>&1 \
-    || { CPLX="n/a (private registry or no network: could not install the scratch lint tools)"; return; }
+    || { CPLX="n/a (failed: private registry or no network: could not install the scratch lint tools)"; return; }
   ( cd "$cc" && pnpm exec eslint -c cc.eslint.config.mjs --no-inline-config . -f json -o "$S/cc.json" ) </dev/null >"$S/cc-run.log" 2>&1
   local n; n=$(jval sonar "$S/cc.json")
-  if [ -n "$n" ]; then CPLX=$n; else CPLX="n/a (complexity run failed)"; fi
+  if [ -n "$n" ]; then CPLX=$n; else CPLX="n/a (failed: complexity run failed)"; fi
 }
 
 # ---------------------------------------------------------------- Python
@@ -424,10 +434,10 @@ measure_python() {
   if [ -n "$pyright" ] && { [ -f "$P/pyrightconfig.json" ] || grep -q 'tool.pyright' "$P/pyproject.toml" 2>/dev/null; }; then
     limited "$S/pyright.json" "$pyright" --outputjson
     local n; n=$(jval pyright "$S/pyright.json")
-    if [ -n "$n" ]; then TYPES=$n; else TYPES="n/a (pyright failed, exit $RC)"; fi
+    if [ -n "$n" ]; then TYPES=$n; else TYPES="n/a (failed: pyright failed, exit $RC)"; fi
   elif [ -n "$mypy" ] && { [ -f "$P/mypy.ini" ] || grep -q 'tool.mypy' "$P/pyproject.toml" 2>/dev/null; }; then
     limited "$S/mypy.log" "$mypy" --cache-dir "$S/mypy" .
-    if [ "$RC" -eq 124 ]; then TYPES="n/a (timeout)"; else TYPES=$(grep -c ': error:' "$S/mypy.log"); fi
+    if [ "$RC" -eq 124 ]; then TYPES="n/a (failed: timeout)"; else TYPES=$(grep -c ': error:' "$S/mypy.log"); fi
   else TYPES="n/a (no configured type checker on PATH or in .venv)"; fi
 
   if [ -z "$py" ]; then TESTS="n/a (no python)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
@@ -438,13 +448,13 @@ measure_python() {
   PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE="$S/.coverage" limited "$S/pytest.log" "$py" -m pytest --junitxml="$S/junit.xml" -q -p no:cacheprovider ${covarg[@]+"${covarg[@]}"}
   t1=$(date +%s)
   local r; r=$(jval junit "$S/junit.xml")
-  if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (no test report, exit $RC)"; fi
+  if [ -n "$r" ]; then TESTS="${r% *} failed of ${r#* }"; else TESTS="n/a (failed: no test report, exit $RC)"; fi
   if [ "$RC" -eq 124 ]; then TESTRC="timeout"; else TESTRC=$RC; fi
   SECS=$((t1 - t0))
   if [ "${#covarg[@]}" -eq 0 ]; then COV="n/a (pytest-cov not installed)"
   else
     local c; c=$(jval cobertura "$S/coverage.xml")
-    if [ -n "$c" ]; then COV="$c%"; else COV="n/a (no coverage report)"; fi
+    if [ -n "$c" ]; then COV="$c%"; else COV="n/a (failed: no coverage report)"; fi
   fi
 }
 
@@ -452,10 +462,10 @@ complexity_python() {
   local ruff; ruff=$(py_bin ruff)
   [ -n "$ruff" ] || { CPLX="n/a (ruff not installed)"; return; }
   local cc="$S/cc"
-  copy_tree "$cc" || { CPLX="n/a (could not copy the working tree)"; return; }
+  copy_tree "$cc" || { CPLX="n/a (failed: could not copy the working tree)"; return; }
   ( cd "$cc" && "$ruff" check --isolated --select C901 --config "lint.mccabe.max-complexity = $COMPLEXITY_LIMIT" --output-format json -o "$S/c901.json" . ) </dev/null >"$S/c901.log" 2>&1
   local n; n=$(jval list "$S/c901.json")
-  if [ -n "$n" ]; then CPLX="$n (cyclomatic proxy)"; else CPLX="n/a (ruff C901 run failed)"; fi
+  if [ -n "$n" ]; then CPLX="$n (cyclomatic proxy)"; else CPLX="n/a (failed: ruff C901 run failed)"; fi
 }
 
 # ---------------------------------------------------------------- Duplication
@@ -471,15 +481,16 @@ measure_duplication() {
     --format "typescript,tsx,javascript,jsx,python" \
     --ignore '**/node_modules/**,**/.next/**,**/dist/**,**/build/**,**/coverage/**,**/.venv/**,**/__pycache__/**,**/*.json,**/*.md,**/*.lock,**/*.d.ts,**/*.test.*,**/*.spec.*,**/__tests__/**,**/tests/**,**/test/**' "$SRC"
   local n; n=$(jval jscpd "$S/jscpd/jscpd-report.json")
-  if [ -n "$n" ]; then DUP="$n%"; else DUP="n/a (jscpd failed, exit $RC)"; fi
+  if [ -n "$n" ]; then DUP="$n%"; else DUP="n/a (failed: jscpd failed, exit $RC)"; fi
 }
 
 # ---------------------------------------------------------------- Static counts
 TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.py$|_test\.py$)'
 CODERE='\.([cm]?[jt]sx?|py)$'
-SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|dist|\.next|\.venv)/)'
-SUPPRESS='eslint-disable|biome-ignore|noqa|nosec|pylint: disable|type: ignore|pyright: ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul ignore|c8 ignore|v8 ignore|pragma: no (cover|branch)'
-EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|^[[:space:]]*ignores[[:space:]]*:|ignorePatterns|"ignore"[[:space:]]*:|extend-exclude|per-file-ignores|exclude_lines|exclude_also|^[[:space:]]*exclude[[:space:]]*[=:]'
+SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|vendor|dist|\.next|\.venv)/)'
+SUPPRESS='eslint-disable|biome-ignore|[Nn][Oo][Qq][Aa]|nosec|pylint:[[:space:]]*disable|type:[[:space:]]*ignore|pyright:[[:space:]]*ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul[[:space:]]+ignore|c8[[:space:]]+ignore|v8[[:space:]]+ignore|pragma:[[:space:]]*no[[:space:]]+(cover|branch)'
+EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|ignores[[:space:]]*:|coverage:[[:space:]]*\{[^}]*exclude|^[[:space:]]*ignore[[:space:]]*=|ignore_errors|--ignore[= ]|sonar\.issue\.ignore\.|ignorePatterns|"ignore"[[:space:]]*:|extend-exclude|per-file-ignores|exclude_lines|exclude_also|^[[:space:]]*exclude[[:space:]]*[=:]'
+ESLOFF=':[[:space:]]*(\[[[:space:]]*)?(['"'"'"]off['"'"'"]|0)[[:space:]]*[],}]'
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
 
@@ -495,13 +506,14 @@ count_static() {
       else
         sl=$((sl + n))
       fi
-      n=$(grep -cE "$SUPPRESS" "$P/$f" 2>/dev/null); supp=$((supp + ${n:-0}))
+      n=$(grep -oE "$SUPPRESS" "$P/$f" 2>/dev/null | wc -l); supp=$((supp + ${n:-0}))
     fi
     case "$(basename "$f")" in
       .eslintignore)
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;;
-      vitest.config.*|vite.config.*|jest.config.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pytest.ini|setup.cfg)
+      vitest.config.*|vite.config.*|jest.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pytest.ini|setup.cfg)
         n=$(grep -cE "$EXCLUDE" "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0}))
+        case "$(basename "$f")" in eslint.config.*|.eslintrc*) n=$(grep -cE "$ESLOFF" "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;; esac
         n=$(grep -cE "$THRESH" "$P/$f" 2>/dev/null); thr=$((thr + ${n:-0})) ;;
     esac
   done < <(list_files)

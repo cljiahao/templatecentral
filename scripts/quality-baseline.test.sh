@@ -56,7 +56,7 @@ check "static test cases" 2 "$(value 'test cases (static count; a parametrized c
 check "suppressions in code files" 1 "$(value 'suppression lines matching (code files)' "$out")"
 contains "label is the column header" "| Metric | before |" "$out"
 check "tree unchanged" unchanged "$(value 'project tree after the run' "$out")"
-contains "failed lint tool is n/a" "n/a (eslint failed" "$(value 'lint findings' "$out")"
+contains "failed lint tool is n/a" "n/a (failed: eslint failed" "$(value 'lint findings' "$out")"
 marker=absent; [ -e "$T/MARKER" ] && marker=present
 check "no project script ran" absent "$marker"
 if grep -qE '^run( |$)' "$T/pnpm.log"; then echo "FAIL pnpm run was called"; fail=1; else echo "ok   pnpm run never called"; fi
@@ -225,9 +225,9 @@ check "a successful write leaves no temporary file" 0 "$(find "$T/keep" -name '.
 mkdir -p "$T/g" && (cd "$T/g" && git init -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m one && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m two)
 H1=$(git -C "$T/g" rev-parse HEAD~1); H2=$(git -C "$T/g" rev-parse HEAD)
 export QB_REPO="$T/g"
-TBL_MODE=full TBL_HEAD=$H1 TBL_TREE=clean
+TBL_MODE=full TBL_HEAD=$H1 TBL_TREE=clean TBL_TESTS='0 failed of 3' TBL_THR=1
 tbl() { # tbl <label> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
-  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | 0 failed of 3 |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | 1 |\n| mode | %s |\n| git head | %s |\n| git tree | %s |\n' "$@" "$TBL_MODE" "$TBL_HEAD" "$TBL_TREE"
+  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | '"$TBL_TESTS"' |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | '"$TBL_THR"' |\n| mode | %s |\n| git head | %s |\n| git tree | %s |\n' "$@" "$TBL_MODE" "$TBL_HEAD" "$TBL_TREE"
 }
 tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b.md"
 TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/same.md"
@@ -250,7 +250,7 @@ regress "complexity" 4 2 80.0% 4 1.5% 2 1
 regress "duplication" 4 2 80.0% 3 1.6% 2 1
 regress "suppressions" 4 2 80.0% 3 1.5% 3 1
 regress "exclusions" 4 2 80.0% 3 1.5% 2 2
-TBL_TREE=dirty tbl after 4 2 "n/a (no coverage report)" 3 1.5% 2 1 >"$T/r.md"
+TBL_TREE=dirty tbl after 4 2 "n/a (failed: no coverage report)" 3 1.5% 2 1 >"$T/r.md"
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "a number no longer measured fails" 1 $?
 contains "not measured after is named" "not measured after" "$outc"
 # a tool absent before and present after is newly measured, not silently skipped
@@ -258,8 +258,15 @@ tbl before "n/a (no eslint.config.*)" "n/a (no tsconfig.json)" "n/a (no vitest o
 outc=$(bash "$SCRIPT" --compare "$T/nb.md" "$T/better.md"); check "numbers absent before are allowed" 0 $?
 contains "newly measured rows carry the value" "newly measured (90.5%)" "$outc"
 # n/a before for any other reason is not a baseline
-tbl before "n/a (eslint failed, exit 2)" 2 80.0% 3 1.5% 2 1 >"$T/failed.md"
-bash "$SCRIPT" --compare "$T/failed.md" "$T/better.md" >/dev/null 2>&1; check "a failed before run exits 2" 2 $?
+for failed in "n/a (failed: eslint failed, exit 2)" "n/a (eslint failed, exit 2)" "n/a (no test report, exit 1)" "n/a (no coverage report; is a coverage provider installed?)" "n/a (timeout)" "n/a (static mode: nothing was run)" "n/a (not installed anywhere)"; do
+  tbl before 4 2 "$failed" 3 1.5% 2 1 >"$T/failed.md"
+  bash "$SCRIPT" --compare "$T/failed.md" "$T/better.md" >/dev/null 2>&1; check "a failure string before is not an absent tool: $failed" 2 $?
+done
+for absent in "n/a (no pnpm)" "n/a (dependencies not installed: no node_modules)" "n/a (no eslint.config.*)" "n/a (no tsconfig.json)" "n/a (no vitest or jest in package.json)" "n/a (ruff not installed)" "n/a (no configured type checker on PATH or in .venv)" "n/a (no python)" "n/a (pytest not installed)" "n/a (pytest-cov not installed)" "n/a (no src, app or lib directory)" "n/a (no pnpm or npx)" "n/a (no package.json, pyproject.toml or requirements file)"; do
+  tbl before 4 2 "$absent" 3 1.5% 2 1 >"$T/absent.md"
+  bash "$SCRIPT" --compare "$T/absent.md" "$T/better.md" >/dev/null 2>&1; check "an absent tool before is accepted: $absent" 0 $?
+done
+check "no failure string in the script reads like an absent tool" 0 "$(grep -v 'KEPT=' "$SCRIPT" | grep -cE 'n/a \((no test report|no coverage report|eslint failed|tsc failed|timeout|jscpd failed|pyright failed|complexity run failed)')"
 # a static before table cannot be a baseline
 TBL_MODE=static tbl before "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" 2 1 >"$T/static.md"
 TBL_TREE=dirty tbl after 99 99 1.0% 99 50% 9 9 >"$T/bad.md"
@@ -271,6 +278,23 @@ for bad in "1.5e0%" "1.5.2%" ".5%" "NaN" "-1"; do
   TBL_TREE=dirty tbl after 4 2 80.0% 3 "$bad" 2 1 >"$T/r.md"
   bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "malformed duplication [$bad] exits 2" 2 $?
 done
+# duplicate metric rows are not a way to pick a number
+{ cat "$T/same.md"; printf '| lint findings | 0 |\n'; } >"$T/dupafter.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/dupafter.md" >/dev/null 2>&1; check "a duplicate metric row after exits 2" 2 $?
+{ cat "$T/b.md"; printf '| lint findings | 99 |\n'; } >"$T/dupbefore.md"
+bash "$SCRIPT" --compare "$T/dupbefore.md" "$T/same.md" >/dev/null 2>&1; check "a duplicate metric row before exits 2" 2 $?
+# the test total may not fall, and a rise in failures or a fall in thresholds is worse
+TBL_TESTS='0 failed of 10' tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/t10.md"
+TBL_TREE=dirty TBL_TESTS='0 failed of 0' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/t0.md"
+outc=$(bash "$SCRIPT" --compare "$T/t10.md" "$T/t0.md"); check "a fallen test total exits 1" 1 $?
+contains "a fallen test total prints both totals" "test total fell 10 to 0" "$outc"
+contains "a fallen test total names who records a consolidation" "retaking the baseline" "$outc"
+TBL_TREE=dirty TBL_TESTS='0 failed of 12' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/t12.md"
+bash "$SCRIPT" --compare "$T/t10.md" "$T/t12.md" >/dev/null 2>&1; check "a larger test total passes" 0 $?
+TBL_TREE=dirty TBL_TESTS='1 failed of 3' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/tf.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/tf.md" >/dev/null 2>&1; check "a rise in failed tests exits 1" 1 $?
+TBL_TREE=dirty TBL_THR=0 tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/thr.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/thr.md" >/dev/null 2>&1; check "a fall in configured thresholds exits 1" 1 $?
 # the tie to a commit
 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
 bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "one commit, both trees clean exits 2" 2 $?
@@ -281,11 +305,17 @@ TBL_HEAD=$H1 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
 bash "$SCRIPT" --compare "$T/b2.md" "$T/r.md" >/dev/null 2>&1; check "a before commit that is not an ancestor exits 2" 2 $?
 TBL_HEAD="no git" TBL_TREE="no git" tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/ng.md"
 TBL_HEAD="no git" TBL_TREE="no git" tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/ng2.md"
-outc=$(bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md"); check "outside git the comparison still runs" 0 $?
-contains "outside git is stated" "no git" "$outc"
+mkdir -p "$T/nogit"
+outc=$(QB_REPO="$T/nogit" bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md"); check "outside a repository the comparison still runs" 0 $?
+contains "outside a repository is stated" "no git" "$outc"
+bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md" >/dev/null 2>&1; check "a no git table inside a repository exits 2" 2 $?
+bash "$SCRIPT" --compare "$T/b.md" "$T/ng2.md" >/dev/null 2>&1; check "one no git table inside a repository exits 2" 2 $?
+TBL_HEAD=0123456789012345678901234567890123456789 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/unk.md"
+unkout=$(bash "$SCRIPT" --compare "$T/b.md" "$T/unk.md" 2>&1 >/dev/null); check "an unresolvable after commit exits 2" 2 $?
+contains "an unresolvable commit is named" "is not in" "$unkout"
 TBL_TREE=dirty
 printf '| Metric | before |\n|---|---|\n| lint findings | n/a (no eslint.config.*) |\n| mode | full |\n| git head | no git |\n| git tree | no git |\n' >"$T/none.md"
-bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null 2>&1; check "a table missing its metric rows exits 2" 2 $?
+QB_REPO="$T/nogit" bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null 2>&1; check "a table missing its metric rows exits 2" 2 $?
 bash "$SCRIPT" --compare "$T/b.md" >/dev/null 2>&1; check "one single-column file exits 2" 2 $?
 outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md")
 printf '%s\n' "$outc" | sed '/^$/,$d' >"$T/rec.md"
@@ -303,12 +333,16 @@ printf 'x\n' >"$gp/src/u.ts"
 outc=$(bash "$SCRIPT" "$gp" --static); check "table records a dirty tree" "dirty" "$(value "git tree" "$outc")"
 rm -f "$gp/src/u.ts"
 base_supp=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
-for form in '# pylint: disable=x' '// biome-ignore lint: x' '# nosec' '# pragma: no cover' '# pragma: no branch' '/* v8 ignore next */' '/* istanbul ignore next */' '// @ts-expect-error' '// @ts-nocheck' '# type: ignore' '# noqa' '// NOSONAR' '@SuppressWarnings("x")'; do
+for form in '# pylint: disable=x' '// biome-ignore lint: x' '# nosec' '# pragma: no cover' '# pragma: no branch' '/* v8 ignore next */' '/* istanbul ignore next */' '// @ts-expect-error' '// @ts-nocheck' '# type: ignore' '# noqa' '// NOSONAR' '@SuppressWarnings("x")' '# type:ignore' '# NOQA' '/* istanbul  ignore next */'; do
   printf 'x = 1 %s\n' "$form" >"$gp/src/s.ts"
   now=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
   check "suppression form counted: $form" "$((base_supp + 1))" "$now"
 done
-rm -f "$gp/src/s.ts"
+printf 'x = 1  # noqa  # type: ignore\n' >"$gp/src/s.ts"
+check "two suppressions on one line count twice" "$((base_supp + 2))" "$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")"
+rm -f "$gp/src/s.ts"; mkdir -p "$gp/vendor"; printf 'x = 1  # noqa\n' >"$gp/vendor/v.ts"
+check "a vendor directory is not counted" "$base_supp" "$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")"
+rm -rf "$gp/vendor"
 base_excl=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
 excl_form() { # excl_form <file> <line>
   printf '%s\n' "$2" >"$gp/$1"
@@ -325,5 +359,13 @@ excl_form eslint.config.mjs 'ignorePatterns: ["src"]'
 excl_form .jscpd.json '"ignore": ["src"]'
 excl_form ruff.toml 'extend-exclude = ["src"]'
 excl_form ruff.toml 'per-file-ignores = {}'
+excl_form vitest.config.ts 'export default { test: { coverage: { exclude: ["src"] } } };'
+excl_form eslint.config.mjs 'export default [{ ignores: ["src"] }];'
+excl_form ruff.toml 'ignore = ["E501"]'
+excl_form pyproject.toml 'ignore_errors = true'
+excl_form pytest.ini 'addopts = --ignore=tests/slow'
+excl_form sonar-project.properties 'sonar.issue.ignore.multicriteria=e1'
+excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 'off' } }];"
+excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 0 } }];"
 
 exit $fail

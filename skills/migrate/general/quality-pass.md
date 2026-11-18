@@ -4,7 +4,7 @@
 
 # Quality pass (lint alignment, then fixes)
 
-This pass changes user code, tests and config. It adds no suppression and no exclusion: fix the code first (suppression rule: `comments.md`). Show every batch as a list or diff and get the user's confirmation before you apply it, at each stage below.
+This pass changes user code, tests and config. Fix the code first; the suppression rule is in `comments.md`. Show every batch as a list or diff and get the user's confirmation before you apply it, at each stage below.
 
 **Scratch.** The pass's scratch directory is a new directory in the session scratch area, outside the project. Batch lists, file copies, reports and coverage XML live there.
 
@@ -27,7 +27,7 @@ Merge the scaffold's rules into the existing config (`<skill-dir>/../scaffold/<s
 
 Work one directory per batch. Per stage: apply the confirmed batch, run lint, typecheck and tests, allow one fix-and-verify retry. A batch still failing is restored from its scratch copies (see Safety), then the stage stops. Put what is left into the report as a backlog ranked by impact; do not loop.
 
-1. **Lint and type findings.** Fix at the cause. Never add a suppression. Remove each existing one unless it is a confirmed third-party false positive; a kept one is one line, one rule id, with a one-line reason above it.
+1. **Lint and type findings.** Fix at the cause. Apply the suppression rule in `comments.md` to each existing one.
 2. **Complexity and duplication.** Confirm each refactor before applying it.
 3. **Tests** (user code; confirm every deletion and merge). Rules: the test guide loaded with this file. Merge tests of one behaviour into parametrized cases; delete tests that only restate constants, types or framework behaviour (they add no coverage or behaviour value; never delete a test of a real code path). Run coverage before and after each merge or deletion batch; a lower covered-line count for the target files reverts the batch.
 4. **Comments.** Apply the comment rules loaded with this file, leaving an ADR id where an ADR explains the code.

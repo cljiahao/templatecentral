@@ -160,4 +160,66 @@ contains "missing gitleaks command named" "FAIL lefthook.yml gitleaks" "$out"
 seed "$T/b10"; rm "$T/b10/lefthook.yml"
 out=$(run "$T/b10"); contains "missing lefthook.yml named" "FAIL lefthook.yml: missing" "$out"
 
+# round 2: hook executability, hooksPath, local settings, lefthook commands, always-block guards
+seed "$T/c1"; chmod -x "$T/c1/.git/hooks/pre-push"
+out=$(run "$T/c1"); check "non-executable git hook exits 1" 1 $?
+contains "non-executable git hook named" "FAIL git hook pre-push" "$out"
+
+seed "$T/c2"; printf '#!/bin/sh\necho lefthook\nexit 0\n' >"$T/c2/.git/hooks/pre-commit"
+out=$(run "$T/c2"); check "git hook that only echoes lefthook exits 1" 1 $?
+seed "$T/c2b"; printf '#!/bin/sh\necho "lefthook run pre-commit"\nexit 0\n' >"$T/c2b/.git/hooks/pre-commit"
+out=$(run "$T/c2b"); check "git hook that only echoes a lefthook run line exits 1" 1 $?
+contains "echo-only git hook named" "FAIL git hook pre-commit" "$out"
+
+seed "$T/c3"; mkdir "$T/c3/.githooks"; mv "$T/c3/.git/hooks/"* "$T/c3/.githooks/"; git -C "$T/c3" config core.hooksPath .githooks
+out=$(run "$T/c3"); check "hooks under core.hooksPath pass" 0 $?
+seed "$T/c3b"; git -C "$T/c3b" config core.hooksPath .nohooks
+out=$(run "$T/c3b"); check "core.hooksPath without the hooks exits 1" 1 $?
+contains "empty hooksPath named" "FAIL git hook pre-commit" "$out"
+
+seed "$T/c4"; printf '{"disableAllHooks": true}\n' >"$T/c4/.claude/settings.local.json"
+out=$(run "$T/c4"); check "disableAllHooks in settings.local.json exits 1" 1 $?
+contains "local disableAllHooks named" "FAIL settings.local.json disableAllHooks" "$out"
+case "$out" in *'"disableAllHooks"'*) echo "FAIL local settings content is printed"; fail=1 ;; *) echo "ok   local settings content is not printed" ;; esac
+seed "$T/c4b"; printf '{"permissions": {"allow": []}}\n' >"$T/c4b/.claude/settings.local.json"
+out=$(run "$T/c4b"); check "harmless settings.local.json passes" 0 $?
+
+seed "$T/c5"; python3 - "$T/c5/lefthook.yml" <<'PY2'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^pre-push:\n(?:[ \t].*\n|\n)*", "pre-push:\n  parallel: true\n", s)
+open(p, "w").write(s)
+PY2
+out=$(run "$T/c5"); check "pre-push without commands exits 1" 1 $?
+contains "empty pre-push commands named" "FAIL lefthook.yml pre-push" "$out"
+
+seed "$T/c5b"; python3 - "$T/c5b/lefthook.yml" <<'PY3'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^pre-push:\n(?:[ \t].*\n|\n)*", "pre-push:\n  commands:\n", s)
+open(p, "w").write(s)
+PY3
+out=$(run "$T/c5b"); check "pre-push with an empty commands block exits 1" 1 $?
+contains "empty commands block named" "FAIL lefthook.yml pre-push" "$out"
+seed "$T/c5c"; python3 - "$T/c5c/lefthook.yml" <<'PY4'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^pre-push:\n(?:[ \t].*\n|\n)*", "pre-push:\n    secret-scan:\n      run: gitleaks git\n", s)
+open(p, "w").write(s)
+PY4
+out=$(run "$T/c5c"); check "pre-push with commands but no commands key exits 1" 1 $?
+contains "missing commands key named" "FAIL lefthook.yml pre-push" "$out"
+
+seed "$T/c6"; sed -i.bak 's#gitleaks git#echo git#; s#command -v gitleaks#command -v echo#' "$T/c6/lefthook.yml"; printf '    # gitleaks\n' >>"$T/c6/lefthook.yml"; rm "$T/c6/lefthook.yml.bak"
+out=$(run "$T/c6"); check "gitleaks only in a comment exits 1" 1 $?
+contains "comment-only gitleaks named" "FAIL lefthook.yml gitleaks" "$out"
+
+seed "$T/c7"; printf '#!/usr/bin/env bash\necho "BLOCKED: always" >&2\nexit 2\n' >"$T/c7/.claude/hooks/protect-files.sh"
+out=$(run "$T/c7"); check "an always-blocking guard exits 1" 1 $?
+contains "always-blocking protect-files named" "FAIL protect-files guard: an ordinary write was blocked" "$out"
+seed "$T/c8"; printf '#!/usr/bin/env bash\necho "BLOCKED: always" >&2\nexit 2\n' >"$T/c8/.claude/hooks/block-no-verify.sh"
+out=$(run "$T/c8"); contains "always-blocking block-no-verify named" "FAIL block-no-verify guard: git status was blocked" "$out"
+
+out=$(run "$T/ok"); contains "the output says the other hooks rest on the hash check" "covered by the .claude/verify-harness.sh hash check" "$out"
+
 exit $fail
