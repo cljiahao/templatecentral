@@ -493,38 +493,95 @@ TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|vendor|dist|\.next|\.venv)/)'
 SUPPRESS='eslint-disable|biome-ignore|[Nn][Oo][Qq][Aa]|nosec|pylint:[[:space:]]*disable|type:[[:space:]]*ignore|pyright:[[:space:]]*ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul[[:space:]]+ignore|c8[[:space:]]+ignore|v8[[:space:]]+ignore|pragma:[[:space:]]*no[[:space:]]+(cover|branch)'
-EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|ignores[[:space:]]*:|coverage:[[:space:]]*\{[^}]*exclude|^[[:space:]]*ignore[[:space:]]*=|ignore_errors|--ignore[= ]|sonar\.issue\.ignore\.|ignorePatterns|"ignore"[[:space:]]*:|extend-exclude|per-file-ignores|exclude_lines|exclude_also|^[[:space:]]*exclude[[:space:]]*[=:]'
+EXCLUDE="coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|coverage:[[:space:]]*\{[^}]*exclude|ignore_errors|ignorePatterns|extend-exclude|exclude_lines|exclude_also|per-file-ignores|--ignore[= ]|^[[:space:]]*(ignore|extend-ignore|exclude|omit)[[:space:]]*[=:]|(^|[^A-Za-z_])ignores[[:space:]]*:|[\"'](exclude|excludes|ignore|ignores|omit|includes)[\"'][[:space:]]*:"
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
 
-# excl_entries <file>: the number of exclusion entries, so a new entry in an existing list counts, including entries on continuation lines.
+# excl_entries <file> <js|ini|yaml>: the number of exclusion entries, so a new entry in an existing list counts, including entries on continuation lines.
 excl_entries() {
-  RE="$EXCLUDE" awk -v q="'" '
-    function cnt(s, ch,  n, k) { n = 0; while ((k = index(s, ch)) > 0) { n++; s = substr(s, k + 1) } return n }
-    function nq(s, neg,  n, t, re, k) {
-      k = match(s, /[:=]/); if (k > 0) s = substr(s, k + 1)
-      re = "\"[^\"]*\"|" q "[^" q "]*" q; n = 0
-      while (match(s, re)) { t = substr(s, RSTART + 1, 1); if (!neg || t == "!") n++; s = substr(s, RSTART + RLENGTH) }
+  local kind=$2 pkg=0
+  [ "$(basename "$1")" = package.json ] && pkg=1
+  RE="$EXCLUDE" KIND="$kind" PKG="$pkg" awk -v q="'" '
+    function strip(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function items(s,  m, parts, k, n) {
+      sub(/[ \t]+[#;].*$/, "", s); m = split(s, parts, ","); n = 0
+      for (k = 1; k <= m; k++) if (strip(parts[k]) != "") n++
       return n }
-    function nql(s, neg,  n, t, re) {
-      re = "\"[^\"]*\"|" q "[^" q "]*" q; n = 0
-      while (match(s, re)) { t = substr(s, RSTART + 1, 1); if (!neg || t == "!") n++; s = substr(s, RSTART + RLENGTH) }
-      return n }
-    BEGIN { re = ENVIRON["RE"] }
-    /^[ \t]*(\/\/|#|;)/ { next }
+    function scan(s, ng,  i, n, ch, e, f) {
+      n = length(s); rest = ""
+      for (i = 1; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (ch == "\"" || ch == q) {
+          e = i + 1
+          while (e <= n && substr(s, e, 1) != ch) { if (substr(s, e, 1) == "\\") e++; e++ }
+          f = substr(s, i + 1, 1)
+          if (!ng || f == "!") { c++; got++ }
+          i = e; continue }
+        if (ch == "#" || (ch == "/" && substr(s, i + 1, 1) == "/")) break
+        if (ch == "[" || ch == "{") { dep++; opened = 1; continue }
+        if (ch == "]" || ch == "}") { dep--; if (opened && dep <= 0) { inl = 0; rest = substr(s, i + 1); return } }
+      }
+      inl = (opened && dep > 0) }
+    function ocount(s, pat,  k, n) { n = 0; while ((k = match(s, pat)) > 0) { n++; s = substr(s, RSTART + RLENGTH) } return n }
+    BEGIN { re = ENVIRON["RE"]; kind = ENVIRON["KIND"]; pkg = ENVIRON["PKG"] + 0
+      ikey = "^(omit|exclude|excludes|exclude_lines|exclude-lines|exclude_also|exclude_patterns|ignore|extend-ignore|extend-exclude|disable|per-file-ignores|extend-per-file-ignores|ignore-paths|ignore-patterns|ignore-modules|norecursedirs|ignore_errors|addopts|sonar\\..*(exclusions|ignore).*)$" }
+    kind == "ini" {
+      if ($0 ~ /^[ \t]*[#;]/) next
+      if (cont == 1 && $0 ~ /^[ \t]+[^ \t]/) { c += items($0); next }
+      if (cont == 2 && $0 ~ /^[ \t]+[^ \t]/) { c += ocount($0, "--ignore"); next }
+      cont = 0
+      if (match($0, /^[ \t]*[A-Za-z_.-]+[ \t]*[=:]/)) {
+        k = $0; sub(/[ \t]*[=:].*$/, "", k); k = tolower(strip(k))
+        v = substr($0, RLENGTH + 1)
+        if (k ~ ikey) {
+          if (k == "addopts") { c += ocount(v, "--ignore"); cont = 2 }
+          else if (k == "ignore_errors") c++
+          else { c += items(v); cont = 1 }
+        }
+      }
+      next }
+    kind == "yaml" {
+      if ($0 ~ /^[ \t]*(#|$)/) next
+      match($0, /[^ \t]/); ind = RSTART - 1
+      if (ylist) { if ($0 ~ /^[ \t]*-([ \t]|$)/ && ind >= kind_ind) { c++; next } ylist = 0 }
+      if (yflow) { s = $0; sub(/[ \t]+#.*$/, "", s); e = index(s, "]"); c += items(e > 0 ? substr(s, 1, e - 1) : s); if (e > 0) yflow = 0; next }
+      if (yrules && ind <= rind) yrules = 0
+      if (pend) {
+        pend = 0
+        if ($0 ~ /^[ \t]*-[ \t]*["'"'"']?(off|0)["'"'"']?[ \t]*(#.*)?$/) { c++; next }
+      }
+      if ($0 ~ /^[ \t]*rules[ \t]*:[ \t]*(#.*)?$/) { yrules = 1; rind = ind; next }
+      if (yrules && match($0, /^[ \t]*[^ \t:#][^:]*:/)) {
+        v = substr($0, RSTART + RLENGTH); sub(/[ \t]+#.*$/, "", v); v = strip(v)
+        if (v ~ /^["'"'"']?(off|0)["'"'"']?$/ || v ~ /^\[[ \t]*["'"'"']?(off|0)["'"'"']?[ \t]*[,\]]/) c++
+        else if (v == "") pend = 1
+        next }
+      if ($0 ~ /^[ \t]*(ignorePatterns|exclude|excludes|ignore|ignores|omit)[ \t]*:/) {
+        v = $0; sub(/^[^:]*:/, "", v); sub(/[ \t]+#.*$/, "", v); v = strip(v)
+        if (v == "") { ylist = 1; kind_ind = ind }
+        else if (substr(v, 1, 1) == "[") { sub(/^\[/, "", v); e = index(v, "]"); if (e > 0) c += items(substr(v, 1, e - 1)); else { c += items(v); yflow = 1 } }
+        else c++
+      }
+      next }
     {
       line = $0
-      if (ini) { if (line ~ /^[ \t]+[^ \t]/) { c++; next } ini = 0 }
-      if (inl) { c += nql(line, neg); d += cnt(line, "[") - cnt(line, "]"); if (d <= 0) inl = 0; next }
-      if (line ~ re) {
-        neg = (line ~ /collectCoverageFrom/)
-        n = nq(line, neg)
-        tmp = line; k = gsub(/--ignore/, "&", tmp); if (k > n) n = k
-        if (line ~ /^[ \t]*sonar\./) { v = line; sub(/^[^=]*=/, "", v); m = split(v, parts, ","); n = 0; for (j = 1; j <= m; j++) if (parts[j] ~ /[^ \t]/) n++ }
-        if (n < 1) n = 1
-        if (line ~ /^[ \t]*[A-Za-z_.-]+[ \t]*=[ \t]*$/) { ini = 1; n = 0 }
-        c += n
-        d = cnt(line, "[") - cnt(line, "]"); inl = (d > 0)
+      if (line ~ /^[ \t]*(\/\/|#|;|\/\*)/) next
+      if (tsec) {
+        if (line ~ /^[ \t]*\[/) tsec = 0
+        else { got = 0; dep = 0; opened = 0; scan(line, 0); if (got == 0 && line ~ /=/) c++; next }
+      }
+      if (inl) { scan(line, ng); line = inl ? "" : rest; if (line == "") next }
+      if (line ~ /^[ \t]*\[[^]]*per-file-ignores[^]]*\][ \t]*$/) { tsec = 1; next }
+      while (line != "" && match(line, re)) {
+        key = substr(line, RSTART, RLENGTH); rem = substr(line, RSTART + RLENGTH); quoted = (key ~ /["'"'"']/ && key !~ /\[tool/)
+        ng = (key ~ /collectCoverageFrom|includes/)
+        if (key ~ /--ignore/) { c += 1; line = rem; continue }
+        sub(/^["'"'"']?[ \t]*[:=]/, "", rem)
+        if (pkg && quoted && rem ~ /^[ \t]*["'"'"']/) { line = rem; continue }
+        got = 0; dep = 0; opened = 0; inl = 0
+        scan(rem, ng)
+        if (got == 0 && !inl && !ng) c++
+        line = inl ? "" : rest
       }
     }
     END { print c + 0 }' "$1"
@@ -532,7 +589,7 @@ excl_entries() {
 
 # eslint_off <file>: the number of rules set to off or 0 directly under a rules object, as a bare value or the first element of the array form.
 eslint_off() {
-  awk -v q="'" '
+  awk -v q="'" -v deep="${2:-0}" '
     BEGIN { RS = "\001" }
     function nextnb(j) { while (j <= n && substr(s, j, 1) ~ /[ \t\r\n]/) j++; return j }
     function strend(j,  c, k) { c = substr(s, j, 1); k = j + 1; while (k <= n && substr(s, k, 1) != c) { if (substr(s, k, 1) == "\\") k++; k++ } return k }
@@ -549,7 +606,7 @@ eslint_off() {
         if (ch == "/" && substr(s, i + 1, 1) == "*") { i += 2; while (i < n && !(substr(s, i, 1) == "*" && substr(s, i + 1, 1) == "/")) i++; i++; continue }
         if (ch == "\"" || ch == q || ch == "`") { e = strend(i); last = substr(s, i + 1, e - i - 1); i = e; continue }
         if (ch ~ /[A-Za-z_$]/) { j = i; while (j < n && substr(s, j + 1, 1) ~ /[A-Za-z0-9_$]/) j++; last = substr(s, i, j - i + 1); i = j; continue }
-        if (ch == "{") { st[++sp] = pend ? "R" : "O"; pend = 0; last = ""; continue }
+        if (ch == "{") { st[++sp] = (pend || (deep && sp > 0 && st[sp] == "R")) ? "R" : "O"; pend = 0; last = ""; continue }
         if (ch == "[") { st[++sp] = "A"; last = ""; continue }
         if (ch == "}" || ch == "]") { if (sp > 0) sp--; last = ""; continue }
         if (ch == ",") { last = ""; continue }
@@ -567,7 +624,7 @@ eslint_off() {
 }
 
 count_static() {
-  local f tl=0 sl=0 cases=0 supp=0 excl=0 thr=0 n
+  local f tl=0 sl=0 cases=0 supp=0 excl=0 thr=0 n base kind
   while IFS= read -r -d '' f; do
     [ -f "$P/$f" ] || continue
     if printf '%s' "$f" | grep -Eq "$CODERE" && ! printf '%s' "$f" | grep -Eq "$SKIPRE"; then
@@ -583,10 +640,24 @@ count_static() {
     case "$(basename "$f")" in
       .eslintignore)
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;;
-      vitest.config.*|vite.config.*|jest.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pytest.ini|setup.cfg)
-        n=$(excl_entries "$P/$f"); excl=$((excl + ${n:-0}))
-        case "$(basename "$f")" in eslint.config.*|.eslintrc*) n=$(eslint_off "$P/$f"); excl=$((excl + ${n:-0})) ;; esac
+      vitest.config.*|vite.config.*|jest.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|biome.jsonc|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pylintrc|pytest.ini|setup.cfg|tox.ini)
+        base=$(basename "$f")
+        case "$base" in
+          .coveragerc|sonar-project.properties|.pylintrc|pylintrc|pytest.ini|setup.cfg|tox.ini) kind=ini ;;
+          *.yml|*.yaml) kind=yaml ;;
+          *) kind=js ;;
+        esac
+        n=$(excl_entries "$P/$f" "$kind"); excl=$((excl + ${n:-0}))
+        case "$base" in
+          eslint.config.*|package.json) n=$(eslint_off "$P/$f") ;;
+          .eslintrc|.eslintrc.json|.eslintrc.js|.eslintrc.cjs) n=$(eslint_off "$P/$f") ;;
+          biome.json|biome.jsonc) n=$(eslint_off "$P/$f" 1) ;;
+          *) n=0 ;;
+        esac
+        excl=$((excl + ${n:-0}))
         n=$(grep -cE "$THRESH" "$P/$f" 2>/dev/null); thr=$((thr + ${n:-0})) ;;
+      tsconfig*.json)
+        n=$(excl_entries "$P/$f" js); excl=$((excl + ${n:-0})) ;;
     esac
   done < <(list_files)
   TESTLOC=$tl SRCLOC=$sl CASES=$cases SUPP=$supp EXCL=$excl THR=$thr

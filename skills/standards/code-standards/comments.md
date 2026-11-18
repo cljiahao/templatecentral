@@ -24,7 +24,7 @@ Allowed beyond the policy, each for a stated reason:
 
 ### Suppression policy
 
-Fix the code first. A suppression is a last resort, only for a confirmed third-party false positive, on the narrowest scope (one line, one rule id), with the reason in a comment on the line above. Never use one to turn a gate green. This covers `eslint-disable`, `noqa`, `type: ignore`, `@ts-expect-error`, `pyright: ignore`, `NOSONAR`, coverage ignore pragmas and lint, coverage or Sonar exclusions. `NOSONAR` and blanket or file-level disables are not allowed, and a stale suppression is removed.
+Fix the code first. A suppression is a last resort, only for a confirmed third-party false positive, on the narrowest scope (one line, one rule id), with the reason in a comment on the line above. Never use one to turn a gate green. This covers `eslint-disable`, `noqa`, `type: ignore`, `@ts-expect-error`, `pyright: ignore`, `NOSONAR`, coverage ignore pragmas and lint, coverage or Sonar exclusions. `NOSONAR` and blanket or file-level disables are not allowed, and a stale suppression is removed. Whether to add the one allowed suppression is the user's decision; once they approve it, the baseline `before` table is retaken after that single change with the reason recorded.
 
 ### Enforcement (seeded per stack)
 

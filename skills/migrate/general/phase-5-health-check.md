@@ -49,7 +49,7 @@ into them WITHOUT losing your edits, run the safe re-sync (Step 5d) — it 3-way
 it does not clobber.
 ```
 
-Then run `bash "<skill-dir>/general/harness-live.sh" <project-dir>` and print its output: matching hashes show the files are canonical, not that the harness is wired. Each FAIL is a wiring gap; list it for Step 5d or for the user (a missing tool).
+Then run `bash "<skill-dir>/general/harness-live.sh" <project-dir>` and print its output: matching hashes show the files are canonical, not that the harness is wired. The git-hook check proves each hook file calls lefthook at top level or through the generated `call_lefthook` function, and does not prove that a deliberately obfuscated hook is live. Each FAIL is a wiring gap; list it for Step 5d or for the user (a missing tool).
 
 If all files are `UNCHANGED`, `templatecentral_version` equals the current plugin version, the `AGENTS.md` import is present **and** the live check exits 0, print:
 ```

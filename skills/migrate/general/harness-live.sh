@@ -51,11 +51,19 @@ JS
 # section_lines <file> <key>: the non-comment lines of one top-level section of a YAML file.
 section_lines() { awk -v k="$2" '/^[^[:space:]#]/ { on = ($0 ~ "^" k ":") } on && !/^[[:space:]]*#/' "$1"; }
 
-# gitleaks_state <file>: ok, skip or none for gitleaks invoked on a run line of a pre-commit command that is not skipped.
+# gitleaks_state <file>: ok, skip or none for gitleaks invoked on a run line of a pre-commit command or job that is not skipped, directly or through npx, pnpm exec, pnpm dlx or docker run.
 gitleaks_state() {
   section_lines "$1" pre-commit | awk '
-    function check(v) { if (v ~ /(^|[;&|(]|then|do|else)[ \t]*([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*([^ \t]*\/)?gitleaks[ \t]+(git|detect|protect|dir|stdin)/) has[cmd] = 1 }
+    BEGIN {
+      pre = "(^|[;&|(]|then|do|else)[ \t]*([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
+      run = "((npx|pnpx|bunx)[ \t]+(-[-A-Za-z]+[ \t]+)*|(pnpm|yarn|npm|bun)[ \t]+(exec|dlx|run)[ \t]+(--[ \t]+)?)?"
+      sub_ = "[ \t]+(git|detect|protect|dir|stdin)"
+      direct = pre run "([^ \t]*/)?gitleaks" sub_
+      docker = pre "docker[ \t]+run[ \t]+[^;&|]*gitleaks[^ \t]*" sub_
+    }
+    function check(v) { if (v ~ direct || v ~ docker) has[cmd] = 1 }
     /^  skip:[ \t]*true/ { hookskip = 1 }
+    /^    -[ \t]/ { cmd = "job" NR; inrun = 0; sub(/^    -[ \t]+/, "      ") }
     /^    [A-Za-z0-9_-]+:[ \t]*$/ { cmd = $1; inrun = 0; next }
     inrun && match($0, /[^ \t]/) && RSTART > 7 { check($0); next }
     { inrun = 0 }
@@ -64,7 +72,7 @@ gitleaks_state() {
     END { for (k in has) { if (!sk[k] && !hookskip) found = 1; else skipped = 1 } print found ? "ok" : (skipped ? "skip" : "none") }'
 }
 
-# hook_runs_lefthook <file>: a git hook that runs lefthook on a line outside a comment, with no top-level exit before it.
+# hook_runs_lefthook <file>: proves the hook file calls lefthook at top level or through the generated call_lefthook function with no top-level exit before it; it does not prove a deliberately obfuscated hook is live.
 hook_runs_lefthook() {
   sed -E 's/[[:space:]]#.*$//' "$1" | awk '
     /^[ \t]*(#|echo|printf|:)/ { next }
@@ -85,8 +93,9 @@ lh=$(resolve lefthook)
 if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH"; fi
 if [ -f "$P/lefthook.yml" ]; then
   for h in pre-commit pre-push; do
-    if section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+commands:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}[A-Za-z0-9_-]+:'; then pass "lefthook.yml $h defines commands"
-    else fail "lefthook.yml $h" "no $h section with a non-empty commands block"; fi
+    if { section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+commands:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}[A-Za-z0-9_-]+:'; } \
+      || { section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+jobs:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}-[[:space:]]'; }; then pass "lefthook.yml $h defines commands"
+    else fail "lefthook.yml $h" "no $h section with a non-empty commands or jobs block"; fi
   done
   case "$(gitleaks_state "$P/lefthook.yml")" in
     ok) pass "lefthook.yml pre-commit runs gitleaks" ;;

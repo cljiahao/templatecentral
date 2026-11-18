@@ -387,7 +387,7 @@ excl_pair "a multi-line exclude list grows" vitest.config.ts 'export default { t
   exclude: [
     "src/a",
     "src/b",
-  ] } } };' 2 3
+  ] } } };' 1 2
 excl_delta() { # excl_delta <file> <content> <delta>
   printf '%s\n' "$2" >"$gp/$1"
   check "exclusion delta $3: $1 $2" "$((base_excl + $3))" "$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")"
@@ -410,6 +410,92 @@ omit =
 excl_delta sonar-project.properties 'sonar.exclusions=a,b,c' 3
 excl_delta pytest.ini '[pytest]
 addopts = --ignore=t/a --ignore=t/b' 2
+
+# round 4: every row, rule, comma item, YAML item and JSON entry counts, and compare exits 1 on a rise
+excl_pair "ruff lint per-file-ignores gets a row" pyproject.toml '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/*" = ["T201"]' 2 4
+excl_pair "ruff lint per-file-ignores gets a rule" pyproject.toml '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101","E402"]' 2 3
+excl_pair "ruff per-file-ignores table gets a rule" pyproject.toml '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101","E402"]' 2 3
+excl_pair "ruff.toml per-file-ignores gets a rule" ruff.toml '[lint.per-file-ignores]
+"tests/*" = ["S101"]' '[lint.per-file-ignores]
+"tests/*" = ["S101","E402"]' 2 3
+excl_pair ".coveragerc omit comma list grows" .coveragerc '[run]
+omit = a/*' '[run]
+omit = a/*,b/*,c/*' 1 3
+excl_pair "setup.cfg exclude comma list grows" setup.cfg '[flake8]
+exclude = a' '[flake8]
+exclude = a,b' 1 2
+excl_pair "tox.ini ignore comma list grows" tox.ini '[flake8]
+ignore = E501' '[flake8]
+ignore = E501,E402' 1 2
+excl_pair "setup.cfg per-file-ignores grows" setup.cfg '[flake8]
+per-file-ignores =
+    tests/*: S101' '[flake8]
+per-file-ignores =
+    tests/*: S101
+    docs/*: E501' 1 2
+excl_pair ".pylintrc ignore list grows" .pylintrc '[MASTER]
+ignore=a' '[MASTER]
+ignore=a,b' 1 2
+excl_pair ".pylintrc disable list grows" .pylintrc '[MESSAGES CONTROL]
+disable=C0114' '[MESSAGES CONTROL]
+disable=C0114,C0115' 1 2
+excl_pair ".eslintrc.yml ignorePatterns gets an item" .eslintrc.yml 'ignorePatterns:
+  - a' 'ignorePatterns:
+  - a
+  - b' 1 2
+excl_pair ".eslintrc.yaml inline ignorePatterns grows" .eslintrc.yaml 'ignorePatterns: [a]' 'ignorePatterns: [a, b]' 1 2
+excl_pair ".eslintrc.yml gets a rule set to off" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: off' 1 2
+excl_pair ".eslintrc.yml gets a rule set to 0" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: 0' 1 2
+excl_pair ".eslintrc.yml gets a rule set to [off]" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: [off, x]' 1 2
+excl_pair ".nycrc exclude list grows" .nycrc '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair ".nycrc.json exclude list grows" .nycrc.json '{
+  "exclude": [
+    "a"
+  ]
+}' '{
+  "exclude": [
+    "a",
+    "b"
+  ]
+}' 1 2
+excl_pair "package.json nyc exclude grows" package.json '{ "nyc": { "exclude": ["a"] } }' '{ "nyc": { "exclude": ["a", "b"] } }' 1 2
+excl_pair "package.json jest ignore patterns grow" package.json '{ "jest": { "coveragePathIgnorePatterns": ["a"] } }' '{ "jest": { "coveragePathIgnorePatterns": ["a", "b"] } }' 1 2
+excl_pair "package.json eslintConfig ignorePatterns grow" package.json '{ "eslintConfig": { "ignorePatterns": ["a"] } }' '{ "eslintConfig": { "ignorePatterns": ["a", "b"] } }' 1 2
+excl_pair "tsconfig exclude grows" tsconfig.json '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair "tsconfig.build.json exclude grows" tsconfig.build.json '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair ".eslintrc.json ignorePatterns grow" .eslintrc.json '{ "ignorePatterns": ["a"] }' '{ "ignorePatterns": ["a", "b"] }' 1 2
+excl_pair "biome rule set to off" biome.json '{ "linter": { "rules": { "style": { "a": "off" } } } }' '{ "linter": { "rules": { "style": { "a": "off", "b": "off" } } } }' 1 2
+excl_pair "biome.jsonc files ignore grows" biome.jsonc '{ "files": { "ignore": ["a"] } }' '{ "files": { "ignore": ["a", "b"] } }' 1 2
+excl_pair "biome linter ignore grows" biome.json '{ "linter": { "ignore": ["a"] } }' '{ "linter": { "ignore": ["a", "b"] } }' 1 2
+excl_delta package.json '{ "dependencies": { "ignore": "^5.0.0" } }' 0
+excl_pair "pytest.ini addopts continuation line gets an ignore" pytest.ini '[pytest]
+addopts =
+    --ignore=a' '[pytest]
+addopts =
+    --ignore=a
+    --ignore=b' 1 2
+excl_pair "biome includes gets a negation" biome.json '{ "files": { "includes": ["**", "!a"] } }' '{ "files": { "includes": ["**", "!a", "!b"] } }' 1 2
+excl_delta biome.json '{ "files": { "includes": ["**", "src"] } }' 0
+excl_delta biome.json '{ "formatter": { "x": "off" } }' 0
+excl_delta .eslintrc.yml 'rules:
+  a: error
+  b: warn' 0
 
 # tables with commit hashes and no repository to check them in exit 2, no git tables from a real non-repository still pass
 outr=$(cd "$T/nogit" && env -u QB_REPO bash "$SCRIPT" --compare "$T/b.md" "$T/same.md" 2>&1); check "commit hashes without a repository exit 2" 2 $?
@@ -441,6 +527,16 @@ outm=$(MYPY_MODE=crash PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains
 outm=$(MYPY_MODE=quiet-fail PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains "a non-zero mypy exit without error lines is a failure" "n/a (failed: mypy failed, exit 1)" "$(value 'type errors' "$outm")"
 outm=$(MYPY_MODE=errors PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "mypy error lines are counted" 1 "$(value 'type errors' "$outm")"
 outm=$(PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "a clean mypy run is zero" 0 "$(value 'type errors' "$outm")"
+
+# a mypy crash in either table: after exits 1 (no longer measured), before exits 2 (input error)
+tbl before 4 "n/a (failed: mypy failed, exit 2)" 80.0% 3 1.5% 2 1 >"$T/mb.md"
+TBL_TREE=dirty tbl after 4 "n/a (failed: mypy failed, exit 2)" 80.0% 3 1.5% 2 1 >"$T/ma.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/ma.md" >/dev/null 2>&1; check "a mypy crash in the after table exits 1" 1 $?
+bash "$SCRIPT" --compare "$T/mb.md" "$T/same.md" >/dev/null 2>&1; check "a mypy crash in the before table exits 2" 2 $?
+
+# the compare doc states the real crash exit codes
+qbm="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-baseline.md"
+if grep -q 'exits 1 when it is in the after table and 2 when it is in the before table' "$qbm"; then echo "ok   quality-baseline.md states the mypy crash exit codes"; else echo "FAIL quality-baseline.md lacks the mypy crash exit codes"; fail=1; fi
 
 # the quality pass defers to comments.md and keeps the compare gate
 qp="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-pass.md"

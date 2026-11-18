@@ -300,6 +300,67 @@ grep -q '^  skip: true' "$T/g3/lefthook.yml" || { echo "FAIL g3 fixture has no h
 out=$(run "$T/g3"); check "a skipped pre-commit hook exits 1" 1 $?
 contains "skipped hook named" "FAIL lefthook.yml gitleaks" "$out"
 
+# gitleaks through a package runner or docker passes; a non-scanning use fails
+gl_variant() { # gl_variant <dir> <replacement run line> <jobs: 1 or 0>
+  seed "$1"; python3 - "$1/lefthook.yml" "$2" "$3" <<'PY7'
+import re, sys
+p, run, jobs = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+s = open(p).read()
+s = re.sub(r"(?m)^(      run: )if command -v gitleaks.*$", lambda m: m.group(1) + run, s, count=1)
+if jobs:
+    s = re.sub(r"(?m)^  commands:\n", "  jobs:\n", s)
+    s = re.sub(r"(?m)^    ([A-Za-z0-9_-]+):\n", r"    - name: \1\n", s)
+open(p, "w").write(s)
+PY7
+  # the edited lefthook.yml is the new seeded origin
+  (cd "$1" && python3 - <<'RH'
+import hashlib, json
+m = json.load(open(".claude/harness.json"))
+m["seeded_files"]["lefthook.yml"]["origin_hash"] = hashlib.sha256(open("lefthook.yml", "rb").read()).hexdigest()
+json.dump(m, open(".claude/harness.json", "w"))
+RH
+  )
+}
+gl_ok() { gl_variant "$T/$1" "$2" "${3:-0}"; out=$(run "$T/$1"); check "gitleaks form passes: $2 jobs=${3:-0}" 0 $?; }
+gl_no() { gl_variant "$T/$1" "$2" "${3:-0}"; out=$(run "$T/$1"); check "gitleaks form fails: $2 jobs=${3:-0}" 1 $?; contains "non-scanning gitleaks named: $2" "FAIL lefthook.yml gitleaks" "$out"; }
+gl_ok r1 'npx gitleaks git --pre-commit --staged'
+gl_ok r2 'pnpm exec gitleaks git --pre-commit --staged'
+gl_ok r3 'pnpm dlx gitleaks git --pre-commit --staged'
+gl_ok r4 'docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest git --pre-commit --staged /repo'
+gl_ok r5 'gitleaks git --pre-commit --staged' 1
+gl_ok r6 'npx gitleaks git --pre-commit --staged' 1
+gl_no n1 'gitleaks version'
+gl_no n2 'gitleaks --help'
+gl_no n3 'echo gitleaks git'
+gl_no n4 'gitleaks version' 1
+gl_no n5 'echo gitleaks git' 1
+seed "$T/n6"; python3 - "$T/n6/lefthook.yml" <<'PY8'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^  commands:\n", "  jobs:\n", s)
+s = re.sub(r"(?m)^    ([A-Za-z0-9_-]+):\n", r"    - name: \1\n", s)
+s = re.sub(r"(?m)^(    - name: secret-scan\n)", r"\1      skip: true\n", s, count=1)
+open(p, "w").write(s)
+PY8
+seed "$T/n7"; python3 - "$T/n7/lefthook.yml" <<'PY9'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^  commands:\n", "  jobs:\n", s)
+s = re.sub(r"(?m)^    ([A-Za-z0-9_-]+):\n", r"    - name: \1\n", s)
+s = re.sub(r"(?m)^(    - name: typecheck\n)", r"\1      skip: true\n", s, count=1)
+open(p, "w").write(s)
+PY9
+(cd "$T/n7" && python3 - <<'RH'
+import hashlib, json
+m = json.load(open(".claude/harness.json"))
+m["seeded_files"]["lefthook.yml"]["origin_hash"] = hashlib.sha256(open("lefthook.yml", "rb").read()).hexdigest()
+json.dump(m, open(".claude/harness.json", "w"))
+RH
+)
+out=$(run "$T/n7"); check "a skip on another job does not fail gitleaks" 0 $?
+out=$(run "$T/n6"); check "a skipped gitleaks job exits 1" 1 $?
+contains "skipped gitleaks job named" "FAIL lefthook.yml gitleaks" "$out"
+
 # invalid settings.local.json fails as unreadable and its contents are never printed
 seed "$T/s1"; printf '{ "marker-9f3a": not json' >"$T/s1/.claude/settings.local.json"
 out=$(run "$T/s1"); check "invalid settings.local.json exits 1" 1 $?
