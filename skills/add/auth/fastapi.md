@@ -16,10 +16,6 @@ Add to `requirements.txt`:
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Add Auth Schemas
 
 First run `TC_PART=leaf TC_LEAF=add/auth/fastapi TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/fastapi/template/` into the project per `<skill-dir>/auth/fastapi/template.manifest` — the files of Steps 1, 3, 4, 5, 6, 8 and the two new test files of Step 11 — and writes nothing, ending with a `STOP:` line, when a path is in the way.
@@ -431,9 +427,3 @@ python -m pytest test/ -v     # auth tests pass
 ruff check src/ test/         # zero lint errors
 python -m pyright src/        # zero type errors
 ```
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.
-
----

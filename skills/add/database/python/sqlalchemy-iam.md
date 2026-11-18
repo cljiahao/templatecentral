@@ -112,8 +112,6 @@ class APISettings(BaseSettings):
     )
 ```
 
-Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
-
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 
 ```
@@ -266,7 +264,3 @@ Repository, service and router wiring is **identical** to standard SQLAlchemy (o
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
 - IAM tokens are short-lived — `do_connect` fetches a fresh one per connection.
 - **PostgreSQL only** for IAM auth.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -72,7 +72,7 @@ PY
 }
 j=$(entry_json --entry add:auth/nestjs)
 check yes "$(entry_check "$j" add:auth/nestjs '"skills/add/SKILL.md" in f and "skills/add/auth/nestjs.md" in f and "skills/add/auth/fastapi.md" not in f')" "add auth leaf loads SKILL.md and its own leaf only"
-check yes "$(entry_check "$j" add:auth/nestjs '"skills/build/SKILL.md" in u and "skills/review/SKILL.md" in u')" "add auth leaf follows the build and review cats as utilities"
+check yes "$(entry_check "$j" add:auth/nestjs '"skills/build/SKILL.md" in u and "skills/review/SKILL.md" in u and "skills/test/SKILL.md" in u')" "add auth leaf loads the build, review and test utilities from the router step"
 check yes "$(entry_check "$j" add:auth/nestjs 'd["total_tokens"] > d["skill_tokens"] > 0 and d["skill_tokens"] == round(sum(v["bytes"] for v in f.values()) / 4)')" "entry totals are bytes/4"
 j=$(entry_json --entry add:database/typescript/nestjs-kysely --entry add:database/python/sqlalchemy)
 check yes "$(entry_check "$j" add:database/typescript/nestjs-kysely '"skills/add/database/typescript.md" in f and "skills/add/database/typescript/nestjs-drizzle.md" not in f')" "add database leaf loads its router, not the sibling leaves"

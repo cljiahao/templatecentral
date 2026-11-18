@@ -199,7 +199,6 @@ Confirm the build succeeds with no type errors.
 ## Rules
 
 - **Opt-in only** — add a database only on request.
-- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
@@ -207,7 +206,3 @@ Confirm the build succeeds with no type errors.
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config; query code is unchanged.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

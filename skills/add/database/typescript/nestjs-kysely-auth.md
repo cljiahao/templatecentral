@@ -119,5 +119,3 @@ export class AuthService {
 **Step C — `src/modules/auth/auth.module.ts` requires no changes**
 
 `KyselyService` comes from the `@Global()` `DatabaseModule` — no need to list it in `AuthModule.providers`.
-
-Then run the **After Writing Code** steps of `nestjs-kysely.md` (build, then review).

@@ -31,8 +31,6 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(default=..., description="MongoDB database name")
 ```
 
-Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
-
 Ask the user to add both to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 
 ```
@@ -238,7 +236,3 @@ Confirm all tests pass and the integration tests ran (not skipped).
 - Every list query is bounded (`find_many` clamps to `MAX_PAGE_SIZE`); paginate further with `templatecentral:add` (pagination).
 - Create indexes in the lifespan (idempotent); uniqueness lives in the index, not in a find-then-insert check.
 - Never return domain models directly — always a `response_model` schema without `hashed_password` (`model_validate(..., from_attributes=True)` copies only its declared fields).
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

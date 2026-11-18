@@ -132,7 +132,6 @@ Confirm the build succeeds with no type errors.
 ## Rules
 
 - **Opt-in only** — add a database only on request.
-- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
@@ -140,7 +139,3 @@ Confirm the build succeeds with no type errors.
 - **Mongoose**: Always use `mongoose.models.X ?? mongoose.model()` to prevent model recompilation errors. For IAM auth, install `@aws-sdk/credential-providers` and use the `MONGODB-AWS` auth mechanism; schema and query code are unchanged.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

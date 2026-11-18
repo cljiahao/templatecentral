@@ -18,7 +18,8 @@
 # router, which is <dir>.md for a leaf under <dir>/ or else <dir>/implementation.md; the standards
 # shared file (code-standards/comments.md or validation-patterns/patterns.md); the leaf; then every
 # `cat "<skill-dir>/…"` target of the leaf and of the skill files it loads. A router's own cat lines are
-# not followed (they list every leaf), and an inline cat inside the skill's own folder is not followed
+# not followed (they list every leaf) unless they leave the skill folder (the add router's build,
+# review and test steps run after every guide, so those utilities always count), and an inline cat inside the skill's own folder is not followed
 # (it is a pointer, not a load). Targets under skills/add are not followed from other skills. @STACK
 # fills <stack> in those cat lines; without it a line that holds <stack> is skipped.
 # Files under skills/<SKILL> are the skill load; files elsewhere (build/review, scaffold, .claude/rules)
@@ -148,6 +149,16 @@ def entry_walk(read, skill, name, stack):
         text = read(rel)
         if text is not None:
             inside[rel] = len(text.encode("utf-8"))
+    # A router's own cat lines are not followed, except those that leave the skill folder: a router step
+    # such as "then cat ../build/SKILL.md" runs after every guide, so those utilities are always loaded.
+    for rel in start:
+        text = read(rel)
+        for target in CAT_ANY.findall(text or ""):
+            for variant in expand(target.replace("<stack>", stack) if stack else target):
+                path = os.path.normpath(os.path.join(home, variant))
+                body = read(path)
+                if not path.startswith(home + "/") and not (skill != "add" and path.startswith("skills/add/")) and body is not None:
+                    outside[path] = len(body.encode("utf-8"))
     while queue:
         rel = queue.pop(0)
         if rel in seen:

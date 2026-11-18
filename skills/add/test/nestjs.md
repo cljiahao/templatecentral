@@ -7,10 +7,6 @@
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **Context check:** Confirm `src/modules/` exists and contains at least one subdirectory. If not, stop and tell the user: "No modules found. Run
 `templatecentral:add` (module) first, then return here."
 
@@ -192,7 +188,3 @@ pnpm test:e2e    # e2e (vitest.config.e2e.ts)
 - Mock the service in controller tests only to exercise error paths
 - `afterAll(() => app.close())` in e2e tests
 - Tests pass in any order
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

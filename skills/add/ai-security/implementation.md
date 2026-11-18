@@ -1,10 +1,6 @@
 <!-- ref: add/ai-security/implementation.md
      loaded-by: add/SKILL.md
      prereq: Stack identified. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
-## Step 0 — Verify context
-
-Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ---
 
 ## Controls (apply all that are relevant to the chosen capability)
@@ -376,28 +372,8 @@ Regardless of capability or environment, **never**:
 - Use `latest` model aliases in production — always pin snapshots
 - Allow unrestricted tool calling without an explicit allowlist (agentic)
 
----
 
-## After Writing Code
-
-Then load `cat "<skill-dir>/../build/SKILL.md"` (validate the project still compiles), then `cat "<skill-dir>/../review/SKILL.md"` (code standards and security patterns).
-
-## Responsible AI Checklist
-
-For pre-launch reviews, also run a cloud responsible-AI checklist (e.g. the AWS Responsible AI Lens, 10 dimensions, or your provider's equivalent):
-
-- **Controllability** — ability to override, retrain, or shut down the model
-- **Privacy** — data minimization, consent, and PII handling
-- **Security** — prompt injection, adversarial input, model extraction defense
-- **Safety** — preventing harmful outputs across user populations
-- **Veracity** — factual accuracy, hallucination detection, grounding
-- **Robustness** — performance under distribution shift and edge inputs
-- **Fairness** — equitable outcomes across demographic groups
-- **Explainability** — traceability from input to output decision
-- **Transparency** — disclosure of AI involvement to end users
-- **Governance** — audit trails, policy enforcement, accountability
-
-OWASP LLM Top 10 covers attack vectors; the Responsible AI Lens covers systemic trustworthiness. Run both before shipping AI features.
+## Agentic Applications
 
 For Capability C (agentic systems), also apply the **OWASP Top 10 for Agentic Applications (ASI prefix codes)** — a separate framework covering multi-agent orchestration risks:
 
@@ -421,4 +397,3 @@ Design principle: **Least Agency** — give each agent only the permissions and 
 - Apply controls proportional to capability: A (simple) needs LLM01, 02, 03, 05, 07, 09, 10; B (RAG) adds LLM04 (data/model poisoning — validate RAG and fine-tuning ingestion) and LLM08. LLM09 (misinformation/overreliance) applies at every tier. **LLM06 (Excessive Agency) applies the moment ANY tool, function, or plugin is wired — not only multi-agent setups** — so add it as soon as the model can take an action. C (agentic) adds the full OWASP Agentic Top 10 (ASI01–ASI10, Least-Agency principle)
 - Use structured output validation (Zod/Pydantic) on every model response — treat it like an external API
 - Document the AI feature's data flow in the project's `AGENTS.md` under "Architecture Decisions"
-

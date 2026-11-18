@@ -177,7 +177,6 @@ Confirm the migration file was generated and the build succeeds with no type err
 ## Rules
 
 - **Opt-in only** — add a database only on request.
-- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - Client and schemas live in `src/integrations/database/`.
 - Keep the cached singleton — it prevents connection exhaustion on hot reload.
 - Do not hardcode credentials; keep connection config in `.env` / `.env.local` and document in `.env.example`.
@@ -185,7 +184,3 @@ Confirm the migration file was generated and the build succeeds with no type err
 - **Drizzle**: Run `pnpm db:generate` after schema changes; run `pnpm db:migrate` to apply. `pnpm db:push` is dev-only, never production. Commit the migrations in `drizzle/`. No IAM variant — use Kysely for IAM auth.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -9,7 +9,7 @@ Report-only mutation testing with StrykerJS + the Vitest runner.
 
 ### Prerequisites
 
-Requires a project scaffolded with `templatecentral:scaffold` for Next.js, NestJS, or Vite+React. See Step 0.
+Requires a project scaffolded with `templatecentral:scaffold` for Next.js, NestJS, or Vite+React.
 
 ### Dependencies
 
@@ -22,10 +22,6 @@ pnpm add -D @stryker-mutator/core @stryker-mutator/vitest-runner
 ```
 
 ### Steps
-
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 #### Step 1 — Create StrykerJS config
 
@@ -88,7 +84,3 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
 ```bash
 pnpm mutation    # runs StrykerJS; kill-rate score in terminal; HTML report at stryker-report.html
 ```
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (confirm no compile errors after config addition), then `cat "<skill-dir>/../review/SKILL.md"` (check config correctness).

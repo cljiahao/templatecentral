@@ -10,10 +10,6 @@ An API endpoint: router → service.
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Define Request/Response Schemas
 
 Request schemas inherit `BaseRequestSchema`, responses `BaseResponseSchema` (`src/api/schemas/base.py`: `extra="forbid"`, camelCase aliases, camelCase serialization on responses). Bound every string/list field (`max_length`) — unbounded input is a cheap DoS vector.
@@ -167,7 +163,3 @@ After creating all files:
 - **Apply auth by default when the project has it** — if `src/api/dependencies/auth.py` exists, add the project's auth dependency (`user_id: Annotated[str, Depends(get_current_user)]` — Ruff `FAST002` rejects the bare `= Depends(...)` default) to new endpoints unless the route is deliberately public. Use `status_code=201` on create endpoints.
 - Services take Pydantic schemas or domain models, not raw `dict` or unvalidated data
 - Register the router in `src/api/routes.py` and add its tag to `src/api/tags.py`
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.

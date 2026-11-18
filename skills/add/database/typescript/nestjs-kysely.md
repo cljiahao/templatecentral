@@ -198,7 +198,6 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 ## Rules
 
 - **Opt-in only** — add a database only on request.
-- **Default to password auth** — use AWS SDK packages and IAM variants only when the user requires AWS IAM.
 - `DatabaseModule` is `@Global()` so modules need not re-import it.
 - Place `KyselyService` and `DatabaseModule` in `src/database/`.
 - Do not hardcode credentials; keep connection config in `.env` and document in `.env.example`.
@@ -206,7 +205,3 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 - **Auth integration** — if `templatecentral:add` (auth) ran first, `nestjs-kysely-auth.md` replaces its 501 stubs; it is loaded alongside this guide, not from it.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

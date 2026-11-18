@@ -3,10 +3,6 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### Vite + React (React Query)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 Run `TC_PART=leaf TC_LEAF=add/pagination/vite-react bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/vite-react/template/` (listed in `<skill-dir>/pagination/vite-react/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
 **1. Pagination Hook**
@@ -146,14 +142,3 @@ Run `pnpm test`, then `pnpm dev` and confirm: Previous is disabled on page 1, Ne
 - Always throw `APIError`, never a generic `Error` — never put validation details in the thrown message
 - Always add the hook to the `src/hooks/index.ts` barrel
 - Use the shadcn `Button` for pagination controls — never a raw `<button>`
-
-## See Also
-
-- `templatecentral:add` (error-handling) — unified error responses
-- `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod/Pydantic
-- `templatecentral:add (endpoint)` — Add pagination to new list endpoints
-- Stack `code-standards` — index sort fields
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

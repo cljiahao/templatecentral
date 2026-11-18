@@ -3,10 +3,6 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js — Structured Logging
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **What already exists in the template:**
 - `pino` in `package.json` dependencies
 - `src/lib/logger.ts` — pino logger with `redact` (auth/cookie/password/token) and an HMR-safe `globalThis` singleton (dev)
@@ -183,7 +179,3 @@ has `"[Redacted]"` as its value.
 ## Production Requirement
 
 Ship logs to a separate system with a defined retention period, protected from alteration — production logs must not live only on the app host.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

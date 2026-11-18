@@ -6,28 +6,12 @@
 
 Validated form with React Hook Form, Zod and the existing `CustomFormField` widget.
 
-## What the Template Already Provides
-
-| Dependency / Component | Location |
-|------------------------|----------|
-| `react-hook-form` | `package.json` |
-| `@hookform/resolvers` | `package.json` |
-| `zod` | `package.json` |
-| `Form` (FormProvider) | `src/components/ui/form.tsx` |
-| `CustomFormField` | `src/components/widgets/custom-form-field.tsx` |
-| `Input`, `Textarea`, `Select` | `src/components/ui/` |
-| `sonner` (Toaster) | `package.json` + `<Toaster />` mounted in `src/components/layout/providers.tsx` |
-
 ## Inputs
 
 - **Form name** — e.g., `contact`, `create-project`, `settings`
 - **Fields** — List of field names, types, and validation rules
 
 ## Steps
-
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
 
 ### 1. Define the Zod Schema
 
@@ -166,13 +150,3 @@ export default function ContactPage() {
 - **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler re-parses the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
 - Add `'use client'` directive — forms are inherently interactive.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
-
-## Validate
-
-```bash
-pnpm build
-```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -38,8 +38,6 @@ class APISettings(BaseSettings):
     )
 ```
 
-Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
-
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 ```
 DATABASE_URL=postgresql+psycopg://your-user:your-password@localhost:5432/your-db
@@ -357,8 +355,3 @@ def get_me(
 - Always use Alembic for schema changes — never call `Base.metadata.create_all()` in production.
 - The `get_db` dependency ensures sessions are properly closed.
 - For async SQLAlchemy, use `create_async_engine` + `AsyncSession` from `sqlalchemy.ext.asyncio`.
-- **Default to password auth** — IAM only when the user requires it.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

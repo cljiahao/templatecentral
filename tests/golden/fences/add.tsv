@@ -270,23 +270,23 @@ ae44c31a2c750b73094a8590ef612dfac5899377228f15999ddb880df8a7c0ba	skills/add/endp
 12caecc444bcfa50c68e6d6d6c5bcb84452d6c880f0c10c8580ef0e00a213c69	skills/add/endpoint/nextjs.md	2. Implement the Route Handler	0	ts
 97153b753d29f7d18ccd7708af551ec3f09623d4539b216f1e4af71b254e8627	skills/add/endpoint/nextjs.md	3. Dynamic Segments	0	ts
 78a0d75c1ca4efcc44f9eec795ecc7658646976e91d9b2a192e036f9549f0fc0	skills/add/endpoint/nextjs.md	4. Update Routes Constant	0	ts
-dc0b6a98cde94f2104fd8269990dd86c8281c4d8682b9767cd394da797f21790	skills/add/error-handling/fastapi.md	Step 0 — Verify context	0	python
-3b67497985359cc05122206dfab3933b1b5f05460e57fa13c71606feb4c0a067	skills/add/error-handling/fastapi.md	Step 0 — Verify context	1	python
-25b77f77831c1a561a82fc87f435271ed216df826ba37f2d47884d1aacb4257b	skills/add/error-handling/fastapi.md	Step 0 — Verify context	2	python
-4713bf57c9b13191acbd69fe29c8b02ed5e650f1730f3b53cb9ad7949b33742b	skills/add/error-handling/fastapi.md	Step 0 — Verify context	3	python
-d3374f1436822825215c4e4bcf0a192ee027d37828b5561542ad58a657158de2	skills/add/error-handling/nestjs.md	Step 0 — Verify context	0	ts
-ea5da2f6524c1c227d48783e3c928a4cb729d6190f782b3827a3f22538a94a5e	skills/add/error-handling/nestjs.md	Step 0 — Verify context	1	ts
-641120f0e97cd4e97f3d3b051d65577cf14aeea51bc496d3bbe7b92e752837e2	skills/add/error-handling/nestjs.md	Step 0 — Verify context	2	ts
+dc0b6a98cde94f2104fd8269990dd86c8281c4d8682b9767cd394da797f21790	skills/add/error-handling/fastapi.md	FastAPI — Error Handling	0	python
+3b67497985359cc05122206dfab3933b1b5f05460e57fa13c71606feb4c0a067	skills/add/error-handling/fastapi.md	FastAPI — Error Handling	1	python
+25b77f77831c1a561a82fc87f435271ed216df826ba37f2d47884d1aacb4257b	skills/add/error-handling/fastapi.md	FastAPI — Error Handling	2	python
+4713bf57c9b13191acbd69fe29c8b02ed5e650f1730f3b53cb9ad7949b33742b	skills/add/error-handling/fastapi.md	FastAPI — Error Handling	3	python
+d3374f1436822825215c4e4bcf0a192ee027d37828b5561542ad58a657158de2	skills/add/error-handling/nestjs.md	NestJS — Error Handling	0	ts
+ea5da2f6524c1c227d48783e3c928a4cb729d6190f782b3827a3f22538a94a5e	skills/add/error-handling/nestjs.md	NestJS — Error Handling	1	ts
+641120f0e97cd4e97f3d3b051d65577cf14aeea51bc496d3bbe7b92e752837e2	skills/add/error-handling/nestjs.md	NestJS — Error Handling	2	ts
 020cb45113996b36936f73fe99ff7d68196cc095064d2cf24aca09ea616322fb	skills/add/error-handling/nextjs.md	Next.js Error Boundary Tests	0	typescript
-ba913d28c2aca5ab3ef52b381b04792b22782785151a8005828b91ff54590265	skills/add/error-handling/nextjs.md	Step 0 — Verify context	0	ts
-739023feaddfed2d2b27102b690cc430fffbe28caa3b2f21f36f2f3ec851d2ff	skills/add/error-handling/nextjs.md	Step 0 — Verify context	1	ts
-cedd729f36659842d7338e2a58bd4418fba8ab9a0b6516c986ccdf4bab503fe4	skills/add/error-handling/nextjs.md	Step 0 — Verify context	2	ts
-6ac86ec1be1287b614879ff96b112a7c6173fe2656d39385c24948d73b1451a3	skills/add/error-handling/nextjs.md	Step 0 — Verify context	3	tsx
-9992e69d17d6cd9f22527ccf2d1f9155f256835348b354ba76a38b8d2baa7698	skills/add/error-handling/nextjs.md	Step 0 — Verify context	4	tsx
-6d3a5b66e0b8bca72559272dd71b0e66be2326781abe006820f4c329d4a8eee4	skills/add/error-handling/nextjs.md	Step 0 — Verify context	5	tsx
-371741e24f04e6d429c567dee18767e61b098f3eb4d8fe802ee17ce9fe1caf97	skills/add/error-handling/vite-react.md	Step 0 — Verify context	0	tsx
-d11888b5d46bf810e95cc0bf650da8ce6b79cfac8db3d6faedf4c418c1d78f4a	skills/add/error-handling/vite-react.md	Step 0 — Verify context	1	ts
-3364f1509f6370c372c0cec64aea7946ec97d50cadafc345d7b5762424cfa5d7	skills/add/error-handling/vite-react.md	Step 0 — Verify context	2	tsx
+ba913d28c2aca5ab3ef52b381b04792b22782785151a8005828b91ff54590265	skills/add/error-handling/nextjs.md	Next.js — Error Handling	0	ts
+739023feaddfed2d2b27102b690cc430fffbe28caa3b2f21f36f2f3ec851d2ff	skills/add/error-handling/nextjs.md	Next.js — Error Handling	1	ts
+cedd729f36659842d7338e2a58bd4418fba8ab9a0b6516c986ccdf4bab503fe4	skills/add/error-handling/nextjs.md	Next.js — Error Handling	2	ts
+6ac86ec1be1287b614879ff96b112a7c6173fe2656d39385c24948d73b1451a3	skills/add/error-handling/nextjs.md	Next.js — Error Handling	3	tsx
+9992e69d17d6cd9f22527ccf2d1f9155f256835348b354ba76a38b8d2baa7698	skills/add/error-handling/nextjs.md	Next.js — Error Handling	4	tsx
+6d3a5b66e0b8bca72559272dd71b0e66be2326781abe006820f4c329d4a8eee4	skills/add/error-handling/nextjs.md	Next.js — Error Handling	5	tsx
+371741e24f04e6d429c567dee18767e61b098f3eb4d8fe802ee17ce9fe1caf97	skills/add/error-handling/vite-react.md	Vite + React — Error Handling	0	tsx
+d11888b5d46bf810e95cc0bf650da8ce6b79cfac8db3d6faedf4c418c1d78f4a	skills/add/error-handling/vite-react.md	Vite + React — Error Handling	1	ts
+3364f1509f6370c372c0cec64aea7946ec97d50cadafc345d7b5762424cfa5d7	skills/add/error-handling/vite-react.md	Vite + React — Error Handling	2	tsx
 bc8e9d3db3671bdf7f67651a92b5cd6c957b83bbc0d9d928afd8d1064b2f1672	skills/add/feature/nextjs.md	1. Create the Feature Directory Structure	0	-
 b85e3289148a77ff20488369622771aabfd7c074e9f6e31a10860813bc46d5fe	skills/add/feature/nextjs.md	2. Create `types.ts`	0	ts
 61ce3274fc2bfd936c25cf97bdf1c3afadf8a6c986f43cb2147065dd3955c7a5	skills/add/feature/nextjs.md	3. Create `constants.ts`	0	ts
@@ -411,36 +411,36 @@ d455f1ad2d0580d2a359a5a51566d2be33b29f4f32d21606f68ae248763eec8f	skills/add/page
 f3089195e6f1bbcf1d163ee371654433da719ac437f16b9c626576ce5e245b2c	skills/add/page/vite-react.md	3. Export from Barrel	0	ts
 631b870dacbf91cd61761e6fb959b96e255c5f0c42f177c539e81772564ef5cf	skills/add/page/vite-react.md	4. Update Routes Constant	0	ts
 4914c0a3ab629e31142c62471aa3205e1099979b16c759fcac83eadb29461370	skills/add/page/vite-react.md	5. Add Navigation (Optional)	0	ts
-b0c33aa2f9b83e5efeac8ce8752635c98c0bc7daf73d1e2ccc9557f581bb79e0	skills/add/pagination/fastapi.md	Step 0 — Verify context	0	python
-ece6f0266af0310cac3cea17803fe1679f9f9211185129e4d1e8c67d9bebd19b	skills/add/pagination/fastapi.md	Step 0 — Verify context	1	python
-3a33d8738628129b5c853792535e8d5ab613fe353a4213fa88efc0bf62c6c72f	skills/add/pagination/fastapi.md	Step 0 — Verify context	2	python
-ed23b8e91269aa339a2d262d5ff1eb712d9daf0fdc521389d9ab7da44b1fe41c	skills/add/pagination/fastapi.md	Step 0 — Verify context	3	python
-db3ff774803c6a39c8562dc54138d64a8379475df4264f5c674039d019580d48	skills/add/pagination/fastapi.md	Step 0 — Verify context	4	python
-b7cf253195ff3744befdaee80ce918be136abbf33ae5132e9cf7162713b96d81	skills/add/pagination/nestjs.md	Step 0 — Verify context	0	ts
-1edc6e93b6d631e67587ef4793c81548b9042da6edb28863be2e36fc74c3e44c	skills/add/pagination/nestjs.md	Step 0 — Verify context	1	ts
-b04e4a0cdaf85b200b8beadd18b08442741d371ea543cd84e9c163a80fe1d9f7	skills/add/pagination/nestjs.md	Step 0 — Verify context	2	ts
-83fbf3c3f44dde44c716cdfab5108d402127e238ea997f016d1b7bb72d809100	skills/add/pagination/nestjs.md	Step 0 — Verify context	3	ts
-922aac2675c54982da9e4d39027b9ea5567fe43c88bfded16e297c44a34dc3c7	skills/add/pagination/nestjs.md	Step 0 — Verify context	4	ts
-dc46b4d74be343611e3bbc42c5371193769273635241dcba7173ba1737d6fe6f	skills/add/pagination/nestjs.md	Step 0 — Verify context	5	ts
-8990de303a7720581e51c75442a7047717c1f03a7603d86d5b70441395331c11	skills/add/pagination/nestjs.md	Step 0 — Verify context	6	ts
-0ce538cebe3f7720012df5f4c9e50528c770ac60d8a866710c5e0e5f0dc30fcd	skills/add/pagination/nestjs.md	Step 0 — Verify context	7	ts
-c2cacfac461d1d1d76cb6883aabd6f41c39501689d756020666ee8045228f626	skills/add/pagination/nestjs.md	Step 0 — Verify context	8	ts
-56af0993b1d5cd479934354eb1e5825435de0c10256a8cb874ea753bea96d986	skills/add/pagination/nestjs.md	Step 0 — Verify context	9	ts
+b0c33aa2f9b83e5efeac8ce8752635c98c0bc7daf73d1e2ccc9557f581bb79e0	skills/add/pagination/fastapi.md	FastAPI (Pydantic + SQLAlchemy)	0	python
+ece6f0266af0310cac3cea17803fe1679f9f9211185129e4d1e8c67d9bebd19b	skills/add/pagination/fastapi.md	FastAPI (Pydantic + SQLAlchemy)	1	python
+3a33d8738628129b5c853792535e8d5ab613fe353a4213fa88efc0bf62c6c72f	skills/add/pagination/fastapi.md	FastAPI (Pydantic + SQLAlchemy)	2	python
+ed23b8e91269aa339a2d262d5ff1eb712d9daf0fdc521389d9ab7da44b1fe41c	skills/add/pagination/fastapi.md	FastAPI (Pydantic + SQLAlchemy)	3	python
+db3ff774803c6a39c8562dc54138d64a8379475df4264f5c674039d019580d48	skills/add/pagination/fastapi.md	FastAPI (Pydantic + SQLAlchemy)	4	python
+b7cf253195ff3744befdaee80ce918be136abbf33ae5132e9cf7162713b96d81	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	0	ts
+1edc6e93b6d631e67587ef4793c81548b9042da6edb28863be2e36fc74c3e44c	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	1	ts
+b04e4a0cdaf85b200b8beadd18b08442741d371ea543cd84e9c163a80fe1d9f7	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	2	ts
+83fbf3c3f44dde44c716cdfab5108d402127e238ea997f016d1b7bb72d809100	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	3	ts
+922aac2675c54982da9e4d39027b9ea5567fe43c88bfded16e297c44a34dc3c7	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	4	ts
+dc46b4d74be343611e3bbc42c5371193769273635241dcba7173ba1737d6fe6f	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	5	ts
+8990de303a7720581e51c75442a7047717c1f03a7603d86d5b70441395331c11	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	6	ts
+0ce538cebe3f7720012df5f4c9e50528c770ac60d8a866710c5e0e5f0dc30fcd	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	7	ts
+c2cacfac461d1d1d76cb6883aabd6f41c39501689d756020666ee8045228f626	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	8	ts
+56af0993b1d5cd479934354eb1e5825435de0c10256a8cb874ea753bea96d986	skills/add/pagination/nestjs.md	NestJS (TypeScript + Zod; Drizzle or Kysely)	9	ts
 6aca9bd72514ad9aa1b12a5efc11ccc5cc3965cd248a6329ca3a7f5c522240cb	skills/add/pagination/nestjs.md	Tests	0	ts
-d1afb1a96916cf8634293f3281100868ec3ca5d39cff12b0b710da7aba53049b	skills/add/pagination/nextjs.md	Step 0 — Verify context	0	ts
-68abd152cf90f1cebb2d53689769e458ea9e1e1b1d3564a7b7470e18e279d838	skills/add/pagination/nextjs.md	Step 0 — Verify context	1	ts
-d875f3160e1ee6365d42b9a965dd3a9bd52c81ee1d84dbcc30a270646a791bd0	skills/add/pagination/nextjs.md	Step 0 — Verify context	2	ts
-72174d3b5e41921a3ccd8afc73309ec319b356f183e93d8d0beb782184ac1bf3	skills/add/pagination/nextjs.md	Step 0 — Verify context	3	ts
-5852e65c0fd352dd9a9880a002dee5a43e63cf4bd13bfc152c21743dbcb0d352	skills/add/pagination/nextjs.md	Step 0 — Verify context	4	ts
-d96a25d6581fbbc78f4a4b24df23100bd2cb43cdefb8ea43bd141ebe9f6a3ee9	skills/add/pagination/nextjs.md	Step 0 — Verify context	5	ts
-4d73bb4800dce2ab5065a94f86a1441ec9841e6a4d366fce1f09d411592f8e7d	skills/add/pagination/nextjs.md	Step 0 — Verify context	6	ts
-ac146f9ea9a007ecaa9e44d4fc509e2719319cd63d6c9dc14a3aee3804837b34	skills/add/pagination/nextjs.md	Step 0 — Verify context	7	ts
-a15c237dfbbdc8ceaf0c8e2f1c0bc567fcaff2619438e093ae8b7ef711c11742	skills/add/pagination/nextjs.md	Step 0 — Verify context	8	tsx
-017613b28e9047e7df5665dfb5ff23886b275a24e10a1b386f4720ff5130926a	skills/add/pagination/vite-react.md	Step 0 — Verify context	0	ts
-a42c25f0e3521c47c516e68dcefb4dc4ed3ae34d34e822b53cd065f36d6a8094	skills/add/pagination/vite-react.md	Step 0 — Verify context	1	ts
-e2111001063e5f02a4021544c6fa282ae9a9ba0e2bb5af64c8968ea8fc75e1d0	skills/add/pagination/vite-react.md	Step 0 — Verify context	2	ts
-00963b18628367f30f118317d6bcd1ba3cf918e536ad4846a11e35ad80fb890e	skills/add/pagination/vite-react.md	Step 0 — Verify context	3	ts
-5ebc7a825e509e4d7cfdeed03d0f4518ebd0b6964aa38f070eac0a976069e211	skills/add/pagination/vite-react.md	Step 0 — Verify context	4	tsx
+d1afb1a96916cf8634293f3281100868ec3ca5d39cff12b0b710da7aba53049b	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	0	ts
+68abd152cf90f1cebb2d53689769e458ea9e1e1b1d3564a7b7470e18e279d838	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	1	ts
+d875f3160e1ee6365d42b9a965dd3a9bd52c81ee1d84dbcc30a270646a791bd0	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	2	ts
+72174d3b5e41921a3ccd8afc73309ec319b356f183e93d8d0beb782184ac1bf3	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	3	ts
+5852e65c0fd352dd9a9880a002dee5a43e63cf4bd13bfc152c21743dbcb0d352	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	4	ts
+d96a25d6581fbbc78f4a4b24df23100bd2cb43cdefb8ea43bd141ebe9f6a3ee9	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	5	ts
+4d73bb4800dce2ab5065a94f86a1441ec9841e6a4d366fce1f09d411592f8e7d	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	6	ts
+ac146f9ea9a007ecaa9e44d4fc509e2719319cd63d6c9dc14a3aee3804837b34	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	7	ts
+a15c237dfbbdc8ceaf0c8e2f1c0bc567fcaff2619438e093ae8b7ef711c11742	skills/add/pagination/nextjs.md	Next.js (Drizzle + Zod)	8	tsx
+017613b28e9047e7df5665dfb5ff23886b275a24e10a1b386f4720ff5130926a	skills/add/pagination/vite-react.md	Vite + React (React Query)	0	ts
+a42c25f0e3521c47c516e68dcefb4dc4ed3ae34d34e822b53cd065f36d6a8094	skills/add/pagination/vite-react.md	Vite + React (React Query)	1	ts
+e2111001063e5f02a4021544c6fa282ae9a9ba0e2bb5af64c8968ea8fc75e1d0	skills/add/pagination/vite-react.md	Vite + React (React Query)	2	ts
+00963b18628367f30f118317d6bcd1ba3cf918e536ad4846a11e35ad80fb890e	skills/add/pagination/vite-react.md	Vite + React (React Query)	3	ts
+5ebc7a825e509e4d7cfdeed03d0f4518ebd0b6964aa38f070eac0a976069e211	skills/add/pagination/vite-react.md	Vite + React (React Query)	4	tsx
 3e394940d3687451d257a077a1dfa99ad83b146e411135cef3e582be2ea953b1	skills/add/redaction/hook-node.md	Part A — `PostToolUse` masking hook	0	javascript
 9a3ac1bcbe843a3488b873c634f62d5bfbba26e80f1360d2ca3f1833ee976fd1	skills/add/redaction/hook-node.md	Part B — `user-prompt-guard` companion warning	0	javascript
 9334025504db9c56072f710220745aa6b2acc5cd8539379cc079cb8aae50cdf5	skills/add/redaction/hook-python.md	Part A — `PostToolUse` masking hook	0	python

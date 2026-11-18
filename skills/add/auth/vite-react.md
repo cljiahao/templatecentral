@@ -24,10 +24,6 @@ In **development mode** (`ENV.IS_DEV`), the user is auto-authenticated as a dev 
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Choose an Auth Strategy
 
 Auth lives in a backend API. Common patterns:
@@ -341,7 +337,3 @@ src/
 - Redirect to `/login` on 401 — `ProtectedRoute` covers navigation; API calls must handle 401 too
 - Keep the dev bypass pattern: `ENV.IS_DEV` → auto-authenticated dev user + "Dev login" button
 - Role and ownership checks in the SPA only hide UI. The API must enforce them on every request
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -25,10 +25,6 @@ Validated form with React Hook Form, Zod and the `CustomFormField` widget.
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Define the Zod Schema
 
 **`src/features/<feature>/schemas/<form-name>.schema.ts`**:
@@ -158,13 +154,3 @@ export function ContactPage() {
 - Use `toast.success()` / `toast.error()` from Sonner for feedback.
 - **Client-side validation is UX, not security** — the backend endpoint has to re-validate the same payload.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
-
-## Validate
-
-```bash
-pnpm build
-```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

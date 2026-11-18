@@ -17,10 +17,6 @@ Create `src/integrations/` on first use (not in the template); the base `FetchCl
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Create Zod Schemas
 
 ```ts
@@ -131,7 +127,3 @@ Build and tests pass; the integration works end-to-end in the browser.
 - Do not hardcode API URLs or secrets; centralize in `src/lib/constants/env.ts`
 - Throw `APIError` for HTTP failures, not a generic `Error`. `ZodError` from schema `parse()` is expected for validation failures and should propagate naturally.
 - Components reach integrations through React Query hooks in features
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

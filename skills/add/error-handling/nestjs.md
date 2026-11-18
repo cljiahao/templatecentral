@@ -3,10 +3,6 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Enhanced HTTP Exception Filter**
 
 This replaces the scaffold's `HttpExceptionFilter`: the body changes from `{ statusCode, message }` to `{ error, details? }`. Update clients, tests and Swagger consumers of the old shape — it is a breaking change.
@@ -110,17 +106,6 @@ Document the error statuses each route can return so Swagger consumers see the `
 @ApiResponse({ status: 404, description: 'Resource not found' })
 ```
 
-## Validate
-
-```bash
-pnpm check && pnpm build && pnpm test && pnpm test:e2e
-pnpm start:dev
-curl -s -X POST localhost:3000/examples -H 'content-type: application/json' -d '{"name":""}'
-# Expect 400 {"error":"Validation failed","details":{"fieldErrors":{"name":[...]},"code":"VALIDATION_ERROR"}}
-```
+Run `pnpm test:e2e` as well as `pnpm test`: e2e tests assert the error body.
 
 Any test asserting the old `{ statusCode, message }` body must be updated in the same change.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

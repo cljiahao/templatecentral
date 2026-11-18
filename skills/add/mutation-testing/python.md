@@ -25,10 +25,6 @@ pip install -r requirements-dev.txt
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### Step 1 — Add mutmut configuration
 
 Add to `pyproject.toml`. Create the file at the project root if it does not exist:
@@ -77,7 +73,3 @@ If `.github/workflows/` exists, add a `mutation` job to the primary workflow. It
 mutmut run       # paths come from pyproject.toml; prints the killed/survived/no-tests tally when done
 mutmut results   # lists surviving (and untested) mutants — `mutmut show <name>` prints the diff
 ```
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (confirm no errors after config addition), then `cat "<skill-dir>/../review/SKILL.md"` (check config correctness).

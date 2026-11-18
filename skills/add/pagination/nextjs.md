@@ -3,10 +3,6 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### Next.js (Drizzle + Zod)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Reusable Pagination Schema** (canonical: `validation-patterns/patterns.md`; reuse an existing `src/lib/validation/schemas.ts`)
 
 ```ts
@@ -243,19 +239,6 @@ export function ProjectsList() {
 }
 ```
 
-## Validate
-
-```bash
-# Expect 200 {"data":{"items":[...],"pagination":{"page":1,"limit":10,"total":N,"hasMore":...}}}
-curl 'http://localhost:3000/api/projects?page=1&limit=10'
-# Each of these must be 400
-curl 'http://localhost:3000/api/projects?page=0'
-curl 'http://localhost:3000/api/projects?limit=200'
-curl 'http://localhost:3000/api/projects?sort=asc_invalid'
-pnpm test
-pnpm build
-```
-
 ## Rules
 
 - Set `placeholderData: keepPreviousData` on paginated queries, or each page click blanks the list
@@ -265,14 +248,3 @@ pnpm build
 - Keep queries out of route handlers and fetches out of components — route → `integrations/`, component → hook → feature `api/`
 - Whitelist every sortable field before it reaches the ORM's `orderBy` — `parseSortParam` returns `null` for anything outside the list
 - Use the shadcn `Button` for pagination controls — never a raw `<button>`
-
-## See Also
-
-- `templatecentral:add` (error-handling) — unified error responses
-- `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod
-- `templatecentral:add (endpoint)` — Add pagination to new list endpoints
-- Stack `code-standards` — index sort fields
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

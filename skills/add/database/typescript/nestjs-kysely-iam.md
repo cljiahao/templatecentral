@@ -3,7 +3,7 @@
      prereq: Stack = NestJS, ORM = Kysely, compliance = AWS IAM (PostgreSQL only). Loaded alongside nestjs-kysely.md — overrides its B2 service, B6 migration-runner pool, and B7 env. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS + Kysely — IAM Auth Variant
 
-> **Add-on to `nestjs-kysely.md`** (the router loads both). Work through that guide's B1–B10, but use the `KyselyService` below instead of its standard B2 service and the IAM env fields below instead of its B7 `DATABASE_URL`; then run its **After Writing Code** steps.
+> **Add-on to `nestjs-kysely.md`** (the router loads both). Work through that guide's B1–B10, but use the `KyselyService` below instead of its standard B2 service and the IAM env fields below instead of its B7 `DATABASE_URL`.
 
 For AWS IAM auth, also install:
 

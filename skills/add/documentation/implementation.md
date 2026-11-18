@@ -4,7 +4,7 @@
 
 ## Step 0 — Verify context
 
-Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate` (Project-migration path; its Phase 5 health check runs automatically), and if still absent, stop without writing files.
+Need `<!-- templateCentral:` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate` (its Phase 5 health check runs on its own), and if still absent, stop without writing files.
 
 ## Step 1 — Backfill per-folder documentation
 

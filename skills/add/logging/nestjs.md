@@ -3,10 +3,6 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS — Structured Logging
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **What already exists in the template:**
 - `nestjs-pino` wired in `app.module.ts` via `LoggerModule.forRoot()` (with a header `redact` block; UUID request ids come from `genReqId` on the `FastifyAdapter` in `app.factory.ts`)
 - `createApp()` in `src/app.factory.ts` already does `app.useLogger(app.get(Logger))` with `bufferLogs: true`, and `src/bootstrap.ts` logs startup — no bootstrap changes needed
@@ -206,17 +202,6 @@ curl http://localhost:3000/health
 grep -iE '"(password|secret|token|access_token|api_key|authorization|cookie|email|phone|address|credit_card)"' <log-output>
 ```
 
-## See Also
-
-- `add/error-handling/nestjs` — Unified error response schema; `logError` integration
-- `standards/validation-patterns/nestjs` — Zod/Pydantic validation before any log call
-- Stack-specific `code-standards` — Logging rules within each stack's security guidelines
-- `templatecentral:add (endpoint)` — Apply logging when adding new routes
-
 ## Production Requirement
 
 Ship logs to a separate, tamper-evident system (CloudWatch, Datadog, OpenSearch Ingestion) — production logs must not live only on the app host.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -13,10 +13,6 @@ pnpm add @nestjs/axios axios
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Create Integration Module Directory
 
 Create `src/modules/<name>-integration/` with:
@@ -255,7 +251,3 @@ pnpm check && pnpm build && pnpm test && pnpm test:e2e
 - Export the service from the integration module so other modules can import it
 - Keep API tokens in environment variables; do not hardcode them
 - Integration modules are self-contained — each has its own module, service, and schemas
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

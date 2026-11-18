@@ -26,10 +26,6 @@ AGENTS.md                            ← adds auth architecture notes
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Install better-auth
 
 ```bash
@@ -433,9 +429,3 @@ Single instance: the built-in limiter suffices — `rateLimit: { storage: 'datab
 - Rate limiting on auth endpoints is mandatory before production.
 - Override the scrypt default with argon2id (Step 2) — the project standard.
 - Reject breached passwords at sign-up/change (e.g. the Have I Been Pwned k-anonymity range API) before `authClient.signUp.email()`, in addition to the length floor.
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
-
----

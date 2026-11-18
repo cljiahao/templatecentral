@@ -9,10 +9,6 @@ Tests for Next.js API route handlers only — not frontend components.
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **Context check:** Confirm `src/app/api/` contains at least one `.ts` route handler file. If not, stop and tell the user: "No API routes found. Run
 `templatecentral:add` (api-route) first, then return here."
 
@@ -255,7 +251,3 @@ function makeParams<T extends Record<string, string>>(values: T) {
 - Tests do not share mutable state
 - One 500 test per handler pattern that asserts the body does not echo the internal error message; not one per route
 - Parametrize sibling inputs per `docs/CONSTITUTION.md` §4 (`it.each`), e.g. several invalid bodies → 400
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -3,10 +3,6 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 > **Migration note — response format change**
 > This skill replaces FastAPI's default error format (`{"detail": "..."}` / `{"detail": [...]}`)
 > with a structured envelope. Before applying, update existing tests:
@@ -188,17 +184,3 @@ async def get_project(project_id: str) -> ProjectResponse:
 Register the router with an `APITags` tag in `src/api/routes.py` (see `add/endpoint/fastapi.md`). Replace each `raise NotImplementedError` with a service call. The router imports no exception types: the service raises `InvalidInputError` for domain validation failures (→ 400) and `NoResultsFound` for missing records (→ 404) from `core.exceptions`, and the handlers in Section 1 turn both into the structured envelope.
 
 **2b. Wiring** — `start_application()` already calls `configure_exceptions(app)`. Replace only the handler bodies; do not add a second `FastAPI(...)` or `configure_exceptions` call.
-
-## Validate
-
-```bash
-# Expect 422 with details.fieldErrors.name
-curl -X POST http://localhost:8000/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name": ""}'
-python -m pytest test/ -v
-```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
