@@ -12,7 +12,7 @@ Report-only mutation testing with mutmut. Run it on changed modules or one named
 Add to `requirements-dev.txt` (create the file if absent):
 
 ```
-mutmut>=3.6.0
+mutmut>=3.8.1
 ```
 
 > The floor and why it is there: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`.

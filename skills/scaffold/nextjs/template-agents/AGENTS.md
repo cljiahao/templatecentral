@@ -4,7 +4,7 @@
 > Next.js 16: `cookies()`, `headers()`, `params`, `searchParams` are async; `middleware.ts` is now `proxy.ts`.
 
 ## Stack
-Next.js 16 App Router · TypeScript strict · shadcn/ui · TanStack Query v5 · React Hook Form · Zod v4 · Vitest · pnpm 12 · Node ≥24
+Next.js 16 App Router · TypeScript strict · shadcn/ui · TanStack Query v5 · React Hook Form · Zod v4 · Vitest · pnpm 12 · Node ≥24.22.1
 
 ## Commands
 `pnpm dev` (localhost:3000) · `pnpm build` · `pnpm test` · `pnpm check` (format + lint + typecheck)

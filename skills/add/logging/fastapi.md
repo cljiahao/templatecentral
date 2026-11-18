@@ -14,7 +14,7 @@
 **Request IDs + request logging.** Install `asgi-correlation-id` (reads `X-Request-ID` or generates a UUID) and wire two middlewares in `src/app.py`.
 
 ```bash
-pip install "asgi-correlation-id>=4.3" && pip freeze > requirements.txt
+pip install "asgi-correlation-id>=5.0.1" && pip freeze > requirements.txt
 ```
 
 Define the middleware as a module-level function — `app` is built inside `start_application()`, so a top-level `@app.middleware("http")` raises `NameError`.
