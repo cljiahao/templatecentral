@@ -30,7 +30,7 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   done
   exit 0
 fi
-# Paths in the diff, relative to the project dir and limited to it (--relative; ls-files is cwd-scoped): deletions and renames as separate paths, untracked included; without a HEAD commit, everything tracked or untracked.
+# Paths relative to the project dir, untracked included; without a HEAD commit, every file.
 git rev-parse --verify -q HEAD >/dev/null 2>&1; head_rc=$?
 if [ "$head_rc" -eq 0 ]; then
   diff_out=$(git -c core.quotePath=false diff --relative --name-only --no-renames HEAD 2>/dev/null) || gate_git_fail "git diff failed"

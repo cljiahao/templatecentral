@@ -24,7 +24,7 @@ for kit_md in "${KIT_MDS[@]}"; do
   [[ -f "$kit_md" ]] || { echo "test-harness-kit: $kit_md not found" >&2; exit 2; }
 done
 
-T=$(mktemp -d)
+T=$(mktemp -d "${TMPDIR:-/tmp}/tkit.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 KIT="$T/kit"
 mkdir -p "$KIT"
@@ -105,13 +105,24 @@ new_repo() {
 
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
-# strip_json <file>: the hook without its stack-specific JSON extraction statements (node in the TS twin, python3 in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd)=\$\(printf/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null$/) skip = 0; next } { print }' "$1"; }
-# No hook is byte-identical between the stacks today; block-no-verify.sh must differ only in its two JSON extraction statements.
-ts_nv=$(strip_json "$KIT/block-no-verify.ts.sh")
-py_nv=$(strip_json "$KIT/block-no-verify.py.sh")
-check yes "$(ok_if test -n "$ts_nv" -a "$ts_nv" = "$py_nv")" "block-no-verify.sh twins differ only in the JSON extraction statements"
-check yes "$(ok_if test "$(wc -l < "$KIT/block-no-verify.ts.sh")" -gt "$(printf '%s\n' "$ts_nv" | wc -l)")" "block-no-verify.sh drift check strips the JSON extraction statements"
+# strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
+strip_json() { awk '/^(cmd|in_cwd)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } { print }' "$1"; }
+# drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
+drift_ok() {
+  local a b total kept
+  a=$(strip_json "$1"); b=$(strip_json "$2")
+  total=$(wc -l < "$1"); kept=$(printf '%s\n' "$a" | wc -l)
+  [ -n "$a" ] && [ "$a" = "$b" ] && [ $((kept * 10)) -ge $((total * 9)) ]
+}
+# Only block-no-verify.sh is meant to match across stacks. The others differ by design: protect-files.sh and
+# subagent-stop.sh (stack tooling in the logic), post-edit-comment-check.sh (TS/JSX scanner), stop-checks.sh and
+# post-edit-typecheck.sh (different toolchains).
+check yes "$(ok_if drift_ok "$KIT/block-no-verify.ts.sh" "$KIT/block-no-verify.py.sh")" "block-no-verify.sh twins differ only in the JSON extraction statement"
+for side in ts py; do
+  cp "$KIT/block-no-verify.ts.sh" "$T/nv.ts.sh"; cp "$KIT/block-no-verify.py.sh" "$T/nv.py.sh"
+  awk '{ sub(/^protected=.main\|uat\|develop.$/, "protected='"'"'main|uat'"'"'"); print }' "$T/nv.$side.sh" > "$T/nv.mut"; mv "$T/nv.mut" "$T/nv.$side.sh"
+  check no "$(ok_if drift_ok "$T/nv.ts.sh" "$T/nv.py.sh")" "block-no-verify.sh drift check fails when only the $side twin changes"
+done
 
 # ── protect-files.sh ──────────────────────────────────────────────────────────
 
@@ -463,7 +474,7 @@ cat > "$MOCK/python" <<'MOCK'
 #!/usr/bin/env bash
 case "$*" in
   "-m pyright --version") [ "$MOCK_HANG_PROBE" = pyright ] && exec sleep 30; [ -n "$MOCK_NO_PYRIGHT" ] && exit 1; echo pyright 1.1; exit 0 ;;
-  "-m pyright src/") echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
+  "-m pyright src/") [ -n "$MOCK_HANG_PYRIGHT" ] && exec sleep 30; echo "pyright" >> "$MOCK_LOG"; [ -f "$MOCK_TSC_OK" ] && exit 0
     echo "cwd=$PWD" >> "$MOCK_LOG"; printf '/p/src/a.py:1:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error\n'; exit 1 ;;
   "-m pytest --version") [ "$MOCK_HANG_PROBE" = pytest ] && exec sleep 30; [ -n "$MOCK_NO_PYTEST" ] && exit 1; exit 0 ;;
   "-m pytest test/ -q") echo "cwd=$PWD" >> "$MOCK_LOG"; echo "1 failed"; exit 1 ;;
@@ -484,7 +495,7 @@ json_has() {
 run_hook "$KIT/post-edit-typecheck.ts.sh" "$PROJ" '{"tool_input":{"file_path":"src/a.ts"}}'
 check "0 yes" "$EC $(ok_if json_has "d['hookEventName'] == 'PostToolUse' and 'TS2322' in d['additionalContext'] and '\"string\"' in d['additionalContext']")" \
   "post-edit-typecheck.ts surfaces tsc errors as additionalContext JSON" "$OUT"
-check yes "$(ok_if grep -qE "cwd=($(cd "$PROJ" && pwd -P)|$PROJ)\$" "$MOCK_LOG")" "post-edit-typecheck.ts runs tsc in the project dir"
+check yes "$(ok_if grep -qE "cwd=($(cd "$PROJ" && pwd -P)|$(cd "$PROJ" && pwd)|$PROJ)\$" "$MOCK_LOG")" "post-edit-typecheck.ts runs tsc in the project dir"
 run_hook "$KIT/post-edit-typecheck.ts.sh" "$PROJ" '{"tool_input":{"file_path":"README.md"}}'
 check "0:" "$EC:$OUT" "post-edit-typecheck.ts ignores non-TS files"
 touch "$MOCK_TSC_OK"
@@ -504,6 +515,15 @@ for e in json.load(open(sys.argv[1]))["hooks"]["PostToolUse"]:
             print(h.get("timeout", "none"))' "$TPL/template-settings-$v/.claude/settings.json")
   check yes "$(ok_if test "$tmo" -ge 1 -a "$tmo" -le 60)" "post-edit-typecheck.$v is bounded by a settings.json timeout of at most 60s" "timeout=$tmo"
 done
+# Its own deadline: a hung typecheck returns within the limit, exit 0, with a message that no result came back.
+touch "$MOCK_TSC_OK"
+for v in ts py; do
+  start=$SECONDS
+  if [ "$v" = ts ]; then hf=src/a.ts; else hf=src/a.py; fi
+  TYPECHECK_LIMIT=3 MOCK_HANG=1 MOCK_HANG_PYRIGHT=1 run_hook "$KIT/post-edit-typecheck.$v.sh" "$PROJ" "{\"tool_input\":{\"file_path\":\"$hf\"}}"
+  check "0 yes yes" "$EC $(ok_if json_has "'timed out after 3s' in d['additionalContext']") $(ok_if test $((SECONDS - start)) -le 10)" "post-edit-typecheck.$v stops a hung typecheck at its own deadline" "$OUT"
+done
+rm -f "$MOCK_TSC_OK"
 
 for v in ts py; do
   run_hook "$KIT/subagent-stop.$v.sh" "$PROJ" '{"agent_type":"general-purpose","stop_hook_active":false}'
@@ -751,8 +771,8 @@ PATH=/usr/bin:/bin run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'pnpm is unavailable' "$T/err")" "stop-checks.ts blocks when pnpm is unavailable"
 # Time limit: a hung tool is killed and the hook blocks with a message naming the step.
 touch "$MOCK_TSC_OK"
-STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running tsc' "$T/err")" "stop-checks.ts blocks on a tsc timeout"
+STOP_GATE_LIMIT=3 MOCK_HANG=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 3s while running tsc' "$T/err")" "stop-checks.ts blocks on a tsc timeout"
 # Repository with no commit: tracked and untracked files count as changed.
 NOHEAD="$T/nohead"
 mkdir -p "$NOHEAD/src" "$NOHEAD/test"
@@ -793,8 +813,8 @@ check "2 yes" "$EC $(ok_if grep -q 'pytest is unavailable' "$T/err")" "stop-chec
 MOCK_NO_PYRIGHT=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'pyright is unavailable' "$T/err")" "stop-checks.py blocks when pyright is unavailable"
 touch "$MOCK_TSC_OK"
-STOP_GATE_LIMIT=1 MOCK_HANG=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'timed out after 1s while running pytest' "$T/err")" "stop-checks.py blocks on a pytest timeout"
+STOP_GATE_LIMIT=3 MOCK_HANG=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
+check "2 yes" "$EC $(ok_if grep -q 'timed out after 3s while running pytest' "$T/err")" "stop-checks.py blocks on a pytest timeout"
 rm -rf "$TP/tests"
 git -C "$TP" add -A; git -C "$TP" "${GIT_ID[@]}" commit -qm notests
 echo 'x = 4' > "$TP/src/u.py"
@@ -961,8 +981,8 @@ probe_hang() {
   local start=$SECONDS
   reset_sr
   if [ "$1" = ts ]; then echo '// e' >> "$SR/app/src/a.ts"; else echo '# e' >> "$SR/app/src/a.py"; fi
-  STOP_GATE_LIMIT=1 MOCK_HANG_PROBE="$2" run_hook "$KIT/stop-checks.$1.sh" "$PROJ" '{}'
-  check "2 yes yes" "$EC $(ok_if grep -q "timed out after 1s while running $3" "$T/err") $(ok_if test $((SECONDS - start)) -le 10)" "stop-checks.$1 bounds a hung $2 version probe" "$(cat "$T/err")"
+  STOP_GATE_LIMIT=3 MOCK_HANG_PROBE="$2" run_hook "$KIT/stop-checks.$1.sh" "$PROJ" '{}'
+  check "2 yes yes" "$EC $(ok_if grep -q "timed out after 3s while running $3" "$T/err") $(ok_if test $((SECONDS - start)) -le 10)" "stop-checks.$1 bounds a hung $2 version probe" "$(cat "$T/err")"
 }
 probe_hang ts tsc "tsc --version"
 probe_hang ts vitest "vitest --version"
