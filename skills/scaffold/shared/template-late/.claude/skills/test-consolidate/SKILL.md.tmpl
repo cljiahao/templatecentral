@@ -1,0 +1,46 @@
+---
+name: test-consolidate
+description: Consolidate duplicate tests under ADR-0001 without losing coverage; run when the test budget reports a breach or likely duplicates.
+disable-model-invocation: true
+allowed-tools: "Bash(bash scripts/test-budget.sh*), Bash(pnpm *), Bash(python -m pytest *), Read, Edit, Grep"
+---
+
+# Test consolidate
+
+Rule: `docs/adr/0001-test-each-behaviour-once.md`. Behaviour stays, case count drops.
+
+## 1. Measure
+
+```bash
+bash scripts/test-budget.sh -v
+```
+
+List every breach and likely duplicate it prints.
+
+## 2. Baseline
+
+Record before touching a test:
+- coverage: `pnpm test:ci` (TypeScript) or `python -m pytest test/ --cov=src` (FastAPI), total and per touched file;
+- mutation score, only where the project has mutation testing;
+- the behaviours each candidate test asserts, as a written list.
+
+## 3. Decide per candidate
+
+For each likely duplicate choose one:
+- **keep**: it is the only test of a distinct behaviour;
+- **merge**: sibling cases with different inputs become one `it.each` or `pytest.mark.parametrize`;
+- **delete**: a higher-level test proves the same behaviour; delete the lower duplicate, or the higher one when the lower proves it alone and faster. Never keep both.
+
+List the merges and deletions and wait for the user's confirmation before deleting any test.
+
+## 4. Prove
+
+After the change, show:
+- total and per-file coverage not lower, total at or above 80%;
+- mutation score not lower, where measured;
+- the behaviour list from step 2, each still asserted, with the test that asserts it;
+- `bash scripts/test-budget.sh` exits 0.
+
+## Stop conditions
+
+Stop and report instead of continuing when coverage or the mutation score drops, a behaviour is no longer asserted, or the only way to pass is to lower a threshold, add an exclude or raise `TEST_BUDGET_MAX_RATIO`. Restore the test that covered the lost lines.

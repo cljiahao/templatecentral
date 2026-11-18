@@ -26,7 +26,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 
 Run when the suite is slow or large, or when asked. Behaviour stays; case count drops.
 
-1. Measure: case count, runtime, and test-to-source line ratio. Record coverage first (`pnpm test:ci` / `pytest --cov=src`).
+1. Measure: case count, runtime, and test-to-source line ratio (`bash scripts/test-budget.sh -v`, ADR-0001; `test-consolidate` project skill). Record coverage first (`pnpm test:ci` / `pytest --cov=src`).
 2. Find tests exercising the same behaviour: near-identical bodies, same function with one changed input, one assertion per case across a table of inputs, tests that only restate a constant, a type or a re-export, or that only exercise framework code, and mocks asserting themselves. Such tests add no coverage or behaviour value; a test of a real code path (branching, validation, error handling, data transformation) is never in this group.
 3. Merge sibling cases into `it.each` / `pytest.mark.parametrize` (no confirmation needed). List the proposed merges and deletions, wait for the user's confirmation before deleting any test, then delete the redundant and no-value tests. Split nothing back out.
 4. Re-run coverage. Changed-line coverage and each file's covered lines must not drop; if one does, restore the test that covered them.

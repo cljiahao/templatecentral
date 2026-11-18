@@ -20,8 +20,10 @@ template-ci/github-py/.github/workflows/ci.yml 644 - -
 template-ci/github-ts/.github/dependabot.yml 644 - -
 template-ci/github-ts/.github/workflows/ci.yml 644 - -
 template-late/.claude/skills/skill-audit/SKILL.md.tmpl 644 - -
+template-late/.claude/skills/test-consolidate/SKILL.md.tmpl 644 - -
 template-late/FUTURE.md 644 - -
 template-late/docs/CONSTITUTION.md 644 __TC_PROJECT_TITLE__ -
+template-late/docs/adr/0001-test-each-behaviour-once.md 644 - -
 template-late/docs/harness.md 644 - -
 template-py/.claude/hooks/block-no-verify.sh 755 - -
 template-py/.claude/hooks/post-edit-comment-check.sh 755 - -
@@ -55,3 +57,4 @@ template/.claude/verify-harness.sh 755 - -
 template/.gitleaks.toml 644 - -
 template/.lefthook/commit-msg.sh 755 - -
 template/scripts/check-docs.sh 755 - -
+template/scripts/test-budget.sh 755 - -
