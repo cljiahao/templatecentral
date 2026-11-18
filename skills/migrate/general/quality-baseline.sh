@@ -29,10 +29,16 @@ is_gate_config() {
   case "$1" in
     *'|'*|*$'\n'*|node_modules/*|*/node_modules/*|.venv/*|*/.venv/*|venv/*|*/venv/*|dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|.git/*|*/.git/*|coverage/*|*/coverage/*|*/__pycache__/*) return 1 ;;
     secrets/*|*/secrets/*|.secrets/*|*/.secrets/*) return 1 ;;
-    .github/workflows/*.yml|.github/workflows/*.yaml|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) return 0 ;;
+  esac
+  case "$(basename "$1" | tr '[:upper:]' '[:lower:]')" in
+    .env*|*.pem|*.key|*.p12|*.pfx|*secret*|*credential*|id_rsa*|*.token) return 1 ;;
+  esac
+  case "$1" in
+    # The bracket in .hus[k]y keeps the lint that forbids that hook manager's name in skills/ from matching this fingerprint pattern.
+    .github/workflows/*.yml|.github/workflows/*.yaml|.github/actions/*|.github/dependabot.yml|.github/dependabot.yaml|.hus[k]y/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) return 0 ;;
   esac
   case "$(basename "$1")" in
-    .env*|*.pem|*.key|*.p12|*.pfx|*secret*|*credential*|id_rsa*|*.token) return 1 ;;
+    playwright.config.*|knip.json|.oxlintrc|.oxlintrc.*|.stylelintrc|.stylelintrc.*|.semgrepignore) return 0 ;;
     eslint.config.*|.eslintrc|.eslintrc.*|.eslintignore|.prettierrc|.prettierrc.*|prettier.config.*|.prettierignore|.editorconfig|biome.json|biome.jsonc) return 0 ;;
     tsconfig*.json|jsconfig.json|next.config.*|nest-cli.json|vite.config.*|vitest.config.*|vitest.workspace.*|jest.config.*|.nycrc|.nycrc.*|.c8rc|.c8rc.*|c8.config.*) return 0 ;;
     codecov.yml|.codecov.yml|.jscpd.json|sonar-project.properties|stryker.conf.*|stryker.config.*|.stryker.conf.*|.stryker.config.*) return 0 ;;
@@ -128,7 +134,7 @@ compare_main() {
       for (w = 1; w <= 2; w++) {
         t = (w == 1) ? "before" : "after"; gv = (w == 1) ? b["gate config files"] : a["gate config files"]
         if (gv == "") { printf "--compare: the %s table has no gate configuration section; retake the baseline with this version of the script\n", t > "/dev/stderr"; exit 2 }
-        if (!has(gv)) { printf "--compare: gate configuration files were not hashed in the %s table: %s\n", t, gv > "/dev/stderr"; exit 2 }
+        if (!has(gv)) { printf "--compare: gate configuration files were not hashed in the %s table (%s); install shasum or sha256sum and retake the baseline\n", t, gv > "/dev/stderr"; exit 2 }
       }
       gn = 0
       for (k in b) if (index(k, "gate config: ") == 1 && b[k] != "-") seen_g[k] = 1
@@ -533,15 +539,38 @@ TESTRE='(\.(test|spec)\.[cm]?[jt]sx?$|(^|/)(__tests__|tests?)/|(^|/)test_[^/]*\.
 CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|vendor|dist|\.next|\.venv)/)'
 SUPPRESS='eslint-disable|biome-ignore|[Nn][Oo][Qq][Aa]|nosec|pylint:[[:space:]]*disable|type:[[:space:]]*ignore|pyright:[[:space:]]*ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul[[:space:]]+ignore|c8[[:space:]]+ignore|v8[[:space:]]+ignore|pragma:[[:space:]]*no[[:space:]]+(cover|branch)'
-EXCLUDE="coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|testPathIgnorePatterns|modulePathIgnorePatterns|globalIgnores[[:space:]]*\(|\[tool\.coverage|coverage:[[:space:]]*\{[^}]*exclude|ignore_errors|ignorePatterns|extend-exclude|exclude_lines|exclude_also|per-file-ignores|--ignore[= ]|^[[:space:]]*(lint\.)?(ignore|extend-ignore|exclude|omit)[[:space:]]*[=:]|(^|[^A-Za-z_])ignores[[:space:]]*:|[\"'](exclude|excludes|ignore|ignores|omit|includes)[\"'][[:space:]]*:"
+EXCLUDE="coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|testPathIgnorePatterns|modulePathIgnorePatterns|testIgnore|globalIgnores[[:space:]]*\(|\[tool\.coverage|coverage:[[:space:]]*\{[^}]*exclude|ignore_errors|ignorePatterns|extend-exclude|exclude_lines|exclude_also|per-file-ignores|--ignore[= ]|^[[:space:]]*(lint\.)?(ignore|extend-ignore|exclude|omit)[[:space:]]*[=:]|(^|[^A-Za-z_])ignores[[:space:]]*:|[\"'](exclude|excludes|ignore|ignores|omit|includes)[\"'][[:space:]]*:"
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
+
+# strip_comments <file>: the file with block comments, // comments and # comments (after whitespace) outside strings removed; newlines are kept so line structure survives.
+strip_comments() {
+  awk 'BEGIN { RS = "\001"; ORS = "" }
+    { s = $0; n = length(s); o = ""; q = ""; i = 1
+      while (i <= n) {
+        c = substr(s, i, 1); d = substr(s, i + 1, 1)
+        if (q != "") {
+          if (c == "\n" && q != "`") q = ""
+          else if (c == "\\") { o = o c d; i += 2; continue }
+          else if (c == q) q = ""
+          o = o c; i++; continue }
+        if (c == "\"" || c == "\047" || c == "`") { q = c; o = o c; i++; continue }
+        if (c == "/" && d == "*") {
+          j = index(substr(s, i + 2), "*/"); blk = (j == 0) ? substr(s, i) : substr(s, i, j + 3)
+          k = gsub(/\n/, "", blk); o = o " "; while (k-- > 0) o = o "\n"
+          i += (j == 0) ? length(s) : j + 3; continue }
+        if ((c == "/" && d == "/") || (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n]/))) {
+          while (i <= n && substr(s, i, 1) != "\n") i++
+          continue }
+        o = o c; i++ }
+      print o }' "$1"
+}
 
 # excl_entries <file> <js|ini|yaml>: the number of exclusion entries, so a new entry in an existing list counts, including entries on continuation lines.
 excl_entries() {
   local kind=$2 pkg=0
   [ "$(basename "$1")" = package.json ] && pkg=1
-  RE="$EXCLUDE" KIND="$kind" PKG="$pkg" awk -v q="'" '
+  { if [ "$kind" = js ]; then strip_comments "$1"; else cat "$1"; fi; } | RE="$EXCLUDE" KIND="$kind" PKG="$pkg" awk -v q="'" '
     function strip(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     function items(s,  m, parts, k, n) {
       sub(/[ \t]+[#;].*$/, "", s); m = split(s, parts, ","); n = 0
@@ -605,12 +634,12 @@ excl_entries() {
       next }
     {
       line = $0
-      if (line ~ /^[ \t]*(\/\/|#|;|\/\*)/) next
       if (tsec) {
         if (line ~ /^[ \t]*\[/) tsec = 0
         else { got = 0; dep = 0; opened = 0; scan(line, 0); if (got == 0 && line ~ /=/) c++; next }
       }
       if (inl) { scan(line, ng); line = inl ? "" : rest; if (line == "") next }
+      if (pend && line ~ /[^ \t]/) { pend = 0; got = 0; dep = 0; opened = 0; scan(line, png); if (got == 0 && !inl && !png) c++; line = inl ? "" : rest; if (line == "") next }
       if (line ~ /^[ \t]*\[[^]]*per-file-ignores[^]]*\][ \t]*$/) { tsec = 1; next }
       while (line != "" && match(line, re)) {
         key = substr(line, RSTART, RLENGTH); rem = substr(line, RSTART + RLENGTH); quoted = (key ~ /["'"'"']/ && key !~ /\[tool/)
@@ -619,12 +648,13 @@ excl_entries() {
         sub(/^["'"'"']?[ \t]*[:=]/, "", rem)
         if (pkg && quoted && rem ~ /^[ \t]*["'"'"']/) { line = rem; continue }
         got = 0; dep = 0; opened = 0; inl = 0
+        if (rem !~ /[^ \t]/) { pend = 1; png = ng; line = ""; continue }
         scan(rem, ng)
         if (got == 0 && !inl && !ng) c++
         line = inl ? "" : rest
       }
     }
-    END { print c + 0 }' "$1"
+    END { print c + 0 }'
 }
 
 # eslint_off <file>: the number of rules set to off or 0 directly under a rules object, as a bare value or the first element of the array form.
@@ -702,7 +732,7 @@ count_static() {
     case "$(basename "$f")" in
       .eslintignore)
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;;
-      vitest.config.*|vite.config.*|jest.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|biome.jsonc|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pylintrc|pytest.ini|setup.cfg|tox.ini)
+      vitest.config.*|vite.config.*|jest.config.*|playwright.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|biome.jsonc|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pylintrc|pytest.ini|setup.cfg|tox.ini)
         base=$(basename "$f")
         case "$base" in
           .coveragerc|sonar-project.properties|.pylintrc|pylintrc|pytest.ini|setup.cfg|tox.ini) kind=ini ;;

@@ -339,7 +339,32 @@ gl_no n6 'gitleaks git --pre-commit --staged || true'
 gl_no n7 'gitleaks git --pre-commit --staged || :'
 gl_no n8 'gitleaks git --pre-commit --staged; true'
 gl_no n9 'gitleaks git --pre-commit --staged || true' 1
-gl_ok r7 'gitleaks git --pre-commit --staged || exit 1'
+gl_mixed() { gl_variant "$T/$1" "$2" 0; out=$(run "$T/$1"); check "gitleaks line not alone fails: $2" 1 $?; contains "only-command message: $2" "the gitleaks command must be the only command in the run line" "$out"; }
+gl_mixed m1 'gitleaks git --staged || true # reason'
+gl_mixed m2 'gitleaks git --staged || exit 0'
+gl_mixed m3 'gitleaks git --staged; exit 0'
+gl_mixed m4 'gitleaks git --staged; :'
+gl_mixed m5 'gitleaks git --staged || echo skipped'
+gl_mixed m6 'gitleaks git --staged || false'
+gl_mixed m7 'gitleaks git --staged || return 0'
+gl_mixed m8 'gitleaks git --staged || (true)'
+gl_mixed m9 'gitleaks git --staged || /bin/true'
+gl_mixed m10 'gitleaks git --staged | true'
+gl_mixed m11 'gitleaks git --staged ||  true ;'
+gl_mixed m12 'gitleaks git --staged &'
+gl_mixed m13 'set +e; gitleaks git --staged'
+gl_mixed m14 'false && gitleaks git --staged'
+gl_mixed m15 'exit 0; gitleaks git --staged'
+gl_mixed m16 'gitleaks git --staged || exit 1'
+gl_mixed m17 $'|\n        set +e\n        gitleaks git --staged'
+gl_mixed m18 $'|\n        gitleaks git --staged\n        true'
+gl_ok a1 'gitleaks git --pre-commit --staged # scan staged files'
+gl_ok a2 'gitleaks git --staged --regexp "a|b;c"'
+gl_ok a3 "gitleaks git --staged --regexp 'a&b(c)'"
+gl_ok a4 $'|\n        # scan staged\n\n        gitleaks git --pre-commit --staged'
+gl_ok a5 'GITLEAKS_LOG=1 gitleaks git --staged'
+gl_ok a6 '"gitleaks git --pre-commit --staged"'
+gl_ok a7 'gitleaks git --pre-commit --staged' 1
 seed "$T/n6"; python3 - "$T/n6/lefthook.yml" <<'PY8'
 import re, sys
 p = sys.argv[1]; s = open(p).read()

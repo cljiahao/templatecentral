@@ -507,6 +507,51 @@ excl_pair "ruff.toml lint.extend-ignore grows" ruff.toml 'lint.extend-ignore = [
 excl_pair "pyproject tool.ruff lint.ignore grows" pyproject.toml '[tool.ruff]
 lint.ignore = ["E501"]' '[tool.ruff]
 lint.ignore = ["E501","F401"]' 1 2
+# round 6: comments are removed from the text before entries are counted
+excl_pair "an entry after a leading block comment counts" jest.config.cjs "module.exports = {
+  testPathIgnorePatterns: ['/x/',
+ /* c */ '/y/'],
+};" "module.exports = {
+  testPathIgnorePatterns: ['/x/',
+ /* c */ '/y/', '/z/'],
+};" 2 3
+excl_pair "a block comment spanning lines inside the array" jest.config.cjs "module.exports = { testPathIgnorePatterns: [
+  '/a/',
+  /* one
+     two '/q/' */
+  '/b/' ] };" "module.exports = { testPathIgnorePatterns: [
+  '/a/',
+  /* one
+     two '/q/' */
+  '/b/', '/c/' ] };" 2 3
+excl_pair "a // comment between entries" jest.config.cjs "module.exports = { testPathIgnorePatterns: [
+  '/a/', // keep '/q/' out
+  '/b/' ] };" "module.exports = { testPathIgnorePatterns: [
+  '/a/', // keep '/q/' out
+  '/b/', '/c/' ] };" 2 3
+excl_pair "strings containing // and /* are one entry each" jest.config.cjs "module.exports = { testPathIgnorePatterns: ['/a//x/', '/b/*/c/*'] };" "module.exports = { testPathIgnorePatterns: ['/a//x/', '/b/*/c/*', 'http://h'] };" 2 3
+excl_pair "a // comment after the key, the array on the next line" jest.config.cjs "module.exports = { testPathIgnorePatterns: // the list
+  ['/a/', '/b/'] };" "module.exports = { testPathIgnorePatterns: // the list
+  ['/a/', '/b/', '/c/'] };" 2 3
+excl_pair "the array on the line after the key" jest.config.cjs "module.exports = { testPathIgnorePatterns:
+  ['/a/', '/b/'] };" "module.exports = { testPathIgnorePatterns:
+  ['/a/', '/b/', '/c/'] };" 2 3
+excl_pair "globalIgnores with the array on the next line" eslint.config.mjs 'export default [globalIgnores(
+  ["a/**", "b/**"]
+)];' 'export default [globalIgnores(
+  ["a/**", "b/**", "c/**"]
+)];' 2 3
+excl_pair "playwright testIgnore grows" playwright.config.ts "export default { testIgnore: ['**/a/**'] };" "export default { testIgnore: ['**/a/**', '**/b/**'] };" 1 2
+excl_pair "a toml # comment between entries" pyproject.toml '[tool.coverage.run]
+omit = [
+  "a/*", # keep "q/*" out
+  "b/*",
+]' '[tool.coverage.run]
+omit = [
+  "a/*", # keep "q/*" out
+  "b/*",
+  "c/*",
+]' 3 4
 excl_delta jest.config.js 'module.exports = { watchPathIgnorePatterns: ["a"], transformIgnorePatterns: ["b"] };' 0
 
 # round 5: the gate configuration section and exit 3
@@ -556,17 +601,34 @@ TBL_TREE=dirty gate_tbl after 4 >"$T/ga.md"; gate_tbl before 4 >"$T/gb.md"
 regress_out=$(TBL_TREE=dirty TBL_GATE='| gate config files | 0 |\n' tbl after 4 2 80.0% 3 1.5% 3 1 >"$T/r.md"; bash "$SCRIPT" --compare "$T/gb.md" "$T/r.md" 2>&1)
 contains "a worse suppression row prints the retake rule" "the agent never retakes it" "$regress_out"
 
+# a globalIgnores argument that is not a literal array keeps the key count; a change is still reported as changed
+excl_delta eslint.config.mjs 'export default [globalIgnores([...base])];' 1
+excl_delta eslint.config.mjs 'export default [globalIgnores([...base, ...more])];' 1
+gate_run 4 4 "eslint.config.mjs=aaaa111122223333" "eslint.config.mjs=bbbb111122223333"
+check "a changed non-countable ignore list exits 3" 3 $rcg
+contains "the non-countable file is reported as changed" "changed: eslint.config.mjs" "$outg"
+# an n/a gate row has its own message
+TBL_GATE='| gate config files | n/a (no shasum or sha256sum) |\n' tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/gna.md"
+gate_tbl after 4 >"$T/ga.md"
+outn=$(TBL_TREE=dirty bash "$SCRIPT" --compare "$T/gna.md" "$T/ga.md" 2>&1); check "an n/a gate row before exits 2" 2 $?
+contains "an n/a gate row names the missing hash tool" "were not hashed in the before table" "$outn"
+case "$outn" in *"no gate configuration section"*) echo "FAIL an n/a gate row reports a missing section"; fail=1 ;; *) echo "ok   an n/a gate row is not reported as a missing section" ;; esac
+
 # the real script hashes gate files, skips symlinks and secret-named files, and prints no contents
 gs="$T/gs"; mkdir -p "$gs/secrets" "$gs/.github/workflows"
 printf '{}\n' >"$gs/package.json"; printf 'name: ci\n' >"$gs/.github/workflows/ci.yml"
 printf 'MARKER_ENV_7731\n' >"$gs/.env"; printf 'MARKER_KEY_7731\n' >"$gs/deploy.key"; printf 'MARKER_CRED_7731\n' >"$gs/credentials.json"
 printf 'MARKER_DIR_7731\n' >"$gs/secrets/tsconfig.json"; printf 'MARKER_SECRET_7731\n' >"$gs/my-secret.toml"; printf 'MARKER_VT_7731\n' >"$gs/vitest.config.secret.ts"
+mkdir -p "$gs/.husky" "$gs/.github/actions/x"; printf 'x\n' >"$gs/.husky/pre-commit"; printf 'x\n' >"$gs/.github/actions/x/action.yml"; printf 'x\n' >"$gs/.github/dependabot.yml"
+printf 'x\n' >"$gs/playwright.config.ts"; printf 'x\n' >"$gs/knip.json"; printf 'x\n' >"$gs/.oxlintrc.json"; printf 'x\n' >"$gs/.stylelintrc.json"; printf 'x\n' >"$gs/.semgrepignore"
+printf 'MARKER_ACT_7731\n' >"$gs/.github/actions/x/secret-action.yml"
 ln -s .env "$gs/tsconfig.json"
 outs=$(bash "$SCRIPT" "$gs" --static)
 contains "package.json is hashed" "| gate config: package.json | " "$outs"
 contains "a CI workflow is hashed" "| gate config: .github/workflows/ci.yml | " "$outs"
-check "only the two gate files are listed" 2 "$(value "gate config files" "$outs")"
-case "$outs" in *MARKER_*|*credentials*|*deploy.key*|*.env*|*my-secret*|*vitest.config.secret*|*"secrets/"*) echo "FAIL a secret-named file or its content appears in the table"; fail=1 ;; *) echo "ok   secret-named files are never hashed or printed" ;; esac
+for g in .husky/pre-commit .github/actions/x/action.yml .github/dependabot.yml playwright.config.ts knip.json .oxlintrc.json .stylelintrc.json .semgrepignore; do contains "gate fingerprint list covers $g" "| gate config: $g | " "$outs"; done
+check "ten gate files are listed, no secret-named one" 10 "$(value "gate config files" "$outs")"
+case "$outs" in *MARKER_*|*credentials*|*deploy.key*|*.env*|*my-secret*|*vitest.config.secret*|*secret-action*|*"secrets/"*) echo "FAIL a secret-named file or its content appears in the table"; fail=1 ;; *) echo "ok   secret-named files are never hashed or printed" ;; esac
 case "$outs" in *"gate config: tsconfig.json"*) echo "FAIL a symlinked gate file is hashed"; fail=1 ;; *) echo "ok   a symlink is not hashed" ;; esac
 h1=$(printf '%s\n' "$outs" | grep -F '| gate config: package.json |')
 printf '{ "a": 1 }\n' >"$gs/package.json"

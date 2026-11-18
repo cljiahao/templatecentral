@@ -51,29 +51,57 @@ JS
 # section_lines <file> <key>: the non-comment lines of one top-level section of a YAML file.
 section_lines() { awk -v k="$2" '/^[^[:space:]#]/ { on = ($0 ~ "^" k ":") } on && !/^[[:space:]]*#/' "$1"; }
 
-# gitleaks_state <file>: ok, skip or none for gitleaks invoked on a run line of a pre-commit command or job that is not skipped, directly or through npx, pnpm exec, pnpm dlx or docker run.
+# gitleaks_state <file>: ok, mixed, skip or none for a pre-commit command or job that is not skipped. ok: a run value (after a trailing shell comment is removed) that is exactly one simple command, optionally after VAR=value words: gitleaks, npx/pnpx/bunx gitleaks, pnpm/yarn/npm/bun exec|dlx|run gitleaks, or docker run ... gitleaks, each followed by git, detect, protect, dir or stdin; the seeded guard `if command -v gitleaks ...; then <that command>; fi` also counts; a multi-line block passes only when its one non-blank, non-comment line is that command. mixed: gitleaks appears next to an unquoted | & ; ( ) backtick, $( or another line, so it may not block.
 gitleaks_state() {
   section_lines "$1" pre-commit | awk '
     BEGIN {
-      pre = "(^|[;&|(]|then|do|else)[ \t]*([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
+      env = "^([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
       run = "((npx|pnpx|bunx)[ \t]+(-[-A-Za-z]+[ \t]+)*|(pnpm|yarn|npm|bun)[ \t]+(exec|dlx|run)[ \t]+(--[ \t]+)?)?"
-      sub_ = "[ \t]+(git|detect|protect|dir|stdin)"
-      direct = pre run "([^ \t]*/)?gitleaks" sub_
-      docker = pre "docker[ \t]+run[ \t]+[^;&|]*gitleaks[^ \t]*" sub_
-      masked = "(\\|\\|[ \t]*(true|:)|;[ \t]*true)[ \t\"\047]*$"
+      sub_ = "[ \t]+(git|detect|protect|dir|stdin)([ \t]|$)"
+      loose = "(^|[;&|(]|then|do|else)[ \t]*([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
+      guard = "^if[ \t]+command[ \t]+-v[ \t]+gitleaks[^;|()`]*;[ \t]*then[ \t]+[^;&|()`]*;[ \t]*fi$"
+      allowed = env run "([^ \t]*/)?gitleaks" sub_
+      dockerok = "^docker[ \t]+run[ \t]+.*gitleaks[^ \t]*" sub_
+      looseany = loose run "([^ \t]*/)?gitleaks" sub_ "|" loose "docker[ \t]+run[ \t]+.*gitleaks[^ \t]*" sub_
     }
-    function check(v) { if ((v ~ direct || v ~ docker) && v !~ masked) has[cmd] = 1 }
+    function strip(v,   i, c, q, o, n, f) {
+      ops = 0; q = ""; o = ""; n = length(v); f = substr(v, 1, 1)
+      if ((f == "\"" || f == "\047") && n > 1 && substr(v, n, 1) == f) { v = substr(v, 2, n - 2); n -= 2 }
+      for (i = 1; i <= n; i++) {
+        c = substr(v, i, 1)
+        if (c == "\\" && q != "\047") { o = o c substr(v, i + 1, 1); i++; continue }
+        if (q == "") {
+          if (c == "#" && (i == 1 || substr(v, i - 1, 1) ~ /[ \t]/)) break
+          if (c == "\047" || c == "\"") q = c
+          else if (c ~ /[|&;()`]/) ops = 1
+          else if (c == "$" && substr(v, i + 1, 1) == "(") ops = 1
+        } else if (c == q) q = ""
+        o = o c
+      }
+      sub(/^[ \t]+/, "", o); sub(/[ \t]+$/, "", o)
+      return o
+    }
+    function ev(v,   s) {
+      s = strip(v)
+      if (s ~ guard) { sub(/^if[ \t]+command[ \t]+-v[ \t]+gitleaks[^;|()`]*;[ \t]*then[ \t]+/, "", s); sub(/;[ \t]*fi$/, "", s); s = strip(s) }
+      if (s !~ /gitleaks/) return
+      if (ops) { if (s ~ looseany) mixed[cmd] = 1; return }
+      if (s ~ allowed || s ~ dockerok) has[cmd] = 1
+    }
+    function flush(   i) {
+      if (nb == 1) ev(bl[1]); else for (i = 1; i <= nb; i++) if (bl[i] ~ /gitleaks/) mixed[cmd] = 1
+      nb = 0
+    }
+    function take(l) { if (l ~ /^[ \t]*#/ || l !~ /[^ \t]/) return; bl[++nb] = l }
     /^  skip:[ \t]*true/ { hookskip = 1 }
-    /^    -[ \t]/ { cmd = "job" NR; inrun = 0; sub(/^    -[ \t]+/, "      ") }
-    /^    [A-Za-z0-9_-]+:[ \t]*$/ { cmd = $1; inrun = 0; next }
-    inrun && match($0, /[^ \t]/) && RSTART > 7 { check($0); next }
-    { inrun = 0 }
+    /^    -[ \t]/ { flush(); cmd = "job" NR; inrun = 0; sub(/^    -[ \t]+/, "      ") }
+    /^    [A-Za-z0-9_-]+:[ \t]*$/ { flush(); cmd = $1; inrun = 0; next }
+    inrun && (match($0, /[^ \t]/) && RSTART > 7 || $0 !~ /[^ \t]/) { take($0); next }
+    { flush(); inrun = 0 }
     /^      skip:[ \t]*true/ { sk[cmd] = 1 }
-    /^      run:/ { v = $0; sub(/^[ \t]*run:[ \t]*/, "", v); if (v ~ /^[|>][-+]?[ \t]*$/) inrun = 1; else { sub(/^["\047]/, "", v); check(v) } }
-    END { for (k in has) { if (!sk[k] && !hookskip) found = 1; else skipped = 1 } print found ? "ok" : (skipped ? "skip" : "none") }'
+    /^      run:/ { v = $0; sub(/^[ \t]*run:[ \t]*/, "", v); if (v ~ /^[|>][-+]?[ \t]*$/) inrun = 1; else { take(v); flush() } }
+    END { flush(); for (k in has) { if (!sk[k] && !hookskip) found = 1; else skipped = 1 } for (k in mixed) if (!sk[k] && !hookskip) mix = 1; print found ? "ok" : (mix ? "mixed" : (skipped ? "skip" : "none")) }'
 }
-
-# Limits of gitleaks_state: a run line ending in `|| true`, `|| :` or `; true` is rejected, but a line in an unreachable branch (`if false; then gitleaks git; fi`) or a glob that never matches still counts. Like hook_runs_lefthook below it proves a plain setup, not a deliberately defeated one.
 
 # hook_runs_lefthook <file>: proves the hook file calls lefthook at top level or through the generated call_lefthook function with no top-level exit before it; it does not prove a deliberately obfuscated hook is live.
 hook_runs_lefthook() {
@@ -102,6 +130,7 @@ if [ -f "$P/lefthook.yml" ]; then
   done
   case "$(gitleaks_state "$P/lefthook.yml")" in
     ok) pass "lefthook.yml pre-commit runs gitleaks" ;;
+    mixed) fail "lefthook.yml gitleaks" "the gitleaks command must be the only command in the run line; a trailing || true, a pipe, a second command or a background marker keeps it from blocking" ;;
     skip) fail "lefthook.yml gitleaks" "the gitleaks command or the pre-commit hook sets skip: true" ;;
     *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect, dir or stdin) outside a comment" ;;
   esac
