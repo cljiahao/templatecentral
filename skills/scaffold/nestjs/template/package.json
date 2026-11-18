@@ -47,7 +47,7 @@
     "@nestjs/schematics": "^12.0.13",
     "@nestjs/testing": "^12.4.2",
     "@types/node": "^24",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.7",
@@ -58,6 +58,6 @@
     "prettier": "^3.10.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
-    "vitest": "^4.1.8"
+    "vitest": "^5.1.0"
   }
 }
