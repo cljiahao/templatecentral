@@ -56,7 +56,7 @@ check "static test cases" 2 "$(value 'test cases (static count; a parametrized c
 check "suppressions in code files" 1 "$(value 'suppression lines matching (code files)' "$out")"
 contains "label is the column header" "| Metric | before |" "$out"
 check "tree unchanged" unchanged "$(value 'project tree after the run' "$out")"
-contains "failed lint tool is n/a" "n/a (eslint failed" "$(value 'lint findings' "$out")"
+contains "failed lint tool is n/a" "n/a (failed: eslint failed" "$(value 'lint findings' "$out")"
 marker=absent; [ -e "$T/MARKER" ] && marker=present
 check "no project script ran" absent "$marker"
 if grep -qE '^run( |$)' "$T/pnpm.log"; then echo "FAIL pnpm run was called"; fail=1; else echo "ok   pnpm run never called"; fi
@@ -152,7 +152,7 @@ FAKE_SLEEP=1 PATH="$PYPATH" bash "$SCRIPT" "$T/py" --full >/dev/null 2>&1 &
 spid=$!
 n=0; while [ ! -s "$T/sleep.pid" ] && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
 kill -TERM "$spid"; wait "$spid" 2>/dev/null; check "TERM exits 143" 143 $?
-alive() { kill -0 "$(cat "$1")" 2>/dev/null && echo alive || echo dead; }
+alive() { if kill -0 "$(cat "$1")" 2>/dev/null; then echo alive; else echo dead; fi; }
 n=0; while [ "$(alive "$T/sleep.pid")" = alive ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 check "TERM kills the tool" dead "$(alive "$T/ruff.pid")"
 check "TERM kills the tool's child" dead "$(alive "$T/sleep.pid")"
@@ -197,14 +197,14 @@ check "ts duplication" "1.5%" "$(value 'duplication' "$outs")"
 check "ts tree unchanged" unchanged "$(value 'project tree after the run' "$outs")"
 contains "composite tsconfig points build info into scratch" "--tsBuildInfoFile" "$(grep 'exec tsc --noEmit' "$T/pnpm2.log")"
 contains "environment reaches the tool" "ENV=passed" "$(grep 'exec eslint' "$T/pnpm2.log" | head -1)"
-check "kept coverage xml exists" yes "$([ -f "$T/keep/cov/cobertura.xml" ] && echo yes || echo no)"
+check "kept coverage xml exists" yes "$(if [ -f "$T/keep/cov/cobertura.xml" ]; then echo yes; else echo no; fi)"
 check "kept coverage row" "$(cd "$T/keep" && pwd -P)/cov/cobertura.xml" "$(value 'coverage xml kept' "$outs")"
 
 # --keep-coverage validation
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/p/cov" >/dev/null 2>&1; check "keep dir inside project exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --static --keep-coverage "$T/keep/x" >/dev/null 2>&1; check "keep without --full exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/missing/x" >/dev/null 2>&1; check "keep with missing parent exits 2" 2 $?
-check "nothing created inside the project" no "$([ -e "$T/p/cov" ] && echo yes || echo no)"
+check "nothing created inside the project" no "$(if [ -e "$T/p/cov" ]; then echo yes; else echo no; fi)"
 ln -s "$T/p" "$T/lnk"
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk" >/dev/null 2>&1; check "keep symlink to the project exits 2" 2 $?
 bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/lnk/cov" >/dev/null 2>&1; check "keep under a symlink into the project exits 2" 2 $?
@@ -220,5 +220,541 @@ check "a refused write leaves no temporary file" 0 "$(find "$T/keep2" -name '.co
 outk=$(PATH="$T/bin2:/usr/bin:/bin" bash "$SCRIPT" "$T/p" --full --keep-coverage "$T/keep")
 check "a rerun overwrites the kept file" "$(cd "$T/keep" && pwd -P)/cobertura.xml" "$(value 'coverage xml kept' "$outk")"
 check "a successful write leaves no temporary file" 0 "$(find "$T/keep" -name '.cobertura.*' | wc -l | tr -d ' ')"
+
+# --- --compare: a verdict table, exit 1 when any measured number got worse, 2 on a table it cannot trust
+mkdir -p "$T/g" && (cd "$T/g" && git init -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m one && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m two)
+H1=$(git -C "$T/g" rev-parse HEAD~1); H2=$(git -C "$T/g" rev-parse HEAD)
+export QB_REPO="$T/g"
+TBL_MODE=full TBL_HEAD=$H1 TBL_TREE=clean TBL_TESTS='0 failed of 3' TBL_THR=1 TBL_GATE='| gate config files | 0 |\n'
+tbl() { # tbl <label> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
+  printf '| Metric | %s |\n|---|---|\n| lint findings | %s |\n| type errors | %s |\n| tests failed | '"$TBL_TESTS"' |\n| line coverage | %s |\n| complexity over 15 | %s |\n| duplication | %s |\n| suppression lines matching (code files) | %s |\n| coverage, lint and Sonar exclusions | %s |\n| coverage thresholds configured | '"$TBL_THR"' |\n'"$TBL_GATE"'| mode | %s |\n| git head | %s |\n| git tree | %s |\n' "$@" "$TBL_MODE" "$TBL_HEAD" "$TBL_TREE"
+}
+tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b.md"
+TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/same.md"
+TBL_TREE=dirty tbl after 1 0 90.5% "2 (cyclomatic proxy)" 1.0% 0 0 >"$T/better.md"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/same.md"); check "compare equal exits 0" 0 $?
+contains "compare equal says OK" "OK: no measured number got worse" "$outc"
+contains "compare prints both commits" "commits: before ${H1:0:9} (clean), after ${H1:0:9} (dirty)" "$outc"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md"); check "compare improved exits 0" 0 $?
+contains "compare names an improvement" "improved" "$outc"
+regress() { # regress <name> <lint> <types> <cov> <cplx> <dup> <supp> <excl>
+  local n=$1; shift
+  TBL_TREE=dirty tbl after "$@" >"$T/r.md"
+  outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "compare fails on worse $n" 1 $?
+  contains "compare table marks $n WORSE" "WORSE" "$outc"
+}
+regress "lint findings" 5 2 80.0% 3 1.5% 2 1
+regress "type errors" 4 3 80.0% 3 1.5% 2 1
+regress "coverage" 4 2 79.9% 3 1.5% 2 1
+regress "complexity" 4 2 80.0% 4 1.5% 2 1
+regress "duplication" 4 2 80.0% 3 1.6% 2 1
+regress "suppressions" 4 2 80.0% 3 1.5% 3 1
+regress "exclusions" 4 2 80.0% 3 1.5% 2 2
+TBL_TREE=dirty tbl after 4 2 "n/a (failed: no coverage report)" 3 1.5% 2 1 >"$T/r.md"
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/r.md"); check "a number no longer measured fails" 1 $?
+contains "not measured after is named" "not measured after" "$outc"
+# a tool absent before and present after is newly measured, not silently skipped
+tbl before "n/a (no eslint.config.*)" "n/a (no tsconfig.json)" "n/a (no vitest or jest in package.json)" "n/a (ruff not installed)" "n/a (no pnpm or npx)" 2 1 >"$T/nb.md"
+outc=$(bash "$SCRIPT" --compare "$T/nb.md" "$T/better.md"); check "numbers absent before are allowed" 0 $?
+contains "newly measured rows carry the value" "newly measured (90.5%)" "$outc"
+# n/a before for any other reason is not a baseline
+for failed in "n/a (failed: eslint failed, exit 2)" "n/a (eslint failed, exit 2)" "n/a (no test report, exit 1)" "n/a (no coverage report; is a coverage provider installed?)" "n/a (timeout)" "n/a (static mode: nothing was run)" "n/a (not installed anywhere)"; do
+  tbl before 4 2 "$failed" 3 1.5% 2 1 >"$T/failed.md"
+  bash "$SCRIPT" --compare "$T/failed.md" "$T/better.md" >/dev/null 2>&1; check "a failure string before is not an absent tool: $failed" 2 $?
+done
+for absent in "n/a (no pnpm)" "n/a (dependencies not installed: no node_modules)" "n/a (no eslint.config.*)" "n/a (no tsconfig.json)" "n/a (no vitest or jest in package.json)" "n/a (ruff not installed)" "n/a (no configured type checker on PATH or in .venv)" "n/a (no python)" "n/a (pytest not installed)" "n/a (pytest-cov not installed)" "n/a (no src, app or lib directory)" "n/a (no pnpm or npx)" "n/a (no package.json, pyproject.toml or requirements file)"; do
+  tbl before 4 2 "$absent" 3 1.5% 2 1 >"$T/absent.md"
+  bash "$SCRIPT" --compare "$T/absent.md" "$T/better.md" >/dev/null 2>&1; check "an absent tool before is accepted: $absent" 0 $?
+done
+check "no failure string in the script reads like an absent tool" 0 "$(grep -v 'KEPT=' "$SCRIPT" | grep -cE 'n/a \((no test report|no coverage report|eslint failed|tsc failed|timeout|jscpd failed|pyright failed|complexity run failed)')"
+# a static before table cannot be a baseline
+TBL_MODE=static tbl before "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" "n/a (static mode: nothing was run)" 2 1 >"$T/static.md"
+TBL_TREE=dirty tbl after 99 99 1.0% 99 50% 9 9 >"$T/bad.md"
+bash "$SCRIPT" --compare "$T/static.md" "$T/bad.md" >/dev/null 2>&1; check "a static before table exits 2, not 0" 2 $?
+TBL_MODE=static TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/staticafter.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/staticafter.md" >/dev/null 2>&1; check "a static after table exits 2" 2 $?
+# malformed numbers are not a pass
+for bad in "1.5e0%" "1.5.2%" ".5%" "NaN" "-1"; do
+  TBL_TREE=dirty tbl after 4 2 80.0% 3 "$bad" 2 1 >"$T/r.md"
+  bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "malformed duplication [$bad] exits 2" 2 $?
+done
+# duplicate metric rows are not a way to pick a number
+{ cat "$T/same.md"; printf '| lint findings | 0 |\n'; } >"$T/dupafter.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/dupafter.md" >/dev/null 2>&1; check "a duplicate metric row after exits 2" 2 $?
+{ cat "$T/b.md"; printf '| lint findings | 99 |\n'; } >"$T/dupbefore.md"
+bash "$SCRIPT" --compare "$T/dupbefore.md" "$T/same.md" >/dev/null 2>&1; check "a duplicate metric row before exits 2" 2 $?
+# the test total may not fall, and a rise in failures or a fall in thresholds is worse
+TBL_TESTS='0 failed of 10' tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/t10.md"
+TBL_TREE=dirty TBL_TESTS='0 failed of 0' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/t0.md"
+outc=$(bash "$SCRIPT" --compare "$T/t10.md" "$T/t0.md"); check "a fallen test total exits 1" 1 $?
+contains "a fallen test total prints both totals" "test total fell 10 to 0" "$outc"
+contains "a fallen test total names who records a consolidation" "retaking the baseline" "$outc"
+TBL_TREE=dirty TBL_TESTS='0 failed of 12' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/t12.md"
+bash "$SCRIPT" --compare "$T/t10.md" "$T/t12.md" >/dev/null 2>&1; check "a larger test total passes" 0 $?
+TBL_TREE=dirty TBL_TESTS='1 failed of 3' tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/tf.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/tf.md" >/dev/null 2>&1; check "a rise in failed tests exits 1" 1 $?
+TBL_TREE=dirty TBL_THR=0 tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/thr.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/thr.md" >/dev/null 2>&1; check "a fall in configured thresholds exits 1" 1 $?
+# the tie to a commit
+TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "one commit, both trees clean exits 2" 2 $?
+TBL_HEAD=$H2 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/r.md" >/dev/null 2>&1; check "a later commit is accepted" 0 $?
+TBL_HEAD=$H2 TBL_TREE=clean tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/b2.md"
+TBL_HEAD=$H1 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/r.md"
+bash "$SCRIPT" --compare "$T/b2.md" "$T/r.md" >/dev/null 2>&1; check "a before commit that is not an ancestor exits 2" 2 $?
+TBL_HEAD="no git" TBL_TREE="no git" tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/ng.md"
+TBL_HEAD="no git" TBL_TREE="no git" tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/ng2.md"
+mkdir -p "$T/nogit"
+outc=$(QB_REPO="$T/nogit" bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md"); check "outside a repository the comparison still runs" 0 $?
+contains "outside a repository is stated" "no git" "$outc"
+bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md" >/dev/null 2>&1; check "a no git table inside a repository exits 2" 2 $?
+bash "$SCRIPT" --compare "$T/b.md" "$T/ng2.md" >/dev/null 2>&1; check "one no git table inside a repository exits 2" 2 $?
+TBL_HEAD=0123456789012345678901234567890123456789 TBL_TREE=clean tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/unk.md"
+unkout=$(bash "$SCRIPT" --compare "$T/b.md" "$T/unk.md" 2>&1 >/dev/null); check "an unresolvable after commit exits 2" 2 $?
+contains "an unresolvable commit is named" "is not in" "$unkout"
+TBL_TREE=dirty
+printf '| Metric | before |\n|---|---|\n| lint findings | n/a (no eslint.config.*) |\n| mode | full |\n| git head | no git |\n| git tree | no git |\n' >"$T/none.md"
+QB_REPO="$T/nogit" bash "$SCRIPT" --compare "$T/none.md" "$T/none.md" >/dev/null 2>&1; check "a table missing its metric rows exits 2" 2 $?
+bash "$SCRIPT" --compare "$T/b.md" >/dev/null 2>&1; check "one single-column file exits 2" 2 $?
+outc=$(bash "$SCRIPT" --compare "$T/b.md" "$T/better.md")
+printf '%s\n' "$outc" | sed '/^$/,$d' >"$T/rec.md"
+bash "$SCRIPT" --compare "$T/rec.md" >/dev/null 2>&1; check "a saved compare table re-compares before with after, ignoring the verdict column" 0 $?
+bash "$SCRIPT" --compare "$T/b.md" "$T/nope.md" >/dev/null 2>&1; check "compare with a missing file exits 2" 2 $?
+bash "$SCRIPT" --compare >/dev/null 2>&1; check "compare without files exits 2" 2 $?
+
+# the table records the commit and tree state, and the wider suppression and exclusion forms are counted
+gp="$T/gp"; mkdir -p "$gp/src"; printf 'const a = 1;\n' >"$gp/src/a.ts"; printf '{}\n' >"$gp/tsconfig.json"; printf '{"name":"g"}\n' >"$gp/package.json"
+(cd "$gp" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init)
+outc=$(bash "$SCRIPT" "$gp" --static)
+check "table records the head" "$(git -C "$gp" rev-parse HEAD)" "$(value "git head" "$outc")"
+check "table records a clean tree" "clean" "$(value "git tree" "$outc")"
+printf 'x\n' >"$gp/src/u.ts"
+outc=$(bash "$SCRIPT" "$gp" --static); check "table records a dirty tree" "dirty" "$(value "git tree" "$outc")"
+rm -f "$gp/src/u.ts"
+base_supp=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
+for form in '# pylint: disable=x' '// biome-ignore lint: x' '# nosec' '# pragma: no cover' '# pragma: no branch' '/* v8 ignore next */' '/* istanbul ignore next */' '// @ts-expect-error' '// @ts-nocheck' '# type: ignore' '# noqa' '// NOSONAR' '@SuppressWarnings("x")' '# type:ignore' '# NOQA' '/* istanbul  ignore next */'; do
+  printf 'x = 1 %s\n' "$form" >"$gp/src/s.ts"
+  now=$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")
+  check "suppression form counted: $form" "$((base_supp + 1))" "$now"
+done
+printf 'x = 1  # noqa  # type: ignore\n' >"$gp/src/s.ts"
+check "two suppressions on one line count twice" "$((base_supp + 2))" "$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")"
+rm -f "$gp/src/s.ts"; mkdir -p "$gp/vendor"; printf 'x = 1  # noqa\n' >"$gp/vendor/v.ts"
+check "a vendor directory is not counted" "$base_supp" "$(value "suppression lines matching (code files)" "$(bash "$SCRIPT" "$gp" --static)")"
+rm -rf "$gp/vendor"
+base_excl=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+excl_form() { # excl_form <file> <line>
+  printf '%s\n' "$2" >"$gp/$1"
+  now=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  check "exclusion form counted: $1 $2" "$((base_excl + 1))" "$now"
+  rm -f "$gp/$1"
+}
+excl_form sonar-project.properties 'sonar.exclusions=src/**'
+excl_form sonar-project.properties 'sonar.coverage.exclusions=src/**'
+excl_form vitest.config.ts '    exclude: ["src/**"],'
+excl_form .coveragerc 'omit = src/*'
+excl_form .eslintignore 'src/legacy'
+excl_form eslint.config.mjs 'ignorePatterns: ["src"]'
+excl_form .jscpd.json '"ignore": ["src"]'
+excl_form ruff.toml 'extend-exclude = ["src"]'
+excl_form vitest.config.ts 'export default { test: { coverage: { exclude: ["src"] } } };'
+excl_form eslint.config.mjs 'export default [{ ignores: ["src"] }];'
+excl_form ruff.toml 'ignore = ["E501"]'
+excl_form pyproject.toml 'ignore_errors = true'
+excl_form pytest.ini 'addopts = --ignore=tests/slow'
+excl_form sonar-project.properties 'sonar.issue.ignore.multicriteria=e1'
+excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 'off' } }];"
+excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 0 } }];"
+
+# exclusions count entries: a new entry in an existing list rises the count, and compare exits 1
+excl_pair() { # excl_pair <name> <file> <before content> <after content> <before count> <after count>
+  printf '%s\n' "$3" >"$gp/$2"; e1=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  printf '%s\n' "$4" >"$gp/$2"; e2=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  rm -f "$gp/$2"
+  check "$1: count before" "$((base_excl + $5))" "$e1"
+  check "$1: count after" "$((base_excl + $6))" "$e2"
+  tbl before 4 2 80.0% 3 1.5% 2 "$e1" >"$T/xb.md"; TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 "$e2" >"$T/xa.md"
+  bash "$SCRIPT" --compare "$T/xb.md" "$T/xa.md" >/dev/null 2>&1; check "$1: compare exits 1" 1 $?
+}
+excl_pair "ruff ignore list grows" ruff.toml 'ignore = ["E501"]' 'ignore = ["E501","E402"]' 1 2
+excl_pair "a second rule off on one line" eslint.config.mjs "export default [{ rules: { 'a': 'off' } }];" "export default [{ rules: { 'a': 'off', 'b': 'off' } }];" 1 2
+excl_pair "a multi-line exclude list grows" vitest.config.ts 'export default { test: { coverage: {
+  exclude: [
+    "src/a",
+  ] } } };' 'export default { test: { coverage: {
+  exclude: [
+    "src/a",
+    "src/b",
+  ] } } };' 1 2
+excl_delta() { # excl_delta <file> <content> <delta>
+  printf '%s\n' "$2" >"$gp/$1"
+  check "exclusion delta $3: $1 $2" "$((base_excl + $3))" "$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")"
+  rm -f "$gp/$1"
+}
+excl_delta eslint.config.mjs "export default [{ rules: { 'complexity': ['error', { max: 0 }] } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'max-depth': ['error', { max: 0 }], 'curly': 'error' } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': ['off'] } }];" 1
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': [0, { a: 1 }] } }];" 1
+excl_delta eslint.config.mjs "export default [{ rules: { ...base, 'x': 0, 'y': \"off\", eqeqeq: 0 } }];" 3
+excl_delta .eslintrc.json '{ "rules": { "no-undef": "off", "max": ["error", { "max": 0 }] } }' 1
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': 'off10' } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': 0.5, 'y': 01 } }];" 0
+excl_delta vitest.config.ts 'export default { test: { coverage: { include: ["src/a", "src/b"] } } };' 0
+excl_delta .coveragerc '[run]
+omit =
+    a/*
+    b/*
+    c/*' 3
+excl_delta sonar-project.properties 'sonar.exclusions=a,b,c' 3
+excl_delta pytest.ini '[pytest]
+addopts = --ignore=t/a --ignore=t/b' 2
+
+# round 4: every row, rule, comma item, YAML item and JSON entry counts, and compare exits 1 on a rise
+excl_pair "ruff lint per-file-ignores gets a row" pyproject.toml '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/*" = ["T201"]' 1 2
+excl_pair "ruff lint per-file-ignores gets a rule" pyproject.toml '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101","E402"]' 1 2
+excl_pair "ruff per-file-ignores table gets a rule" pyproject.toml '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]' '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101","E402"]' 1 2
+excl_pair "ruff.toml per-file-ignores gets a rule" ruff.toml '[lint.per-file-ignores]
+"tests/*" = ["S101"]' '[lint.per-file-ignores]
+"tests/*" = ["S101","E402"]' 1 2
+excl_pair ".coveragerc omit comma list grows" .coveragerc '[run]
+omit = a/*' '[run]
+omit = a/*,b/*,c/*' 1 3
+excl_pair "setup.cfg exclude comma list grows" setup.cfg '[flake8]
+exclude = a' '[flake8]
+exclude = a,b' 1 2
+excl_pair "tox.ini ignore comma list grows" tox.ini '[flake8]
+ignore = E501' '[flake8]
+ignore = E501,E402' 1 2
+excl_pair "setup.cfg per-file-ignores grows" setup.cfg '[flake8]
+per-file-ignores =
+    tests/*: S101' '[flake8]
+per-file-ignores =
+    tests/*: S101
+    docs/*: E501' 1 2
+excl_pair ".pylintrc ignore list grows" .pylintrc '[MASTER]
+ignore=a' '[MASTER]
+ignore=a,b' 1 2
+excl_pair ".pylintrc disable list grows" .pylintrc '[MESSAGES CONTROL]
+disable=C0114' '[MESSAGES CONTROL]
+disable=C0114,C0115' 1 2
+excl_pair ".eslintrc.yml ignorePatterns gets an item" .eslintrc.yml 'ignorePatterns:
+  - a' 'ignorePatterns:
+  - a
+  - b' 1 2
+excl_pair ".eslintrc.yaml inline ignorePatterns grows" .eslintrc.yaml 'ignorePatterns: [a]' 'ignorePatterns: [a, b]' 1 2
+excl_pair ".eslintrc.yml gets a rule set to off" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: off' 1 2
+excl_pair ".eslintrc.yml gets a rule set to 0" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: 0' 1 2
+excl_pair ".eslintrc.yml gets a rule set to [off]" .eslintrc.yml 'rules:
+  a: off' 'rules:
+  a: off
+  b: [off, x]' 1 2
+excl_pair ".nycrc exclude list grows" .nycrc '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair ".nycrc.json exclude list grows" .nycrc.json '{
+  "exclude": [
+    "a"
+  ]
+}' '{
+  "exclude": [
+    "a",
+    "b"
+  ]
+}' 1 2
+excl_pair "package.json nyc exclude grows" package.json '{ "nyc": { "exclude": ["a"] } }' '{ "nyc": { "exclude": ["a", "b"] } }' 1 2
+excl_pair "package.json jest ignore patterns grow" package.json '{ "jest": { "coveragePathIgnorePatterns": ["a"] } }' '{ "jest": { "coveragePathIgnorePatterns": ["a", "b"] } }' 1 2
+excl_pair "package.json eslintConfig ignorePatterns grow" package.json '{ "eslintConfig": { "ignorePatterns": ["a"] } }' '{ "eslintConfig": { "ignorePatterns": ["a", "b"] } }' 1 2
+excl_pair "tsconfig exclude grows" tsconfig.json '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair "tsconfig.build.json exclude grows" tsconfig.build.json '{ "exclude": ["a"] }' '{ "exclude": ["a", "b"] }' 1 2
+excl_pair ".eslintrc.json ignorePatterns grow" .eslintrc.json '{ "ignorePatterns": ["a"] }' '{ "ignorePatterns": ["a", "b"] }' 1 2
+excl_pair "biome rule set to off" biome.json '{ "linter": { "rules": { "style": { "a": "off" } } } }' '{ "linter": { "rules": { "style": { "a": "off", "b": "off" } } } }' 1 2
+excl_pair "biome.jsonc files ignore grows" biome.jsonc '{ "files": { "ignore": ["a"] } }' '{ "files": { "ignore": ["a", "b"] } }' 1 2
+excl_pair "biome linter ignore grows" biome.json '{ "linter": { "ignore": ["a"] } }' '{ "linter": { "ignore": ["a", "b"] } }' 1 2
+excl_delta package.json '{ "dependencies": { "ignore": "^5.0.0" } }' 0
+excl_pair "pytest.ini addopts continuation line gets an ignore" pytest.ini '[pytest]
+addopts =
+    --ignore=a' '[pytest]
+addopts =
+    --ignore=a
+    --ignore=b' 1 2
+excl_pair "biome includes gets a negation" biome.json '{ "files": { "includes": ["**", "!a"] } }' '{ "files": { "includes": ["**", "!a", "!b"] } }' 1 2
+excl_delta biome.json '{ "files": { "includes": ["**", "src"] } }' 0
+excl_delta biome.json '{ "formatter": { "x": "off" } }' 0
+excl_delta .eslintrc.yml 'rules:
+  a: error
+  b: warn' 0
+
+# round 5: jest ignore patterns, globalIgnores and ruff dotted keys count
+excl_pair "jest testPathIgnorePatterns in package.json grows" package.json '{ "jest": { "testPathIgnorePatterns": ["a"] } }' '{ "jest": { "testPathIgnorePatterns": ["a", "b"] } }' 1 2
+excl_pair "jest modulePathIgnorePatterns in package.json grows" package.json '{ "jest": { "modulePathIgnorePatterns": ["a"] } }' '{ "jest": { "modulePathIgnorePatterns": ["a", "b"] } }' 1 2
+excl_pair "jest.config testPathIgnorePatterns grows" jest.config.js 'module.exports = { testPathIgnorePatterns: ["a"] };' 'module.exports = { testPathIgnorePatterns: ["a", "b"] };' 1 2
+excl_pair "globalIgnores call grows" eslint.config.mjs 'export default [globalIgnores(["a/**"])];' 'export default [globalIgnores(["a/**", "b/**"])];' 1 2
+excl_pair "ruff.toml lint.ignore grows" ruff.toml 'lint.ignore = ["E501"]' 'lint.ignore = ["E501","F401"]' 1 2
+excl_pair "ruff.toml lint.extend-ignore grows" ruff.toml 'lint.extend-ignore = ["E501"]' 'lint.extend-ignore = ["E501","F401"]' 1 2
+excl_pair "pyproject tool.ruff lint.ignore grows" pyproject.toml '[tool.ruff]
+lint.ignore = ["E501"]' '[tool.ruff]
+lint.ignore = ["E501","F401"]' 1 2
+# round 6: comments are removed from the text before entries are counted
+excl_pair "an entry after a leading block comment counts" jest.config.cjs "module.exports = {
+  testPathIgnorePatterns: ['/x/',
+ /* c */ '/y/'],
+};" "module.exports = {
+  testPathIgnorePatterns: ['/x/',
+ /* c */ '/y/', '/z/'],
+};" 2 3
+excl_pair "a block comment spanning lines inside the array" jest.config.cjs "module.exports = { testPathIgnorePatterns: [
+  '/a/',
+  /* one
+     two '/q/' */
+  '/b/' ] };" "module.exports = { testPathIgnorePatterns: [
+  '/a/',
+  /* one
+     two '/q/' */
+  '/b/', '/c/' ] };" 2 3
+excl_pair "a // comment between entries" jest.config.cjs "module.exports = { testPathIgnorePatterns: [
+  '/a/', // keep '/q/' out
+  '/b/' ] };" "module.exports = { testPathIgnorePatterns: [
+  '/a/', // keep '/q/' out
+  '/b/', '/c/' ] };" 2 3
+excl_pair "strings containing // and /* are one entry each" jest.config.cjs "module.exports = { testPathIgnorePatterns: ['/a//x/', '/b/*/c/*'] };" "module.exports = { testPathIgnorePatterns: ['/a//x/', '/b/*/c/*', 'http://h'] };" 2 3
+excl_pair "a // comment after the key, the array on the next line" jest.config.cjs "module.exports = { testPathIgnorePatterns: // the list
+  ['/a/', '/b/'] };" "module.exports = { testPathIgnorePatterns: // the list
+  ['/a/', '/b/', '/c/'] };" 2 3
+excl_pair "the array on the line after the key" jest.config.cjs "module.exports = { testPathIgnorePatterns:
+  ['/a/', '/b/'] };" "module.exports = { testPathIgnorePatterns:
+  ['/a/', '/b/', '/c/'] };" 2 3
+excl_pair "globalIgnores with the array on the next line" eslint.config.mjs 'export default [globalIgnores(
+  ["a/**", "b/**"]
+)];' 'export default [globalIgnores(
+  ["a/**", "b/**", "c/**"]
+)];' 2 3
+excl_pair "playwright testIgnore grows" playwright.config.ts "export default { testIgnore: ['**/a/**'] };" "export default { testIgnore: ['**/a/**', '**/b/**'] };" 1 2
+excl_pair "a toml # comment between entries" pyproject.toml '[tool.coverage.run]
+omit = [
+  "a/*", # keep "q/*" out
+  "b/*",
+]' '[tool.coverage.run]
+omit = [
+  "a/*", # keep "q/*" out
+  "b/*",
+  "c/*",
+]' 2 3
+excl_delta jest.config.js 'module.exports = { watchPathIgnorePatterns: ["a"], transformIgnorePatterns: ["b"] };' 0
+
+# round 5: the gate configuration section and exit 3
+gate_tbl() { # gate_tbl <label> <lint> <gate rows...>: a table whose gate rows are the remaining arguments as "path=hash"
+  local label=$1 lint=$2 rows="" n=0 a; shift 2
+  for a in "$@"; do rows="${rows}| gate config: ${a%%=*} | ${a#*=} |\n"; n=$((n + 1)); done
+  TBL_GATE="| gate config files | $n |\n$rows" tbl "$label" "$lint" 2 80.0% 3 1.5% 2 1
+}
+gate_run() { # gate_run <before lint> <after lint> <before rows> <after rows>: compare, output in $outg and status in $rcg
+  # shellcheck disable=SC2086  # the row lists are space-separated words
+  gate_tbl before "$1" $3 >"$T/gb.md"
+  # shellcheck disable=SC2086
+  TBL_TREE=dirty gate_tbl after "$2" $4 >"$T/ga.md"
+  outg=$(bash "$SCRIPT" --compare "$T/gb.md" "$T/ga.md" 2>&1); rcg=$?
+}
+gate_run 4 4 "pyproject.toml=aaaa111122223333" "pyproject.toml=bbbb111122223333"
+check "a changed gate file with equal counts exits 3" 3 $rcg
+contains "the changed file is named" "changed: pyproject.toml" "$outg"
+contains "the review line is printed" "REVIEW: 1 gate configuration file(s) changed; show this list to the user before reporting the migration as done." "$outg"
+contains "the section heading is printed" "Gate configuration changed (1):" "$outg"
+gate_run 4 4 "tsconfig.json=aaaa111122223333 package.json=cccc111122223333" "tsconfig.json=dddd111122223333 package.json=cccc111122223333"
+check "a narrowed tsconfig include exits 3" 3 $rcg
+contains "tsconfig.json is listed" "changed: tsconfig.json" "$outg"
+case "$outg" in *"changed: package.json"*) echo "FAIL an unchanged file is listed"; fail=1 ;; *) echo "ok   an unchanged file is not listed" ;; esac
+gate_run 4 4 "" "mypy.ini=eeee111122223333"
+check "an added mypy.ini exits 3" 3 $rcg
+contains "mypy.ini shows as added" "added: mypy.ini" "$outg"
+gate_run 4 4 "mypy.ini=eeee111122223333" ""
+check "a removed gate file exits 3" 3 $rcg
+contains "a removed file shows as removed" "removed: mypy.ini" "$outg"
+gate_run 4 5 "pyproject.toml=aaaa111122223333" "pyproject.toml=bbbb111122223333"
+check "a worse number with a config change exits 1" 1 $rcg
+contains "exit 1 still prints the section" "changed: pyproject.toml" "$outg"
+case "$outg" in *"REVIEW:"*) echo "FAIL exit 1 prints the review line"; fail=1 ;; *) echo "ok   exit 1 prints no review line" ;; esac
+gate_run 4 4 "pyproject.toml=aaaa111122223333" "pyproject.toml=aaaa111122223333"
+check "no config change and nothing worse exits 0" 0 $rcg
+case "$outg" in *"Gate configuration changed"*) echo "FAIL an equal hash lists the section"; fail=1 ;; *) echo "ok   an equal hash lists no section" ;; esac
+printf '| Metric | before |\n|---|---|\n| lint findings | 4 |\n| mode | full |\n' >/dev/null
+TBL_GATE='' tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/gold.md"
+TBL_TREE=dirty gate_tbl after 4 >"$T/ga.md"
+bash "$SCRIPT" --compare "$T/gold.md" "$T/ga.md" >/dev/null 2>&1; check "a before table without the gate section exits 2" 2 $?
+outg=$(bash "$SCRIPT" --compare "$T/gold.md" "$T/ga.md" 2>&1); contains "the old table message asks for a retake" "retake the baseline" "$outg"
+gate_tbl before 4 >"$T/gb.md"; TBL_GATE='' TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 1 >"$T/gold.md"
+bash "$SCRIPT" --compare "$T/gb.md" "$T/gold.md" >/dev/null 2>&1; check "an after table without the gate section exits 2" 2 $?
+# a worse suppression row prints the retake rule
+TBL_TREE=dirty gate_tbl after 4 >"$T/ga.md"; gate_tbl before 4 >"$T/gb.md"
+regress_out=$(TBL_TREE=dirty TBL_GATE='| gate config files | 0 |\n' tbl after 4 2 80.0% 3 1.5% 3 1 >"$T/r.md"; bash "$SCRIPT" --compare "$T/gb.md" "$T/r.md" 2>&1)
+contains "a worse suppression row prints the retake rule" "the agent never retakes it" "$regress_out"
+
+# a globalIgnores argument that is not a literal array keeps the key count; a change is still reported as changed
+excl_delta eslint.config.mjs 'export default [globalIgnores([...base])];' 1
+excl_delta eslint.config.mjs 'export default [globalIgnores([...base, ...more])];' 2
+gate_run 4 4 "eslint.config.mjs=aaaa111122223333" "eslint.config.mjs=bbbb111122223333"
+check "a changed non-countable ignore list exits 3" 3 $rcg
+contains "the non-countable file is reported as changed" "changed: eslint.config.mjs" "$outg"
+# an n/a gate row has its own message
+TBL_GATE='| gate config files | n/a (no shasum or sha256sum) |\n' tbl before 4 2 80.0% 3 1.5% 2 1 >"$T/gna.md"
+gate_tbl after 4 >"$T/ga.md"
+outn=$(TBL_TREE=dirty bash "$SCRIPT" --compare "$T/gna.md" "$T/ga.md" 2>&1); check "an n/a gate row before exits 2" 2 $?
+contains "an n/a gate row names the missing hash tool" "were not hashed in the before table" "$outn"
+case "$outn" in *"no gate configuration section"*) echo "FAIL an n/a gate row reports a missing section"; fail=1 ;; *) echo "ok   an n/a gate row is not reported as a missing section" ;; esac
+
+# the real script hashes gate files, skips symlinks and secret-named files, and prints no contents
+gs="$T/gs"; mkdir -p "$gs/secrets" "$gs/.github/workflows"
+printf '{}\n' >"$gs/package.json"; printf 'name: ci\n' >"$gs/.github/workflows/ci.yml"
+printf 'MARKER_ENV_7731\n' >"$gs/.env"; printf 'MARKER_KEY_7731\n' >"$gs/deploy.key"; printf 'MARKER_CRED_7731\n' >"$gs/credentials.json"
+printf 'MARKER_DIR_7731\n' >"$gs/secrets/tsconfig.json"; printf 'MARKER_SECRET_7731\n' >"$gs/my-secret.toml"; printf 'MARKER_VT_7731\n' >"$gs/vitest.config.secret.ts"
+mkdir -p "$gs/.husky" "$gs/.github/actions/x"; printf 'x\n' >"$gs/.husky/pre-commit"; printf 'x\n' >"$gs/.github/actions/x/action.yml"; printf 'x\n' >"$gs/.github/dependabot.yml"
+printf 'x\n' >"$gs/playwright.config.ts"; printf 'x\n' >"$gs/knip.json"; printf 'x\n' >"$gs/.oxlintrc.json"; printf 'x\n' >"$gs/.stylelintrc.json"; printf 'x\n' >"$gs/.semgrepignore"
+printf 'MARKER_ACT_7731\n' >"$gs/.github/actions/x/secret-action.yml"
+ln -s .env "$gs/tsconfig.json"
+outs=$(bash "$SCRIPT" "$gs" --static)
+contains "package.json is hashed" "| gate config: package.json | " "$outs"
+contains "a CI workflow is hashed" "| gate config: .github/workflows/ci.yml | " "$outs"
+for g in .husky/pre-commit .github/actions/x/action.yml .github/dependabot.yml playwright.config.ts knip.json .oxlintrc.json .stylelintrc.json .semgrepignore; do contains "gate fingerprint list covers $g" "| gate config: $g | " "$outs"; done
+check "ten gate files are listed, no secret-named one" 10 "$(value "gate config files" "$outs")"
+case "$outs" in *MARKER_*|*credentials*|*deploy.key*|*.env*|*my-secret*|*vitest.config.secret*|*secret-action*|*"secrets/"*) echo "FAIL a secret-named file or its content appears in the table"; fail=1 ;; *) echo "ok   secret-named files are never hashed or printed" ;; esac
+case "$outs" in *"gate config: tsconfig.json"*) echo "FAIL a symlinked gate file is hashed"; fail=1 ;; *) echo "ok   a symlink is not hashed" ;; esac
+h1=$(printf '%s\n' "$outs" | grep -F '| gate config: package.json |')
+printf '{ "a": 1 }\n' >"$gs/package.json"
+h2=$(bash "$SCRIPT" "$gs" --static | grep -F '| gate config: package.json |')
+if [ "$h1" != "$h2" ]; then echo "ok   a content change changes the hash"; else echo "FAIL a content change keeps the hash"; fail=1; fi
+h3=$(bash "$SCRIPT" "$gs" --static | grep -F '| gate config: package.json |')
+check "an unchanged file keeps its hash" "$h2" "$h3"
+
+# tables with commit hashes and no repository to check them in exit 2, no git tables from a real non-repository still pass
+outr=$(cd "$T/nogit" && env -u QB_REPO bash "$SCRIPT" --compare "$T/b.md" "$T/same.md" 2>&1); check "commit hashes without a repository exit 2" 2 $?
+contains "commit hashes without a repository say so" "is not a git repository" "$outr"
+(cd "$T/nogit" && env -u QB_REPO bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md" >/dev/null 2>&1); check "no git on both sides from a non-repository exits 0" 0 $?
+
+# no OK line is printed on an exit 2 path
+outd=$(bash "$SCRIPT" --compare "$T/b.md" "$T/dupafter.md" 2>&1); check "duplicate row exits 2" 2 $?
+case "$outd" in *"OK:"*) echo "FAIL duplicate row prints an OK line"; fail=1 ;; *) echo "ok   duplicate row prints no OK line" ;; esac
+outd=$(bash "$SCRIPT" --compare "$T/dupbefore.md" "$T/same.md" 2>&1); check "duplicate row before exits 2" 2 $?
+case "$outd" in *"OK:"*) echo "FAIL duplicate row before prints an OK line"; fail=1 ;; *) echo "ok   duplicate row before prints no OK line" ;; esac
+
+# a mypy run that fails without error lines is not zero findings
+cp -R "$T/py" "$T/py2"; rm -rf "$T/py2/.git"; printf '[tool.mypy]\n' >"$T/py2/pyproject.toml"
+(cd "$T/py2" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init)
+mkdir -p "$T/fbin2"; for b in ruff python; do cp "$T/fbin/$b" "$T/fbin2/$b"; done
+cat >"$T/fbin2/mypy" <<'SH'
+#!/usr/bin/env bash
+case "${MYPY_MODE:-}" in
+  crash) echo "INTERNAL ERROR" >&2; exit 2 ;;
+  errors) echo "a.py:1: error: bad"; exit 1 ;;
+  quiet-fail) exit 1 ;;
+esac
+exit 0
+SH
+chmod +x "$T/fbin2/mypy"
+PYPATH2="$T/fbin2:/usr/bin:/bin"
+outm=$(MYPY_MODE=crash PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains "a mypy crash is a failure, not zero" "n/a (failed: mypy failed, exit 2)" "$(value 'type errors' "$outm")"
+outm=$(MYPY_MODE=quiet-fail PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains "a non-zero mypy exit without error lines is a failure" "n/a (failed: mypy failed, exit 1)" "$(value 'type errors' "$outm")"
+outm=$(MYPY_MODE=errors PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "mypy error lines are counted" 1 "$(value 'type errors' "$outm")"
+outm=$(PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "a clean mypy run is zero" 0 "$(value 'type errors' "$outm")"
+
+# a mypy crash in either table: after exits 1 (no longer measured), before exits 2 (input error)
+tbl before 4 "n/a (failed: mypy failed, exit 2)" 80.0% 3 1.5% 2 1 >"$T/mb.md"
+TBL_TREE=dirty tbl after 4 "n/a (failed: mypy failed, exit 2)" 80.0% 3 1.5% 2 1 >"$T/ma.md"
+bash "$SCRIPT" --compare "$T/b.md" "$T/ma.md" >/dev/null 2>&1; check "a mypy crash in the after table exits 1" 1 $?
+bash "$SCRIPT" --compare "$T/mb.md" "$T/same.md" >/dev/null 2>&1; check "a mypy crash in the before table exits 2" 2 $?
+
+# the compare doc states the real crash exit codes
+qbm="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-baseline.md"
+if grep -q 'exits 1 when it is in the after table and 2 when it is in the before table' "$qbm"; then echo "ok   quality-baseline.md states the mypy crash exit codes"; else echo "FAIL quality-baseline.md lacks the mypy crash exit codes"; fail=1; fi
+
+# the quality pass defers to comments.md and keeps the compare gate
+qp="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-pass.md"
+if grep -q 'no suppression, exclusion or threshold change is added' "$qp"; then echo "FAIL quality-pass.md still forbids every suppression"; fail=1; else echo "ok   quality-pass.md has no absolute suppression ban"; fi
+if grep -q 'comments.md. allows, and .--compare. must still pass' "$qp"; then echo "ok   quality-pass.md defers to comments.md and compare"; else echo "FAIL quality-pass.md lacks the comments.md and compare wording"; fail=1; fi
+
+excl_delta ruff.toml 'per-file-ignores = {}' 0
+
+# round 7: count items, not lines; an empty inline array is 0, one item 1, two items 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [] } } };' 0
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a"] } } };' 1
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a","b"] } } };' 2
+excl_delta eslint.config.mjs 'export default [globalIgnores([])];' 0
+excl_delta eslint.config.mjs 'export default [globalIgnores(["a"])];' 1
+excl_delta eslint.config.mjs 'export default [globalIgnores(["a","b"])];' 2
+excl_delta ruff.toml 'extend-exclude = []' 0
+excl_delta ruff.toml 'extend-exclude = ["a"]' 1
+excl_delta ruff.toml 'extend-exclude = ["a","b"]' 2
+excl_delta .eslintrc.yml 'ignorePatterns: []' 0
+excl_delta .eslintrc.yml 'ignorePatterns: ["a"]' 1
+excl_delta .eslintrc.yml 'ignorePatterns: ["a","b"]' 2
+excl_delta .eslintrc.json '{ "ignorePatterns": [] }' 0
+excl_delta .eslintrc.json '{ "ignorePatterns": ["a"] }' 1
+excl_delta .eslintrc.json '{ "ignorePatterns": ["a","b"] }' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = []' 0
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = ["a"]' 1
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = ["a","b"]' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = [
+  "a",
+  "b",
+]' 2
+excl_delta pyproject.toml '[tool.coverage.run]
+omit = [
+]' 0
+excl_delta setup.cfg '[coverage:run]
+omit = a/*, b/*' 2
+excl_pair "empty inline exclude gets its first entry" vitest.config.ts 'export default { test: { coverage: { exclude: [] } } };' 'export default { test: { coverage: { exclude: ["a"] } } };' 0 1
+excl_pair "empty ruff list gets its first entry" ruff.toml 'extend-exclude = []' 'extend-exclude = ["a"]' 0 1
+
+# round 8: an added exclusion always raises the count; arrays count one per top-level element, whatever it is
+excl_pair "a spread gets a string added" vitest.config.ts 'export default { test: { coverage: { exclude: [...configDefaults.coverage.exclude] } } };' 'export default { test: { coverage: { exclude: [...configDefaults.coverage.exclude, "a"] } } };' 1 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [A] } } };' 1
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [A, B] } } };' 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a", B, C] } } };' 3
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/a/, /b/] } } };' 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/a,b/, "c,d", f(1, 2), [3, 4]] } } };' 4
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/[/]x/, "a"] } } };' 2
+excl_pair "identifiers across lines" vitest.config.ts 'export default { test: { coverage: { exclude: [
+  A,
+  B,
+] } } };' 'export default { test: { coverage: { exclude: [
+  A,
+  B,
+  C,
+] } } };' 2 3
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [
+  /a/,
+  /b/,
+] } } };' 2
+excl_delta .eslintrc.yml 'ignore:
+  - path: a
+    reason: x
+  - path: b
+    reason: y' 2
+excl_delta .eslintrc.yml 'exclude:
+  paths:
+    - a
+    - b' 2
+excl_delta pyproject.toml '[tool.mypy]
+ignore_errors = false' 0
+excl_delta pyproject.toml '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "S102"]' 2
+excl_delta setup.cfg '[flake8]
+ignore = E1, E2
+    E3
+      not-an-item: x' 3
 
 exit $fail

@@ -212,15 +212,18 @@ jobs:
         run: bash scripts/check-doc-sync.test.sh
       - name: Doc sync (README, EXAMPLES, AGENTS capability row)
         run: bash scripts/check-doc-sync.sh
-      - name: Quality baseline script parses and passes shellcheck
+      - name: Migrate scripts parse and pass shellcheck
         run: |
           set -euo pipefail
-          f=skills/migrate/general/quality-baseline.sh
-          [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
-          bash -n "$f"
-          shellcheck "$f"
+          for f in skills/migrate/general/quality-baseline.sh skills/migrate/general/harness-live.sh; do
+            [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
+            bash -n "$f"
+            shellcheck "$f"
+          done
       - name: Quality baseline script tests
         run: bash scripts/quality-baseline.test.sh
+      - name: Harness live check tests
+        run: bash scripts/harness-live.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests

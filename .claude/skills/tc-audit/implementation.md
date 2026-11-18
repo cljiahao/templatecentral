@@ -35,9 +35,19 @@ The script does **not** measure cognitive complexity, duplication or coverage. T
 
 Template thresholds are a ratchet set just above today's numbers, not targets. The test:source ratio is a floor-plus-ceiling band: too low means untested code, too high means tests that outgrew the code. A failing number is a finding: fix the template, never raise a threshold to pass. Lower a threshold when the real numbers fall well under it. Known gap: the FastAPI template carries ~24% comment lines against 3-8% on the TypeScript stacks; the threshold is not tuned to it.
 
-### 2b — Deeper check (optional; needs network and installs)
+### 2b — Measured outcomes of a scaffolded project (needs network and installs)
 
-Scaffold one stack into a temp directory with `templatecentral:scaffold`, then run its lint, typecheck and tests (`pnpm run check`, `pnpm exec vitest --run --coverage`; FastAPI: `ruff check`, `python -m pyright src/`, `pytest --cov`). Record wall-clock time per command and flag any that is slow or any warning. Rotate the stack each audit. Skip it when offline.
+One stack per run, rotating: `stack=$(set -- nextjs vite-react nestjs fastapi; shift $((10#$(date +%V) % 4)); echo "$1")`; run all four when the user asks. Scaffold into a temporary directory, install, then measure:
+
+```bash
+d=$(mktemp -d "${TMPDIR:-/tmp}/tc-audit.XXXXXX")
+TC_STACK="$stack" TC_PART=stack bash skills/scaffold/shared/tc-copy.sh "$d"
+(cd "$d" && git init -q && git add -A && git -c user.email=a@a -c user.name=a commit -qm init)
+(cd "$d" && if [ -f package.json ]; then pnpm install --ignore-scripts; elif [ -f requirements-dev.txt ]; then python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt; else echo "tc-audit: no package.json and no requirements-dev.txt in $d" >&2; exit 1; fi)
+bash skills/migrate/general/quality-baseline.sh "$d" --full --label audit
+```
+
+Report the table. Any `n/a` row, a nonzero lint, type or complexity count, a failed test, coverage under 80% or duplication over 3% is a finding against the template. Unmeasured, by design: Sonar security hotspots and every Sonar rule other than cognitive complexity need a Sonar server, which this repo does not run. Skip the step offline.
 
 ---
 
