@@ -51,13 +51,14 @@ JS
 # section_lines <file> <key>: the non-comment lines of one top-level section of a YAML file.
 section_lines() { awk -v k="$2" '/^[^[:space:]#]/ { on = ($0 ~ "^" k ":") } on && !/^[[:space:]]*#/' "$1"; }
 
-# gitleaks_state <file>: ok, mixed, multi, key:<name>, arg:<text>, skip or none for the pre-commit section. A command counts as ok only when all of these hold.
+# gitleaks_state <file>: ok, mixed, multi, key:<name>, arg:<text>, form, dup, duphook, overlay, skip or none for the pre-commit section. A command counts as ok only when all of these hold.
 # The run value (a plain scalar continues on every following blank or deeper-indented line, joined with one space, as YAML folds it; a trailing lone backslash is refused) has a trailing shell comment removed per line and is exactly one simple command, or the single non-blank, non-comment line of a run: | block, or the seeded guard `if command -v gitleaks ...; then <command>; fi`.
 # The command is gitleaks, npx/pnpx/bunx gitleaks, pnpm/yarn/npm/bun exec|dlx|run gitleaks, or docker run (--rm, -i, -t, -v/--volume, -w/--workdir) <image>; no env prefix.
-# Its subcommand is git, protect, detect or dir, and its arguments are only --pre-commit, --staged, --redact [N], -v, --verbose, --no-banner, --no-color, --log-level <v>, -c/--config <path other than /dev/null>, and in the docker form a positional path.
-# The command has one run: key and none of skip, only, exclude, glob, files or env (skip: false is fine). mixed: gitleaks appears next to an unquoted | & ; ( ) backtick, $( or another line, or a line ends in a backslash. multi: a command with gitleaks has more than one run: key.
+# Its subcommand is git, protect, detect or dir, and its arguments are only --pre-commit, --staged, --redact [N], -v, --verbose, --no-banner, --no-color, --log-level <v>, -c/--config <path not under /dev/ and without $ or a backtick>, and in the docker form a positional path.
+# The command has one run: key and only the keys run, name, tags, stage_fixed, fail_text, priority, root and skip: false; pre-commit has only commands, jobs, scripts, parallel, piped, follow, fail_on_changes and skip: false; any other key is key:<name>, and top-level exclude_tags is refused. A line that is not a plain bare key: value (quoted or explicit key, space before the colon, merge key, alias, anchor, flow mapping) is form. A repeated gitleaks command name is dup, a repeated pre-commit: is duphook, and lefthook-local.yml or top-level extends:/remotes: gives overlay, never ok. A trailing CR is stripped, so CRLF reads as LF. mixed: gitleaks appears next to an unquoted | & ; ( ) backtick, $( or another line, or a line ends in a backslash. multi: a command with gitleaks has more than one run: key.
 gitleaks_state() {
-  section_lines "$1" pre-commit | awk '
+  local r
+  r=$(awk '
     BEGIN {
       guard = "^if[ \t]+command[ \t]+-v[ \t]+gitleaks[^;|()`]*;[ \t]*then[ \t]+[^;&|()`]*;[ \t]*fi$"
       run = "((npx|pnpx|bunx)[ \t]+(-[-A-Za-z]+[ \t]+)*|(pnpm|yarn|npm|bun)[ \t]+(exec|dlx|run)[ \t]+(--[ \t]+)?)?"
@@ -111,6 +112,7 @@ gitleaks_state() {
       }
       if (inw) W[++NW] = w
     }
+    function badcfg(v) { return v == "" || v ~ /^\/dev(\/|$)/ || v ~ /[$`]/ }
     function gl(w) { return w ~ /(^|\/)gitleaks(:[^\/]*)?$/ }
     function classify(s,   i, envw, dock, f, badf, a, v) {
       tok(s); i = 1; envw = ""; dock = 0; badf = ""
@@ -141,8 +143,8 @@ gitleaks_state() {
         if (a ~ /^--redact=[0-9]*$/) { i++; continue }
         if (a == "--log-level") { if (i + 1 > NW) return "arg:" a; i += 2; continue }
         if (a ~ /^--log-level=/) { i++; continue }
-        if (a == "-c" || a == "--config") { v = W[i + 1]; if (i + 1 > NW || v == "" || v == "/dev/null") return "arg:" a " " v; i += 2; continue }
-        if (a ~ /^--config=/) { v = substr(a, 10); if (v == "" || v == "/dev/null") return "arg:" a; i++; continue }
+        if (a == "-c" || a == "--config") { v = W[i + 1]; if (i + 1 > NW || badcfg(v)) return "arg:" a " " v; i += 2; continue }
+        if (a ~ /^--config=/) { v = substr(a, 10); if (badcfg(v)) return "arg:" a; i++; continue }
         if (dock && a !~ /^-/) { i++; continue }
         return "arg:" a
       }
@@ -171,28 +173,73 @@ gitleaks_state() {
       if (st != "" && res == "") res = st
     }
     function note(r) { if (bad == "") bad = r }
+    function gnote(r) { if (gbad == "") gbad = r }
     function endcmd() {
       run_end()
       if (cmd != "") {
+        nm[cmdname]++
+        if (anygl) glc[cmdname] = 1
         if (nrun > 1 && anygl) note("multi")
-        else if (res == "ok") { if (kbad == "skip") skipped = 1; else if (kbad != "") note(kbad); else okn++ }
+        else if (res == "ok") { if (cmdform) note("form"); else if (kbad == "skip") skipped = 1; else if (kbad != "") note(kbad); else okn++ }
         else if (res != "") note(res)
       }
-      cmd = ""; nrun = 0; anygl = 0; res = ""; kbad = ""
+      cmd = ""; cmdname = ""; nrun = 0; anygl = 0; res = ""; kbad = ""; cmdform = 0
     }
+    function field(l,   key, val) {
+      if (cmd == "") return
+      if (l !~ /^      [A-Za-z_][A-Za-z0-9_-]*:([ \t]|$)/) { cmdform = 1; return }
+      key = l; sub(/^      /, "", key); sub(/:.*$/, "", key)
+      val = l; sub(/^      [^:]*:/, "", val); val = uncomment(val)
+      if (val ~ /^[*&!]/) cmdform = 1
+      if (key == "run") run_start(val)
+      else if (key == "skip") { if (val != "false" && kbad == "") kbad = (val == "true") ? "skip" : "key:skip" }
+      else if (key ~ /^(name|tags|stage_fixed|fail_text|priority|root)$/) { if (key == "name") cmdname = val }
+      else if (kbad == "") kbad = "key:" key
+    }
+    { sub(/\r$/, "") }
+    /^[ \t]*#/ { next }
+    /^[^ \t]/ {
+      run_end(); endcmd(); on = 0; hk = ""
+      if ($0 ~ /^pre-commit[ \t]*:/) { npc++; on = 1; v = $0; sub(/^[^:]*:/, "", v); if (uncomment(v) != "") gnote("form") }
+      else if ($0 ~ /^(extends|remotes)[ \t]*:/) overlay = 1
+      else if ($0 ~ /^exclude_tags[ \t]*:/) gnote("key:exclude_tags")
+      next }
+    !on { next }
     inrun && ($0 !~ /[^ \t]/ || indent($0) > 6) { if (mode == "plain") plain_add($0); else block_add($0); next }
     { run_end() }
-    /^  skip:[ \t]*true/ { hookskip = 1 }
-    /^    -[ \t]/ { endcmd(); cmd = "job" NR; sub(/^    -[ \t]+/, "      ") }
-    /^    [A-Za-z0-9_-]+:[ \t]*$/ { endcmd(); cmd = $1; next }
-    /^      [A-Za-z_-]+:/ {
-      key = $0; sub(/^      /, "", key); sub(/:.*$/, "", key)
-      val = $0; sub(/^      [^:]*:[ \t]*/, "", val); val = uncomment(val)
-      if (key == "run") run_start(val)
-      else if (key == "skip") { if (val == "false") next; if (kbad == "") kbad = (val == "true") ? "skip" : "key:skip" }
-      else if (key ~ /^(only|exclude|glob|files|env)$/) { if (kbad == "") kbad = "key:" key }
-    }
-    END { endcmd(); print (okn > 0 && !hookskip) ? "ok" : (bad != "" ? bad : ((skipped || okn > 0) ? "skip" : "none")) }'
+    $0 !~ /[^ \t]/ { next }
+    { ind = indent($0) }
+    ind == 2 {
+      endcmd(); hk = ""
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_-]*:([ \t]|$)/) { gnote("form"); next }
+      key = $0; sub(/^  /, "", key); sub(/:.*$/, "", key)
+      val = $0; sub(/^  [^:]*:/, "", val); val = uncomment(val)
+      if (val ~ /^[*&!]/) { gnote("form"); next }
+      if (key == "skip") { if (val == "true") hookskip = 1; else if (val != "false") gnote("key:skip") }
+      else if (key ~ /^(commands|jobs)$/) { if (val != "") gnote("form"); hk = key }
+      else if (key !~ /^(scripts|parallel|piped|follow|fail_on_changes)$/) gnote("key:" key)
+      next }
+    hk !~ /^(commands|jobs)$/ { next }
+    ind == 4 {
+      h = $0; sub(/[ \t]+#.*$/, "", h)
+      if (hk == "jobs" && h ~ /^    -([ \t]|$)/) { endcmd(); cmd = "job" NR; cmdname = ""; l = $0; sub(/^    -[ \t]*/, "      ", l); field(l) }
+      else if (hk == "commands" && h ~ /^    [A-Za-z0-9_-]+:[ \t]*$/) { endcmd(); cmd = h; sub(/^[ \t]+/, "", cmd); sub(/:[ \t]*$/, "", cmd); cmdname = cmd }
+      else { endcmd(); gnote("form") }
+      next }
+    ind == 6 { field($0); next }
+    { if (cmd != "") cmdform = 1 }
+    END {
+      endcmd()
+      if (npc > 1) gnote("duphook")
+      for (n in glc) if (n != "" && nm[n] > 1) gnote("dup")
+      if (gbad != "") r = gbad
+      else if (okn > 0 && !hookskip) r = overlay ? "overlay" : "ok"
+      else if (bad != "") r = bad
+      else if (skipped || okn > 0 || hookskip) r = "skip"
+      else r = "none"
+      print r }' "$1")
+  if [ "$r" = ok ] && { [ -f "$(dirname "$1")/lefthook-local.yml" ] || [ -f "$(dirname "$1")/.lefthook-local.yml" ]; }; then r=overlay; fi
+  printf '%s\n' "$r"
 }
 
 # hook_runs_lefthook <file>: proves the hook file calls lefthook at top level or through the generated call_lefthook function with no top-level exit before it; it does not prove a deliberately obfuscated hook is live.
@@ -225,10 +272,14 @@ if [ -f "$P/lefthook.yml" ]; then
     ok) pass "lefthook.yml pre-commit runs gitleaks" ;;
     mixed) fail "lefthook.yml gitleaks" "the gitleaks command must be the only command in the run line; a trailing || true, a pipe, a second command, a background marker or a trailing backslash keeps it from blocking; in the docker form use \"\$PWD\" and not \$(pwd)" ;;
     multi) fail "lefthook.yml gitleaks" "the command that runs gitleaks has more than one run: key; keep exactly one" ;;
-    key:*) fail "lefthook.yml gitleaks" "the command that runs gitleaks sets ${gls#key:}:, which can switch the scan off; remove it" ;;
-    arg:*) fail "lefthook.yml gitleaks" "argument ${gls#arg:} is not accepted; the scan may use only git, protect, detect or dir with --pre-commit, --staged, --redact, -v, --verbose, --no-banner, --no-color, --log-level and a --config file that is not /dev/null" ;;
+    key:*) fail "lefthook.yml gitleaks" "${gls#key:}: is not an accepted key here and can switch the scan off or narrow it; the check accepts only commands, jobs, scripts, parallel, piped, follow, fail_on_changes and skip: false in pre-commit, and run, name, tags, stage_fixed, fail_text, priority, root and skip: false on the gitleaks command; exclude_tags is refused at the top level" ;;
+    arg:*) fail "lefthook.yml gitleaks" "argument ${gls#arg:} is not accepted; the scan may use only git, protect, detect or dir with --pre-commit, --staged, --redact, -v, --verbose, --no-banner, --no-color, --log-level and a --config file that is not under /dev/ and has no \$ or backtick; a positional path is accepted only in the docker form" ;;
+    form) fail "lefthook.yml gitleaks" "lefthook.yml uses a YAML form the check cannot read (a quoted or explicit key, a space before the colon, a merge key, an alias or anchor, a flow mapping, or a list under a command key); write the gitleaks command plainly" ;;
+    dup) fail "lefthook.yml gitleaks" "a command name that holds gitleaks is repeated; the later entry can replace it" ;;
+    duphook) fail "lefthook.yml gitleaks" "pre-commit: appears more than once at the top level; keep one" ;;
+    overlay) fail "lefthook.yml gitleaks" "lefthook-local.yml, extends: or remotes: can change the pre-commit hook; check it by hand or remove it" ;;
     skip) fail "lefthook.yml gitleaks" "the gitleaks command or the pre-commit hook sets skip: true" ;;
-    *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect or dir) outside a comment" ;;
+    *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect or dir) outside a comment; the check reads only two-space indentation (commands: at 2 spaces, command names at 4, fields at 6), not 4-space indentation or flow mappings, and a bare gitleaks dir . is not accepted" ;;
   esac
   if git -C "$P" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     hooks_dir=$(git -C "$P" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)

@@ -576,28 +576,47 @@ excl_entries() {
       sub(/[ \t]+[#;].*$/, "", s); gsub(/[][]/, "", s); m = split(s, parts, ","); n = 0
       for (k = 1; k <= m; k++) if (strip(parts[k]) != "") n++
       return n }
-    function scan(s, ng,  i, n, ch, e, f) {
+    function scan(s, ng,  i, n, ch, e, st, j, k, cc, cls) {
       n = length(s); rest = ""
       for (i = 1; i <= n; i++) {
         ch = substr(s, i, 1)
+        if (ch ~ /[ \t]/) continue
+        st = (opened && dep == base && eexp)
         if (ch == "\"" || ch == q) {
           e = i + 1
           while (e <= n && substr(s, e, 1) != ch) { if (substr(s, e, 1) == "\\") e++; e++ }
-          f = substr(s, i + 1, 1)
-          if (!ng || f == "!") { c++; got++ }
+          if (st) { eexp = 0; if (!ng || substr(s, i + 1, 1) == "!") { c++; got++ } }
           i = e; continue }
         if (ch == "#" || (ch == "/" && substr(s, i + 1, 1) == "/")) break
-        if (ch == "[" || ch == "{") { dep++; opened = 1; continue }
-        if (ch == "]" || ch == "}") { dep--; if (opened && dep <= 0) { inl = 0; rest = substr(s, i + 1); return } continue }
-        if (opened && dep > 0 && ch !~ /[ \t,]/) oth++
+        if (ch == ",") { if (opened && dep == base) eexp = 1; continue }
+        if (ch == "[" || ch == "{" || ch == "(") {
+          if (st) { eexp = 0; if (!ng) { c++; got++ } }
+          dep++
+          if (!opened && ch != "(") { opened = 1; base = dep; eexp = 1 }
+          continue }
+        if (ch == "]" || ch == "}" || ch == ")") {
+          dep--
+          if (opened && dep < base) { inl = 0; rest = substr(s, i + 1); return }
+          continue }
+        if (st) { eexp = 0; if (!ng) { c++; got++ } }
+        if (st && ch == "/") {
+          cls = 0
+          for (j = i + 1; j <= n; j++) {
+            cc = substr(s, j, 1)
+            if (cc == "\\") { j++; continue }
+            if (cc == "[") cls = 1
+            else if (cc == "]") cls = 0
+            else if (cc == "/" && !cls) break
+          }
+          i = j }
       }
-      inl = (opened && dep > 0) }
+      inl = (opened && dep >= base) }
     function ocount(s, pat,  k, n) { n = 0; while ((k = match(s, pat)) > 0) { n++; s = substr(s, RSTART + RLENGTH) } return n }
     BEGIN { re = ENVIRON["RE"]; kind = ENVIRON["KIND"]; pkg = ENVIRON["PKG"] + 0
       ikey = "^(omit|exclude|excludes|exclude_lines|exclude-lines|exclude_also|exclude_patterns|ignore|extend-ignore|extend-exclude|disable|per-file-ignores|extend-per-file-ignores|ignore-paths|ignore-patterns|ignore-modules|norecursedirs|ignore_errors|addopts|sonar\\..*(exclusions|ignore).*)$" }
     kind == "ini" {
       if ($0 ~ /^[ \t]*[#;]/) next
-      if (cont == 1 && $0 ~ /^[ \t]+[^ \t]/) { c += items($0); next }
+      if (cont == 1 && $0 ~ /^[ \t]+[^ \t]/) { if ($0 !~ /^[ \t]+[A-Za-z_.-]+[ \t]*[=:]/) c += items($0); next }
       if (cont == 2 && $0 ~ /^[ \t]+[^ \t]/) { c += ocount($0, "--ignore"); next }
       cont = 0
       if (match($0, /^[ \t]*[A-Za-z_.-]+[ \t]*[=:]/)) {
@@ -613,7 +632,12 @@ excl_entries() {
     kind == "yaml" {
       if ($0 ~ /^[ \t]*(#|$)/) next
       match($0, /[^ \t]/); ind = RSTART - 1
-      if (ylist) { if ($0 ~ /^[ \t]*-([ \t]|$)/ && ind >= kind_ind) { c++; next } ylist = 0 }
+      if (ylist) {
+        if ($0 ~ /^[ \t]*-([ \t]|$)/ && ind >= kind_ind) { if (iind < 0) iind = ind; if (ind == iind) c++; next }
+        if (ind > kind_ind) {
+          if ($0 ~ /^[ \t]*(paths|patterns|files|globs)[ \t]*:[ \t]*(#.*)?$/ && iind < 0) { kind_ind = ind; next }
+          next }
+        ylist = 0 }
       if (yflow) { s = $0; sub(/[ \t]+#.*$/, "", s); e = index(s, "]"); c += items(e > 0 ? substr(s, 1, e - 1) : s); if (e > 0) yflow = 0; next }
       if (yrules && ind <= rind) yrules = 0
       if (pend) {
@@ -628,7 +652,7 @@ excl_entries() {
         next }
       if ($0 ~ /^[ \t]*(ignorePatterns|exclude|excludes|ignore|ignores|omit)[ \t]*:/) {
         v = $0; sub(/^[^:]*:/, "", v); sub(/[ \t]+#.*$/, "", v); v = strip(v)
-        if (v == "") { ylist = 1; kind_ind = ind }
+        if (v == "") { ylist = 1; kind_ind = ind; iind = -1 }
         else if (substr(v, 1, 1) == "[") { sub(/^\[/, "", v); e = index(v, "]"); if (e > 0) c += items(substr(v, 1, e - 1)); else { c += items(v); yflow = 1 } }
         else c++
       }
@@ -636,23 +660,26 @@ excl_entries() {
     {
       line = $0
       if (tsec) {
-        if (line ~ /^[ \t]*\[/) tsec = 0
-        else { got = 0; oth = 0; dep = 0; opened = 0; scan(line, 0); if (got == 0 && line ~ /=/) c++; next }
+        if (!inl && line ~ /^[ \t]*\[/) tsec = 0
+        else if (inl) { scan(line, 0); next }
+        else { got = 0; dep = 0; opened = 0; eexp = 0; base = 0; scan(line, 0); if (got == 0 && !opened && line ~ /=/) c++; next }
       }
       if (inl) { scan(line, ng); line = inl ? "" : rest; if (line == "") next }
-      if (pend && line ~ /[^ \t]/) { pend = 0; got = 0; oth = 0; dep = 0; opened = 0; scan(line, png); if (got == 0 && !inl && !png && !(opened && oth == 0)) c++; line = inl ? "" : rest; if (line == "") next }
+      if (pend && line ~ /[^ \t]/) { pend = 0; got = 0; dep = 0; opened = 0; eexp = 0; base = 0; scan(line, png); if (got == 0 && !inl && !png && !opened) c++; line = inl ? "" : rest; if (line == "") next }
       if (line ~ /^[ \t]*\[[^]]*per-file-ignores[^]]*\][ \t]*$/) { tsec = 1; next }
       while (line != "" && match(line, re)) {
         key = substr(line, RSTART, RLENGTH); rem = substr(line, RSTART + RLENGTH); quoted = (key ~ /["'"'"']/ && key !~ /\[tool/)
+        if (key ~ /^coverage:[ \t]*\{/) { k = index(key, "exclude"); rem = substr(key, k + 7) rem; key = "exclude" }
         ng = (key ~ /collectCoverageFrom|includes/)
         if (key ~ /--ignore/) { c += 1; line = rem; continue }
         if (key ~ /^\[tool/) { line = ""; continue }
+        if (key ~ /ignore_errors/ && rem ~ /^[ \t]*["'"'"']?[ \t]*(=|:)?[ \t]*(false|False|no|off|0)[ \t]*(#.*)?$/) { line = ""; continue }
         sub(/^["'"'"']?[ \t]*[:=]/, "", rem)
         if (pkg && quoted && rem ~ /^[ \t]*["'"'"']/) { line = rem; continue }
-        got = 0; oth = 0; dep = 0; opened = 0; inl = 0
+        got = 0; dep = 0; opened = 0; eexp = 0; base = 0; inl = 0
         if (rem !~ /[^ \t]/) { pend = 1; png = ng; line = ""; continue }
         scan(rem, ng)
-        if (got == 0 && !inl && !ng && !(opened && oth == 0)) c++
+        if (got == 0 && !inl && !ng && !opened) c++
         line = inl ? "" : rest
       }
     }

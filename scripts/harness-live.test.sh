@@ -416,9 +416,10 @@ gl_ok c8 $'gitleaks git --pre-commit\n          --staged # note'
 # round 7: duplicate run key, gating keys
 gl_msg() { gl_variant "$T/$1" "$2" 0; out=$(run "$T/$1"); check "fails: $2" 1 $?; contains "message for: $2" "$3" "$out"; }
 gl_msg d1 $'gitleaks git --staged\n      run: true' "more than one run:"
-for k in "skip: true" "skip: CI" "only: false" "exclude: '*'" "glob: '*.nothing'" "files: echo" "env: {A: b}"; do
-  gl_msg "k-${k%%:*}-${k##* }" "$(printf 'gitleaks git --staged\n      %s' "$k")" "sets ${k%%:*}:"
+for k in "skip: CI" "only: false" "exclude: '*'" "glob: '*.nothing'" "files: echo" "env: {A: b}"; do
+  gl_msg "k-${k%%:*}-${k##* }" "$(printf 'gitleaks git --staged\n      %s' "$k")" "${k%%:*}: is not an accepted key"
 done
+gl_msg k-skip-true $'gitleaks git --staged\n      skip: true' "sets skip: true"
 gl_ok kf $'gitleaks git --staged\n      skip: false'
 gl_ok kt $'gitleaks git --staged\n      tags: security\n      stage_fixed: true\n      fail_text: stop\n      priority: 1\n      root: ./'
 # round 7: neutering arguments
@@ -432,4 +433,71 @@ gl_msg e2 'FOO=1 npx gitleaks git --staged' "is not accepted"
 gl_msg e3 'docker run --rm -v $(pwd):/repo zricethezav/gitleaks:latest git --staged /repo' '"$PWD"'
 gl_ok f1 'gitleaks protect --staged -v --verbose --no-color --log-level debug --redact=50 --config ok.toml'
 gl_ok f2 'gitleaks detect --redact 20 --no-banner'
+
+# round 8: a structural allow-list; every key or YAML form outside it fails closed
+gl_rehash() { (cd "$1" && python3 - <<'RH8'
+import hashlib, json
+m = json.load(open(".claude/harness.json"))
+m["seeded_files"]["lefthook.yml"]["origin_hash"] = hashlib.sha256(open("lefthook.yml", "rb").read()).hexdigest()
+json.dump(m, open(".claude/harness.json", "w"))
+RH8
+  ); }
+# gl_raw <name> <lefthook.yml content> <expected exit 0|1> <expected message fragment, or empty>
+gl_raw() {
+  seed "$T/$1"; printf '%s%s' "$2" $'pre-push:\n  commands:\n    p:\n      run: true\n' >"$T/$1/lefthook.yml"; gl_rehash "$T/$1"
+  out=$(run "$T/$1"); check "raw $1 exit" "$3" $?
+  [ -z "$4" ] || contains "raw $1 message" "$4" "$out"
+}
+# gl_hook <name> <hook-level lines> <exit> <fragment>
+gl_hook() { gl_raw "$1" $'pre-commit:\n'"$2"$'\n  commands:\n    sec:\n      run: gitleaks git --staged\n' "$3" "$4"; }
+NOKEY="is not an accepted key here"
+gl_hook h1 '  only: [push]' 1 "only: $NOKEY"
+gl_hook h2 '  exclude_tags: [secret]' 1 "exclude_tags: $NOKEY"
+gl_hook h3 '  skip: True' 1 "skip: $NOKEY"
+gl_hook h4 "  skip: 'true'" 1 "skip: $NOKEY"
+gl_hook h5 '  skip: [merge]' 1 "skip: $NOKEY"
+gl_hook h6 '  skip: [ref: main]' 1 "skip: $NOKEY"
+gl_hook h7 '  exclude: ["*"]' 1 "exclude: $NOKEY"
+gl_hook h8 '  glob: "*.nothing"' 1 "glob: $NOKEY"
+gl_hook h9 '  files: echo' 1 "files: $NOKEY"
+gl_hook h10 '  file_types: [text]' 1 "file_types: $NOKEY"
+gl_hook h11 '  skip: true' 1 "sets skip: true"
+gl_hook ho1 '  parallel: false' 0 ""
+gl_hook ho2 $'  piped: true\n  follow: true\n  fail_on_changes: never\n  skip: false' 0 ""
+gl_hook ho3 $'  scripts:\n    "x.sh":\n      runner: bash' 0 ""
+gl_hook f1 '  "skip": true' 1 "YAML form the check cannot read"
+gl_hook f2 '  skip : true' 1 "YAML form the check cannot read"
+gl_hook f3 '  ? skip' 1 "YAML form the check cannot read"
+gl_hook f4 '  <<: *a' 1 "YAML form the check cannot read"
+gl_hook f5 '  parallel: *a' 1 "YAML form the check cannot read"
+gl_hook f6 '  parallel: &a false' 1 "YAML form the check cannot read"
+gl_raw f7 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      "skip": true\n' 1 "YAML form the check cannot read"
+gl_raw f8 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      skip : true\n' 1 "YAML form the check cannot read"
+gl_raw f9 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      ? skip\n' 1 "YAML form the check cannot read"
+gl_raw f10 $'pre-commit:\n  commands:\n    sec:\n      <<: *a\n      run: gitleaks git --staged\n' 1 "YAML form the check cannot read"
+gl_raw f11 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      tags: *t\n' 1 "YAML form the check cannot read"
+gl_raw f12 $'pre-commit:\n  commands:\n    sec: &a\n      run: gitleaks git --staged\n' 1 "YAML form the check cannot read"
+gl_raw f13 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      tags:\n        - a\n' 1 "YAML form the check cannot read"
+gl_raw f14 $'pre-commit:\n  commands: {sec: {run: gitleaks git --staged}}\n' 1 "YAML form the check cannot read"
+gl_raw k1 $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n      file_types: [text]\n' 1 "file_types: $NOKEY"
+gl_raw t1 $'exclude_tags: [sec]\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "exclude_tags: $NOKEY"
+gl_raw t2 $'output: [success]\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 0 ""
+gl_raw d1n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n    sec:\n      run: true\n' 1 "name that holds gitleaks is repeated"
+gl_raw d2n $'pre-commit:\n  commands:\n    sec:\n      run: true\n    sec:\n      run: gitleaks git --staged\n' 1 "name that holds gitleaks is repeated"
+gl_raw d3n $'pre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\npre-commit:\n  commands:\n    other:\n      run: true\n' 1 "pre-commit: appears more than once"
+gl_raw o1 $'extends:\n  - a.yml\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "can change the pre-commit hook"
+gl_raw o2 $'remotes:\n  - git_url: x\npre-commit:\n  commands:\n    sec:\n      run: gitleaks git --staged\n' 1 "can change the pre-commit hook"
+seed "$T/o3"; printf 'pre-commit:\n  commands:\n    x:\n      run: true\n' >"$T/o3/lefthook-local.yml"; out=$(run "$T/o3"); check "lefthook-local.yml present fails" 1 $?; contains "overlay message" "can change the pre-commit hook" "$out"
+seed "$T/o4"; out=$(run "$T/o4"); check "seeded project has no overlay" 0 $?
+# shellcheck disable=SC2016
+for cfg in '-c /dev/stdin' '--config=/dev/fd/3' '-c $CFG' '--config "x`y"' '-c /dev/null'; do gl_msg "cf-${cfg%% *}-${cfg##*[/=]}" "gitleaks git --staged $cfg" "is not accepted"; done
+gl_ok cfg1 'gitleaks git --staged --config .gitleaks.toml'
+# CRLF is judged like LF
+gl_raw crlf1 "$(printf 'pre-commit:\r\n  commands:\r\n    sec:\r\n      run: gitleaks git --staged\r\n')"$'\n' 0 ""
+gl_raw crlf2 "$(printf 'pre-commit:\r\n  commands:\r\n    sec:\r\n      run: gitleaks git --staged\r\n          || true\r\n')"$'\n' 1 "only command in the run line"
+gl_raw crlf3 "$(printf 'pre-commit:\r\n  skip: true\r\n  commands:\r\n    sec:\r\n      run: gitleaks git --staged\r\n')"$'\n' 1 "sets skip: true"
+# the reasons behind the fail-closed rejections are in the message
+gl_raw w1 $'pre-commit:\n    commands:\n        sec:\n            run: gitleaks git --staged\n' 1 "two-space indentation"
+gl_raw w2 $'pre-commit:\n  commands:\n    sec: {run: gitleaks git --staged}\n' 1 "YAML form the check cannot read"
+gl_msg w3 'gitleaks dir .' "positional path is accepted only in the docker form"
 exit $fail

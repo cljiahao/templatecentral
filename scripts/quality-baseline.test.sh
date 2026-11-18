@@ -414,16 +414,16 @@ addopts = --ignore=t/a --ignore=t/b' 2
 excl_pair "ruff lint per-file-ignores gets a row" pyproject.toml '[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
-"scripts/*" = ["T201"]' 2 4
+"scripts/*" = ["T201"]' 1 2
 excl_pair "ruff lint per-file-ignores gets a rule" pyproject.toml '[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]' '[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101","E402"]' 2 3
+"tests/*" = ["S101","E402"]' 1 2
 excl_pair "ruff per-file-ignores table gets a rule" pyproject.toml '[tool.ruff.per-file-ignores]
 "tests/*" = ["S101"]' '[tool.ruff.per-file-ignores]
-"tests/*" = ["S101","E402"]' 2 3
+"tests/*" = ["S101","E402"]' 1 2
 excl_pair "ruff.toml per-file-ignores gets a rule" ruff.toml '[lint.per-file-ignores]
 "tests/*" = ["S101"]' '[lint.per-file-ignores]
-"tests/*" = ["S101","E402"]' 2 3
+"tests/*" = ["S101","E402"]' 1 2
 excl_pair ".coveragerc omit comma list grows" .coveragerc '[run]
 omit = a/*' '[run]
 omit = a/*,b/*,c/*' 1 3
@@ -602,7 +602,7 @@ contains "a worse suppression row prints the retake rule" "the agent never retak
 
 # a globalIgnores argument that is not a literal array keeps the key count; a change is still reported as changed
 excl_delta eslint.config.mjs 'export default [globalIgnores([...base])];' 1
-excl_delta eslint.config.mjs 'export default [globalIgnores([...base, ...more])];' 1
+excl_delta eslint.config.mjs 'export default [globalIgnores([...base, ...more])];' 2
 gate_run 4 4 "eslint.config.mjs=aaaa111122223333" "eslint.config.mjs=bbbb111122223333"
 check "a changed non-countable ignore list exits 3" 3 $rcg
 contains "the non-countable file is reported as changed" "changed: eslint.config.mjs" "$outg"
@@ -718,5 +718,43 @@ excl_delta setup.cfg '[coverage:run]
 omit = a/*, b/*' 2
 excl_pair "empty inline exclude gets its first entry" vitest.config.ts 'export default { test: { coverage: { exclude: [] } } };' 'export default { test: { coverage: { exclude: ["a"] } } };' 0 1
 excl_pair "empty ruff list gets its first entry" ruff.toml 'extend-exclude = []' 'extend-exclude = ["a"]' 0 1
+
+# round 8: an added exclusion always raises the count; arrays count one per top-level element, whatever it is
+excl_pair "a spread gets a string added" vitest.config.ts 'export default { test: { coverage: { exclude: [...configDefaults.coverage.exclude] } } };' 'export default { test: { coverage: { exclude: [...configDefaults.coverage.exclude, "a"] } } };' 1 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [A] } } };' 1
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [A, B] } } };' 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: ["a", B, C] } } };' 3
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/a/, /b/] } } };' 2
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/a,b/, "c,d", f(1, 2), [3, 4]] } } };' 4
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [/[/]x/, "a"] } } };' 2
+excl_pair "identifiers across lines" vitest.config.ts 'export default { test: { coverage: { exclude: [
+  A,
+  B,
+] } } };' 'export default { test: { coverage: { exclude: [
+  A,
+  B,
+  C,
+] } } };' 2 3
+excl_delta vitest.config.ts 'export default { test: { coverage: { exclude: [
+  /a/,
+  /b/,
+] } } };' 2
+excl_delta .eslintrc.yml 'ignore:
+  - path: a
+    reason: x
+  - path: b
+    reason: y' 2
+excl_delta .eslintrc.yml 'exclude:
+  paths:
+    - a
+    - b' 2
+excl_delta pyproject.toml '[tool.mypy]
+ignore_errors = false' 0
+excl_delta pyproject.toml '[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "S102"]' 2
+excl_delta setup.cfg '[flake8]
+ignore = E1, E2
+    E3
+      not-an-item: x' 3
 
 exit $fail
