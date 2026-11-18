@@ -77,7 +77,9 @@ list_files() {
 }
 
 # Reads every Markdown file once and prints `file<TAB>line<TAB>kind<TAB>target` for each link, backticked path,
-# README list or table row (as name tokens) and Contents heading outside code fences, comments and code spans.
+# README list or table row (as name tokens) and Contents heading outside code fences, indented code, comments and code spans.
+# A trailing carriage return and blockquote markers are stripped from each line first, so every rule sees the same text.
+# A link starting with a slash is a site route, not a repository path: it is never checked.
 scan_all() {
   awk -v EXTS="$EXTS" '
     BEGIN { SQ = sprintf("%c", 39) }
@@ -88,7 +90,7 @@ scan_all() {
       sub(/#.*$/, "", t)
       sub(/\?.*$/, "", t)
       if (t == "") return
-      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:/ || t ~ /^\/\//) return
+      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:/ || substr(t, 1, 1) == "/") return
       emit("link", t)
     }
     function emit_span(t,   base, last, trail) {
@@ -120,49 +122,107 @@ scan_all() {
       }
       if (out != "") emit("tok", out)
     }
-    function split_spans(s,   out, i, n, run, j, m, found, content) {
-      if (index(s, "`") == 0) return s
+    function ticks(r,   out) {
       out = ""
-      n = length(s)
-      i = 1
-      while (i <= n) {
-        if (substr(s, i, 1) != "`") { out = out substr(s, i, 1); i++; continue }
-        run = 0
-        while (substr(s, i + run, 1) == "`") run++
-        j = i + run
+      while (r-- > 0) out = out "`"
+      return out
+    }
+    function split_spans(s,   n, seg, k, r, m, r2, j, out, content, found) {
+      n = split(s, seg, "`")
+      if (n == 1) return s
+      out = seg[1]
+      k = 1
+      while (k < n) {
+        r = 1
+        while (k + r < n && seg[k + r] == "") r++
         found = 0
-        while (j <= n) {
-          if (substr(s, j, 1) == "`") {
-            m = 0
-            while (substr(s, j + m, 1) == "`") m++
-            if (m == run) { found = 1; break }
-            j += m
-          } else j++
+        m = k + r
+        while (m < n) {
+          r2 = 1
+          while (m + r2 < n && seg[m + r2] == "") r2++
+          if (r2 == r) { found = 1; break }
+          m += r2
         }
         if (found) {
-          content = substr(s, i + run, j - (i + run))
-          if (run == 1) emit_span(content)
-          out = out " "
-          i = j + run
+          if (r == 1) {
+            content = ""
+            for (j = k + r; j < m; j++) content = content seg[j] "`"
+            emit_span(content seg[m])
+          }
+          out = out " " seg[m + r]
+          k = m + r
         } else {
-          out = out substr(s, i, run)
-          i += run
+          out = out ticks(r) seg[k + r]
+          k += r
         }
       }
       return out
     }
-    function scan_links(s,   p, j, c, depth, t) {
-      while ((p = index(s, "](")) > 0) {
-        s = substr(s, p + 2)
-        if (substr(s, 1, 1) == "<") {
-          j = index(s, ">")
+    function strip_comments(s,   out, i, n, run, j, m, found, e) {
+      out = ""
+      n = length(s)
+      i = 1
+      while (i <= n) {
+        if (comment) {
+          e = index(substr(s, i), "-->")
+          if (e == 0) return out
+          comment = 0
+          i += e + 2
+          continue
+        }
+        if (substr(s, i, 1) == "`") {
+          run = 0
+          while (substr(s, i + run, 1) == "`") run++
+          j = i + run
+          found = 0
+          while (j <= n) {
+            if (substr(s, j, 1) == "`") {
+              m = 0
+              while (substr(s, j + m, 1) == "`") m++
+              if (m == run) { found = 1; break }
+              j += m
+            } else j++
+          }
+          if (found) { out = out substr(s, i, j + run - i); i = j + run }
+          else { out = out substr(s, i, run); i += run }
+          continue
+        }
+        if (substr(s, i, 4) == "<!--") { comment = 1; i += 4; continue }
+        out = out substr(s, i, 1)
+        i++
+      }
+      return out
+    }
+    function ref_def(s,   t, first) {
+      if (s ~ /^[ \t]*\[\^/) return
+      if (s !~ /^[ \t]*\[[^]]+\]:[ \t]*[^ \t]/) return
+      t = s
+      sub(/^[ \t]*\[[^]]+\]:[ \t]*/, "", t)
+      if (substr(t, 1, 1) == "<") {
+        j = index(t, ">")
+        if (j == 0) return
+        emit_link(substr(t, 2, j - 2))
+        return
+      }
+      first = t
+      sub(/[ \t].*$/, "", first)
+      if (first != t && first !~ /[\/.]/) return
+      emit_link(first)
+    }
+    function scan_links(s,   n, parts, k, part, j, m, c, depth, t) {
+      n = split(s, parts, "\\]\\(")
+      for (k = 2; k <= n; k++) {
+        part = parts[k]
+        if (substr(part, 1, 1) == "<") {
+          j = index(part, ">")
           if (j == 0) continue
-          t = substr(s, 2, j - 2)
+          t = substr(part, 2, j - 2)
         } else {
           depth = 0
           t = ""
-          for (j = 1; j <= length(s); j++) {
-            c = substr(s, j, 1)
+          m = length(part)
+          for (j = 1; j <= m; j++) {
+            c = substr(part, j, 1)
             if (c == "(") depth++
             else if (c == ")") { if (depth == 0) break; depth-- }
             else if (c == " " || c == "\t") break
@@ -178,17 +238,32 @@ scan_all() {
       isreadme = (file == "README.md" || file ~ /\/README\.md$/)
       fence = 0
       comment = 0
+      prevblank = 1
+      inlist = 0
+      incode = 0
     }
     {
       line = $0
+      sub(/\r$/, "", line)
+      while (match(line, /^[ \t]*>[ \t]?/)) line = substr(line, RLENGTH + 1)
+      wasblank = prevblank
+      prevblank = (line ~ /^[ \t]*$/)
       if (!fence) {
+        if (!prevblank) {
+          indented = (line ~ /^(    |\t)/)
+          if (indented && !inlist && (wasblank || incode)) { incode = 1; next }
+          incode = 0
+          if (!indented) inlist = (line ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/)
+        }
         if (match(line, /^[ \t]*(```+|~~~+)/)) {
           run = substr(line, RSTART, RLENGTH)
           sub(/^[ \t]+/, "", run)
           fchar = substr(run, 1, 1)
-          flen = length(run)
-          fence = 1
-          next
+          if (!(fchar == "`" && index(substr(line, RSTART + RLENGTH), "`") > 0)) {
+            flen = length(run)
+            fence = 1
+            next
+          }
         }
       } else {
         t = line
@@ -197,22 +272,9 @@ scan_all() {
         if (t ~ /^(```+|~~~+)$/ && substr(t, 1, 1) == fchar && length(t) >= flen) fence = 0
         next
       }
-      if (comment) {
-        if (index(line, "-->")) { comment = 0; line = substr(line, index(line, "-->") + 3) } else next
-      }
-      while ((i = index(line, "<!--")) > 0) {
-        j = index(substr(line, i), "-->")
-        if (j > 0) line = substr(line, 1, i - 1) substr(line, i + j + 2)
-        else { line = substr(line, 1, i - 1); comment = 1 }
-      }
+      if (comment || index(line, "<!--") > 0) line = strip_comments(line)
       if (isreadme && tolower(line) ~ /^#+[ \t]+contents[ \t]*$/) emit("heading", "")
-      if (line ~ /^[ \t]*\[[^]]+\]:[ \t]*[^ \t]/) {
-        t = line
-        sub(/^[ \t]*\[[^]]+\]:[ \t]*/, "", t)
-        sub(/[ \t].*$/, "", t)
-        gsub(/^<|>$/, "", t)
-        emit_link(t)
-      }
+      ref_def(line)
       if (isreadme && (line ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/ || line ~ /^[ \t]*\|/)) emit_tokens(line)
       scan_links(split_spans(line))
     }
@@ -236,16 +298,12 @@ miss() {
   report "$1" "$2" "$3" "$chk"
 }
 
-# True when the target exists relative to the file's folder (or the project root for a leading slash).
+# True when the target exists relative to the file's folder.
 exists_as() {
   local file=$1 target=$2 dir
   dir=${file%/*}
   [ "$dir" = "$file" ] && dir=.
-  case "$target" in
-    /*) [ -e ".$target" ] && return 0 ;;
-    *) [ -e "$dir/$target" ] && return 0 ;;
-  esac
-  return 1
+  [ -e "$dir/$target" ]
 }
 
 # Sets REPLY to the string with every %XX sequence decoded; a % without two hex digits after it stays as written.
@@ -276,20 +334,23 @@ check_link() {
   [ -n "$t" ] || return 0
   exists_as "$file" "$t" && return 0
   dir=${file%/*}
-  case "$t" in
-    /*) chk=${t#/} ;;
-    *) if [ "$dir" = "$file" ]; then chk=$t; else chk=$dir/$t; fi ;;
-  esac
+  if [ "$dir" = "$file" ]; then chk=$t; else chk=$dir/$t; fi
   miss "$file" "$ln" "broken link: $t" "$chk"
 }
 
-# Checks one backticked repo path; a soft span has no known extension or trailing slash, so it counts only when its first segment exists.
+# Checks one backticked repo path. A soft span has no known extension or trailing slash: it counts only when its
+# first segment exists, and it passes when a folder of that name or a file with that stem exists.
 check_span() {
-  local file=$1 ln=$2 t=$3 soft=$4 base
+  local file=$1 ln=$2 t=$3 soft=$4 base dir g
   base=${t%%#*}
   base=${base%/}
+  dir=${file%/*}
+  [ "$dir" = "$file" ] && dir=.
   if [ "$soft" -eq 1 ]; then
     [ -e "${base%%/*}" ] || return 0
+    for g in "$base".* "$dir/$base".*; do
+      [ -e "$g" ] && return 0
+    done
   fi
   [ -e "$base" ] && return 0
   exists_as "$file" "$base" && return 0
@@ -353,6 +414,7 @@ filter_ignored() {
   done
 }
 
+explicit=$#
 list_files "$@"
 
 targets=()
@@ -360,7 +422,10 @@ ntargets=0
 while IFS= read -r -d '' f; do
   f=${f#./}
   [ -n "$f" ] || continue
-  [ -e "$f" ] || continue
+  if [ ! -e "$f" ]; then
+    [ "$explicit" -eq 0 ] || die "no such file: $f"
+    continue
+  fi
   is_target "$f" || continue
   [ -f "$f" ] || continue
   [ -r "$f" ] || die "cannot read $f"

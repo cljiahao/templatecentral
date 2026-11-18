@@ -329,6 +329,101 @@ printf '# x\n\n[gone](nope.md)\n' > "$d/pkg/keep/README.md"
 run_check "$d"
 check 1 "$EC" "skipped_folders: a folder outside the lists is still checked"
 
+# proj <name> — a bare project with src/real.ts and src/lib/db.ts.
+proj() {
+  local d
+  d=$(bare_project "$1")
+  mkdir -p "$d/src/lib"
+  touch "$d/src/real.ts" "$d/src/lib/db.ts"
+  echo "$d"
+}
+
+# a CRLF file gives the same results as its LF form: fences close, reference targets are clean, Contents and listings fire
+FENCE3="$BT$BT$BT"
+d=$(proj crlf-fence)
+printf '[ref][r]\r\n[r]: ../src/real.ts\r\n%s\r\n[x](../src/inf.ts)\r\n%s\r\n[c](../src/after.ts)\r\n' "$FENCE3" "$FENCE3" > "$d/docs/crlf.md"
+run_check "$d"
+check 1 "$EC" "crlf_fence_and_reference: exits 1 ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^docs/crlf\.md:6: broken link: \.\./src/after\.ts$')" "crlf_fence_and_reference: link after the fence is checked ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "crlf_fence_and_reference: the reference target and the fenced link are clean ($OUT)"
+d=$(proj crlf-contents)
+printf '# T\r\n## Contents\r\n' > "$d/README.md"
+expect_finding "$d" "crlf_contents_heading" '^README\.md:2: README has a Contents heading'
+d=$(proj crlf-listing)
+mkdir -p "$d/m"
+touch "$d/m/a.ts" "$d/m/b.ts" "$d/m/c.ts"
+printf '# M\r\n- a.ts\r\n- b.ts\r\n- c.ts\r\n' > "$d/m/README.md"
+expect_finding "$d" "crlf_listing" '^m/README\.md:1: README lists every file of its folder'
+
+# a footnote definition is not a link definition; a label with prose is not one either; real definitions are checked
+d=$(proj refdefs)
+printf '[^1]: note\n[Label]: some prose here\n[ok]: src/real.ts "title"\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "footnote_and_prose_label: not reported ($OUT)"
+printf '[r]: src/gone.md\n[r2]: ./gone2\n[r3]: gone3.md "title"\n' > "$d/README.md"
+run_check "$d"
+check 3 "$(printf '%s\n' "$OUT" | grep -c 'broken link')" "reference_definitions_checked: three real definitions are reported ($OUT)"
+
+# an angle-bracket target keeps its spaces, in a reference definition and in an inline link
+d=$(proj angle)
+printf '# p\n' > "$d/src/a b.ts"
+printf '[r]: <src/a b.ts>\n[l](<src/a b.ts>)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "angle_target_with_space: existing target resolves ($OUT)"
+printf '[r]: <src/c d.ts>\n[l](<src/c d.ts>)\n' > "$d/README.md"
+run_check "$d"
+check 2 "$(printf '%s\n' "$OUT" | grep -c 'broken link: src/c d\.ts$')" "angle_target_with_space: missing target reported whole in both forms ($OUT)"
+
+# a fence inside a blockquote is a fence; indented code is not scanned, a list continuation is
+d=$(proj blockquote)
+printf '> %s\n> [x](src/bq.ts)\n> %s\n' "$FENCE3" "$FENCE3" > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "blockquote_fence: link inside is ignored ($OUT)"
+printf 'Text\n\n    [i](src/ind.ts)\n\n\t[t](src/tab.ts)\n\n- item\n\n    [c](src/cont.ts)\n' > "$d/README.md"
+run_check "$d"
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "indented_code: only the list continuation is scanned ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^README\.md:9: broken link: src/cont\.ts$')" "indented_code: the list continuation is reported ($OUT)"
+
+# inline code holding a comment opener does not hide the rest of the file; a same-line triple backtick is inline code
+d=$(proj inline-comment)
+printf 'Use %s<!--%s to open.\n[x](src/hidden.ts)\n' "$BT" "$BT" > "$d/README.md"
+expect_finding "$d" "inline_comment_opener" '^README\.md:2: broken link: src/hidden\.ts$'
+printf '%sx%s\n[y](src/same.ts)\n' "$FENCE3" "$FENCE3" > "$d/README.md"
+expect_finding "$d" "same_line_triple_backtick" '^README\.md:2: broken link: src/same\.ts$'
+printf '<!-- hidden [h](src/h.ts) -->\n[v](src/v.ts)\n' > "$d/README.md"
+expect_finding "$d" "real_comment_still_hides" '^README\.md:2: broken link: src/v\.ts$'
+
+# a link starting with a slash is a site route and is not checked
+d=$(proj routes)
+printf '[login](/login) [home](/)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "root_absolute_link: not checked ($OUT)"
+
+# an explicit file that does not exist is an internal failure
+d=$(proj missing-arg)
+printf '# p\n' > "$d/README.md"
+run_check "$d" nonexist.md
+check 2 "$EC" "missing_file_argument: exits 2"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: no such file: nonexist\.md$')" "missing_file_argument: names the file ($OUT)"
+
+# one very long line is scanned in linear time
+d=$(proj longline)
+pad=$(printf 'x%.0s' $(seq 1 100))
+for i in $(seq 1 20000); do printf '[%s%s](src/real.ts)' "$pad" "$i"; done > "$d/README.md"
+start=$SECONDS
+run_check "$d"
+elapsed=$((SECONDS - start))
+check 0 "$EC" "long_line_20000_links: exits 0 ($OUT)"
+check 1 "$([[ $elapsed -lt 10 ]] && echo 1 || echo 0)" "long_line_20000_links: finished in ${elapsed}s, bound 10s"
+
+# a backticked path without an extension passes when a file of that stem or a folder of that name exists
+d=$(proj stem)
+printf 'See %ssrc/lib/db%s and %ssrc/lib%s and %ssrc/lib/missing%s.\n' "$BT" "$BT" "$BT" "$BT" "$BT" "$BT" > "$d/README.md"
+expect_finding "$d" "extensionless_stem" '^README\.md:1: path does not exist: src/lib/missing$'
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "extensionless_stem: only the missing path is reported ($OUT)"
+printf '[l](src/lib/db)\n' > "$d/README.md"
+expect_finding "$d" "extensionless_link_stays_exact" '^README\.md:1: broken link: src/lib/db$'
+
 # the retired gate and its opt-in appear nowhere in the seeded layer or the kit
 old=$(grep -rnE 'readme-coupling|readme-freshness|skip-readme-check|ci-gates\.sh readme|richReadme|TC_RICH_README|README freshness' \
   "$REPO_ROOT/skills/scaffold" "$REPO_ROOT/skills/add" "$REPO_ROOT/skills/cleanup" "$REPO_ROOT/skills/review" "$REPO_ROOT/skills/standards" 2>/dev/null)
