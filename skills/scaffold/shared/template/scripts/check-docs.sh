@@ -1,42 +1,52 @@
 #!/usr/bin/env bash
-# Docs check: check-docs.sh [markdown-file ...]. Offline; exits 1 with one `file:line: message` per finding (max 20).
+# Docs check: check-docs.sh [markdown-file ...]. Offline; one `file:line: message` per finding (max 20 lines).
+# Exit 0 clean, 1 findings, 2 internal failure (missing tool, unreadable file, failed temp folder) with one line naming the cause.
 # Checks README.md, AGENTS.md, docs/**/*.md and boundary READMEs: relative links and backticked repo paths must exist,
 # and a README must not carry a `## Contents` heading or a list naming every child of its own folder.
 # With arguments only those files are checked (pre-commit); without, the whole project (pre-push, CI).
 set -uo pipefail
 
-here=$(cd "$(dirname "$0")" && pwd)
-cd "$here/.." || exit 2
+# Prints one line naming the cause and exits 2; exit 1 is reserved for findings.
+die() {
+  printf 'check-docs: %s\n' "$1" >&2
+  exit 2
+}
+
+case "$0" in
+  */*) here=${0%/*} ;;
+  *) here=. ;;
+esac
+cd "$here/.." || die "cannot enter the project folder ($here/..)"
+
+for tool in awk mktemp rm; do
+  command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
+done
 
 CAP=20
 GENERATED='node_modules dist build .next coverage .venv venv __pycache__ .pytest_cache .ruff_cache .mypy_cache .pyright htmlcov .turbo .stryker-tmp .mutmut-cache .git'
 SKIPPED_DIRS='.claude .github .azuredevops azure-pipelines .lefthook secrets .secrets'
 EXTS='md|mdx|ts|tsx|js|jsx|mjs|cjs|py|json|yml|yaml|toml|sh|css|scss|sql|html|txt|env|example|ini|cfg|lock|svg|png|jpg|gif|ico|prisma'
 
-findings=$(mktemp "${TMPDIR:-/tmp}/check-docs.XXXXXX") || exit 2
-cands=$(mktemp "${TMPDIR:-/tmp}/check-docs-cands.XXXXXX") || { rm -f "$findings"; exit 2; }
-trap 'rm -f "$findings" "$cands"' EXIT
+workdir=
+trap '[ -z "$workdir" ] || rm -rf "$workdir"' EXIT
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/check-docs.XXXXXX") || die "cannot create a temporary folder (mktemp failed)"
+[ -d "$workdir" ] || die "cannot create a temporary folder (mktemp returned no folder)"
 
 in_git=0
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 && in_git=1
+if command -v git > /dev/null 2>&1 && git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  in_git=1
+fi
 
-# True when any path segment is a generated folder, or git ignores the path.
-is_generated() {
-  local seg rest=$1
+FINDINGS=()
+F_CHK=()
+nfind=0
+
+# True when any path segment is one of the space-separated names in the list.
+has_segment() {
+  local seg rest=$1 list=$2
   while [ -n "$rest" ]; do
     seg=${rest%%/*}
-    case " $GENERATED " in *" $seg "*) return 0 ;; esac
-    case "$rest" in */*) rest=${rest#*/} ;; *) rest= ;; esac
-  done
-  [ "$in_git" -eq 1 ] && git check-ignore -q -- "$1" 2>/dev/null
-}
-
-# True when a project-relative path sits in a folder the harness owns or the build generates.
-is_skipped_dir() {
-  local seg rest=$1
-  while [ -n "$rest" ]; do
-    seg=${rest%%/*}
-    case " $GENERATED $SKIPPED_DIRS " in *" $seg "*) return 0 ;; esac
+    case " $list " in *" $seg "*) return 0 ;; esac
     case "$rest" in */*) rest=${rest#*/} ;; *) rest= ;; esac
   done
   return 1
@@ -50,36 +60,96 @@ is_target() {
     */README.md) ;;
     *) return 1 ;;
   esac
-  is_skipped_dir "${1%/*}" && return 1
+  has_segment "${1%/*}" "$GENERATED $SKIPPED_DIRS" && return 1
   return 0
 }
 
-# Lists every target file of the project, one per line.
-list_all() {
-  if [ "$in_git" -eq 1 ]; then
-    git ls-files --cached --others --exclude-standard | LC_ALL=C sort -u
+# Writes the NUL-separated list of candidate files to $workdir/files.
+list_files() {
+  if [ "$#" -gt 0 ]; then
+    printf '%s\0' "$@" > "$workdir/files" || die "cannot write the file list"
+  elif [ "$in_git" -eq 1 ]; then
+    git ls-files -z --cached --others --exclude-standard > "$workdir/files" || die "git ls-files failed"
   else
-    find . \( -name node_modules -o -name .git -o -name .venv -o -name dist -o -name build -o -name .next \) -prune -o -type f \( -name '*.md' \) -print | sed 's|^\./||' | LC_ALL=C sort
+    command -v find > /dev/null 2>&1 || die "missing tool: find"
+    find . \( -name node_modules -o -name .git -o -name .venv -o -name dist -o -name build -o -name .next \) -prune -o -type f -name '*.md' -print0 > "$workdir/files" || die "find failed"
   fi
 }
 
-# Emits `line<TAB>kind<TAB>target` for each link, backticked path and Contents heading outside code fences.
-scan() {
-  awk -v want_heading="$2" '
-    function strip_spans(s,   out) {
-      out = s
-      gsub(/``[^`]*``/, "", out)
-      return out
+# Reads every Markdown file once and prints `file<TAB>line<TAB>kind<TAB>target` for each link, backticked path,
+# README list or table row (as name tokens) and Contents heading outside code fences, comments and code spans.
+scan_all() {
+  awk -v EXTS="$EXTS" '
+    BEGIN { SQ = sprintf("%c", 39) }
+    function emit(kind, t) {
+      printf "%s\t%d\t%s\t%s\n", file, FNR, kind, t
     }
-    function emit(kind, t,   b) {
-      printf "%d\t%s\t%s\n", NR, kind, t
-      if (isitem && (kind == "link" || kind == "span")) {
-        b = t
-        sub(/#.*$/, "", b)
-        sub(/\/$/, "", b)
-        sub(/^.*\//, "", b)
-        printf "%d\titemname\t%s\n", NR, b
+    function emit_link(t) {
+      sub(/#.*$/, "", t)
+      sub(/\?.*$/, "", t)
+      if (t == "") return
+      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:/ || t ~ /^\/\//) return
+      emit("link", t)
+    }
+    function emit_span(t,   base, last, trail) {
+      if (index(t, "/") == 0) return
+      if (t ~ /[[:space:]<>*{}$|;&:"=?!,~]/ || index(t, SQ) > 0) return
+      if (substr(t, 1, 1) == "/" || substr(t, 1, 4) == "http") return
+      if (substr(t, 1, 3) == "..." || (length(t) >= 3 && substr(t, length(t) - 2) == "...")) return
+      base = t
+      sub(/#.*$/, "", base)
+      trail = (substr(t, length(t), 1) == "/")
+      sub(/\/$/, "", base)
+      if (base == "") return
+      last = base
+      sub(/^.*\//, "", last)
+      if (trail || last ~ ("\\.(" EXTS ")$")) emit("span", t)
+      else emit("softspan", t)
+    }
+    function emit_tokens(s,   n, parts, i, tok, out) {
+      gsub(/\[/, " ", s)
+      gsub(/\]/, " ", s)
+      gsub(SQ, " ", s)
+      gsub(/[ \t|`*(),;:<>"=\/\\#!?{}~]+/, " ", s)
+      n = split(s, parts, " ")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        tok = parts[i]
+        sub(/\.+$/, "", tok)
+        if (tok != "") out = out tok " "
       }
+      if (out != "") emit("tok", out)
+    }
+    function split_spans(s,   out, i, n, run, j, m, found, content) {
+      if (index(s, "`") == 0) return s
+      out = ""
+      n = length(s)
+      i = 1
+      while (i <= n) {
+        if (substr(s, i, 1) != "`") { out = out substr(s, i, 1); i++; continue }
+        run = 0
+        while (substr(s, i + run, 1) == "`") run++
+        j = i + run
+        found = 0
+        while (j <= n) {
+          if (substr(s, j, 1) == "`") {
+            m = 0
+            while (substr(s, j + m, 1) == "`") m++
+            if (m == run) { found = 1; break }
+            j += m
+          } else j++
+        }
+        if (found) {
+          content = substr(s, i + run, j - (i + run))
+          if (run == 1) emit_span(content)
+          out = out " "
+          i = j + run
+        } else {
+          out = out substr(s, i, run)
+          i += run
+        }
+      }
+      return out
     }
     function scan_links(s,   p, j, c, depth, t) {
       while ((p = index(s, "](")) > 0) {
@@ -99,34 +169,32 @@ scan() {
             t = t c
           }
         }
-        emit("link", t)
+        emit_link(t)
       }
     }
-    function scan_spans(s,   i, j, rest, t) {
-      rest = strip_spans(s)
-      while ((i = index(rest, "`")) > 0) {
-        rest = substr(rest, i + 1)
-        j = index(rest, "`")
-        if (j == 0) break
-        t = substr(rest, 1, j - 1)
-        rest = substr(rest, j + 1)
-        emit("span", t)
-      }
+    FNR == 1 {
+      file = FILENAME
+      sub(/^\.\//, "", file)
+      isreadme = (file == "README.md" || file ~ /\/README\.md$/)
+      fence = 0
+      comment = 0
     }
-    BEGIN { fence = ""; comment = 0 }
     {
       line = $0
-      if (fence == "") {
+      if (!fence) {
         if (match(line, /^[ \t]*(```+|~~~+)/)) {
-          fence = substr(line, RSTART, RLENGTH)
-          gsub(/^[ \t]+/, "", fence)
-          fence = substr(fence, 1, 1)
+          run = substr(line, RSTART, RLENGTH)
+          sub(/^[ \t]+/, "", run)
+          fchar = substr(run, 1, 1)
+          flen = length(run)
+          fence = 1
           next
         }
       } else {
         t = line
-        gsub(/^[ \t]+/, "", t)
-        if (substr(t, 1, 3) == fence fence fence) fence = ""
+        sub(/^[ \t]+/, "", t)
+        sub(/[ \t]+$/, "", t)
+        if (t ~ /^(```+|~~~+)$/ && substr(t, 1, 1) == fchar && length(t) >= flen) fence = 0
         next
       }
       if (comment) {
@@ -137,25 +205,36 @@ scan() {
         if (j > 0) line = substr(line, 1, i - 1) substr(line, i + j + 2)
         else { line = substr(line, 1, i - 1); comment = 1 }
       }
-      if (want_heading == "1" && tolower(line) ~ /^#+[ \t]+contents[ \t]*$/) emit("heading", "")
+      if (isreadme && tolower(line) ~ /^#+[ \t]+contents[ \t]*$/) emit("heading", "")
       if (line ~ /^[ \t]*\[[^]]+\]:[ \t]*[^ \t]/) {
         t = line
         sub(/^[ \t]*\[[^]]+\]:[ \t]*/, "", t)
         sub(/[ \t].*$/, "", t)
         gsub(/^<|>$/, "", t)
-        emit("link", t)
+        emit_link(t)
       }
-      isitem = (line ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/)
-      nospan = line
-      gsub(/`[^`]*`/, "", nospan)
-      scan_links(nospan)
-      scan_spans(line)
+      if (isreadme && (line ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/ || line ~ /^[ \t]*\|/)) emit_tokens(line)
+      scan_links(split_spans(line))
     }
-  ' "$1"
+  ' "$@"
 }
 
-# Prints a finding as file:line: message.
-report() { printf '%s:%s: %s\n' "$1" "$2" "$3" >> "$findings"; }
+# Records a finding. chk is a project-relative path to test against the git ignore rules, or empty when the finding is final.
+report() {
+  FINDINGS[nfind]="$1:$2: $3"
+  F_CHK[nfind]=${4:-}
+  nfind=$((nfind + 1))
+}
+
+# Records a missing path unless it sits in a generated folder; a path leaving the project is never git-ignore tested.
+miss() {
+  local chk=$4
+  if [ -n "$chk" ]; then
+    has_segment "$chk" "$GENERATED" && return 0
+    case "$chk" in ../* | */../* | .. | */..) chk= ;; esac
+  fi
+  report "$1" "$2" "$3" "$chk"
+}
 
 # True when the target exists relative to the file's folder (or the project root for a leading slash).
 exists_as() {
@@ -169,107 +248,167 @@ exists_as() {
   return 1
 }
 
-# Checks one link target; skips web links, anchors and generated paths.
-check_link() {
-  local file=$1 ln=$2 t=$3
-  t=${t%%#*}
-  t=${t%%\?*}
-  [ -n "$t" ] || return 0
-  case "$t" in
-    http://* | https://* | mailto:* | tel:* | //* | data:* | '#'*) return 0 ;;
-  esac
-  t=$(printf '%s' "$t" | sed 's/%20/ /g')
-  exists_as "$file" "$t" && return 0
-  case "$t" in /*) is_generated "${t#/}" && return 0 ;; *) is_generated "${file%/*}/$t" && return 0 ;; esac
-  report "$file" "$ln" "broken link: $t"
+# Sets REPLY to the string with every %XX sequence decoded; a % without two hex digits after it stays as written.
+decode_percent() {
+  local s=$1 pre rest hex ch out=
+  REPLY=$s
+  case "$s" in *%*) ;; *) return 0 ;; esac
+  while :; do
+    case "$s" in
+      *%[0-9A-Fa-f][0-9A-Fa-f]*) ;;
+      *) break ;;
+    esac
+    pre=${s%%%[0-9A-Fa-f][0-9A-Fa-f]*}
+    rest=${s#"$pre"}
+    hex=${rest:1:2}
+    printf -v ch '%b' "\\x$hex"
+    out=$out$pre$ch
+    s=${rest:3}
+  done
+  REPLY=$out$s
 }
 
-# Checks one backticked span when it looks like a repo path (contains a slash, no spaces or placeholders).
+# Checks one link target that is already stripped of fragment and query; web links never reach it.
+check_link() {
+  local file=$1 ln=$2 t chk dir
+  decode_percent "$3"
+  t=$REPLY
+  [ -n "$t" ] || return 0
+  exists_as "$file" "$t" && return 0
+  dir=${file%/*}
+  case "$t" in
+    /*) chk=${t#/} ;;
+    *) if [ "$dir" = "$file" ]; then chk=$t; else chk=$dir/$t; fi ;;
+  esac
+  miss "$file" "$ln" "broken link: $t" "$chk"
+}
+
+# Checks one backticked repo path; a soft span has no known extension or trailing slash, so it counts only when its first segment exists.
 check_span() {
-  local file=$1 ln=$2 t=$3 base last
-  case "$t" in
-    */*) ;;
-    *) return 0 ;;
-  esac
-  case "$t" in
-    *[[:space:]]* | *'<'* | *'>'* | *'*'* | *'{'* | *'}'* | *'$'* | *'|'* | *';'* | *'&'* | *':'* | *'"'* | *"'"* | *'='* | *'?'* | *'!'* | *','* | *'~'* | /* | http* | '...'* | *'...') return 0 ;;
-  esac
+  local file=$1 ln=$2 t=$3 soft=$4 base
   base=${t%%#*}
   base=${base%/}
-  [ -n "$base" ] || return 0
-  last=${base##*/}
-  if ! printf '%s' "$last" | grep -qE "\\.($EXTS)\$" && [ "${t%/}" = "$t" ] && [ ! -e "${base%%/*}" ]; then
-    return 0
+  if [ "$soft" -eq 1 ]; then
+    [ -e "${base%%/*}" ] || return 0
   fi
   [ -e "$base" ] && return 0
   exists_as "$file" "$base" && return 0
-  is_generated "$base" && return 0
-  report "$file" "$ln" "path does not exist: $t"
+  miss "$file" "$ln" "path does not exist: $t" "$base"
 }
 
-# Counts the folder children (files and subfolders, hidden ones excluded) a README list names; flags a full listing.
+# Flags a README whose list items or table rows name every child of its own folder, however the name is marked up
+# (link, backticks, bold or plain). Only folders with at least 3 files, or at least 3 subfolders, are checked.
 check_listing() {
-  local file=$1 dir names all_files all_dirs n_files n_dirs
+  local file=$1 toks=$2 dir p name nf=0 nd=0 allf=1 alld=1
   dir=${file%/*}
   [ "$dir" = "$file" ] && dir=.
-  names=$(mktemp "${TMPDIR:-/tmp}/check-docs-names.XXXXXX") || return 0
-  while IFS=$'\t' read -r _ kind target; do
-    [ "$kind" = itemname ] && printf '%s\n' "$target"
-  done < "$cands" | LC_ALL=C sort -u > "$names"
-  all_files=$(find "$dir" -maxdepth 1 -type f ! -name '.*' ! -name README.md -exec basename {} \; | LC_ALL=C sort)
-  all_dirs=$(find "$dir" -maxdepth 1 -mindepth 1 -type d ! -name '.*' -exec basename {} \; | while IFS= read -r d; do is_generated "${dir#./}/$d" || printf '%s\n' "$d"; done | LC_ALL=C sort)
-  n_files=0
-  [ -n "$all_files" ] && n_files=$(printf '%s\n' "$all_files" | wc -l | tr -d ' ')
-  n_dirs=0
-  [ -n "$all_dirs" ] && n_dirs=$(printf '%s\n' "$all_dirs" | wc -l | tr -d ' ')
-  if [ "$n_files" -ge 3 ] && [ -z "$(printf '%s\n' "$all_files" | LC_ALL=C comm -23 - "$names")" ]; then
+  for p in "$dir"/*; do
+    [ -e "$p" ] || continue
+    name=${p##*/}
+    if [ -d "$p" ]; then
+      case " $GENERATED " in *" $name "*) continue ;; esac
+      nd=$((nd + 1))
+      case "$toks" in *" $name "*) ;; *) alld=0 ;; esac
+    else
+      [ "$name" = README.md ] && continue
+      nf=$((nf + 1))
+      case "$toks" in *" $name "*) ;; *) allf=0 ;; esac
+    fi
+  done
+  if [ "$nf" -ge 3 ] && [ "$allf" -eq 1 ]; then
     report "$file" 1 "README lists every file of its folder; describe the module, not its files"
-  elif [ "$n_dirs" -ge 3 ] && [ -z "$(printf '%s\n' "$all_dirs" | LC_ALL=C comm -23 - "$names")" ]; then
+  elif [ "$nd" -ge 3 ] && [ "$alld" -eq 1 ]; then
     report "$file" 1 "README lists every subfolder of its folder; describe the module, not its layout"
   fi
-  rm -f "$names"
-  return 0
 }
 
-# Runs every check on one file.
-check_file() {
-  local file=$1 ln kind target is_readme=0
-  case "$file" in README.md | */README.md) is_readme=1 ;; esac
-  scan "$file" "$is_readme" > "$cands"
-  while IFS=$'\t' read -r ln kind target; do
+# Drops findings whose path git ignores, with one git call for all of them.
+filter_ignored() {
+  local i=0 any=0 p rc first ign=$'\n'
+  [ "$in_git" -eq 1 ] || return 0
+  while [ "$i" -lt "$nfind" ]; do
+    if [ -n "${F_CHK[i]}" ]; then
+      any=1
+      printf '%s\0' "${F_CHK[i]}"
+    fi
+    i=$((i + 1))
+  done > "$workdir/in"
+  [ "$any" -eq 1 ] || return 0
+  git check-ignore -z --stdin < "$workdir/in" > "$workdir/out" 2> "$workdir/err"
+  rc=$?
+  if [ "$rc" -gt 1 ]; then
+    first=
+    read -r first < "$workdir/err"
+    die "git check-ignore failed: ${first:-exit $rc}"
+  fi
+  while IFS= read -r -d '' p; do
+    ign=$ign$p$'\n'
+  done < "$workdir/out"
+  i=0
+  while [ "$i" -lt "$nfind" ]; do
+    if [ -n "${F_CHK[i]}" ]; then
+      case "$ign" in *$'\n'"${F_CHK[i]}"$'\n'*) FINDINGS[i]= ;; esac
+    fi
+    i=$((i + 1))
+  done
+}
+
+list_files "$@"
+
+targets=()
+ntargets=0
+while IFS= read -r -d '' f; do
+  f=${f#./}
+  [ -n "$f" ] || continue
+  [ -e "$f" ] || continue
+  is_target "$f" || continue
+  [ -f "$f" ] || continue
+  [ -r "$f" ] || die "cannot read $f"
+  targets[ntargets]=./$f
+  ntargets=$((ntargets + 1))
+done < "$workdir/files"
+
+if [ "$ntargets" -gt 0 ]; then
+  scan_all "${targets[@]}" > "$workdir/cands" || die "cannot read the Markdown files (awk failed)"
+  cur=
+  toks=" "
+  while IFS=$'\t' read -r file ln kind target; do
+    if [ "$file" != "$cur" ]; then
+      [ -z "$cur" ] || check_listing "$cur" "$toks"
+      cur=$file
+      toks=" "
+    fi
     case "$kind" in
       link) check_link "$file" "$ln" "$target" ;;
-      span) check_span "$file" "$ln" "$target" ;;
+      span) check_span "$file" "$ln" "$target" 0 ;;
+      softspan) check_span "$file" "$ln" "$target" 1 ;;
       heading) report "$file" "$ln" "README has a Contents heading; a README must not list its folder" ;;
+      tok) toks=$toks$target ;;
     esac
-  done < "$cands"
-  [ "$is_readme" -eq 1 ] && check_listing "$file"
-  return 0
-}
-
-if [ "$#" -gt 0 ]; then
-  files=$(printf '%s\n' "$@" | sed 's|^\./||')
-else
-  files=$(list_all)
+  done < "$workdir/cands"
+  [ -z "$cur" ] || check_listing "$cur" "$toks"
 fi
 
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  [ -f "$f" ] || continue
-  is_target "$f" || continue
-  check_file "$f"
-done <<EOF
-$files
-EOF
+filter_ignored
 
-total=$(wc -l < "$findings" | tr -d ' ')
-if [ "$total" -eq 0 ]; then
-  exit 0
-fi
-if [ "$total" -gt "$CAP" ]; then
-  head -n $((CAP - 1)) "$findings"
-  printf 'check-docs: %s more findings not shown\n' $((total - CAP + 1))
-else
-  cat "$findings"
-fi
+total=0
+i=0
+while [ "$i" -lt "$nfind" ]; do
+  [ -z "${FINDINGS[i]}" ] || total=$((total + 1))
+  i=$((i + 1))
+done
+[ "$total" -gt 0 ] || exit 0
+
+limit=$total
+[ "$total" -le "$CAP" ] || limit=$((CAP - 1))
+shown=0
+i=0
+while [ "$i" -lt "$nfind" ] && [ "$shown" -lt "$limit" ]; do
+  if [ -n "${FINDINGS[i]}" ]; then
+    printf '%s\n' "${FINDINGS[i]}"
+    shown=$((shown + 1))
+  fi
+  i=$((i + 1))
+done
+[ "$total" -le "$CAP" ] || printf 'check-docs: %s more findings not shown\n' $((total - CAP + 1))
 exit 1

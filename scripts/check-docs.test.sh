@@ -179,6 +179,152 @@ for ci in "$SHARED/template-ci/github-ts/.github/workflows/ci.yml" "$SHARED/temp
 done
 check 1 "$(grep -c -- '- bash: bash scripts/check-docs.sh$' "$SHARED/template-ci/azure/azure-pipelines/templatecentral-gates.yml")" "ci[azure]: runs the docs check as a plain script step"
 
+# bare_project <name> — a project with only the script and a root README, outside any git repository.
+bare_project() {
+  local d="$T/bare-$1"
+  rm -rf "$d"
+  mkdir -p "$d/scripts" "$d/docs"
+  cp "$CHECK" "$d/scripts/check-docs.sh"
+  printf '# p\n' > "$d/docs/architecture.md"
+  echo "$d"
+}
+
+# an internal failure exits 2 with one line naming the cause; exit 1 stays for findings
+d=$(bare_project failclosed)
+printf '# p\n' > "$d/README.md"
+stub="$T/stub-mktemp"
+mkdir -p "$stub"
+printf '#!/bin/sh\nexit 1\n' > "$stub/mktemp"
+chmod +x "$stub/mktemp"
+OUT=$(cd "$d" && PATH="$stub:$PATH" bash scripts/check-docs.sh 2>&1)
+EC=$?
+check 2 "$EC" "mktemp_fails: exits 2"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: cannot create a temporary folder')" "mktemp_fails: one line names the cause ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "mktemp_fails: exactly one line"
+
+OUT=$(cd "$d" && PATH="$T/no-such-bin" /bin/bash scripts/check-docs.sh 2>&1)
+EC=$?
+check 2 "$EC" "missing_tool: exits 2"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: missing tool: awk$')" "missing_tool: names the tool ($OUT)"
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  chmod 000 "$d/README.md"
+  run_check "$d"
+  chmod 644 "$d/README.md"
+  check 2 "$EC" "unreadable_file: exits 2"
+  check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: cannot read README\.md$')" "unreadable_file: names the file ($OUT)"
+fi
+
+d=$(bare_project gitfail)
+git init -q "$d"
+printf '# p\n\n[gone](nope.md)\n' > "$d/README.md"
+stub="$T/stub-git"
+mkdir -p "$stub"
+printf '#!/bin/sh\nif [ "$1" = check-ignore ]; then echo "fatal: boom" >&2; exit 128; fi\nexec "%s" "$@"\n' "$(command -v git)" > "$stub/git"
+chmod +x "$stub/git"
+OUT=$(cd "$d" && PATH="$stub:$PATH" bash scripts/check-docs.sh 2>&1)
+EC=$?
+check 2 "$EC" "git_check_ignore_fails: exits 2"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^check-docs: git check-ignore failed: fatal: boom$')" "git_check_ignore_fails: names the cause ($OUT)"
+
+# no process is started per reference: 4000 references finish well inside the bound
+d=$(bare_project speed)
+{
+  printf '# p\n\n'
+  for i in $(seq 1 2000); do printf -- '- [l%s](docs/architecture.md) and %sdocs/architecture.md%s\n' "$i" "$BT" "$BT"; done
+} > "$d/README.md"
+start=$SECONDS
+run_check "$d"
+elapsed=$((SECONDS - start))
+check 0 "$EC" "speed_4000_refs: exits 0 ($OUT)"
+check 1 "$([[ $elapsed -lt 10 ]] && echo 1 || echo 0)" "speed_4000_refs: finished in ${elapsed}s, bound 10s"
+for i in $(seq 1 2000); do printf '[b%s](docs/gone%s.md)\n' "$i" "$i"; done > "$d/docs/broken.md"
+start=$SECONDS
+run_check "$d" docs/broken.md
+elapsed=$((SECONDS - start))
+check 1 "$EC" "speed_2000_broken: exits 1"
+check 20 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "speed_2000_broken: output capped"
+check 1 "$([[ $elapsed -lt 10 ]] && echo 1 || echo 0)" "speed_2000_broken: finished in ${elapsed}s, bound 10s"
+
+# a URL scheme is external whatever its case
+d=$(bare_project schemes)
+printf '# p\n\n[a](HTTPS://X.com/missing) [b](Mailto:a@b.c) [c](custom+x-1.y:rest) [d](FTP://h/f)\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "url_schemes_any_case: external links pass ($OUT)"
+printf '\n[e](Docs/Gone.md)\n' >> "$d/README.md"
+expect_finding "$d" "url_schemes_relative_still_checked" '^README\.md:[0-9]+: broken link: Docs/Gone\.md$'
+
+# a fence closes only on the same character with at least the opening length
+d=$(bare_project fences)
+{
+  printf '# p\n\n````md\n```\n[inner](gone-inner.md)\n```\n[still](gone-still.md)\n~~~\n[tilde](gone-tilde.md)\n````\n\n'
+  printf '[after](gone-after.md)\n'
+} > "$d/README.md"
+run_check "$d"
+check 1 "$EC" "fence_length: exits 1"
+check 1 "$(printf '%s\n' "$OUT" | grep -c '^README\.md:12: broken link: gone-after\.md$')" "fence_length: only the link after the real close is reported ($OUT)"
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "fence_length: nothing inside the longer fence is reported ($OUT)"
+
+# double-backtick spans, even around a single backtick, are not scanned
+d=$(bare_project spans)
+printf '# p\n\nA ``see %ssrc/not/there.ts%s here`` and ``[x](gone.md)`` and %s%s%s.\n' "$BT" "$BT" "$BT$BT" "$BT" "$BT$BT" > "$d/README.md"
+printf 'Plain %ssrc/not/there.ts%s stays checked.\n' "$BT" "$BT" >> "$d/README.md"
+expect_finding "$d" "double_backtick_spans" '^README\.md:4: path does not exist: src/not/there\.ts$'
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "double_backtick_spans: only the plain span is reported ($OUT)"
+
+# every %XX sequence is decoded before the existence test
+d=$(bare_project percent)
+printf '# n\n' > "$d/docs/a.b.md"
+printf '# n\n' > "$d/docs/$(printf '\342\202\254').md"
+printf '# p\n\n[a](docs/a%%2Eb.md) [e](docs/%%E2%%82%%AC.md) [lone](docs/100%%.md)\n' > "$d/README.md"
+expect_finding "$d" "percent_decoding" '^README\.md:3: broken link: docs/100%\.md$'
+check 1 "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "percent_decoding: encoded dot and multibyte names resolve ($OUT)"
+
+# a README naming every file as a plain item, bold item or table row is flagged
+for form in plain bold table; do
+  d=$(bare_project "listing-$form")
+  mkdir -p "$d/src/billing"
+  touch "$d/src/billing/index.ts" "$d/src/billing/b.ts" "$d/src/billing/c.ts"
+  case "$form" in
+    plain) printf '# billing\n\n- index.ts: entry\n- b.ts: b\n- c.ts: c\n' > "$d/src/billing/README.md" ;;
+    bold) printf '# billing\n\n- **index.ts** entry\n- **b.ts** b\n* **c.ts**: c\n' > "$d/src/billing/README.md" ;;
+    table) printf '# billing\n\n| File | Role |\n|---|---|\n| %sindex.ts%s | entry |\n| %sb.ts%s | b |\n| c.ts | c |\n' "$BT" "$BT" "$BT" "$BT" > "$d/src/billing/README.md" ;;
+  esac
+  expect_finding "$d" "listing_$form" '^src/billing/README\.md:1: README lists every file of its folder'
+done
+
+# a README naming its entry point and one other file is fine, and so is a folder with fewer than 3 files
+d=$(bare_project listing-partial)
+mkdir -p "$d/src/billing" "$d/src/small"
+touch "$d/src/billing/index.ts" "$d/src/billing/b.ts" "$d/src/billing/c.ts" "$d/src/small/a.ts" "$d/src/small/b.ts"
+printf '# billing\n\n- index.ts: entry\n- b.ts: helper\n' > "$d/src/billing/README.md"
+printf '# small\n\n- a.ts: a\n- b.ts: b\n' > "$d/src/small/README.md"
+run_check "$d"
+check 0 "$EC" "listing_partial_and_small: not flagged ($OUT)"
+
+# Markdown under every folder the script skips is ignored, read from the script's own lists
+skips=$(sed -n -e "s/^GENERATED='\(.*\)'\$/\1/p" -e "s/^SKIPPED_DIRS='\(.*\)'\$/\1/p" "$CHECK")
+check 1 "$([[ $(printf '%s\n' "$skips" | wc -w | tr -d ' ') -ge 15 ]] && echo 1 || echo 0)" "skipped_folders: the lists were read from the script ($skips)"
+d=$(bare_project skipped)
+for folder in $skips; do
+  mkdir -p "$d/pkg/$folder/deep"
+  printf '# x\n\n[gone](nope.md)\n' > "$d/pkg/$folder/README.md"
+  printf '# x\n\n[gone](nope.md)\n' > "$d/pkg/$folder/deep/README.md"
+  mkdir -p "$d/docs/$folder"
+  printf '# x\n\n[gone](nope.md)\n' > "$d/docs/$folder/page.md"
+done
+printf '# p\n' > "$d/README.md"
+run_check "$d"
+check 0 "$EC" "skipped_folders: full run ignores Markdown under every skipped folder ($OUT)"
+for folder in $skips; do
+  run_check "$d" "pkg/$folder/README.md" "pkg/$folder/deep/README.md" "docs/$folder/page.md"
+  check 0 "$EC" "skipped_folders[$folder]: named files are ignored ($OUT)"
+done
+mkdir -p "$d/pkg/keep"
+printf '# x\n\n[gone](nope.md)\n' > "$d/pkg/keep/README.md"
+run_check "$d"
+check 1 "$EC" "skipped_folders: a folder outside the lists is still checked"
+
 # the retired gate and its opt-in appear nowhere in the seeded layer or the kit
 old=$(grep -rnE 'readme-coupling|readme-freshness|skip-readme-check|ci-gates\.sh readme|richReadme|TC_RICH_README|README freshness' \
   "$REPO_ROOT/skills/scaffold" "$REPO_ROOT/skills/add" "$REPO_ROOT/skills/cleanup" "$REPO_ROOT/skills/review" "$REPO_ROOT/skills/standards" 2>/dev/null)

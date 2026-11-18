@@ -13,7 +13,7 @@ Enforced by hooks in `.claude/settings.json`. Detail, bypass labels and CI gates
 - Never install skills that hardcode secrets or make outbound calls without an explicit allow-list.
 
 ## Git Workflow
-- Fix a stale README or doc in the same change, without asking; `scripts/check-docs.sh` fails on a broken link or path.
+- Fix a stale README or doc in the same change, no asking; `scripts/check-docs.sh` checks them.
 - Fork every branch from a fresh `main`: `git fetch -p`, then `git checkout main && git pull --ff-only`.
 - Hooks always guard `main`/`uat`/`develop` from direct commits and force-push; this is a fixed baseline, not this repo's route (`docs/harness.md#git-workflow`, or this file's branch routes section).
 
