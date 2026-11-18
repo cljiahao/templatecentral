@@ -16,22 +16,23 @@ VERSIONS = "skills/scaffold/shared/versions.txt"
 TEXT_SUFFIXES = {".md", ".tmpl", ".sh", ".yml", ".yaml", ".json", ".toml", ".txt", ".properties",
                  ".py", ".cjs", ".mjs", ".cfg", ".ini", ".env", ".example", ""}
 errors = []
+SUBKEYS = {"node": ("major", "min"), "python": ("minor",)}
 
 
 def err(path, line, msg):
     errors.append(f"{path}:{line}: {msg}")
 
 
-def read(path):
+def read(path, encoding="utf-8"):
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding=encoding)
     except (UnicodeDecodeError, OSError):
         return None
 
 
 def load(root):
     cfg = {"npm": {}, "pip": {}, "tool": {}, "action": {}, "image": {}, "node": {}, "python": {}, "pnpm": None}
-    text = read(root / VERSIONS)
+    text = read(root / VERSIONS, "utf-8-sig")
     if text is None:
         sys.exit(f"check-versions: {VERSIONS} not found under {root}")
     seen, records = {}, 0
@@ -48,7 +49,7 @@ def load(root):
         records += 1
         if kind in ("npm", "pip", "tool", "image") and len(rest) == 2:
             cfg[kind][rest[0]] = rest[1]
-        elif kind in ("node", "python") and len(rest) == 2:
+        elif kind in SUBKEYS and len(rest) == 2 and rest[0] in SUBKEYS[kind]:
             cfg[kind][rest[0]] = rest[1]
         elif kind == "pnpm" and len(rest) == 1:
             cfg["pnpm"] = rest[0]
@@ -167,19 +168,15 @@ def check_requirements(cfg, root):
 
 
 def check_images(cfg, root):
-    pat = re.compile(r"(?<![\w/.\-])(node|python|nginx):([\w][\w.\-]*)")
     for p in files(root, "skills/**/Dockerfile*", "skills/**/*.yml", "skills/**/*.yaml"):
         if not in_template(p, root):
             continue
         for n, line in enumerate(read(p).splitlines(), 1):
             if line.lstrip().startswith("#"):
                 continue
-            for m in pat.finditer(line):
-                got, want = m.group(0), cfg["image"].get(m.group(1))
-                if want is None:
-                    err(rel(p, root), n, f"{got}: no image record for {m.group(1)}")
-                elif got != want:
-                    err(rel(p, root), n, f"{got} but versions.txt says {want}")
+            for tok, ok in image_tokens(line, cfg):
+                if not ok:
+                    err(rel(p, root), n, f"{tok} is not an image in versions.txt")
     n_ref = cfg["image"].get("node", "")
     if n_ref and not n_ref.startswith(f"node:{cfg['node'].get('major', '?')}-"):
         err(VERSIONS, 0, f"image node {n_ref} does not match the node major {cfg['node'].get('major')}")
@@ -337,6 +334,8 @@ def check_pip_and_npm_in_text(cfg, root):
                 k = mask[m.start()]
                 if k == 1:
                     continue
+                if name in DICT_NAMES and k != 2 and text[m.start() + len(name):m.start() + len(name) + 1] != "@":
+                    continue
                 if k == 2:
                     span = text.rfind("`", 0, m.start())
                     if install.search(text[span:m.start()]):
@@ -346,14 +345,30 @@ def check_pip_and_npm_in_text(cfg, root):
                 err(r, lineno(text, m.start()), f"prose states a version for {name}")
 
 
+# Product names for the prose check. Display aliases match case-insensitively, except the aliases that are
+# also ordinary English words (DICT_ALIASES): those match only in their capitalised spelling.
 ALIASES = {
     "FastAPI": ("pip", "fastapi"), "Pydantic": ("pip", "pydantic"), "Starlette": ("pip", "starlette"),
-    "Next.js": ("npm", "next"), "NestJS": ("npm", "@nestjs/common"), "Nest": ("npm", "@nestjs/common"),
-    "React": ("npm", "react"), "Vite": ("npm", "vite"), "TypeScript": ("npm", "typescript"),
-    "Tailwind CSS": ("npm", "tailwindcss"), "Vitest": ("npm", "vitest"), "Zod": ("npm", "zod"),
-    "React Router": ("npm", "react-router"), "TanStack Query": ("npm", "@tanstack/react-query"),
+    "Beanie": ("pip", "beanie"), "PyMongo": ("pip", "pymongo"), "Pytest": ("pip", "pytest"),
+    "Pyright": ("pip", "pyright"), "Structlog": ("pip", "structlog"), "Mutmut": ("pip", "mutmut"),
+    "Ruff": ("pip", "ruff"), "Next.js": ("npm", "next"), "NextJS": ("npm", "next"),
+    "NestJS": ("npm", "@nestjs/common"), "Nest": ("npm", "@nestjs/common"), "React": ("npm", "react"),
+    "React DOM": ("npm", "react-dom"), "Vite": ("npm", "vite"), "TypeScript": ("npm", "typescript"),
+    "Tailwind CSS": ("npm", "tailwindcss"), "Tailwind": ("npm", "tailwindcss"), "Vitest": ("npm", "vitest"),
+    "Zod": ("npm", "zod"), "React Router": ("npm", "react-router"), "TanStack Query": ("npm", "@tanstack/react-query"),
+    "React Query": ("npm", "@tanstack/react-query"), "React Hook Form": ("npm", "react-hook-form"),
+    "Better Auth": ("npm", "better-auth"), "Fastify": ("npm", "fastify"), "Prettier": ("npm", "prettier"),
+    "ESLint": ("npm", "eslint"), "Axios": ("npm", "axios"), "jsdom": ("npm", "jsdom"), "Pino": ("npm", "pino"),
+    "Lucide": ("npm", "lucide-react"), "Lefthook": ("npm", "lefthook"), "StrykerJS": ("npm", "@stryker-mutator/core"),
 }
+# Listed package names that are ordinary English words: in prose they match only as a product name (an alias
+# above, the bare name inside an inline code span, or the bare name directly followed by "@").
+DICT_NAMES = {"next", "react", "vite", "prettier", "globals", "ruff", "beanie", "starlette"}
+DICT_ALIASES = {"Nest", "React", "Vite", "Prettier", "Ruff", "Beanie", "Starlette"}
 CLAIM = re.compile(r"\b(?:current|latest|newest|most recent|up[- ]to[- ]date)\b", re.I)
+# Between a name and its number: Markdown emphasis, a closing link, table-cell separators, and an optional comparison
+# sign (a backtick may precede the sign, so a floor written as a code span matches; a plain `3.14` setting does not).
+SEP = r"(?:[ \t*_|]|\]\([^)\n]*\))*(?:`?[ \t]*(?:≥|>=|==|\^|~)[ \t]*)?v?(?=\d)"
 
 
 def vtuple(v):
@@ -361,15 +376,24 @@ def vtuple(v):
 
 
 def check_prose_floors(cfg, root):
-    """A version stated in prose for a listed package may not exceed the pinned version, and a
-    current/latest claim next to a number fails. Scope: .claude/rules, skills markdown, template AGENTS.md."""
-    names = {}
+    """A version stated in prose for a listed package may not exceed the pinned version, and a current/latest
+    claim in the same sentence fails. Scope: .claude/rules, skills markdown, root AGENTS.md and README.md.
+    The number must follow the name on the same line, with only emphasis, link, table, backtick or comparison
+    characters between ("Next.js, at least 99" has words between and stays unmatched: free prose is not parsed
+    further; a bare code-span number without a comparison sign, as in pyright `3.14`, is a setting and stays
+    unmatched too). Fenced blocks are skipped (the fence checks own them)."""
+    exact = {}
     for name in list(cfg["npm"]) + list(cfg["pip"]):
-        names[name] = (("npm" if name in cfg["npm"] else "pip"), name)
-    names.update(ALIASES)
-    alts = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
-    rx = re.compile(r"(?<![\w@/.:\-])(" + alts + r")(?![\w\-/])[ \t]*(?:≥|>=|\^|~|==|v)?[ \t]*(\d+(?:\.\d+)*)(\+?)")
-    for p in files(root, ".claude/rules/*.md", "skills/**/*.md"):
+        exact[name] = ("npm" if name in cfg["npm"] else "pip", name)
+    ci = {k: v for k, v in ALIASES.items() if k not in DICT_ALIASES}
+    cs = {k: v for k, v in ALIASES.items() if k in DICT_ALIASES}
+    by_ci = {k.lower(): v for k, v in ci.items()}
+
+    def alt(names):
+        return "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    head, tail = r"(?<![\w@/.\-])", r"(?![\w\-/])" + SEP + r"(\d+(?:\.\d+)*)"
+    rx = re.compile(head + "(?:(?i:(" + alt(ci) + "))|(" + alt(list(cs) + list(exact)) + "))" + tail)
+    for p in files(root, ".claude/rules/*.md", "skills/**/*.md", "AGENTS.md", "README.md"):
         text = read(p)
         if text is None:
             continue
@@ -378,30 +402,48 @@ def check_prose_floors(cfg, root):
         for m in rx.finditer(text):
             if mask[m.start()] == 1:
                 continue
-            kind, pkg = names[m.group(1)]
+            if m.group(1):
+                label = m.group(1)
+                kind, pkg = by_ci[label.lower()]
+            else:
+                label = m.group(2)
+                kind, pkg = cs[label] if label in cs else exact[label]
+                if label in DICT_NAMES and label not in cs and mask[m.start()] != 2 and text[m.start() + len(label):m.start() + len(label) + 1] != "@":
+                    continue
             pin = cfg[kind].get(pkg)
             if pin is None:
                 continue
             n = lineno(text, m.start())
-            got = m.group(2)
+            got = m.group(3)
             if vtuple(got) > vtuple(base(pin).split(",")[0]):
-                err(r, n, f"prose says {m.group(1)} {got} but versions.txt pins {pkg} {pin}")
-            near = text[max(0, m.start() - 40):m.start()].split("\n")[-1] + text[m.start():m.end() + 60].split("\n")[0]
-            if CLAIM.search(near):
-                err(r, n, f"prose calls {m.group(1)} {got} current/latest; versions.txt owns the current version")
+                err(r, n, f"prose says {label} {got} but versions.txt pins {pkg} {pin}")
+            before = re.split(r"[.!?](?:\s|$)", text[max(0, m.start() - 40):m.start()])[-1].split("\n")[-1]
+            after = re.split(r"[.!?](?:\s|$)", text[m.end():m.end() + 60])[0].split("\n")[0]
+            if CLAIM.search(before + " " + after):
+                err(r, n, f"prose calls {label} {got} current/latest; versions.txt owns the current version")
+
+
+# An image reference: optional registry/namespace prefix, a node|python|nginx* name, a tag that starts with a digit.
+IMG_RE = re.compile(r"(?<![\w.\-])((?:[\w.\-]+(?::\d+)?/)*)((?i:node|python|nginx[\w\-]*)):(\d[\w.\-]*)")
+
+
+def image_tokens(line, cfg):
+    """Yield (token, listed?) for every image token in a line; listed means prefix-stripped name:tag is in versions.txt."""
+    allowed = {v.lower() for v in cfg["image"].values()}
+    for m in IMG_RE.finditer(line):
+        ref = f"{m.group(2)}:{m.group(3)}".lower()
+        yield m.group(0), ref in allowed
 
 
 def check_image_tokens_in_skills(cfg, root):
-    allowed = set(cfg["image"].values())
-    pat = re.compile(r"(?<![\w/.\-])(python|node|nginx):(\d[\w.\-]*)")
     for p in files(root, "skills/**/*.md"):
         text = read(p)
         if text is None:
             continue
         for n, line in enumerate(text.splitlines(), 1):
-            for m in pat.finditer(line):
-                if m.group(0) not in allowed and re.search(r"\d+\.\d+|-(?:alpine|slim)", m.group(2)):
-                    err(rel(p, root), n, f"{m.group(0)} is not an image in versions.txt")
+            for tok, ok in image_tokens(line, cfg):
+                if not ok:
+                    err(rel(p, root), n, f"{tok} is not an image in versions.txt")
 
 
 def main(argv):
