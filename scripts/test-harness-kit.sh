@@ -597,7 +597,7 @@ git -C "$PROJ" mv src/util.py src/util2.py
 py_runs test "stop-checks.py runs all of test/ when a source file is renamed"
 reset_proj
 rm -f "$PROJ/test/test_a.py"
-quiet py "stop-checks.py exits 0 and runs nothing when only a test file is deleted"
+py_runs test "stop-checks.py runs all of test/ when only a test-pattern file is deleted"
 for f in test/conftest.py test/helpers.py test/data/case.json test/__init__.py; do
   reset_proj
   put "$f" 'x = 1'
@@ -816,6 +816,70 @@ ts_runs pnpm-test "stop-checks.ts runs pnpm test when test/setup.ts is deleted"
 git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
 rm -f "$FR/test/helpers.ts"
 ts_runs pnpm-test "stop-checks.ts runs pnpm test when a test helper is deleted"
+PROJ=$SAVE_PROJ
+# Fail-closed branches: the project dir is a subdirectory of a repository, git is missing, the project dir is unreadable,
+# and a git shim that fails only one named command.
+SR=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$SR
+mkdir -p "$SR/app/src" "$SR/app/test"
+echo 'export const a = 1' > "$SR/app/src/a.ts"; echo 'x = 1' > "$SR/app/src/a.py"
+echo 'def test_a(): pass' > "$SR/app/test/test_a.py"; echo 'def test_u(): pass' > "$SR/app/test/test_utils.py"
+commit_all subdir-fixture
+touch "$MOCK_TSC_OK"
+REAL_GIT=$(command -v git)
+mkdir -p "$T/nogit-bin"
+for tool in bash cat node python3; do ln -sf "$(command -v $tool)" "$T/nogit-bin/$tool"; done
+mkdir -p "$T/partshim"
+cat > "$T/partshim/git" <<SHIM
+#!/bin/sh
+case " \$* " in *" \$FAIL_PAT "*) exit 128 ;; esac
+exec "$REAL_GIT" "\$@"
+SHIM
+chmod +x "$T/partshim/git"
+# blocked <v> <project dir> <name> <stderr needle>: exit 2, the message, and no tool ran.
+blocked() {
+  check "2 yes no" "$EC $(ok_if grep -q "$4" "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$1 $3" "$(cat "$T/err")"
+}
+for v in ts py; do
+  git -C "$SR" reset -q --hard; git -C "$SR" clean -fdq; : > "$MOCK_LOG"
+  echo '# e' >> "$SR/app/src/a.$v"
+  cp "$SR/.git/HEAD" "$T/HEAD.good"
+  echo garbage > "$SR/.git/HEAD"
+  run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+  blocked "$v" "$SR/app" "blocks in a subdirectory project when the repository HEAD is broken" 'cannot read changed files'
+  PATH="$T/nogit-bin" run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+  blocked "$v" "$SR/app" "blocks in a subdirectory project when git is not on PATH" 'git is not on PATH'
+  cp "$T/HEAD.good" "$SR/.git/HEAD"
+  NOGIT=$(mktemp -d "$T/nogit.XXXX")
+  PATH="$T/nogit-bin" run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  blocked "$v" "$NOGIT" "blocks outside any repository when git is not on PATH" 'git is not on PATH'
+  run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  check 0 "$EC" "stop-checks.$v exits 0 for a directory with no .git here or in any parent"
+  run_hook "$KIT/stop-checks.$v.sh" "$T/does-not-exist" '{}'
+  blocked "$v" "$T/does-not-exist" "blocks when the project dir does not exist" 'cannot enter project directory'
+  run_hook "$KIT/stop-checks.$v.sh" "$T/does-not-exist" '{"stop_hook_active":true}'
+  check 0 "$EC" "stop-checks.$v stop_hook_active wins over a missing project dir"
+  UNR=$(mktemp -d "$T/unreadable.XXXX"); chmod 000 "$UNR"
+  run_hook "$KIT/stop-checks.$v.sh" "$UNR" '{}'
+  blocked "$v" "$UNR" "blocks when the project dir is unreadable" 'cannot enter project directory'
+  chmod 755 "$UNR"
+  for pat in diff ls-files --verify; do
+    git -C "$SR" reset -q --hard; : > "$MOCK_LOG"
+    echo '# e' >> "$SR/app/src/a.$v"
+    FAIL_PAT=$pat PATH="$T/partshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$SR/app" '{}'
+    blocked "$v" "$SR/app" "blocks when only git $pat fails" 'cannot read changed files'
+  done
+  NH=$(mktemp -d "$T/nohead.XXXX"); git -C "$NH" init -q; echo 'x = 1' > "$NH/a.py"; echo 'export const a = 1' > "$NH/a.ts"; git -C "$NH" add -A
+  : > "$MOCK_LOG"
+  FAIL_PAT=ls-files PATH="$T/partshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$NH" '{}'
+  blocked "$v" "$NH" "blocks when git ls-files fails in a repository with no commit" 'cannot read changed files'
+done
+git -C "$SR" reset -q --hard
+# A deleted test-pattern file may be a helper other tests import: the full suite runs (py).
+rm -f "$SR/app/test/test_utils.py"
+: > "$MOCK_LOG"
+run_hook "$KIT/stop-checks.py.sh" "$SR/app" '{}'
+check "2 yes" "$EC $(ok_if grep -qxF "pytest -m pytest -q test" "$MOCK_LOG")" "stop-checks.py runs all of test/ when test/test_utils.py is deleted in a subdirectory project" "$(cat "$MOCK_LOG")"
 PROJ=$SAVE_PROJ
 reset_proj
 rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/docs" "$MOCK_TSC_OK"
