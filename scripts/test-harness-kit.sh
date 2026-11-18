@@ -527,7 +527,7 @@ rm -f "$PROJ/notes.md"
 touch "$MOCK_TSC_OK"
 echo 'export const a = 1' > "$PROJ/a.ts"
 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
-check "2 yes" "$EC $(ok_if grep -q 'related --run a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
+check "2 yes" "$EC $(ok_if grep -q 'related --run ./a.ts' "$MOCK_LOG")" "stop-checks.ts runs vitest related on changed files"
 rm -f "$PROJ/a.ts"
 # Fixtures are committed first so that only the intended files count as changed; each case asserts the
 # exact tool arguments (grep -x), so over- and under-selection both fail.
@@ -567,19 +567,19 @@ echo 'x = 2' > "$PROJ/src/util.py"
 py_runs test "stop-checks.py runs all of test/ when util.py changes and only svc.py (not util.py) is imported by a test"
 reset_proj
 echo 'def test_a(): assert 1' > "$PROJ/test/test_a.py"
-py_runs test/test_a.py "stop-checks.py runs only the changed test file"
+py_runs ./test/test_a.py "stop-checks.py runs only the changed test file"
 py_pyright no "stop-checks.py skips pyright on a test-files-only change"
 reset_proj
 echo '# e' >> "$PROJ/test/test_a.py"
 echo '# e' >> "$PROJ/test/test_svc.py"
 put test/test_new.py 'def test_n(): pass'
-py_runs "test/test_a.py test/test_new.py test/test_svc.py" "stop-checks.py runs exactly the changed and new test files"
+py_runs "./test/test_a.py ./test/test_new.py ./test/test_svc.py" "stop-checks.py runs exactly the changed and new test files"
 reset_proj
 echo '# e' >> "$PROJ/test/test_my mod.py"
-py_runs "test/test_my mod.py" "stop-checks.py handles a test file name with a space"
+py_runs "./test/test_my mod.py" "stop-checks.py handles a test file name with a space"
 reset_proj
 echo '# e' >> "$PROJ/test/test_café.py"
-py_runs "test/test_café.py" "stop-checks.py handles a non-ASCII test file name"
+py_runs "./test/test_café.py" "stop-checks.py handles a non-ASCII test file name"
 reset_proj
 echo '# e' >> "$PROJ/test/test_a.py"
 echo 'x = 3' > "$PROJ/src/util.py"
@@ -648,7 +648,7 @@ echo 'export const c = 1' > "$PROJ/café2.ts"
 commit_all ts-fixture
 reset_proj
 put a.ts 'export const a = 1'
-ts_runs 'related exec vitest related --run a.ts' "stop-checks.ts runs vitest related on a changed code file"
+ts_runs 'related exec vitest related --run ./a.ts' "stop-checks.ts runs vitest related on a changed code file"
 check no "$(ok_if grep -qx pnpm-test "$MOCK_LOG")" "stop-checks.ts does not run pnpm test for a related-only change"
 reset_proj
 rm -f "$PROJ/d.ts"
@@ -658,10 +658,10 @@ git -C "$PROJ" mv d.ts d2.ts
 ts_runs pnpm-test "stop-checks.ts runs pnpm test when a code file is renamed"
 reset_proj
 echo 'export const c = 2' > "$PROJ/café2.ts"
-ts_runs 'related exec vitest related --run café2.ts' "stop-checks.ts handles a tracked non-ASCII file name"
+ts_runs 'related exec vitest related --run ./café2.ts' "stop-checks.ts handles a tracked non-ASCII file name"
 reset_proj
 put café.ts 'export const c = 1'
-ts_runs 'related exec vitest related --run café.ts' "stop-checks.ts handles an untracked non-ASCII file name"
+ts_runs 'related exec vitest related --run ./café.ts' "stop-checks.ts handles an untracked non-ASCII file name"
 reset_proj
 put n.ts 'export const n = 1'
 MOCK_RELATED_NONE=1 run_hook "$KIT/stop-checks.ts.sh" "$PROJ" '{}'
@@ -693,10 +693,10 @@ quiet ts "stop-checks.ts ignores exactly 50 inert files"
 # TS: code under a docs-named directory and root/nested config files.
 reset_proj
 put src/docs/page.tsx 'export const p = 1'
-ts_runs 'related exec vitest related --run src/docs/page.tsx' "stop-checks.ts relates a code file under src/docs"
+ts_runs 'related exec vitest related --run ./src/docs/page.tsx' "stop-checks.ts relates a code file under src/docs"
 reset_proj
 put src/foo.config.ts 'export const f = 1'
-ts_runs 'related exec vitest related --run src/foo.config.ts' "stop-checks.ts relates a nested foo.config.ts"
+ts_runs 'related exec vitest related --run ./src/foo.config.ts' "stop-checks.ts relates a nested foo.config.ts"
 for f in next.config.ts playwright.config.ts eslint.config.mjs postcss.config.js; do
   reset_proj
   put "$f" 'export default {}'
@@ -733,7 +733,7 @@ printf 'export const a = 1\n' > "$NOHEAD/src/a.ts"
 git -C "$NOHEAD" add -A
 SAVE_PROJ=$PROJ; PROJ=$NOHEAD
 : > "$MOCK_LOG"
-ts_runs 'related exec vitest related --run src/a.ts' "stop-checks.ts reads the changed set of a repository with no commit"
+ts_runs 'related exec vitest related --run ./src/a.ts' "stop-checks.ts reads the changed set of a repository with no commit"
 : > "$MOCK_LOG"
 rm -rf "$NOHEAD/src"; git -C "$NOHEAD" rm -rfq --cached . ; echo '# hi' > "$NOHEAD/README.md"
 quiet ts "stop-checks.ts ignores a docs-only repository with no commit"
@@ -757,7 +757,7 @@ echo 'x = 2' > "$TP/src/u.py"
 py_runs tests "stop-checks.py runs all of tests/ when source changes"
 git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
 echo '# e' >> "$TP/tests/test_a.py"
-py_runs tests/test_a.py "stop-checks.py runs only a changed file under tests/"
+py_runs ./tests/test_a.py "stop-checks.py runs only a changed file under tests/"
 git -C "$TP" reset -q --hard; : > "$MOCK_LOG"
 echo 'x = 3' > "$TP/src/u.py"
 MOCK_NO_PYTEST=1 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
@@ -772,6 +772,50 @@ git -C "$TP" add -A; git -C "$TP" "${GIT_ID[@]}" commit -qm notests
 echo 'x = 4' > "$TP/src/u.py"
 MOCK_PYTEST_RC=5 run_hook "$KIT/stop-checks.py.sh" "$TP" '{}'
 check "2 yes" "$EC $(ok_if grep -q 'collected no tests' "$T/err")" "stop-checks.py blocks when no tests exist and a source file changed"
+PROJ=$SAVE_PROJ
+# Change detection never fails open: an unreadable index or a broken git inside a repository blocks (exit 2).
+FR=$(new_repo feat)
+SAVE_PROJ=$PROJ; PROJ=$FR
+mkdir -p "$FR/src" "$FR/test"
+echo 'x = 1' > "$FR/src/a.py"; echo 'export const a = 1' > "$FR/src/a.ts"
+echo 'def test_a(): pass' > "$FR/test/test_a.py"; echo '# fixtures' > "$FR/test/conftest.py"
+echo 'export const h = 1' > "$FR/test/helpers.ts"; echo 'export const s = 1' > "$FR/test/setup.ts"
+commit_all fail-closed-fixture
+touch "$MOCK_TSC_OK"
+for v in ts py; do
+  src=src/a.$v
+  git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+  echo '// e' >> "$FR/$src"
+  cp "$FR/.git/index" "$T/index.good"
+  head -c 20 /dev/urandom > "$FR/.git/index"
+  run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks on a corrupt git index" "$(cat "$T/err")"
+  cp "$T/index.good" "$FR/.git/index"
+  chmod 000 "$FR/.git/index"
+  run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks on an unreadable git index" "$(cat "$T/err")"
+  chmod 644 "$FR/.git/index"
+  mkdir -p "$T/gitshim"; printf '#!/bin/sh\nexit 128\n' > "$T/gitshim/git"; chmod +x "$T/gitshim/git"
+  PATH="$T/gitshim:$PATH" run_hook "$KIT/stop-checks.$v.sh" "$FR" '{}'
+  check "2 yes no" "$EC $(ok_if grep -q 'cannot read changed files' "$T/err") $(ok_if test -s "$MOCK_LOG")" "stop-checks.$v blocks when git exits 128" "$(cat "$T/err")"
+  NOGIT=$(mktemp -d "$T/nogit.XXXX"); echo 'x = 1' > "$NOGIT/a.py"
+  run_hook "$KIT/stop-checks.$v.sh" "$NOGIT" '{}'
+  check 0 "$EC" "stop-checks.$v still exits 0 in a directory that is not a git repository"
+done
+# A path that starts with "-" reaches vitest as ./-y.ts, never as an option.
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+echo 'export const y = 1' > "$FR/-y.ts"
+ts_runs 'related exec vitest related --run ./-y.ts' "stop-checks.ts passes a file named -y.ts as ./-y.ts"
+# Deleting a test-pattern file alone runs nothing; deleting conftest.py or a setup/helper file runs the full suite.
+git -C "$FR" reset -q --hard; git -C "$FR" clean -fdq; : > "$MOCK_LOG"
+rm -f "$FR/test/conftest.py"
+py_runs test "stop-checks.py runs all of test/ when conftest.py is deleted"
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+rm -f "$FR/test/setup.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when test/setup.ts is deleted"
+git -C "$FR" reset -q --hard; : > "$MOCK_LOG"
+rm -f "$FR/test/helpers.ts"
+ts_runs pnpm-test "stop-checks.ts runs pnpm test when a test helper is deleted"
 PROJ=$SAVE_PROJ
 reset_proj
 rm -rf "$PROJ/src" "$PROJ/test" "$PROJ/docs" "$MOCK_TSC_OK"

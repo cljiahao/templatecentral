@@ -4,18 +4,27 @@
 # any other changed file (source, config, fixture, data, deletion, rename) or more than 50 changed files runs all tests.
 # Inert (nothing runs): root *.md, root LICENSE*/CHANGELOG*, and .md or images under the top-level docs/ directory.
 # Fails closed: a missing tool or a run past STOP_GATE_LIMIT seconds (default 270, under the 300 s hook timeout) exits 2 with a message.
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
+# Change detection never fails open: inside a git repository an unreadable index, a broken git or a failed cd exits 2, not 0.
+gate_git_fail() { echo "Stop gate: cannot read changed files ($1); repair the repository or run the checks manually." >&2; exit 2; }
+PROJ="${CLAUDE_PROJECT_DIR:-.}"
+cd "$PROJ" 2>/dev/null || { [ -e "$PROJ/.git" ] && gate_git_fail "cd $PROJ failed"; exit 0; }
 input=$(cat)
 active=$(printf '%s' "$input" | python3 -c "import json,sys
 try: print('true' if json.loads(sys.stdin.read() or '{}').get('stop_hook_active') is True else 'false')
 except Exception: print('false')" 2>/dev/null)
 [ "$active" = "true" ] && exit 0
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { [ -e .git ] && gate_git_fail "git rev-parse failed"; exit 0; }
 # Paths in the diff: deletions and renames as separate paths, untracked included; without a HEAD commit, everything tracked or untracked.
-if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
-  files=$( { git -c core.quotePath=false diff --name-only --no-renames HEAD; git -c core.quotePath=false ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+git rev-parse --verify -q HEAD >/dev/null 2>&1; head_rc=$?
+if [ "$head_rc" -eq 0 ]; then
+  diff_out=$(git -c core.quotePath=false diff --name-only --no-renames HEAD 2>/dev/null) || gate_git_fail "git diff failed"
+  new_out=$(git -c core.quotePath=false ls-files --others --exclude-standard 2>/dev/null) || gate_git_fail "git ls-files failed"
+  files=$(printf '%s\n%s\n' "$diff_out" "$new_out" | sort -u)
+elif [ "$head_rc" -eq 1 ]; then
+  all_out=$(git -c core.quotePath=false ls-files --cached --others --exclude-standard 2>/dev/null) || gate_git_fail "git ls-files failed"
+  files=$(printf '%s\n' "$all_out" | sort -u)
 else
-  files=$(git -c core.quotePath=false ls-files --cached --others --exclude-standard 2>/dev/null | sort -u)
+  gate_git_fail "git rev-parse HEAD failed"
 fi
 [ -n "$files" ] || exit 0
 n=0; src_changed=""; full=""; tests=""
@@ -31,7 +40,7 @@ while IFS= read -r f; do
       case "${f##*/}" in
         # A deleted test file leaves nothing to run.
         test_*.py|*_test.py) [ -f "$f" ] && tests="$tests
-$f"; continue ;;
+./$f"; continue ;;
       esac ;;
   esac
   src_changed=1; full=1

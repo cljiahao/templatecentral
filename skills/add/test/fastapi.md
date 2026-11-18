@@ -124,7 +124,7 @@ Rules:
 
 - One main concept per test.
 - Assert before and after when testing mutations.
-- `pytest.raises(..., match=...)` when the message matters; the type alone otherwise.
+- `pytest.raises(..., match=...)` unless the message is not part of the contract.
 
 ### Parametrize
 

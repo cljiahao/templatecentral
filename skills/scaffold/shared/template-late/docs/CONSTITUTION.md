@@ -27,7 +27,7 @@ an explicit `## Human Approval Override` section in the PR description.
 - Test behaviour that can regress. One test per distinct behaviour.
 - Parametrize sibling cases (`it.each`, `pytest.mark.parametrize`) instead of copy-pasting them.
 - Before adding a test, check whether an existing one already covers the behaviour; extend it.
-- No tests for constants, types, re-exports, framework behaviour, or mocks asserting themselves.
+- No tests that only restate a constant, type or re-export, exercise framework behaviour, or are mocks asserting themselves: they add no coverage or behaviour value. This never excuses skipping tests of real code paths.
 - Meet the changed-line coverage gate (80%) with behaviour tests, never by excluding files or adding ignore pragmas.
 - Security minimum: an authenticated route keeps one unauthenticated-rejected test. Shared auth guards are tested once, not per route.
 - Scaffolded template code ships with its own tests; add tests only for code you add or change.
