@@ -5,6 +5,12 @@ Checked: template package.json and requirements files, Dockerfiles, CI templates
 version tokens in template files, GitHub Action pins in skills/ and .github/, pip/npm specs in skill
 code fences, and skill prose that states a version for a listed package.
 
+Prose floors, documented limits (each is pinned by a test in check-versions.test.sh): the bare capitalised word
+"Next" is not a product alias, so "Needs Next 99 here." passes while "Next 20 items" at a sentence start must also
+pass; use "Next.js" or `next`. "Next.js, at least 99." (words between the name and the number) is not parsed. A
+code-span number with no comparison sign (pyright `3.14`) is a setting, not a floor. Lowercase node/python
+("node 2 of the cluster") never matches; only the capitalised Node, Node.js and Python do.
+
 Usage: check-versions.py [--root DIR]   (default: the repository root)
 """
 import json
@@ -57,6 +63,10 @@ def load(root):
             cfg["action"][rest[0]] = (rest[1], rest[2])
         else:
             err(VERSIONS, n, f"unreadable record: {raw.strip()}")
+    if errors:
+        for e in errors:
+            print(e)
+        sys.exit(f"check-versions: {VERSIONS} is malformed; fix it first")
     if not records:
         sys.exit(f"check-versions: {VERSIONS} has no records (empty or only comments)")
     for need in (("node", "major"), ("node", "min"), ("python", "minor")):
@@ -360,15 +370,20 @@ ALIASES = {
     "Better Auth": ("npm", "better-auth"), "Fastify": ("npm", "fastify"), "Prettier": ("npm", "prettier"),
     "ESLint": ("npm", "eslint"), "Axios": ("npm", "axios"), "jsdom": ("npm", "jsdom"), "Pino": ("npm", "pino"),
     "Lucide": ("npm", "lucide-react"), "Lefthook": ("npm", "lefthook"), "StrykerJS": ("npm", "@stryker-mutator/core"),
+    "Node.js": ("node", "major"), "Node": ("node", "major"), "Python": ("python", "minor"),
 }
 # Listed package names that are ordinary English words: in prose they match only as a product name (an alias
 # above, the bare name inside an inline code span, or the bare name directly followed by "@").
 DICT_NAMES = {"next", "react", "vite", "prettier", "globals", "ruff", "beanie", "starlette"}
-DICT_ALIASES = {"Nest", "React", "Vite", "Prettier", "Ruff", "Beanie", "Starlette"}
+DICT_ALIASES = {"Nest", "React", "Vite", "Prettier", "Ruff", "Beanie", "Starlette", "Node.js", "Node", "Python"}
 CLAIM = re.compile(r"\b(?:current|latest|newest|most recent|up[- ]to[- ]date)\b", re.I)
-# Between a name and its number: Markdown emphasis, a closing link, table-cell separators, and an optional comparison
+# Between a name and its number: Markdown emphasis, a closing link, table-cell separators, a colon, spaces (also
+# non-breaking), one line break (not before a list marker such as "2. "), "to"/"through", and an optional comparison
 # sign (a backtick may precede the sign, so a floor written as a code span matches; a plain `3.14` setting does not).
-SEP = r"(?:[ \t*_|]|\]\([^)\n]*\))*(?:`?[ \t]*(?:≥|>=|==|\^|~)[ \t]*)?v?(?=\d)"
+SEP = (r"(?:[ \t\u00a0\u202f*_|:]|\]\([^)\n]*\)|\n[ \t>]*(?!\d+[.)]\s))*"
+       r"(?:(?:up to|to|through)[ \t\u00a0]+|`?[ \t]*(?:≥|>=|==|\^|~)(?:[ \t]|\n[ \t>]*(?!\d+[.)]\s))*)?v?(?=\d)")
+NUM = r"\d+(?:\.\d+)*"
+RANGE = r"((?:[ \t\u00a0]*(?:-|–|—|to|or)[ \t\u00a0]*v?" + NUM + r")*)"
 
 
 def vtuple(v):
@@ -391,7 +406,7 @@ def check_prose_floors(cfg, root):
 
     def alt(names):
         return "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
-    head, tail = r"(?<![\w@/.\-])", r"(?![\w\-/])" + SEP + r"(\d+(?:\.\d+)*)"
+    head, tail = r"(?<![\w@/.\-])", r"(?![\w\-/])`?" + SEP + "(" + NUM + ")" + RANGE
     rx = re.compile(head + "(?:(?i:(" + alt(ci) + "))|(" + alt(list(cs) + list(exact)) + "))" + tail)
     for p in files(root, ".claude/rules/*.md", "skills/**/*.md", "AGENTS.md", "README.md"):
         text = read(p)
@@ -415,8 +430,12 @@ def check_prose_floors(cfg, root):
                 continue
             n = lineno(text, m.start())
             got = m.group(3)
-            if vtuple(got) > vtuple(base(pin).split(",")[0]):
-                err(r, n, f"prose says {label} {got} but versions.txt pins {pkg} {pin}")
+            pint = vtuple(base(pin).split(",")[0])
+            for num in [got] + re.findall(NUM, m.group(4)):
+                nt = vtuple(num)[:len(pint)] if kind in ("node", "python") else vtuple(num)
+                if nt > pint:
+                    err(r, n, f"prose says {label} {num} but versions.txt pins {pkg} {pin}")
+                    break
             before = re.split(r"[.!?](?:\s|$)", text[max(0, m.start() - 40):m.start()])[-1].split("\n")[-1]
             after = re.split(r"[.!?](?:\s|$)", text[m.end():m.end() + 60])[0].split("\n")[0]
             if CLAIM.search(before + " " + after):

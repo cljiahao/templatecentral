@@ -3,7 +3,7 @@
 # Every mutation must change the copy: a sed pattern that no longer matches would otherwise pass silently.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-T=$(mktemp -d) || exit 1; trap 'rm -rf "$T"' EXIT
+T=$(mktemp -d "${TMPDIR:-/tmp}/cv.XXXXXX") || exit 1; trap 'rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 base="$T/base"; mkdir -p "$base/scripts"
 cp -R "$REPO/skills" "$base/skills"
@@ -104,5 +104,29 @@ t image_other_registry 1 "printf '\n\`\`\`dockerfile\nFROM mcr.microsoft.com/pyt
 t image_upper_case 1 "printf '\n\`\`\`dockerfile\nFROM Node:20-alpine\n\`\`\`\n' >> $DOC" "Node:20-alpine is not an image"
 t image_other_nginx_name 1 "printf '\n\`\`\`dockerfile\nFROM nginxinc/nginx-unprivileged:1.27\n\`\`\`\n' >> $DOC" "nginx-unprivileged:1.27 is not an image"
 t image_listed_tag_passes 0 "printf '\n\`\`\`dockerfile\nFROM node:26-alpine\nFROM --platform=linux/amd64 node:26-alpine AS b\nFROM node:26-alpine@sha256:0123456789abcdef\nFROM docker.io/library/node:26-alpine\n\`\`\`\n' >> $DOC" "check-versions: ok"
+# round 3: a code-span name followed by a plain number, ranges, connectors, line breaks, Node and Python
+t prose_code_span_next_plain_number 1 "printf '\nNeeds \`next\` 99 here.\n' >> $DOC" "prose says next 99"
+t prose_code_span_react_plain_number 1 "printf '\n\`react\` 99\n' >> $DOC" "prose says react 99"
+t prose_code_span_vite_plain_number 1 "printf '\n\`vite\` 99\n' >> $DOC" "prose says vite 99"
+t prose_code_span_prettier_plain_number 1 "printf '\n\`prettier\` 99\n' >> $DOC" "prose says prettier 99"
+t prose_code_span_vitest_plain_number 1 "printf '\n\`vitest\` 99\n' >> $DOC" "prose says vitest 99"
+t prose_range_hyphen 1 "printf '\nNext.js 14-99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_range_en_dash 1 "printf '\nNext.js 15 – 99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_range_or 1 "printf '\nNext.js 15 or 99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_colon_after_code_span 1 "printf '\n\`next\`: 99\n' >> $DOC" "prose says next 99"
+t prose_to_connector 1 "printf '\nNext.js to 99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_non_breaking_space 1 "printf '\nNext.js\xc2\xa099 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_line_break_between 1 "printf '\nNext.js\n99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_line_break_after_sign 1 "printf '\nNext.js ≥\n99 only.\n' >> $DOC" "prose says Next.js 99"
+t prose_node_alias 1 "printf '\nNode 99 only.\n' >> $DOC" "prose says Node 99"
+t prose_node_js_alias 1 "printf '\nNode.js 99 only.\n' >> $DOC" "prose says Node.js 99"
+t prose_python_alias 1 "printf '\nPython 3.99 only.\n' >> $DOC" "prose says Python 3.99"
+t prose_next_sentence_start_passes 0 "printf '\nNext 20 items need review.\n' >> $DOC" "check-versions: ok"
+t prose_bare_next_documented_limit 0 "printf '\nNeeds Next 99 here.\n' >> $DOC" "check-versions: ok"
+t prose_lowercase_node_passes 0 "printf '\nRun node 2 of the cluster.\n' >> $DOC" "check-versions: ok"
+t prose_node_below_pin_passes 0 "printf '\nNode 24 is older; Node 26.1 and Python 3.14.2 pass.\n' >> $DOC" "check-versions: ok"
+t prose_list_marker_after_line_break_passes 0 "printf '\nInstall React\n20. Then run it.\n' >> $DOC" "check-versions: ok"
+t prose_range_within_pin_passes 0 "printf '\nNext.js 14-15 and \`next\` 15 are fine.\n' >> $DOC" "check-versions: ok"
+t versions_extra_field_names_the_line 1 "printf 'npm left-pad ^1 extra\n' >> $V" "versions.txt:"
 echo "check-versions.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

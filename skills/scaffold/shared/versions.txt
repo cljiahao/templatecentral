@@ -1,6 +1,9 @@
 # The one place templateCentral keeps a version. `scripts/check-versions.sh` fails when a template file,
 # CI template, seeded script, skill code fence or this repo's workflow disagrees with a line here, and
 # when skill prose states a version for a package listed here.
+# Prose check limits: the bare capitalised word "Next" is not matched ("Next 20 items" starts many sentences),
+# so write Next.js or `next`; "Next.js, at least 99" (words between name and number) is not parsed; a code-span
+# number with no comparison sign (pyright `3.14`) is a setting; lowercase node and python never match.
 #
 # Rule for every value: the latest stable release that was at least 7 days old when the file was
 # last refreshed (cut-off 2026-11-11). A hold on an older release has a "held:" note beside it.
