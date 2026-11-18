@@ -112,7 +112,6 @@ class APISettings(BaseSettings):
     )
 ```
 
-Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Add to `src/.env` (never commit) and document in `src/.env.default`:
 

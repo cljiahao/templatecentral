@@ -51,7 +51,6 @@ class APISettings(BaseSettings):
     MONGODB_DB_NAME: str = Field(default=..., description="MongoDB database name")
 ```
 
-Declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression.
 
 Ask the user to add `MONGODB_URL` and `MONGODB_DB_NAME` to `src/.env` (agent `.env` edits are blocked); document the placeholders in `src/.env.default`:
 ```

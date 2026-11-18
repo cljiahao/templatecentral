@@ -25,4 +25,6 @@ MongoDB defaults to PyMongo async (stays on Python 3.14). Load Beanie only when 
 |---|---|
 | `src/api/services/auth_service.py` exists | `cat "<skill-dir>/database/python/pymongo-async-auth.md"` |
 
+Settings fields: declare required fields as `Field(default=..., ...)`: they stay required at runtime and `APISettings()` type-checks under pyright with no suppression. Applies to every guide below.
+
 Run the chosen `cat`(s); follow the guide(s).
