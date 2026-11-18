@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Test budget: test-budget.sh [-v] [project-dir]. Offline and read-only; plain text analysis, nothing installed.
-# Enforces ADR-0001. Exit 0 within budget, 1 on a breach, 2 on an internal failure (one line naming the cause).
-# Breach: test LOC per 100 source LOC above TEST_BUDGET_MAX_RATIO (default 35), or one test title twice in one file.
-# Likely duplicates (same title across files, near-identical assertion sets, a unit and an e2e file naming
-# the same route or imported function) are reported and never fail; -v lists them.
+# Enforces ADR-0001. Exit 0 within budget, 1 when the ratio is over the limit, 2 on bad input or an internal failure.
+# Only one thing fails: test LOC per 100 source LOC above TEST_BUDGET_MAX_RATIO (default 35; set but empty is an error).
+# Likely duplicates (a title repeated in one file or across files, near-identical assertion sets, a unit and an e2e
+# file naming the same route or imported function) are reported and never fail; -v lists them, plus a count of
+# test-file lines over 300 bytes. Unreadable files are skipped with one warning on stderr.
 # Counting rules mirror the plugin's gate: a test file sits under test, tests or __tests__ or is named *.test.*, *.spec.*,
 # test_*, *_test.py; source is code under src (any non-test code when the project has no src folder); a line counts
 # when it is not blank and not a comment; one app per detected stack folder (root plus first-level folders).
+# Limits: tests in folders that match none of those patterns (spec/, e2e/, cypress/ without a .test. or .spec.
+# suffix) count as source or are ignored, as in the plugin's gate; size is counted by line, not by what a line holds.
+# A symlink to a file is read through, as in the plugin's gate; a symlink to a folder is skipped.
 set -uo pipefail
 export LC_ALL=C
 
@@ -33,7 +37,7 @@ fi
 [ -d "$TARGET" ] || die "not a folder: $TARGET"
 root=$(cd "$TARGET" 2> /dev/null && pwd) || die "cannot enter $TARGET"
 
-LIMIT=${TEST_BUDGET_MAX_RATIO:-35}
+LIMIT=${TEST_BUDGET_MAX_RATIO-35}
 case "$LIMIT" in
   '' | . | *[!0-9.]* | *.*.*) die "TEST_BUDGET_MAX_RATIO must be a number (got '$LIMIT')" ;;
 esac
@@ -71,15 +75,24 @@ detect() {
   return 1
 }
 
-# Relative file paths of a folder, one per line: tracked and untracked unignored files in a git work tree, else a walk.
+# Relative paths of the regular files of a folder (symlinks to files included), one per line, with backslash, tab
+# and newline written as \\, \t and \n so every name stays on one line: tracked and untracked unignored files in a
+# git work tree, else a walk. Names are read NUL-delimited.
 listfiles() {
+  local f
   if git -C "$1" ls-files -co --exclude-standard -z > "$wd/git.out" 2> /dev/null; then
-    tr '\0' '\n' < "$wd/git.out"
+    :
   else
     (cd "$1" && find . \( -name node_modules -o -name .next -o -name dist -o -name build -o -name __pycache__ \
-      -o -name coverage -o -name .venv -o -name venv -o -name .git -o -name .turbo \) -prune -o -type f -print0 \
-      | tr '\0' '\n' | sed 's|^\./||')
+      -o -name coverage -o -name .venv -o -name venv -o -name .git -o -name .turbo \) -prune -o \( -type f -o -type l \) -print0) > "$wd/git.out"
   fi
+  while IFS= read -r -d '' f; do
+    f=${f#./}
+    [ -f "$1/$f" ] || continue
+    f=${f//\\/\\\\}
+    f=${f//$'\t'/\\t}
+    printf '%s\n' "${f//$'\n'/\\n}"
+  done < "$wd/git.out"
 }
 
 found=$wd/found
@@ -139,6 +152,18 @@ function trim(s) {
   sub(/^[ \t\r]+/, "", s)
   sub(/[ \t\r]+$/, "", s)
   return s
+}
+function decode(s,   o, i, c, d) {
+  o = ""
+  for (i = 1; i <= length(s); i++) {
+    c = substr(s, i, 1)
+    if (c == "\\") {
+      d = substr(s, i + 1, 1)
+      i++
+      o = o (d == "n" ? "\n" : (d == "t" ? "\t" : d))
+    } else o = o c
+  }
+  return o
 }
 function cnt(s, q,   n, i) {
   n = 0
@@ -201,7 +226,7 @@ BEGIN {
     prefix = R[2]
     rel = R[3]
     disp = prefix rel
-    full = ROOT "/" disp
+    full = ROOT "/" prefix decode(rel)
     nf++
     FA[nf] = a
     FD[nf] = disp
@@ -236,6 +261,7 @@ BEGIN {
       if (isc) continue
       loc++
       if (!isT) continue
+      if (length(line) > 300) LL[a]++
       w = line
       sub(/^[ \t]+/, "", w)
       iw = length(line) - length(w)
@@ -275,8 +301,8 @@ BEGIN {
       }
       if (tk == "t") {
         if (title in CF) {
-          nD++
-          DR[nD] = disp ":" nl ": duplicate test title in one file: \"" title "\" (first at line " CF[title] ")"
+          DUPF[a]++
+          note("V", disp ":" nl ": repeated test title in one file: \"" title "\" (first at line " CF[title] ")")
         } else {
           CF[title] = nl
           ttot[a]++
@@ -287,6 +313,7 @@ BEGIN {
       }
     }
     close(full)
+    if (r < 0) { nU++; FA[nf] = 0 }
     FK[nf] = loc
   }
   for (a = 1; a <= nA; a++) {
@@ -301,7 +328,7 @@ BEGIN {
       nR++
       RR[nR] = AL[a] ": test LOC " tst " vs source LOC " src ": " ratio " per 100 source LOC, limit " LIM " (TEST_BUDGET_MAX_RATIO)"
     }
-    nSame = 0
+    nSame = DUPF[a] + 0
     for (j = 1; j <= nTO[a]; j++) {
       t = TO[a, j]
       if (TFN[a, t] > 1) { nSame++; if (nV < 400) note("V", "same title in " TFN[a, t] " files: \"" t "\": " TFL[a, t]) }
@@ -346,14 +373,15 @@ BEGIN {
         note("V", "unit and e2e name the same " (substr(k, 1, 2) == "r:" ? "route" : "function") " " substr(k, (substr(k, 1, 2) == "r:" ? 3 : 4)) ": " FD[u] ", " FD[e])
       }
     }
+    if (LL[a] > 0) note("V", AL[a] ": " LL[a] " test-file lines over 300 bytes (count only)")
     line = AL[a] ": src " src " LOC, test " tst " LOC, ratio " ratio " per 100 (limit " LIM "), " tfiles " test files; likely duplicates: " nSame " same-title, " nSim " similar-assertion, " nUE " unit-e2e"
     S[a] = line
     totDup += nSame + nSim + nUE
   }
   for (a = 1; a <= nA; a++) print "S\t" S[a]
   for (j = 1; j <= nR; j++) print "B\t" RR[j]
-  for (j = 1; j <= nD; j++) print "B\t" DR[j]
   for (j = 1; j <= nV; j++) print "V\t" VR[j]
+  print "U\t" nU + 0
   print "D\t" totDup + 0
 }
 AWK
@@ -367,6 +395,7 @@ awk -v APPS="$apps" -v LIST="$list" -v ROOT="$root" -v LIM="$LIMIT" -f "$wd/p.aw
 
 summary=
 dups=0
+unreadable=0
 nb=0
 nv=0
 : > "$wd/b"
@@ -377,8 +406,11 @@ while IFS="$TAB" read -r tag text; do
     B) printf '%s\n' "$text" >> "$wd/b"; nb=$((nb + 1)) ;;
     V) printf '%s\n' "$text" >> "$wd/v"; nv=$((nv + 1)) ;;
     D) dups=$text ;;
+    U) unreadable=$text ;;
   esac
 done < "$wd/result"
+
+[ "$unreadable" -eq 0 ] || printf 'test-budget: warning: %s unreadable file(s) skipped\n' "$unreadable" >&2
 
 if [ "$nb" -gt 0 ]; then
   printf 'test-budget: FAIL, %s breach(es); fix per ADR-0001 (test each behaviour once)\n' "$nb"

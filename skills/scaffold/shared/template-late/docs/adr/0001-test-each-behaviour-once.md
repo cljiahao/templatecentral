@@ -15,10 +15,10 @@ Suites grow by addition. The same behaviour ends up asserted in a unit test, an 
 - A new test names the behaviour it alone covers. If it cannot, it is not added.
 - When a higher-level test proves a behaviour a lower one also asserts, delete one of the two. Never keep both.
 - Coverage stays at or above 80%. No threshold is lowered and no exclude is added to make a deletion pass.
-- Test lines per 100 source lines stay at or under the budget in `scripts/test-budget.sh` (`TEST_BUDGET_MAX_RATIO`, default 35), and a test title appears once per file.
+- Test lines per 100 source lines stay at or under the budget in `scripts/test-budget.sh` (`TEST_BUDGET_MAX_RATIO`, default 35).
 
 ## Consequences
 
 - The suite stays small enough to run unsharded.
-- `scripts/test-budget.sh` reports likely duplicates (same title across files, near-identical assertions, a unit and an e2e file naming one route or function). Merging them follows the test-consolidate skill.
+- `scripts/test-budget.sh` fails only on the ratio. It reports likely duplicates and never fails on them (a title repeated in a file or across files, near-identical assertions, a unit and an e2e file naming one route or function). Merging them follows the test-consolidate skill.
 - A breach is fixed by consolidating tests, never by raising the limit.
