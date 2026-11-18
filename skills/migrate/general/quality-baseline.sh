@@ -62,7 +62,7 @@ commits_ok() {
     echo "commits: no git, the tie to a commit is not checked"; return 0
   fi
   echo "commits: before ${bh:0:9} ($bt), after ${ah:0:9} ($at)"
-  if [ "$inrepo" -eq 0 ]; then echo "commits: ancestry not checked, $repo is not a git repository"; return 0; fi
+  if [ "$inrepo" -eq 0 ]; then echo "--compare: the tables carry commit hashes but $repo is not a git repository; run from the repository or set QB_REPO" >&2; return 2; fi
   if ! git -C "$repo" cat-file -e "$bh^{commit}" 2>/dev/null || ! git -C "$repo" cat-file -e "$ah^{commit}" 2>/dev/null; then
     echo "--compare: a commit named in a table is not in $repo, so the tie cannot be checked" >&2; return 2
   fi
@@ -94,9 +94,10 @@ compare_main() {
     function total(v) { return match(v, / of [0-9]+$/) ? substr(v, RSTART + 4) + 0 : -1 }
     function key(k) { return k ~ /^complexity over/ ? "complexity" : k }
     $0 == "---" { seen = 1; next }
-    !seen { if (key($1) in b) { printf "--compare: the before table has more than one %s row\n", key($1) > "/dev/stderr"; exit 2 } b[key($1)] = $2; next }
-    { if (key($1) in a) { printf "--compare: the after table has more than one %s row\n", key($1) > "/dev/stderr"; exit 2 } a[key($1)] = $2 }
+    !seen { if (key($1) in b) { printf "--compare: the before table has more than one %s row\n", key($1) > "/dev/stderr"; err = 2; exit 2 } b[key($1)] = $2; next }
+    { if (key($1) in a) { printf "--compare: the after table has more than one %s row\n", key($1) > "/dev/stderr"; err = 2; exit 2 } a[key($1)] = $2 }
     END {
+      if (err) exit err
       n = split("lint findings:-1;type errors:-1;tests failed:-1;complexity:-1;duplication:-1;suppression lines matching (code files):-1;coverage, lint and Sonar exclusions:-1;line coverage:1;coverage thresholds configured:1", spec, ";")
       for (i = 1; i <= n; i++) {
         split(spec[i], p, ":"); m = p[1]
@@ -437,7 +438,10 @@ measure_python() {
     if [ -n "$n" ]; then TYPES=$n; else TYPES="n/a (failed: pyright failed, exit $RC)"; fi
   elif [ -n "$mypy" ] && { [ -f "$P/mypy.ini" ] || grep -q 'tool.mypy' "$P/pyproject.toml" 2>/dev/null; }; then
     limited "$S/mypy.log" "$mypy" --cache-dir "$S/mypy" .
-    if [ "$RC" -eq 124 ]; then TYPES="n/a (failed: timeout)"; else TYPES=$(grep -c ': error:' "$S/mypy.log"); fi
+    if [ "$RC" -eq 124 ]; then TYPES="n/a (failed: timeout)"; else
+      TYPES=$(grep -c ': error:' "$S/mypy.log")
+      if [ "${TYPES:-0}" -eq 0 ] && [ "$RC" -ne 0 ]; then TYPES="n/a (failed: mypy failed, exit $RC)"; fi
+    fi
   else TYPES="n/a (no configured type checker on PATH or in .venv)"; fi
 
   if [ -z "$py" ]; then TESTS="n/a (no python)"; TESTRC=$TESTS; SECS=$TESTS; COV=$TESTS; return; fi
@@ -490,9 +494,77 @@ CODERE='\.([cm]?[jt]sx?|py)$'
 SKIPRE='(\.d\.ts$|(^|/)(__snapshots__|generated|fixtures|node_modules|vendor|dist|\.next|\.venv)/)'
 SUPPRESS='eslint-disable|biome-ignore|[Nn][Oo][Qq][Aa]|nosec|pylint:[[:space:]]*disable|type:[[:space:]]*ignore|pyright:[[:space:]]*ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|NOSONAR|SuppressWarnings|istanbul[[:space:]]+ignore|c8[[:space:]]+ignore|v8[[:space:]]+ignore|pragma:[[:space:]]*no[[:space:]]+(cover|branch)'
 EXCLUDE='coverage\.exclude|collectCoverageFrom|coveragePathIgnorePatterns|\[tool\.coverage|^[[:space:]]*omit[[:space:]]*=|sonar\.(coverage\.|cpd\.)?exclusions|ignores[[:space:]]*:|coverage:[[:space:]]*\{[^}]*exclude|^[[:space:]]*ignore[[:space:]]*=|ignore_errors|--ignore[= ]|sonar\.issue\.ignore\.|ignorePatterns|"ignore"[[:space:]]*:|extend-exclude|per-file-ignores|exclude_lines|exclude_also|^[[:space:]]*exclude[[:space:]]*[=:]'
-ESLOFF=':[[:space:]]*(\[[[:space:]]*)?(['"'"'"]off['"'"'"]|0)[[:space:]]*[],}]'
 THRESH='coverageThreshold|thresholds|fail_under|fail-under'
 CASERE='^[[:space:]]*((it|test)(\.[a-z]+)?\(|(async )?def test_)'
+
+# excl_entries <file>: the number of exclusion entries, so a new entry in an existing list counts, including entries on continuation lines.
+excl_entries() {
+  RE="$EXCLUDE" awk -v q="'" '
+    function cnt(s, ch,  n, k) { n = 0; while ((k = index(s, ch)) > 0) { n++; s = substr(s, k + 1) } return n }
+    function nq(s, neg,  n, t, re, k) {
+      k = match(s, /[:=]/); if (k > 0) s = substr(s, k + 1)
+      re = "\"[^\"]*\"|" q "[^" q "]*" q; n = 0
+      while (match(s, re)) { t = substr(s, RSTART + 1, 1); if (!neg || t == "!") n++; s = substr(s, RSTART + RLENGTH) }
+      return n }
+    function nql(s, neg,  n, t, re) {
+      re = "\"[^\"]*\"|" q "[^" q "]*" q; n = 0
+      while (match(s, re)) { t = substr(s, RSTART + 1, 1); if (!neg || t == "!") n++; s = substr(s, RSTART + RLENGTH) }
+      return n }
+    BEGIN { re = ENVIRON["RE"] }
+    /^[ \t]*(\/\/|#|;)/ { next }
+    {
+      line = $0
+      if (ini) { if (line ~ /^[ \t]+[^ \t]/) { c++; next } ini = 0 }
+      if (inl) { c += nql(line, neg); d += cnt(line, "[") - cnt(line, "]"); if (d <= 0) inl = 0; next }
+      if (line ~ re) {
+        neg = (line ~ /collectCoverageFrom/)
+        n = nq(line, neg)
+        tmp = line; k = gsub(/--ignore/, "&", tmp); if (k > n) n = k
+        if (line ~ /^[ \t]*sonar\./) { v = line; sub(/^[^=]*=/, "", v); m = split(v, parts, ","); n = 0; for (j = 1; j <= m; j++) if (parts[j] ~ /[^ \t]/) n++ }
+        if (n < 1) n = 1
+        if (line ~ /^[ \t]*[A-Za-z_.-]+[ \t]*=[ \t]*$/) { ini = 1; n = 0 }
+        c += n
+        d = cnt(line, "[") - cnt(line, "]"); inl = (d > 0)
+      }
+    }
+    END { print c + 0 }' "$1"
+}
+
+# eslint_off <file>: the number of rules set to off or 0 directly under a rules object, as a bare value or the first element of the array form.
+eslint_off() {
+  awk -v q="'" '
+    BEGIN { RS = "\001" }
+    function nextnb(j) { while (j <= n && substr(s, j, 1) ~ /[ \t\r\n]/) j++; return j }
+    function strend(j,  c, k) { c = substr(s, j, 1); k = j + 1; while (k <= n && substr(s, k, 1) != c) { if (substr(s, k, 1) == "\\") k++; k++ } return k }
+    function isoff(j,  c, e) {
+      c = substr(s, j, 1)
+      if (c == "\"" || c == q) { e = strend(j); return substr(s, j + 1, e - j - 1) == "off" }
+      if (c == "0") return substr(s, j + 1, 1) !~ /[0-9A-Za-z_.]/
+      return 0 }
+    {
+      s = $0; n = length(s); sp = 0; last = ""; pend = 0
+      for (i = 1; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (ch == "/" && substr(s, i + 1, 1) == "/") { while (i <= n && substr(s, i, 1) != "\n") i++; continue }
+        if (ch == "/" && substr(s, i + 1, 1) == "*") { i += 2; while (i < n && !(substr(s, i, 1) == "*" && substr(s, i + 1, 1) == "/")) i++; i++; continue }
+        if (ch == "\"" || ch == q || ch == "`") { e = strend(i); last = substr(s, i + 1, e - i - 1); i = e; continue }
+        if (ch ~ /[A-Za-z_$]/) { j = i; while (j < n && substr(s, j + 1, 1) ~ /[A-Za-z0-9_$]/) j++; last = substr(s, i, j - i + 1); i = j; continue }
+        if (ch == "{") { st[++sp] = pend ? "R" : "O"; pend = 0; last = ""; continue }
+        if (ch == "[") { st[++sp] = "A"; last = ""; continue }
+        if (ch == "}" || ch == "]") { if (sp > 0) sp--; last = ""; continue }
+        if (ch == ",") { last = ""; continue }
+        if (ch == ":") {
+          j = nextnb(i + 1)
+          if (last == "rules" && substr(s, j, 1) == "{") pend = 1
+          else if (sp > 0 && st[sp] == "R") {
+            if (substr(s, j, 1) == "[") { if (isoff(nextnb(j + 1))) c++ }
+            else if (isoff(j)) c++
+          }
+        }
+      }
+    }
+    END { print c + 0 }' "$1"
+}
 
 count_static() {
   local f tl=0 sl=0 cases=0 supp=0 excl=0 thr=0 n
@@ -512,8 +584,8 @@ count_static() {
       .eslintignore)
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;;
       vitest.config.*|vite.config.*|jest.config.*|.eslintrc|.eslintrc.*|package.json|pyproject.toml|.coveragerc|sonar-project.properties|eslint.config.*|.jscpd.json|biome.json|ruff.toml|.ruff.toml|.nycrc|.nycrc.json|.pylintrc|pytest.ini|setup.cfg)
-        n=$(grep -cE "$EXCLUDE" "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0}))
-        case "$(basename "$f")" in eslint.config.*|.eslintrc*) n=$(grep -cE "$ESLOFF" "$P/$f" 2>/dev/null); excl=$((excl + ${n:-0})) ;; esac
+        n=$(excl_entries "$P/$f"); excl=$((excl + ${n:-0}))
+        case "$(basename "$f")" in eslint.config.*|.eslintrc*) n=$(eslint_off "$P/$f"); excl=$((excl + ${n:-0})) ;; esac
         n=$(grep -cE "$THRESH" "$P/$f" 2>/dev/null); thr=$((thr + ${n:-0})) ;;
     esac
   done < <(list_files)

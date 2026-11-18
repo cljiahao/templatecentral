@@ -222,4 +222,91 @@ out=$(run "$T/c8"); contains "always-blocking block-no-verify named" "FAIL block
 
 out=$(run "$T/ok"); contains "the output says the other hooks rest on the hash check" "covered by the .claude/verify-harness.sh hash check" "$out"
 
+# a hook with a top-level exit before the lefthook call does not run it
+seed "$T/h1"; printf '#!/bin/sh\nexit 0\nlefthook run pre-commit\n' >"$T/h1/.git/hooks/pre-commit"
+out=$(run "$T/h1"); check "an early exit before lefthook exits 1" 1 $?
+contains "early exit named" "FAIL git hook pre-commit" "$out"
+seed "$T/h2"; printf '#!/bin/sh\nexit 0 # lefthook run pre-commit\n' >"$T/h2/.git/hooks/pre-commit"
+out=$(run "$T/h2"); check "lefthook only in a trailing comment exits 1" 1 $?
+contains "trailing comment named" "FAIL git hook pre-commit" "$out"
+seed "$T/h3"; printf '#!/bin/sh\nif [ -z "%s" ]; then exit 0; fi\nlefthook run pre-commit\n' "\$CI" >"$T/h3/.git/hooks/pre-commit"
+out=$(run "$T/h3"); check "a conditional exit before lefthook still passes" 0 $?
+
+seed "$T/h5"; printf '#!/bin/sh\nlefthook version\n' >"$T/h5/.git/hooks/pre-commit"
+out=$(run "$T/h5"); check "a hook that calls lefthook without run exits 1" 1 $?
+contains "lefthook without run named" "FAIL git hook pre-commit" "$out"
+
+# a hook shaped like the file lefthook install writes passes; the lefthook binary is not installed here, so this is a fixture of its known output
+seed "$T/h4"
+for h in pre-commit commit-msg pre-push; do
+cat >"$T/h4/.git/hooks/$h" <<HOOK
+#!/bin/sh
+
+if [ "\$LEFTHOOK_VERBOSE" = "1" -o "\$LEFTHOOK_VERBOSE" = "true" ]; then
+  set -x
+fi
+
+if [ "\$LEFTHOOK" = "0" ]; then
+  exit 0
+fi
+
+call_lefthook()
+{
+  if test -n "\$LEFTHOOK_BIN"
+  then
+    "\$LEFTHOOK_BIN" "\$@"
+  elif lefthook -h >/dev/null 2>&1
+  then
+    lefthook "\$@"
+  else
+    dir="\$(git rev-parse --show-toplevel)"
+    osArch=\$(uname | tr '[:upper:]' '[:lower:]')
+    if test -f "\$dir/node_modules/lefthook/bin/index.js"
+    then
+      "\$dir/node_modules/lefthook/bin/index.js" "\$@"
+    else
+      echo "Can't find lefthook in PATH"
+    fi
+  fi
+}
+
+call_lefthook run "$h" "\$@"
+HOOK
+chmod +x "$T/h4/.git/hooks/$h"
+done
+out=$(run "$T/h4"); check "a hook shaped like lefthook install output passes" 0 $?
+
+# gitleaks must be the invoked command on a run line and not skipped
+seed "$T/g1"; sed -i.bak 's#gitleaks git --pre-commit#echo gitleaks git --pre-commit#; s#command -v gitleaks#command -v echo#' "$T/g1/lefthook.yml"; rm "$T/g1/lefthook.yml.bak"
+out=$(run "$T/g1"); check "run: echo gitleaks-not exits 1" 1 $?
+contains "echo gitleaks named" "FAIL lefthook.yml gitleaks" "$out"
+seed "$T/g2"; python3 - "$T/g2/lefthook.yml" <<'PY5'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^(    secret-scan:\n)", r"\1      skip: true\n", s, count=1)
+open(p, "w").write(s)
+PY5
+grep -q 'skip: true' "$T/g2/lefthook.yml" || { echo "FAIL g2 fixture has no skip line"; fail=1; }
+out=$(run "$T/g2"); check "a skipped gitleaks command exits 1" 1 $?
+contains "skipped gitleaks named" "FAIL lefthook.yml gitleaks" "$out"
+
+seed "$T/g3"; python3 - "$T/g3/lefthook.yml" <<'PY6'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"(?m)^pre-commit:\n", "pre-commit:\n  skip: true\n", s, count=1)
+open(p, "w").write(s)
+PY6
+grep -q '^  skip: true' "$T/g3/lefthook.yml" || { echo "FAIL g3 fixture has no hook skip line"; fail=1; }
+out=$(run "$T/g3"); check "a skipped pre-commit hook exits 1" 1 $?
+contains "skipped hook named" "FAIL lefthook.yml gitleaks" "$out"
+
+# invalid settings.local.json fails as unreadable and its contents are never printed
+seed "$T/s1"; printf '{ "marker-9f3a": not json' >"$T/s1/.claude/settings.local.json"
+out=$(run "$T/s1"); check "invalid settings.local.json exits 1" 1 $?
+contains "invalid settings.local.json named" "FAIL settings.local.json" "$out"
+case "$out" in *marker-9f3a*) echo "FAIL settings.local.json contents printed"; fail=1 ;; *) echo "ok   settings.local.json contents not printed" ;; esac
+seed "$T/s2"; printf '{ "hooks": {}, "note": "marker-77c1" }' >"$T/s2/.claude/settings.local.json"
+out=$(run "$T/s2"); check "valid settings.local.json passes" 0 $?
+case "$out" in *marker-77c1*) echo "FAIL valid settings.local.json contents printed"; fail=1 ;; *) echo "ok   valid settings.local.json contents not printed" ;; esac
+
 exit $fail

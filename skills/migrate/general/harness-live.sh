@@ -51,6 +51,35 @@ JS
 # section_lines <file> <key>: the non-comment lines of one top-level section of a YAML file.
 section_lines() { awk -v k="$2" '/^[^[:space:]#]/ { on = ($0 ~ "^" k ":") } on && !/^[[:space:]]*#/' "$1"; }
 
+# gitleaks_state <file>: ok, skip or none for gitleaks invoked on a run line of a pre-commit command that is not skipped.
+gitleaks_state() {
+  section_lines "$1" pre-commit | awk '
+    function check(v) { if (v ~ /(^|[;&|(]|then|do|else)[ \t]*([A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*([^ \t]*\/)?gitleaks[ \t]+(git|detect|protect|dir|stdin)/) has[cmd] = 1 }
+    /^  skip:[ \t]*true/ { hookskip = 1 }
+    /^    [A-Za-z0-9_-]+:[ \t]*$/ { cmd = $1; inrun = 0; next }
+    inrun && match($0, /[^ \t]/) && RSTART > 7 { check($0); next }
+    { inrun = 0 }
+    /^      skip:[ \t]*true/ { sk[cmd] = 1 }
+    /^      run:/ { v = $0; sub(/^[ \t]*run:[ \t]*/, "", v); if (v ~ /^[|>][-+]?[ \t]*$/) inrun = 1; else { sub(/^["\047]/, "", v); check(v) } }
+    END { for (k in has) { if (!sk[k] && !hookskip) found = 1; else skipped = 1 } print found ? "ok" : (skipped ? "skip" : "none") }'
+}
+
+# hook_runs_lefthook <file>: a git hook that runs lefthook on a line outside a comment, with no top-level exit before it.
+hook_runs_lefthook() {
+  sed -E 's/[[:space:]]#.*$//' "$1" | awk '
+    /^[ \t]*(#|echo|printf|:)/ { next }
+    {
+      l = $0; tmp = l; o = gsub(/(^|[^A-Za-z0-9_])(if|case|while|for|until)[ \t]/, "&", tmp)
+      tmp = l; cl = gsub(/(^|[^A-Za-z0-9_])(fi|esac|done)([^A-Za-z0-9_]|$)/, "&", tmp)
+      if (l ~ /^[ \t]*\{[ \t]*$/ || l ~ /\)[ \t]*\{[ \t]*$/) o++
+      if (l ~ /^[ \t]*\}[ \t]*$/) cl++
+      if (d == 0 && l ~ /^[ \t]*exit([ \t]+[0-9]+)?[ \t]*(;.*)?$/) exited = 1
+      if (!exited && l ~ /(lefthook|LEFTHOOK_BIN"?|call_lefthook)[ \t]+(run|hook)/) ok = 1
+      d += o - cl
+    }
+    END { exit !ok }'
+}
+
 # 1. lefthook binary, config and wired git hooks
 lh=$(resolve lefthook)
 if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH"; fi
@@ -59,13 +88,17 @@ if [ -f "$P/lefthook.yml" ]; then
     if section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+commands:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}[A-Za-z0-9_-]+:'; then pass "lefthook.yml $h defines commands"
     else fail "lefthook.yml $h" "no $h section with a non-empty commands block"; fi
   done
-  if section_lines "$P/lefthook.yml" pre-commit | grep -q gitleaks; then pass "lefthook.yml pre-commit runs gitleaks"; else fail "lefthook.yml gitleaks" "no gitleaks command or run line outside a comment in pre-commit"; fi
+  case "$(gitleaks_state "$P/lefthook.yml")" in
+    ok) pass "lefthook.yml pre-commit runs gitleaks" ;;
+    skip) fail "lefthook.yml gitleaks" "the gitleaks command or the pre-commit hook sets skip: true" ;;
+    *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect, dir or stdin) outside a comment" ;;
+  esac
   if git -C "$P" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     hooks_dir=$(git -C "$P" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
     for h in pre-commit commit-msg pre-push; do
       grep -Eq "^$h:" "$P/lefthook.yml" || continue
-      if [ -f "$hooks_dir/$h" ] && [ -x "$hooks_dir/$h" ] && grep -Ev '^[[:space:]]*(#|echo|printf|:)' "$hooks_dir/$h" | grep -Eq 'lefthook[[:space:]]+(run|hook)|^[[:space:]]*(exec[[:space:]]+)?"?[^[:space:]"]*lefthook"?([[:space:]]|$)|call_lefthook'; then pass "git hook $h executable and calls lefthook"
-      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h is missing, not executable, or has no line outside a comment that runs lefthook; run lefthook install"; fi
+      if [ -f "$hooks_dir/$h" ] && [ -x "$hooks_dir/$h" ] && hook_runs_lefthook "$hooks_dir/$h"; then pass "git hook $h executable and calls lefthook"
+      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h is missing, not executable, or does not run lefthook before any top-level exit; run lefthook install"; fi
     done
   else fail "git hooks" "not a git repository"; fi
 else fail "lefthook.yml" "missing"; fi
@@ -104,7 +137,8 @@ if [ -f "$P/.claude/settings.json" ]; then
   done
 else fail ".claude/settings.json" "missing"; fi
 if [ -f "$P/.claude/settings.local.json" ]; then
-  if settings_hooks "$P/.claude/settings.local.json" 2>/dev/null | grep -q '^__disable__ true'; then fail "settings.local.json disableAllHooks" "true turns every hook off"
+  if ! loc=$(settings_hooks "$P/.claude/settings.local.json" 2>/dev/null); then fail "settings.local.json" "unreadable or not valid JSON"
+  elif printf '%s\n' "$loc" | grep -q '^__disable__ true'; then fail "settings.local.json disableAllHooks" "true turns every hook off"
   else pass "settings.local.json does not disable hooks"; fi
 fi
 

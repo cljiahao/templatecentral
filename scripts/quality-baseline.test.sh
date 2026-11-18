@@ -368,4 +368,83 @@ excl_form sonar-project.properties 'sonar.issue.ignore.multicriteria=e1'
 excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 'off' } }];"
 excl_form eslint.config.mjs "export default [{ rules: { 'no-undef': 0 } }];"
 
+# exclusions count entries: a new entry in an existing list rises the count, and compare exits 1
+excl_pair() { # excl_pair <name> <file> <before content> <after content> <before count> <after count>
+  printf '%s\n' "$3" >"$gp/$2"; e1=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  printf '%s\n' "$4" >"$gp/$2"; e2=$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")
+  rm -f "$gp/$2"
+  check "$1: count before" "$((base_excl + $5))" "$e1"
+  check "$1: count after" "$((base_excl + $6))" "$e2"
+  tbl before 4 2 80.0% 3 1.5% 2 "$e1" >"$T/xb.md"; TBL_TREE=dirty tbl after 4 2 80.0% 3 1.5% 2 "$e2" >"$T/xa.md"
+  bash "$SCRIPT" --compare "$T/xb.md" "$T/xa.md" >/dev/null 2>&1; check "$1: compare exits 1" 1 $?
+}
+excl_pair "ruff ignore list grows" ruff.toml 'ignore = ["E501"]' 'ignore = ["E501","E402"]' 1 2
+excl_pair "a second rule off on one line" eslint.config.mjs "export default [{ rules: { 'a': 'off' } }];" "export default [{ rules: { 'a': 'off', 'b': 'off' } }];" 1 2
+excl_pair "a multi-line exclude list grows" vitest.config.ts 'export default { test: { coverage: {
+  exclude: [
+    "src/a",
+  ] } } };' 'export default { test: { coverage: {
+  exclude: [
+    "src/a",
+    "src/b",
+  ] } } };' 2 3
+excl_delta() { # excl_delta <file> <content> <delta>
+  printf '%s\n' "$2" >"$gp/$1"
+  check "exclusion delta $3: $1 $2" "$((base_excl + $3))" "$(value "coverage, lint and Sonar exclusions" "$(bash "$SCRIPT" "$gp" --static)")"
+  rm -f "$gp/$1"
+}
+excl_delta eslint.config.mjs "export default [{ rules: { 'complexity': ['error', { max: 0 }] } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'max-depth': ['error', { max: 0 }], 'curly': 'error' } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': ['off'] } }];" 1
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': [0, { a: 1 }] } }];" 1
+excl_delta eslint.config.mjs "export default [{ rules: { ...base, 'x': 0, 'y': \"off\", eqeqeq: 0 } }];" 3
+excl_delta .eslintrc.json '{ "rules": { "no-undef": "off", "max": ["error", { "max": 0 }] } }' 1
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': 'off10' } }];" 0
+excl_delta eslint.config.mjs "export default [{ rules: { 'x': 0.5, 'y': 01 } }];" 0
+excl_delta vitest.config.ts 'export default { test: { coverage: { include: ["src/a", "src/b"] } } };' 0
+excl_delta .coveragerc '[run]
+omit =
+    a/*
+    b/*
+    c/*' 3
+excl_delta sonar-project.properties 'sonar.exclusions=a,b,c' 3
+excl_delta pytest.ini '[pytest]
+addopts = --ignore=t/a --ignore=t/b' 2
+
+# tables with commit hashes and no repository to check them in exit 2, no git tables from a real non-repository still pass
+outr=$(cd "$T/nogit" && env -u QB_REPO bash "$SCRIPT" --compare "$T/b.md" "$T/same.md" 2>&1); check "commit hashes without a repository exit 2" 2 $?
+contains "commit hashes without a repository say so" "is not a git repository" "$outr"
+(cd "$T/nogit" && env -u QB_REPO bash "$SCRIPT" --compare "$T/ng.md" "$T/ng2.md" >/dev/null 2>&1); check "no git on both sides from a non-repository exits 0" 0 $?
+
+# no OK line is printed on an exit 2 path
+outd=$(bash "$SCRIPT" --compare "$T/b.md" "$T/dupafter.md" 2>&1); check "duplicate row exits 2" 2 $?
+case "$outd" in *"OK:"*) echo "FAIL duplicate row prints an OK line"; fail=1 ;; *) echo "ok   duplicate row prints no OK line" ;; esac
+outd=$(bash "$SCRIPT" --compare "$T/dupbefore.md" "$T/same.md" 2>&1); check "duplicate row before exits 2" 2 $?
+case "$outd" in *"OK:"*) echo "FAIL duplicate row before prints an OK line"; fail=1 ;; *) echo "ok   duplicate row before prints no OK line" ;; esac
+
+# a mypy run that fails without error lines is not zero findings
+cp -R "$T/py" "$T/py2"; rm -rf "$T/py2/.git"; printf '[tool.mypy]\n' >"$T/py2/pyproject.toml"
+(cd "$T/py2" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init)
+mkdir -p "$T/fbin2"; for b in ruff python; do cp "$T/fbin/$b" "$T/fbin2/$b"; done
+cat >"$T/fbin2/mypy" <<'SH'
+#!/usr/bin/env bash
+case "${MYPY_MODE:-}" in
+  crash) echo "INTERNAL ERROR" >&2; exit 2 ;;
+  errors) echo "a.py:1: error: bad"; exit 1 ;;
+  quiet-fail) exit 1 ;;
+esac
+exit 0
+SH
+chmod +x "$T/fbin2/mypy"
+PYPATH2="$T/fbin2:/usr/bin:/bin"
+outm=$(MYPY_MODE=crash PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains "a mypy crash is a failure, not zero" "n/a (failed: mypy failed, exit 2)" "$(value 'type errors' "$outm")"
+outm=$(MYPY_MODE=quiet-fail PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); contains "a non-zero mypy exit without error lines is a failure" "n/a (failed: mypy failed, exit 1)" "$(value 'type errors' "$outm")"
+outm=$(MYPY_MODE=errors PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "mypy error lines are counted" 1 "$(value 'type errors' "$outm")"
+outm=$(PATH="$PYPATH2" bash "$SCRIPT" "$T/py2" --full); check "a clean mypy run is zero" 0 "$(value 'type errors' "$outm")"
+
+# the quality pass defers to comments.md and keeps the compare gate
+qp="$(cd "$(dirname "$SCRIPT")" && pwd)/quality-pass.md"
+if grep -q 'no suppression, exclusion or threshold change is added' "$qp"; then echo "FAIL quality-pass.md still forbids every suppression"; fail=1; else echo "ok   quality-pass.md has no absolute suppression ban"; fi
+if grep -q 'comments.md. allows, and .--compare. must still pass' "$qp"; then echo "ok   quality-pass.md defers to comments.md and compare"; else echo "FAIL quality-pass.md lacks the comments.md and compare wording"; fail=1; fi
+
 exit $fail
