@@ -102,7 +102,7 @@ ae8f0ca211107f65b87db1d310863151441a8fdc992cd8adf2741d7a2f0c7078	skills/add/auth
 cc352a2aca1a1e025f33871aa2bc35049ccc9fd249e3fbce8129ec245162403e	skills/add/auth/vite-react.md	6. Add Protected Routes	0	tsx
 c3f153618c00ae05d72efa1793bd46da3fa08da6d2ae2cf74fe4beca0475a92e	skills/add/auth/vite-react.md	7. Add a Sign-Out Button	0	tsx
 bee9c20345692fc39976421100763bea999f472fb9d93535db7e9a893ac6369e	skills/add/auth/vite-react.md	Architecture	0	-
-432d9d99a15ab44f7aa701480100f00a21a850dc00a3f38b44d6fbaa10cd84c9	skills/add/database/python/beanie.md	B1. Install Dependencies	0	-
+a495fe63f5fecb0a997d4c2e20cc801ef5a324565882f65f67a2bafb8abb4ea0	skills/add/database/python/beanie.md	B1. Install Dependencies	0	-
 6de4715d6fbe182df32f564ff1b205c465fac38d58cee6c8d6696a6a89811f3f	skills/add/database/python/beanie.md	B2. Create MongoDB Connection	0	python
 caacbc202cbe3778fc8a107ec77ff57166abc49bc5fe70935caff28199dad48b	skills/add/database/python/beanie.md	B3. Add Configuration	0	python
 686daa01c6b62d83ac3d40e6364941e72ea6b39496b4b4eaa30c97d0f665156c	skills/add/database/python/beanie.md	B3. Add Configuration	1	-
@@ -122,7 +122,7 @@ ebe4bae679b02ffb221f64d7965f063427420eef6066027393a93f1109b39a5c	skills/add/data
 378326803397a8f097e3b3802cd9621623406cde0ccf12c5a8c314dd609d4d73	skills/add/database/python/pymongo-async-auth.md	Step A — Replace stubs in `src/api/services/auth_service.py`	0	python
 fdf28d4d6bcdeda3a7c6829a24c3b5884f42a16c79de81575d7c5e7bf9187cd8	skills/add/database/python/pymongo-async-auth.md	Step B — Replace `src/api/routers/auth.py`	0	python
 663324b495778b9938091611c2d489f9c6a3ffb9fc945a68e87e6ad8e1e07940	skills/add/database/python/pymongo-async-auth.md	Step C — Lock down `src/api/routers/users.py`	0	python
-a3633dad6991ff54ba511504e113e3043a7e8d1f1e94d6fc3043e33703b642f6	skills/add/database/python/pymongo-async.md	M1. Install Dependencies	0	-
+7024350112802addaae5980df893d78582206615ccdbd305aae502a67b07ea59	skills/add/database/python/pymongo-async.md	M1. Install Dependencies	0	-
 caacbc202cbe3778fc8a107ec77ff57166abc49bc5fe70935caff28199dad48b	skills/add/database/python/pymongo-async.md	M2. Add Configuration	0	python
 686daa01c6b62d83ac3d40e6364941e72ea6b39496b4b4eaa30c97d0f665156c	skills/add/database/python/pymongo-async.md	M2. Add Configuration	1	-
 b39d4e3dacb7307bb8d3603e90701bb49af97e025a1a8bb835cb8f1e20359532	skills/add/database/python/pymongo-async.md	M3. Create the Client	0	python
@@ -388,14 +388,14 @@ ea4f39addd280acc520ff27afa06b19d265c93d37f4b47b9fc9519440e4c9960	skills/add/logg
 7dcae74f91c8858cfe5a39a882b8261bafd5beb1c93d2b13d02fc9d97a8f3edf	skills/add/logging/vite-react.md	4. Add router navigation breadcrumbs	1	tsx
 ee6caf0c8e9b4a0a2e03cafbf471fde45aecabb51c325794e7dde2df6df1d03b	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	0	ts
 d4215fbedeb2233765a4498380598229b8ac2cc65a30e8df98d9ea1928743d33	skills/add/logging/vite-react.md	5. Export from `src/lib/logging/index.ts`	1	ts
-425a5f5171f1f324984095db6f40c2ceecabfca3988f75b61ea0be57cc2db0c1	skills/add/mutation-testing/python.md	Dependencies	0	-
+9596ded4f99a544358595ed46a1ba3fb6128978d5bc7c78a7a04ffb0b6d23250	skills/add/mutation-testing/python.md	Dependencies	0	-
 fa72d6cbbce95a0c4211c2445ea879fa6d9f70429c8b1bd2f89e69f8991c3b0a	skills/add/mutation-testing/python.md	Step 1 — Add mutmut configuration	0	toml
 ecc80fa931d674f2929143c554b395f482585738f632809e857191cc189c7c46	skills/add/mutation-testing/python.md	Step 2 — Update .gitignore	0	-
-a625886d39511c4c846eb2e00f52e3d8f137196f680b58efca350ea72815c0bf	skills/add/mutation-testing/python.md	Step 3 — Add CI job	0	yaml
+49d470de729a6ebe2dccf278dbc5abfd13c0dd6816ff9c41878ad3c05eff87c2	skills/add/mutation-testing/python.md	Step 3 — Add CI job	0	yaml
 d1fb635dd5e9362e0e25881107b790c7438e57d24131c325847c5c561e7ab41d	skills/add/mutation-testing/typescript.md	Step 1 — Create StrykerJS config	0	javascript
 4d637aa74c22a0ed221e3733518e818c398aa3c125a0de1b84ae3d45e64fa782	skills/add/mutation-testing/typescript.md	Step 2 — Add npm script	0	json
 2555ff5b99a042bf9bd918bf87ac9b6a1e3c39ebb1de037b31555825eceed69b	skills/add/mutation-testing/typescript.md	Step 3 — Update .gitignore	0	-
-7c274e6359ede0b6f3b9693f75c64921255c7ca5d29cf7f1b076aeec1484f949	skills/add/mutation-testing/typescript.md	Step 4 — Add CI job	0	yaml
+f8e2bb9d31f1419a12ed0e76a237059d2666e637a6f4ae08a519d2b3929d75b1	skills/add/mutation-testing/typescript.md	Step 4 — Add CI job	0	yaml
 6914448cccf3c7e03e197959eb6377f34bfffdaec44f42a6e11f2c553a785921	skills/add/page/nextjs.md	2. Create the Page File	0	tsx
 d330d790c3b405436d0e7a11e601859b466b4d0fd82230bb72829d2f82fec6c0	skills/add/page/nextjs.md	3. Add a Loading State (Required for Data-Fetching Pages)	0	tsx
 b9a5524e50e45081e39f763fe92dd9f52d78bd7b88c08672f3621d0554db7894	skills/add/page/nextjs.md	4. Add Error Handling (Optional)	0	tsx
