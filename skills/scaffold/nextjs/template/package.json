@@ -33,7 +33,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-hook-form": "^7.92.0",
-    "@hookform/resolvers": "^5.1.0",
+    "@hookform/resolvers": "^7.0.6",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"

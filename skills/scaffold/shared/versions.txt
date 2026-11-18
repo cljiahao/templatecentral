@@ -50,7 +50,7 @@ npm @eslint-community/eslint-plugin-eslint-comments ^4.8.1
 npm @eslint/js                    ^10.0.1
 npm @fastify/helmet               ^13.2.0
 npm @fastify/static               ^10.1.10
-npm @hookform/resolvers           ^5.1.0
+npm @hookform/resolvers           ^7.0.6
 npm @nestjs/cli                   ^12.0.12
 npm @nestjs/common                ^12.4.2
 npm @nestjs/core                  ^12.4.2
