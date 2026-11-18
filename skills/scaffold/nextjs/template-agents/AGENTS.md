@@ -11,7 +11,7 @@ Next.js 16 App Router · TypeScript strict · shadcn/ui · TanStack Query v5 · 
 
 ## Layout
 - `src/app/` routes and API handlers; `src/features/<name>/` (api/, components/, hooks/, types.ts)
-- `src/components/widgets/` shared components; `src/components/ui/` is shadcn (see `.claude/rules/nextjs.md`)
+- `src/components/widgets/` shared components; shadcn primitives in src/components/ui (see `.claude/rules/nextjs.md`)
 - `src/lib/constants/env.ts` env access. Path-specific guidance: `.claude/rules/`
 - Binding invariants (win on conflict): `docs/CONSTITUTION.md`
 

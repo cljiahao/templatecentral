@@ -9,7 +9,7 @@ Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React 
 
 ## Layout
 - `src/features/<name>/` (api/, components/, hooks/, types.ts); `src/router.tsx` route definitions
-- `src/components/widgets/` shared components; `src/components/ui/` is shadcn (see `.claude/rules/vite-react.md`)
+- `src/components/widgets/` shared components; shadcn primitives in src/components/ui (see `.claude/rules/vite-react.md`)
 - `src/lib/constants/env.ts` centralizes `VITE_*` access. Path-specific guidance: `.claude/rules/`
 - Binding invariants (win on conflict): `docs/CONSTITUTION.md`
 

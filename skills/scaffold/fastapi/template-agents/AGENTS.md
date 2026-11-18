@@ -8,7 +8,7 @@ FastAPI 0.136+ · Python 3.14 · Pydantic v2 · Uvicorn · Ruff · pytest · pyr
 `python src/main.py` (localhost:8000) · `python -m pytest test/ -v` · `ruff check src/` · `ruff format src/` · `python -m pyright src/`
 
 ## Architecture
-- Layered `api/` → `models/`; details in `.claude/rules/fastapi.md`
+- Layered api → models; details in `.claude/rules/fastapi.md`
 - Binding invariants (win on conflict): `docs/CONSTITUTION.md`. Path-specific guidance: `.claude/rules/`
 
 ## Rules
