@@ -130,8 +130,12 @@ def step_bounds(lines, n):
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
 PR_ONLY_JOBS = {"changelog", "readme-freshness", "comment-hygiene"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
+class MergeKeyError(yaml.YAMLError):
+    pass
 class UniqueKeyLoader(yaml.SafeLoader):
     def construct_mapping(self, node, deep=False):
+        if any(k.tag == "tag:yaml.org,2002:merge" for k, _ in node.value):
+            raise MergeKeyError("YAML merge keys are not allowed in CI templates")
         keys = [self.construct_object(k, deep=True) for k, _ in node.value]
         dupes = sorted({str(k) for k in keys if keys.count(k) > 1})
         if dupes:
@@ -145,7 +149,10 @@ def condition_errors(rel, doc):
         for key in ("if", "condition"):
             if key in node and not (allowed and key == "if" and node[key] == PR_ONLY_IF):
                 errors.append(f"{rel}: {kind} {name} has a run condition: {key}: {node[key]}")
+    count = [0]
     def azure_jobs(owner, jobs):
+        if isinstance(jobs, list):
+            count[0] += len(jobs)
         if not isinstance(jobs, list):
             errors.append(f"{rel}: {owner} jobs is not a list the job-condition guard can read")
             return
@@ -159,6 +166,7 @@ def condition_errors(rel, doc):
     jobs = doc.get("jobs")
     if isinstance(jobs, dict):
         seen = True
+        count[0] += len(jobs)
         for name, node in jobs.items():
             check("job", name, node, name in PR_ONLY_JOBS)
     elif jobs is not None:
@@ -176,6 +184,21 @@ def condition_errors(rel, doc):
                     azure_jobs("stage " + str(stage.get("stage", "?")), stage["jobs"])
     if not seen:
         errors.append(f"{rel}: no jobs or stages the job-condition guard can read")
+    elif count[0] == 0:
+        errors.append(f"{rel}: the template yields zero jobs, so the job-condition guard has nothing to check")
+def gate_include_errors(rel, doc):
+    steps = doc.get("steps") if isinstance(doc, dict) else None
+    if not isinstance(steps, list) or not steps:
+        errors.append(f"{rel}: expected a non-empty top-level steps list")
+        return
+    for step in steps:
+        name = step.get("displayName", "?") if isinstance(step, dict) else "?"
+        if not isinstance(step, dict):
+            errors.append(f"{rel}: step {name} is not a mapping the gate guard can read")
+            continue
+        for key in ("condition", "enabled", "continueOnError", "if"):
+            if key in step:
+                errors.append(f"{rel}: gate step {name} has {key}: {step[key]}; every step in the gates include must always run and fail the job")
 # Gate steps (merge, diff-cover, jscpd, nosonar) must always run and must fail the job: no step-level or job-level
 # if/condition/continueOnError, no inline guard. Allowed conditions elsewhere: `if: hashFiles('uv.lock') != ''` on the
 # optional setup-uv step (not a gate) and the job-level `github.event_name == 'pull_request'` on the PR-only gates.
@@ -196,6 +219,8 @@ for host, (rel, merge) in files.items():
     lines = open(f"{root}/{rel}").read().split("\n")
     try:
         condition_errors(rel, yaml.load(open(f"{root}/{rel}").read(), Loader=UniqueKeyLoader))
+    except MergeKeyError as e:
+        errors.append(f"{rel}: {e}")
     except yaml.YAMLError as e:
         errors.append(f"{rel}: not parseable YAML, so the job-condition guard cannot check it: {e}")
     for i, l in enumerate(lines):
@@ -236,6 +261,12 @@ for i, l in enumerate(open(f"{root}/{gates}").read().split("\n")):
     if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)|^\s*condition:", code):
         errors.append(f"{gates}:{i + 1}: gate-neutralising construct: {l.strip()}")
 gate_step_checks(gates, open(f"{root}/{gates}").read().split("\n"), "nosonar step", "ci-gates.sh nosonar")
+try:
+    gate_include_errors(gates, yaml.load(open(f"{root}/{gates}").read(), Loader=UniqueKeyLoader))
+except MergeKeyError as e:
+    errors.append(f"{gates}: {e}")
+except yaml.YAMLError as e:
+    errors.append(f"{gates}: not parseable YAML, so the gate guard cannot check it: {e}")
 print("\n".join(errors))
 sys.exit(1 if errors else 0)
 PY
@@ -300,6 +331,15 @@ mutate "single-quoted 'if' key on a job (github-py)" github-py/.github/workflows
 mutate "space before the colon in if : false on a job (github-py)" github-py/.github/workflows/ci.yml '    timeout-minutes: 20\n' '    timeout-minutes: 20\n    if : false\n' static
 mutate "job key at column 6 after -   job: with a condition (azure-ts)" azure-ts/azure-pipelines.yml '  - job: coverage\n' '  -   job: zz\n      condition: false\n      steps: []\n  - job: coverage\n' static
 mutate "duplicate if key hiding a forbidden value (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" "  changelog:\n    if: false\n    if: github.event_name == 'pull_request'" static
+mutate "merge key giving a job if: false (github-ts)" github-ts/.github/workflows/ci.yml 'jobs:\n' 'jobs:\n  base: &off\n    if: false\n  merged:\n    <<: *off\n' static
+mutate "merge key in a job mapping (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" "  changelog:\n    <<: {if: false}" static
+mutate "empty jobs mapping (github-py)" github-py/.github/workflows/ci.yml 'jobs:\n  quality:' 'jobs: {}\nx-unused:\n  quality:' static
+mutate "empty jobs list (azure-py)" azure-py/azure-pipelines.yml 'jobs:\n  - job: quality\n' 'jobs: []\nx-unused:\n  - job: quality\n' static
+mutate "empty stages list and no jobs (azure-ts)" azure-ts/azure-pipelines.yml 'jobs:\n' 'stages: []\nx-unused:\n' static
+mutate "condition: false on the secrets step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Secret scan (gitleaks CLI, checksum-verified)' '    condition: false\n    displayName: Secret scan (gitleaks CLI, checksum-verified)' static
+mutate "enabled: false on the dependency step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)' '    enabled: false\n    displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)' static
+mutate "quoted \"condition\" on the secrets step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Secret scan (gitleaks CLI, checksum-verified)' '    "condition": false\n    displayName: Secret scan (gitleaks CLI, checksum-verified)' static
+mutate "continueOnError on the changelog step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: Changelog gate' '    continueOnError: true\n    displayName: Changelog gate' static
 mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test, if: false }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
