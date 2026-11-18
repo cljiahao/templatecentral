@@ -173,6 +173,13 @@ jobs:
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests
         run: bash scripts/test-harness-kit.sh
+      - name: Install PyYAML for the CI template guard
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
+          "$RUNNER_TEMP/ci-templates-venv/bin/pip" install "pyyaml==6.0.3"
+          echo "$RUNNER_TEMP/ci-templates-venv/bin" >> "$GITHUB_PATH"
+      - name: Seeded CI template tests
+        run: bash scripts/test-ci-templates.sh
       - name: Research content guard tests
         run: bash scripts/check-research-content.test.sh
       - name: Fence extractor tests

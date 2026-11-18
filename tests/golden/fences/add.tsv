@@ -65,7 +65,7 @@ ccf4fe1aa8e7f2564edfe2a0f028175c595d9c448ce46fa82190c227afe566fe	skills/add/auth
 4479dd318dca1865d1533449599102961264dd274a579abc657a01bfd31978b8	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	2	typescript
 2f70cc61cf5b6ec2bef5874d122cd8f26502a5bf84e12c739513fa75ded2963d	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	3	typescript
 b0c32fdcd3a33b11432a687a710dd063eb3785fe5122d3fa65882528eb39e372	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	4	typescript
-273abfa99a3c6c97a44bcdd0e671fa579bc47c86036c5ca4a1bd36ae7339047e	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	5	typescript
+9339e891db20d2f7b67d3a8766c04f176628b6f256dc7394b05d874e36ead796	skills/add/auth/nestjs.md	Browser Client (Cookie Mode)	5	typescript
 4a9e72cb7bb2384b10f0380e94f5697c6531b36dcaf77fb812b50a8436402ec1	skills/add/auth/nestjs.md	Dependencies	0	yaml
 c651ad11b1fcb8f4b8bd7cbb67f654b126f5c5955b4ed9cf8fc8ae3b3d7de4e2	skills/add/auth/nestjs.md	Rate Limiting (Required for Production)	0	typescript
 b191dcea0d7ff202a71eeb3cc9892669db37131788bff63d09c5b827bb36b148	skills/add/auth/nestjs.md	Rate Limiting (Required for Production)	1	typescript
@@ -458,7 +458,7 @@ f40903a2ddbcd7fa911b889de8a7c993d802c3b05966ca728774834015434462	skills/add/test
 1e7b200fee34bfad8ce3407d8c2b4b8a74a838f8199fff0b26563fbfcb6092a8	skills/add/test/fastapi.md	Parametrize	0	python
 127c8544c201f7afda65c1016aa81a93bd1032511dd233b743706820b0cbdb3f	skills/add/test/fastapi.md	Test Structure	0	-
 8833a7347db19452a2a9f35319d2be31845288f77dd09d242b42df2b05aead73	skills/add/test/nestjs.md	Controller Test	0	typescript
-4b01ecc6ff920444b739ccf699133f35dee4782adfd70dc4b3a16534df23f55d	skills/add/test/nestjs.md	E2E Tests	0	typescript
+6afb7a406b9834494575754b0aa7d1604c8b0ed9053ba7a61cb31325f3fa8b44	skills/add/test/nestjs.md	E2E Tests	0	typescript
 293a8d4d150c730aabff4e5a8d4d57bc42e8cb6538ad5780f571ae8cc00a4770	skills/add/test/nestjs.md	Service Test with Mocked Repository	0	typescript
 77b85b69951d6fb6b6b5121257b3b95c291686abd963468a2d818b3581c78d8b	skills/add/test/nestjs.md	Test Organization	0	-
 6995f9dbfaa44e50b3722ee34adbb30edcb1f9a919ceb5e57c369943d18bc707	skills/add/test/nextjs.md	2. Test GET Endpoints	0	ts

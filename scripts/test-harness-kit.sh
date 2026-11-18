@@ -656,7 +656,8 @@ check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out"
 mkdir -p "$GT/skills/scaffold/shared/template-ci/github-ts"
 printf 'k: 1  # note\n' > "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
-check "0 yes" "$gate_ec $(ok_if grep -q 'ok (.* fences scanned)$' <<<"$gate_out")" "check-template-comments skips template-ci" "$gate_out"
+check "1 yes" "$gate_ec $(ok_if grep -q 'template-ci/github-ts/ci.yml:1: trailing comment' <<<"$gate_out")" "check-template-comments scans template-ci" "$gate_out"
+rm "$GT/skills/scaffold/shared/template-ci/github-ts/ci.yml"
 printf '%s\n' 'text' '```py' 'a = 1  # note' '```' > "$GT/skills/add/foo.md"
 gate_out=$(bash "$GT/scripts/check-template-comments.sh" 2>&1); gate_ec=$?
 check "1 yes" "$gate_ec $(ok_if grep -q 'skills/add/foo.md:3: trailing comment' <<<"$gate_out")" "check-template-comments maps a guide fence finding to its markdown line" "$gate_out"
@@ -853,6 +854,22 @@ out=$(cd "$FEAT" && TF_BUILD=True PATH="$GLS:$PATH" STUB_EXIT=1 bash "$KIT/ci-ga
 check 1 "$(grep -c '^##vso\[task.logissue type=error\]' <<<"$out")" "ci-gates reports errors in Azure Pipelines format"
 bash "$KIT/ci-gates.sh" nope >/dev/null 2>&1
 check 2 "$?" "ci-gates rejects an unknown gate"
+NSR=$(new_repo nosonar)
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 0 "$?" "ci-gates nosonar passes on clean source"
+mkdir -p "$NSR/src"; printf 'x = 1  # NOSONAR\n' > "$NSR/src/a.py"; git -C "$NSR" add src/a.py
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in Python"
+printf 'const x = 1; // nosonar\n' > "$NSR/src/b.ts"; git -C "$NSR" rm -qf --cached src/a.py; git -C "$NSR" add src/b.ts
+(cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+check 1 "$?" "ci-gates nosonar fails on a lower-case marker in TypeScript"
+for ext in js jsx mjs cjs; do
+  git -C "$NSR" rm -qf --cached src/b.ts 2>/dev/null || true
+  printf 'const x = 1; // NOSONAR\n' > "$NSR/src/c.$ext"; git -C "$NSR" add "src/c.$ext"
+  (cd "$NSR" && bash "$KIT/ci-gates.sh" nosonar >/dev/null 2>&1)
+  check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in .$ext"
+  git -C "$NSR" rm -qf --cached "src/c.$ext"
+done
 for g in changelog readme comments; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"

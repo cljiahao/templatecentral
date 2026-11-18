@@ -1,9 +1,4 @@
-# templateCentral merge gates. Include from the PR pipeline after a full-history checkout:
-#   - checkout: self
-#     fetchDepth: 0
-#   - template: templatecentral-gates.yml   # path is relative to the including file
-# The deps step needs the project's package manager (pnpm or uv) and pipx on PATH: include the template after the pipeline's install steps.
-# Bypass a PR-only gate by queueing the run with variable LABELS=skip-changelog (or skip-readme-check / skip-comment-check).
+# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog, skip-readme-check or skip-comment-check skips a PR-only gate.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity
@@ -11,6 +6,8 @@ steps:
     displayName: Secret scan (gitleaks CLI, checksum-verified)
   - bash: bash .claude/ci-gates.sh deps
     displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
+  - bash: bash .claude/ci-gates.sh nosonar
+    displayName: No NOSONAR suppression markers
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
     env: { LABELS: $(LABELS) }

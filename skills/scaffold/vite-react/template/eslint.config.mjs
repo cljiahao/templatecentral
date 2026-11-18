@@ -41,6 +41,10 @@ export default tseslint.config(
         { ignorePattern: 'eslint-|@ts-|prettier-|c8 |istanbul ' },
       ],
       'sonarjs/no-commented-code': 'error',
+      // SonarQube's default quality gate: cognitive complexity 15 per function.
+      'sonarjs/cognitive-complexity': ['error', 15],
+      // Sonar's inline suppression marker hides findings from the server's quality gate; fix the finding instead.
+      'no-warning-comments': ['error', { terms: ['nosonar'], location: 'anywhere' }],
       // Task tags with context are allowed; keep them visible without failing lint.
       'sonarjs/todo-tag': 'warn',
       'sonarjs/fixme-tag': 'warn',

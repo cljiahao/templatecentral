@@ -41,9 +41,9 @@ export class ListProjectsQueryDto extends createZodDto(listProjectsQuerySchema) 
 
 **2. Controller — validate at the boundary, delegate everything else**
 
-> **File uploads with Fastify**: `FileInterceptor` from `@nestjs/platform-express` is incompatible with the Fastify adapter. Use `@fastify/multipart` (`pnpm add @fastify/multipart`), registered inside `bootstrap()` before `app.listen()` — `register` returns a promise, so await it:
+> **File uploads with Fastify**: `FileInterceptor` from `@nestjs/platform-express` is incompatible with the Fastify adapter. Use `@fastify/multipart` (`pnpm add @fastify/multipart`), registered inside `createApp()` (`src/app.factory.ts`) before `app.init()` — `register` returns a promise, so await it:
 > ```ts
-> // src/main.ts — inside bootstrap(), before app.listen()
+> // src/app.factory.ts — inside createApp(), before app.init()
 > const fastify = app.getHttpAdapter().getInstance();
 > await fastify.register(import('@fastify/multipart'), {
 >   limits: { fileSize: 10 * 1024 * 1024, files: 1 },

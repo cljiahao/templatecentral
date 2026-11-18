@@ -27,11 +27,6 @@
 - Mutable: `@dataclass(slots=True)` — state that changes during processing.
 - Use `__post_init__` for invariants; fail fast with clear `ValueError`.
 
-### Function Design
-
-- Prefer small, pure, single-purpose functions; isolate mutation in `-> None` functions.
-- Dict dispatch over long `if/elif` for key-based branching.
-
 ### Error Handling
 
 - Built-in exceptions with descriptive messages (`ValueError` for values, `TypeError` for types).
@@ -53,9 +48,18 @@
 - Docstrings only on public APIs the signature does not explain: see `comments.md`.
 - Keep Ruff's comment rules in `pyproject.toml` (`comments.md` → Enforcement).
 
-### Static Analysis (`ruff`)
+### Function Design
 
-`pyproject.toml` pins `[tool.ruff.lint] select` (not `extend-select`, which would add to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, and comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`). `S101`/`S105` are off under `test/**`. Not enabled: `PL`, `ANN`, `ARG` (framework callback signatures), `TRY`/`EM`, `DTZ`, `FIX`, `TD001`–`TD004`/`TD006`/`TD007`.
+- Prefer small, pure, single-purpose functions; isolate mutation in `-> None` functions.
+- Dict dispatch over long `if/elif` for key-based branching.
+
+### Quality gate (SonarQube default "Sonar way")
+
+Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, coverage >= 80%, duplication <= 3%; cognitive complexity <= 15 per function. Local and CI mirror it:
+
+- `ruff` `select` in `pyproject.toml` (not `extend-select`, which adds to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`), and an approximation of Sonar's Python rules (Sonar remains the gate): `C901` (max 15; cyclomatic, it approximates Sonar's cognitive complexity and does not match it), `PLR0911`/`PLR0912`/`PLR0913` (max 7 args, Sonar S107)/`PLR0915`, `ARG`, `PLW0602`/`PLW0603`/`PLW2901`, `PLR1714`, `PLR5501`. Fix findings; do not add `noqa` or raise limits. Prefix a deliberately unused argument with `_`. `S101`/`S105` are off under `test/**`.
+- CI runs `jscpd` with the seeded `.jscpd.json` (duplication <= 3% on production source only; Sonar also measures production code, and duplicate tests fall under the test-value rule; the CI step runs `npx --yes jscpd@<pinned>`, which pins jscpd but not its transitive dependencies, because this stack has no Node lockfile) and `python -m pytest -n auto` with pytest-cov (xdist workers combine into `coverage.xml`), then `diff-cover --fail-under=80` on changed lines.
+- Seeded `sonar-project.properties` points the scanner at `src`, `test` and `coverage.xml`, with no coverage exclusions. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: add one after the pytest step, with both as CI secrets.
 
 ### Constants
 

@@ -1126,19 +1126,20 @@ check_no_version_pins() {
     "No version pins in skills"
 
   # The template package.json files carry caret floors, so a dependency written as an exact
-  # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs is the one exact pin by design
-  # (its enabled-rule set changes across minor versions; see the scaffold notes).
+  # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs and jscpd are the exact pins by design
+  # (sonarjs: its enabled-rule set changes across minor versions; jscpd: the CI duplication gate pins
+  # the same version, so a local run and CI measure alike).
   header "Template package.json dependencies use floors, not exact pins"
   local pj pins="" n=0
   while IFS= read -r pj; do
     n=$((n + 1))
     pins+=$(grep -nE '^[[:space:]]+"[^"]+":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$pj" \
-      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs)"' | sed "s#^#$pj:#" || true)
+      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs|jscpd)"' | sed "s#^#$pj:#" || true)
   done < <(template_files | grep '/package\.json$' || true)
   [[ "$n" -gt 0 ]] || pins="no template package.json found — nothing to check"
   report "$pins" \
-    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs is the only exact pin)" \
-    "Template package.json dependencies use floors (eslint-plugin-sonarjs exact by design)"
+    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs and jscpd are the only exact pins)" \
+    "Template package.json dependencies use floors (eslint-plugin-sonarjs and jscpd exact by design)"
 
   # A floor written as prose (≥X.Y outside a fence and outside inline code) restates a rule that
   # .claude/rules/*.md owns, and drifts when the floor moves. Install commands and requirement lines
@@ -1379,6 +1380,55 @@ check_security_seeds_present() {
     "Deps gate and authz seeds present"
 }
 
+check_sonar_scope_alignment() {
+  # What the runner leaves out of coverage must be what Sonar treats as tests (or excludes), or Sonar counts
+  # the file as uncovered production code. Every entry of a TS stack's coverage `exclude` list, brace-expanded,
+  # must appear in sonar.test.inclusions or sonar.exclusions of the shared sonar-project.properties. The Python
+  # properties must keep sources=src, tests=test, matching `pytest --cov=src`.
+  header "Sonar test scope matches the coverage excludes of each stack"
+  local out
+  out=$(python3 - "$SKILLS_DIR/scaffold" <<'PY'
+import re, sys
+root = sys.argv[1]
+errors = []
+def read(rel):
+    try:
+        return open(f"{root}/{rel}").read()
+    except OSError:
+        errors.append(f"{rel}: file not found")
+        return ""
+def expand(g):
+    m = re.search(r"\{([^{}]*)\}", g)
+    if not m:
+        return [g]
+    return [x for alt in m.group(1).split(",") for x in expand(g[:m.start()] + alt + g[m.end():])]
+props = read("shared/template-ts/sonar-project.properties")
+def prop(name):
+    m = re.search(rf"^{re.escape(name)}=(.*)$", props, re.M)
+    return set(m.group(1).split(",")) if m else set()
+allowed = prop("sonar.test.inclusions") | prop("sonar.exclusions")
+for rel in ("vite-react/template/vite.config.ts", "nextjs/template/vitest.config.ts", "nestjs/template/vitest.config.ts"):
+    cfg = read(rel)
+    m = re.search(r"coverage:\s*\{.*?exclude:\s*\[(.*?)\]", cfg, re.S)
+    if not m:
+        errors.append(f"{rel}: no coverage exclude list found")
+        continue
+    for entry in re.findall(r"'([^']+)'", m.group(1)):
+        for g in expand(entry):
+            if g not in allowed:
+                errors.append(f"{rel}: coverage exclude '{entry}' ({g}) is in neither sonar.test.inclusions nor sonar.exclusions")
+pyprops = read("shared/template-py/sonar-project.properties")
+for want in ("sonar.sources=src", "sonar.tests=test"):
+    if not re.search(rf"^{re.escape(want)}$", pyprops, re.M):
+        errors.append(f"shared/template-py/sonar-project.properties: missing {want}")
+print("\n".join(errors))
+PY
+)
+  report "$out" \
+    "Sonar scope drifted from the coverage excludes — add the path to sonar.test.inclusions (or sonar.exclusions), or drop the coverage exclude" \
+    "Sonar test inclusions cover every coverage exclude; Python sources/tests match pytest --cov=src"
+}
+
 check_template_security_defaults() {
   # Security defaults the audit used to verify by hand, now greped in the shipped template trees so a
   # drop fails the lint. Each row is "<file under skills/>|<ERE>|<what it guards>"; a missing file or a
@@ -1390,8 +1440,8 @@ check_template_security_defaults() {
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|referrerPolicy: \{|NestJS helmet referrerPolicy" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|frameguard: .*action: 'deny'|NestJS frameguard deny default" \
     "scaffold/nestjs/template/src/config/setups/security.setup.ts|portal \?\? \"'none'\"|NestJS frame-ancestors 'none' fallback" \
-    "scaffold/nestjs/template/src/main.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
-    "scaffold/nestjs/template/src/main.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
+    "scaffold/nestjs/template/src/app.factory.ts|new FastifyAdapter\(\{|NestJS FastifyAdapter" \
+    "scaffold/nestjs/template/src/app.factory.ts|\.\.\.\(trustProxy \? \{ trustProxy \} : \{\}\)|NestJS TRUST_PROXY reaches FastifyAdapter" \
     "scaffold/nestjs/template/package.json|\"nestjs-zod\"|NestJS nestjs-zod dependency" \
     "scaffold/fastapi/template/src/app.py|^class SecurityHeadersMiddleware|FastAPI SecurityHeadersMiddleware" \
     "scaffold/fastapi/template/src/app.py|add_middleware\(SecurityHeadersMiddleware\)|FastAPI SecurityHeadersMiddleware registered" \
@@ -1793,6 +1843,7 @@ check_no_starlette_startup_events
 check_no_fastapi_orjson_response
 check_security_seeds_present
 check_template_security_defaults
+check_sonar_scope_alignment
 check_harness_version_matches_plugin
 check_agents_marker_not_drifted_to_semver
 echo ""

@@ -1255,7 +1255,7 @@ H_SEC="Template security defaults present"
 sec_empty() { rm -rf "$S/scaffold/nestjs/template" "$S/scaffold/fastapi/template" "$S/scaffold/nextjs/template" "$S/scaffold/vite-react/template"; }
 sec_nest_jwt() { sed -i.bak "s/algorithms: \['HS256'\]/algorithms: ['none']/" "$S/add/auth/nestjs/template/src/modules/auth/jwt.strategy.ts"; }
 sec_nest_referrer() { sed -i.bak 's/referrerPolicy: {/referrerPolicyX: {/' "$S/scaffold/nestjs/template/src/config/setups/security.setup.ts"; }
-sec_nest_trust() { sed -i.bak 's/\.\.\.(trustProxy ? { trustProxy } : {}),//' "$S/scaffold/nestjs/template/src/main.ts"; }
+sec_nest_trust() { sed -i.bak 's/\.\.\.(trustProxy ? { trustProxy } : {}),//' "$S/scaffold/nestjs/template/src/app.factory.ts"; }
 sec_nest_classvalidator() { sed -i.bak 's/"nestjs-zod"/"class-validator": "1.0.0", "nestjs-zod"/' "$S/scaffold/nestjs/template/package.json"; }
 sec_fastapi_mw() { sed -i.bak 's/add_middleware(SecurityHeadersMiddleware)/pass/' "$S/scaffold/fastapi/template/src/app.py"; }
 sec_fastapi_trust() { sed -i.bak 's/if not api_settings.TRUST_PROXY:/if False:/' "$S/scaffold/fastapi/template/src/app.py"; }
@@ -1298,6 +1298,14 @@ floor_in_prose() { printf '\nNeeds zz-lib ≥9.9 for this.\n' >> "$S/add/form/ne
 floor_in_code() { printf '\nInstall `zz-lib ≥9.9` first.\n\n```text\nzz-lib ≥9.9\n```\n' >> "$S/add/form/nextjs.md"; }
 fails prose_floor_fails "Version floors in skill prose" floor_in_prose "zz-lib ≥9.9"
 passes prose_floor_in_code_passes "Version floors in skill prose" floor_in_code
+
+# ── check_sonar_scope_alignment ──────────────────────────────────────────────────────────────
+H_SONAR="Sonar test scope matches the coverage excludes of each stack"
+sonar_drop_spec() { sed -i.bak 's|\*\*/\*\.spec\.ts,||' "$S/scaffold/shared/template-ts/sonar-project.properties"; }
+sonar_py_sources() { sed -i.bak 's|^sonar.sources=src$|sonar.sources=.|' "$S/scaffold/shared/template-py/sonar-project.properties"; }
+fails sonar_scope_spec_inclusion_dropped "$H_SONAR" sonar_drop_spec "coverage exclude"
+fails sonar_scope_py_sources_changed "$H_SONAR" sonar_py_sources "missing sonar.sources=src"
+passes sonar_scope_aligned "$H_SONAR" true
 
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"

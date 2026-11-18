@@ -13,13 +13,15 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    passWithNoTests: true,
+    // CI runners are small: half the cores per process keeps memory flat; sharding adds the parallelism.
+    maxWorkers: process.env.CI ? '50%' : undefined,
     include: ['test/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'cobertura'],
+      reporter: ['text', 'cobertura', 'lcov'],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      exclude: ['**/*.test.ts', '**/*.d.ts', '**/index.ts'],
+      // Production source only: test files are not measured.
+      exclude: ['**/*.{test,spec}.{ts,tsx}', '**/*.d.ts'],
     },
   },
 });

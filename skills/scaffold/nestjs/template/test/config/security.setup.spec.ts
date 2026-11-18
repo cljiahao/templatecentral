@@ -1,26 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { portalFrameAncestor } from '../../src/config/setups/security.setup';
 
-describe('portalFrameAncestor', () => {
-  it('accepts a single https portal origin', () => {
-    expect(portalFrameAncestor('https://appcentral-uat.cpfnet.gov.sg')).toBe(
-      'https://appcentral-uat.cpfnet.gov.sg'
-    );
-  });
+const portal = 'https://appcentral-uat.cpfnet.gov.sg';
 
-  it.each([
-    undefined,
-    '',
-    '*',
-    'http://appcentral.example.gov.sg',
-    'https://*.example.gov.sg',
-    'https://example.gov.sg:8443',
-    'https://example.gov.sg/path',
-    'https://Example.gov.sg',
-    'https://localhost',
-    "https://example.gov.sg; script-src 'unsafe-inline'",
-    'https://example.gov.sg\nX-Injected: 1',
-  ])('falls back to deny for %s', (origin) => {
-    expect(portalFrameAncestor(origin)).toBeNull();
-  });
+it.each([
+  [portal, portal],
+  [undefined, null],
+  ['', null],
+  ['*', null],
+  ['http://appcentral.example.gov.sg', null],
+  ['https://*.example.gov.sg', null],
+  ['https://example.gov.sg:8443', null],
+  ['https://example.gov.sg/path', null],
+  ['https://Example.gov.sg', null],
+  ['https://localhost', null],
+  ["https://example.gov.sg; script-src 'unsafe-inline'", null],
+  ['https://example.gov.sg\nX-Injected: 1', null],
+])('maps %j to %j (only a single https origin is allowed)', (origin, expected) => {
+  expect(portalFrameAncestor(origin)).toBe(expected);
 });

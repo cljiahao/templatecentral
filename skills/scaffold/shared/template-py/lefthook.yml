@@ -92,4 +92,4 @@ pre-push:
     harness-integrity:
       run: bash .claude/verify-harness.sh
     verify:
-      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ && python -m pyright src/ && python -m pytest test/ -q'
+      run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; ruff check src/ test/ && python -m pyright src/ && python -m pytest test/ -q'
