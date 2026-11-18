@@ -11,10 +11,6 @@
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Create the Page Component
 
 Pages live in `src/pages/` and should be thin — compose from features:
@@ -165,7 +161,3 @@ Confirm the build succeeds with no type errors and all tests pass.
 - Always validate `useParams` / `useSearchParams` values with Zod before using them
 - Use `PAGE_ROUTES` constants for route paths, not hardcoded strings
 - Keep pages flat in `src/pages/`; nesting is in the router
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

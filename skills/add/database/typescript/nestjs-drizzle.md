@@ -287,7 +287,3 @@ export class AuthService {
 `DrizzleService` comes from the `@Global()` `DatabaseModule` — no need to list it in `AuthModule.providers`; confirm `DatabaseModule` is in `AppModule`.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

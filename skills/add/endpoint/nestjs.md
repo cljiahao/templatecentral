@@ -20,10 +20,6 @@ Replace `<name>` throughout using these rules:
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Create Module Directory
 
 Create `src/modules/<name>/`; Steps 2–7 fill it.
@@ -301,7 +297,3 @@ After creating all files:
 
 - **Tests ride with the change** — new or changed behaviour gets a Vitest test in `test/` in the same change, per the test-value rule (`docs/CONSTITUTION.md` §4).
 - Register the module in `app.module.ts` and export it from `modules/index.ts`
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

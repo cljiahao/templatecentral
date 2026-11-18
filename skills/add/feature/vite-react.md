@@ -10,10 +10,6 @@
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Create the Feature Directory Structure
 
 ```
@@ -205,7 +201,3 @@ It installs into `src/components/ui/`; never hand-create primitives there.
 Rules:
 - Prefer composition with children over boolean flag props for variants
 - Add each new file in a shared folder to its barrel `index.ts`
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

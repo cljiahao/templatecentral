@@ -3,10 +3,6 @@
      prereq: Stack = vite-react. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Vite + React — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Error Boundary (Already Wired by the Scaffold — No Changes Required)**
 
 The scaffold already ships `src/components/layout/error-boundary.tsx`, which imports `logError` from `@/lib/errors` and calls `logError('react.error-boundary', error)` in `componentDidCatch(error: Error)`. Do not rewrite it, and do not add a second `logError` import.
@@ -103,7 +99,3 @@ pnpm build
 - `templatecentral:standards` (validation-patterns) — Zod/Pydantic schemas for validation errors
 - Stack-specific `code-standards` — Security and error handling guidance
 - `templatecentral:add (endpoint)` — Use error handling in new routes
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

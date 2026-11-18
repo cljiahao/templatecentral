@@ -3,10 +3,6 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## Next.js — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Global Error Handler (Already Present)**
 
 The template includes `src/lib/errors/handle-api-error.ts`. Enhance it to include field-level details:
@@ -208,7 +204,3 @@ pnpm build
 > **Deps not in scaffold**: `pnpm add -D @testing-library/react @testing-library/jest-dom jsdom`. The `@vitest-environment jsdom` docblock keeps `node` as the default for API tests.
 
 Copied verbatim from `<skill-dir>/error-handling/nextjs/template/test/error-boundary.test.tsx` by the copy step; do not re-type it.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

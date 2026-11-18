@@ -127,5 +127,3 @@ import { User, UserSchema } from './schemas/user.schema';
 })
 export class AuthModule {}
 ```
-
-Then run the **After Writing Code** steps of `nestjs-mongoose.md` (build, then review).

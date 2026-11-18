@@ -3,10 +3,6 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### FastAPI (Pydantic + SQLAlchemy)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 > **Prerequisites**: FastAPI scaffold + `templatecentral:add (database)` with SQLAlchemy (sync `Session` from `src/database/session.py`). For `AsyncSession`, make the service and handler `async def` and `await` each `session.execute(...)`.
 
 Run `TC_PART=leaf TC_LEAF=add/pagination/fastapi bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/fastapi/template/` (listed in `<skill-dir>/pagination/fastapi/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
@@ -121,7 +117,3 @@ curl 'http://localhost:8000/projects?page=0&limit=10'
 curl 'http://localhost:8000/projects?sort=asc_bogus'
 python -m pytest test/ -v
 ```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

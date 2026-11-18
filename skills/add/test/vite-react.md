@@ -7,10 +7,6 @@ Apply the test-value rule (`docs/CONSTITUTION.md` §4).
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **Context check:** Confirm `src/features/` or `src/components/` contains at least
 one `.tsx` file. If not, stop and tell the user: "No components or features found. Add some
 using `templatecentral:add` (feature) or `templatecentral:add` (component)
@@ -246,7 +242,3 @@ Confirm the build succeeds and all tests pass.
 - Test what the user sees or the caller gets; test your use of third-party code, not its behavior
 - `it.each` for sibling inputs; no snapshot or markup tests of static presentation
 - Tests do not share mutable state
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

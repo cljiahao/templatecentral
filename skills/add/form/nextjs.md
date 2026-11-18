@@ -25,10 +25,6 @@ Validated form with React Hook Form, Zod and the existing `CustomFormField` widg
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Define the Zod Schema
 
 `sonner` and one `<Toaster />` are already mounted in `providers.tsx` — call `toast.*` directly (otherwise `npx shadcn@latest add sonner` and mount exactly one `<Toaster />`).
@@ -166,13 +162,3 @@ export default function ContactPage() {
 - **Client-side validation is not a security boundary** — any client can skip `zodResolver`. The server action / route handler re-parses the same schema (`contactFormSchema.safeParse(values)`) and reject on failure before any side effect.
 - Add `'use client'` directive — forms are inherently interactive.
 - Complex validation (files, passwords, OWASP/CWE): `templatecentral:standards` (validation-patterns).
-
-## Validate
-
-```bash
-pnpm build
-```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

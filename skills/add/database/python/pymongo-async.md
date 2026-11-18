@@ -238,7 +238,3 @@ Confirm all tests pass and the integration tests ran (not skipped).
 - Every list query is bounded (`find_many` clamps to `MAX_PAGE_SIZE`); paginate further with `templatecentral:add` (pagination).
 - Create indexes in the lifespan (idempotent); uniqueness lives in the index, not in a find-then-insert check.
 - Never return domain models directly — always a `response_model` schema without `hashed_password` (`model_validate(..., from_attributes=True)` copies only its declared fields).
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

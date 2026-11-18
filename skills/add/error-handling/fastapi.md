@@ -3,10 +3,6 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 > **Migration note — response format change**
 > This skill replaces FastAPI's default error format (`{"detail": "..."}` / `{"detail": [...]}`)
 > with a structured envelope. Before applying, update existing tests:
@@ -198,7 +194,3 @@ curl -X POST http://localhost:8000/projects \
   -d '{"name": ""}'
 python -m pytest test/ -v
 ```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

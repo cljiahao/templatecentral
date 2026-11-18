@@ -23,10 +23,6 @@ Add to `requirements.txt`:
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Create Integration Directories
 
 Create `src/integrations/` and `src/api/dependencies/` (not in the template):
@@ -330,7 +326,3 @@ python -m pytest test/ -v
 ruff check src/ test/
 python -m pyright src/
 ```
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate the server starts and tests pass), then `cat "<skill-dir>/../review/SKILL.md"`.

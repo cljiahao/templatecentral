@@ -3,10 +3,6 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### NestJS (TypeScript + Zod; Drizzle or Kysely)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 Run `TC_PART=leaf TC_LEAF=add/pagination/nestjs bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"` now. It copies every file in `<skill-dir>/pagination/nestjs/template/` (listed in `<skill-dir>/pagination/nestjs/template.manifest`) into the project, and writes nothing, ending with a `STOP:` line, when a path is in the way. A later step that names one of those files only explains it.
 
 **1. Pagination Query DTO** (shared — every paginated module reuses it)
@@ -267,7 +263,3 @@ pnpm start:dev
 curl 'http://localhost:3000/projects?page=1&limit=10&sort=asc_name'   # 200
 curl 'http://localhost:3000/projects?page=-1'                         # 400 VALIDATION_ERROR
 ```
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

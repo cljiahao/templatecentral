@@ -360,7 +360,3 @@ Scope `get_user` to the caller's own id, or gate it on an admin role, before exp
 - Always register document models in `DOCUMENT_MODELS` and call `init_beanie()` in the lifespan event.
 - Beanie uses Pydantic v2 natively — leverage field validators and computed fields.
 - Never return raw Beanie documents — always map to a Pydantic response schema.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

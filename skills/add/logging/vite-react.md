@@ -16,10 +16,6 @@
 
 This adds `logEvent` beside `logError`, a breadcrumb buffer, and batched delivery to a backend `/logs` endpoint (console-JSON in dev).
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: vite-react@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 > **Step order matters.** `error-log-handler.ts` imports `@/lib/logging/breadcrumbs`, so Step 1 must precede Step 2 or `pnpm build` fails.
 
 ### 1. Create `src/lib/logging/breadcrumbs.ts`
@@ -174,7 +170,3 @@ Manually verify in dev mode (`pnpm dev`):
 1. Trigger an error (e.g. navigate to a non-existent route) → expect a console.error JSON line with `breadcrumbs`
 2. Call `logEvent('test.event')` from the browser console → expect a `console.info` JSON line
 3. Check the batch timer: wait 5 s after a log event → expect `[log-batcher]` console output in dev
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

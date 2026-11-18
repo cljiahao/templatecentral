@@ -7,10 +7,6 @@
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **Context check:** Confirm `src/api/routers/` contains at least one `.py` file. If not, stop and tell the user: "No routers found. Run
 `templatecentral:add` (endpoint) first, then return here."
 
@@ -153,7 +149,3 @@ python -m pytest test/test_api/           # API tests only
 - Prefer pytest's `monkeypatch` over `unittest.mock.patch`
 - Use factories for what you own; mock only network, filesystem and time
 - Tests pass in any order
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

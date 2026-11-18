@@ -12,10 +12,6 @@
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Determine the Route Location
 
 | Route type | Location |
@@ -145,7 +141,3 @@ Build passes; for a data-fetching page, the loading state renders in the browser
 - Use route groups `(name)/` for shared layouts without URL impact
 - Keep `page.tsx` components server components, without `'use client'`. Note: `error.tsx` requires `'use client'` (Next.js constraint)
 - Keep pages in the `(public)/` or `dashboard/` route groups
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

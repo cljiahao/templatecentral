@@ -17,10 +17,6 @@ Environment → factories.ts → clients/ → services/ → schemas/
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Create Zod Schemas
 
 ```ts
@@ -140,7 +136,3 @@ Build passes; the integration works end-to-end.
 - Do not import integrations into client components or feature `api/` services; consume them server-side; `import 'server-only'` in `factories.ts` enforces this
 - For wiring this integration to a frontend SPA: use `templatecentral:standards` (full-stack-pairing)
 - For complex Zod response validation patterns: use `templatecentral:standards` (validation-patterns)
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

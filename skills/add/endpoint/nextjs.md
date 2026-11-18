@@ -11,10 +11,6 @@
 
 ## Steps
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 ### 1. Create the Route File
 
 API routes live in `src/app/api/`:
@@ -182,7 +178,3 @@ Build and tests pass; the route answers correctly via `curl` or the browser.
 - Zod-parse `request.json()` and return 400 on failure; do not use it unvalidated
 - Do not expose internal error details
 - Add every new API route to `src/lib/constants/routes.ts`
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

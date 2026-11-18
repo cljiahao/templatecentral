@@ -358,7 +358,3 @@ def get_me(
 - The `get_db` dependency ensures sessions are properly closed.
 - For async SQLAlchemy, use `create_async_engine` + `AsyncSession` from `sqlalchemy.ext.asyncio`.
 - **Default to password auth** — IAM only when the user requires it.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

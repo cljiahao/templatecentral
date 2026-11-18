@@ -3,10 +3,6 @@
      prereq: Stack = nextjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ### Next.js (Drizzle + Zod)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nextjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Reusable Pagination Schema** (canonical: `validation-patterns/patterns.md`; reuse an existing `src/lib/validation/schemas.ts`)
 
 ```ts
@@ -272,7 +268,3 @@ pnpm build
 - `templatecentral:standards` (validation-patterns) — Pagination query params validated with Zod
 - `templatecentral:add (endpoint)` — Add pagination to new list endpoints
 - Stack `code-standards` — index sort fields
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

@@ -3,10 +3,6 @@
      prereq: Stack = fastapi. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## FastAPI — Structured Logging (structlog)
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: fastapi@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **What already exists in the template:**
 - `structlog` in the installed dependencies (`requirements.txt`)
 - `src/core/logging.py` — structlog configured for stdlib interop: JSON in prod/uat, colored console in dev, daily-rotating JSON files in dev, plus a key-based redaction processor (`password`, `token`, `authorization`, `cookie`, …)
@@ -275,7 +271,3 @@ grep -i "password\|secret\|token\|authorization\|cookie" <log-output>
 ## Production Requirement
 
 Ship logs to a separate system with a defined retention period, protected from alteration — production logs must not live only on the app host.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

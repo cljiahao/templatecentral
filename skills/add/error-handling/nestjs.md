@@ -3,10 +3,6 @@
      prereq: Stack = nestjs. Do not invoke this file directly — it is loaded at runtime by the templatecentral:add skill. -->
 ## NestJS — Error Handling
 
-### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 **1. Enhanced HTTP Exception Filter**
 
 This replaces the scaffold's `HttpExceptionFilter`: the body changes from `{ statusCode, message }` to `{ error, details? }`. Update clients, tests and Swagger consumers of the old shape — it is a breaking change.
@@ -120,7 +116,3 @@ curl -s -X POST localhost:3000/examples -H 'content-type: application/json' -d '
 ```
 
 Any test asserting the old `{ statusCode, message }` body must be updated in the same change.
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.

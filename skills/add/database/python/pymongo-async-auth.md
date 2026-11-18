@@ -118,5 +118,3 @@ router = APIRouter(prefix="/users", dependencies=[Depends(get_current_user)])
 That still lets any user read or rename any other; scope `get_user`/`update_user` to the caller's own id, or gate them on an admin role, before exposing them.
 
 Update the M8 integration tests to match: give the `api` fixture's `AsyncClient` a bearer header (`headers={"Authorization": f"Bearer {create_access_token('test-user')}"}`, imported from `core.security`), and point `test_create_user_hides_password_hash` at `POST /auth/register` (expect `200`, then `409`).
-
-Then run the **After Writing Code** steps of `pymongo-async.md` (build, then review).

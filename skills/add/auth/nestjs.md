@@ -27,10 +27,6 @@ pnpm add -D @types/passport-jwt
 
 ### Steps
 
-#### Step 0 — Verify context
-
-Need `<!-- templateCentral: nestjs@` on `AGENTS.md` line 1; if absent, run `templatecentral:migrate`, and if still absent, stop without writing files.
-
 #### 1. Create Auth Module Directory
 
 Run `TC_PART=leaf TC_LEAF=add/auth/nestjs TC_TREE=template bash "<skill-dir>/../scaffold/shared/tc-copy.sh" "<target>"`. It copies `<skill-dir>/auth/nestjs/template/` into the project per `<skill-dir>/auth/nestjs/template.manifest`, and writes nothing, ending with a `STOP:` line, when a path is in the way. It creates `src/modules/auth/` (flat — no subdirectories, matching the template's module structure) with the files of Steps 2 and 4–9, and the two test files of Step 13.
@@ -328,9 +324,3 @@ Then tighten only the auth endpoints: in `auth.controller.ts`, import `{ Throttl
 ```bash
 pnpm check && pnpm build && pnpm test && pnpm test:e2e
 ```
-
-### After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
-
----

@@ -207,7 +207,3 @@ Confirm the build succeeds with no type errors.
 - **Kysely**: Write manual `up`/`down` migration files in `src/integrations/database/migrations/`, named `NNN_<description>.ts` with the next unused number — Kysely runs them in name order and fails on a file that sorts before an executed one. Use `kysely-codegen` to regenerate types after schema changes. For IAM auth, install `@aws-sdk/rds-signer` and use the IAM variant pool config; query code is unchanged.
 
 ---
-
-## After Writing Code
-
-Then `cat "<skill-dir>/../build/SKILL.md"` (validate compilation), then `cat "<skill-dir>/../review/SKILL.md"`.
