@@ -59,7 +59,19 @@ Target: Sonar way on new code: 0 new issues, 100% security hotspots reviewed, co
 
 - `ruff` `select` in `pyproject.toml` (not `extend-select`, which adds to ruff's large default set): `E4`/`E7`/`E9`/`F`, `I`, `B`, `S`, `FAST`, `SIM`/`C4`/`RET`, `PT`, `PIE`, `UP`, comment hygiene (`ERA`, `PGH003`, `PGH004`, `RUF100`, `TD005`), and an approximation of Sonar's Python rules (Sonar remains the gate): `C901` (max 15; cyclomatic, it approximates Sonar's cognitive complexity and does not match it), `PLR0911`/`PLR0912`/`PLR0913` (max 7 args, Sonar S107)/`PLR0915`, `ARG`, `PLW0602`/`PLW0603`/`PLW2901`, `PLR1714`, `PLR5501`. Fix findings; do not add `noqa` or raise limits. Prefix a deliberately unused argument with `_`. `S101`/`S105` are off under `test/**`.
 - CI runs `jscpd` with the seeded `.jscpd.json` (duplication <= 3% on production source only; Sonar also measures production code, and duplicate tests fall under the test-value rule; the CI step runs `npx --yes jscpd@<pinned>`, which pins jscpd but not its transitive dependencies, because this stack has no Node lockfile) and `python -m pytest` serially with pytest-cov (writes `coverage.xml`; xdist measured slower at this suite size), then `diff-cover --fail-under=80` on changed lines.
-- Seeded `sonar-project.properties` points the scanner at `src`, `test` and `coverage.xml`, with no coverage exclusions. Set `sonar.projectKey` in it. The scaffold ships no scanner step because it needs a server URL and token: add one after the pytest step, with both as CI secrets.
+- There are no coverage exclusions: every changed line under `src` counts toward the 80% diff-coverage gate.
+
+### Sonar way profile notes
+
+Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.
+
+- S1774 bans every ternary and is not in the default profile; remove it on the server. Nested ternaries (S3358) are default and covered locally.
+- S6480 (functions or `.bind()` in JSX props) was removed from the default profile.
+- S7728 (`for…of` over `.forEach`) is being removed from Sonar way.
+- The default profile changes with the server version, and findings from newly added rules are backdated onto existing code.
+- Security hotspots need manual review on the server; no local check closes them.
+- The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
+- Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
 
 ### Constants
 

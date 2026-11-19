@@ -45,6 +45,18 @@ The seeded hooks separately protect the common branch names `main`/`uat`/`develo
 
 The route table for this deployment (for example develop/uat, develop/staging/live, or trunk) belongs in `AGENTS.md` under `## Git Workflow`, below the marker comment. The fetch-first step is universal; the route clause is not.
 
+## Sonar way profile notes
+
+Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.
+
+- S1774 bans every ternary and is not in the default profile; remove it on the server. Nested ternaries (S3358) are default and covered locally.
+- S6480 (functions or `.bind()` in JSX props) was removed from the default profile.
+- S7728 (`for…of` over `.forEach`) is being removed from Sonar way.
+- The default profile changes with the server version, and findings from newly added rules are backdated onto existing code.
+- Security hotspots need manual review on the server; no local check closes them.
+- The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
+- Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
+
 ## Skill capture
 
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from the skill usage log in the `.claude` folder.
