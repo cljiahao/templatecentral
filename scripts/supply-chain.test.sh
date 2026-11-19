@@ -635,12 +635,16 @@ has "THR=none" "$SPY" "dockerfile unsets HADOLINT_FAILURE_THRESHOLD"
 
 # CI=false is not CI.
 df df-cifalse "$GOODDF"
-OUT=$(cd "$D" && env CI=false TF_BUILD= GITHUB_ACTIONS= PATH="/usr/bin:/bin" /bin/bash "$SC/check-dockerfile.sh" 2>&1)
+OUT=$(cd "$D" && env -u TF_BUILD -u GITHUB_ACTIONS CI=false PATH="/usr/bin:/bin" /bin/bash "$SC/check-dockerfile.sh" 2>&1)
 check 0 "$?" "dockerfile treats CI=false as a local run ($OUT)"
-OUT=$(cd "$D" && env CI=false PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+OUT=$(cd "$D" && env -u TF_BUILD -u GITHUB_ACTIONS CI=false PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
 check 0 "$?" "secret scanner treats CI=false as a local run ($OUT)"
-OUT=$(cd "$D" && env CI=true PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+OUT=$(cd "$D" && env -u TF_BUILD -u GITHUB_ACTIONS CI=true PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
 check 1 "$?" "secret scanner fails in CI=true"
+OUT=$(cd "$D" && env -u CI -u TF_BUILD GITHUB_ACTIONS=true PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+check 1 "$?" "secret scanner fails on GitHub Actions without gitleaks"
+OUT=$(cd "$D" && env -u CI -u GITHUB_ACTIONS TF_BUILD=True PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+check 1 "$?" "secret scanner fails on Azure without gitleaks"
 
 # hadolint absent: a local run warns and passes, a CI run fails.
 df df-nohl "$GOODDF"
