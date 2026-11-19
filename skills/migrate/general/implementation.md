@@ -115,14 +115,14 @@ User B → print "No changes made." Exit.
 ```
 ℹ️ This project was scaffolded with templateCentral <version>.
 
-The upgrade seeds the whole current harness, after a baseline run and ending with a comparison:
-- .claude/settings.json + .claude/hooks/        — the enforcement layer (exec-form hooks)
-- lefthook.yml, .gitleaks.toml, CI quality gates
-- .claude/harness.json + .claude/.harness-base/ — integrity manifest and merge base
-- AGENTS.md tail, docs/CONSTITUTION.md, root README and boundary docs
+v4.0 adds an AI harness layer to all scaffolds:
+- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
+- AGENTS.md              — ## AI Harness section with post-harness seams
 
 Upgrade? (A) Yes  (B) Skip
 ```
+Before showing that message, replace its list (the two lines under "v4.0 adds an AI harness layer") with the current harness, because the upgrade seeds all of it, after a baseline run and ending with a comparison: `.claude/settings.json` and `.claude/hooks/` (exec-form enforcement layer); `lefthook.yml`, `.gitleaks.toml` and the CI quality gates; `.claude/harness.json` and `.claude/.harness-base/` (integrity manifest and merge base); the AGENTS.md tail, `docs/CONSTITUTION.md`, the root README and boundary docs.
+
 User A → proceed to Phase 4.
 User B → print "No changes made." Exit.
 
