@@ -79,5 +79,7 @@ pre-push:
       run: bash .claude/verify-harness.sh
     docs-check:
       run: bash scripts/check-docs.sh
+    test-budget:
+      run: bash scripts/test-budget.sh
     verify:
       run: pnpm run check && pnpm test

@@ -164,14 +164,14 @@ done
 cp "$TPL/template-ts/.claude/hooks/user-prompt-guard.cjs" "$KIT/user-prompt-guard.cjs" 2>/dev/null
 cp "$TPL/template-py/.claude/hooks/user-prompt-guard.py" "$KIT/user-prompt-guard.py" 2>/dev/null
 cp "$TPL/template/.claude/hooks/session-context.sh" "$TPL/template/.claude/hooks/skill-usage-log.sh" \
-  "$TPL/template/.claude/verify-harness.sh" "$TPL/template/.claude/ci-gates.sh" "$KIT/" 2>/dev/null
+  "$TPL/template/.claude/verify-harness.sh" "$TPL/template/.claude/ci-gates.sh" "$TPL/template/.claude/gates.txt" "$KIT/" 2>/dev/null
 cp "$TPL/template/.lefthook/commit-msg.sh" "$KIT/commit-msg.sh" 2>/dev/null
 
 EXPECTED="protect-files.ts.sh protect-files.py.sh block-no-verify.ts.sh block-no-verify.py.sh
 user-prompt-guard.cjs user-prompt-guard.py post-edit-typecheck.ts.sh post-edit-typecheck.py.sh
 post-edit-comment-check.ts.sh post-edit-comment-check.py.sh stop-checks.ts.sh stop-checks.py.sh
 subagent-stop.ts.sh subagent-stop.py.sh session-context.sh skill-usage-log.sh commit-msg.sh
-verify-harness.sh ci-gates.sh"
+verify-harness.sh ci-gates.sh gates.txt"
 missing=""
 for f in $EXPECTED; do [[ -s "$KIT/$f" ]] || missing+=" $f"; done
 if [[ -n "$missing" ]]; then
@@ -238,7 +238,7 @@ json_has() {
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
 # strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } { print }' "$1"; }
+strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -246,14 +246,18 @@ drift_ok() {
   total=$(wc -l < "$1"); kept=$(printf '%s\n' "$a" | wc -l)
   [ -n "$a" ] && [ "$a" = "$b" ] && [ $((kept * 10)) -ge $((total * 9)) ]
 }
-# Only block-no-verify.sh is meant to match across stacks. The others differ by design: protect-files.sh and
-# subagent-stop.sh (stack tooling in the logic), post-edit-comment-check.sh (TS/JSX scanner), stop-checks.sh and
-# post-edit-typecheck.sh (different toolchains).
+# block-no-verify.sh and protect-files.sh must match across stacks apart from their JSON-extraction statements. The
+# others differ by design: subagent-stop.sh (stack tooling in the logic), post-edit-comment-check.sh (TS/JSX scanner),
+# stop-checks.sh and post-edit-typecheck.sh (different toolchains).
 check yes "$(ok_if drift_ok "$KIT/block-no-verify.ts.sh" "$KIT/block-no-verify.py.sh")" "block-no-verify.sh twins differ only in the JSON extraction statement"
+check yes "$(ok_if drift_ok "$KIT/protect-files.ts.sh" "$KIT/protect-files.py.sh")" "protect-files.sh twins differ only in the JSON extraction statements"
 for side in ts py; do
   cp "$KIT/block-no-verify.ts.sh" "$T/nv.ts.sh"; cp "$KIT/block-no-verify.py.sh" "$T/nv.py.sh"
   awk '{ sub(/^protected=.main\|uat\|develop.$/, "protected='"'"'main|uat'"'"'"); print }' "$T/nv.$side.sh" > "$T/nv.mut"; mv "$T/nv.mut" "$T/nv.$side.sh"
   check no "$(ok_if drift_ok "$T/nv.ts.sh" "$T/nv.py.sh")" "block-no-verify.sh drift check fails when only the $side twin changes"
+  cp "$KIT/protect-files.ts.sh" "$T/pf.ts.sh"; cp "$KIT/protect-files.py.sh" "$T/pf.py.sh"
+  awk '/scripts\/gate-ratchet\.sh/ { sub(/\|scripts\/gate-ratchet\.sh\|\*\/scripts\/gate-ratchet\.sh/, "") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
+  check no "$(ok_if drift_ok "$T/pf.ts.sh" "$T/pf.py.sh")" "protect-files.sh drift check fails when only the $side twin changes"
 done
 
 # ── protect-files.sh ──────────────────────────────────────────────────────────
@@ -1531,6 +1535,7 @@ done
 V=$(mktemp -d "$T/vh.XXXX")
 mkdir -p "$V/.claude/hooks"
 echo x > "$V/.claude/hooks/a.sh"
+cp "$KIT/gates.txt" "$V/.claude/gates.txt"
 sha() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 
 # expect_verify <want-exit> <harness.json> <description> [PATH]
@@ -1567,6 +1572,45 @@ for gp in .claude/ci-gates.sh azure-pipelines/templatecentral-gates.yml; do
   echo y >> "$V/$gp"
   expect_verify 1 "$CG" "flags a modified $gp"
 done
+
+# Gate manifest: lefthook and each CI file must run every gate .claude/gates.txt lists.
+GV=$(mktemp -d "$T/gv.XXXX")
+mkdir -p "$GV/.claude" "$GV/.github/workflows" "$GV/azure-pipelines"
+cp "$KIT/gates.txt" "$GV/.claude/gates.txt"
+printf '%s' "$GOOD" > "$GV/.claude/harness.json"
+mkdir -p "$GV/.claude/hooks"; cp "$V/.claude/hooks/a.sh" "$GV/.claude/hooks/a.sh"
+printf '%s' "{\"seeded_files\":{\"a\":{\"path\":\".claude/hooks/a.sh\",\"origin_hash\":\"$(sha "$GV/.claude/hooks/a.sh")\"}}}" > "$GV/.claude/harness.json"
+gate_lines=$(grep -vE '^[[:space:]]*(#|$)' "$GV/.claude/gates.txt")
+: > "$GV/lefthook.yml"; : > "$GV/.github/workflows/ci.yml"; : > "$GV/azure-pipelines/templatecentral-gates.yml"
+while IFS='|' read -r gid lh ci; do
+  if [[ "$lh" != "-" ]]; then echo "run: $lh" >> "$GV/lefthook.yml"; fi
+  if [[ "$ci" != "-" ]]; then echo "run: $ci" >> "$GV/.github/workflows/ci.yml"; echo "- bash: $ci" >> "$GV/azure-pipelines/templatecentral-gates.yml"; fi
+done <<< "$gate_lines"
+gate_verify() { (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
+out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
+for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml; do
+  while IFS='|' read -r gid lh ci; do
+    want=$ci; if [[ "$f" == lefthook.yml ]]; then want=$lh; fi
+    if [[ "$want" == "-" ]]; then continue; fi
+    cp "$GV/$f" "$GV/$f.bak"
+    grep -vF -- "$want" "$GV/$f.bak" > "$GV/$f" || true
+    out=$(gate_verify); rc=$?
+    check 1 "$rc" "verify-harness fails when $f drops gate $gid"
+    check 1 "$(grep -c "GATE MISSING: $gid " <<<"$out")" "verify-harness names gate $gid missing from $f"
+    mv "$GV/$f.bak" "$GV/$f"
+  done <<< "$gate_lines"
+done
+printf 'extra|run-extra|run-extra\n' >> "$GV/.claude/gates.txt"
+out=$(gate_verify); check 1 "$?" "verify-harness fails when the manifest lists a gate no runner has"
+rm "$GV/.claude/gates.txt"
+out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing"
+cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
+out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
+bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
+check "harness docs testbudget nosonar secrets deps changelog comments ratchet" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
+bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
+check 1 "$?" "ci-gates refuses a gate the manifest does not list"
 
 # ── commit-msg.sh ─────────────────────────────────────────────────────────────
 
@@ -1644,11 +1688,11 @@ for ext in js jsx mjs cjs; do
   check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in .$ext"
   git -C "$NSR" rm -qf --cached "src/c.$ext"
 done
-for g in changelog comments; do
+for g in changelog comments ratchet; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"
 done
-for g in changelog comments; do
+for g in changelog comments ratchet; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" no-such-branch) >/dev/null 2>&1
   check 1 "$?" "ci-gates $g fails closed when the base ref is missing"
 done

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -14,11 +14,35 @@ bypassed() {
   case " ${LABELS:-} " in *" $1 "*) echo "$1 label present — OK"; return 0 ;; esac
   return 1
 }
+# A gate runs only when .claude/gates.txt lists it; `list` prints the listed gates.
+gate_listed() {
+  local manifest line
+  manifest="$(dirname "$0")/gates.txt"
+  [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    if [ "${line%%|*}" = "$1" ]; then return 0; fi
+  done < "$manifest"
+  return 1
+}
 pr_only() {
   [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
   git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
 }
 
+case "$gate" in
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet)
+    gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
+    ;;
+  list)
+    manifest="$(dirname "$0")/gates.txt"
+    [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
+    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | cut -d'|' -f1)
+    [ -n "$listed" ] || fail "$manifest lists no gate"
+    printf '%s\n' "$listed"
+    exit 0
+    ;;
+esac
 case "$gate" in
   secrets)
     # Bump version and SHA256 together, from the release's gitleaks_<version>_checksums.txt
@@ -72,9 +96,37 @@ case "$gate" in
       fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
     fi
     ;;
+  ratchet)
+    pr_only
+    # A PR may not weaken gate config versus its merge base; the merge-base copy of the checker runs, so a PR cannot rewrite the script that judges it.
+    runner=scripts/gate-ratchet.sh
+    mbase=$(git merge-base "$base" HEAD) || fail "no merge base with $base — check out with full history (fetch-depth 0)"
+    runner_tmp=$(mktemp "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gate-ratchet.XXXXXX") || fail "cannot create a temporary file"
+    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then runner=$runner_tmp; else [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"; fi
+    findings=$(GATE_RATCHET_REEXEC=1 bash "$runner" "$base" 2>&1)
+    rc=$?
+    rm -f "$runner_tmp"
+    printf '%s\n' "$findings"
+    if [ "$rc" -ne 0 ]; then
+      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget)[.]sh)$'
+      if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
+        fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
+      fi
+      if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then
+        fail "the allow-gate-change label cannot waive an unreadable config or a checker failure (output above); fix the cause."
+      fi
+      if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
+      fail "a gate is weaker than at the base branch, or its config is unreadable (output above). Restore it, or have a maintainer apply the 'allow-gate-change' label after review."
+    fi
+    ;;
+  testbudget)
+    # ADR-0001: test code may not outgrow source code; the limit lives in scripts/test-budget.sh.
+    [ -f scripts/test-budget.sh ] || fail "scripts/test-budget.sh is missing"
+    bash scripts/test-budget.sh || fail "test budget exceeded or unreadable (output above). Consolidate duplicate tests with the test-consolidate skill."
+    ;;
   nosonar)
     # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
-    hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude') && rc=0 || rc=$?
+    if hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2
@@ -241,7 +293,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]" >&2
     exit 2
     ;;
 esac

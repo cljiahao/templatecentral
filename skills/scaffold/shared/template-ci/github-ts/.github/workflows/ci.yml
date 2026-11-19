@@ -63,6 +63,8 @@ jobs:
         run: bash .claude/verify-harness.sh
       - name: Docs check (links and paths in README.md, AGENTS.md, docs/)
         run: bash scripts/check-docs.sh
+      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)
+        run: bash .claude/ci-gates.sh testbudget
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
       # format:check + lint + typecheck
@@ -188,6 +190,26 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: bash .claude/ci-gates.sh comments "$BASE_REF"
+  gate-ratchet:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
+      - name: Require no weaker gate config (apply 'allow-gate-change' label to bypass)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+        run: |
+          set -euo pipefail
+          if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi
+          if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi
+          tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")
+          trap 'rm -f "$tmp"' EXIT
+          if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi
+          bash .claude/ci-gates.sh ratchet "$BASE_REF"
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

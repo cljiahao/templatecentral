@@ -22,7 +22,7 @@ seed() {
   local d=$1
   mkdir -p "$d/.claude/hooks" "$d/.lefthook" "$d/.github/workflows"
   cp -p "$SH"/template/.claude/hooks/* "$SH"/template-ts/.claude/hooks/* "$d/.claude/hooks/"
-  cp -p "$SH"/template/.claude/ci-gates.sh "$SH"/template/.claude/verify-harness.sh "$d/.claude/"
+  cp -p "$SH"/template/.claude/ci-gates.sh "$SH"/template/.claude/gates.txt "$SH"/template/.claude/verify-harness.sh "$d/.claude/"
   cp "$SH/template-settings-ts/.claude/settings.json" "$d/.claude/settings.json"
   cp "$SH/template-ts/lefthook.yml" "$d/lefthook.yml"
   cp "$SH/template/.gitleaks.toml" "$d/.gitleaks.toml"
@@ -31,7 +31,7 @@ seed() {
   (cd "$d" && python3 - <<'MAN'
 import hashlib, json, os
 paths = [os.path.join(r, f) for r, _, fs in os.walk(".claude/hooks") for f in fs]
-paths += [".claude/ci-gates.sh", ".claude/verify-harness.sh", ".claude/settings.json", "lefthook.yml", ".gitleaks.toml", ".github/workflows/ci.yml"]
+paths += [".claude/ci-gates.sh", ".claude/gates.txt", ".claude/verify-harness.sh", ".claude/settings.json", "lefthook.yml", ".gitleaks.toml", ".github/workflows/ci.yml"]
 seeded = {p: {"path": p, "origin_hash": hashlib.sha256(open(p, "rb").read()).hexdigest()} for p in sorted(paths)}
 json.dump({"seeded_files": seeded}, open(".claude/harness.json", "w"))
 MAN
@@ -438,13 +438,14 @@ gl_ok f2 'gitleaks detect --redact 20 --no-banner'
 gl_rehash() { (cd "$1" && python3 - <<'RH8'
 import hashlib, json
 m = json.load(open(".claude/harness.json"))
-m["seeded_files"]["lefthook.yml"]["origin_hash"] = hashlib.sha256(open("lefthook.yml", "rb").read()).hexdigest()
+for f in ("lefthook.yml", ".claude/gates.txt"):
+    m["seeded_files"][f]["origin_hash"] = hashlib.sha256(open(f, "rb").read()).hexdigest()
 json.dump(m, open(".claude/harness.json", "w"))
 RH8
   ); }
 # gl_raw <name> <lefthook.yml content> <expected exit 0|1> <expected message fragment, or empty>
 gl_raw() {
-  seed "$T/$1"; printf '%s%s' "$2" $'pre-push:\n  commands:\n    p:\n      run: true\n' >"$T/$1/lefthook.yml"; gl_rehash "$T/$1"
+  seed "$T/$1"; printf '%s%s' "$2" $'pre-push:\n  commands:\n    p:\n      run: true\n' >"$T/$1/lefthook.yml"; printf 'harness|-|-\n' >"$T/$1/.claude/gates.txt"; gl_rehash "$T/$1"
   out=$(run "$T/$1"); check "raw $1 exit" "$3" $?
   [ -z "$4" ] || contains "raw $1 message" "$4" "$out"
 }

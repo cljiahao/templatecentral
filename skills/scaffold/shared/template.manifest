@@ -50,6 +50,7 @@ template-ts/lefthook.yml 644 - -
 template-ts/sonar-project.properties 644 - -
 template/.claude/ci-gates.sh 755 - -
 template/.claude/comment-hygiene-patterns.txt 644 - -
+template/.claude/gates.txt 644 - -
 template/.claude/hooks/session-context.sh 755 - -
 template/.claude/hooks/skill-usage-log.sh 755 - -
 template/.claude/regen-harness.sh 755 - -
@@ -58,3 +59,4 @@ template/.gitleaks.toml 644 - -
 template/.lefthook/commit-msg.sh 755 - -
 template/scripts/check-docs.sh 755 - -
 template/scripts/test-budget.sh 755 - -
+template/scripts/gate-ratchet.sh 755 - -

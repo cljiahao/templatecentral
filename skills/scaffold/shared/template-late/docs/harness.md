@@ -45,6 +45,22 @@ The seeded hooks separately protect the common branch names `main`/`uat`/`develo
 
 The route table for this deployment (for example develop/uat, develop/staging/live, or trunk) belongs in `AGENTS.md` under `## Git Workflow`, below the marker comment. The fetch-first step is universal; the route clause is not.
 
+**Gate ratchet:** CI runs the merge-base copy of `.claude/ci-gates.sh` and `scripts/gate-ratchet.sh` and fails a PR that weakens a gate or changes a gate script, runner or manifest. A maintainer can apply the `allow-gate-change` label after review: the log then prints every finding plus a line saying the label waived them. The label cannot waive a change to the files that enforce the gates (the CI files, `lefthook.yml`, `.claude/ci-gates.sh`, `.claude/gates.txt`, `.claude/verify-harness.sh`, `scripts/gate-ratchet.sh`, `scripts/test-budget.sh`, the protect-files hooks); that needs owner review. The label waives only a weakened setting on other files, never an unreadable config or a checker failure. A nested `pyproject.toml` or `eslint.config.*` in a sub-package is not read and needs the label.
+
+The ratchet is the second line of defence; the first is the agent file-protection hooks. To make it binding, mark the CI check as required and require owner review for the CI pipeline files, `.claude/` and `scripts/` in the host's branch protection. No CODEOWNERS file is seeded, because it needs an account name.
+
+## Sonar way profile notes
+
+Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.
+
+- S1774 bans every ternary and is not in the default profile; remove it on the server. Nested ternaries (S3358) are default and covered locally.
+- S6480 (functions or `.bind()` in JSX props) was removed from the default profile.
+- S7728 (`for…of` over `.forEach`) is being removed from Sonar way.
+- The default profile changes with the server version, and findings from newly added rules are backdated onto existing code.
+- Security hotspots need manual review on the server; no local check closes them.
+- The server ignores the coverage and duplication conditions until the new code reaches 20 lines; local diff coverage has no such exemption.
+- Sonar has two built-in gates; the local checks target plain "Sonar way", not "Sonar way for agentic AI".
+
 ## Skill capture
 
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from the skill usage log in the `.claude` folder.

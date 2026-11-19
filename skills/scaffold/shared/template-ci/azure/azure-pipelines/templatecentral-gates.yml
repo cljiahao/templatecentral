@@ -1,9 +1,11 @@
-# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog or skip-comment-check skips a PR-only gate.
+# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog, skip-comment-check or allow-gate-change skips a PR-only gate.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity
   - bash: bash scripts/check-docs.sh
     displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)
+  - bash: bash .claude/ci-gates.sh testbudget
+    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)
   - bash: bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Secret scan (gitleaks CLI, checksum-verified)
   - bash: bash .claude/ci-gates.sh deps
@@ -15,4 +17,19 @@ steps:
     env: { LABELS: $(LABELS) }
   - bash: bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Comment hygiene gate
+    env: { LABELS: $(LABELS) }
+  # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
+  - bash: |
+      set -euo pipefail
+      branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+      branch="${branch#refs/heads/}"
+      if [ -n "$branch" ]; then
+        if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi
+        if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi
+        tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")
+        trap 'rm -f "$tmp"' EXIT
+        if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi
+      fi
+      bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }

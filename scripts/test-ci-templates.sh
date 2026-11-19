@@ -216,7 +216,7 @@ def step_bounds(lines, n):
 # Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
 # skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
-PR_ONLY_JOBS = {"changelog", "comment-hygiene", "dependency-review"}
+PR_ONLY_JOBS = {"changelog", "comment-hygiene", "gate-ratchet", "dependency-review"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
 # Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
 # no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
@@ -396,12 +396,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'test': ['plan'],
                          'coverage': ['plan', 'test'],
                          'changelog': [],
-                         'comment-hygiene': [],
+                         'comment-hygiene': [], 'gate-ratchet': [],
                          'dependency-review': []},
                'gates': [('shard plan', 'plan', 'run', GH_PLAN),
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
+                         ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
@@ -432,15 +433,26 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('gate ratchet',
+                          'gate-ratchet',
+                          'run',
+                          'set -euo pipefail\n'
+                          'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                          'trap \'rm -f "$tmp"\' EXIT\n'
+                          'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                          'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
                           'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'github-py': {'file': 'github-py/.github/workflows/ci.yml',
-               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'dependency-review': []},
+               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'gate-ratchet': [], 'dependency-review': []},
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
+                         ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
@@ -454,6 +466,16 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('gate ratchet',
+                          'gate-ratchet',
+                          'run',
+                          'set -euo pipefail\n'
+                          'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                          'trap \'rm -f "$tmp"\' EXIT\n'
+                          'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                          'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
@@ -523,6 +545,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '(gates include)',
                             'bash',
                             'bash scripts/check-docs.sh'),
+                           ('Test budget (test code <= 35 lines per 100 source lines, ADR-0001)',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh testbudget'),
                            ('Secret scan (gitleaks CLI, checksum-verified)',
                             '(gates include)',
                             'bash',
@@ -539,7 +565,21 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Comment hygiene gate',
                             '(gates include)',
                             'bash',
-                            'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
+                            'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Gate ratchet (no gate weaker than the base branch)',
+                            '(gates include)',
+                            'bash',
+                            'set -euo pipefail\n'
+                            'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
+                            'branch="${branch#refs/heads/}"\n'
+                            'if [ -n "$branch" ]; then\n'
+                            '  if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi\n'
+                            '  if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi\n'
+                            '  tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")\n'
+                            '  trap \'rm -f "$tmp"\' EXIT\n'
+                            '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                            'fi\n'
+                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n')]}}
 
 # Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
 # permissions, defaults, env, container) and the full ordered list of steps with every key except name/displayName; a
@@ -562,6 +602,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
+                        'gate-ratchet': {'if': "github.event_name == 'pull_request'",
+                                         'runs-on': 'ubuntu-latest',
+                                         'timeout-minutes': 5},
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
@@ -577,6 +620,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
                                      {'run': 'bash scripts/check-docs.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
@@ -622,6 +666,17 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                          {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                   'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                             "') }}"},
+                                           'run': 'set -euo pipefail\n'
+                                                  'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                                                  'trap \'rm -f "$tmp"\' EXIT\n'
+                                                  'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                                                  'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-ts': {'jobs': {'plan': {'timeoutInMinutes': 5},
@@ -693,6 +748,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
+                        'gate-ratchet': {'if': "github.event_name == 'pull_request'",
+                                         'runs-on': 'ubuntu-latest',
+                                         'timeout-minutes': 5},
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
@@ -709,6 +767,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
                                      {'run': 'bash scripts/check-docs.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
@@ -729,6 +788,17 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                          {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                   'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                             "') }}"},
+                                           'run': 'set -euo pipefail\n'
+                                                  'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                                                  'trap \'rm -f "$tmp"\' EXIT\n'
+                                                  'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                                                  'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-py': {'jobs': {'quality': {'timeoutInMinutes': 20}},
@@ -751,6 +821,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
  'azure-gates': {'steps': {'(gates include)': [{'bash': 'bash .claude/verify-harness.sh'},
                                                {'bash': 'bash scripts/check-docs.sh'},
+                                               {'bash': 'bash .claude/ci-gates.sh testbudget'},
                                                {'bash': 'bash .claude/ci-gates.sh secrets '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh deps'},
@@ -760,6 +831,18 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                 'env': {'LABELS': '$(LABELS)'}},
                                                {'bash': 'bash .claude/ci-gates.sh comments '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                                'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'set -euo pipefail\n'
+                                                        'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
+                                                        'branch="${branch#refs/heads/}"\n'
+                                                        'if [ -n "$branch" ]; then\n'
+                                                        '  if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi\n'
+                                                        '  if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi\n'
+                                                        '  tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")\n'
+                                                        '  trap \'rm -f "$tmp"\' EXIT\n'
+                                                        '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                                                        'fi\n'
+                                                        'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}}]}}}
 
 for _h, _p in PINNED.items():
@@ -819,6 +902,14 @@ def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
         for st in found:
             if "shell" in st:
                 errors.append(f"{rel}: required gate '{gate}' in job {job} must not set shell: {st['shell']}")
+GH_TRIGGERS = {"pull_request": {"branches": ["main", "uat", "develop"]}, "push": {"branches": ["main"]}}
+AZ_TRIGGER = {"branches": {"include": ["main"]}}
+AZ_PR = {"branches": {"include": ["main", "uat", "develop"]}}
+def azure_trigger_errors(rel, doc):
+    if doc.get("trigger") != AZ_TRIGGER:
+        errors.append(f"{rel}: trigger must be exactly {AZ_TRIGGER!r}, found {doc.get('trigger')!r}")
+    if doc.get("pr") != AZ_PR:
+        errors.append(f"{rel}: pr must be exactly {AZ_PR!r}, found {doc.get('pr')!r}")
 GH_ENV_KEYS = {"DIFF_COVER_VERSION", "JSCPD_VERSION", "SHARD_MAX", "NODE_OPTIONS"}
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:")
 USES_PINNED = re.compile(r"^\s*(?:-\s+)?uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d[\w.+-]*\s*$")
@@ -828,8 +919,8 @@ def workflow_errors(rel, doc, lines):
     if doc.get("permissions") != {"contents": "read"}:
         errors.append(f"{rel}: workflow permissions must be exactly {{contents: read}}, found {doc.get('permissions')!r}")
     triggers = doc.get(True, doc.get("on"))
-    if not isinstance(triggers, dict) or set(triggers) != {"pull_request", "push"}:
-        errors.append(f"{rel}: workflow triggers must be exactly pull_request and push, found {triggers!r}")
+    if triggers != GH_TRIGGERS:
+        errors.append(f"{rel}: workflow triggers must be exactly {GH_TRIGGERS!r}, found {triggers!r}")
     env = doc.get("env")
     if not isinstance(env, dict) or not set(env) <= GH_ENV_KEYS:
         errors.append(f"{rel}: workflow env keys must be within {sorted(GH_ENV_KEYS)}, found {env!r}")
@@ -859,6 +950,8 @@ for host, rel in files.items():
         manifest_errors(rel, doc, MANIFEST[host], "needs" if host.startswith("github") else "dependsOn")
         if host.startswith("github"):
             workflow_errors(rel, doc, lines)
+        else:
+            azure_trigger_errors(rel, doc)
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
@@ -993,6 +1086,10 @@ mutate "harness integrity deleted (azure gates)" azure/azure-pipelines/templatec
 mutate "docs check deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
 mutate "docs check deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
 mutate "docs check deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n' '' static
+mutate "test budget deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n        run: bash .claude/ci-gates.sh testbudget\n' '' static
+mutate "test budget deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n        run: bash .claude/ci-gates.sh testbudget\n' '' static
+mutate "test budget deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n' '' static
+mutate "test budget made non-failing (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh testbudget' 'run: bash .claude/ci-gates.sh testbudget || true' static
 mutate "docs check made non-failing (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash scripts/check-docs.sh' 'run: bash scripts/check-docs.sh || true' static
 mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(shard).json\" --shard=\"\$(shard)/\$(shardCount)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
 mutate "needs removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n' static
@@ -1034,7 +1131,7 @@ mutate "job-level defaults with a working-directory (github-py quality)" github-
 mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: [plan, test]\n' static "key env must be None"
 mutate "step inserted before the first gate (github-ts quality)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '      - run: echo "{}" > .claude/dep-audit-allow.txt\n      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' static "differ from the pinned ordered list"
 mutate "step inserted between install and the gates (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - bash: rm -f .jscpd.json\n      - template: azure-pipelines/templatecentral-gates.yml\n' static "differ from the pinned ordered list"
-mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
+mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
 mutate "gates reordered (github-py, secret scan before tests)" "github-py/.github/workflows/ci.yml" "      # PR: the PR's commits; push: full history\n      - name: Secret scan (gitleaks CLI, checksum-verified)\n        env:\n          BASE_REF: \${{ github.base_ref }}\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\n" "" "static"
 mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/ci.yml" "shard: \${{ fromJSON(needs.plan.outputs.shards) }}" "shard: [1]" "static" "key strategy must be"
 mutate "hard-coded matrix (azure-ts)" "azure-ts/azure-pipelines.yml" "matrix: \$[ dependencies.plan.outputs['shards.matrix'] ]" "matrix: { shard1: { shard: 1 } }" "static" "key strategy must be"
@@ -1054,6 +1151,12 @@ mutate "action pinned by tag instead of SHA (github-ts)" github-ts/.github/workf
 mutate "SHA pin without a version comment (github-py)" github-py/.github/workflows/ci.yml 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0' 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' static "full commit SHA"
 mutate "workflow permissions raised to write (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }' 'permissions: { contents: write }' static "permissions must be exactly"
 mutate "workflow permissions removed (github-py)" github-py/.github/workflows/ci.yml 'permissions: { contents: read }\n' '' static "permissions must be exactly"
+mutate "pull_request branches narrowed (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request: { branches: [main] }' static "workflow triggers must be exactly"
+mutate "pull_request paths-ignore added (github-py)" github-py/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request: { branches: [main, uat, develop], paths-ignore: ["src/**"] }' static "workflow triggers must be exactly"
+mutate "push trigger widened to every branch (github-ts)" github-ts/.github/workflows/ci.yml '  push: { branches: [main] }' '  push: { branches: [main, feature] }' static "workflow triggers must be exactly"
+mutate "azure pr branches narrowed (azure-ts)" azure-ts/azure-pipelines.yml 'branches: { include: [main, uat, develop] }' 'branches: { include: [main] }' static "pr must be exactly"
+mutate "azure pr switched off (azure-py)" azure-py/azure-pipelines.yml 'pr:\n  branches: { include: [main, uat, develop] }' 'pr: none' static "pr must be exactly"
+mutate "azure trigger paths exclude added (azure-ts)" azure-ts/azure-pipelines.yml 'trigger:\n  branches: { include: [main] }' 'trigger:\n  branches: { include: [main] }\n  paths: { exclude: [src] }' static "trigger must be exactly"
 mutate "pull_request_target trigger (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request_target: { branches: [main, uat, develop] }' static "pull_request_target"
 mutate "secret echoed in a run step (github-py)" "github-py/.github/workflows/ci.yml" "        run: bash .claude/ci-gates.sh nosonar" "        run: bash .claude/ci-gates.sh nosonar && echo \"\${{ secrets.DEPLOY_TOKEN }}\"" "static" "secret in run"
 mutate "dependency-review job removed (github-ts)" github-ts/.github/workflows/ci.yml '  dependency-review:\n    if: github.event_name == '"'"'pull_request'"'"'\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      # fails the PR when it adds a dependency with a high or critical advisory\n      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0\n        with: { fail-on-severity: high }\n' '' static "required job dependency-review is missing"
@@ -1089,6 +1192,12 @@ for host, eco in want.items():
             bad.append(f"{rel}: {u.get('package-ecosystem')} must update / weekly")
         if sorted(grp.get("update-types") or []) != ["minor", "patch"] or grp.get("patterns") != ["*"]:
             bad.append(f"{rel}: {u.get('package-ecosystem')} must group minor and patch updates over *")
+        if set(u) != {"package-ecosystem", "directory", "schedule", "groups"}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} may only set package-ecosystem, directory, schedule and groups, found {sorted(map(str, u))}")
+        if u.get("schedule") != {"interval": "weekly"} or set(u.get("groups") or {}) != {"minor-and-patch"} or set(grp) != {"patterns", "update-types"}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} schedule and groups may hold nothing beyond weekly and the minor-and-patch group")
+    if set(doc) != {"version", "updates"}:
+        bad.append(f"{rel}: only version and updates are allowed at the top level, found {sorted(map(str, doc))}")
 print("\n".join(bad))
 sys.exit(1 if bad else 0)
 PY
@@ -1109,6 +1218,11 @@ PY
 dep_mutate "github-actions ecosystem removed (github-ts)" github-ts '  - package-ecosystem: github-actions' '  - package-ecosystem: docker'
 dep_mutate "daily instead of weekly (github-py)" github-py 'interval: weekly' 'interval: daily'
 dep_mutate "major updates grouped (github-ts)" github-ts 'update-types: [minor, patch]' 'update-types: [minor, patch, major]'
+dep_mutate "open-pull-requests-limit 0 (github-ts)" github-ts '  - package-ecosystem: npm\n    directory: /' '  - package-ecosystem: npm\n    open-pull-requests-limit: 0\n    directory: /'
+dep_mutate "ignore list added (github-py)" github-py '  - package-ecosystem: pip\n    directory: /' '  - package-ecosystem: pip\n    ignore:\n      - dependency-name: "*"\n    directory: /'
+dep_mutate "ignore added to github-actions (github-ts)" github-ts '  - package-ecosystem: github-actions\n    directory: /' '  - package-ecosystem: github-actions\n    ignore:\n      - dependency-name: "*"\n    directory: /'
+dep_mutate "extra top-level key (github-py)" github-py 'version: 2' 'version: 2\nregistries: {}'
+dep_mutate "schedule day added (github-ts)" github-ts 'schedule: { interval: weekly }' 'schedule: { interval: weekly, day: sunday }'
 dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: pip' 'package-ecosystem: npm'
 
 # 7. passWithNoTests must not appear anywhere in the seeded templates (it would let a project with no test files pass).
@@ -1150,6 +1264,44 @@ rm -rf "$T/mut" && cp -R "$CI_DIR" "$T/mut" && sed -i.bak 's#ruff check src/ tes
 if out=$(py_scope_check "$T/mut" "$LEFTHOOK_PY" 2>&1); then bad "mutation not caught: CI ruff scope narrowed to src/"; else ok "mutation caught: CI ruff scope narrowed to src/ -> $out"; fi
 cp "$LEFTHOOK_PY" "$T/lefthook.bad" && sed -i.bak 's#ruff check src/ test/ &&#ruff check src/ \&\&#' "$T/lefthook.bad"
 if out=$(py_scope_check "$CI_DIR" "$T/lefthook.bad" 2>&1); then bad "mutation not caught: lefthook ruff scope narrowed to src/"; else ok "mutation caught: lefthook ruff scope narrowed to src/ -> $out"; fi
+
+# 9. Gate manifest: verify-harness fails when lefthook or any CI file of a stack omits a gate listed in .claude/gates.txt
+SHARED="$REPO_ROOT/skills/scaffold/shared"
+gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
+  local d="$1" st="$2" host="$3" h
+  rm -rf "$d" && mkdir -p "$d/.claude/hooks"
+  cp "$SHARED/template/.claude/gates.txt" "$SHARED/template/.claude/verify-harness.sh" "$d/.claude/"
+  cp "$SHARED/template-$st/lefthook.yml" "$d/lefthook.yml"
+  if [[ "$host" == github ]]; then
+    mkdir -p "$d/.github/workflows" && cp "$CI_DIR/github-$st/.github/workflows/ci.yml" "$d/.github/workflows/ci.yml"
+  else
+    mkdir -p "$d/azure-pipelines" && cp "$CI_DIR/azure-$st/azure-pipelines.yml" "$d/azure-pipelines.yml"
+    cp "$CI_DIR/azure/azure-pipelines/templatecentral-gates.yml" "$d/azure-pipelines/templatecentral-gates.yml"
+  fi
+  echo x > "$d/.claude/hooks/a.sh"
+  h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
+  printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+}
+gate_verify() { (cd "$1" && bash .claude/verify-harness.sh 2>&1); }
+for st in ts py; do
+  for host in github azure; do
+    gate_fixture "$T/gm" "$st" "$host"
+    if out=$(gate_verify "$T/gm"); then ok "gate manifest: $st/$host lefthook and CI run every listed gate"; else bad "gate manifest: $st/$host omits a listed gate: $out"; fi
+    while IFS='|' read -r gid lh ci; do
+      [[ -z "$gid" || "$gid" == \#* ]] && continue
+      files=(lefthook.yml)
+      if [[ "$host" == github ]]; then files+=(.github/workflows/ci.yml); else files+=(azure-pipelines/templatecentral-gates.yml azure-pipelines.yml); fi
+      for f in "${files[@]}"; do
+        want=$ci; [[ "$f" == lefthook.yml ]] && want=$lh
+        [[ "$want" == "-" ]] && continue
+        grep -qF -- "$want" "$T/gm/$f" || continue
+        gate_fixture "$T/gmm" "$st" "$host"
+        sed -i.bak "s#$want#removed-gate#g" "$T/gmm/$f"
+        if out=$(gate_verify "$T/gmm"); then bad "mutation not caught: $st/$host $f drops gate $gid"; else ok "mutation caught: $st/$host $f drops gate $gid"; fi
+      done
+    done < "$SHARED/template/.claude/gates.txt"
+  done
+done
 
 if [[ $fail -eq 0 ]]; then
   echo "test-ci-templates: all passed"

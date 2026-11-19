@@ -78,6 +78,25 @@ out=$(run "$T/ok"); check "fresh seed exits 0" 0 $?
 contains "fresh seed: summary" "0 to replace, 0 to add, 0 modified" "$out"
 absent "fresh seed: no REPLACE" "REPLACE" "$out"
 
+# the files recorded since the test budget landed are classified like any other seeded file
+seed "$T/rec" nestjs
+for f in scripts/test-budget.sh .claude/skills/test-consolidate/SKILL.md docs/adr/0001-test-each-behaviour-once.md docs/harness.md .github/dependabot.yml; do
+  contains "record present: $f" "\"$f\"" "$(cat "$T/rec/.claude/harness.json")"
+done
+age "$T/rec" scripts/test-budget.sh
+age "$T/rec" docs/harness.md
+age "$T/rec" .github/dependabot.yml
+age "$T/rec" .claude/skills/test-consolidate/SKILL.md
+printf '# local note\n' >>"$T/rec/docs/adr/0001-test-each-behaviour-once.md"
+commit "$T/rec" aged
+out=$(run "$T/rec"); rc=$?
+check "recorded files: a local edit exits 1" 1 $rc
+contains "test-budget.sh aged is REPLACE" "REPLACE   scripts/test-budget.sh  (unmodified since seeded)" "$out"
+contains "harness.md aged is REPLACE" "REPLACE   docs/harness.md  (unmodified since seeded)" "$out"
+contains "dependabot.yml aged is REPLACE" "REPLACE   .github/dependabot.yml  (unmodified since seeded)" "$out"
+contains "test-consolidate skill aged is REPLACE" "REPLACE   .claude/skills/test-consolidate/SKILL.md  (unmodified since seeded)" "$out"
+contains "edited ADR is MODIFIED" "MODIFIED  docs/adr/0001-test-each-behaviour-once.md  (differs from its recorded origin hash)" "$out"
+
 # every class at once, on one project
 seed "$T/p" nestjs
 age "$T/p" .claude/hooks/stop-checks.sh
