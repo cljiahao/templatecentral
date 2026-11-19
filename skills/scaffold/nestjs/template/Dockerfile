@@ -5,7 +5,7 @@
 # NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
 #                 apk, adduser, etc.). Not overridden by CI.
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USER:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the NestJS server listens on

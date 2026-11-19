@@ -3,7 +3,7 @@
 #                 apk, adduser, etc.). Not overridden by CI.
 # NGINX:          Nginx image for serving the static Vite build output
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USER:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)

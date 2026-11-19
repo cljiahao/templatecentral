@@ -47,6 +47,8 @@ t pip_spec_in_prose 1 "printf '\nUse pytest==9.0 here.\n' >> $DOC" "prose states
 t uv_pin_drift_dockerfile 1 "sub skills/scaffold/fastapi/template/Dockerfile 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6 but versions.txt says uv==0.13.7"
 t uv_pin_drift_ci 1 "sub skills/scaffold/shared/template-ci/azure-py/azure-pipelines.yml 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6"
 t uv_pin_drift_prose 1 "sub skills/scaffold/fastapi/source-files.md 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6"
+t uv_pin_trailing_dot_prose 0 "printf '\n# pin uv==0.13.7.\n' >> skills/scaffold/fastapi/template/Dockerfile"
+t uv_pin_extra_drift 1 "printf '\nInstall uv[x]==0.13.6 first.\n' >> $DOC" "uv==0.13.6 but versions.txt says uv==0.13.7"
 t package_pin_in_prose 1 "printf '\nInstall vitest@4.1.8 first.\n' >> $DOC" "prose states a version for vitest"
 # versions.txt itself
 t versions_missing 1 "rm $V" "not found"

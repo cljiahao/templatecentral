@@ -309,7 +309,7 @@ def check_exact_pip_pins(cfg, root):
     """Every `name==X.Y.Z` in any skills/ file (templates, Dockerfiles, CI, prose) must equal an exact (`==`) pip record."""
     exact = {n: v for n, v in cfg["pip"].items() if v.startswith("==")}
     for name, want in exact.items():
-        rx = re.compile(r"(?<![\w.\-/])" + re.escape(name) + r"==([0-9][0-9A-Za-z.*]*)")
+        rx = re.compile(r"(?<![\w.\-/])" + re.escape(name) + r"(?:\[[^\]]*\])?==([0-9](?:[0-9A-Za-z.*]*[0-9A-Za-z*])?)")
         for p in files(root, "skills/**/*"):
             if p == root / VERSIONS:
                 continue

@@ -1,7 +1,7 @@
 # ---- Global build arguments ----
 # PYTHON:         Base Python image (pinned for reproducible builds)
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USER:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on

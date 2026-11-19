@@ -52,18 +52,32 @@ for d in "$REPO_ROOT"/skills/scaffold/*/template; do
   check 0 $? "$s Dockerfile passes the seeded dockerfile gate: $out"
 done
 
-# The gate still fails a real finding, and a project .hadolint.yaml cannot silence it.
-mkdir "$T/bad"
-printf 'FROM python:3.14.0-slim@sha256:%064d\nRUN pip install flask\nUSER 1000\n' 0 > "$T/bad/Dockerfile"
-printf 'ignored:\n  - DL3013\n' > "$T/bad/.hadolint.yaml"
-(cd "$T/bad" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS bash "$GATE" Dockerfile > /dev/null 2>&1)
-check 1 $? "unpinned pip install fails the gate even with .hadolint.yaml ignoring DL3013"
+# run_gate <dir>: run the seeded gate on <dir>/Dockerfile; sets GATE_RC and GATE_OUT.
+run_gate() {
+  GATE_OUT=$(cd "$1" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS bash "$GATE" Dockerfile 2>&1)
+  GATE_RC=$?
+}
+# fixture <dir> <extra Dockerfile lines>: an otherwise clean Dockerfile, so a failure comes from the extra lines alone.
+fixture() {
+  mkdir -p "$1"
+  printf 'FROM python:3.14.0-slim@sha256:%064d\nHEALTHCHECK CMD ["true"]\n%sUSER 1000\n' 0 "$2" > "$1/Dockerfile"
+}
+# expect_finding <name> <extra lines, newline-ended> <rule> [rule a project .hadolint.yaml ignores]: the clean control passes, the same fixture plus the extra lines fails with <rule> in the output.
+expect_finding() {
+  fixture "$T/$1-ok" ""
+  run_gate "$T/$1-ok"
+  check 0 "$GATE_RC" "$1 control (same Dockerfile without the finding) passes the gate: $GATE_OUT"
+  fixture "$T/$1-bad" "$2"
+  if [ -n "${4:-}" ]; then printf 'ignored:\n  - %s\n' "$4" > "$T/$1-bad/.hadolint.yaml"; fi
+  run_gate "$T/$1-bad"
+  check 1 "$GATE_RC" "$1 fails the gate"
+  case "$GATE_OUT" in *"$3"*) check yes yes "$1 reports $3" ;; *) check yes no "$1 reports $3 (output: $GATE_OUT)" ;; esac
+}
 
+# The gate still fails a real finding, and a project .hadolint.yaml cannot silence it.
+expect_finding pip $'RUN pip install flask\n' DL3013 DL3013
 for form in ENV ARG; do
-  mkdir "$T/sec-$form"
-  printf 'FROM python:3.14.0-slim@sha256:%064d\n%s DB_PASSWORD=hunter2\nUSER 1000\n' 0 "$form" > "$T/sec-$form/Dockerfile"
-  (cd "$T/sec-$form" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS bash "$GATE" Dockerfile > /dev/null 2>&1)
-  check 1 $? "$form DB_PASSWORD=hunter2 fails the gate (DL3064 is not ignored)"
+  expect_finding "sec-$form" "$form DB_PASSWORD=hunter2"$'\n' DL3064
 done
 
 echo "seeded-dockerfiles.test: $PASS passed, $FAIL failed"
