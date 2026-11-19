@@ -556,8 +556,8 @@ function do_dependabot(   i, n, L, line, v) {
   n = split(T, L, "\n")
   for (i = 1; i <= n; i++) {
     line = norm_yaml(L[i])
-    if (match(line, /default-days:[ \t]*[0-9]+/)) {
-      v = substr(line, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", v)
+    if (match(line, /default-days:[ \t]*["']?[0-9]+/)) {
+      v = substr(line, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*["']?/, "", v)
       emit("min", "dependabot-cooldown", v)
     }
   }

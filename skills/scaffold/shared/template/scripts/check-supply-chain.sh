@@ -104,7 +104,7 @@ python_hashes() {
   local f=requirements.txt out
   if [ ! -f "$f" ]; then
     if [ -f package.json ]; then return 0; fi
-    echo "check-supply-chain: NOTE no $f at the project root, so the hashed-install check did not run. A Python project keeps one: list direct dependencies in requirements.in, then run uv pip compile requirements.in --generate-hashes -o requirements.txt"
+    echo "check-supply-chain: NOTE no $f at the project root, so the hashed-install check did not run. A Python project keeps one: list direct dependencies in requirements.in, then run uv pip compile requirements.in --universal --generate-hashes -o requirements.txt"
     return 0
   fi
   out=$(awk '
@@ -125,7 +125,7 @@ python_hashes() {
   ' "$f" | cut -c1-100)
   if [ -n "$out" ]; then
     printf '%s\n' "$out" | while IFS= read -r l; do printf 'check-supply-chain: %s line %s\n' "$f" "$l" >&2; done
-    bad "$f has entries without == or --hash=sha256 values. List the direct dependencies in requirements.in (create it if missing), then regenerate: uv pip compile requirements.in --generate-hashes -o requirements.txt"
+    bad "$f has entries without == or --hash=sha256 values. List the direct dependencies in requirements.in (create it if missing), then regenerate: uv pip compile requirements.in --universal --generate-hashes -o requirements.txt"
   fi
 }
 
@@ -196,8 +196,8 @@ dependabot_cooldown() {
     { sub(/\r$/, "") }
     /^[[:space:]]*#/ { next }
     /^[[:space:]]*-[[:space:]]+package-ecosystem:/ { close_entry(); inentry = 1; ent = NR; days = -1 }
-    inentry && match($0, /default-days:[[:space:]]*[0-9]+/) {
-      v = substr($0, RSTART, RLENGTH); sub(/^[^:]*:[[:space:]]*/, "", v); days = v
+    inentry && match($0, /default-days:[[:space:]]*["'\'']?[0-9]+/) {
+      v = substr($0, RSTART, RLENGTH); sub(/^[^:]*:[[:space:]]*["'\'']?/, "", v); days = v
     }
     END { close_entry() }
   ' "$f")

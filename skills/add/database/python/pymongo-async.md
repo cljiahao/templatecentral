@@ -7,7 +7,7 @@ PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer â€
 
 ### M1. Install Dependencies
 
-Add to `requirements.in`, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
+Add to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
 
 ```
 pymongo>=4.19.0
@@ -109,7 +109,7 @@ Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api
 
 Copied verbatim from `<skill-dir>/database/python/pymongo-async/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 
-`core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.txt`.
+`core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`.
 
 **`src/api/routers/users.py`** (register it in `src/api/routes.py` and add a `USERS` tag to `APITags`). It has no auth of its own â€” keep it off any deployed environment until `pymongo-async-auth.md` Step C (or your own guard) protects it:
 

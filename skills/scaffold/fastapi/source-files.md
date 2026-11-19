@@ -30,7 +30,7 @@ Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shar
 
 Then write `README.md`: name, the one-sentence description from scaffold Step 1, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
-Do not create `requirements.txt` yet: Step 4 writes `requirements.in` (direct runtime dependencies) and compiles it into the hashed `requirements.txt`. From then on edit `requirements.in` only, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt`.
+Do not create `requirements.txt` yet: Step 4 writes `requirements.in` (direct runtime dependencies) and compiles it into the hashed `requirements.txt`. From then on edit `requirements.in` only, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`.
 
 ### 2. Update project settings
 
@@ -75,8 +75,8 @@ REQ
 
 # uv comes from pip inside the venv. The Dockerfile's prod-deps stage installs requirements.txt with
 # --require-hashes, so requirements.in lists runtime packages only.
-pip install uv
-uv pip compile requirements.in --generate-hashes -o requirements.txt
+pip install uv==0.13.7
+uv pip compile requirements.in --universal --generate-hashes -o requirements.txt
 pip install --require-hashes -r requirements.txt
 
 pip install -r requirements-dev.txt

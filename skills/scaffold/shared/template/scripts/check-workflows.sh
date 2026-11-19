@@ -14,7 +14,7 @@ if [ "$#" -gt 0 ]; then
   files=("$@")
 else
   files=()
-  for f in .github/workflows/*.yml .github/workflows/*.yaml azure-pipelines.yml azure-pipelines/*.yml; do
+  for f in .github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/action.yml .github/actions/*/action.yaml azure-pipelines.yml azure-pipelines/*.yml; do
     if [ -f "$f" ]; then files+=("$f"); fi
   done
 fi
@@ -37,8 +37,18 @@ github_pins() {
   done < <(grep -nE '^[[:space:]]*(-[[:space:]]+)?uses:' "$f" | grep -vE '^[0-9]+:[[:space:]]*#')
 }
 
+# A file gets the GitHub rules by its path or, for a path outside .github, by its content (runs-on or a composite action).
+is_github() {
+  case "$1" in
+    *.github/workflows/* | *.github/actions/*/action.yml | *.github/actions/*/action.yaml) return 0 ;;
+  esac
+  grep -qE '^[[:space:]]*runs-on:|^[[:space:]]*using:[[:space:]]*["'"'"']?composite' "$1"
+}
+
 github_structure() {
-  awk -v file="$1" '
+  local composite=0
+  if grep -qE '^[[:space:]]*using:[[:space:]]*["'"'"']?composite' "$1"; then composite=1; fi
+  awk -v file="$1" -v composite="$composite" '
     function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
     function report(n, msg) { printf "%s:%d: %s\n", file, n, msg; found = 1 }
     function end_job() {
@@ -56,13 +66,26 @@ github_structure() {
         report(n, "untrusted data (event, branch name, actor, input or step output) inside a script can inject commands. Pass it through env: (NAME: ${{ github.event... }}) and read \"$NAME\" in the script.")
       }
     }
-    BEGIN { gscript = 0; inrun = 0; in_jobs = 0; injob = 0; toplevel_perm = 0; perm_block = 0; has_perm = 0; checkouts = 0; persist = 0; pushes = 0 }
+    BEGIN { curstep = 0; curind = -1; gscript = 0; inrun = 0; in_jobs = 0; injob = 0; toplevel_perm = 0; perm_block = 0; has_perm = 0; checkouts = 0; persist = 0; pushes = 0 }
+    # First pass: which lines belong to a step that uses actions/github-script, wherever the script key sits in the step.
+    FNR == NR {
+      if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/) next
+      pind = indent_of($0); ps = $0; sub(/^ +/, "", ps)
+      if (ps ~ /^-([[:space:]]|$)/) {
+        if (!(curstep && pind > curind)) { curstep = FNR; curind = pind }
+      } else if (curstep && pind <= curind) curstep = 0
+      if (curstep) {
+        stepof[FNR] = curstep
+        if (ps ~ /uses:[[:space:]]*["'"'"']?actions\/github-script@/) gsstep[curstep] = 1
+      }
+      next
+    }
     /^[[:space:]]*$/ { next }
     {
       ind = indent_of($0)
       s = $0; sub(/^ +/, "", s)
       if (s ~ /^#/) next
-      if (inrun && ind > runcol) { scan_run(NR, s); next }
+      if (inrun && ind > runcol) { scan_run(FNR, s); next }
       inrun = 0
       if (ind == 0) {
         perm_block = 0
@@ -70,36 +93,38 @@ github_structure() {
         if (s ~ /^permissions:/) {
           has_perm = 1
           v = s; sub(/^permissions:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v)
-          if (v == "write-all") report(NR, "top-level permissions: write-all grants every scope. Declare `permissions: { contents: read }` and widen per job.")
+          if (v == "write-all") report(FNR, "top-level permissions: write-all grants every scope. Declare `permissions: { contents: read }` and widen per job.")
           else if (v == "") perm_block = 1
-          else if (v ~ /write/) report(NR, "top-level permissions grant write access. Declare `permissions: { contents: read }` and widen per job.")
+          else if (v ~ /write/) report(FNR, "top-level permissions grant write access. Declare `permissions: { contents: read }` and widen per job.")
         }
-        if (s ~ /^(on|"on"|true):/ && s ~ /pull_request_target/) report(NR, "pull_request_target runs fork code with repository secrets. Use pull_request, or split the privileged step into a separate workflow_run.")
+        if (s ~ /^(on|"on"|true):/ && s ~ /pull_request_target/) report(FNR, "pull_request_target runs fork code with repository secrets. Use pull_request, or split the privileged step into a separate workflow_run.")
       }
-      if (s ~ /pull_request_target/ && s !~ /^permissions:/) report(NR, "pull_request_target runs fork code with repository secrets. Use pull_request, or split the privileged step into a separate workflow_run.")
-      if (perm_block && ind > 0 && s ~ /:[[:space:]]*write([[:space:]]|$)/) report(NR, "top-level permissions grant write access. Declare `permissions: { contents: read }` and widen per job.")
-      if (s ~ /write-all/ && !(ind == 0 && s ~ /^permissions:/)) report(NR, "permissions: write-all grants every scope. List only the scopes this job needs.")
+      if (s ~ /pull_request_target/ && s !~ /^permissions:/) report(FNR, "pull_request_target runs fork code with repository secrets. Use pull_request, or split the privileged step into a separate workflow_run.")
+      if (perm_block && ind > 0 && s ~ /:[[:space:]]*write([[:space:]]|$)/) report(FNR, "top-level permissions grant write access. Declare `permissions: { contents: read }` and widen per job.")
+      if (s ~ /write-all/ && !(ind == 0 && s ~ /^permissions:/)) report(FNR, "permissions: write-all grants every scope. List only the scopes this job needs.")
       if (in_jobs && ind == 2 && s ~ /^[A-Za-z0-9_-]+:[[:space:]]*$/) { end_job(); injob = 1 }
-      if (s ~ /uses:[[:space:]]*["'"'"']?actions\/checkout@/) { checkouts++; checkout_line = NR }
+      if (s ~ /uses:[[:space:]]*["'"'"']?actions\/checkout@/) { checkouts++; checkout_line = FNR }
       if (s ~ /persist-credentials:[[:space:]]*["'"'"']?false/) persist++
-      if (s ~ /^(-[[:space:]]+)?uses:[[:space:]]*["'"'"']?actions\/github-script@/) gscript = 1
-      else if (s ~ /^-[[:space:]]/) gscript = 0
-      if (gscript && s ~ /^script:/) {
-        v = s; sub(/^script:[[:space:]]*/, "", v)
-        if (v ~ /^[|>]/) { inrun = 1; runcol = ind } else scan_run(NR, v)
+      gscript = (FNR in stepof) && (stepof[FNR] in gsstep)
+      if (gscript && s ~ /^(-[[:space:]]+)?script:/) {
+        col = ind + ((s ~ /^-/) ? 2 : 0)
+        v = s; sub(/^(-[[:space:]]+)?script:[[:space:]]*/, "", v)
+        if (v !~ /^[|>]/) scan_run(FNR, v)
+        inrun = 1; runcol = col
       }
       if (s ~ /^(-[[:space:]]+)?run:/) {
         col = ind + ((s ~ /^-/) ? 2 : 0)
         v = s; sub(/^(-[[:space:]]+)?run:[[:space:]]*/, "", v)
-        if (v ~ /^[|>]/) { inrun = 1; runcol = col } else scan_run(NR, v)
+        if (v !~ /^[|>]/) scan_run(FNR, v)
+        inrun = 1; runcol = col
       }
     }
     END {
       end_job()
-      if (!has_perm) report(1, "no top-level `permissions:` block, so the token takes the repository default. Add `permissions: { contents: read }`.")
+      if (!has_perm && !composite) report(1, "no top-level `permissions:` block, so the token takes the repository default. Add `permissions: { contents: read }`.")
       exit found
     }
-  ' "$1"
+  ' "$1" "$1"
 }
 
 azure_rules() {
@@ -139,17 +164,14 @@ for f in "${files[@]}"; do
     bad "check-workflows: $f is not a regular file. Pass the path of a workflow or pipeline file, or run with no arguments to check them all."
     continue
   fi
-  case "$f" in
-    *.github/workflows/*)
-      github_pins "$f"
-      out=$(github_structure "$f") || true
-      if [ -n "$out" ]; then printf '%s\n' "$out" >&2; bad_count=$((bad_count + 1)); fi
-      ;;
-    *)
-      azure_rules "$f"
-      azure_injection "$f"
-      ;;
-  esac
+  if is_github "$f"; then
+    github_pins "$f"
+    out=$(github_structure "$f") || true
+    if [ -n "$out" ]; then printf '%s\n' "$out" >&2; bad_count=$((bad_count + 1)); fi
+  else
+    azure_rules "$f"
+    azure_injection "$f"
+  fi
 done
 
 if [ "$bad_count" -ne 0 ]; then exit 1; fi

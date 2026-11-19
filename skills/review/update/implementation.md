@@ -44,7 +44,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
    - **Patch or minor bump** → auto-update list
    - **Major bump** → report-only list
 4. Rewrite `requirements.in` keeping each line's specifier style (`==` pins move to the new version; `>=` floors are raised to it)
-5. Run `uv pip compile requirements.in --generate-hashes -o requirements.txt`, then `pip install --require-hashes -r requirements.txt`
+5. Run `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`, then `pip install --require-hashes -r requirements.txt`
 6. Dispatch the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`
 7. If build fails → rollback
 8. Run `pip-audit --requirement requirements.txt` if `pip-audit` is available

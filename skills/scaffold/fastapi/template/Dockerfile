@@ -34,10 +34,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR ${APP_DIR}
 
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends dumb-init \
     && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
-    && useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
+    && useradd -l -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
     && chown ${APP_UID}:${APP_GID} ${APP_DIR} \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -51,7 +50,7 @@ COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
-  if [ -f uv.lock ]; then pip install uv && uv sync --frozen; \
+  if [ -f uv.lock ]; then pip install uv==0.13.7 && uv sync --frozen; \
   elif [ -f requirements-dev.txt ]; then pip install --require-hashes -r requirements.txt && pip install -r requirements-dev.txt; \
   elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install .; \
@@ -70,7 +69,7 @@ COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
-  if [ -f uv.lock ]; then pip install uv && uv sync --frozen --no-dev; \
+  if [ -f uv.lock ]; then pip install uv==0.13.7 && uv sync --frozen --no-dev; \
   elif [ -f requirements-prod.txt ]; then pip install -r requirements-prod.txt; \
   elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install . --no-deps || pip install .; \
@@ -118,7 +117,7 @@ EXPOSE ${PORT}
 USER ${APP_UID}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:' + str(__import__('os').environ.get('PORT', 8000)) + '/health')" || exit 1
+  CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT', '8000') + '/health')"]
 
 ENTRYPOINT ["dumb-init", "--", "./docker-entrypoint.sh"]
 CMD ["prod"]

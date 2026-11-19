@@ -49,8 +49,8 @@ RUN \
 FROM deps AS dev
 ENV NODE_ENV="development"
 COPY ./ ./
-RUN apk add --no-cache curl
-RUN chmod +x docker-entrypoint.sh
+RUN apk add --no-cache curl \
+    && chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 

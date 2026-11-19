@@ -131,6 +131,15 @@ grep -v 'cooldown' "$SH/template-ci/github-ts/.github/dependabot.yml" > "$D/.git
 run "$D" check-supply-chain.sh
 check 1 "$EC" "supply-chain blocks dependabot entries without a cooldown"
 has "cooldown" "$OUT" "supply-chain names the cooldown"
+for q in '"30"' "'30'" '30'; do
+  sed "s/default-days: [0-9]*/default-days: $q/" "$SH/template-ci/github-ts/.github/dependabot.yml" > "$D/.github/dependabot.yml"
+  run "$D" check-supply-chain.sh
+  check 0 "$EC" "supply-chain accepts cooldown default-days: $q ($OUT)"
+done
+sed 's/default-days: [0-9]*/default-days: "3"/' "$SH/template-ci/github-ts/.github/dependabot.yml" > "$D/.github/dependabot.yml"
+run "$D" check-supply-chain.sh
+check 1 "$EC" "supply-chain blocks a quoted cooldown below the floor"
+has "below the floor" "$OUT" "supply-chain reports the quoted cooldown value, not no cooldown"
 
 sc_pnpm sc-scp
 printf "packages:\n  a@1.0.0:\n    resolution: {repo: git@Evil.Example.com:u/r.git}\n" > "$D/pnpm-lock.yaml"
@@ -362,6 +371,87 @@ az az-inline "steps:
 run "$D" check-workflows.sh
 check 1 "$EC" "workflows blocks a branch macro in an inlineScript"
 
+# A GitHub workflow is judged by its content when its path is not under .github/workflows.
+D=$(fixture wf-nopath)
+printf 'on: [push]\npermissions: write-all\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n' > "$D/build.yml"
+OUT=$(cd "$D" && bash "$SC/check-workflows.sh" build.yml 2>&1)
+check 1 "$?" "workflows applies the GitHub rules to a workflow passed by a path outside .github/workflows ($OUT)"
+has "write-all" "$OUT" "workflows reports write-all for a workflow outside .github/workflows"
+D=$(fixture wf-composite)
+mkdir -p "$D/.github/actions/x"
+cat > "$D/.github/actions/x/action.yml" <<'EOF'
+name: x
+runs:
+  using: composite
+  steps:
+    - run: echo "${{ github.event.issue.title }}"
+      shell: bash
+EOF
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows checks composite actions by default ($OUT)"
+has "action.yml" "$OUT" "workflows names the composite action file"
+printf 'name: x\nruns:\n  using: composite\n  steps:\n    - run: echo hi\n      shell: bash\n' > "$D/.github/actions/x/action.yml"
+run "$D" check-workflows.sh
+check 0 "$EC" "workflows passes a clean composite action without a permissions block ($OUT)"
+
+# A plain multi-line scalar after run: is still a script.
+HEAD="${GOOD%      - run: echo hi}"
+wfs() { # wfs <name> <steps>: the hardened header plus extra steps; @SHA@ becomes a pinned SHA
+  local steps=${2//@SHA@/$SHA}
+  wf "$1" "$HEAD$steps"
+}
+S_PLAIN=$(cat <<'EOF'
+      - run: echo hi
+          echo "${{ github.event.pull_request.title }}"
+EOF
+)
+wfs wf-plain "$S_PLAIN"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows scans the continuation lines of a plain multi-line run value ($OUT)"
+S_PLAIN_ENV=$(cat <<'EOF'
+      - run: echo hi
+        env:
+          T: ${{ github.event.pull_request.title }}
+EOF
+)
+wfs wf-plain-env "$S_PLAIN_ENV"
+run "$D" check-workflows.sh
+check 0 "$EC" "workflows allows event data under env: after a plain run value ($OUT)"
+# github-script: the script key decides nothing by line order within the step.
+S_GS_BEFORE=$(cat <<'EOF'
+      - name: s
+        with:
+          script: |
+            core.info("${{ github.event.pull_request.title }}")
+        uses: actions/github-script@@SHA@ # v7
+EOF
+)
+wfs wf-gs-before "$S_GS_BEFORE"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows scans github-script when script: comes before uses: ($OUT)"
+S_GS_AFTER=$(cat <<'EOF'
+      - uses: actions/github-script@@SHA@ # v7
+        with:
+          script: |
+            core.info("${{ github.event.pull_request.title }}")
+EOF
+)
+wfs wf-gs-after "$S_GS_AFTER"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows scans github-script when uses: comes first ($OUT)"
+S_GS_OK=$(cat <<'EOF'
+      - name: s
+        with:
+          script: |
+            core.info("hi")
+        uses: actions/github-script@@SHA@ # v7
+      - run: echo "${{ github.event.number }}"
+EOF
+)
+wfs wf-gs-ok "$S_GS_OK"
+run "$D" check-workflows.sh
+check 0 "$EC" "workflows passes a safe github-script step and a plain run after it ($OUT)"
+
 # ── check-env-example.sh ──────────────────────────────────────────────────────
 
 ee() { # ee <name> <example body> <source body>
@@ -430,6 +520,12 @@ printf 'const x = process.env.SERVER_ONLY;\n' > "$D/server/index.ts"
 run "$D" check-env-example.sh
 check 0 "$EC" "env-example still passes when source sits outside the scanned directories ($OUT)"
 has "source exists outside the scanned directories (server)" "$OUT" "env-example warns about source outside the scanned directories"
+ee ee-aux "API_URL=" "const a = process.env.API_URL;"
+mkdir -p "$D/test/api" "$D/tests" "$D/docs" "$D/scripts" "$D/.claude/hooks"
+for x in test/api tests docs scripts .claude/hooks; do printf 'const y = 1;\n' > "$D/$x/a.ts"; done
+run "$D" check-env-example.sh
+check 0 "$EC" "env-example passes with test, tests, docs, scripts and .claude directories ($OUT)"
+if [[ "$OUT" == *"outside the scanned"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: env-example warns about test, docs or scripts directories: $OUT"; else PASS=$((PASS + 1)); fi
 D=$(fixture ee-none)
 run "$D" check-env-example.sh
 check 1 "$EC" "env-example blocks a missing .env.example"
@@ -568,6 +664,7 @@ for stack in nextjs nestjs vite-react fastapi; do
   if [[ -f "$TD/.env.example" ]]; then
     OUT=$(cd "$TD" && bash "$SC/check-env-example.sh" 2>&1)
     check 0 "$?" "env-example passes on the $stack template ($OUT)"
+    if [[ "$OUT" == *"outside the scanned directories"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: env-example warns falsely on the $stack template: $OUT"; else PASS=$((PASS + 1)); fi
   fi
   if [[ -f "$TD/pnpm-workspace.yaml" ]]; then
     OUT=$(cd "$TD" && bash "$SC/check-supply-chain.sh" 2>&1)

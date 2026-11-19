@@ -829,7 +829,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              'if [ -f requirements-dev.txt ]; then python -m pip install -r '
                                              'requirements-dev.txt; fi\n'
                                              '# the deps gate exports uv.lock with uv\n'
-                                             'if [ -f uv.lock ]; then python -m pip install uv; fi\n'},
+                                             'if [ -f uv.lock ]; then python -m pip install uv==0.13.7; fi\n'},
                                     {'template': 'azure-pipelines/templatecentral-gates.yml'},
                                     {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                     {'bash': 'python -m pyright src/'},

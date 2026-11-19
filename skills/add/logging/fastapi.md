@@ -15,7 +15,7 @@
 
 ```bash
 echo "asgi-correlation-id>=5.0.1" >> requirements.in
-uv pip compile requirements.in --generate-hashes -o requirements.txt
+uv pip compile requirements.in --universal --generate-hashes -o requirements.txt
 pip install --require-hashes -r requirements.txt
 ```
 

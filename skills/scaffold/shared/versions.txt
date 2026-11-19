@@ -137,6 +137,7 @@ pip pyright             >=1.1.414
 pip pytest              >=9.2.0
 pip pytest-asyncio      >=1.4.1
 pip pytest-cov          >=7.1.0
+pip uv                  ==0.13.7
 pip python-multipart    >=0.0.33
 pip ruff                >=0.17.4
 pip starlette           >=1.10.0

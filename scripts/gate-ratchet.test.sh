@@ -366,6 +366,10 @@ weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
   - left-pad" "quoted exclusion key" "minimumReleaseAgeExclude"
 weakens .github/dependabot.yml "default-days: 7" "default-days: 0" "dependabot cooldown zeroed" "dependabot-cooldown"
 passes .github/dependabot.yml "default-days: 7" "default-days: 14" "dependabot cooldown raised"
+weakens .github/dependabot.yml "default-days: 7" "default-days: \"0\"" "dependabot cooldown zeroed with quotes" "dependabot-cooldown"
+passes .github/dependabot.yml "default-days: 7" "default-days: \"14\"" "dependabot cooldown raised with quotes"
+edit scripts/check-dockerfile.sh 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064"' 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064 DL3013"'
+expect 1 "dockerfile gate ignore list grown" "scripts/check-dockerfile.sh" "gate script, runner or manifest changed"
 weakens .npmrc "# note" "# note
 ignore-scripts=false" "npmrc re-enables scripts" "ignore-scripts=false"
 weakens .npmrc "# note" "# note

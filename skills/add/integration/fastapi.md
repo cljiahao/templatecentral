@@ -18,7 +18,7 @@ config → client → schemas → service → dependency injection → router
 
 ### Dependencies
 
-Add to `requirements.in`, then run `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt`:
+Add to `requirements.in`, then run `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt`:
 - `httpx` — Async HTTP client
 
 ### Steps

@@ -65,8 +65,8 @@ RUN \
 FROM deps AS dev
 ENV NODE_ENV="development"
 COPY ./ ./
-RUN apk add --no-cache curl
-RUN chmod +x docker-entrypoint.sh
+RUN apk add --no-cache curl \
+    && chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 
@@ -99,6 +99,6 @@ EXPOSE ${PORT}
 USER ${APP_UID}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q -O/dev/null "http://localhost:${PORT:-3000}/" || exit 1
+  CMD ["sh", "-c", "wget -q -O/dev/null http://localhost:${PORT:-3000}/"]
 
 CMD ["nginx", "-g", "daemon off;"]

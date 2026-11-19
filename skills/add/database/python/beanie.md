@@ -18,7 +18,7 @@ python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('ht
 
 ### B1. Install Dependencies
 
-Add to `requirements.in`, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`):
+Add to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`):
 
 ```
 beanie>=2.2,<3
@@ -131,7 +131,7 @@ Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schema
 
 Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/schemas/response/user.py` by the copy step; do not re-type it.
 
-**`src/api/services/user_service.py`** — `core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.txt`.
+**`src/api/services/user_service.py`** — `core.security.hash_password` comes from `templatecentral:add` (auth); run it first. Without auth, create `src/core/security.py` from the password part of `<skill-dir>/auth/fastapi/template/src/core/security.py` (the `PasswordHasher`, `_VERIFY_ERRORS`, `hash_password` and `verify_password` definitions and their `argon2` imports; leave out the JWT code, which needs `SECRET_KEY`) and add `argon2-cffi` to `requirements.in`, then recompile with `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`.
 
 Copied verbatim from `<skill-dir>/database/python/beanie/template/src/api/services/user_service.py` by the copy step; do not re-type it.
 

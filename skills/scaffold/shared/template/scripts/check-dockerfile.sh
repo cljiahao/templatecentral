@@ -127,6 +127,13 @@ for f in "${files[@]}"; do
   fi
 done
 
+# Fixed ignore list, the only hadolint rules this gate skips. A project cannot grow it: this script is a ratchet guard file,
+# so any edit is reported. Each rule is skipped for one reason:
+#   DL3008 apt-get install without version pins: the base image is already pinned by digest, and an OS package pin breaks the build when the mirror drops that exact version.
+#   DL3018 apk add without version pins: same reason, for the Alpine base.
+#   DL3064 ARG or ENV whose name looks sensitive: APP_USERNAME holds the container account name, not a secret.
+DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064"
+
 run_hadolint() {
   local cfg="$1" f="$2" var
   local unset_args=()
@@ -139,10 +146,13 @@ run_hadolint() {
 if command -v hadolint > /dev/null 2>&1; then
   strict_cfg=$(mktemp "${TMPDIR:-/tmp}/hadolint-strict.XXXXXX") || { echo "check-dockerfile: cannot create a temporary file. Set TMPDIR to a writable directory." >&2; exit 1; }
   trap 'rm -f "$strict_cfg"' EXIT
-  printf 'ignored: []\n' > "$strict_cfg"
+  {
+    printf 'ignored:\n'
+    for r in $DOCKERFILE_IGNORED_RULES; do printf '  - %s\n' "$r"; done
+  } > "$strict_cfg"
   for f in "${files[@]}"; do
     if ! run_hadolint "$strict_cfg" "$f"; then
-      echo "check-dockerfile: hadolint reported findings for $f (above). Fix them. The gate ignores .hadolint.yaml, HADOLINT_* variables and inline ignore pragmas, so an ignore cannot silence a finding." >&2
+      echo "check-dockerfile: hadolint reported findings for $f (above). Fix them. The gate ignores .hadolint.yaml, HADOLINT_* variables and inline ignore pragmas, so an ignore cannot silence a finding (the fixed list at the top of this script is the only exception)." >&2
       rc=1
     fi
   done

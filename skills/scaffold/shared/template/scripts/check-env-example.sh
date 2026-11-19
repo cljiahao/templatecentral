@@ -63,8 +63,8 @@ if [ "${#sources[@]}" -gt 0 ]; then
 else
   echo "check-env-example: no src, app or lib directory found, so no source was scanned."
 fi
-outside=$(find . -mindepth 2 -maxdepth 3 \( -name node_modules -o -name .git -o -name .venv -o -name __pycache__ -o -name dist -o -name build -o -name .next -o -name .claude -o -name test -o -name tests -o -name docs -o -name scripts \) -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' \) -print 2> /dev/null \
-  | sed -E 's|^\./||; s|/.*$||' | sort -u | grep -vxE 'src|app|lib' || true)
+outside=$(find . -mindepth 1 -maxdepth 3 \( -name node_modules -o -name .git -o -name .venv -o -name __pycache__ -o -name dist -o -name build -o -name .next -o -name .claude -o -name test -o -name tests -o -name docs -o -name scripts \) -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' \) -print 2> /dev/null \
+  | sed -E 's|^\./||' | grep / | sed -E 's|/.*$||' | sort -u | grep -vxE 'src|app|lib' || true)
 if [ -n "$outside" ]; then
   echo "WARNING check-env-example: source exists outside the scanned directories (${outside//$'\n'/, }). Variables read there are not checked; run the check from that project's root." >&2
 fi

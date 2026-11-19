@@ -1111,6 +1111,7 @@ check_no_version_pins() {
   #   shadcn@latest: the official shadcn CLI invocation, not a dependency pin
   #   templateCentral: schema markers (<!-- templateCentral: stack@X.Y.Z -->)
   #   "packageManager" field: corepack requires an exact version in this field by design
+  #   uv==X.Y.Z: the one exact Python pin (the seeded Dockerfile, CI and docs install uv itself); versions.txt records it and check-versions.sh enforces every copy
   #   ":<space>stack@version" prose (drift-check example output, schema version references)
   # REVISIT: if the SSOT policy changes, remove this check.
   header "Version pins in skills (SSOT)"
@@ -1121,7 +1122,7 @@ check_no_version_pins() {
         | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' || true
       echo
       scan -E '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+'
-    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' || true)" \
+    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' | grep -vE '[^a-zA-Z0-9_-]uv==[0-9]' || true)" \
     "Version pins found — move floors/pins to .claude/rules/*.md" \
     "No version pins in skills"
 
