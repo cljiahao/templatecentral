@@ -1,6 +1,7 @@
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import coreWebVitals from 'eslint-config-next/core-web-vitals';
 import typescript from 'eslint-config-next/typescript';
+import noUnsanitized from 'eslint-plugin-no-unsanitized';
 import sonarjs from 'eslint-plugin-sonarjs';
 
 const sonarjsPlugin = sonarjs.configs.recommended.plugins.sonarjs;
@@ -15,6 +16,8 @@ const config = [
     },
   },
   eslintComments.recommended,
+  // innerHTML, outerHTML, insertAdjacentHTML and document.write take sanitized input only: use DOMPurify or a Trusted Types policy.
+  noUnsanitized.configs.recommended,
   {
     ...sonarjs.configs.recommended,
     rules: {

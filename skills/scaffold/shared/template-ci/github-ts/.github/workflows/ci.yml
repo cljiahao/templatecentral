@@ -22,6 +22,7 @@ jobs:
       count: ${{ steps.shards.outputs.count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       # No `version:` input: pnpm/action-setup reads packageManager from package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -50,7 +51,7 @@ jobs:
       # SHA-pinned per Skills Security; re-verify or bump via the review utility, do not hand-edit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # diff-cover needs full history
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       # No `version:` input: pnpm/action-setup reads packageManager from package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -67,6 +68,14 @@ jobs:
         run: bash .claude/ci-gates.sh testbudget
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
+      - name: Supply chain (install scripts, release age, lockfile hosts, frozen installs)
+        run: bash .claude/ci-gates.sh supplychain
+      - name: Workflow hardening (pinned actions, token permissions, no injection)
+        run: bash .claude/ci-gates.sh workflows
+      - name: .env.example matches the variables the code reads
+        run: bash .claude/ci-gates.sh envexample
+      - name: Dockerfile lint (digest pin, non-root USER, hadolint)
+        run: bash .claude/ci-gates.sh dockerfile
       # format:check + lint + typecheck
       - run: pnpm run check
       - name: Duplication (production source <= 3%, per .jscpd.json)
@@ -86,6 +95,7 @@ jobs:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       # No `version:` input: pnpm/action-setup reads packageManager from package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -117,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # diff-cover needs full history
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       # No `version:` input: pnpm/action-setup reads packageManager from package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -172,7 +182,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -184,7 +194,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - name: Require no change-narration comments (apply 'skip-comment-check' label to bypass)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -196,7 +206,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
       - name: Require no weaker gate config (apply 'allow-gate-change' label to bypass)
         env:

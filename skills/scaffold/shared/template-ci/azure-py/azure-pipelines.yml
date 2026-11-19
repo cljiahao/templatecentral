@@ -22,7 +22,7 @@ jobs:
         displayName: Python 3.14
       - bash: |
           set -euo pipefail
-          python -m pip install -r requirements.txt
+          python -m pip install --require-hashes -r requirements.txt
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
           # the deps gate exports uv.lock with uv
           if [ -f uv.lock ]; then python -m pip install uv; fi

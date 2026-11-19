@@ -9,10 +9,10 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the NestJS server listens on
-# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
-# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG NODE=node:26-alpine
-ARG NODE_BUILD=node:26-alpine
+# Base images are pinned by digest (scripts/check-dockerfile.sh). To bump one, edit the tag and digest together:
+# `docker buildx imagetools inspect <image>:<tag>`. Rebuild with `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
+ARG NODE=node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
+ARG NODE_BUILD=node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user

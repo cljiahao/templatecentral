@@ -13,12 +13,28 @@ pre-commit:
     typecheck:
       run: '[ -f .venv/bin/activate ] && . .venv/bin/activate; python -m pyright src/'
     secret-scan:
-      # Skips only when gitleaks isn't installed locally; CI is the hard gate, and a finding fails the commit.
+      # Scans staged changes when the scanner is installed; the next command warns or fails when it is not.
       run: if command -v gitleaks >/dev/null 2>&1; then gitleaks git --pre-commit --staged --redact --no-banner; fi
+    scanner-present:
+      # Never a silent skip: warns with the install command locally and fails in CI.
+      run: bash scripts/check-secret-scanner.sh
     docs-check:
       # Fails on a broken link or path in staged docs; CI and pre-push run the full check.
       glob: "*.md"
       run: bash scripts/check-docs.sh {staged_files}
+    env-example:
+      # Fails when the variables the code reads and .env.example disagree; reads source files and .env.example only.
+      glob: "{src/**,.env.example,next.config.*,vite.config.*}"
+      run: bash scripts/check-env-example.sh
+    workflow-lint:
+      glob: "{.github/workflows/*,azure-pipelines.yml,azure-pipelines/*}"
+      run: bash scripts/check-workflows.sh
+    dockerfile-lint:
+      glob: "{Dockerfile,Dockerfile.*}"
+      run: bash scripts/check-dockerfile.sh
+    supply-chain:
+      glob: "{pnpm-workspace.yaml,pnpm-lock.yaml,.npmrc,requirements*.txt,uv.lock,.github/dependabot.yml,.claude/registry-hosts.txt}"
+      run: bash scripts/check-supply-chain.sh
     comment-hygiene:
       # Warn-only, never blocks. Patterns come from .claude/comment-hygiene-patterns.txt.
       run: |

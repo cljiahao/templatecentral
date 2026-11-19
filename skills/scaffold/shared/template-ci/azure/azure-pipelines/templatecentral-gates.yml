@@ -12,6 +12,14 @@ steps:
     displayName: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
   - bash: bash .claude/ci-gates.sh nosonar
     displayName: No NOSONAR suppression markers
+  - bash: bash .claude/ci-gates.sh supplychain
+    displayName: Supply chain (install scripts, release age, lockfile hosts, frozen installs)
+  - bash: bash .claude/ci-gates.sh workflows
+    displayName: Workflow hardening (pinned actions, token permissions, no injection)
+  - bash: bash .claude/ci-gates.sh envexample
+    displayName: .env.example matches the variables the code reads
+  - bash: bash .claude/ci-gates.sh dockerfile
+    displayName: Dockerfile lint (digest pin, non-root USER, hadolint)
   - bash: bash .claude/ci-gates.sh changelog "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Changelog gate
     env: { LABELS: $(LABELS) }

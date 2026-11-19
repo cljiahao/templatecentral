@@ -5,9 +5,9 @@
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
-# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG PYTHON=python:3.14.10-slim
+# Base images are pinned by digest (scripts/check-dockerfile.sh). To bump one, edit the tag and digest together:
+# `docker buildx imagetools inspect <image>:<tag>`. Rebuild with `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
+ARG PYTHON=python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 ARG APP_UID=1001
 ARG APP_GID=1001
 ARG APP_USERNAME=container-user
@@ -52,8 +52,8 @@ RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
   if [ -f uv.lock ]; then pip install uv && uv sync --frozen; \
-  elif [ -f requirements-dev.txt ]; then pip install -r requirements.txt -r requirements-dev.txt; \
-  elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
+  elif [ -f requirements-dev.txt ]; then pip install --require-hashes -r requirements.txt && pip install -r requirements-dev.txt; \
+  elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install .; \
   elif [ -f setup.py ]; then pip install .; \
   else echo "No requirements.txt, pyproject.toml, or setup.py found." && exit 1; \
@@ -72,7 +72,7 @@ ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
   if [ -f uv.lock ]; then pip install uv && uv sync --frozen --no-dev; \
   elif [ -f requirements-prod.txt ]; then pip install -r requirements-prod.txt; \
-  elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
+  elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install . --no-deps || pip install .; \
   elif [ -f setup.py ]; then pip install .; \
   else echo "No requirements file found." && exit 1; \

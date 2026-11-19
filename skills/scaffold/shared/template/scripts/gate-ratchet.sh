@@ -30,8 +30,10 @@ kind_of() {
     .gitleaks.toml | */.gitleaks.toml) echo gitleaks ;;
     scripts/test-budget.sh | */scripts/test-budget.sh) echo budget ;;
     .claude/gates.txt | */.claude/gates.txt) echo gates ;;
+    .claude/registry-hosts.txt | */.claude/registry-hosts.txt) echo hosts ;;
+    pnpm-workspace.yaml | */pnpm-workspace.yaml) echo pnpmws ;;
     .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
-    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
+    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | scripts/check-supply-chain.sh | */scripts/check-supply-chain.sh | scripts/check-workflows.sh | */scripts/check-workflows.sh | scripts/check-env-example.sh | */scripts/check-env-example.sh | scripts/check-dockerfile.sh | */scripts/check-dockerfile.sh | scripts/check-secret-scanner.sh | */scripts/check-secret-scanner.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
     *) echo "" ;;
   esac
 }
@@ -517,6 +519,28 @@ function do_budget() {
   emit("max", "test-budget-ratio", num_in(substr(T, MS + 21, ML - 21)))
 }
 
+function do_hosts(   i, n, L, line) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]; gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "" || line ~ /^#/) continue
+    emit("set", "registry-host", tolower(line))
+  }
+}
+
+function do_pnpmws(   i, n, L, line, v, inbuilds) {
+  n = split(T, L, "\n"); inbuilds = 0
+  for (i = 1; i <= n; i++) {
+    line = L[i]; sub(/[ \t]+#.*$/, "", line)
+    if (line ~ /^[^ \t#]/) inbuilds = (line ~ /^allowBuilds:/)
+    if (line ~ /^minimumReleaseAge:/) { v = line; sub(/^[^:]*:[ \t]*/, "", v); if (!plain_num(v)) fail("minimumReleaseAge is not a plain number"); emit("min", "minimumReleaseAge", v) }
+    else if (line ~ /^minimumReleaseAgeExclude:/) emit("set", "minimumReleaseAgeExclude", "present")
+    else if (line ~ /^dangerouslyAllowAllBuilds:[ \t]*true/) emit("set", "dangerouslyAllowAllBuilds", "true")
+    else if (line ~ /^(strictDepBuilds|ignoreScripts):[ \t]*false/) { v = line; sub(/:.*$/, "", v); emit("set", v, "false") }
+    else if (inbuilds && line ~ /^[ \t]+[^ \t].*:[ \t]*true[ \t]*$/) { v = line; sub(/:[ \t]*true[ \t]*$/, "", v); gsub(/^[ \t'"'"'"]+|[ \t'"'"'"]+$/, "", v); emit("set", "allowBuilds", v) }
+  }
+}
+
 function do_gates(   i, nl, n, line, f, c) {
   n = split(T, GL, "\n"); c = 0
   for (i = 1; i <= n; i++) {
@@ -552,6 +576,8 @@ END {
   else if (K == "gitleaks") { T = clean(T, "toml"); do_gitleaks() }
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
+  else if (K == "hosts") do_hosts()
+  else if (K == "pnpmws") do_pnpmws()
   else if (K == "ci") do_ci()
   if (ERRSET) exit 3
 }

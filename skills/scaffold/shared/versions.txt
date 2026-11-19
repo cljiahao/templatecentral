@@ -30,6 +30,7 @@ image  beanie-python python:3.13.16-slim   # held on 3.13 (beanie declares <3.14
 
 tool   DIFF_COVER  11.0.3
 tool   GITLEAKS    8.30.1
+tool   HADOLINT    2.15.1
 tool   PIP_AUDIT   2.10.1
 tool   JSCPD       npm:jscpd
 tool   SONARJS     npm:eslint-plugin-sonarjs
@@ -87,6 +88,7 @@ npm dotenv                        ^18.0.10
 npm eslint                        ^10.14.0
 npm eslint-config-next            ^16.4.6
 npm eslint-config-prettier        ^10.1.8
+npm eslint-plugin-no-unsanitized  4.1.5
 npm eslint-plugin-prettier        ^5.5.7
 npm eslint-plugin-react-hooks     ^7.1.1
 npm eslint-plugin-sonarjs         4.2.2

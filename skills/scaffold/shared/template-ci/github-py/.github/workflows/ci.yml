@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
@@ -28,7 +28,7 @@ jobs:
       - name: Install deps
         run: |
           set -euo pipefail
-          pip install -r requirements.txt
+          pip install --require-hashes -r requirements.txt
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
       - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)
         run: bash .claude/ci-gates.sh deps
@@ -40,6 +40,14 @@ jobs:
         run: bash .claude/ci-gates.sh testbudget
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
+      - name: Supply chain (install scripts, release age, lockfile hosts, frozen installs)
+        run: bash .claude/ci-gates.sh supplychain
+      - name: Workflow hardening (pinned actions, token permissions, no injection)
+        run: bash .claude/ci-gates.sh workflows
+      - name: .env.example matches the variables the code reads
+        run: bash .claude/ci-gates.sh envexample
+      - name: Dockerfile lint (digest pin, non-root USER, hadolint)
+        run: bash .claude/ci-gates.sh dockerfile
       - run: ruff check src/ test/ && ruff format --check src/ test/
       - run: python -m pyright src/
       - name: Duplication (production source <= 3%, per .jscpd.json)
@@ -63,7 +71,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - name: Require CHANGELOG for src changes (apply 'skip-changelog' label to bypass)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -75,7 +83,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - name: Require no change-narration comments (apply 'skip-comment-check' label to bypass)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -87,7 +95,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
       - name: Require no weaker gate config (apply 'allow-gate-change' label to bypass)
         env:

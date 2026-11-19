@@ -4,6 +4,7 @@ updates:
   - package-ecosystem: pip
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       minor-and-patch:
         patterns: ["*"]
@@ -12,6 +13,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       minor-and-patch:
         patterns: ["*"]

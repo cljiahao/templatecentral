@@ -1,0 +1,2 @@
+# Extra package registry hosts a lockfile may pull from, one per line. The default public registries (registry.npmjs.org, pypi.org, files.pythonhosted.org) need no entry.
+# Add a host only after reviewing why a dependency resolves from it; the gate-ratchet flags every added line.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -31,7 +31,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -108,7 +108,7 @@ case "$gate" in
     rm -f "$runner_tmp"
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
-      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget)[.]sh)$'
+      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
       if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
@@ -292,8 +292,34 @@ JS
       fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an audited advisory in $allow with an expiry date and a reason. Unaudited packages cannot be allowlisted: install the missing audit tool or make the package auditable, or remove it."
     fi
     ;;
+  supplychain)
+    [ -f scripts/check-supply-chain.sh ] || fail "scripts/check-supply-chain.sh is missing"
+    bash scripts/check-supply-chain.sh || fail "supply-chain check failed (output above)."
+    ;;
+  workflows)
+    [ -f scripts/check-workflows.sh ] || fail "scripts/check-workflows.sh is missing"
+    bash scripts/check-workflows.sh || fail "workflow hardening check failed (output above)."
+    ;;
+  envexample)
+    [ -f scripts/check-env-example.sh ] || fail "scripts/check-env-example.sh is missing"
+    bash scripts/check-env-example.sh || fail ".env.example drifted from the variables the code reads (output above)."
+    ;;
+  dockerfile)
+    # Bump version and SHA256 together, from the release's checksums.sha256 (hadolint-linux-x86_64)
+    HADOLINT_VERSION="2.15.1"
+    HADOLINT_SHA256="c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
+    [ -f scripts/check-dockerfile.sh ] || fail "scripts/check-dockerfile.sh is missing"
+    if ! command -v hadolint >/dev/null 2>&1; then
+      tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/hadolint.XXXXXX")
+      curl -fsSL -o "$tmp/hadolint" "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64" || fail "hadolint download failed"
+      echo "${HADOLINT_SHA256}  $tmp/hadolint" | sha256sum -c - || fail "hadolint checksum mismatch"
+      chmod +x "$tmp/hadolint"
+      PATH="$tmp:$PATH"
+    fi
+    bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
+    ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]" >&2
     exit 2
     ;;
 esac

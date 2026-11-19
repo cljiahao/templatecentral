@@ -65,7 +65,10 @@ pip install "fastapi>=0.162.5" "uvicorn[standard]" "pydantic>=2.14.3" pydantic-s
 
 # Freeze BEFORE dev deps are installed — requirements.txt is what the Dockerfile's
 # prod-deps stage installs, so it must contain runtime packages only.
-pip freeze > requirements.txt
+pip freeze > requirements.in
+pip install uv
+uv pip compile requirements.in --generate-hashes -o requirements.txt
+rm requirements.in
 
 pip install -r requirements-dev.txt
 ```
