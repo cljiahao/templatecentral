@@ -117,16 +117,23 @@ if [ -f "$HJ" ]; then
 fi
 origin_of() { printf '%s\n' "$records" | awk -v p="$1" '{ h = $1; $1 = ""; sub(/^ /, ""); if ($0 == p) { print h; exit } }'; }
 
-# unsafe_path <rel>: succeeds when the file or any parent below the project is a symlink or not a directory.
+# unsafe_path <rel>: the one check for every write site (targets, sidecars, base copies). Succeeds when the file or any
+# parent below the project is a symlink or not a directory, the path escapes the project, or the nearest existing
+# ancestor resolves outside the project root.
 unsafe_path() {
-  local d=$1
+  local d=$1 a r
+  case "$d" in /*|..|../*|*/..|*/../*) return 0 ;; esac
   [ -L "$P/$d" ] && return 0
   while [ "${d%/*}" != "$d" ]; do
     d=${d%/*}
     if [ -L "$P/$d" ]; then return 0; fi
     if [ -e "$P/$d" ] && [ ! -d "$P/$d" ]; then return 0; fi
   done
-  return 1
+  a=$1
+  while [ "${a%/*}" != "$a" ] && [ ! -d "$P/${a%/*}" ]; do a=${a%/*}; done
+  if [ "${a%/*}" != "$a" ]; then r=$(cd -P -- "$P/${a%/*}" 2>/dev/null && pwd -P) || return 0; else r=$P; fi
+  case "$r/" in "$P"/*) return 1 ;; esac
+  return 0
 }
 
 # masked_same <template> <file>: equal once the template's placeholder lines are dropped from both.
@@ -185,6 +192,7 @@ printf '%s\n' "$records" | while IFS= read -r line; do
   p=${line#* }
   case "$p" in AGENTS.md|CLAUDE.md|.claude/skills/*-verify/SKILL.md|.claude/skills/next-migrate/SKILL.md) continue ;; esac
   case "$managed$NL" in *"$NL$p$NL"*) continue ;; esac
+  if unsafe_path "$p"; then add GONE "$p" - - "record path is outside the project or under a symlink; ignored"; continue; fi
   if [ -e "$P/$p" ]; then add GONE "$p" - - "no longer seeded; still on disk, left alone"; else add GONE "$p" - - "no longer seeded; already absent"; fi
 done
 
@@ -216,6 +224,20 @@ if [ "$TREE" != clean ] && [ "$DIRTY_OK" -eq 0 ]; then
   echo "refusing to apply: git tree is $TREE. Commit or stash first so the refresh is one reviewable diff, or pass --allow-dirty." >&2
   exit 2
 fi
+
+# Every path the run will write is checked here, before the first write, so a refusal leaves the tree untouched.
+if [ -L "$HJ" ] || { [ -e "$HJ" ] && [ ! -f "$HJ" ]; }; then die "refusing: .claude/harness.json is a symlink or not a regular file"; fi
+unsafe_path .claude/harness.json && die "refusing: .claude/harness.json resolves outside the project"
+if [ "$N_REP$N_ADD" != 00 ]; then
+  unsafe_path "$BASE/x" && die "refusing: $BASE is a symlink or resolves outside the project"
+  while IFS="$TAB" read -r cls path _; do
+    case "$cls" in
+      ADD|REPLACE)
+        unsafe_path "$path" && die "refusing: $path is a symlink, sits under one, or resolves outside the project"
+        unsafe_path "$BASE/$path" && die "refusing: the base copy of $path ($BASE/$path) is a symlink, sits under one, or resolves outside the project" ;;
+    esac
+  done <"$RES"
+fi
 if [ -n "$BASEDIR" ]; then
   [ -d "$BASEDIR" ] || die "--baseline directory $BASEDIR does not exist"
   BD=$(cd -P -- "$BASEDIR" && pwd -P)
@@ -232,6 +254,7 @@ trap 'rm -f "$RES" "$TMPF"' EXIT
 write_file() {
   local srcf=$1 out=$2 mode=$3 d
   d=$(dirname -- "$out")
+  if unsafe_path "${out#"$P"/}"; then return 1; fi
   mkdir -p -- "$d" || return 1
   TMPF=$(mktemp "$d/.tc-refresh.XXXXXX") || return 1
   if ! { cp -- "$srcf" "$TMPF" && chmod -- "$mode" "$TMPF" && mv -f -- "$TMPF" "$out"; }; then rm -f -- "$TMPF"; return 1; fi
@@ -242,19 +265,41 @@ WROTE=$(mktemp "${TMPDIR:-/tmp}/hrefresh-wrote.XXXXXX") || die "cannot create a 
 trap 'rm -f "$RES" "$TMPF" "$WROTE"' EXIT
 NEWFILES=
 FAILED=0
+WLIST=
+NWLIST=
+# still_proven <path> <note>: the REPLACE proof holds right now, re-checked just before the write.
+still_proven() {
+  local path=$1 note=$2 oh
+  [ -f "$P/$path" ] && [ ! -L "$P/$path" ] || return 1
+  case "$note" in
+    "content identical"*) cmp -s -- "$srcf" "$P/$path" ;;
+    *)
+      oh=$(origin_of "$path")
+      [ -n "$oh" ] && [ "$(sha "$P/$path")" = "$oh" ] && [ -f "$P/$BASE/$path" ] && cmp -s -- "$P/$BASE/$path" "$P/$path" ;;
+  esac
+}
+# write_sidecar <path> <srcf>: the new version beside a modified file; never replaces anything that is already there.
+write_sidecar() {
+  local path=$1 srcf=$2 sc=$P/$1$NEWSUF
+  if [ -L "$sc" ]; then echo "FAILED   $path$NEWSUF (it is a symlink)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
+  if [ -e "$sc" ] && [ ! -f "$sc" ]; then echo "FAILED   $path$NEWSUF (it exists and is not a regular file)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
+  if [ -f "$sc" ]; then echo "FAILED   $path$NEWSUF (it already exists; merge or remove it first)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
+  if write_file "$srcf" "$sc" 644; then echo "wrote    $path$NEWSUF"; NEWFILES="$NEWFILES$NL$path$NEWSUF"; WLIST="$WLIST $path$NEWSUF"
+  else echo "FAILED   $path$NEWSUF"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; fi
+}
 while IFS="$TAB" read -r cls path srcf mode note; do
   case "$cls" in
     ADD|REPLACE)
-      if [ "$cls" = ADD ] && { [ -e "$P/$path" ] || [ -L "$P/$path" ]; }; then echo "skipped $path: it appeared after the plan"; FAILED=1; continue; fi
-      if write_file "$srcf" "$P/$path" "$mode"; then echo "wrote    $path"; echo "$path" >>"$WROTE"
-      else echo "FAILED   $path"; FAILED=1; fi ;;
+      if [ "$cls" = ADD ] && { [ -e "$P/$path" ] || [ -L "$P/$path" ]; }; then echo "FAILED   $path (it appeared after the plan)"; FAILED=1; NWLIST="$NWLIST $path"; continue; fi
+      if [ "$cls" = REPLACE ] && ! still_proven "$path" "$note"; then
+        echo "changed  $path since the plan; treated as MODIFIED"
+        N_MOD=$((N_MOD + 1)); write_sidecar "$path" "$srcf"; continue
+      fi
+      if write_file "$srcf" "$P/$path" "$mode"; then echo "wrote    $path"; echo "$path" >>"$WROTE"; WLIST="$WLIST $path"
+      else echo "FAILED   $path"; FAILED=1; NWLIST="$NWLIST $path"; fi ;;
     MODIFIED)
       if unsafe_path "$path" || { [ -e "$P/$path" ] && [ ! -f "$P/$path" ]; }; then echo "left     $path (no new version written: $note)"; continue; fi
-      if [ -e "$P/$path$NEWSUF" ] || [ -L "$P/$path$NEWSUF" ]; then
-        if [ -L "$P/$path$NEWSUF" ]; then echo "left     $path (its $NEWSUF is a symlink)"; FAILED=1; continue; fi
-      fi
-      if write_file "$srcf" "$P/$path$NEWSUF" 644; then echo "wrote    $path$NEWSUF"; NEWFILES="$NEWFILES$NL$path$NEWSUF"
-      else echo "FAILED   $path$NEWSUF"; FAILED=1; fi ;;
+      write_sidecar "$path" "$srcf" ;;
   esac
 done <"$RES"
 
@@ -265,11 +310,11 @@ if [ -s "$WROTE" ] && [ -f "$HJ" ]; then
   [ -f "$pj" ] && VER=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$pj" | head -n 1)
   [ "$N_MOD" -eq 0 ] || VER=
   while IFS= read -r p; do
-    mkdir -p -- "$P/$BASE/$(dirname -- "$p")" && cp -- "$P/$p" "$P/$BASE/$p"
+    if ! write_file "$P/$p" "$P/$BASE/$p" 644; then echo "FAILED   $BASE/$p"; FAILED=1; NWLIST="$NWLIST $BASE/$p"; fi
   done <"$WROTE"
   if have python3; then
     (cd "$P" && python3 - "$WROTE" "$VER" <<'PY'
-import hashlib, json, sys
+import hashlib, json, os, sys
 f = ".claude/harness.json"
 j = json.load(open(f))
 for p in open(sys.argv[1]).read().split("\n"):
@@ -277,9 +322,18 @@ for p in open(sys.argv[1]).read().split("\n"):
         j["seeded_files"][p] = {"origin_hash": hashlib.sha256(open(p, "rb").read()).hexdigest(), "path": p}
 if sys.argv[2]:
     j["templatecentral_version"] = sys.argv[2]
-open(f, "w").write(json.dumps(j, indent=2) + "\n")
+tmp = f + ".tc-refresh.%d" % os.getpid()
+try:
+    with open(tmp, "w") as o:
+        o.write(json.dumps(j, indent=2) + "\n")
+    os.chmod(tmp, os.stat(f).st_mode & 0o777)
+    os.replace(tmp, f)
+except BaseException:
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    raise
 PY
-    ) || { echo "could not update .claude/harness.json"; FAILED=1; }
+    ) || { echo "could not update .claude/harness.json"; FAILED=1; NWLIST="$NWLIST .claude/harness.json"; }
   elif have node; then
     (cd "$P" && node - "$WROTE" "$VER" <<'JS'
 const fs = require("fs"), cr = require("crypto");
@@ -287,12 +341,20 @@ const f = ".claude/harness.json", j = JSON.parse(fs.readFileSync(f, "utf8"));
 for (const p of fs.readFileSync(process.argv[2], "utf8").split("\n"))
   if (p) j.seeded_files[p] = { origin_hash: cr.createHash("sha256").update(fs.readFileSync(p)).digest("hex"), path: p };
 if (process.argv[3]) j.templatecentral_version = process.argv[3];
-fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+const tmp = f + ".tc-refresh." + process.pid;
+try {
+  fs.writeFileSync(tmp, JSON.stringify(j, null, 2) + "\n");
+  fs.chmodSync(tmp, fs.statSync(f).mode & 0o777);
+  fs.renameSync(tmp, f);
+} catch (e) {
+  try { fs.unlinkSync(tmp); } catch (_) { /* nothing to remove */ }
+  throw e;
+}
 JS
-    ) || { echo "could not update .claude/harness.json"; FAILED=1; }
+    ) || { echo "could not update .claude/harness.json"; FAILED=1; NWLIST="$NWLIST .claude/harness.json"; }
   else
     echo "neither python3 nor node found: .claude/harness.json not updated; verify-harness.sh will flag the written files."
-    FAILED=1
+    FAILED=1; NWLIST="$NWLIST .claude/harness.json"
   fi
 elif [ -s "$WROTE" ]; then
   echo "no .claude/harness.json: files written, no records updated (kit Step E writes it)."
@@ -317,5 +379,8 @@ if [ -n "$NEWFILES" ]; then
 fi
 [ "$N_GONE" -eq 0 ] || echo "Report only: $N_GONE recorded file(s) are no longer seeded; nothing was deleted."
 echo "Review with git diff, then commit the refresh as one change."
+if [ "$FAILED" -ne 0 ]; then
+  echo "PARTIAL: the tree is partly applied. written:${WLIST:- none}. not written:${NWLIST:- none}."
+fi
 if [ "$N_MOD" -gt 0 ] || [ "$FAILED" -ne 0 ] || [ "$LIVE" -ne 0 ] || [ "$CMP" -ne 0 ]; then exit 1; fi
 exit 0

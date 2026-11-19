@@ -224,4 +224,126 @@ echo keep >"$T/nl-out.txt"; ln -s "$T/nl-out.txt" "$T/nl/.claude/hooks/protect-f
 commit "$T/nl" edit
 run "$T/nl" --apply >/dev/null; check "new-version symlink: target untouched" "keep" "$(cat "$T/nl-out.txt")"
 
+# a symlinked .claude/.harness-base is refused before any write, nothing lands outside
+seed "$T/hb" nestjs
+age "$T/hb" .claude/hooks/stop-checks.sh
+rm "$T/hb/.claude/hooks/subagent-stop.sh"
+mv "$T/hb/.claude/.harness-base" "$T/hb-outside" && ln -s "$T/hb-outside" "$T/hb/.claude/.harness-base"
+commit "$T/hb" basesymlink
+before=$(treehash "$T/hb"); outside_before=$(treehash "$T/hb-outside")
+out=$(run "$T/hb" --apply); check "symlinked .harness-base: refused with 2" 2 $?
+contains "symlinked .harness-base: reason" "refusing: .claude/.harness-base is a symlink" "$out"
+check "symlinked .harness-base: project tree untouched" "$before" "$(treehash "$T/hb")"
+check "symlinked .harness-base: outside directory untouched" "$outside_before" "$(treehash "$T/hb-outside")"
+
+# a symlinked harness.json is refused before any write
+seed "$T/hj" nestjs
+age "$T/hj" .claude/hooks/stop-checks.sh
+mv "$T/hj/.claude/harness.json" "$T/hj-out.json" && ln -s "$T/hj-out.json" "$T/hj/.claude/harness.json"
+commit "$T/hj" hjsymlink
+before=$(treehash "$T/hj"); outside_before=$(sha "$T/hj-out.json")
+out=$(run "$T/hj" --apply); check "symlinked harness.json: refused with 2" 2 $?
+contains "symlinked harness.json: reason" "harness.json is a symlink" "$out"
+check "symlinked harness.json: project tree untouched" "$before" "$(treehash "$T/hj")"
+check "symlinked harness.json: outside file untouched" "$outside_before" "$(sha "$T/hj-out.json")"
+
+# a .templatecentral-new that is a directory fails for that file, leaves no temp file, and ends with the partial summary
+seed "$T/sd" nestjs
+printf 'edit\n' >>"$T/sd/.claude/hooks/protect-files.sh"
+age "$T/sd" .claude/hooks/stop-checks.sh
+rm "$T/sd/.claude/hooks/subagent-stop.sh"
+mkdir "$T/sd/.claude/hooks/protect-files.sh.templatecentral-new"
+commit "$T/sd" sidecardir
+out=$(run "$T/sd" --apply); check "sidecar is a directory: exits 1" 1 $?
+contains "sidecar is a directory: reported" "FAILED   .claude/hooks/protect-files.sh.templatecentral-new (it exists and is not a regular file)" "$out"
+absent "sidecar is a directory: not claimed written" "wrote    .claude/hooks/protect-files.sh.templatecentral-new" "$out"
+check "sidecar is a directory: no temp file left" 0 "$(find "$T/sd" -name '.tc-refresh.*' | wc -l | tr -d ' ')"
+check "sidecar is a directory: still empty" 0 "$(find "$T/sd/.claude/hooks/protect-files.sh.templatecentral-new" -mindepth 1 | wc -l | tr -d ' ')"
+contains "partial summary after FAILED" "PARTIAL: the tree is partly applied. written:" "$out"
+contains "partial summary lists what was written" ".claude/hooks/stop-checks.sh" "$(printf '%s\n' "$out" | grep '^PARTIAL')"
+contains "partial summary lists what was not" "not written: .claude/hooks/protect-files.sh.templatecentral-new" "$out"
+
+# a .templatecentral-new that is a regular file is not overwritten
+seed "$T/sf" nestjs
+printf 'edit\n' >>"$T/sf/.claude/hooks/protect-files.sh"
+printf 'my merge in progress\n' >"$T/sf/.claude/hooks/protect-files.sh.templatecentral-new"
+commit "$T/sf" sidecarfile
+out=$(run "$T/sf" --apply); check "sidecar is a file: exits 1" 1 $?
+check "sidecar is a file: kept as it was" "my merge in progress" "$(cat "$T/sf/.claude/hooks/protect-files.sh.templatecentral-new")"
+contains "sidecar is a file: told to merge or remove" "it already exists; merge or remove it first" "$out"
+
+# a REPLACE file that changes between the plan and the write is treated as MODIFIED
+mkdir -p "$T/gitbin"
+REALGIT=$(command -v git)
+cat >"$T/gitbin/git" <<EOF
+#!/usr/bin/env bash
+out=\$("$REALGIT" "\$@"); rc=\$?
+printf '%s\n' "\$out"
+case " \$* " in *" status "*) if [ -n "\${TC_RACE:-}" ] && [ ! -e "\$TC_RACE.done" ]; then printf '# race\n' >>"\$TC_RACE"; : >"\$TC_RACE.done"; fi ;; esac
+exit \$rc
+EOF
+chmod +x "$T/gitbin/git"
+seed "$T/rc" nestjs
+age "$T/rc" .claude/hooks/stop-checks.sh
+commit "$T/rc" aged
+out=$(PATH="$T/gitbin:$RUNPATH" TC_RACE="$T/rc/.claude/hooks/stop-checks.sh" bash "$SCRIPT" "$T/rc" --apply 2>&1); check "changed since the plan: exits 1" 1 $?
+contains "changed since the plan: reported" "changed  .claude/hooks/stop-checks.sh since the plan; treated as MODIFIED" "$out"
+check "changed since the plan: file not replaced" 1 "$(grep -c '^# race$' "$T/rc/.claude/hooks/stop-checks.sh")"
+check "changed since the plan: new version beside it" "$(sha "$ROOT/skills/scaffold/shared/template-ts/.claude/hooks/stop-checks.sh")" "$(sha "$T/rc/.claude/hooks/stop-checks.sh.templatecentral-new")"
+
+# rehash <dir> <path>: set the record to the file's current hash (a forged record)
+rehash() {
+  (cd "$1" && python3 - "$2" <<'PY'
+import hashlib, json, sys
+j = json.load(open(".claude/harness.json"))
+j["seeded_files"][sys.argv[1]]["origin_hash"] = hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest()
+json.dump(j, open(".claude/harness.json", "w"), indent=2)
+PY
+  )
+}
+# forged record: file edited and record changed to match, base copy left old
+seed "$T/fr" nestjs
+age "$T/fr" .claude/hooks/stop-checks.sh
+printf '# sneaky local edit\n' >>"$T/fr/.claude/hooks/stop-checks.sh"
+rehash "$T/fr" .claude/hooks/stop-checks.sh
+commit "$T/fr" forged
+out=$(run "$T/fr")
+contains "forged record: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its seeded copy" "$out"
+# base copy mismatch alone: file equals its record, base copy differs
+seed "$T/bm" nestjs
+age "$T/bm" .claude/hooks/stop-checks.sh
+printf '# base drift\n' >>"$T/bm/.claude/.harness-base/.claude/hooks/stop-checks.sh"
+commit "$T/bm" basedrift
+out=$(run "$T/bm")
+contains "base mismatch alone: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its seeded copy" "$out"
+# whitespace-only and CRLF edits are edits
+seed "$T/ws" nestjs
+age "$T/ws" .claude/hooks/stop-checks.sh
+age "$T/ws" lefthook.yml
+sed -i.bak '1s/$/ /' "$T/ws/.claude/hooks/stop-checks.sh"; rm -f "$T/ws/.claude/hooks/stop-checks.sh.bak"
+awk '{ printf "%s\r\n", $0 }' "$T/ws/lefthook.yml" >"$T/ws/lefthook.crlf" && mv "$T/ws/lefthook.crlf" "$T/ws/lefthook.yml"
+commit "$T/ws" whitespace
+out=$(run "$T/ws")
+contains "whitespace-only edit: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its recorded origin hash)" "$out"
+contains "CRLF edit: MODIFIED" "MODIFIED  lefthook.yml  (differs from its recorded origin hash)" "$out"
+
+# record entries that point outside the project are never written or removed
+seed "$T/ev" nestjs
+echo keep >"$T/evil"; echo keep >"$T/abs-file"
+python3 - "$T/ev" "$T/abs-file" <<'PY'
+import json, sys
+f = sys.argv[1] + "/.claude/harness.json"
+j = json.load(open(f))
+for p in ("../evil", sys.argv[2]):
+    j["seeded_files"][p] = {"origin_hash": "0" * 64, "path": p}
+json.dump(j, open(f, "w"), indent=2)
+PY
+age "$T/ev" .claude/hooks/stop-checks.sh
+commit "$T/ev" evilrecords
+out=$(run "$T/ev" --apply); check "outside record paths: apply exits 0" 0 $?
+contains "outside record path: ignored" "GONE      ../evil  (record path is outside the project or under a symlink; ignored)" "$out"
+contains "absolute record path: ignored" "GONE      $T/abs-file  (record path is outside the project or under a symlink; ignored)" "$out"
+check "outside record path: file kept" "keep" "$(cat "$T/evil")"
+check "absolute record path: file kept" "keep" "$(cat "$T/abs-file")"
+
 exit $fail

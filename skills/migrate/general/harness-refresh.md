@@ -8,6 +8,10 @@ Brings the harness files to the current templates. Replaces only files proven un
 
 **Proof.** A file counts as unmodified only when its hash equals its `origin_hash` in `.claude/harness.json` and it is byte-equal to its copy under `.claude/.harness-base/`. A project without both records (an older plugin version may lack them) gets every changed file as MODIFIED; the script does not guess.
 
+**Safety.** `--apply` checks every path it will write first (targets, sidecars, base copies, `.claude/harness.json`). A symlink, a path outside the project, or a symlinked `.claude/.harness-base` or `harness.json` makes it refuse with exit 2 before any write. A `<path>.templatecentral-new` that already exists is never overwritten: merge or remove it first. Any FAILED line ends with one `PARTIAL:` line listing what was written and what was not.
+
+**Notes.** `--stack <nestjs|nextjs|vite-react|fastapi>` picks the stack when detection is ambiguous or finds none. A dry run exits 0 when only REPLACE or ADD are pending. A replaced file gets the template's file mode.
+
 1. Dry run. It writes nothing and prints one line per file:
    ```bash
    bash "<skill-dir>/general/harness-refresh.sh" <project-dir>
