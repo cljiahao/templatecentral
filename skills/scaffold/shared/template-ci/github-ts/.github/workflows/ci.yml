@@ -9,22 +9,40 @@ concurrency:
 env:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
   DIFF_COVER_VERSION: "11.0.3"
-  # the one knob for test sharding: raise it to split the suite across more runners
-  SHARD_COUNT: "2"
+  # most test shards; the plan job lowers it to the number of test files so no shard is empty
+  SHARD_MAX: "4"
   # caps each Node process; the test workers inherit it
   NODE_OPTIONS: --max-old-space-size=4096
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     outputs:
       shards: ${{ steps.shards.outputs.list }}
+      count: ${{ steps.shards.outputs.count }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No `version:` input: pnpm/action-setup reads packageManager from package.json.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "26", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # vitest refuses --shard=i/N when N exceeds its test files, so N = min(SHARD_MAX, files); no files fails.
       - id: shards
         run: |
           set -euo pipefail
-          list=$(node -p 'JSON.stringify(Array.from({ length: Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')
-          echo "list=$list" >> "$GITHUB_OUTPUT"
+          pnpm exec vitest list --filesOnly --json | node -e '
+          const fs = require("node:fs");
+          const files = JSON.parse(fs.readFileSync(0, "utf8")).length;
+          if (files < 1) {
+            console.error("vitest resolved no test files");
+            process.exit(1);
+          }
+          const count = Math.min(Number(process.env.SHARD_MAX), files);
+          const list = Array.from({ length: count }, (_, i) => i + 1);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "count=" + count + "\nlist=" + JSON.stringify(list) + "\n");
+          console.log(files + " test files, " + count + " shards");
+          '
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -71,8 +89,19 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: "26", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}, coverage in the blob report)
-        run: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ env.SHARD_COUNT }}"
+      - name: Require a valid shard count (a positive integer from the plan job)
+        env:
+          SHARD_COUNT: ${{ needs.plan.outputs.count }}
+        run: |
+          set -euo pipefail
+          case "$SHARD_COUNT" in
+            ''|*[!0-9]*|0*|??????????*)
+              echo "invalid shard count: '$SHARD_COUNT'" >&2
+              exit 1
+              ;;
+          esac
+      - name: Tests (shard ${{ matrix.shard }}/${{ needs.plan.outputs.count }}, coverage in the blob report)
+        run: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ needs.plan.outputs.count }}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-blob-${{ matrix.shard }}
@@ -80,7 +109,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   coverage:
-    needs: test
+    needs: [plan, test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -98,9 +127,39 @@ jobs:
           path: blob
           merge-multiple: true
       - name: Require one blob report per shard (a missing shard must fail, not shrink coverage)
-        run: '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'
+        env:
+          SHARD_COUNT: ${{ needs.plan.outputs.count }}
+        run: |
+          set -euo pipefail
+          case "$SHARD_COUNT" in
+            ''|*[!0-9]*|0*|??????????*)
+              echo "invalid shard count: '$SHARD_COUNT'" >&2
+              exit 1
+              ;;
+          esac
+          found=$(find blob -name "*.json" | wc -l | tr -d ' ')
+          if [ "$found" != "$SHARD_COUNT" ]; then
+            echo "expected $SHARD_COUNT shard reports, found $found" >&2
+            exit 1
+          fi
       - name: Merge shard reports (writes coverage/cobertura-coverage.xml)
         run: pnpm exec vitest run --merge-reports=blob --coverage
+      - name: Build one test report from the shard reports
+        run: pnpm exec vitest run --merge-reports=blob --reporter=json --outputFile.json=report/merged.json
+      - name: Count the tests without sharding (collection only, no test body runs)
+        run: pnpm exec vitest run -t '^$' --reporter=json --outputFile.json=report/collected.json
+      - name: Require the merged test count to equal the unsharded count
+        run: |
+          set -euo pipefail
+          node -e '
+          const fs = require("node:fs");
+          const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
+          const merged = read("report/merged.json");
+          const collected = read("report/collected.json");
+          console.log("merged " + merged.numTotalTests + ", unsharded " + collected.numTotalTests + ", failed " + merged.numFailedTests);
+          const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0 && merged.success === true;
+          process.exit(ok ? 0 : 1);
+          '
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}

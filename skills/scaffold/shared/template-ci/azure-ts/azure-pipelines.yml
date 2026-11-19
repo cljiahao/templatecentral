@@ -8,8 +8,8 @@ pool:
 variables:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
   diffCoverVersion: "11.0.3"
-  # the one knob for test sharding: raise it to split the suite across more agents
-  shardCount: 2
+  # most test shards; the plan job lowers it to the number of test files so no shard is empty
+  shardMax: 4
   # caps each Node process; the test workers inherit it
   NODE_OPTIONS: --max-old-space-size=4096
 jobs:
@@ -33,10 +33,8 @@ jobs:
         displayName: Format, lint and typecheck
       - bash: pnpm exec jscpd
         displayName: Duplication (production source <= 3%, per .jscpd.json)
-  - job: test
-    timeoutInMinutes: 20
-    strategy:
-      parallel: ${{ variables.shardCount }}
+  - job: plan
+    timeoutInMinutes: 5
     steps:
       - checkout: self
       - task: NodeTool@0
@@ -46,14 +44,60 @@ jobs:
         displayName: pnpm (the version pinned in packageManager)
       - bash: pnpm install --frozen-lockfile
         displayName: Install deps
-      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" --shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"
+      # vitest refuses --shard=i/N when N exceeds its test files, so N = min(shardMax, files); no files fails.
+      - bash: |
+          set -euo pipefail
+          pnpm exec vitest list --filesOnly --json | SHARD_MAX="$(shardMax)" node -e '
+          const fs = require("node:fs");
+          const files = JSON.parse(fs.readFileSync(0, "utf8")).length;
+          if (files < 1) {
+            console.error("vitest resolved no test files");
+            process.exit(1);
+          }
+          const count = Math.min(Number(process.env.SHARD_MAX), files);
+          const matrix = {};
+          for (let i = 1; i <= count; i++) matrix["shard" + i] = { shard: String(i) };
+          console.log(files + " test files, " + count + " shards");
+          console.log("##vso[task.setvariable variable=count;isOutput=true]" + count);
+          console.log("##vso[task.setvariable variable=matrix;isOutput=true]" + JSON.stringify(matrix));
+          '
+        name: shards
+        displayName: Plan the test shards
+  - job: test
+    dependsOn: plan
+    timeoutInMinutes: 20
+    variables:
+      shardCount: $[ dependencies.plan.outputs['shards.count'] ]
+    strategy:
+      matrix: $[ dependencies.plan.outputs['shards.matrix'] ]
+    steps:
+      - checkout: self
+      - task: NodeTool@0
+        inputs: { versionSpec: "26.x" }
+        displayName: Node 26
+      - bash: npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
+        displayName: pnpm (the version pinned in packageManager)
+      - bash: pnpm install --frozen-lockfile
+        displayName: Install deps
+      - bash: |
+          set -euo pipefail
+          case "$(shardCount)" in
+            ''|*[!0-9]*|0*|??????????*)
+              echo "invalid shard count: '$(shardCount)'" >&2
+              exit 1
+              ;;
+          esac
+        displayName: Require a valid shard count (a positive integer from the plan job)
+      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(shard).json" --shard="$(shard)/$(shardCount)"
         displayName: Tests (this shard, coverage in the blob report)
       - task: PublishPipelineArtifact@1
-        inputs: { targetPath: blob, artifact: "vitest-blob-$(System.JobPositionInPhase)" }
+        inputs: { targetPath: blob, artifact: "vitest-blob-$(shard)" }
         displayName: Publish shard report
   - job: coverage
-    dependsOn: test
+    dependsOn: [plan, test]
     timeoutInMinutes: 10
+    variables:
+      shardCount: $[ dependencies.plan.outputs['shards.count'] ]
     steps:
       - checkout: self
         # diff-cover needs full history
@@ -77,8 +121,14 @@ jobs:
       # Own step: a missing shard must fail the job, not shrink coverage.
       - bash: |
           set -euo pipefail
-          count=$(find blob -name '*.json' | wc -l)
-          if [ "$count" -ne "$(shardCount)" ]; then
+          case "$(shardCount)" in
+            ''|*[!0-9]*|0*|??????????*)
+              echo "invalid shard count: '$(shardCount)'" >&2
+              exit 1
+              ;;
+          esac
+          count=$(find blob -name '*.json' | wc -l | tr -d ' ')
+          if [ "$count" != "$(shardCount)" ]; then
             echo "expected $(shardCount) shard reports, found $count" >&2
             exit 1
           fi
@@ -88,6 +138,22 @@ jobs:
           # writes coverage/cobertura-coverage.xml
           pnpm exec vitest run --merge-reports=blob --coverage
         displayName: Merge shard reports
+      - bash: pnpm exec vitest run --merge-reports=blob --reporter=json --outputFile.json=report/merged.json
+        displayName: Build one test report from the shard reports
+      - bash: pnpm exec vitest run -t '^$' --reporter=json --outputFile.json=report/collected.json
+        displayName: Count the tests without sharding (collection only, no test body runs)
+      - bash: |
+          set -euo pipefail
+          node -e '
+          const fs = require("node:fs");
+          const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
+          const merged = read("report/merged.json");
+          const collected = read("report/collected.json");
+          console.log("merged " + merged.numTotalTests + ", unsharded " + collected.numTotalTests + ", failed " + merged.numFailedTests);
+          const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0 && merged.success === true;
+          process.exit(ok ? 0 : 1);
+          '
+        displayName: Require the merged test count to equal the unsharded count
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}

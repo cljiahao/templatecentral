@@ -7,10 +7,13 @@
 #
 # Usage: bash scripts/test-harness-kit.sh [KIT_MD ...]   (needs git, node, python3; default: every kit file)
 # KIT_MD files only feed the prose checks; the scripts under test always come from the template trees.
+# Runs as four parallel groups of sections (each in its own process and temp folder); TKIT_SERIAL=1 runs one process.
+# The parent fails on any failed case, on a crashed group, or when the groups' sections do not match the sections in this
+# file. TKIT_NAMES_DIR=<dir> keeps each group's case list (section, result, description).
 # No `set -e`: cases deliberately run commands that fail.
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="${TKIT_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 if [[ $# -gt 0 ]]; then
   KIT_MDS=("$@")
 else
@@ -23,6 +26,122 @@ done
 for kit_md in "${KIT_MDS[@]}"; do
   [[ -f "$kit_md" ]] || { echo "test-harness-kit: $kit_md not found" >&2; exit 2; }
 done
+
+# tkit_section <title>: marks where a section starts in the case list a group writes.
+tkit_section() {
+  if [[ -n "${TKIT_NAMES:-}" ]]; then printf '#section\t%s\n' "$1" >> "$TKIT_NAMES"; fi
+  return 0
+}
+
+# Sections of one group start with one of these titles. The setup sections run in every group because later sections use
+# their variables; "rest" takes every section no other group names.
+TKIT_SETUP='Template files|Helpers|Twin drift'
+tkit_titles() {
+  case $1 in
+    bnv) echo 'block-no-verify.sh' ;;
+    tsrel) echo 'TS: changed code files|Typecheck / stop|Python: a test-files-only' ;;
+    pf) echo 'protect-files.sh|user-prompt-guard' ;;
+    *) echo '' ;;
+  esac
+}
+
+# tkit_child <group> <kit-md>...: runs the sections of one group from a filtered copy of this file.
+tkit_child() {
+  local group=$1 keep named n
+  shift
+  named="$(tkit_titles bnv)|$(tkit_titles tsrel)|$(tkit_titles pf)"
+  if [[ $group == rest ]]; then keep=''; else keep=$(tkit_titles "$group"); fi
+  n=$(mktemp "${TMPDIR:-/tmp}/tkit-group.XXXXXX") || return 2
+  awk -v setup="$TKIT_SETUP" -v keep="$keep" -v named="$named" -v group="$group" '
+    function listed(title, list,   k, i) {
+      k = split(list, parts, "|")
+      for (i = 1; i <= k; i++) if (parts[i] != "" && index(title, parts[i]) == 1) return 1
+      return 0
+    }
+    /^# ── .* (─)+[[:space:]]*$/ {
+      title = $0; sub(/^# ── /, "", title); sub(/ (─)+[[:space:]]*$/, "", title)
+      if (title ~ /^Summary/) on = 1
+      else if (listed(title, setup)) on = 1
+      else if (group == "rest") on = !listed(title, named)
+      else on = listed(title, keep)
+      seen_header = 1
+      if (on) { print; gsub(/\047/, "\047\\\047\047", title); print "tkit_section \047" title "\047" }
+      next
+    }
+    !seen_header || on { print }
+  ' "${BASH_SOURCE[0]}" > "$n"
+  TKIT_CHILD_RUN=1 TKIT_REPO_ROOT="$REPO_ROOT" bash "$n" "$@"
+  local ec=$?
+  rm -f "$n"
+  return $ec
+}
+
+# tkit_parent <kit-md>...: starts the groups, then totals their case lists and checks them against this file.
+tkit_parent() {
+  local P g pid ec=0 headers title want got total=0 fails=0 first=1 line p f
+  local groups="bnv tsrel pf rest"
+  P=$(mktemp -d "${TMPDIR:-/tmp}/tkit-par.XXXXXX") || return 2
+  local pids=""
+  for g in $groups; do
+    TKIT_GROUP=$g TKIT_NAMES="$P/names.$g" bash "${BASH_SOURCE[0]}" "$@" > "$P/out.$g" 2>&1 &
+    pids="$pids $!"
+  done
+  for pid in $pids; do wait "$pid" || true; done
+  headers=$(awk '/^# ── .* (─)+[[:space:]]*$/ { t = $0; sub(/^# ── /, "", t); sub(/ (─)+[[:space:]]*$/, "", t); if (t !~ /^Summary/) print t }' "${BASH_SOURCE[0]}")
+  : > "$P/sections.tsv"
+  for g in $groups; do
+    [[ -f "$P/names.$g" ]] || : > "$P/names.$g"
+    awk -F'\t' -v g="$g" '
+      /^#section\t/ { t = $2; if (!(t in n)) { order[++k] = t; n[t] = 0 } next }
+      { n[t]++; if ($1 == "FAIL") f[t]++ }
+      END { for (i = 1; i <= k; i++) print g "\t" order[i] "\t" n[order[i]] "\t" f[order[i]] + 0 }
+    ' "$P/names.$g" >> "$P/sections.tsv"
+  done
+  # every section of this file runs in exactly one group, the setup sections in all of them
+  while IFS= read -r title; do
+    [[ -n "$title" ]] || continue
+    got=$(awk -F'\t' -v t="$title" '$2 == t' "$P/sections.tsv" | wc -l | tr -d ' ')
+    if printf '%s\n' "$TKIT_SETUP" | tr '|' '\n' | grep -qxF "$title"; then want=4; else want=1; fi
+    if [[ $got -ne $want ]]; then
+      echo "test-harness-kit: MISMATCH section '$title' ran in $got groups, expected $want" >&2; ec=1
+    elif [[ $want -eq 4 && $(awk -F'\t' -v t="$title" '$2 == t { print $3 }' "$P/sections.tsv" | sort -u | wc -l | tr -d ' ') -ne 1 ]]; then
+      echo "test-harness-kit: MISMATCH setup section '$title' has different case counts across groups" >&2; ec=1
+    elif [[ $want -eq 1 && $(awk -F'\t' -v t="$title" '$2 == t { s += $3 } END { print s + 0 }' "$P/sections.tsv") -eq 0 ]]; then
+      echo "test-harness-kit: MISMATCH section '$title' ran no cases" >&2; ec=1
+    fi
+  done <<< "$headers"
+  while IFS=$'\t' read -r g title _; do
+    [[ $title == Summary* ]] || printf '%s\n' "$headers" | grep -qxF "$title" || { echo "test-harness-kit: MISMATCH group $g ran unknown section '$title'" >&2; ec=1; }
+  done < "$P/sections.tsv"
+  # totals: setup sections count once (from the first group), every other section once
+  for g in $groups; do
+    p=$(awk -F'\t' -v g="$g" -v setup="$TKIT_SETUP" -v first="$first" '
+      BEGIN { k = split(setup, s, "|") }
+      $1 == g { isset = 0; for (i = 1; i <= k; i++) if (s[i] == $2) isset = 1
+        if (!isset || first) { c += $3; x += $4 } }
+      END { print c + 0, x + 0 }' "$P/sections.tsv")
+    read -r line f <<< "$p"
+    total=$((total + line)); fails=$((fails + f)); first=0
+    # the group's own summary line must agree with its case list
+    got=$(tail -n 1 "$P/out.$g")
+    want="test-harness-kit: $(awk -F'\t' -v g="$g" '$1 == g { c += $3; x += $4 } END { print c - x " passed, " x + 0 " failed" }' "$P/sections.tsv")"
+    if [[ "$got" != "$want" ]]; then echo "test-harness-kit: MISMATCH group $g summary '$got', case list says '$want'" >&2; ec=1; fi
+  done
+  # a failed case prints its FAIL line once even when a setup section failed in every group
+  for g in $groups; do grep -v '^test-harness-kit: [0-9]* passed' "$P/out.$g"; done | awk '!seen[$0]++'
+  if [[ -n "${TKIT_NAMES_DIR:-}" ]]; then mkdir -p "$TKIT_NAMES_DIR" && cp "$P"/names.* "$TKIT_NAMES_DIR"/; fi
+  rm -rf "$P"
+  echo "test-harness-kit: $((total - fails)) passed, $fails failed"
+  [[ $fails -eq 0 && $ec -eq 0 ]]
+}
+
+if [[ -n "${TKIT_GROUP:-}" && -z "${TKIT_CHILD_RUN:-}" ]]; then
+  tkit_child "$TKIT_GROUP" "$@"
+  exit $?
+elif [[ -z "${TKIT_SERIAL:-}" && -z "${TKIT_CHILD_RUN:-}" ]]; then
+  tkit_parent "$@"
+  exit $?
+fi
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/tkit.XXXXXX")
 trap 'rm -rf "$T"' EXIT
@@ -74,6 +193,11 @@ check() {
     FAIL=$((FAIL + 1))
     echo "FAIL: $3 — expected $1, got $2${4:+ :: $4}"
   fi
+  if [[ -n "${TKIT_NAMES:-}" ]]; then
+    local mark=ok
+    [[ "$1" == "$2" ]] || mark=FAIL
+    printf '%s\t%s\n' "$mark" "${3//$'\n'/ }" >> "$TKIT_NAMES"
+  fi
 }
 
 # ok_if <cmd...>: yes or no by the command's exit status.
@@ -101,6 +225,14 @@ new_repo() {
   git -C "$d" init -q -b "$1"
   git -C "$d" "${GIT_ID[@]}" commit -q --allow-empty -m init
   echo "$d"
+}
+
+# Used by sections that run in different groups, so they are set up here with the other helpers.
+FEAT=$(new_repo feat)
+
+# json_has <python-assertion-on-d> — reads JSON from $OUT; d is hookSpecificOutput.
+json_has() {
+  printf '%s' "$OUT" | python3 -c "import json, sys; d = json.load(sys.stdin)['hookSpecificOutput']; sys.exit(0 if ($1) else 1)" 2>/dev/null
 }
 
 # ── Twin drift ────────────────────────────────────────────────────────────────
@@ -174,7 +306,6 @@ expect_edit ask "$PF/.claude/agents/x.ipynb" notebook_path NotebookEdit
 
 # ── block-no-verify.sh ────────────────────────────────────────────────────────
 
-FEAT=$(new_repo feat)
 MAIN=$(new_repo main)
 NL=$'\n'
 TAB=$'\t'
@@ -492,11 +623,6 @@ MOCK
 chmod +x "$MOCK"/*
 ORIG_PATH=$PATH
 export PATH="$MOCK:$PATH" MOCK_LOG MOCK_TSC_OK
-
-# json_has <python-assertion-on-d> — reads JSON from $OUT; d is hookSpecificOutput.
-json_has() {
-  printf '%s' "$OUT" | python3 -c "import json, sys; d = json.load(sys.stdin)['hookSpecificOutput']; sys.exit(0 if ($1) else 1)" 2>/dev/null
-}
 
 run_hook "$KIT/post-edit-typecheck.ts.sh" "$PROJ" '{"tool_input":{"file_path":"src/a.ts"}}'
 check "0 yes" "$EC $(ok_if json_has "d['hookEventName'] == 'PostToolUse' and 'TS2322' in d['additionalContext'] and '\"string\"' in d['additionalContext']")" \

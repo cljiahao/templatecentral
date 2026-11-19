@@ -35,8 +35,8 @@ jobs:
       # Pinned by JSCPD_VERSION; bump it deliberately.
       - bash: npx --yes jscpd@$(JSCPD_VERSION)
         displayName: Duplication (production source <= 3%, per .jscpd.json)
-      # xdist workers; pytest-cov combines their data into coverage.xml
-      - bash: python -m pytest test/ -n auto --cov=src --cov-report=xml -q
+      # Serial on purpose: xdist measured slower at this suite size.
+      - bash: python -m pytest test/ --cov=src --cov-report=xml -q
         displayName: Tests with coverage
       - bash: |
           set -euo pipefail

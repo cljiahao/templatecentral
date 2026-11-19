@@ -43,8 +43,9 @@ jobs:
       - name: Duplication (production source <= 3%, per .jscpd.json)
         # Pinned by JSCPD_VERSION; bump it deliberately.
         run: npx --yes jscpd@${JSCPD_VERSION}
-      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)
-        run: python -m pytest test/ -n auto --cov=src --cov-report=xml -q
+      # Serial on purpose: xdist measured slower at this suite size.
+      - name: Tests (serial; pytest-cov writes coverage.xml)
+        run: python -m pytest test/ --cov=src --cov-report=xml -q
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}

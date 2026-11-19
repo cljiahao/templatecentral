@@ -33,6 +33,8 @@ export default defineConfig({
     env: { VITE_API_BASE_URL: 'http://api.test' },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
+    // Threads start faster than forks and keep the same test IDs, coverage and isolation.
+    pool: 'threads',
     // CI runners are small: half the cores per process keeps memory flat; sharding adds the parallelism.
     maxWorkers: process.env.CI ? '50%' : undefined,
     coverage: {

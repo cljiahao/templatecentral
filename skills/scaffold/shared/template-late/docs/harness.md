@@ -49,3 +49,30 @@ The route table for this deployment (for example develop/uat, develop/staging/li
 
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from the skill usage log in the `.claude` folder.
 - Do not vendor third-party plugin skills; re-author the workflow as a project skill tuned to this repo.
+
+## Test speed
+
+Speed changes keep the same tests, the same coverage and the same gates. The levers that are on:
+
+- **Vitest runs on `pool: 'threads'`.** Threads start faster than forks and keep test IDs, coverage and per-file isolation.
+- **Caches are used only where a stale result cannot hide a finding.** `pnpm typecheck` and the lefthook typecheck step run `tsc --noEmit --incremental` on every TS stack; `pnpm check` runs plain `tsc --noEmit`, which reads and writes `*.tsbuildinfo` only where the tsconfig sets `incremental` (NestJS and Next.js). `pnpm lint` runs `eslint --cache` on Next.js and Vite + React, whose rules read one file at a time. NestJS lint, `pnpm check` and the lefthook eslint step run uncached: NestJS uses type-aware rules, and an edit in one file can change a finding in a file you did not touch. `*.tsbuildinfo` and `.eslintcache` are gitignored. CI is uncached because a fresh checkout has no cache file.
+- **CI shards the vitest suite up to 4 ways** (`SHARD_MAX` on GitHub, `shardMax` on Azure). A plan job counts the test files vitest resolves (`vitest list --filesOnly`) and uses `min(4, files)` shards, because vitest refuses `--shard=i/N` when N is above the file count; no test files fails the plan. A merge step fails unless the merged test count equals a collection-only count of the unsharded suite and no test failed, then the existing changed-line coverage bar (80%) applies to the merged report.
+- **FastAPI tests run serially.** `python -m pytest -n auto` was removed because xdist measured slower at this suite size. Add it back only after measuring a longer suite.
+
+Acceptance rule for any further speed change. All of these hold before it merges:
+
+1. The test IDs are the same before and after (list and diff them).
+2. Coverage is equal and at least 80%.
+3. The mutation score is not lower.
+4. Ten random-order runs (`--sequence.shuffle` for vitest) show no flake.
+5. No gate is skipped, loosened or made optional.
+6. The full suite runs before merge to `main`. A sample or an affected-only run is never the final gate.
+
+Rejected levers, with the reason:
+
+- `pool: 'vmThreads'`: a shared VM context leaks module and global state between tests and raises memory use.
+- `--no-isolate` / `isolate: false`: tests share module state, so order starts to matter.
+- `--bail`: stops at the first failure and hides the rest of the run, so the test IDs differ.
+- A lower `maxWorkers` than the seeded `'50%'` in CI (`process.env.CI ? '50%' : undefined` in the vitest config): the runners are small, so half the cores per process keeps memory flat, and the shards supply the parallelism. Tighter caps only slow a shard.
+- xdist or shards for Python: slower than serial at this suite size.
+- Affected-only test selection: a sample, not the full suite, so it cannot be the final gate.
