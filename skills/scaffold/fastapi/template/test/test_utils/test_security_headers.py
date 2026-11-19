@@ -4,7 +4,7 @@ from core.security_headers import frame_ancestors
 
 
 def test_frame_ancestors_accepts_portal_origin() -> None:
-    origin = "https://appcentral-uat.cpfnet.gov.sg"
+    origin = "https://portal.example.com"
     assert frame_ancestors(origin) == origin.encode()
 
 

@@ -24,7 +24,7 @@ pre-commit:
       run: bash scripts/check-docs.sh {staged_files}
     env-example:
       # Fails when the variables the code reads and .env.example disagree; reads source files and .env.example only.
-      glob: "{src/**,.env.example,next.config.*,vite.config.*}"
+      glob: "{src/**,app/**,lib/**,.env.example,next.config.*,vite.config.*}"
       run: bash scripts/check-env-example.sh
     workflow-lint:
       glob: "{.github/workflows/*,azure-pipelines.yml,azure-pipelines/*}"

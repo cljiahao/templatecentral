@@ -24,11 +24,25 @@ for f in next.config.* vite.config.*; do
   if [ -f "$f" ]; then sources+=("$f"); fi
 done
 
+src_files() {
+  find "${sources[@]}" \( -name node_modules -o -name __pycache__ \) -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.py' \) \
+    -not -name '*.test.*' -not -name '*.spec.*' -not -name 'test_*.py' -not -name conftest.py -print 2> /dev/null
+}
+
+scan_destructured() {
+  local f
+  while IFS= read -r f; do
+    tr '\n' ' ' < "$f" | grep -oE '[{][^{}]*[}][[:space:]]*=[[:space:]]*process[.]env([^A-Za-z0-9_.]|$)' 2> /dev/null \
+      | sed -E 's/^[{]//; s/[}].*$//' | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*[:=].*$//; s/[[:space:]]+$//'
+  done < <(src_files)
+}
+
 scan_sources() {
+  scan_destructured
   grep -rhoE --exclude-dir=node_modules --exclude-dir=__pycache__ --exclude='*.test.*' --exclude='*.spec.*' --exclude='test_*.py' --exclude='conftest.py' \
     --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' --include='*.py' \
-    "process[.]env[.][A-Za-z_][A-Za-z0-9_]*|process[.]env\\[[\"'][A-Za-z_][A-Za-z0-9_]*|import[.]meta[.]env[.][A-Za-z_][A-Za-z0-9_]*|os[.]environ[.]get\\([\"'][A-Za-z_][A-Za-z0-9_]*|os[.]getenv\\([\"'][A-Za-z_][A-Za-z0-9_]*|os[.]environ\\[[\"'][A-Za-z_][A-Za-z0-9_]*" \
-    "${sources[@]}" 2> /dev/null | sed -E "s/^.*[.\\[(][\"']?//"
+    "process[.]env[?]?[.][A-Za-z_][A-Za-z0-9_]*|process[.]env[?]?\\[[[:space:]]*[\"'][A-Za-z_][A-Za-z0-9_]*|import[.]meta[.]env[?]?[.][A-Za-z_][A-Za-z0-9_]*|os[.]environ[.]get\\([[:space:]]*[\"'][A-Za-z_][A-Za-z0-9_]*|os[.]getenv\\([[:space:]]*[\"'][A-Za-z_][A-Za-z0-9_]*|os[.]environ\\[[[:space:]]*[\"'][A-Za-z_][A-Za-z0-9_]*" \
+    "${sources[@]}" 2> /dev/null | sed -E "s/^.*[.\\[(][[:space:]]*[\"']?//"
   # Settings modules: zod schema keys (env*.ts) and pydantic settings fields (config*.py, settings*.py).
   # A list or dict field defaulting to an empty literal is computed after load, not read from the environment.
   find "${sources[@]}" -type f \( -name 'env*.ts' -o -name 'env*.js' \) -not -path '*/node_modules/*' -not -name '*.test.*' -exec grep -hoE '^[[:space:]]+[A-Z][A-Z0-9_]*:[[:space:]]*z([.]|$)' {} + 2> /dev/null \
@@ -40,9 +54,20 @@ scan_sources() {
 if [ "${#sources[@]}" -gt 0 ]; then scan_sources > "$tmp/code.raw"; fi
 grep -vE "$builtin" "$tmp/code.raw" | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | sort -u > "$tmp/code"
 
-grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$example" | sed 's/=$//' | sort -u > "$tmp/active"
-grep -oE '^#[[:space:]]*[A-Z][A-Z0-9_]*=' "$example" | sed -E 's/^#[[:space:]]*//; s/=$//' | sort -u > "$tmp/commented"
+grep -oE '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=' "$example" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/[[:space:]]*=$//' | sort -u > "$tmp/active"
+grep -oE '^#[[:space:]]*(export[[:space:]]+)?[A-Z][A-Z0-9_]*[[:space:]]*=' "$example" | sed -E 's/^#[[:space:]]*(export[[:space:]]+)?//; s/[[:space:]]*=$//' | sort -u > "$tmp/commented"
 sort -u "$tmp/active" "$tmp/commented" > "$tmp/documented"
+
+if [ "${#sources[@]}" -gt 0 ]; then
+  echo "check-env-example: scanned ${sources[*]}"
+else
+  echo "check-env-example: no src, app or lib directory found, so no source was scanned."
+fi
+outside=$(find . -mindepth 2 -maxdepth 3 \( -name node_modules -o -name .git -o -name .venv -o -name __pycache__ -o -name dist -o -name build -o -name .next -o -name .claude -o -name test -o -name tests -o -name docs -o -name scripts \) -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' \) -print 2> /dev/null \
+  | sed -E 's|^\./||; s|/.*$||' | sort -u | grep -vxE 'src|app|lib' || true)
+if [ -n "$outside" ]; then
+  echo "WARNING check-env-example: source exists outside the scanned directories (${outside//$'\n'/, }). Variables read there are not checked; run the check from that project's root." >&2
+fi
 
 fail=0
 while IFS= read -r name; do

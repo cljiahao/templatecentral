@@ -37,14 +37,14 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 
 ### FastAPI
 
-1. Read `requirements.txt` (parse `package==version` or `package>=version`)
-2. Run `pip list --outdated --format json` — one command covers every installed package; cross-reference entries against `requirements.txt`
+1. Read `requirements.in` (the editable file; `requirements.txt` is its hashed compile output) (parse `package==version` or `package>=version`)
+2. Run `pip list --outdated --format json` — one command covers every installed package; cross-reference entries against `requirements.in`
    - WebFetch `https://pypi.org/pypi/<package>/json` only as a fallback for packages needing release-note review
 3. Compare versions:
    - **Patch or minor bump** → auto-update list
    - **Major bump** → report-only list
-4. Rewrite `requirements.txt` keeping each line's specifier style (`==` pins move to the new version; `>=` floors are raised to it)
-5. Run `pip install -r requirements.txt`
+4. Rewrite `requirements.in` keeping each line's specifier style (`==` pins move to the new version; `>=` floors are raised to it)
+5. Run `uv pip compile requirements.in --generate-hashes -o requirements.txt`, then `pip install --require-hashes -r requirements.txt`
 6. Dispatch the build utility — load it with: `cat "<skill-dir>/../build/SKILL.md"`
 7. If build fails → rollback
 8. Run `pip-audit --requirement requirements.txt` if `pip-audit` is available
@@ -60,8 +60,8 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 If the build utility (load it with: `cat "<skill-dir>/../build/SKILL.md"`) reports failure after applying all updates:
 
 1. Save list of updated packages + old/new versions
-2. Restore original `package.json` / `requirements.txt`
-3. Re-apply all updates except one package, reinstall (`pnpm install` / `pip install -r requirements.txt`), and rebuild
+2. Restore original `package.json` / `requirements.in` / `requirements.txt`
+3. Re-apply all updates except one package, reinstall (`pnpm install` / recompile `requirements.in`, then `pip install --require-hashes -r requirements.txt`), and rebuild
 4. Rotate the excluded package until the build passes — that package is the breaking one
 5. Keep all updates except the breaking package
 6. Report which package could not be updated and its current vs attempted version

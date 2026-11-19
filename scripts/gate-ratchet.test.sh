@@ -37,6 +37,10 @@ seed() {
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
     cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
+    mkdir -p "$R/.github"
+    cp "$SH/template-ci/github-ts/.github/dependabot.yml" "$R/.github/dependabot.yml"
+    printf '# note\n' > "$R/.npmrc"
+    printf '# note\n' > "$R/.hadolint.yaml"
     for sc in check-supply-chain check-workflows check-env-example check-dockerfile; do cp "$SH/template/scripts/$sc.sh" "$R/scripts/$sc.sh"; done
     cp "$SH/template-ci/github-ts/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     mkdir -p "$R/.claude/hooks" "$R/azure-pipelines"
@@ -353,6 +357,22 @@ minimumReleaseAgeExclude:
   - left-pad" "release age exclusion added" "minimumReleaseAgeExclude"
 weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
 dangerouslyAllowAllBuilds: true" "all builds allowed" "dangerouslyAllowAllBuilds"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+strictDepBuilds: False" "strictDepBuilds False spelling" "strictDepBuilds"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+\"ignoreScripts\": FALSE" "quoted ignoreScripts key" "ignoreScripts"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+\"minimumReleaseAgeExclude\":
+  - left-pad" "quoted exclusion key" "minimumReleaseAgeExclude"
+weakens .github/dependabot.yml "default-days: 7" "default-days: 0" "dependabot cooldown zeroed" "dependabot-cooldown"
+passes .github/dependabot.yml "default-days: 7" "default-days: 14" "dependabot cooldown raised"
+weakens .npmrc "# note" "# note
+ignore-scripts=false" "npmrc re-enables scripts" "ignore-scripts=false"
+weakens .npmrc "# note" "# note
+registry=https://evil.example.com/" "npmrc registry redirect" "registry"
+weakens .hadolint.yaml "# note" "# note
+ignored:
+  - DL3008" "hadolint ignore added" "DL3008"
 git_ checkout -q -B work main
 printf '  esbuild: true\n' >> "$R/pnpm-workspace.yaml"
 git_ commit -q -am allowbuild

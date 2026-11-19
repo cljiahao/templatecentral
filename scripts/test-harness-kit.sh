@@ -1588,6 +1588,20 @@ while IFS='|' read -r gid lh ci; do
 done <<< "$gate_lines"
 gate_verify() { (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
+cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
+out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"
+sed 's/"Bash(curl \*)",/"Bash(curl)",/' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+out=$(gate_verify); rc=$?
+check 1 "$rc" "verify-harness fails when the curl ask rule is gone"
+check 1 "$(grep -c 'ASK RULE MISSING: Bash(curl \*)' <<<"$out")" "verify-harness names the missing curl ask rule"
+for r in 'Bash(sh)' 'Bash(bash)' 'Bash(eval *)' 'Bash(sh -s *)'; do
+  grep -vF -- "\"$r\"" "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+  out=$(gate_verify); rc=$?
+  check 1 "$rc" "verify-harness fails when deny rule $r is gone"
+done
+awk '/"ask": \[/ { sub(/"ask"/, "\"deny\"") } { print }' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+out=$(gate_verify); check 1 "$?" "verify-harness fails when curl is listed outside the ask list"
+rm "$GV/.claude/settings.json"
 for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml; do
   while IFS='|' read -r gid lh ci; do
     want=$ci; if [[ "$f" == lefthook.yml ]]; then want=$lh; fi

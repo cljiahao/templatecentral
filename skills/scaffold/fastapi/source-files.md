@@ -30,7 +30,7 @@ Run kit Step **0** now as `TC_STACK=fastapi TC_PART=stack bash "<skill-dir>/shar
 
 Then write `README.md`: name, the one-sentence description from scaffold Step 1, and a Quickstart with the Step 4 commands and the `## Commands` section of `<skill-dir>/fastapi/template-agents/AGENTS.md`. Kit Step E3 never overwrites this prose; it only appends `## Structure`.
 
-Do not create `requirements.txt` yet: Step 4 produces it with `pip freeze`.
+Do not create `requirements.txt` yet: Step 4 writes `requirements.in` (direct runtime dependencies) and compiles it into the hashed `requirements.txt`. From then on edit `requirements.in` only, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt`.
 
 ### 2. Update project settings
 
@@ -61,14 +61,23 @@ python3.14 -m venv .venv    # Python 3.14 — matches the Dockerfile image, ruff
 source .venv/bin/activate   # Linux/Mac
 
 # certifi floor: older bundles still trust the compromised eMudhra intermediate CAs (Oct 2026).
-pip install "fastapi>=0.162.5" "uvicorn[standard]" "pydantic>=2.14.3" pydantic-settings python-dotenv "python-multipart>=0.0.33" "structlog>=26.1.0" "starlette>=1.10.0" "certifi>=2026.10.23"
+cat > requirements.in <<'REQ'
+fastapi>=0.162.5
+uvicorn[standard]
+pydantic>=2.14.3
+pydantic-settings
+python-dotenv
+python-multipart>=0.0.33
+structlog>=26.1.0
+starlette>=1.10.0
+certifi>=2026.10.23
+REQ
 
-# Freeze BEFORE dev deps are installed — requirements.txt is what the Dockerfile's
-# prod-deps stage installs, so it must contain runtime packages only.
-pip freeze > requirements.in
+# uv comes from pip inside the venv. The Dockerfile's prod-deps stage installs requirements.txt with
+# --require-hashes, so requirements.in lists runtime packages only.
 pip install uv
 uv pip compile requirements.in --generate-hashes -o requirements.txt
-rm requirements.in
+pip install --require-hashes -r requirements.txt
 
 pip install -r requirements-dev.txt
 ```

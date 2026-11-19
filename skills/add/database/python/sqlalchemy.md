@@ -5,7 +5,7 @@
 
 ### A1. Install Dependencies
 
-Add to `requirements.txt`:
+Add to `requirements.in`, then run `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt`:
 
 ```
 sqlalchemy

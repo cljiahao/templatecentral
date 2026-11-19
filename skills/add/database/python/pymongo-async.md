@@ -7,7 +7,7 @@ PyMongo's `AsyncMongoClient` with Pydantic models and a thin repository layer â€
 
 ### M1. Install Dependencies
 
-Add to `requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
+Add to `requirements.in`, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (`AsyncMongoClient` does not exist before 4.13):
 
 ```
 pymongo>=4.19.0

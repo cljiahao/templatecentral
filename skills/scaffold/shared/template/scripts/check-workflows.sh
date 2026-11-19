@@ -52,11 +52,11 @@ github_structure() {
       t = text
       gsub(/[$][{][{][[:space:]]*github[.]event[.]number[[:space:]]*[}][}]/, "", t)
       gsub(/[$][{][{][[:space:]]*github[.]event[.]pull_request[.]number[[:space:]]*[}][}]/, "", t)
-      if (t ~ /[$][{][{][^}]*(github[.]event[.]|github[.]head_ref)/) {
-        report(n, "untrusted event data inside a run script can inject shell commands. Pass it through env: (NAME: ${{ github.event... }}) and read \"$NAME\" in the script.")
+      if (t ~ /[$][{][{][^}]*(github[.]event[.]|github[.]head_ref|github[.]ref_name|github[.]actor|inputs[.]|steps[.][A-Za-z0-9_-]+[.]outputs[.])/) {
+        report(n, "untrusted data (event, branch name, actor, input or step output) inside a script can inject commands. Pass it through env: (NAME: ${{ github.event... }}) and read \"$NAME\" in the script.")
       }
     }
-    BEGIN { inrun = 0; in_jobs = 0; injob = 0; toplevel_perm = 0; perm_block = 0; has_perm = 0; checkouts = 0; persist = 0; pushes = 0 }
+    BEGIN { gscript = 0; inrun = 0; in_jobs = 0; injob = 0; toplevel_perm = 0; perm_block = 0; has_perm = 0; checkouts = 0; persist = 0; pushes = 0 }
     /^[[:space:]]*$/ { next }
     {
       ind = indent_of($0)
@@ -78,10 +78,16 @@ github_structure() {
       }
       if (s ~ /pull_request_target/ && s !~ /^permissions:/) report(NR, "pull_request_target runs fork code with repository secrets. Use pull_request, or split the privileged step into a separate workflow_run.")
       if (perm_block && ind > 0 && s ~ /:[[:space:]]*write([[:space:]]|$)/) report(NR, "top-level permissions grant write access. Declare `permissions: { contents: read }` and widen per job.")
-      if (s ~ /write-all/ && s !~ /^permissions:/) report(NR, "permissions: write-all grants every scope. List only the scopes this job needs.")
+      if (s ~ /write-all/ && !(ind == 0 && s ~ /^permissions:/)) report(NR, "permissions: write-all grants every scope. List only the scopes this job needs.")
       if (in_jobs && ind == 2 && s ~ /^[A-Za-z0-9_-]+:[[:space:]]*$/) { end_job(); injob = 1 }
-      if (s ~ /uses:[[:space:]]*actions\/checkout@/) { checkouts++; checkout_line = NR }
-      if (s ~ /persist-credentials:[[:space:]]*false/) persist++
+      if (s ~ /uses:[[:space:]]*["'"'"']?actions\/checkout@/) { checkouts++; checkout_line = NR }
+      if (s ~ /persist-credentials:[[:space:]]*["'"'"']?false/) persist++
+      if (s ~ /^(-[[:space:]]+)?uses:[[:space:]]*["'"'"']?actions\/github-script@/) gscript = 1
+      else if (s ~ /^-[[:space:]]/) gscript = 0
+      if (gscript && s ~ /^script:/) {
+        v = s; sub(/^script:[[:space:]]*/, "", v)
+        if (v ~ /^[|>]/) { inrun = 1; runcol = ind } else scan_run(NR, v)
+      }
       if (s ~ /^(-[[:space:]]+)?run:/) {
         col = ind + ((s ~ /^-/) ? 2 : 0)
         v = s; sub(/^(-[[:space:]]+)?run:[[:space:]]*/, "", v)
@@ -97,10 +103,20 @@ github_structure() {
 }
 
 azure_rules() {
-  local f=$1 hit
-  if grep -vE '^[[:space:]]*#' "$f" | grep -qE 'git[[:space:]]+push'; then return 0; fi
-  hit=$(grep -nE 'persistCredentials:[[:space:]]*true' "$f" | head -n 1)
-  if [ -n "$hit" ]; then bad "$f:${hit%%:*}: checkout persists the access token in the git config. Remove persistCredentials: true, or run the push from a step that needs it."; fi
+  local f=$1 out
+  out=$(awk -v file="$f" '
+    function flush() { if (pending) { printf "%s:%d: checkout persists the access token in the git config and no later step in the same job pushes. Remove persistCredentials: true, or move the push into a step after the checkout.\n", file, pending; found = 1 } pending = 0 }
+    { sub(/\r$/, "") }
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*-[[:space:]]+(job|deployment):/ || /^[[:space:]]*-[[:space:]]+stage:/ || /^[[:space:]]*stages:/ || /^[[:space:]]*jobs:/ { flush() }
+    /persistCredentials:[[:space:]]*["'"'"']?[Tt][Rr][Uu][Ee]/ { if (!pending) pending = NR }
+    pending && /git[[:space:]]+push/ { pending = 0 }
+    END { flush(); exit found }
+  ' "$f") || true
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" >&2
+    bad_count=$((bad_count + 1))
+  fi
 }
 
 azure_injection() {
@@ -109,7 +125,7 @@ azure_injection() {
     | grep -vE '^[0-9]+:[[:space:]]*#' | grep -vE '^[0-9]+:[[:space:]]*(-[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*:[[:space:]]|[A-Za-z_][A-Za-z0-9_]*:$)' \
     | head -n 1)
   if [ -z "$hit" ]; then
-    hit=$(grep -nE '^[[:space:]]*(-[[:space:]]+)?(script|bash|powershell|pwsh):[[:space:]].*[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]' "$f" | head -n 1)
+    hit=$(grep -nE '^[[:space:]]*(-[[:space:]]+)?(script|bash|powershell|pwsh|inlineScript):[[:space:]].*[$][(](Build[.]SourceBranch(Name)?|System[.]PullRequest[.](SourceBranch|SourceBranchName)|Build[.]SourceVersionMessage|Build[.]RequestedFor(Email)?)[)]' "$f" | head -n 1)
   fi
   if [ -n "$hit" ]; then bad "$f:${hit%%:*}: a branch name or commit message is expanded inside a script and can inject shell commands. Map it under env: (NAME: \$(Build.SourceBranch)) and read \"\$NAME\"."; fi
 }
@@ -119,6 +135,10 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 for f in "${files[@]}"; do
+  if [ ! -f "$f" ]; then
+    bad "check-workflows: $f is not a regular file. Pass the path of a workflow or pipeline file, or run with no arguments to check them all."
+    continue
+  fi
   case "$f" in
     *.github/workflows/*)
       github_pins "$f"

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { portalFrameAncestor } from '../../src/config/setups/security.setup';
 
-const portal = 'https://appcentral-uat.cpfnet.gov.sg';
+const portal = 'https://portal.example.com';
 
 it.each([
   [portal, portal],

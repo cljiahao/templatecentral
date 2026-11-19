@@ -18,7 +18,7 @@ python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('ht
 
 ### B1. Install Dependencies
 
-Add to `requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`):
+Add to `requirements.in`, then recompile with `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt` (why these floors: the plugin's `<skill-dir>/../../.claude/rules/fastapi.md`):
 
 ```
 beanie>=2.2,<3
@@ -88,7 +88,7 @@ app = FastAPI(lifespan=lifespan, ...)
 
 **`src/models/user.py`** (example):
 
-If using `EmailStr`, add `email-validator` to `requirements.txt`.
+If using `EmailStr`, add `email-validator` to `requirements.in` and recompile.
 
 ```python
 from typing import Annotated
@@ -215,7 +215,7 @@ python -m pytest test/ -q
 
 ### Step A — Update `src/models/user.py` and register it
 
-If `email-validator` is not yet in `requirements.txt`, add it first (`EmailStr` requires it).
+If `email-validator` is not yet in `requirements.in`, add it and recompile first (`EmailStr` requires it).
 
 ```python
 # src/models/user.py

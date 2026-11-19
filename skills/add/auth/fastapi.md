@@ -9,7 +9,7 @@ Adds JWT authentication to a templateCentral FastAPI project.
 
 ### Dependencies
 
-Add to `requirements.txt`:
+Add to `requirements.in`, then run `uv pip compile requirements.in --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt`:
 - `PyJWT[crypto]` — JWT encoding/decoding
 - `argon2-cffi` — Password hashing (argon2id algorithm; OWASP recommended)
 - `email-validator` — Pydantic `EmailStr` validation (validates email format in request schemas)
@@ -371,7 +371,7 @@ Copied verbatim from `<skill-dir>/auth/fastapi/template-cookie/test/test_api/tes
 
 ### Rate Limiting (Required for Production)
 
-Target: max 3 auth attempts per 15 minutes per client IP. Add `slowapi` to `requirements.txt`, then:
+Target: max 3 auth attempts per 15 minutes per client IP. Add `slowapi` to `requirements.in`, recompile (`uv pip compile requirements.in --generate-hashes -o requirements.txt`), then:
 
 ```python
 from fastapi import Request

@@ -32,6 +32,9 @@ kind_of() {
     .claude/gates.txt | */.claude/gates.txt) echo gates ;;
     .claude/registry-hosts.txt | */.claude/registry-hosts.txt) echo hosts ;;
     pnpm-workspace.yaml | */pnpm-workspace.yaml) echo pnpmws ;;
+    .github/dependabot.yml | */.github/dependabot.yml) echo dependabot ;;
+    .npmrc | */.npmrc) echo npmrc ;;
+    .hadolint.yaml | */.hadolint.yaml | .hadolint.yml | */.hadolint.yml) echo hadolint ;;
     .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
     scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | scripts/check-supply-chain.sh | */scripts/check-supply-chain.sh | scripts/check-workflows.sh | */scripts/check-workflows.sh | scripts/check-env-example.sh | */scripts/check-env-example.sh | scripts/check-dockerfile.sh | */scripts/check-dockerfile.sh | scripts/check-secret-scanner.sh | */scripts/check-secret-scanner.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
     *) echo "" ;;
@@ -528,16 +531,54 @@ function do_hosts(   i, n, L, line) {
   }
 }
 
+function yes(v) { return v ~ /^[Tt][Rr][Uu][Ee]$/ }
+function no(v) { return v ~ /^[Ff][Aa][Ll][Ss][Ee]$/ }
+function norm_yaml(line) {
+  sub(/\r$/, "", line)
+  sub(/[ \t]+#.*$/, "", line)
+  if (line ~ /^["'][A-Za-z]+["'][ \t]*:/) { sub(/^["']/, "", line); sub(/["'][ \t]*:/, ":", line) }
+  return line
+}
 function do_pnpmws(   i, n, L, line, v, inbuilds) {
   n = split(T, L, "\n"); inbuilds = 0
   for (i = 1; i <= n; i++) {
-    line = L[i]; sub(/[ \t]+#.*$/, "", line)
+    line = norm_yaml(L[i])
     if (line ~ /^[^ \t#]/) inbuilds = (line ~ /^allowBuilds:/)
-    if (line ~ /^minimumReleaseAge:/) { v = line; sub(/^[^:]*:[ \t]*/, "", v); if (!plain_num(v)) fail("minimumReleaseAge is not a plain number"); emit("min", "minimumReleaseAge", v) }
+    if (line ~ /^minimumReleaseAge:/) { v = line; sub(/^[^:]*:[ \t]*/, "", v); gsub(/^["']|["']$/, "", v); if (!plain_num(v)) fail("minimumReleaseAge is not a plain number"); emit("min", "minimumReleaseAge", v) }
     else if (line ~ /^minimumReleaseAgeExclude:/) emit("set", "minimumReleaseAgeExclude", "present")
-    else if (line ~ /^dangerouslyAllowAllBuilds:[ \t]*true/) emit("set", "dangerouslyAllowAllBuilds", "true")
-    else if (line ~ /^(strictDepBuilds|ignoreScripts):[ \t]*false/) { v = line; sub(/:.*$/, "", v); emit("set", v, "false") }
-    else if (inbuilds && line ~ /^[ \t]+[^ \t].*:[ \t]*true[ \t]*$/) { v = line; sub(/:[ \t]*true[ \t]*$/, "", v); gsub(/^[ \t'"'"'"]+|[ \t'"'"'"]+$/, "", v); emit("set", "allowBuilds", v) }
+    else if (line ~ /^dangerouslyAllowAllBuilds:/) { v = line; sub(/^[^:]*:[ \t]*/, "", v); gsub(/^["']|["']$/, "", v); if (yes(v)) emit("set", "dangerouslyAllowAllBuilds", "true") }
+    else if (line ~ /^(strictDepBuilds|ignoreScripts):/) { v = line; sub(/^[^:]*:[ \t]*/, "", v); gsub(/^["']|["']$/, "", v); if (no(v)) { sub(/:.*$/, "", line); emit("set", line, "false") } }
+    else if (inbuilds && line ~ /^[ \t]+[^ \t].*:[ \t]*["']?[Tt][Rr][Uu][Ee]["']?[ \t]*$/) { v = line; sub(/:[ \t]*["']?[Tt][Rr][Uu][Ee]["']?[ \t]*$/, "", v); gsub(/^[ \t'"'"'"]+|[ \t'"'"'"]+$/, "", v); emit("set", "allowBuilds", v) }
+  }
+}
+
+function do_dependabot(   i, n, L, line, v) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = norm_yaml(L[i])
+    if (match(line, /default-days:[ \t]*[0-9]+/)) {
+      v = substr(line, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", v)
+      emit("min", "dependabot-cooldown", v)
+    }
+  }
+}
+
+function do_npmrc(   i, n, L, line) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]; sub(/\r$/, "", line); line = tolower(line); gsub(/[ \t]+/, "", line)
+    if (line ~ /^ignore-scripts=false/) emit("set", "npmrc", "ignore-scripts=false")
+    else if (line ~ /^dangerously-allow-all-builds=true/) emit("set", "npmrc", "dangerously-allow-all-builds=true")
+    else if (line ~ /^(@[^:]+:)?registry=/) emit("set", "npmrc-registry", line)
+  }
+}
+
+function do_hadolint(   i, n, L, line) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    line = L[i]; sub(/\r$/, "", line); gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "" || line ~ /^#/) continue
+    emit("set", "hadolint", line)
   }
 }
 
@@ -578,6 +619,9 @@ END {
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
   else if (K == "pnpmws") do_pnpmws()
+  else if (K == "dependabot") do_dependabot()
+  else if (K == "npmrc") do_npmrc()
+  else if (K == "hadolint") do_hadolint()
   else if (K == "ci") do_ci()
   if (ERRSET) exit 3
 }

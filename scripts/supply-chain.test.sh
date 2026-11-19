@@ -132,6 +132,60 @@ run "$D" check-supply-chain.sh
 check 1 "$EC" "supply-chain blocks dependabot entries without a cooldown"
 has "cooldown" "$OUT" "supply-chain names the cooldown"
 
+sc_pnpm sc-scp
+printf "packages:\n  a@1.0.0:\n    resolution: {repo: git@Evil.Example.com:u/r.git}\n" > "$D/pnpm-lock.yaml"
+run "$D" check-supply-chain.sh
+check 1 "$EC" "supply-chain blocks an scp-style git host"
+has "pnpm-lock.yaml:3" "$OUT" "supply-chain reports the line of a mixed-case host"
+has "evil.example.com" "$OUT" "supply-chain names the scp host"
+
+sc_pnpm sc-cmds
+mkdir -p "$D/.github/workflows"
+cmd_case() { # cmd_case <0|1> <command>
+  printf 'jobs:\n  a:\n    steps:\n      - run: %s\n' "$2" > "$D/.github/workflows/ci.yml"
+  run "$D" check-supply-chain.sh
+  check "$1" "$EC" "supply-chain install command [$2] ($OUT)"
+}
+for c in 'pnpm --dir x install' 'pnpm -C web i' 'pnpm install --frozen-lockfile=false' 'pnpm install --no-frozen-lockfile' 'uv sync --frozen=false' 'pip install -r ./requirements.txt' 'pip install --requirement requirements.txt' 'pip install -rrequirements.txt' 'pnpm install && pnpm install --frozen-lockfile' 'uv pip install -r requirements.txt' 'python -m pip install -r requirements.txt'; do
+  cmd_case 1 "$c"
+done
+for c in 'pnpm --dir x install --frozen-lockfile' 'pnpm install --frozen-lockfile=true' 'pip install --require-hashes -r ./requirements.txt' 'pip install --require-hashes --requirement requirements.txt' 'pip install -r requirements-dev.txt' 'uv sync --locked' 'uv pip install --require-hashes -r requirements.txt' 'npm ci' 'pnpm add -g foo' 'pnpm install --frozen-lockfile && pip install --require-hashes -r requirements.txt'; do
+  cmd_case 0 "$c"
+done
+
+for form in 'strictDepBuilds: False' 'strictDepBuilds: FALSE' "strictDepBuilds: 'false'" '"minimumReleaseAgeExclude":' '"dangerouslyAllowAllBuilds": TRUE' '"ignoreScripts": false'; do
+  sc_pnpm sc-yaml
+  printf '%s\n' "$form" >> "$D/pnpm-workspace.yaml"
+  run "$D" check-supply-chain.sh
+  check 1 "$EC" "supply-chain blocks the YAML form [$form]"
+done
+sc_pnpm sc-crlf
+sed 's/$/\r/' "$NEXT/pnpm-workspace.yaml" > "$D/pnpm-workspace.yaml"
+run "$D" check-supply-chain.sh
+check 1 "$EC" "supply-chain rejects a CRLF pnpm-workspace.yaml"
+has "CRLF" "$OUT" "supply-chain says the file is CRLF"
+D=$(fixture sc-subdir)
+mkdir -p "$D/web"
+printf '{}\n' > "$D/web/package.json"
+run "$D" check-supply-chain.sh
+check 0 "$EC" "supply-chain passes a root with only a subdirectory frontend ($OUT)"
+has "web/package.json" "$OUT" "supply-chain prints that a subdirectory frontend is not checked"
+D=$(fixture sc-nopy)
+run "$D" check-supply-chain.sh
+has "no requirements.txt" "$OUT" "supply-chain prints why the hashed-install check did not run"
+
+D=$(fixture sc-cool)
+mkdir -p "$D/.github"
+for days in 0 3; do
+  sed "s/default-days: [0-9]*/default-days: $days/" "$SH/template-ci/github-ts/.github/dependabot.yml" > "$D/.github/dependabot.yml"
+  run "$D" check-supply-chain.sh
+  check 1 "$EC" "supply-chain blocks a dependabot cooldown of $days days"
+  has "default-days" "$OUT" "supply-chain names default-days"
+done
+sed "s/default-days: [0-9]*/default-days: 14/" "$SH/template-ci/github-ts/.github/dependabot.yml" > "$D/.github/dependabot.yml"
+run "$D" check-supply-chain.sh
+check 0 "$EC" "supply-chain allows a longer dependabot cooldown ($OUT)"
+
 # ── check-workflows.sh ────────────────────────────────────────────────────────
 
 SHA=$(printf 'b%.0s' {1..40})
@@ -220,6 +274,94 @@ az az-env "steps:
 run "$D" check-workflows.sh
 check 0 "$EC" "workflows allows a branch name mapped through env ($OUT)"
 
+wf wf-jobwa "$GOOD
+  b:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - run: echo hi"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks job-level permissions: write-all"
+has "write-all" "$OUT" "workflows names write-all"
+for ctx in 'inputs.name' 'github.ref_name' 'github.head_ref' 'github.actor' 'steps.x.outputs.y'; do
+  wf wf-ctx "$GOOD
+      - run: echo \${{ $ctx }}"
+  run "$D" check-workflows.sh
+  check 1 "$EC" "workflows blocks \${{ $ctx }} inside run"
+done
+wf wf-gs "$GOOD
+      - uses: actions/github-script@$SHA # v7
+        with:
+          script: |
+            const t = '\${{ github.event.issue.title }}'"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks event data inside a github-script script"
+wf wf-gs1 "$GOOD
+      - uses: actions/github-script@$SHA # v7
+        with:
+          script: core.info('\${{ github.head_ref }}')"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks event data in a one-line github-script"
+wf wf-gsok "$GOOD
+      - uses: actions/github-script@$SHA # v7
+        with:
+          script: |
+            core.info(process.env.TITLE)
+        env:
+          TITLE: \${{ github.event.issue.title }}"
+run "$D" check-workflows.sh
+check 0 "$EC" "workflows allows github-script that reads event data from env ($OUT)"
+wf wf-quoted "${GOOD//        with:
+          persist-credentials: false
+/}"
+sed -i.bak "s|uses: actions/checkout@|uses: \"actions/checkout@|; s|checkout@$SHA # v1|checkout@$SHA\" # v1|" "$D/.github/workflows/ci.yml"
+rm -f "$D/.github/workflows/ci.yml.bak"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks a quoted checkout that persists credentials ($OUT)"
+D=$(fixture wf-nofile)
+run "$D" check-workflows.sh .github/workflows/none.yml
+check 1 "$EC" "workflows rejects an argument that is not a file"
+has "not a regular file" "$OUT" "workflows says the argument is not a file"
+mkdir -p "$D/adir"
+run "$D" check-workflows.sh adir
+check 1 "$EC" "workflows rejects a directory argument"
+
+az az-push-step "jobs:
+  - job: a
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - script: git push origin HEAD
+  - job: b
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - script: echo hi"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows keeps the Azure persistCredentials exemption to the job that pushes"
+az az-push-ok "jobs:
+  - job: a
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - script: git push origin HEAD"
+run "$D" check-workflows.sh
+check 0 "$EC" "workflows allows persistCredentials in the job that pushes ($OUT)"
+az az-push-before "jobs:
+  - job: a
+    steps:
+      - script: git push origin HEAD
+      - checkout: self
+        persistCredentials: true"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks persistCredentials when the push comes before the checkout"
+az az-inline "steps:
+  - task: AzureCLI@2
+    inputs:
+      inlineScript: echo \$(Build.SourceBranch)"
+run "$D" check-workflows.sh
+check 1 "$EC" "workflows blocks a branch macro in an inlineScript"
+
 # ── check-env-example.sh ──────────────────────────────────────────────────────
 
 ee() { # ee <name> <example body> <source body>
@@ -244,10 +386,50 @@ has "STALE" "$OUT" "env-example names the stale key"
 ee ee-builtin "API_URL=" "const a = process.env.API_URL; const b = process.env.NODE_ENV;"
 run "$D" check-env-example.sh
 check 0 "$EC" "env-example ignores runtime-set names ($OUT)"
-ee ee-real "API_URL=" "const a = process.env.API_URL;"
+ee ee-real "API_URL=" "const a = process.env.API_URL; const b = process.env.SECRET_ONLY_HERE;"
 printf 'SECRET_ONLY_HERE=1\n' > "$D/.env"
 run "$D" check-env-example.sh
-check 0 "$EC" "env-example never reads a real .env ($OUT)"
+check 1 "$EC" "env-example never reads a real .env: a key only the .env has is still missing ($OUT)"
+has "SECRET_ONLY_HERE" "$OUT" "env-example names the key the .env alone had"
+ee ee-destr "API_URL=" "const { API_URL, OTHER_ONE: x = 'd' } = process.env;"
+run "$D" check-env-example.sh
+check 1 "$EC" "env-example reads a destructured process.env"
+has "OTHER_ONE" "$OUT" "env-example names the destructured variable"
+ee ee-destr-ml "API_URL=" "const {
+  API_URL,
+  MULTI_LINE,
+} = process.env;"
+run "$D" check-env-example.sh
+check 1 "$EC" "env-example reads a multi-line destructured process.env"
+has "MULTI_LINE" "$OUT" "env-example names the multi-line destructured variable"
+ee ee-optional "API_URL=" "const a = process.env.API_URL; const b = process.env?.OPT_CHAIN;"
+run "$D" check-env-example.sh
+check 1 "$EC" "env-example reads optional chaining process.env?.X"
+has "OPT_CHAIN" "$OUT" "env-example names the optional-chaining variable"
+ee ee-pyspace "API_URL=" "import os
+a = os.environ.get( \"API_URL\")
+b = os.environ.get( \"PY_SPACED\")"
+printf '%s\n' "$(cat "$D/src/a.ts")" > "$D/src/a.py"
+rm "$D/src/a.ts"
+run "$D" check-env-example.sh
+check 1 "$EC" "env-example reads os.environ.get with a space after the paren"
+has "PY_SPACED" "$OUT" "env-example names the spaced os.environ.get variable"
+ee ee-export "export API_URL=
+# export OPT_KEY =" "const a = process.env.API_URL; const b = process.env.OPT_KEY;"
+run "$D" check-env-example.sh
+check 0 "$EC" "env-example accepts export NAME= and NAME = lines ($OUT)"
+ee ee-spaced-eq "API_URL = http://x" "const a = process.env.API_URL;"
+run "$D" check-env-example.sh
+check 0 "$EC" "env-example accepts NAME = value ($OUT)"
+ee ee-scanned "API_URL=" "const a = process.env.API_URL;"
+run "$D" check-env-example.sh
+has "scanned src" "$OUT" "env-example prints the directories it scanned"
+ee ee-outside "API_URL=" "const a = process.env.API_URL;"
+mkdir -p "$D/server"
+printf 'const x = process.env.SERVER_ONLY;\n' > "$D/server/index.ts"
+run "$D" check-env-example.sh
+check 0 "$EC" "env-example still passes when source sits outside the scanned directories ($OUT)"
+has "source exists outside the scanned directories (server)" "$OUT" "env-example warns about source outside the scanned directories"
 D=$(fixture ee-none)
 run "$D" check-env-example.sh
 check 1 "$EC" "env-example blocks a missing .env.example"
@@ -299,6 +481,71 @@ D=$(fixture df-none)
 run "$D" check-dockerfile.sh
 check 0 "$EC" "dockerfile passes when no Dockerfile exists ($OUT)"
 
+df df-user00 "${GOODDF//USER 1000/USER 00}"
+run "$D" check-dockerfile.sh
+check 1 "$EC" "dockerfile blocks USER 00"
+df df-user0000 "${GOODDF//USER 1000/USER 0000:0}"
+run "$D" check-dockerfile.sh
+check 1 "$EC" "dockerfile blocks USER 0000:0"
+df df-addjson "${GOODDF//CMD/ADD [\"https://example.com/x.tgz\", \"/x\"]
+CMD}"
+run "$D" check-dockerfile.sh
+check 1 "$EC" "dockerfile blocks a JSON-form ADD from a URL"
+df df-default "FROM \${IMG:-node:20}
+USER 1000"
+run "$D" check-dockerfile.sh
+check 1 "$EC" "dockerfile blocks an ARG default form with no digest"
+has "base image node:20 is not pinned" "$OUT" "dockerfile message names the resolved default image"
+df df-default-ok "ARG IMG=node:26-alpine@sha256:$DIG
+FROM \${IMG:-node:20}
+USER 1000"
+run "$D" check-dockerfile.sh
+check 0 "$EC" "dockerfile uses the ARG value over its :- default ($OUT)"
+df df-heredoc "FROM node:26-alpine@sha256:$DIG
+RUN <<EOF
+echo hello
+FROM bogus-image
+EOF
+USER 1000"
+run "$D" check-dockerfile.sh
+check 0 "$EC" "dockerfile ignores a FROM inside a RUN heredoc ($OUT)"
+
+# hadolint stubs: a failing stub fails the gate, and the gate strips every way to loosen it.
+FAILHL="$T/failhl"
+mkdir -p "$FAILHL"
+printf '#!/bin/sh\necho "stub finding" >&2\nexit 1\n' > "$FAILHL/hadolint"
+chmod +x "$FAILHL/hadolint"
+df df-hlfail "$GOODDF"
+OUT=$(cd "$D" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS PATH="$FAILHL:$PATH" bash "$SC/check-dockerfile.sh" 2>&1)
+check 1 "$?" "dockerfile fails when hadolint reports a finding"
+has "Fix them" "$OUT" "dockerfile says to fix hadolint findings"
+SPYHL="$T/spyhl"
+mkdir -p "$SPYHL"
+cat > "$SPYHL/hadolint" <<'STUB'
+#!/bin/sh
+printf 'ARGS=%s IGN=%s THR=%s\n' "$*" "${HADOLINT_IGNORE:-none}" "${HADOLINT_FAILURE_THRESHOLD:-none}" > "$SPY_OUT"
+exit 0
+STUB
+chmod +x "$SPYHL/hadolint"
+df df-hlargs "$GOODDF"
+printf 'ignored:\n  - DL3008\n' > "$D/.hadolint.yaml"
+OUT=$(cd "$D" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS SPY_OUT="$T/spy.txt" HADOLINT_IGNORE=DL3008 HADOLINT_FAILURE_THRESHOLD=none PATH="$SPYHL:$PATH" bash "$SC/check-dockerfile.sh" 2>&1)
+check 0 "$?" "dockerfile runs a clean stub ($OUT)"
+SPY=$(cat "$T/spy.txt")
+has "--disable-ignore-pragma" "$SPY" "dockerfile turns off inline ignore pragmas"
+has "--config" "$SPY" "dockerfile passes its own hadolint config"
+has "IGN=none" "$SPY" "dockerfile unsets HADOLINT_IGNORE"
+has "THR=none" "$SPY" "dockerfile unsets HADOLINT_FAILURE_THRESHOLD"
+
+# CI=false is not CI.
+df df-cifalse "$GOODDF"
+OUT=$(cd "$D" && env CI=false TF_BUILD= GITHUB_ACTIONS= PATH="/usr/bin:/bin" /bin/bash "$SC/check-dockerfile.sh" 2>&1)
+check 0 "$?" "dockerfile treats CI=false as a local run ($OUT)"
+OUT=$(cd "$D" && env CI=false PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+check 0 "$?" "secret scanner treats CI=false as a local run ($OUT)"
+OUT=$(cd "$D" && env CI=true PATH="/usr/bin:/bin" /bin/bash "$SC/check-secret-scanner.sh" 2>&1)
+check 1 "$?" "secret scanner fails in CI=true"
+
 # hadolint absent: a local run warns and passes, a CI run fails.
 df df-nohl "$GOODDF"
 NOHL_PATH="/usr/bin:/bin"
@@ -318,6 +565,10 @@ for stack in nextjs nestjs vite-react fastapi; do
   [[ -f "$TD/Dockerfile" ]] || continue
   OUT=$(cd "$TD" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS PATH="$NOHL:$PATH" bash "$SC/check-dockerfile.sh" 2>&1)
   check 0 "$?" "dockerfile passes on the $stack template ($OUT)"
+  if [[ -f "$TD/.env.example" ]]; then
+    OUT=$(cd "$TD" && bash "$SC/check-env-example.sh" 2>&1)
+    check 0 "$?" "env-example passes on the $stack template ($OUT)"
+  fi
   if [[ -f "$TD/pnpm-workspace.yaml" ]]; then
     OUT=$(cd "$TD" && bash "$SC/check-supply-chain.sh" 2>&1)
     check 0 "$?" "supply-chain passes on the $stack template ($OUT)"

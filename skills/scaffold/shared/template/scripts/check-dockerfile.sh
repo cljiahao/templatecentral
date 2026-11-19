@@ -16,15 +16,30 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
+in_ci() {
+  local v
+  for v in "${CI:-}" "${TF_BUILD:-}" "${GITHUB_ACTIONS:-}"; do
+    case "$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" in
+      "" | false | 0 | no) ;;
+      *) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 lint_static() {
   awk -v file="$1" '
     function report(msg) { printf "%s:%d: %s\n", file, start, msg; found = 1 }
-    function resolve(s,   m, name, rep) {
-      while (match(s, /[$][{]?[A-Za-z_][A-Za-z0-9_]*[}]?/)) {
-        name = substr(s, RSTART, RLENGTH)
-        gsub(/[${}]/, "", name)
-        rep = (name in args) ? args[name] : "?"
-        s = substr(s, 1, RSTART - 1) rep substr(s, RSTART + RLENGTH)
+    function resolve(s,   m, name, rep, dflt, tok) {
+      while (match(s, /[$][{][A-Za-z_][A-Za-z0-9_]*:?[-+=?][^}]*[}]|[$][{]?[A-Za-z_][A-Za-z0-9_]*[}]?/)) {
+        tok = substr(s, RSTART, RLENGTH)
+        name = tok; sub(/^[$][{]?/, "", name); sub(/[^A-Za-z0-9_].*$/, "", name)
+        dflt = ""
+        if (tok ~ /^[$][{][A-Za-z_][A-Za-z0-9_]*:?-/) { dflt = tok; sub(/^[^-]*-/, "", dflt); sub(/[}]$/, "", dflt) }
+        if (name in args && args[name] != "") rep = args[name]
+        else if (dflt != "") rep = dflt
+        else rep = "?"
+        s = substr(s, 1, RSTART - 1) rep substr(s, RSTART + length(tok))
       }
       return s
     }
@@ -56,9 +71,10 @@ lint_static() {
       tag = slash; sub(/^[^:]*:/, "", tag)
       if (tag == "latest") report("base image " img " uses the :latest tag. Pin a version tag and a digest.")
     }
-    BEGIN { stage_seen = 0; Q = sprintf("%c", 39) }
+    BEGIN { inhd = 0; stage_seen = 0; Q = sprintf("%c", 39) }
     {
       line = $0
+      if (inhd) { hl = line; gsub(/^[[:space:]]+|[[:space:]]+$/, "", hl); if (hl == hdword) inhd = 0; next }
       if (joined == "") start = NR
       if (line ~ /^[[:space:]]*#/ && joined == "") next
       if (line ~ /\\[[:space:]]*$/) { sub(/\\[[:space:]]*$/, " ", line); joined = joined line; next }
@@ -68,12 +84,16 @@ lint_static() {
       n = split(line, w, /[[:space:]]+/)
       op = toupper(w[1])
       rest = line; sub(/^[^[:space:]]+[[:space:]]*/, "", rest)
+      if ((op == "RUN" || op == "COPY" || op == "ADD") && match(line, /<<-?[[:space:]]*[^[:space:]]+/)) {
+        hw = substr(line, RSTART, RLENGTH); sub(/^<<-?[[:space:]]*/, "", hw); gsub("[\"" Q "]", "", hw)
+        if (hw ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { inhd = 1; hdword = hw }
+      }
       if (op == "ARG") {
         if (rest ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { name = rest; sub(/=.*$/, "", name); val = rest; sub(/^[^=]*=/, "", val); args[name] = unquote(val) }
       } else if (op == "FROM") { from_line(rest) }
       else if (op == "USER") { stage_user = resolve(unquote(w[2])) }
       else if (op == "ADD") {
-        if (rest ~ /(^|[[:space:]])(https?|ftp):\/\//) report("ADD fetches a URL. Download in a RUN step with a checksum check, or COPY a vendored file.")
+        if (rest ~ /(^|[^A-Za-z0-9])(https?|ftp):\/\//) report("ADD fetches a URL. Download in a RUN step with a checksum check, or COPY a vendored file.")
       }
     }
     END {
@@ -81,7 +101,7 @@ lint_static() {
       else {
         start = last_from
         if (stage_user == "") report("the final stage sets no USER, so the container runs as root. Add USER <non-root uid> before CMD.")
-        else if (stage_user ~ /^(root|0)([:].*)?$/) report("the final stage runs as USER " stage_user ". Use a non-root uid.")
+        else if (stage_user ~ /^(root|0+)([:].*)?$/) report("the final stage runs as USER " stage_user ". Use a non-root uid.")
         else if (stage_user ~ /[?]/) report("the final stage USER " stage_user " uses an ARG with no default. Give it a non-root default.")
       }
       exit found
@@ -90,7 +110,7 @@ lint_static() {
 }
 
 hadolint_missing() {
-  if [ -n "${CI:-}${TF_BUILD:-}${GITHUB_ACTIONS:-}" ]; then
+  if in_ci; then
     echo "check-dockerfile: hadolint is not installed, and CI never skips it. Run it through ci-gates.sh dockerfile, which installs the pinned release." >&2
     return 1
   fi
@@ -107,10 +127,22 @@ for f in "${files[@]}"; do
   fi
 done
 
+run_hadolint() {
+  local cfg="$1" f="$2" var
+  local unset_args=()
+  while IFS= read -r var; do
+    unset_args+=(-u "$var")
+  done < <(env | sed -n 's/^\(HADOLINT_[A-Za-z0-9_]*\)=.*/\1/p')
+  env ${unset_args[@]+"${unset_args[@]}"} hadolint --config "$cfg" --disable-ignore-pragma --failure-threshold info "$f"
+}
+
 if command -v hadolint > /dev/null 2>&1; then
+  strict_cfg=$(mktemp "${TMPDIR:-/tmp}/hadolint-strict.XXXXXX") || { echo "check-dockerfile: cannot create a temporary file. Set TMPDIR to a writable directory." >&2; exit 1; }
+  trap 'rm -f "$strict_cfg"' EXIT
+  printf 'ignored: []\n' > "$strict_cfg"
   for f in "${files[@]}"; do
-    if ! hadolint "$f"; then
-      echo "check-dockerfile: hadolint reported findings for $f (above). Fix them; do not add an ignore." >&2
+    if ! run_hadolint "$strict_cfg" "$f"; then
+      echo "check-dockerfile: hadolint reported findings for $f (above). Fix them. The gate ignores .hadolint.yaml, HADOLINT_* variables and inline ignore pragmas, so an ignore cannot silence a finding." >&2
       rc=1
     fi
   done

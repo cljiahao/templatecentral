@@ -310,6 +310,10 @@ JS
     HADOLINT_SHA256="c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
     [ -f scripts/check-dockerfile.sh ] || fail "scripts/check-dockerfile.sh is missing"
     if ! command -v hadolint >/dev/null 2>&1; then
+      if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
+        fail "hadolint is not installed and this runner is $(uname -s) $(uname -m); the pinned download is Linux x86_64 only. Install hadolint ${HADOLINT_VERSION} on the runner and run again."
+      fi
+      command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is missing on this runner, so the hadolint download cannot be verified. Install coreutils, or install hadolint ${HADOLINT_VERSION} on the runner."
       tmp=$(mktemp -d "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/hadolint.XXXXXX")
       curl -fsSL -o "$tmp/hadolint" "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64" || fail "hadolint download failed"
       echo "${HADOLINT_SHA256}  $tmp/hadolint" | sha256sum -c - || fail "hadolint checksum mismatch"

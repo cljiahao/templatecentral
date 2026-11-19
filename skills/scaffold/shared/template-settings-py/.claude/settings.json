@@ -13,8 +13,6 @@
       "Read(**/*.key)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)",
-      "Bash(curl *)",
-      "Bash(wget *)",
       "Bash(sh)",
       "Bash(bash)",
       "Bash(sh -s *)",
@@ -27,6 +25,10 @@
       "Read(./**/.mypy_cache/**)",
       "Read(./**/htmlcov/**)",
       "Read(./**/dist/**)"
+    ],
+    "ask": [
+      "Bash(curl *)",
+      "Bash(wget *)"
     ]
   },
   "hooks": {
