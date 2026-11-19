@@ -47,7 +47,7 @@ The route table for this deployment (for example develop/uat, develop/staging/li
 
 **Gate ratchet:** CI runs the merge-base copy of `.claude/ci-gates.sh` and `scripts/gate-ratchet.sh` and fails a PR that weakens a gate or changes a gate script, runner or manifest. A maintainer can apply the `allow-gate-change` label after review: the log then prints every finding plus a line saying the label waived them. The label cannot waive a change to the files that enforce the gates (the CI files, `lefthook.yml`, `.claude/ci-gates.sh`, `.claude/gates.txt`, `.claude/verify-harness.sh`, `scripts/gate-ratchet.sh`, `scripts/test-budget.sh`, the protect-files hooks); that needs owner review. The label waives only a weakened setting on other files, never an unreadable config or a checker failure. A nested `pyproject.toml` or `eslint.config.*` in a sub-package is not read and needs the label.
 
-The ratchet is the second line of defence; the first is the agent file-protection hooks. To make it binding, mark the CI check as required and require owner review for `.github/` or `azure-pipelines*`, `.claude/` and `scripts/` in the host's branch protection. No CODEOWNERS file is seeded, because it needs an account name.
+The ratchet is the second line of defence; the first is the agent file-protection hooks. To make it binding, mark the CI check as required and require owner review for the CI pipeline files, `.claude/` and `scripts/` in the host's branch protection. No CODEOWNERS file is seeded, because it needs an account name.
 
 ## Sonar way profile notes
 
