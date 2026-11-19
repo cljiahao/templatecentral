@@ -238,7 +238,7 @@ json_has() {
 # ── Twin drift ────────────────────────────────────────────────────────────────
 
 # strip_json <file>: the hook without its JSON-extraction statement (one node line in the TS twin, three python3 lines in the FastAPI twin).
-strip_json() { awk '/^(cmd|in_cwd)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } { print }' "$1"; }
+strip_json() { awk '/^(cmd|in_cwd|file)=\$\(printf .%s. "\$input" \| (node -e|python3 -c)/ { skip = 1 } skip { if ($0 ~ /2>\/dev\/null\)$/) skip = 0; next } /^  (node -e|python3 -c) / { next } { print }' "$1"; }
 # drift_ok <ts file> <py file>: same text once the JSON extraction is stripped, and the strip kept at least 90% of the lines.
 drift_ok() {
   local a b total kept
@@ -246,14 +246,18 @@ drift_ok() {
   total=$(wc -l < "$1"); kept=$(printf '%s\n' "$a" | wc -l)
   [ -n "$a" ] && [ "$a" = "$b" ] && [ $((kept * 10)) -ge $((total * 9)) ]
 }
-# Only block-no-verify.sh is meant to match across stacks. The others differ by design: protect-files.sh and
-# subagent-stop.sh (stack tooling in the logic), post-edit-comment-check.sh (TS/JSX scanner), stop-checks.sh and
-# post-edit-typecheck.sh (different toolchains).
+# block-no-verify.sh and protect-files.sh must match across stacks apart from their JSON-extraction statements. The
+# others differ by design: subagent-stop.sh (stack tooling in the logic), post-edit-comment-check.sh (TS/JSX scanner),
+# stop-checks.sh and post-edit-typecheck.sh (different toolchains).
 check yes "$(ok_if drift_ok "$KIT/block-no-verify.ts.sh" "$KIT/block-no-verify.py.sh")" "block-no-verify.sh twins differ only in the JSON extraction statement"
+check yes "$(ok_if drift_ok "$KIT/protect-files.ts.sh" "$KIT/protect-files.py.sh")" "protect-files.sh twins differ only in the JSON extraction statements"
 for side in ts py; do
   cp "$KIT/block-no-verify.ts.sh" "$T/nv.ts.sh"; cp "$KIT/block-no-verify.py.sh" "$T/nv.py.sh"
   awk '{ sub(/^protected=.main\|uat\|develop.$/, "protected='"'"'main|uat'"'"'"); print }' "$T/nv.$side.sh" > "$T/nv.mut"; mv "$T/nv.mut" "$T/nv.$side.sh"
   check no "$(ok_if drift_ok "$T/nv.ts.sh" "$T/nv.py.sh")" "block-no-verify.sh drift check fails when only the $side twin changes"
+  cp "$KIT/protect-files.ts.sh" "$T/pf.ts.sh"; cp "$KIT/protect-files.py.sh" "$T/pf.py.sh"
+  awk '/scripts\/gate-ratchet\.sh/ { sub(/\|scripts\/gate-ratchet\.sh\|\*\/scripts\/gate-ratchet\.sh/, "") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
+  check no "$(ok_if drift_ok "$T/pf.ts.sh" "$T/pf.py.sh")" "protect-files.sh drift check fails when only the $side twin changes"
 done
 
 # ── protect-files.sh ──────────────────────────────────────────────────────────

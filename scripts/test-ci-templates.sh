@@ -853,6 +853,14 @@ def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
         for st in found:
             if "shell" in st:
                 errors.append(f"{rel}: required gate '{gate}' in job {job} must not set shell: {st['shell']}")
+GH_TRIGGERS = {"pull_request": {"branches": ["main", "uat", "develop"]}, "push": {"branches": ["main"]}}
+AZ_TRIGGER = {"branches": {"include": ["main"]}}
+AZ_PR = {"branches": {"include": ["main", "uat", "develop"]}}
+def azure_trigger_errors(rel, doc):
+    if doc.get("trigger") != AZ_TRIGGER:
+        errors.append(f"{rel}: trigger must be exactly {AZ_TRIGGER!r}, found {doc.get('trigger')!r}")
+    if doc.get("pr") != AZ_PR:
+        errors.append(f"{rel}: pr must be exactly {AZ_PR!r}, found {doc.get('pr')!r}")
 GH_ENV_KEYS = {"DIFF_COVER_VERSION", "JSCPD_VERSION", "SHARD_MAX", "NODE_OPTIONS"}
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:")
 USES_PINNED = re.compile(r"^\s*(?:-\s+)?uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d[\w.+-]*\s*$")
@@ -862,8 +870,8 @@ def workflow_errors(rel, doc, lines):
     if doc.get("permissions") != {"contents": "read"}:
         errors.append(f"{rel}: workflow permissions must be exactly {{contents: read}}, found {doc.get('permissions')!r}")
     triggers = doc.get(True, doc.get("on"))
-    if not isinstance(triggers, dict) or set(triggers) != {"pull_request", "push"}:
-        errors.append(f"{rel}: workflow triggers must be exactly pull_request and push, found {triggers!r}")
+    if triggers != GH_TRIGGERS:
+        errors.append(f"{rel}: workflow triggers must be exactly {GH_TRIGGERS!r}, found {triggers!r}")
     env = doc.get("env")
     if not isinstance(env, dict) or not set(env) <= GH_ENV_KEYS:
         errors.append(f"{rel}: workflow env keys must be within {sorted(GH_ENV_KEYS)}, found {env!r}")
@@ -893,6 +901,8 @@ for host, rel in files.items():
         manifest_errors(rel, doc, MANIFEST[host], "needs" if host.startswith("github") else "dependsOn")
         if host.startswith("github"):
             workflow_errors(rel, doc, lines)
+        else:
+            azure_trigger_errors(rel, doc)
     for i, l in enumerate(lines):
         code = re.sub(r"\s#\s.*$", "", l)
         if re.search(r"\|\||continue-on-error|succeededOrFailed\(|\balways\(\)", code):
@@ -1092,6 +1102,12 @@ mutate "action pinned by tag instead of SHA (github-ts)" github-ts/.github/workf
 mutate "SHA pin without a version comment (github-py)" github-py/.github/workflows/ci.yml 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0' 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' static "full commit SHA"
 mutate "workflow permissions raised to write (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }' 'permissions: { contents: write }' static "permissions must be exactly"
 mutate "workflow permissions removed (github-py)" github-py/.github/workflows/ci.yml 'permissions: { contents: read }\n' '' static "permissions must be exactly"
+mutate "pull_request branches narrowed (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request: { branches: [main] }' static "workflow triggers must be exactly"
+mutate "pull_request paths-ignore added (github-py)" github-py/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request: { branches: [main, uat, develop], paths-ignore: ["src/**"] }' static "workflow triggers must be exactly"
+mutate "push trigger widened to every branch (github-ts)" github-ts/.github/workflows/ci.yml '  push: { branches: [main] }' '  push: { branches: [main, feature] }' static "workflow triggers must be exactly"
+mutate "azure pr branches narrowed (azure-ts)" azure-ts/azure-pipelines.yml 'branches: { include: [main, uat, develop] }' 'branches: { include: [main] }' static "pr must be exactly"
+mutate "azure pr switched off (azure-py)" azure-py/azure-pipelines.yml 'pr:\n  branches: { include: [main, uat, develop] }' 'pr: none' static "pr must be exactly"
+mutate "azure trigger paths exclude added (azure-ts)" azure-ts/azure-pipelines.yml 'trigger:\n  branches: { include: [main] }' 'trigger:\n  branches: { include: [main] }\n  paths: { exclude: [src] }' static "trigger must be exactly"
 mutate "pull_request_target trigger (github-ts)" github-ts/.github/workflows/ci.yml '  pull_request: { branches: [main, uat, develop] }' '  pull_request_target: { branches: [main, uat, develop] }' static "pull_request_target"
 mutate "secret echoed in a run step (github-py)" "github-py/.github/workflows/ci.yml" "        run: bash .claude/ci-gates.sh nosonar" "        run: bash .claude/ci-gates.sh nosonar && echo \"\${{ secrets.DEPLOY_TOKEN }}\"" "static" "secret in run"
 mutate "dependency-review job removed (github-ts)" github-ts/.github/workflows/ci.yml '  dependency-review:\n    if: github.event_name == '"'"'pull_request'"'"'\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      # fails the PR when it adds a dependency with a high or critical advisory\n      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0\n        with: { fail-on-severity: high }\n' '' static "required job dependency-review is missing"
@@ -1127,6 +1143,12 @@ for host, eco in want.items():
             bad.append(f"{rel}: {u.get('package-ecosystem')} must update / weekly")
         if sorted(grp.get("update-types") or []) != ["minor", "patch"] or grp.get("patterns") != ["*"]:
             bad.append(f"{rel}: {u.get('package-ecosystem')} must group minor and patch updates over *")
+        if set(u) != {"package-ecosystem", "directory", "schedule", "groups"}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} may only set package-ecosystem, directory, schedule and groups, found {sorted(map(str, u))}")
+        if u.get("schedule") != {"interval": "weekly"} or set(u.get("groups") or {}) != {"minor-and-patch"} or set(grp) != {"patterns", "update-types"}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} schedule and groups may hold nothing beyond weekly and the minor-and-patch group")
+    if set(doc) != {"version", "updates"}:
+        bad.append(f"{rel}: only version and updates are allowed at the top level, found {sorted(map(str, doc))}")
 print("\n".join(bad))
 sys.exit(1 if bad else 0)
 PY
@@ -1147,6 +1169,11 @@ PY
 dep_mutate "github-actions ecosystem removed (github-ts)" github-ts '  - package-ecosystem: github-actions' '  - package-ecosystem: docker'
 dep_mutate "daily instead of weekly (github-py)" github-py 'interval: weekly' 'interval: daily'
 dep_mutate "major updates grouped (github-ts)" github-ts 'update-types: [minor, patch]' 'update-types: [minor, patch, major]'
+dep_mutate "open-pull-requests-limit 0 (github-ts)" github-ts '  - package-ecosystem: npm\n    directory: /' '  - package-ecosystem: npm\n    open-pull-requests-limit: 0\n    directory: /'
+dep_mutate "ignore list added (github-py)" github-py '  - package-ecosystem: pip\n    directory: /' '  - package-ecosystem: pip\n    ignore:\n      - dependency-name: "*"\n    directory: /'
+dep_mutate "ignore added to github-actions (github-ts)" github-ts '  - package-ecosystem: github-actions\n    directory: /' '  - package-ecosystem: github-actions\n    ignore:\n      - dependency-name: "*"\n    directory: /'
+dep_mutate "extra top-level key (github-py)" github-py 'version: 2' 'version: 2\nregistries: {}'
+dep_mutate "schedule day added (github-ts)" github-ts 'schedule: { interval: weekly }' 'schedule: { interval: weekly, day: sunday }'
 dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: pip' 'package-ecosystem: npm'
 
 # 7. passWithNoTests must not appear anywhere in the seeded templates (it would let a project with no test files pass).
