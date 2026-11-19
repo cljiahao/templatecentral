@@ -126,8 +126,10 @@ check "apply never deletes a GONE file" "$gone_hash" "$(sha "$T/p/.claude/hooks/
 check "modified file gets the new version beside it" "$(sha "$ROOT/skills/scaffold/shared/template-ts/.claude/hooks/protect-files.sh")" "$(sha "$T/p/.claude/hooks/protect-files.sh.templatecentral-new")"
 check "replaced file equals the template" "$(sha "$ROOT/skills/scaffold/shared/template-ts/.claude/hooks/stop-checks.sh")" "$(sha "$T/p/.claude/hooks/stop-checks.sh")"
 check "added file equals the template" "$(sha "$ROOT/skills/scaffold/shared/template-ts/.claude/hooks/subagent-stop.sh")" "$(sha "$T/p/.claude/hooks/subagent-stop.sh")"
-check "added hook is executable" 1 "$([ -x "$T/p/.claude/hooks/subagent-stop.sh" ] && echo 1 || echo 0)"
-check "mode-only fix applied" 1 "$([ -x "$T/p/.claude/hooks/block-no-verify.sh" ] && echo 1 || echo 0)"
+if [ -x "$T/p/.claude/hooks/subagent-stop.sh" ]; then isx=1; else isx=0; fi
+check "added hook is executable" 1 "$isx"
+if [ -x "$T/p/.claude/hooks/block-no-verify.sh" ]; then isx=1; else isx=0; fi
+check "mode-only fix applied" 1 "$isx"
 contains "apply lists the file for the user" "NEEDS YOU: merge each new version" "$out"
 contains "apply runs the live check" "live check:" "$out"
 rec=$(python3 -c "import json;print(json.load(open('$T/p/.claude/harness.json'))['seeded_files']['.claude/hooks/stop-checks.sh']['origin_hash'])")
@@ -262,6 +264,8 @@ check "sidecar is a directory: still empty" 0 "$(find "$T/sd/.claude/hooks/prote
 contains "partial summary after FAILED" "PARTIAL: the tree is partly applied. written:" "$out"
 contains "partial summary lists what was written" ".claude/hooks/stop-checks.sh" "$(printf '%s\n' "$out" | grep '^PARTIAL')"
 contains "partial summary lists what was not" "not written: .claude/hooks/protect-files.sh.templatecentral-new" "$out"
+absent "partial run: no commit advice" "then commit the refresh" "$out"
+check "partial run: PARTIAL is the last line" "PARTIAL" "$(printf '%s\n' "$out" | tail -n 1 | cut -c1-7)"
 
 # a .templatecentral-new that is a regular file is not overwritten
 seed "$T/sf" nestjs

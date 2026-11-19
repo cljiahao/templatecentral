@@ -41,7 +41,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ -n "$PROJ" ] && [ -d "$PROJ" ] || die "usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <stack>]"
+if [ -z "$PROJ" ] || [ ! -d "$PROJ" ]; then die "usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <stack>]"; fi
 [ -z "$BASEDIR" ] || [ "$APPLY" -eq 1 ] || die "--baseline needs --apply"
 case "$STACK" in ''|nestjs|nextjs|vite-react|fastapi) ;; *) die "unknown stack '$STACK'" ;; esac
 
@@ -52,11 +52,11 @@ while [ -L "$src" ] && [ "$hops" -lt 40 ]; do
   case "$link" in /*) src=$link ;; *) src=$(dirname -- "$src")/$link ;; esac
   hops=$((hops + 1))
 done
-GEN=$(cd -- "$(dirname -- "$src")" 2>/dev/null && pwd -P) || die "cannot locate the script directory"
+if ! GEN=$(cd -- "$(dirname -- "$src")" 2>/dev/null && pwd -P); then die "cannot locate the script directory"; fi
 SHARED=$GEN/../../scaffold/shared
 MANIFEST=$SHARED/template.manifest
 [ -s "$MANIFEST" ] || die "template.manifest not found at $MANIFEST"
-P=$(cd -P -- "$PROJ" 2>/dev/null && pwd -P) || die "cannot enter $PROJ"
+if ! P=$(cd -P -- "$PROJ" 2>/dev/null && pwd -P); then die "cannot enter $PROJ"; fi
 case "$P$GEN" in *"$NL"*) die "a path contains a newline" ;; esac
 [ "$P" != / ] || die "the project directory is the filesystem root"
 if [ -L "$P/.claude" ]; then die ".claude is a symlink; refusing to touch it"; fi
@@ -131,7 +131,11 @@ unsafe_path() {
   done
   a=$1
   while [ "${a%/*}" != "$a" ] && [ ! -d "$P/${a%/*}" ]; do a=${a%/*}; done
-  if [ "${a%/*}" != "$a" ]; then r=$(cd -P -- "$P/${a%/*}" 2>/dev/null && pwd -P) || return 0; else r=$P; fi
+  if [ "${a%/*}" != "$a" ]; then
+    if ! r=$(cd -P -- "$P/${a%/*}" 2>/dev/null && pwd -P); then return 0; fi
+  else
+    r=$P
+  fi
   case "$r/" in "$P"/*) return 1 ;; esac
   return 0
 }
@@ -207,7 +211,8 @@ else
 fi
 
 echo "harness refresh: $P"
-echo "stack $STACK, ci $CI, git tree $TREE, $([ "$APPLY" -eq 1 ] && echo apply || echo 'dry run, nothing is changed')"
+if [ "$APPLY" -eq 1 ]; then MODE_TXT=apply; else MODE_TXT='dry run, nothing is changed'; fi
+echo "stack $STACK, ci $CI, git tree $TREE, $MODE_TXT"
 awk -F "$TAB" '{ printf "%-9s %s%s\n", $1, $2, ($5 != "" ? "  (" $5 ")" : "") }' "$RES"
 echo "summary: $N_SAME same, $N_REP to replace, $N_ADD to add, $N_MOD modified (need you), $N_GONE no longer seeded (report only)"
 
@@ -270,7 +275,7 @@ NWLIST=
 # still_proven <path> <note>: the REPLACE proof holds right now, re-checked just before the write.
 still_proven() {
   local path=$1 note=$2 oh
-  [ -f "$P/$path" ] && [ ! -L "$P/$path" ] || return 1
+  if [ ! -f "$P/$path" ] || [ -L "$P/$path" ]; then return 1; fi
   case "$note" in
     "content identical"*) cmp -s -- "$srcf" "$P/$path" ;;
     *)
@@ -290,7 +295,9 @@ write_sidecar() {
 while IFS="$TAB" read -r cls path srcf mode note; do
   case "$cls" in
     ADD|REPLACE)
-      if [ "$cls" = ADD ] && { [ -e "$P/$path" ] || [ -L "$P/$path" ]; }; then echo "FAILED   $path (it appeared after the plan)"; FAILED=1; NWLIST="$NWLIST $path"; continue; fi
+      if [ "$cls" = ADD ]; then
+        if [ -e "$P/$path" ] || [ -L "$P/$path" ]; then echo "FAILED   $path (it appeared after the plan)"; FAILED=1; NWLIST="$NWLIST $path"; continue; fi
+      fi
       if [ "$cls" = REPLACE ] && ! still_proven "$path" "$note"; then
         echo "changed  $path since the plan; treated as MODIFIED"
         N_MOD=$((N_MOD + 1)); write_sidecar "$path" "$srcf"; continue
@@ -378,7 +385,7 @@ if [ -n "$NEWFILES" ]; then
   echo "NEEDS YOU: merge each new version into your file, then delete the $NEWSUF file:${NEWFILES}"
 fi
 [ "$N_GONE" -eq 0 ] || echo "Report only: $N_GONE recorded file(s) are no longer seeded; nothing was deleted."
-echo "Review with git diff, then commit the refresh as one change."
+if [ "$FAILED" -eq 0 ]; then echo "Review with git diff, then commit the refresh as one change."; fi
 if [ "$FAILED" -ne 0 ]; then
   echo "PARTIAL: the tree is partly applied. written:${WLIST:- none}. not written:${NWLIST:- none}."
 fi
