@@ -29,6 +29,9 @@ seed() {
   cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
   cp "$SH/template/scripts/test-budget.sh" "$R/scripts/test-budget.sh"
   cp "$SH/template/.gitleaks.toml" "$R/.gitleaks.toml"
+  cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+  cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
+  cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
     cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
@@ -87,6 +90,24 @@ passes() {
   edit "$1" "$2" "$3"
   ratchet
   check 0 "$EC" "$4: exits 0 ($OUT)"
+}
+
+# add_file <path> <content>: a new file on a branch off main.
+add_file() {
+  git_ checkout -q -B work main
+  mkdir -p "$(dirname "$R/$1")"
+  printf '%s\n' "$2" > "$R/$1"
+  git_ add -A
+  git_ commit -q -m add
+}
+
+# expect <exit code> <label> <fragments...>: run the ratchet on the current branch and check its exit code and output.
+expect() {
+  local want=$1 label=$2 frag
+  shift 2
+  ratchet
+  check "$want" "$EC" "$label: exits $want ($OUT)"
+  for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
 }
 
 seed ts
@@ -159,6 +180,98 @@ ratchet
 check 2 "$EC" "gitleaks unterminated string: exits 2 ($OUT)"
 has "UNREADABLE .gitleaks.toml" "$OUT" "gitleaks unterminated string: names the file"
 
+weakens scripts/gate-ratchet.sh "set -uo pipefail" "set -uo pipefail
+exit 0" "ratchet script replaced by exit 0" "gate script, runner or manifest changed"
+weakens scripts/test-budget.sh "#!/usr/bin/env bash
+" "#!/usr/bin/env bash
+exit 0
+" "exit 0 injected into the test budget" "gate script, runner or manifest changed"
+weakens scripts/test-budget.sh "#!/usr/bin/env bash
+" "#!/usr/bin/env bash
+TEST_BUDGET_MAX_RATIO=9999
+" "ratio forced by assignment" "gate script, runner or manifest changed"
+weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-latest
+    if: false" "CI job disabled" "gate script, runner or manifest changed"
+weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-latest
+    continue-on-error: true" "CI job may fail" "gate script, runner or manifest changed"
+weakens .claude/gates.txt "ratchet|-|ci-gates.sh ratchet" "ratchet|-|ratchet" "gate needle rewritten" "gate script, runner or manifest changed"
+weakens .claude/ci-gates.sh "set -uo pipefail" "set -uo pipefail
+exit 0" "ci-gates changed" "gate script, runner or manifest changed"
+weakens .claude/verify-harness.sh "set -euo pipefail" "set -euo pipefail
+exit 0" "verify-harness changed" "gate script, runner or manifest changed"
+weakens lefthook.yml "parallel: false" "parallel: true" "lefthook changed" "gate script, runner or manifest changed"
+
+add_file ruff.toml "line-length = 100"
+expect 1 "ruff.toml shadows pyproject" "ruff.toml" "competes"
+add_file .ruff.toml "line-length = 100"
+expect 1 ".ruff.toml shadows pyproject" ".ruff.toml" "competes"
+add_file eslint.config.js "export default [];"
+expect 1 "second eslint config" "eslint.config.js" "competes"
+add_file vitest.config.mts "export default {};"
+expect 1 "second vitest config" "vitest.config.mts" "competes"
+add_file vite.config.js "export default {};"
+expect 1 "vite config competes with vitest config" "vite.config.js" "competes"
+add_file jest.config.js "module.exports = {};"
+expect 0 "first jest config in a repo without one"
+add_file .coveragerc "[run]"
+expect 1 ".coveragerc" ".coveragerc" "competes"
+add_file .gitleaksignore "abc"
+expect 1 ".gitleaksignore" ".gitleaksignore" "competes"
+add_file .eslintignore "src"
+expect 1 ".eslintignore" ".eslintignore" "competes"
+add_file jscpd.json '{ "threshold": 99 }'
+expect 1 "jscpd.json variant" "jscpd.json" "competes"
+add_file .jscpdrc '{ "threshold": 99 }'
+expect 1 ".jscpdrc variant" ".jscpdrc" "competes"
+git_ checkout -q -B work main
+git_ mv eslint.config.mjs eslint.config.js
+git_ commit -q -m rename
+expect 1 "eslint config renamed" "eslint.config.mjs" "renamed to eslint.config.js"
+
+weakens eslint.config.mjs "  {
+    // Test fixtures" "  {
+    rules: { 'sonarjs/no-hardcoded-secrets': 'off' },
+  },
+  {
+    // Test fixtures" "global rule off while a test override already has it off" "sonarjs/no-hardcoded-secrets" "is off"
+weakens eslint.config.mjs "// @ts-check" "/* eslint-disable */" "file-level eslint-disable in the config" "eslint-disable-comments" "now 1"
+weakens eslint.config.mjs "      'sonarjs/todo-tag': 'warn'," "      'sonarjs/todo-tag': 'warn',
+      'sonarjs/cognitive-complexity': 'off'," "second global entry turns a rule off" "sonarjs/cognitive-complexity"
+weakens eslint.config.mjs "'sonarjs/no-clear-text-protocols': 'off'," "'sonarjs/no-clear-text-protocols': 'off',
+      'sonarjs/no-commented-code': 'warn'," "new scoped block lowers a rule below the base" "sonarjs/no-commented-code"
+weakens vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/app/**/*.ts']," "coverage include narrowed" "src/**/*.ts" "now removed"
+weakens .jscpd.json '"threshold": 3' '"threshold": 3, "minTokens": 500' "jscpd minTokens raised" "jscpd-minTokens" "now 500"
+weakens .jscpd.json '"threshold": 3' '"threshold": 3, "minLines": 50' "jscpd minLines raised" "jscpd-minLines" "now 50"
+weakens .jscpd.json '"path": ["src"]' '"path": ["src/app"]' "jscpd path narrowed" "src"
+weakens .jscpd.json '"threshold": 3' '"threshold": 3, "gitignore": true' "jscpd gitignore on" "gitignore"
+weakens .jscpd.json '"threshold": 3' '"threshold": 3, "skipLocal": true' "jscpd skipLocal on" "skipLocal"
+weakens .gitleaks.toml "useDefault = true" "useDefault = true
+disabledRules = [\"generic-api-key\"]" "gitleaks disabledRules" "generic-api-key"
+
+for bad in 'lines: 80 - 79' 'lines: Number(process.env.COV)' 'lines: LIMIT'; do
+  edit vitest.config.ts "lines: 80" "$bad"
+  expect 2 "unreadable vitest threshold [$bad]" "UNREADABLE vitest.config.ts" "plain decimal"
+done
+edit .jscpd.json '"threshold": 3' '"threshold": 1e2'
+expect 2 "jscpd threshold in exponent form" "UNREADABLE .jscpd.json" "plain decimal"
+edit .jscpd.json '"threshold": 3' '"threshold": $''{JSCPD_MAX}'
+expect 2 "jscpd threshold from the environment" "UNREADABLE .jscpd.json"
+edit .jscpd.json '"threshold": 3,' '"threshold": 3, "threshold": 99,'
+expect 2 "jscpd duplicate key" "UNREADABLE .jscpd.json" "duplicate JSON key"
+edit .github/workflows/ci.yml "--fail-under=80" "--fail-under=80-1"
+expect 2 "diff coverage not a plain literal" "UNREADABLE .github/workflows/ci.yml"
+
+passes .claude/gates.txt "# Required merge gates" "# Required merge gates (edited comment)" "gates comment edit"
+passes eslint.config.mjs "        { ignore: ['eslint-enable'] }," "        { ignore: ['eslint-enable'] }, // note" "trailing comment"
+
+git_ checkout -q -B main main
+printf '#!/usr/bin/env bash\necho BASE-COPY-RAN\nexit 7\n' > "$R/scripts/gate-ratchet.sh"
+git_ commit -q -am "base ratchet"
+git_ checkout -q -B work main
+cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+git_ commit -q -am "head ratchet"
+expect 7 "the merge-base copy of the ratchet is the one that runs" "BASE-COPY-RAN"
+
 OUT=$(cd "$R" && bash "$RATCHET" no-such-ref 2>&1)
 check 2 "$?" "unknown base ref: exits 2 ($OUT)"
 OUT=$(cd "$R" && bash "$RATCHET" 2>&1)
@@ -185,6 +298,27 @@ weakens .jscpd.json '"threshold": 3' '"threshold": 9' "python duplication limit 
 passes pyproject.toml "max-complexity = 15" "max-complexity = 12" "ruff complexity lowered"
 passes pyproject.toml "fail_under = 80" "fail_under = 85" "python coverage raised"
 passes pyproject.toml "line-length = 88" "line-length = 100" "line length edit"
+weakens pyproject.toml "line-length = 88" "line-length = 88
+lint.ignore = [\"E501\"]" "dotted lint.ignore" "E501"
+weakens pyproject.toml "[tool.ruff.lint]
+" "[tool.ruff.lint]
+per-file-ignores = { \"src/**\" = [\"S608\"] }
+" "inline per-file-ignores table" "S608"
+weakens pyproject.toml "[tool.ruff.lint]
+" "[tool.ruff.lint]
+extend-per-file-ignores = { \"src/**\" = [\"S608\"] }
+" "extend-per-file-ignores" "S608"
+weakens pyproject.toml "[tool.ruff.lint.per-file-ignores]
+" "[tool.ruff.lint.extend-per-file-ignores]
+\"src/**/*.py\" = [\"S608\"]
+[tool.ruff.lint.per-file-ignores]
+" "extend-per-file-ignores section" "S608"
+for bad in '15 + 5' '1e1' '"15"'; do
+  edit pyproject.toml "max-complexity = 15" "max-complexity = $bad"
+  expect 2 "unreadable ruff complexity [$bad]" "UNREADABLE pyproject.toml"
+done
+edit pyproject.toml "fail_under = 80" "fail_under = 1e2"
+expect 2 "coverage fail_under in exponent form" "UNREADABLE pyproject.toml" "plain decimal"
 git_ checkout -q -B work main
 sed -i.bak 's/tool[.]ruff/tool.rff/g' "$R/pyproject.toml" && rm -f "$R/pyproject.toml.bak"
 git_ commit -q -am rename

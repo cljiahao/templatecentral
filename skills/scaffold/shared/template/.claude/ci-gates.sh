@@ -35,7 +35,11 @@ case "$gate" in
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
-    grep -vE '^[[:space:]]*(#|$)' "$(dirname "$0")/gates.txt" | cut -d'|' -f1
+    manifest="$(dirname "$0")/gates.txt"
+    [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
+    listed=$(grep -vE '^[[:space:]]*(#|$)' "$manifest" | cut -d'|' -f1)
+    [ -n "$listed" ] || fail "$manifest lists no gate"
+    printf '%s\n' "$listed"
     exit 0
     ;;
 esac
@@ -94,10 +98,16 @@ case "$gate" in
     ;;
   ratchet)
     pr_only
-    # A PR may not weaken gate config (thresholds, lint rules, ignores, the gate manifest) versus its merge base.
-    [ -f scripts/gate-ratchet.sh ] || fail "scripts/gate-ratchet.sh is missing"
-    if ! bash scripts/gate-ratchet.sh "$base"; then
-      bypassed allow-gate-change && exit 0
+    # A PR may not weaken gate config versus its merge base; the merge-base copy of the checker runs, so a PR cannot rewrite the script that judges it.
+    runner=scripts/gate-ratchet.sh
+    mbase=$(git merge-base "$base" HEAD) || fail "no merge base with $base — check out with full history (fetch-depth 0)"
+    runner_tmp=$(mktemp "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gate-ratchet.XXXXXX") || fail "cannot create a temporary file"
+    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then runner=$runner_tmp; else [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"; fi
+    GATE_RATCHET_REEXEC=1 bash "$runner" "$base"
+    rc=$?
+    rm -f "$runner_tmp"
+    if [ "$rc" -ne 0 ]; then
+      if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
       fail "a gate is weaker than at the base branch, or its config is unreadable (output above). Restore it, or have a maintainer apply the 'allow-gate-change' label after review."
     fi
     ;;
@@ -275,7 +285,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]" >&2
     exit 2
     ;;
 esac

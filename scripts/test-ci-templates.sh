@@ -1240,7 +1240,8 @@ for st in ts py; do
     if out=$(gate_verify "$T/gm"); then ok "gate manifest: $st/$host lefthook and CI run every listed gate"; else bad "gate manifest: $st/$host omits a listed gate: $out"; fi
     while IFS='|' read -r gid lh ci; do
       [[ -z "$gid" || "$gid" == \#* ]] && continue
-      files=(lefthook.yml); [[ "$host" == github ]] && files+=(.github/workflows/ci.yml) || files+=(azure-pipelines/templatecentral-gates.yml azure-pipelines.yml)
+      files=(lefthook.yml)
+      if [[ "$host" == github ]]; then files+=(.github/workflows/ci.yml); else files+=(azure-pipelines/templatecentral-gates.yml azure-pipelines.yml); fi
       for f in "${files[@]}"; do
         want=$ci; [[ "$f" == lefthook.yml ]] && want=$lh
         [[ "$want" == "-" ]] && continue

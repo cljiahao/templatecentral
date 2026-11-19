@@ -1,5 +1,4 @@
-# Required merge gates, one per line: <gate>|<lefthook.yml must contain>|<CI file must contain>
-# `-` means that runner does not need the gate. ci-gates.sh runs only gates listed here; verify-harness.sh fails when lefthook or CI omits one.
+# Required merge gates: <gate>|<lefthook.yml needle>|<CI needle>; - means not needed.
 harness|verify-harness.sh|verify-harness.sh
 docs|scripts/check-docs.sh|scripts/check-docs.sh
 testbudget|scripts/test-budget.sh|ci-gates.sh testbudget

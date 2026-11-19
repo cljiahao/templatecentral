@@ -2,9 +2,9 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-942ea6e4eeb4056b48a73dfe409301c9a1762bcd901ab2f9236ae9ad28695d4c  .claude/ci-gates.sh
+d7404c3e7b8f981feb9879157ccbcad7632ff656f343db388b7354a22914f29e  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
-0d105ec78d5be6aec2829780d7ff5431858451d666b6a522922b9c2ccdc35a14  .claude/gates.txt
+b3cb572ea9aa90f11611a015f657fa44c2feb44b7d7524babcdffc491a5b93e8  .claude/gates.txt
 f2999526a7230160997249fd5d317cf9e58379e951ba64b6cc9f2eb006de4445  .claude/hooks/block-no-verify.sh
 3436c6ce2786fe71ed70d7354e12d4fab35bc758af4d667f646433f55d46b297  .claude/hooks/post-edit-comment-check.sh
 aa3386ffc3698e7946b2dc96e036d8760b6d26cee8a7d2f8b959b17178e62fc5  .claude/hooks/post-edit-typecheck.sh
@@ -37,15 +37,15 @@ d403fc06dd3807b7bd8c330f396f973962523086e8ca65150e6d01ac37379ff8  FUTURE.md
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-test-each-behaviour-once.md
 66a649febfc52d831936f2f1e93a53011839dd0204a2be57ca89c7748a495929  docs/architecture.md
-c63a47921e1767fa40c9974f54046cfe2c66f0bcbcbb07db1aa4cf3a47bf211a  docs/harness.md
+23fa48dc03ec0443f1b07e6c2b38b4dba813abc5521cb26a4897ca8d5b9df510  docs/harness.md
 654eb8359cebdb49bef15fced823cecab2ddcaf57da38ea04fb4f9ac83b38b3f  lefthook.yml
 bc0876fb5a4780062f49f5491e7baf542161c59c28b65475011c215225239e2c  pyproject.toml
 3b0ac975a7fdec02ad26e5e8b0c8444fcc8d0efac12f925aa22811fb4cdb91fb  pyrightconfig.json
 23979e4edd8d9a498ff73a63428073bdce270f14af7d88fb8d75a9187becc3a1  requirements-dev.txt
 0c4561464783a416b276ddc377916bb722af6d207f266bd710926b9753827b0f  scripts/check-docs.sh
-f7a6081d8bfc2c1b7d5a2ad4e91e6c91dc5017b894a593d90e2ad83fa4c18407  scripts/gate-ratchet.sh
+258851d7bc8e3f00793bd17cf1c12026ec02cde9d19cdb22fef83a196024dfda  scripts/gate-ratchet.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
-c36646165308f6c9e5cc38a37d6810cd4f8c83f318056481e219c6f5c8fb1fe4  sonar-project.properties
+eb854c347a9bfb07636fe89a776ab16caa05f8ec9173ffb5a12fc8b0dd8ec278  sonar-project.properties
 a5097809f3068374c0ecaf2eb8f052860899cfe03f1891c2ae1cdfbe013afe07  src/.env.default
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/api/__init__.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  src/api/routers/__init__.py

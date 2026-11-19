@@ -45,6 +45,8 @@ The seeded hooks separately protect the common branch names `main`/`uat`/`develo
 
 The route table for this deployment (for example develop/uat, develop/staging/live, or trunk) belongs in `AGENTS.md` under `## Git Workflow`, below the marker comment. The fetch-first step is universal; the route clause is not.
 
+**Gate ratchet:** CI runs the merge-base copy of `scripts/gate-ratchet.sh` and fails a PR that weakens a gate or changes a gate script, runner or manifest; a maintainer can apply the `allow-gate-change` label after review, and the log then prints every finding plus a line saying the label waived them.
+
 ## Sonar way profile notes
 
 Local checks match the default Sonar way profile. If your server flags a rule below, the fix is in the server's quality profile, not the code.

@@ -2,9 +2,9 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-942ea6e4eeb4056b48a73dfe409301c9a1762bcd901ab2f9236ae9ad28695d4c  .claude/ci-gates.sh
+d7404c3e7b8f981feb9879157ccbcad7632ff656f343db388b7354a22914f29e  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
-0d105ec78d5be6aec2829780d7ff5431858451d666b6a522922b9c2ccdc35a14  .claude/gates.txt
+b3cb572ea9aa90f11611a015f657fa44c2feb44b7d7524babcdffc491a5b93e8  .claude/gates.txt
 e3a24182b897024313fc137ee44d82eb5318306bc36c326dbe3f3ad00f530a50  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
@@ -42,7 +42,7 @@ d403fc06dd3807b7bd8c330f396f973962523086e8ca65150e6d01ac37379ff8  FUTURE.md
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-test-each-behaviour-once.md
 aa305fc153b84d9c6cb3e5f64cc41aad97df4064b8cd0f6ff7292d14a0847f7c  docs/architecture.md
-c63a47921e1767fa40c9974f54046cfe2c66f0bcbcbb07db1aa4cf3a47bf211a  docs/harness.md
+23fa48dc03ec0443f1b07e6c2b38b4dba813abc5521cb26a4897ca8d5b9df510  docs/harness.md
 d637e85017a390e52949f80f4541975de6a31fdb73fe06de755a88acfa08e26a  eslint.config.mjs
 aaea542dcd638a628af0dbadf04d299101629c453cf324746d7c9ab4908eb648  index.html
 fc2d4368984695c756e5be157023857a0e7d59b977db8226baa005490666d209  lefthook.yml
@@ -51,9 +51,9 @@ fc2d4368984695c756e5be157023857a0e7d59b977db8226baa005490666d209  lefthook.yml
 35f7127b3752726162f6f7dcf8366838322d7efb1ee62c2618e92a8b0ec82e1d  pnpm-workspace.yaml
 4cae941be9bc3bee9a6905e47ea7a51aee216d587d34a8cc4ae48f78fd6d8159  postcss.config.mjs
 0c4561464783a416b276ddc377916bb722af6d207f266bd710926b9753827b0f  scripts/check-docs.sh
-f7a6081d8bfc2c1b7d5a2ad4e91e6c91dc5017b894a593d90e2ad83fa4c18407  scripts/gate-ratchet.sh
+258851d7bc8e3f00793bd17cf1c12026ec02cde9d19cdb22fef83a196024dfda  scripts/gate-ratchet.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
-e408705166ca9fd7ac040ad48360c790796fa3f29fd6c700d2a4a1b165dda751  sonar-project.properties
+3acdf69eee8401eaa33d1a78c41894e2009568d809bdf05061af88ebf22ea333  sonar-project.properties
 bd43caebd208435102e89ba538fbe9377b7feed90cb9412542364519deed421a  src/app.tsx
 8b890af5b098564ed08290a4d0e4bd77e4e052b5bbac2955d43fbf9db5fbe9b7  src/components/layout/error-boundary.tsx
 38fd1e902f02659905689c4176c3f405539afefbaa3aad854b57ad75b4a74ab4  src/components/layout/index.ts
