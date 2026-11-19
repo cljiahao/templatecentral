@@ -8,7 +8,7 @@ manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget)\.sh$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget)\.sh$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
@@ -33,6 +33,25 @@ while IFS=$'\t' read -r path origin; do
   if [ ! -f "$path" ]; then echo "MISSING:  $path" >&2; drift=1; continue; fi
   [ "$(sha "$path")" = "$origin" ] || { echo "MODIFIED: $path" >&2; drift=1; }
 done <<< "$entries"
+
+# Gate manifest: every gate in .claude/gates.txt must be run by lefthook (when it names a command) and by each CI host's files.
+gates=".claude/gates.txt"
+[ -f "$gates" ] || { echo "verify-harness: $gates missing" >&2; exit 2; }
+code_of() { for f in "$@"; do if [ -f "$f" ]; then grep -vE '^[[:space:]]*#' "$f" || true; fi; done; }
+has() { printf '%s\n' "$1" | grep -qF -- "$2"; }
+hook_text=$(code_of lefthook.yml)
+gh_text=$(code_of .github/workflows/ci.yml)
+az_text=$(code_of azure-pipelines.yml azure-pipelines/templatecentral-gates.yml)
+listed=0
+while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
+  case "$gid" in ""|"#"*) continue ;; esac
+  if [ -z "$lh" ] || [ -z "$ci" ]; then echo "verify-harness: $gates line for '$gid' needs three | separated fields" >&2; exit 2; fi
+  listed=$((listed + 1))
+  if [ "$lh" != "-" ] && [ -n "$hook_text" ] && ! has "$hook_text" "$lh"; then echo "GATE MISSING: $gid is not run by lefthook.yml (expects '$lh')" >&2; drift=1; fi
+  if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
+  if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
+done < "$gates"
+[ "$listed" -gt 0 ] || { echo "verify-harness: $gates lists no gate" >&2; exit 2; }
 
 [ "$unfilled" -eq 0 ] || { echo "❌ $manifest still has unfilled origin_hash placeholders — finish Step E" >&2; exit 2; }
 [ "$checked" -gt 0 ] || { echo "❌ verify-harness checked zero enforcement-layer entries — manifest empty or malformed" >&2; exit 2; }

@@ -1164,6 +1164,43 @@ if out=$(py_scope_check "$T/mut" "$LEFTHOOK_PY" 2>&1); then bad "mutation not ca
 cp "$LEFTHOOK_PY" "$T/lefthook.bad" && sed -i.bak 's#ruff check src/ test/ &&#ruff check src/ \&\&#' "$T/lefthook.bad"
 if out=$(py_scope_check "$CI_DIR" "$T/lefthook.bad" 2>&1); then bad "mutation not caught: lefthook ruff scope narrowed to src/"; else ok "mutation caught: lefthook ruff scope narrowed to src/ -> $out"; fi
 
+# 9. Gate manifest: verify-harness fails when lefthook or any CI file of a stack omits a gate listed in .claude/gates.txt
+SHARED="$REPO_ROOT/skills/scaffold/shared"
+gate_fixture() { # gate_fixture <dir> <ts|py> <github|azure>
+  local d="$1" st="$2" host="$3" h
+  rm -rf "$d" && mkdir -p "$d/.claude/hooks"
+  cp "$SHARED/template/.claude/gates.txt" "$SHARED/template/.claude/verify-harness.sh" "$d/.claude/"
+  cp "$SHARED/template-$st/lefthook.yml" "$d/lefthook.yml"
+  if [[ "$host" == github ]]; then
+    mkdir -p "$d/.github/workflows" && cp "$CI_DIR/github-$st/.github/workflows/ci.yml" "$d/.github/workflows/ci.yml"
+  else
+    mkdir -p "$d/azure-pipelines" && cp "$CI_DIR/azure-$st/azure-pipelines.yml" "$d/azure-pipelines.yml"
+    cp "$CI_DIR/azure/azure-pipelines/templatecentral-gates.yml" "$d/azure-pipelines/templatecentral-gates.yml"
+  fi
+  echo x > "$d/.claude/hooks/a.sh"
+  h=$(shasum -a 256 "$d/.claude/hooks/a.sh" | cut -d' ' -f1)
+  printf '{"seeded_files":{"a":{"path":".claude/hooks/a.sh","origin_hash":"%s"}}}' "$h" > "$d/.claude/harness.json"
+}
+gate_verify() { (cd "$1" && bash .claude/verify-harness.sh 2>&1); }
+for st in ts py; do
+  for host in github azure; do
+    gate_fixture "$T/gm" "$st" "$host"
+    if out=$(gate_verify "$T/gm"); then ok "gate manifest: $st/$host lefthook and CI run every listed gate"; else bad "gate manifest: $st/$host omits a listed gate: $out"; fi
+    while IFS='|' read -r gid lh ci; do
+      [[ -z "$gid" || "$gid" == \#* ]] && continue
+      files=(lefthook.yml); [[ "$host" == github ]] && files+=(.github/workflows/ci.yml) || files+=(azure-pipelines/templatecentral-gates.yml azure-pipelines.yml)
+      for f in "${files[@]}"; do
+        want=$ci; [[ "$f" == lefthook.yml ]] && want=$lh
+        [[ "$want" == "-" ]] && continue
+        grep -qF -- "$want" "$T/gm/$f" || continue
+        gate_fixture "$T/gmm" "$st" "$host"
+        sed -i.bak "s#$want#removed-gate#g" "$T/gmm/$f"
+        if out=$(gate_verify "$T/gmm"); then bad "mutation not caught: $st/$host $f drops gate $gid"; else ok "mutation caught: $st/$host $f drops gate $gid"; fi
+      done
+    done < "$SHARED/template/.claude/gates.txt"
+  done
+done
+
 if [[ $fail -eq 0 ]]; then
   echo "test-ci-templates: all passed"
 else

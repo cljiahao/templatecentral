@@ -495,7 +495,7 @@ check_scaffold_seeds_complete_harness() {
   done
   # Template files every scaffold copies, per tree; the variant trees must each hold the full hook set.
   local shared_files=(
-    .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/ci-gates.sh
+    .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/ci-gates.sh .claude/gates.txt
     .claude/verify-harness.sh .claude/regen-harness.sh .claude/comment-hygiene-patterns.txt
     .lefthook/commit-msg.sh .gitleaks.toml scripts/check-docs.sh
   )

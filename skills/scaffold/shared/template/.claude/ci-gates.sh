@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -14,11 +14,31 @@ bypassed() {
   case " ${LABELS:-} " in *" $1 "*) echo "$1 label present — OK"; return 0 ;; esac
   return 1
 }
+# A gate runs only when .claude/gates.txt lists it; `list` prints the listed gates.
+gate_listed() {
+  local manifest line
+  manifest="$(dirname "$0")/gates.txt"
+  [ -f "$manifest" ] || fail "$manifest is missing — the gate manifest is the authority for which gates exist"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    if [ "${line%%|*}" = "$1" ]; then return 0; fi
+  done < "$manifest"
+  return 1
+}
 pr_only() {
   [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
   git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
 }
 
+case "$gate" in
+  secrets|changelog|comments|deps|nosonar|testbudget)
+    gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
+    ;;
+  list)
+    grep -vE '^[[:space:]]*(#|$)' "$(dirname "$0")/gates.txt" | cut -d'|' -f1
+    exit 0
+    ;;
+esac
 case "$gate" in
   secrets)
     # Bump version and SHA256 together, from the release's gitleaks_<version>_checksums.txt
@@ -246,7 +266,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|list> [base-branch]" >&2
     exit 2
     ;;
 esac
