@@ -138,7 +138,13 @@ Execute kit **Step E2**: it snapshots every seeded file into `.claude/.harness-b
 
 **Step 4f-1c: Generate per-folder documentation**
 
-Execute kit **Step E3** over the full adopted project tree: it follows `documentation-kit.md` (loaded by the phase table in `implementation.md`) and writes or refreshes each folder's `README.md`.
+Execute kit **Step E3** over the full adopted project tree: it follows `documentation-kit.md` (loaded by the phase table in `implementation.md`) and writes the root `README.md`, `docs/architecture.md` and a `README.md` only at a package, service or feature-module boundary. It writes no README per folder.
+
+Then classify every existing per-folder `README.md` the project already has:
+- **Boundary doc**: says what the unit is for, how it fits, or how to use it. Keep it.
+- **File manifest**: mostly a list of the folder's files or exports. `scripts/check-docs.sh` fails on a README that lists every file of its folder, so these will block pre-push.
+
+Print both lists with the path and one reason each. Keep every README in place. For the manifests only, propose removal and ask the user to confirm; delete only the ones they confirm, and never a boundary doc.
 
 **Step 4f-2: Create `.agents` symlink**
 
@@ -160,4 +166,4 @@ Run `bash "<skill-dir>/general/harness-live.sh" <project-dir>`. It reports PASS 
 
 **Step 4g: Print summary**
 
-`<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory. Print `✓ Upgraded to templateCentral <version>.`, then one line per file or tree written, grouped as: `AGENTS.md` (marker `@6.0.0` plus shared tail; nextjs: compressed template), `CLAUDE.md` (`@AGENTS.md` import), `.claude/settings.json` (merged: secret-read deny block, `skillListingBudgetFraction`, 6 hook events in exec form), the 9 `.claude/hooks/*.sh` scripts, `.claude/comment-hygiene-patterns.txt`, the git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`), the CI gates (`.claude/ci-gates.sh` plus the host's CI file), `.claude/verify-harness.sh` and `regen-harness.sh`, the `skill-audit` and `<stack>-verify` skills (nextjs also `next-migrate`), `.claude/harness.json` and `.claude/.harness-base/`, `FUTURE.md`, `docs/CONSTITUTION.md`, per-folder `README.md`, and any deletion (`post-tool-failure.sh`). End with the live check's last line and: "Commit these files together — the harness only enforces as a complete set."
+`<version>` is the plugin release, read from `.claude-plugin/plugin.json` (`version`) in the plugin directory. Print `✓ Upgraded to templateCentral <version>.`, then one line per file or tree written, grouped as: `AGENTS.md` (marker `@6.0.0` plus shared tail; nextjs: compressed template), `CLAUDE.md` (`@AGENTS.md` import), `.claude/settings.json` (merged: secret-read deny block, `skillListingBudgetFraction`, 6 hook events in exec form), the 9 `.claude/hooks/*.sh` scripts, `.claude/comment-hygiene-patterns.txt`, the git-hook layer (`lefthook.yml`, `.lefthook/commit-msg.sh`, `.gitleaks.toml`), the CI gates (`.claude/ci-gates.sh` plus the host's CI file), `.claude/verify-harness.sh` and `regen-harness.sh`, the `skill-audit` and `<stack>-verify` skills (nextjs also `next-migrate`), `.claude/harness.json` and `.claude/.harness-base/`, `FUTURE.md`, `docs/CONSTITUTION.md`, the root `README.md`, `docs/architecture.md` and boundary `README.md` files, and any deletion (`post-tool-failure.sh`). End with the live check's last line and: "Commit these files together — the harness only enforces as a complete set."
