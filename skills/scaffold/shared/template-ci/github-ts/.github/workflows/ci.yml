@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$SHARD_COUNT" in
-            ''|*[!0-9]*|0*)
+            ''|*[!0-9]*|0*|??????????*)
               echo "invalid shard count: '$SHARD_COUNT'" >&2
               exit 1
               ;;
@@ -132,13 +132,13 @@ jobs:
         run: |
           set -euo pipefail
           case "$SHARD_COUNT" in
-            ''|*[!0-9]*|0*)
+            ''|*[!0-9]*|0*|??????????*)
               echo "invalid shard count: '$SHARD_COUNT'" >&2
               exit 1
               ;;
           esac
-          found=$(find blob -name "*.json" | wc -l)
-          if [ "$found" -ne "$SHARD_COUNT" ]; then
+          found=$(find blob -name "*.json" | wc -l | tr -d ' ')
+          if [ "$found" != "$SHARD_COUNT" ]; then
             echo "expected $SHARD_COUNT shard reports, found $found" >&2
             exit 1
           fi

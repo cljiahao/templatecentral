@@ -180,7 +180,7 @@ count_run() { # count_run <script> <value> -> exit code; blob holds two reports
   echo "$rc"
 }
 for script in valid-gh valid-az assert-gh assert-az; do
-  for value in "" abc 1.5 -1 0 03; do
+  for value in "" abc 1.5 -1 0 03 99999999999999999999 9223372036854775808; do
     if [[ "$(count_run "$T/$script.sh" "$value")" != 0 ]]; then ok "$script fails on shard count '$value'"; else bad "$script passed on shard count '$value'"; fi
   done
   if [[ "$(count_run "$T/$script.sh" 2)" == 0 ]]; then ok "$script passes on shard count 2 with two reports"; else bad "$script failed on shard count 2 with two reports"; fi
@@ -372,21 +372,21 @@ AZ_PLAN = ('set -euo pipefail\n'
            "'\n")
 def case_check(v):
     return ('case "' + v + '" in\n'
-            "  ''|*[!0-9]*|0*)\n"
+            "  ''|*[!0-9]*|0*|??????????*)\n"
             '    echo "invalid shard count: \'' + v + '\'" >&2\n'
             '    exit 1\n'
             '    ;;\n'
             'esac\n')
 GH_VALID = 'set -euo pipefail\n' + case_check('$SHARD_COUNT')
 AZ_VALID = 'set -euo pipefail\n' + case_check('$(shardCount)')
-GH_ASSERT = (GH_VALID + 'found=$(find blob -name "*.json" | wc -l)\n'
-             'if [ "$found" -ne "$SHARD_COUNT" ]; then\n'
+GH_ASSERT = (GH_VALID + 'found=$(find blob -name "*.json" | wc -l | tr -d \' \')\n'
+             'if [ "$found" != "$SHARD_COUNT" ]; then\n'
              '  echo "expected $SHARD_COUNT shard reports, found $found" >&2\n'
              '  exit 1\n'
              'fi\n')
 AZ_ASSERT = ('set -euo pipefail\n' + case_check('$(shardCount)') +
-             "count=$(find blob -name '*.json' | wc -l)\n"
-             'if [ "$count" -ne "$(shardCount)" ]; then\n'
+             "count=$(find blob -name '*.json' | wc -l | tr -d ' ')\n"
+             'if [ "$count" != "$(shardCount)" ]; then\n'
              '  echo "expected $(shardCount) shard reports, found $count" >&2\n'
              '  exit 1\n'
              'fi\n')
@@ -920,7 +920,7 @@ mutate "--fail-under=80 removed (azure-py)" azure-py/azure-pipelines.yml ' --fai
 mutate "merge command removed (github-ts)" github-ts/.github/workflows/ci.yml '--merge-reports=blob --coverage' '--coverage' static
 mutate "job-level if: always() on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    if: always()\n    needs: [plan, test]\n' static
 mutate "|| true inside the Azure merge script (azure-ts)" azure-ts/azure-pipelines.yml 'vitest run --merge-reports=blob --coverage' 'vitest run --merge-reports=blob --coverage || true' static
-mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "found=\$(find blob -name \"*.json\" | wc -l)" "found=\$SHARD_COUNT" github
+mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "found=\$(find blob -name \"*.json\" | wc -l | tr -d ' ')" "found=\$SHARD_COUNT" github
 mutate "|| true mid-command before a following command (github-ts nosonar)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: bash .claude/ci-gates.sh nosonar || true; echo done' static
 mutate "|| : mid-command (azure gates nosonar)" azure/azure-pipelines/templatecentral-gates.yml 'bash .claude/ci-gates.sh nosonar' 'bash .claude/ci-gates.sh nosonar || : ; echo done' static
 mutate "|| exit 0 after the jscpd step (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: pnpm exec jscpd || exit 0' static
@@ -1040,8 +1040,10 @@ mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/
 mutate "hard-coded matrix (azure-ts)" "azure-ts/azure-pipelines.yml" "matrix: \$[ dependencies.plan.outputs['shards.matrix'] ]" "matrix: { shard1: { shard: 1 } }" "static" "key strategy must be"
 mutate "constant shard count restored, larger than the file count (github-ts)" github-ts/.github/workflows/ci.yml "Math.min(Number(process.env.SHARD_MAX), files)" "Number(process.env.SHARD_MAX)" static "required gate 'shard plan'"
 mutate "constant shard count restored, larger than the file count (azure-ts)" azure-ts/azure-pipelines.yml "Math.min(Number(process.env.SHARD_MAX), files)" "Number(process.env.SHARD_MAX)" static "required gate 'shard plan'"
-mutate "empty shard count allowed (github-ts)" github-ts/.github/workflows/ci.yml "''|*[!0-9]*|0*)" "*[!0-9]*|0*)" static "shard count"
-mutate "empty shard count allowed (azure-ts)" azure-ts/azure-pipelines.yml "''|*[!0-9]*|0*)" "*[!0-9]*|0*)" static "shard count"
+mutate "empty shard count allowed (github-ts)" github-ts/.github/workflows/ci.yml "''|*[!0-9]*|0*|??????????*)" "*[!0-9]*|0*|??????????*)" static "shard count"
+mutate "oversized shard count allowed (github-ts)" github-ts/.github/workflows/ci.yml "|0*|??????????*)" "|0*)" static "shard count"
+mutate "empty shard count allowed (azure-ts)" azure-ts/azure-pipelines.yml "''|*[!0-9]*|0*|??????????*)" "*[!0-9]*|0*|??????????*)" static "shard count"
+mutate "oversized shard count allowed (azure-ts)" azure-ts/azure-pipelines.yml "|0*|??????????*)" "|0*)" static "shard count"
 mutate "zero test files no longer fails the plan (github-ts)" github-ts/.github/workflows/ci.yml "if (files < 1) {" "if (files < 0) {" static "required gate 'shard plan'"
 mutate "parameters passed to the gates include (azure-ts)" azure-ts/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { skipDeps: true }\n' static "differ from the pinned ordered list"
 mutate "parameters passed to the gates include (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { runDeps: false }\n' static "differ from the pinned ordered list"
