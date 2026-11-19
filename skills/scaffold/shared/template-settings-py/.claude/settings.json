@@ -13,6 +13,11 @@
       "Read(**/*.key)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)",
+      "Bash(sh)",
+      "Bash(bash)",
+      "Bash(sh -s *)",
+      "Bash(bash -s *)",
+      "Bash(eval *)",
       "Read(./**/.venv/**)",
       "Read(./**/__pycache__/**)",
       "Read(./**/.pytest_cache/**)",
@@ -20,6 +25,10 @@
       "Read(./**/.mypy_cache/**)",
       "Read(./**/htmlcov/**)",
       "Read(./**/dist/**)"
+    ],
+    "ask": [
+      "Bash(curl *)",
+      "Bash(wget *)"
     ]
   },
   "hooks": {

@@ -35,6 +35,13 @@ seed() {
   if [[ "$1" == ts ]]; then
     cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
+    cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
+    cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
+    mkdir -p "$R/.github"
+    cp "$SH/template-ci/github-ts/.github/dependabot.yml" "$R/.github/dependabot.yml"
+    printf '# note\n' > "$R/.npmrc"
+    printf '# note\n' > "$R/.hadolint.yaml"
+    for sc in check-supply-chain check-workflows check-env-example check-dockerfile; do cp "$SH/template/scripts/$sc.sh" "$R/scripts/$sc.sh"; done
     cp "$SH/template-ci/github-ts/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     mkdir -p "$R/.claude/hooks" "$R/azure-pipelines"
     cp "$SH/template-ts/.claude/hooks/protect-files.sh" "$R/.claude/hooks/protect-files.sh"
@@ -337,6 +344,50 @@ has "WEAKENED" "$OUT" "waiver: findings are still printed"
 edit .claude/hooks/protect-files.sh "#!/usr/bin/env bash" "#!/usr/bin/env bash
 exit 0"
 expect 1 "protect-files hook change" ".claude/hooks/protect-files.sh" "gate script, runner or manifest changed"
+
+for sc in check-supply-chain check-workflows check-env-example check-dockerfile; do
+  edit "scripts/$sc.sh" "set -uo pipefail" "set -uo pipefail
+exit 0"
+  expect 1 "$sc script change" "scripts/$sc.sh" "gate script, runner or manifest changed"
+done
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 60" "release age lowered" "minimumReleaseAge"
+passes pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 20000" "release age raised"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - left-pad" "release age exclusion added" "minimumReleaseAgeExclude"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+dangerouslyAllowAllBuilds: true" "all builds allowed" "dangerouslyAllowAllBuilds"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+strictDepBuilds: False" "strictDepBuilds False spelling" "strictDepBuilds"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+\"ignoreScripts\": FALSE" "quoted ignoreScripts key" "ignoreScripts"
+weakens pnpm-workspace.yaml "minimumReleaseAge: 10080" "minimumReleaseAge: 10080
+\"minimumReleaseAgeExclude\":
+  - left-pad" "quoted exclusion key" "minimumReleaseAgeExclude"
+weakens .github/dependabot.yml "default-days: 7" "default-days: 0" "dependabot cooldown zeroed" "dependabot-cooldown"
+passes .github/dependabot.yml "default-days: 7" "default-days: 14" "dependabot cooldown raised"
+weakens .github/dependabot.yml "default-days: 7" "default-days: \"0\"" "dependabot cooldown zeroed with quotes" "dependabot-cooldown"
+passes .github/dependabot.yml "default-days: 7" "default-days: \"14\"" "dependabot cooldown raised with quotes"
+edit scripts/check-dockerfile.sh 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018"' 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3013"'
+expect 1 "dockerfile gate ignore list grown" "scripts/check-dockerfile.sh" "gate script, runner or manifest changed"
+weakens .npmrc "# note" "# note
+ignore-scripts=false" "npmrc re-enables scripts" "ignore-scripts=false"
+weakens .npmrc "# note" "# note
+registry=https://evil.example.com/" "npmrc registry redirect" "registry"
+weakens .hadolint.yaml "# note" "# note
+ignored:
+  - DL3008" "hadolint ignore added" "DL3008"
+git_ checkout -q -B work main
+printf '  esbuild: true\n' >> "$R/pnpm-workspace.yaml"
+git_ commit -q -am allowbuild
+expect 1 "allowBuilds entry added" "esbuild"
+git_ checkout -q -B work main
+printf 'registry.example.com\n' >> "$R/.claude/registry-hosts.txt"
+git_ commit -q -am host
+expect 1 "registry host added" ".claude/registry-hosts.txt" "registry.example.com"
+ci_gate "allow-gate-change"
+check 1 "$EC" "registry host addition cannot be waived by label ($OUT)"
+passes .claude/registry-hosts.txt "#" "# note" "registry hosts comment edit"
 
 passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@${NEWSHA} # v7.0.2" "pinned action bump"
 passes azure-pipelines.yml "NodeTool@0" "NodeTool@1" "azure task version bump"

@@ -88,7 +88,7 @@ class CreateUserRequest(BaseRequestSchema):
     email: EmailStr
 ```
 
-Port every Zod constraint — a bare `str` silently drops the validation. `EmailStr` needs `email-validator` in `requirements.txt`. Fields are `snake_case`; `BaseRequestSchema`'s `to_camel` alias accepts both key styles.
+Port every Zod constraint — a bare `str` silently drops the validation. `EmailStr` needs `email-validator` in `requirements.in` (then recompile). Fields are `snake_case`; `BaseRequestSchema`'s `to_camel` alias accepts both key styles.
 
 **Response schema template:**
 
@@ -230,7 +230,7 @@ Then apply the Phase 7 `proxy.ts` rule in `common.md`.
 ```bash
 # 1. FastAPI backend
 cd ../[project-name]-api
-pip install -r requirements.txt && python -m pytest test/ -q
+pip install --require-hashes -r requirements.txt && python -m pytest test/ -q
 
 # 2. Next.js frontend
 cd [original-project-path]

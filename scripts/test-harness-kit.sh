@@ -1588,6 +1588,20 @@ while IFS='|' read -r gid lh ci; do
 done <<< "$gate_lines"
 gate_verify() { (cd "$GV" && bash "$KIT/verify-harness.sh" 2>&1); }
 out=$(gate_verify); check 0 "$?" "verify-harness passes when every runner has every listed gate"
+cp "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" "$GV/.claude/settings.json"
+out=$(gate_verify); check 0 "$?" "verify-harness passes on the seeded settings.json ($out)"
+sed 's/"Bash(curl \*)",/"Bash(curl)",/' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+out=$(gate_verify); rc=$?
+check 1 "$rc" "verify-harness fails when the curl ask rule is gone"
+check 1 "$(grep -c 'ASK RULE MISSING: Bash(curl \*)' <<<"$out")" "verify-harness names the missing curl ask rule"
+for r in 'Bash(sh)' 'Bash(bash)' 'Bash(eval *)' 'Bash(sh -s *)'; do
+  grep -vF -- "\"$r\"" "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+  out=$(gate_verify); rc=$?
+  check 1 "$rc" "verify-harness fails when deny rule $r is gone"
+done
+awk '/"ask": \[/ { sub(/"ask"/, "\"deny\"") } { print }' "$REPO_ROOT/skills/scaffold/shared/template-settings-ts/.claude/settings.json" > "$GV/.claude/settings.json"
+out=$(gate_verify); check 1 "$?" "verify-harness fails when curl is listed outside the ask list"
+rm "$GV/.claude/settings.json"
 for f in lefthook.yml .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml; do
   while IFS='|' read -r gid lh ci; do
     want=$ci; if [[ "$f" == lefthook.yml ]]; then want=$lh; fi
@@ -1607,7 +1621,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments ratchet" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments ratchet supplychain workflows envexample dockerfile" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"
@@ -1631,7 +1645,7 @@ done
 # ── gitleaks (lefthook secret-scan + CI) ──────────────────────────────────────
 
 # The lefthook secret-scan `run:` line, run against a stub gitleaks that records its argv
-# and exits with $STUB_EXIT: a finding must fail the commit, and an absent binary must skip.
+# and exits with $STUB_EXIT: a finding must fail the commit, and an absent binary must skip the scan line, then check-secret-scanner warns locally and fails in CI.
 GLS="$T/gl-stub"
 mkdir -p "$GLS"
 # shellcheck disable=SC2016  # literal $* / $STUB_EXIT belong to the generated stub script.
@@ -1647,8 +1661,19 @@ for kit_md in "${LEFTHOOKS[@]}"; do
   check "git --pre-commit --staged --redact --no-banner" "$(cat "$GLS/argv" 2>/dev/null)" "$k secret-scan uses gitleaks git --pre-commit"
   STUB_EXIT=0 PATH="$GLS:/usr/bin:/bin" bash -c "$line" >/dev/null 2>&1
   check 0 "$?" "$k secret-scan passes when clean"
-  PATH=/usr/bin:/bin bash -c "$line" >/dev/null 2>&1
-  check 0 "$?" "$k secret-scan skips when gitleaks is absent"
+  present=$(grep -A3 '^    scanner-present:' "$kit_md" 2>/dev/null | grep -m1 '^      run: ' | sed 's/^      run: //')
+  check "bash scripts/check-secret-scanner.sh" "$present" "$k runs the scanner presence check on commit"
+  PS_SCRIPT="$REPO_ROOT/skills/scaffold/shared/template/scripts/check-secret-scanner.sh"
+  out=$(env -u CI -u TF_BUILD -u GITHUB_ACTIONS PATH=/usr/bin:/bin bash "$PS_SCRIPT" 2>&1 >/dev/null)
+  check 0 "$?" "check-secret-scanner warns but lets a local commit through when gitleaks is absent"
+  check 1 "$(grep -c 'WARNING.*gitleaks is not installed' <<<"$out")" "check-secret-scanner warns that the commit was not scanned"
+  check 1 "$(grep -c 'brew install gitleaks' <<<"$out")" "check-secret-scanner names the install command"
+  CI=true PATH=/usr/bin:/bin bash "$PS_SCRIPT" >/dev/null 2>&1
+  check 1 "$?" "check-secret-scanner fails in CI when gitleaks is absent"
+  TF_BUILD=True PATH=/usr/bin:/bin bash "$PS_SCRIPT" >/dev/null 2>&1
+  check 1 "$?" "check-secret-scanner fails on Azure when gitleaks is absent"
+  CI=true PATH="$GLS:/usr/bin:/bin" bash "$PS_SCRIPT" >/dev/null 2>&1
+  check 0 "$?" "check-secret-scanner passes in CI when gitleaks is installed"
 done
 for kit_md in "${KIT_MDS[@]}" "${LEFTHOOKS[@]}" "${CI_FILES[@]}" "$KIT/ci-gates.sh"; do
   k=$(basename "$(dirname "$kit_md")")/$(basename "$kit_md")

@@ -25,14 +25,14 @@ curl -o /path/to/global-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 
 ### Step 1 — Install boto3 + psycopg 3
 
-Add to `requirements.txt`:
+Add to `requirements.in`, then run `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt` and `pip install --require-hashes -r requirements.txt`:
 
 ```
 boto3
 psycopg[binary]
 ```
 
-If `requirements.txt` still lists `psycopg2-binary`, replace it — the engine URL below uses the psycopg 3 `postgresql+psycopg://` scheme.
+If `requirements.in` still lists `psycopg2-binary`, replace it — the engine URL below uses the psycopg 3 `postgresql+psycopg://` scheme.
 
 ### Step 2 — Replace `src/database/session.py`
 

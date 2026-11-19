@@ -1111,6 +1111,7 @@ check_no_version_pins() {
   #   shadcn@latest: the official shadcn CLI invocation, not a dependency pin
   #   templateCentral: schema markers (<!-- templateCentral: stack@X.Y.Z -->)
   #   "packageManager" field: corepack requires an exact version in this field by design
+  #   uv==X.Y.Z: the one exact Python pin (the seeded Dockerfile, CI and docs install uv itself); versions.txt records it and check-versions.sh enforces every copy
   #   ":<space>stack@version" prose (drift-check example output, schema version references)
   # REVISIT: if the SSOT policy changes, remove this check.
   header "Version pins in skills (SSOT)"
@@ -1121,7 +1122,7 @@ check_no_version_pins() {
         | grep -vE ':[[:space:]]+[a-zA-Z][a-zA-Z0-9_-]*@[0-9]' || true
       echo
       scan -E '[a-zA-Z0-9_-]+[=]{2}[0-9]+\.[0-9]+'
-    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' || true)" \
+    } | grep -v '^$' | sort -u | grep -v 'shadcn@latest' | grep -vE '[^a-zA-Z0-9_-]uv==[0-9]' || true)" \
     "Version pins found — move floors/pins to .claude/rules/*.md" \
     "No version pins in skills"
 
@@ -1129,17 +1130,18 @@ check_no_version_pins() {
   # "name": "X.Y.Z" is an unreviewed pin. eslint-plugin-sonarjs and jscpd are the exact pins by design
   # (sonarjs: its enabled-rule set changes across minor versions; jscpd: the CI duplication gate pins
   # the same version, so a local run and CI measure alike).
+  # eslint-plugin-no-unsanitized: its rule set decides which sinks fail the lint, so a later minor must not change it unseen.
   # nestjs-zod: an exact pin keeps a later 5.x from changing behaviour unseen.
   header "Template package.json dependencies use floors, not exact pins"
   local pj pins="" n=0
   while IFS= read -r pj; do
     n=$((n + 1))
     pins+=$(grep -nE '^[[:space:]]+"[^"]+":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$pj" \
-      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs|jscpd|nestjs-zod)"' | sed "s#^#$pj:#" || true)
+      | grep -vE '"(version|packageManager|eslint-plugin-sonarjs|eslint-plugin-no-unsanitized|jscpd|nestjs-zod)"' | sed "s#^#$pj:#" || true)
   done < <(template_files | grep '/package\.json$' || true)
   [[ "$n" -gt 0 ]] || pins="no template package.json found — nothing to check"
   report "$pins" \
-    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs, jscpd and nestjs-zod are the only exact pins)" \
+    "Exact dependency pin in a template package.json — use a caret floor aligned with .claude/rules/*.md (eslint-plugin-sonarjs, eslint-plugin-no-unsanitized, jscpd and nestjs-zod are the only exact pins)" \
     "Template package.json dependencies use floors (eslint-plugin-sonarjs, jscpd and nestjs-zod exact by design)"
 
   # A floor written as prose (≥X.Y outside a fence and outside inline code) restates a rule that

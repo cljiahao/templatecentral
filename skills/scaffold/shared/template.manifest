@@ -60,3 +60,9 @@ template/.lefthook/commit-msg.sh 755 - -
 template/scripts/check-docs.sh 755 - -
 template/scripts/test-budget.sh 755 - -
 template/scripts/gate-ratchet.sh 755 - -
+template/scripts/check-supply-chain.sh 755 - -
+template/scripts/check-workflows.sh 755 - -
+template/scripts/check-env-example.sh 755 - -
+template/scripts/check-dockerfile.sh 755 - -
+template/scripts/check-secret-scanner.sh 755 - -
+template/.claude/registry-hosts.txt 644 - -

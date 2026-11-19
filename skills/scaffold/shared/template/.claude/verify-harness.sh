@@ -8,7 +8,7 @@ manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet)\.sh$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)\.sh$|\.claude/registry-hosts\.txt$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
@@ -51,6 +51,27 @@ while IFS='|' read -r gid lh ci || [ -n "$gid" ]; do
   if [ "$ci" != "-" ] && [ -n "$gh_text" ] && ! has "$gh_text" "$ci"; then echo "GATE MISSING: $gid is not run by .github/workflows/ci.yml (expects '$ci')" >&2; drift=1; fi
   if [ "$ci" != "-" ] && [ -n "$az_text" ] && ! has "$az_text" "$ci"; then echo "GATE MISSING: $gid is not run by the Azure pipeline files (expects '$ci')" >&2; drift=1; fi
 done < "$gates"
+# Agent permission baseline: a blessed hash must not hide a deleted deny or ask rule.
+settings=".claude/settings.json"
+rule_in_list() {
+  awk -v list="$2" -v rule="$3" '
+    $0 ~ "\"" list "\"[[:space:]]*:[[:space:]]*\\[" { on = 1; next }
+    on && /\]/ { on = 0 }
+    on && index($0, "\"" rule "\"") { found = 1 }
+    END { exit !found }
+  ' "$1"
+}
+if [ -f "$settings" ]; then
+  for rule in 'Read(**/.env)' 'Read(**/.env.local)' 'Read(**/*.pem)' 'Read(**/*.key)' 'Read(./secrets/**)' 'Bash(sh)' 'Bash(bash)' 'Bash(bash -s *)' 'Bash(sh -s *)' 'Bash(eval *)'; do
+    if ! rule_in_list "$settings" deny "$rule"; then echo "DENY RULE MISSING: $rule is not in $settings permissions.deny; restore it from the scaffold" >&2; drift=1; fi
+  done
+  for rule in 'Bash(curl *)' 'Bash(wget *)'; do
+    if ! rule_in_list "$settings" ask "$rule"; then echo "ASK RULE MISSING: $rule is not in $settings permissions.ask; restore it from the scaffold" >&2; drift=1; fi
+  done
+  for rule in 'Bash(curl *)' 'Bash(wget *)'; do
+    if rule_in_list "$settings" allow "$rule"; then echo "ASK RULE WEAKENED: $rule is in $settings permissions.allow; remove it so the agent asks first" >&2; drift=1; fi
+  done
+fi
 [ "$listed" -gt 0 ] || { echo "verify-harness: $gates lists no gate" >&2; exit 2; }
 
 [ "$unfilled" -eq 0 ] || { echo "❌ $manifest still has unfilled origin_hash placeholders — finish Step E" >&2; exit 2; }

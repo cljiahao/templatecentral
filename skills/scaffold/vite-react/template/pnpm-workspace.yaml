@@ -3,6 +3,9 @@
 # Block git-URL, tarball and local-path dependencies: the main defence against dependency confusion.
 blockExoticSubdeps: true
 
+# Wait 7 days, counted in minutes, before installing a new release, so a compromised publish is usually pulled first. Never add minimumReleaseAgeExclude.
+minimumReleaseAge: 10080
+
 # Allowlist packages permitted to run install scripts; pnpm >=11 blocks all by default.
 allowBuilds:
   # lefthook ships its binary via optional deps; pnpm still needs an explicit decision or install fails with ERR_PNPM_IGNORED_BUILDS.

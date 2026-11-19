@@ -13,12 +13,21 @@
       "Read(**/*.key)",
       "Read(./secrets/**)",
       "Read(./.secrets/**)",
+      "Bash(sh)",
+      "Bash(bash)",
+      "Bash(sh -s *)",
+      "Bash(bash -s *)",
+      "Bash(eval *)",
       "Read(./**/node_modules/**)",
       "Read(./**/.next/**)",
       "Read(./**/dist/**)",
       "Read(./**/coverage/**)",
       "Read(./**/.turbo/**)",
       "Read(./**/*.tsbuildinfo)"
+    ],
+    "ask": [
+      "Bash(curl *)",
+      "Bash(wget *)"
     ]
   },
   "hooks": {

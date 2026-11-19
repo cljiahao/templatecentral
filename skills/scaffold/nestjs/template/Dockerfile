@@ -5,17 +5,17 @@
 # NODE_BUILD:     Build-stage Node.js image. Always Alpine (needs shell for
 #                 apk, adduser, etc.). Not overridden by CI.
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USERNAME:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the NestJS server listens on
-# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
-# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG NODE=node:26-alpine
-ARG NODE_BUILD=node:26-alpine
+# Base images are pinned by digest (scripts/check-dockerfile.sh). To bump one, edit the tag and digest together:
+# `docker buildx imagetools inspect <image>:<tag>`. Rebuild with `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
+ARG NODE=node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
+ARG NODE_BUILD=node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
 ARG APP_UID=1001
 ARG APP_GID=1001
-ARG APP_USERNAME=container-user
+ARG APP_USER=container-user
 ARG APP_GROUPNAME=container-group
 ARG APP_DIR=/app
 ARG PORT=3000
@@ -28,7 +28,7 @@ FROM ${NODE_BUILD} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
+ARG APP_USER
 ARG APP_GROUPNAME
 
 WORKDIR ${APP_DIR}
@@ -37,7 +37,7 @@ WORKDIR ${APP_DIR}
 RUN apk add --no-cache dumb-init ca-certificates \
     && apk upgrade --no-cache \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
-    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
+    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USER}
 
 # ---- Dependencies ----
 # Installs ALL dependencies (including devDependencies like TypeScript, vitest, etc.)
@@ -82,8 +82,8 @@ RUN \
 FROM deps AS dev
 ENV NODE_ENV="development"
 COPY ./ ./
-RUN apk add --no-cache curl
-RUN chmod +x docker-entrypoint.sh
+RUN apk add --no-cache curl \
+    && chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 

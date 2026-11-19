@@ -20,11 +20,11 @@ describe('applyFrameProtection', () => {
   });
 
   it('allows only the portal origin and drops X-Frame-Options', () => {
-    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://appcentral-uat.cpfnet.gov.sg');
+    vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://portal.example.com');
     const res = framed();
     expect(res.headers.get('X-Frame-Options')).toBeNull();
     expect(res.headers.get('Content-Security-Policy')).toBe(
-      `frame-ancestors https://appcentral-uat.cpfnet.gov.sg; ${CSP_BASE}`,
+      `frame-ancestors https://portal.example.com; ${CSP_BASE}`,
     );
   });
 
@@ -47,7 +47,7 @@ describe('applyFrameProtection', () => {
   it.each(['/api/external', '/api/external/items'])(
     'leaves backend-proxied responses (%s) untouched',
     (pathname) => {
-      vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://appcentral-uat.cpfnet.gov.sg');
+      vi.stubEnv('APPCENTRAL_PORTAL_ORIGIN', 'https://portal.example.com');
       const backend = new Response(null, {
         headers: { 'Content-Security-Policy': "default-src 'none'", 'X-Frame-Options': 'DENY' },
       });

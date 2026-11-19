@@ -3,17 +3,17 @@
 #                 apk, adduser, etc.). Not overridden by CI.
 # NGINX:          Nginx image for serving the static Vite build output
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USERNAME:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the Nginx server listens on (also used in nginx.conf.template)
-# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
-# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG NODE_BUILD=node:26-alpine
-ARG NGINX=nginx:1.30.5-alpine3.24
+# Base images are pinned by digest (scripts/check-dockerfile.sh). To bump one, edit the tag and digest together:
+# `docker buildx imagetools inspect <image>:<tag>`. Rebuild with `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
+ARG NODE_BUILD=node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
+ARG NGINX=nginx:1.30.5-alpine3.24@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
 ARG APP_UID=1001
 ARG APP_GID=1001
-ARG APP_USERNAME=container-user
+ARG APP_USER=container-user
 ARG APP_GROUPNAME=container-group
 ARG APP_DIR=/app
 ARG PORT=3000
@@ -25,7 +25,7 @@ FROM ${NODE_BUILD} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
+ARG APP_USER
 ARG APP_GROUPNAME
 
 WORKDIR ${APP_DIR}
@@ -33,7 +33,7 @@ WORKDIR ${APP_DIR}
 # TZ defaults to UTC — override via TZ env var in your deploy config if needed
 RUN apk upgrade --no-cache \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
-    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME}
+    && adduser -S -u ${APP_UID} -h ${APP_DIR} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USER}
 
 # ---- Dependencies ----
 # Installs ALL dependencies (including devDependencies like vite, typescript,
@@ -65,8 +65,8 @@ RUN \
 FROM deps AS dev
 ENV NODE_ENV="development"
 COPY ./ ./
-RUN apk add --no-cache curl
-RUN chmod +x docker-entrypoint.sh
+RUN apk add --no-cache curl \
+    && chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["dev"]
 
@@ -75,7 +75,7 @@ CMD ["dev"]
 FROM ${NGINX} AS prod
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
+ARG APP_USER
 ARG APP_GROUPNAME
 ARG APP_DIR
 ARG PORT
@@ -85,7 +85,7 @@ ENV PORT=${PORT}
 RUN apk upgrade --no-cache \
     && mkdir -p /run \
     && addgroup -g ${APP_GID} ${APP_GROUPNAME} \
-    && adduser -S -u ${APP_UID} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USERNAME} \
+    && adduser -S -u ${APP_UID} -s /sbin/nologin -G ${APP_GROUPNAME} ${APP_USER} \
     && chown -R ${APP_UID}:${APP_GID} /run /var/cache/nginx /etc/nginx \
     && chmod -R 755 /run /var/cache/nginx /etc/nginx \
     && rm /etc/nginx/conf.d/default.conf
@@ -99,6 +99,6 @@ EXPOSE ${PORT}
 USER ${APP_UID}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q -O/dev/null "http://localhost:${PORT:-3000}/" || exit 1
+  CMD ["sh", "-c", "wget -q -O/dev/null http://localhost:${PORT:-3000}/"]
 
 CMD ["nginx", "-g", "daemon off;"]

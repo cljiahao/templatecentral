@@ -8,3 +8,7 @@ deps|-|ci-gates.sh deps
 changelog|-|ci-gates.sh changelog
 comments|-|ci-gates.sh comments
 ratchet|-|ci-gates.sh ratchet
+supplychain|scripts/check-supply-chain.sh|ci-gates.sh supplychain
+workflows|scripts/check-workflows.sh|ci-gates.sh workflows
+envexample|scripts/check-env-example.sh|ci-gates.sh envexample
+dockerfile|-|ci-gates.sh dockerfile

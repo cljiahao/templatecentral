@@ -5,7 +5,7 @@
 # Portal framing (`APPCENTRAL_PORTAL_ORIGIN`)
 
 Since 6.2.0 a scaffolded app may be framed by its appCentral portal, and only by it. The platform
-injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://appcentral-uat.cpfnet.gov.sg`) at runtime.
+injects `APPCENTRAL_PORTAL_ORIGIN` (e.g. `https://portal.example.com`) at runtime.
 
 | `APPCENTRAL_PORTAL_ORIGIN` | `Content-Security-Policy` | `X-Frame-Options` |
 |---|---|---|
@@ -109,6 +109,6 @@ Run the project's verify gate (`.claude/skills/*-verify`, or `templatecentral` b
 check both cases against a production-mode run (`curl -sI`):
 
 - variable unset → `X-Frame-Options: DENY` and `frame-ancestors 'none'`
-- `APPCENTRAL_PORTAL_ORIGIN=https://appcentral-uat.cpfnet.gov.sg` → no `X-Frame-Options`, and
-  `frame-ancestors https://appcentral-uat.cpfnet.gov.sg` with the other CSP directives intact
+- `APPCENTRAL_PORTAL_ORIGIN=https://portal.example.com` → no `X-Frame-Options`, and
+  `frame-ancestors https://portal.example.com` with the other CSP directives intact
 - `APPCENTRAL_PORTAL_ORIGIN='https://a.example.gov.sg; script-src *'` → same as unset

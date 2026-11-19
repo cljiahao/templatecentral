@@ -39,7 +39,7 @@ class ProjectResponse(BaseResponseSchema):
     created_at: datetime
 ```
 
-`EmailStr` needs `email-validator` in `requirements.txt` (installed by `templatecentral:add (auth)`).
+`EmailStr` needs `email-validator` in `requirements.in` (installed by `templatecentral:add (auth)`).
 
 ```python
 # src/api/schemas/request/auth.py

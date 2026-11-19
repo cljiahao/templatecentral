@@ -391,7 +391,7 @@ d4215fbedeb2233765a4498380598229b8ac2cc65a30e8df98d9ea1928743d33	skills/add/logg
 9596ded4f99a544358595ed46a1ba3fb6128978d5bc7c78a7a04ffb0b6d23250	skills/add/mutation-testing/python.md	Dependencies	0	-
 fa72d6cbbce95a0c4211c2445ea879fa6d9f70429c8b1bd2f89e69f8991c3b0a	skills/add/mutation-testing/python.md	Step 1 — Add mutmut configuration	0	toml
 ecc80fa931d674f2929143c554b395f482585738f632809e857191cc189c7c46	skills/add/mutation-testing/python.md	Step 2 — Update .gitignore	0	-
-49d470de729a6ebe2dccf278dbc5abfd13c0dd6816ff9c41878ad3c05eff87c2	skills/add/mutation-testing/python.md	Step 3 — Add CI job	0	yaml
+d2598c1c6822f00af3469e894410b2fd6b9176d3a9b1c7637d413c1b54e2bda0	skills/add/mutation-testing/python.md	Step 3 — Add CI job	0	yaml
 d1fb635dd5e9362e0e25881107b790c7438e57d24131c325847c5c561e7ab41d	skills/add/mutation-testing/typescript.md	Step 1 — Create StrykerJS config	0	javascript
 4d637aa74c22a0ed221e3733518e818c398aa3c125a0de1b84ae3d45e64fa782	skills/add/mutation-testing/typescript.md	Step 2 — Add npm script	0	json
 2555ff5b99a042bf9bd918bf87ac9b6a1e3c39ebb1de037b31555825eceed69b	skills/add/mutation-testing/typescript.md	Step 3 — Update .gitignore	0	-

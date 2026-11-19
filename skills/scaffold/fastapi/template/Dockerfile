@@ -1,16 +1,16 @@
 # ---- Global build arguments ----
 # PYTHON:         Base Python image (pinned for reproducible builds)
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USERNAME:   Non-root username inside the container
+# APP_USER:       Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
-# Tag floats on purpose (no digest pin: a pinned digest goes stale downstream). Rebuild with
-# `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
-ARG PYTHON=python:3.14.10-slim
+# Base images are pinned by digest (scripts/check-dockerfile.sh). To bump one, edit the tag and digest together:
+# `docker buildx imagetools inspect <image>:<tag>`. Rebuild with `--pull --no-cache` to pick up trust-store fixes (eMudhra intermediate CA, Oct 2026).
+ARG PYTHON=python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 ARG APP_UID=1001
 ARG APP_GID=1001
-ARG APP_USERNAME=container-user
+ARG APP_USER=container-user
 ARG APP_GROUPNAME=container-group
 ARG APP_DIR=/app
 ARG PORT=8000
@@ -22,7 +22,7 @@ FROM ${PYTHON} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
+ARG APP_USER
 ARG APP_GROUPNAME
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -34,10 +34,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR ${APP_DIR}
 
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends dumb-init \
     && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
-    && useradd -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
+    && useradd -l -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USER} \
     && chown ${APP_UID}:${APP_GID} ${APP_DIR} \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -51,9 +50,9 @@ COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
-  if [ -f uv.lock ]; then pip install uv && uv sync --frozen; \
-  elif [ -f requirements-dev.txt ]; then pip install -r requirements.txt -r requirements-dev.txt; \
-  elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
+  if [ -f uv.lock ]; then pip install uv==0.13.7 && uv sync --frozen; \
+  elif [ -f requirements-dev.txt ]; then pip install --require-hashes -r requirements.txt && pip install -r requirements-dev.txt; \
+  elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install .; \
   elif [ -f setup.py ]; then pip install .; \
   else echo "No requirements.txt, pyproject.toml, or setup.py found." && exit 1; \
@@ -70,9 +69,9 @@ COPY requirements*.txt pyproject.toml* uv.lock* setup.py* setup.cfg* ./
 RUN python -m venv .venv
 ENV PATH="${APP_DIR}/.venv/bin:${PATH}"
 RUN \
-  if [ -f uv.lock ]; then pip install uv && uv sync --frozen --no-dev; \
+  if [ -f uv.lock ]; then pip install uv==0.13.7 && uv sync --frozen --no-dev; \
   elif [ -f requirements-prod.txt ]; then pip install -r requirements-prod.txt; \
-  elif [ -f requirements.txt ]; then pip install -r requirements.txt; \
+  elif [ -f requirements.txt ]; then pip install --require-hashes -r requirements.txt; \
   elif [ -f pyproject.toml ]; then pip install . --no-deps || pip install .; \
   elif [ -f setup.py ]; then pip install .; \
   else echo "No requirements file found." && exit 1; \
@@ -118,7 +117,7 @@ EXPOSE ${PORT}
 USER ${APP_UID}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:' + str(__import__('os').environ.get('PORT', 8000)) + '/health')" || exit 1
+  CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT', '8000') + '/health')"]
 
 ENTRYPOINT ["dumb-init", "--", "./docker-entrypoint.sh"]
 CMD ["prod"]
