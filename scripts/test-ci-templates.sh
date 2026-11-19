@@ -100,6 +100,34 @@ gh_behaviour() { # gh_behaviour <ci-dir> — prints "missing=<rc> full=<rc>"
 res=$(gh_behaviour "$CI_DIR")
 if [[ "$res" =~ ^missing=[1-9][0-9]*\ full=0$ ]]; then ok "github assertion fails with a missing shard and passes with all ($res)"; else bad "github assertion behaviour wrong: $res"; fi
 
+# 4b. test-count equality step: run the real step script of each template against fixture reports
+python3 - "$CI_DIR" "$T" <<'PY2'
+import sys, yaml
+root, out = sys.argv[1:3]
+gh = yaml.safe_load(open(f"{root}/github-ts/.github/workflows/ci.yml"))
+steps = gh["jobs"]["coverage"]["steps"]
+open(f"{out}/count-gh.sh", "w").write(next(x["run"] for x in steps if x.get("name") == "Require the merged test count to equal the unsharded count"))
+az = yaml.safe_load(open(f"{root}/azure-ts/azure-pipelines.yml"))
+steps = next(j for j in az["jobs"] if j["job"] == "coverage")["steps"]
+open(f"{out}/count-az.sh", "w").write(next(x["bash"] for x in steps if x.get("displayName") == "Require the merged test count to equal the unsharded count"))
+PY2
+count_case() { # count_case <script> <merged-total> <merged-failed> <collected-total> -> exit code
+  rm -rf "$T/cnt" && mkdir -p "$T/cnt/report"
+  printf '{"numTotalTests":%s,"numFailedTests":%s}' "$2" "$3" > "$T/cnt/report/merged.json"
+  printf '{"numTotalTests":%s}' "$4" > "$T/cnt/report/collected.json"
+  local rc=0
+  ( cd "$T/cnt" && bash "$1" ) >/dev/null 2>&1 || rc=$?
+  echo "$rc"
+}
+for host in gh az; do
+  if [[ "$(count_case "$T/count-$host.sh" 28 0 28)" == 0 ]]; then ok "$host count step passes when merged equals unsharded"; else bad "$host count step failed on equal counts"; fi
+  if [[ "$(count_case "$T/count-$host.sh" 27 0 28)" != 0 ]]; then ok "$host count step fails when a test is missing from the merge"; else bad "$host count step passed with 27 of 28 tests"; fi
+  if [[ "$(count_case "$T/count-$host.sh" 28 1 28)" != 0 ]]; then ok "$host count step fails on a failed test"; else bad "$host count step passed with a failed test"; fi
+  if [[ "$(count_case "$T/count-$host.sh" 0 0 0)" != 0 ]]; then ok "$host count step fails on zero tests"; else bad "$host count step passed with zero tests"; fi
+done
+if grep -q 'SHARD_COUNT: "4"' "$CI_DIR/github-ts/.github/workflows/ci.yml" && grep -q 'shardCount: 4' "$CI_DIR/azure-ts/azure-pipelines.yml"; then ok "both TS templates shard the tests four ways"; else bad "a TS template does not use four shards"; fi
+if grep -rq -- ' -n auto' "$CI_DIR/github-py" "$CI_DIR/azure-py"; then bad "a Python CI template runs pytest with xdist"; else ok "Python CI templates run pytest serially"; fi
+
 # 5. static guards over all four templates
 cat > "$T/static.py" <<'PY'
 import re, sys
@@ -250,6 +278,16 @@ def gate_include_errors(rel, doc):
 # needs/dependsOn edges of every job. A missing step, a changed command, a step in the wrong job, an unlisted job or a
 # missing edge fails and names the gate. Exact text also rules out `set +e`, `exit 0` and `|| true` in a gate command.
 # The github and azure variants differ only where the platform differs (task vs uses, $(var) vs ${VAR}), each recorded.
+COUNT_CHECK = ('set -euo pipefail\n'
+               "node -e '\n"
+               'const fs = require("node:fs");\n'
+               'const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"));\n'
+               'const merged = read("report/merged.json");\n'
+               'const collected = read("report/collected.json");\n'
+               'console.log("merged " + merged.numTotalTests + ", unsharded " + collected.numTotalTests + ", failed " + merged.numFailedTests);\n'
+               'const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0;\n'
+               'process.exit(ok ? 0 : 1);\n'
+               "'\n")
 MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                'needs': {'plan': [],
                          'quality': [],
@@ -280,6 +318,15 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('shard download', 'coverage', 'uses', 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'),
                          ('shard count assertion', 'coverage', 'run', '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'),
                          ('coverage merge', 'coverage', 'run', 'pnpm exec vitest run --merge-reports=blob --coverage'),
+                         ('merged test report',
+                          'coverage',
+                          'run',
+                          'pnpm exec vitest run --merge-reports=blob --reporter=json --outputFile.json=report/merged.json'),
+                         ('unsharded test count',
+                          'coverage',
+                          'run',
+                          "pnpm exec vitest run -t '^$' --reporter=json --outputFile.json=report/collected.json"),
+                         ('test count equality', 'coverage', 'run', COUNT_CHECK),
                          ('diff-cover at 80',
                           'coverage',
                           'run',
@@ -300,7 +347,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
                          ('jscpd', 'quality', 'run', 'npx --yes jscpd@${JSCPD_VERSION}'),
-                         ('tests', 'quality', 'run', 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'),
+                         ('tests', 'quality', 'run', 'python -m pytest test/ --cov=src --cov-report=xml -q'),
                          ('diff-cover at 80',
                           'quality',
                           'run',
@@ -348,6 +395,15 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'set -euo pipefail\n'
                          '# writes coverage/cobertura-coverage.xml\n'
                          'pnpm exec vitest run --merge-reports=blob --coverage\n'),
+                        ('merged test report',
+                         'coverage',
+                         'bash',
+                         'pnpm exec vitest run --merge-reports=blob --reporter=json --outputFile.json=report/merged.json'),
+                        ('unsharded test count',
+                         'coverage',
+                         'bash',
+                         "pnpm exec vitest run -t '^$' --reporter=json --outputFile.json=report/collected.json"),
+                        ('test count equality', 'coverage', 'bash', COUNT_CHECK),
                         ('diff-cover at 80',
                          'coverage',
                          'bash',
@@ -361,7 +417,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                         ('typecheck', 'quality', 'bash', 'python -m pyright src/'),
                         ('jscpd', 'quality', 'bash', 'npx --yes jscpd@$(JSCPD_VERSION)'),
                         ('gates include', 'quality', 'template', 'azure-pipelines/templatecentral-gates.yml'),
-                        ('tests', 'quality', 'bash', 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'),
+                        ('tests', 'quality', 'bash', 'python -m pytest test/ --cov=src --cov-report=xml -q'),
                         ('diff-cover at 80',
                          'quality',
                          'bash',
@@ -453,6 +509,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                        'with': {'pattern': 'vitest-blob-*', 'path': 'blob', 'merge-multiple': True}},
                                       {'run': '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'},
                                       {'run': 'pnpm exec vitest run --merge-reports=blob --coverage'},
+                                      {'run': 'pnpm exec vitest run --merge-reports=blob --reporter=json '
+                                              '--outputFile.json=report/merged.json'},
+                                      {'run': "pnpm exec vitest run -t '^$' --reporter=json "
+                                              '--outputFile.json=report/collected.json'},
+                                      {'run': COUNT_CHECK},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                        'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" '
                                               'coverage/cobertura-coverage.xml '
@@ -513,6 +574,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'bash': 'set -euo pipefail\n'
                                               '# writes coverage/cobertura-coverage.xml\n'
                                               'pnpm exec vitest run --merge-reports=blob --coverage\n'},
+                                     {'bash': 'pnpm exec vitest run --merge-reports=blob --reporter=json '
+                                              '--outputFile.json=report/merged.json'},
+                                     {'bash': "pnpm exec vitest run -t '^$' --reporter=json "
+                                              '--outputFile.json=report/collected.json'},
+                                     {'bash': COUNT_CHECK},
                                      {'bash': 'set -euo pipefail\n'
                                               'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                                               'pipx run "diff-cover==$(diffCoverVersion)" '
@@ -545,7 +611,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
-                                     {'run': 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'},
+                                     {'run': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'},
@@ -576,7 +642,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                     {'bash': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                     {'bash': 'python -m pyright src/'},
                                     {'bash': 'npx --yes jscpd@$(JSCPD_VERSION)'},
-                                    {'bash': 'python -m pytest test/ -n auto --cov=src --cov-report=xml -q'},
+                                    {'bash': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                     {'bash': 'set -euo pipefail\n'
                                              'target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}\n'
                                              'pipx run "diff-cover==$(DIFF_COVER_VERSION)" coverage.xml '
@@ -802,7 +868,7 @@ mutate "step-level if: false on the docs check step (github-ts)" github-ts/.gith
 mutate "step-level if: false on the comment step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Require no change-narration comments' '      - if: false\n        name: Require no change-narration comments' static
 mutate "step-level if: false on Dependency audit (github-py)" github-py/.github/workflows/ci.yml '      - name: Dependency audit' '      - if: false\n        name: Dependency audit' static
 mutate "step-level if: false on Secret scan (github-py)" github-py/.github/workflows/ci.yml '      - name: Secret scan' '      - if: false\n        name: Secret scan' static
-mutate "step-level if: false on the Tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (pytest-xdist' '      - if: false\n        name: Tests (pytest-xdist' static
+mutate "step-level if: false on the Tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (serial' '      - if: false\n        name: Tests (serial' static
 mutate "step-level if: false on the changelog step (github-py)" github-py/.github/workflows/ci.yml '      - name: Require CHANGELOG for src changes' '      - if: false\n        name: Require CHANGELOG for src changes' static
 mutate "enabled: false on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        enabled: false\n        displayName: Merge shard reports' static
 mutate "enabled: false on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage' '        enabled: false\n        displayName: Changed-line coverage' static
@@ -854,8 +920,11 @@ mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure
 # 6b. pinned step options, defaults, step order, shard matrix, gate-include parameters
 mutate "working-directory on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)\n        env:' '      - name: Changed-line coverage (>= 80%)\n        working-directory: docs\n        env:' static "differ from the pinned ordered list"
 mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: pipx run" "          BASE_REF: HEAD\n        run: pipx run" "static" "differ from the pinned ordered list"
-mutate "env added on the tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)\n' '      - name: Tests (pytest-xdist workers; pytest-cov combines their data into coverage.xml)\n        env: { PYTEST_ADDOPTS: --co }\n' static "differ from the pinned ordered list"
+mutate "env added on the tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (serial; pytest-cov writes coverage.xml)\n' '      - name: Tests (serial; pytest-cov writes coverage.xml)\n        env: { PYTEST_ADDOPTS: --co }\n' static "differ from the pinned ordered list"
 mutate "workingDirectory on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage (>= 80%)' '        workingDirectory: docs\n        displayName: Changed-line coverage (>= 80%)' static "differ from the pinned ordered list"
+mutate "count comparison neutered (github-ts)" github-ts/.github/workflows/ci.yml "process.exit(ok ? 0 : 1);" "process.exit(0);" static "required gate 'test count equality'"
+mutate "|| true on the unsharded count step (azure-ts)" azure-ts/azure-pipelines.yml "outputFile.json=report/collected.json" "outputFile.json=report/collected.json || true" static
+mutate "|| true on the merged report step (github-ts)" github-ts/.github/workflows/ci.yml "outputFile.json=report/merged.json" "outputFile.json=report/merged.json || true" static
 mutate "target on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        target: host\n        displayName: Merge shard reports' static "differ from the pinned ordered list"
 mutate "LABELS env changed on the changelog gate (azure gates)" "azure/azure-pipelines/templatecentral-gates.yml" "    displayName: Changelog gate\n    env: { LABELS: \$(LABELS) }" "    displayName: Changelog gate\n    env: { LABELS: skip-changelog }" "static" "differ from the pinned ordered list"
 mutate "workflow-level defaults with a working-directory (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }\n' 'permissions: { contents: read }\ndefaults:\n  run:\n    working-directory: docs\n' static "workflow-level defaults"

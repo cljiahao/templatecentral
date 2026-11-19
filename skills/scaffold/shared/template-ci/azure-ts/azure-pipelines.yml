@@ -9,7 +9,7 @@ variables:
   # changed-line coverage tool; bump deliberately, it decides what fails the build
   diffCoverVersion: "11.0.3"
   # the one knob for test sharding: raise it to split the suite across more agents
-  shardCount: 2
+  shardCount: 4
   # caps each Node process; the test workers inherit it
   NODE_OPTIONS: --max-old-space-size=4096
 jobs:
@@ -88,6 +88,22 @@ jobs:
           # writes coverage/cobertura-coverage.xml
           pnpm exec vitest run --merge-reports=blob --coverage
         displayName: Merge shard reports
+      - bash: pnpm exec vitest run --merge-reports=blob --reporter=json --outputFile.json=report/merged.json
+        displayName: Build one test report from the shard reports
+      - bash: pnpm exec vitest run -t '^$' --reporter=json --outputFile.json=report/collected.json
+        displayName: Count the tests without sharding (collection only, no test body runs)
+      - bash: |
+          set -euo pipefail
+          node -e '
+          const fs = require("node:fs");
+          const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
+          const merged = read("report/merged.json");
+          const collected = read("report/collected.json");
+          console.log("merged " + merged.numTotalTests + ", unsharded " + collected.numTotalTests + ", failed " + merged.numFailedTests);
+          const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0;
+          process.exit(ok ? 0 : 1);
+          '
+        displayName: Require the merged test count to equal the unsharded count
       - bash: |
           set -euo pipefail
           target=${SYSTEM_PULLREQUEST_TARGETBRANCH:-main}

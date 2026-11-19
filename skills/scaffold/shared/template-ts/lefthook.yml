@@ -9,10 +9,10 @@ pre-commit:
       exclude:
         - .claude/hooks/*
         - .claude/.harness-base/**
-      run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --fix --max-warnings=0 --no-warn-ignored {staged_files}
+      run: pnpm exec prettier --write {staged_files} && pnpm exec eslint --cache --fix --max-warnings=0 --no-warn-ignored {staged_files}
       stage_fixed: true
     typecheck:
-      run: pnpm exec tsc --noEmit
+      run: pnpm exec tsc --noEmit --incremental
     lockfile:
       glob: "package.json"
       run: pnpm install --frozen-lockfile

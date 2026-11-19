@@ -39,6 +39,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# eslint --cache file
+.eslintcache
 next-env.d.ts
 # Local agent symlink (.agents -> .claude) — do not track it: a git-tracked
 # symlink breaks Windows CI build agents (e.g. "Unable to load symbolic/hard

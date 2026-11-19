@@ -49,3 +49,30 @@ The route table for this deployment (for example develop/uat, develop/staging/li
 
 - A workflow done twice → author a `.claude/skills/<name>/` project skill and commit it, so the repo (and teammates) carry it, not just session memory. `/skill-audit` surfaces repeats from the skill usage log in the `.claude` folder.
 - Do not vendor third-party plugin skills; re-author the workflow as a project skill tuned to this repo.
+
+## Test speed
+
+Speed changes keep the same tests, the same coverage and the same gates. The levers that are on:
+
+- **Vitest runs on `pool: 'threads'`.** Threads start faster than forks and keep test IDs, coverage and per-file isolation.
+- **Type check and lint are incremental locally.** `pnpm typecheck` runs `tsc --noEmit --incremental` and `pnpm lint` runs `eslint --cache` (`*.tsbuildinfo` and `.eslintcache` are gitignored), as do the lefthook steps and the Claude hooks. `pnpm check` and CI run both in full, with no cache.
+- **CI shards the vitest suite 4 ways** (`SHARD_COUNT` on GitHub, `shardCount` on Azure). A merge step fails unless the merged test count equals a collection-only count of the unsharded suite and no test failed, then the existing changed-line coverage bar (80%) applies to the merged report.
+- **FastAPI tests run serially.** `python -m pytest -n auto` was removed because xdist measured slower at this suite size. Add it back only after measuring a longer suite.
+
+Acceptance rule for any further speed change. All of these hold before it merges:
+
+1. The test IDs are the same before and after (list and diff them).
+2. Coverage is equal and at least 80%.
+3. The mutation score is not lower.
+4. Ten random-order runs (`--sequence.shuffle` for vitest) show no flake.
+5. No gate is skipped, loosened or made optional.
+6. The full suite runs before merge to `main`. A sample or an affected-only run is never the final gate.
+
+Rejected levers, with the reason:
+
+- `pool: 'vmThreads'`: a shared VM context leaks module and global state between tests and raises memory use.
+- `--no-isolate` / `isolate: false`: tests share module state, so order starts to matter.
+- `--bail`: stops at the first failure and hides the rest of the run, so the test IDs differ.
+- `--maxWorkers` caps in CI: no gain on the runner and it slows the shards.
+- xdist or shards for Python: slower than serial at this suite size.
+- Affected-only test selection: a sample, not the full suite, so it cannot be the final gate.
