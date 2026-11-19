@@ -112,6 +112,9 @@ case "$gate" in
       if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
+      if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then
+        fail "the allow-gate-change label cannot waive an unreadable config or a checker failure (output above); fix the cause."
+      fi
       if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
       fail "a gate is weaker than at the base branch, or its config is unreadable (output above). Restore it, or have a maintainer apply the 'allow-gate-change' label after review."
     fi

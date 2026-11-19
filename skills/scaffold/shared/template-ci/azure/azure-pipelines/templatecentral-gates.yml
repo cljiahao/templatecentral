@@ -20,9 +20,16 @@ steps:
     env: { LABELS: $(LABELS) }
   # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
   - bash: |
+      set -euo pipefail
       branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
       branch="${branch#refs/heads/}"
-      if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" > "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi
+      if [ -n "$branch" ]; then
+        if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi
+        if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi
+        tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")
+        trap 'rm -f "$tmp"' EXIT
+        if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi
+      fi
       bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }

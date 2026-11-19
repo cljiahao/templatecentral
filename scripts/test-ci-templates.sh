@@ -437,9 +437,11 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'gate-ratchet',
                           'run',
                           'set -euo pipefail\n'
-                          'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
-                          '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
-                          'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                          'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                          'trap \'rm -f "$tmp"\' EXIT\n'
+                          'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                           'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
@@ -468,9 +470,11 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'gate-ratchet',
                           'run',
                           'set -euo pipefail\n'
-                          'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
-                          '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
-                          'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                          'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                          'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                          'trap \'rm -f "$tmp"\' EXIT\n'
+                          'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                           'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
@@ -565,11 +569,16 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Gate ratchet (no gate weaker than the base branch)',
                             '(gates include)',
                             'bash',
+                            'set -euo pipefail\n'
                             'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
                             'branch="${branch#refs/heads/}"\n'
-                            'if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" '
-                            '> "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then '
-                            'cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                            'if [ -n "$branch" ]; then\n'
+                            '  if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi\n'
+                            '  if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi\n'
+                            '  tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")\n'
+                            '  trap \'rm -f "$tmp"\' EXIT\n'
+                            '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                            'fi\n'
                             'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n')]}}
 
 # Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
@@ -662,9 +671,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
                                            'run': 'set -euo pipefail\n'
-                                                  'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
-                                                  '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
-                                                  'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                  'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                                                  'trap \'rm -f "$tmp"\' EXIT\n'
+                                                  'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                                                   'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
@@ -782,9 +793,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
                                            'run': 'set -euo pipefail\n'
-                                                  'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
-                                                  '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
-                                                  'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                  'if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi\n'
+                                                  'tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")\n'
+                                                  'trap \'rm -f "$tmp"\' EXIT\n'
+                                                  'if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
                                                   'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
@@ -819,11 +832,16 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                {'bash': 'bash .claude/ci-gates.sh comments '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
-                                               {'bash': 'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
+                                               {'bash': 'set -euo pipefail\n'
+                                                        'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
                                                         'branch="${branch#refs/heads/}"\n'
-                                                        'if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" '
-                                                        '> "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then '
-                                                        'cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                        'if [ -n "$branch" ]; then\n'
+                                                        '  if ! base_sha=$(git rev-parse --verify --quiet "origin/$branch^{commit}"); then echo "##vso[task.logissue type=error]origin/$branch not found; check out with fetchDepth: 0"; exit 1; fi\n'
+                                                        '  if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "##vso[task.logissue type=error]no merge base with origin/$branch; check out with fetchDepth: 0"; exit 1; fi\n'
+                                                        '  tmp=$(mktemp "${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}/ci-gates.XXXXXX")\n'
+                                                        '  trap \'rm -f "$tmp"\' EXIT\n'
+                                                        '  if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi\n'
+                                                        'fi\n'
                                                         'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}}]}}}
 

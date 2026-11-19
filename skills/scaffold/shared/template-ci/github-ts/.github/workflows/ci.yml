@@ -204,7 +204,11 @@ jobs:
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: |
           set -euo pipefail
-          if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" > "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi
+          if ! base_sha=$(git rev-parse --verify --quiet "origin/$BASE_REF^{commit}"); then echo "::error::origin/$BASE_REF not found; check out with fetch-depth: 0"; exit 1; fi
+          if ! mbase=$(git merge-base "$base_sha" HEAD); then echo "::error::no merge base with origin/$BASE_REF; check out with fetch-depth: 0"; exit 1; fi
+          tmp=$(mktemp "$RUNNER_TEMP/ci-gates.XXXXXX")
+          trap 'rm -f "$tmp"' EXIT
+          if git cat-file -e "$mbase:.claude/ci-gates.sh" 2>/dev/null; then git show "$mbase:.claude/ci-gates.sh" > "$tmp"; cp "$tmp" .claude/ci-gates.sh; fi
           bash .claude/ci-gates.sh ratchet "$BASE_REF"
   dependency-review:
     if: github.event_name == 'pull_request'

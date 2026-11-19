@@ -98,6 +98,16 @@ ci_gate() {
   EC=$?
 }
 
+# run_step <gh|az> <base branch>: sets OUT and EC from the seeded CI ratchet step script, run in the current repo.
+run_step() {
+  mkdir -p "$T/rt"
+  rm -f "$T/rt"/*
+  git_ update-ref refs/remotes/origin/main main
+  OUT=$(cd "$R" && BASE_REF="$2" SYSTEM_PULLREQUEST_TARGETBRANCH="refs/heads/$2" RUNNER_TEMP="$T/rt" AGENT_TEMPDIRECTORY="$T/rt" LABELS="" bash "$T/step-$1.sh" 2>&1)
+  EC=$?
+  LEFT=$(find "$T/rt" -type f | wc -l | tr -d ' ')
+}
+
 # weakens <file> <old> <new> <fragments...>: the edit must exit 1 and name the file, old and new values.
 weakens() {
   local file=$1 old=$2 new=$3 label=$4 frag
@@ -424,6 +434,71 @@ git_ add -A
 git_ commit -q -m "add ignore"
 expect 0 "base without .gitleaks.toml: .gitleaksignore is not a shadow"
 seed ts
+
+python3 - "$T" "$SH" <<'PY'
+import sys, yaml
+t, sh = sys.argv[1:3]
+y = yaml.safe_load(open(sh + "/template-ci/github-ts/.github/workflows/ci.yml"))
+open(t + "/step-gh.sh", "w").write(y["jobs"]["gate-ratchet"]["steps"][1]["run"])
+a = yaml.safe_load(open(sh + "/template-ci/azure/azure-pipelines/templatecentral-gates.yml"))
+steps = a if isinstance(a, list) else a["steps"]
+open(t + "/step-az.sh", "w").write(steps[-1]["bash"])
+PY
+git_ checkout -q -B main main
+printf '#!/usr/bin/env bash\necho BASE-ENTRY\nexit 9\n' > "$R/.claude/ci-gates.sh"
+git_ commit -q -am "base entry"
+git_ checkout -q -B work main
+cp "$SH/template/.claude/ci-gates.sh" "$R/.claude/ci-gates.sh"
+git_ commit -q -am "head entry"
+for kind in gh az; do
+  run_step "$kind" main
+  check 9 "$EC" "ci step $kind: the merge-base entry point runs ($OUT)"
+  has "BASE-ENTRY" "$OUT" "ci step $kind: output from the base entry point"
+  check 0 "$LEFT" "ci step $kind: temporary copy removed"
+  git_ checkout -q -f work
+done
+for kind in gh az; do
+  run_step "$kind" no-such-branch
+  check 1 "$EC" "ci step $kind: missing base ref exits 1 ($OUT)"
+  has "fetch" "$OUT" "ci step $kind: says how to fix a missing base ref"
+  if [[ "$OUT" == *BASE-ENTRY* ]]; then check no yes "ci step $kind: head script must not run when the base ref is missing"; fi
+  git_ diff --quiet
+  check 0 "$?" "ci step $kind: entry point untouched when the base ref is missing"
+done
+git_ checkout -q --orphan lone
+git_ commit -q -m lone
+for kind in gh az; do
+  run_step "$kind" main
+  check 1 "$EC" "ci step $kind: no merge base exits 1 ($OUT)"
+  has "no merge base" "$OUT" "ci step $kind: names the missing merge base"
+done
+seed ts
+git_ checkout -q -B main main
+git_ rm -q .claude/ci-gates.sh .claude/gates.txt
+git_ commit -q -m "base without the harness entry"
+git_ checkout -q -B work main
+git_ checkout main~1 -- .claude/ci-gates.sh .claude/gates.txt
+git_ commit -q -m "adopt"
+for kind in gh az; do
+  run_step "$kind" main
+  check 0 "$EC" "ci step $kind: first adoption falls back to the head entry point ($OUT)"
+  has "first adoption" "$OUT" "ci step $kind: first adoption reported"
+done
+seed ts
+
+TAGREF=v4
+weakens .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@${TAGREF}" "action pin moved to a tag" "gate script, runner or manifest changed"
+ci_gate "allow-gate-change"
+check 1 "$EC" "pin moved to a tag: label cannot waive it ($OUT)"
+has "cannot waive" "$OUT" "pin moved to a tag: says the label cannot waive it"
+weakens azure-pipelines.yml "NodeTool@0" "NodeTool@latest" "azure task moved off a numeric version" "gate script, runner or manifest changed"
+passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" "pin comment dropped"
+
+edit eslint.config.mjs "ignores: ['eslint.config.mjs'," "ignores: ['eslint.config.mjs"
+ci_gate "allow-gate-change"
+check 1 "$EC" "unreadable config: the label does not waive it ($OUT)"
+has "cannot waive an unreadable config" "$OUT" "unreadable config: says why"
+if [[ "$OUT" == *"waived every finding"* ]]; then check no yes "unreadable config must not print the waiver line"; fi
 
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-COPY-RAN\nexit 7\n' > "$R/scripts/gate-ratchet.sh"

@@ -65,11 +65,11 @@ shadow_reason() {
   return 1
 }
 
-# CI file text with the tracked coverage number and any pinned action or task version masked, so a routine pin bump is not a change.
+# CI file text with the tracked coverage number masked and only a full-SHA action pin or a numeric Azure task version masked, so a SHA-to-SHA bump is not a change but a move to a tag or branch is.
 mask_ci() {
   sed -E -e 's/--fail-under[= ]+[0-9]+([.][0-9]+)?/--fail-under=N/g' \
-    -e 's/(uses:[[:space:]]*[^@[:space:]]+)@[^[:space:]]+([[:space:]]+#.*)?$/\1@V/' \
-    -e 's/(task:[[:space:]]*[^@[:space:]]+)@[^[:space:]]+/\1@V/'
+    -e 's/(uses:[[:space:]]*[^@[:space:]]+)@[0-9a-f]{40}([[:space:]]+#.*)?[[:space:]]*$/\1@V/' \
+    -e 's/(task:[[:space:]]*[^@[:space:]]+)@[0-9]+[[:space:]]*$/\1@V/'
 }
 
 # Content check for files whose behaviour is not a parsed value; tracked numbers are masked because the parsed comparison covers them.
