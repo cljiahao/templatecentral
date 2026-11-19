@@ -216,7 +216,7 @@ def step_bounds(lines, n):
 # Only the PR-only gates may carry a job- or stage-level if/condition, and only this exact one: the gates themselves
 # skip off-PR runs, so any other if/condition on a job or stage could silently switch a gate off. The templates are
 # parsed with PyYAML and walked structurally, so quoting, spacing, indent, flow style and anchors cannot hide a key.
-PR_ONLY_JOBS = {"changelog", "comment-hygiene", "dependency-review"}
+PR_ONLY_JOBS = {"changelog", "comment-hygiene", "gate-ratchet", "dependency-review"}
 PR_ONLY_IF = "github.event_name == 'pull_request'"
 # Every step of every job must always run and fail the job: no if/condition/enabled/continue-on-error/continueOnError and
 # no non-positive timeout. Allowlist keyed by (template, job, step name, or its exact uses/task/script first line when
@@ -396,7 +396,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          'test': ['plan'],
                          'coverage': ['plan', 'test'],
                          'changelog': [],
-                         'comment-hygiene': [],
+                         'comment-hygiene': [], 'gate-ratchet': [],
                          'dependency-review': []},
                'gates': [('shard plan', 'plan', 'run', GH_PLAN),
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
@@ -433,12 +433,13 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('gate ratchet', 'gate-ratchet', 'run', 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
                           'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'github-py': {'file': 'github-py/.github/workflows/ci.yml',
-               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'dependency-review': []},
+               'needs': {'quality': [], 'changelog': [], 'comment-hygiene': [], 'gate-ratchet': [], 'dependency-review': []},
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
@@ -456,6 +457,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
+                         ('gate ratchet', 'gate-ratchet', 'run', 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
@@ -545,7 +547,11 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Comment hygiene gate',
                             '(gates include)',
                             'bash',
-                            'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
+                            'bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'),
+                           ('Gate ratchet (no gate weaker than the base branch)',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
 
 # Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
 # permissions, defaults, env, container) and the full ordered list of steps with every key except name/displayName; a
@@ -568,6 +574,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
+                        'gate-ratchet': {'if': "github.event_name == 'pull_request'",
+                                         'runs-on': 'ubuntu-latest',
+                                         'timeout-minutes': 5},
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
@@ -629,6 +638,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                          {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                   'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                             "') }}"},
+                                           'run': 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-ts': {'jobs': {'plan': {'timeoutInMinutes': 5},
@@ -700,6 +714,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'comment-hygiene': {'if': "github.event_name == 'pull_request'",
                                             'runs-on': 'ubuntu-latest',
                                             'timeout-minutes': 5},
+                        'gate-ratchet': {'if': "github.event_name == 'pull_request'",
+                                         'runs-on': 'ubuntu-latest',
+                                         'timeout-minutes': 5},
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
@@ -737,6 +754,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                                          {'env': {'BASE_REF': '${{ github.base_ref }}',
+                                                   'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
+                                                             "') }}"},
+                                           'run': 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-py': {'jobs': {'quality': {'timeoutInMinutes': 20}},
@@ -768,6 +790,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
                                                {'bash': 'bash .claude/ci-gates.sh comments '
+                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                                'env': {'LABELS': '$(LABELS)'}},
+                                               {'bash': 'bash .claude/ci-gates.sh ratchet '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}}]}}}
 

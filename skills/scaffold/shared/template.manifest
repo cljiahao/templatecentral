@@ -59,3 +59,4 @@ template/.gitleaks.toml 644 - -
 template/.lefthook/commit-msg.sh 755 - -
 template/scripts/check-docs.sh 755 - -
 template/scripts/test-budget.sh 755 - -
+template/scripts/gate-ratchet.sh 755 - -

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -31,7 +31,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -90,6 +90,15 @@ case "$gate" in
       bypassed skip-comment-check && exit 0
       printf '%s\n' "$flagged"
       fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
+    fi
+    ;;
+  ratchet)
+    pr_only
+    # A PR may not weaken gate config (thresholds, lint rules, ignores, the gate manifest) versus its merge base.
+    [ -f scripts/gate-ratchet.sh ] || fail "scripts/gate-ratchet.sh is missing"
+    if ! bash scripts/gate-ratchet.sh "$base"; then
+      bypassed allow-gate-change && exit 0
+      fail "a gate is weaker than at the base branch, or its config is unreadable (output above). Restore it, or have a maintainer apply the 'allow-gate-change' label after review."
     fi
     ;;
   testbudget)

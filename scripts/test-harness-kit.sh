@@ -1603,7 +1603,7 @@ out=$(gate_verify); check 2 "$?" "verify-harness fails when gates.txt is missing
 cp "$KIT/gates.txt" "$GV/.claude/gates.txt"; printf 'broken\n' >> "$GV/.claude/gates.txt"
 out=$(gate_verify); check 2 "$?" "verify-harness fails on a malformed manifest line"
 bash "$KIT/ci-gates.sh" list > "$T/gl.txt" 2>&1
-check "harness docs testbudget nosonar secrets deps changelog comments" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
+check "harness docs testbudget nosonar secrets deps changelog comments ratchet" "$(tr '\n' ' ' < "$T/gl.txt" | sed 's/ $//')" "ci-gates list prints the manifest gates in order"
 KG=$(mktemp -d "$T/kg.XXXX"); cp "$KIT/ci-gates.sh" "$KG/"; grep -v '^nosonar|' "$KIT/gates.txt" > "$KG/gates.txt"
 bash "$KG/ci-gates.sh" nosonar >/dev/null 2>&1
 check 1 "$?" "ci-gates refuses a gate the manifest does not list"
@@ -1684,11 +1684,11 @@ for ext in js jsx mjs cjs; do
   check 1 "$?" "ci-gates nosonar fails on a NOSONAR marker in .$ext"
   git -C "$NSR" rm -qf --cached "src/c.$ext"
 done
-for g in changelog comments; do
+for g in changelog comments ratchet; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" "") >/dev/null 2>&1
   check 0 "$?" "ci-gates $g skips off-PR"
 done
-for g in changelog comments; do
+for g in changelog comments ratchet; do
   (cd "$FEAT" && bash "$KIT/ci-gates.sh" "$g" no-such-branch) >/dev/null 2>&1
   check 1 "$?" "ci-gates $g fails closed when the base ref is missing"
 done

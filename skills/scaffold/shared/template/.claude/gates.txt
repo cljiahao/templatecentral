@@ -8,3 +8,4 @@ secrets|gitleaks|ci-gates.sh secrets
 deps|-|ci-gates.sh deps
 changelog|-|ci-gates.sh changelog
 comments|-|ci-gates.sh comments
+ratchet|-|ci-gates.sh ratchet

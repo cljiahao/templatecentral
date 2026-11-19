@@ -1,4 +1,4 @@
-# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog or skip-comment-check skips a PR-only gate.
+# Include after `checkout: self` with `fetchDepth: 0` and the install steps, with pnpm or uv and pipx on PATH; LABELS=skip-changelog, skip-comment-check or allow-gate-change skips a PR-only gate.
 steps:
   - bash: bash .claude/verify-harness.sh
     displayName: Harness integrity
@@ -17,4 +17,7 @@ steps:
     env: { LABELS: $(LABELS) }
   - bash: bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Comment hygiene gate
+    env: { LABELS: $(LABELS) }
+  - bash: bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+    displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }

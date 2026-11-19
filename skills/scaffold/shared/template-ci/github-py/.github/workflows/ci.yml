@@ -81,6 +81,18 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: bash .claude/ci-gates.sh comments "$BASE_REF"
+  gate-ratchet:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Require no weaker gate config (apply 'allow-gate-change' label to bypass)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+        run: bash .claude/ci-gates.sh ratchet "$BASE_REF"
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

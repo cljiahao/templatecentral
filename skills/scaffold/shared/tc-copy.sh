@@ -213,7 +213,7 @@ if [ "$PART" = manifest ]; then
     (cd "$TGT" && find .claude/hooks -type f 2>/dev/null | LC_ALL=C sort)
     printf '%s\n' lefthook.yml .lefthook/commit-msg.sh .gitleaks.toml .claude/comment-hygiene-patterns.txt \
       .github/workflows/ci.yml azure-pipelines/templatecentral-gates.yml azure-pipelines.yml .claude/ci-gates.sh .claude/gates.txt \
-      .claude/verify-harness.sh .claude/regen-harness.sh scripts/check-docs.sh scripts/test-budget.sh \
+      .claude/verify-harness.sh .claude/regen-harness.sh scripts/check-docs.sh scripts/test-budget.sh scripts/gate-ratchet.sh \
       .claude/skills/test-consolidate/SKILL.md docs/adr/0001-test-each-behaviour-once.md docs/harness.md .github/dependabot.yml
   )
   body=""
