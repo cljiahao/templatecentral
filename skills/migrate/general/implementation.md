@@ -59,7 +59,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   ```
   ✓ This project is on the current harness schema (@6.0.0). No migration needed.
   ```
-  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above.
+  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above. To bring the harness files up to the current templates in one run instead, load `general/harness-refresh.md`.
 
 - **`.claude/harness.json` does not exist** → a light adoption wrote the marker but never seeded
   the harness. Do **not** exit. Skip Phases 1–3 and present:
@@ -115,9 +115,11 @@ User B → print "No changes made." Exit.
 ```
 ℹ️ This project was scaffolded with templateCentral <version>.
 
-v4.0 adds an AI harness layer to all scaffolds:
-- .claude/settings.json  — PreToolUse (.env guard), PostToolUse (type-check), Stop (test suite), SessionStart (re-injects AGENTS.md after compaction)
-- AGENTS.md              — ## AI Harness section with post-harness seams
+The upgrade seeds the whole current harness, after a baseline run and ending with a comparison:
+- .claude/settings.json + .claude/hooks/        — the enforcement layer (exec-form hooks)
+- lefthook.yml, .gitleaks.toml, CI quality gates
+- .claude/harness.json + .claude/.harness-base/ — integrity manifest and merge base
+- AGENTS.md tail, docs/CONSTITUTION.md, root README and boundary docs
 
 Upgrade? (A) Yes  (B) Skip
 ```

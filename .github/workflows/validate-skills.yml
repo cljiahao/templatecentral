@@ -219,7 +219,7 @@ jobs:
       - name: Migrate scripts parse and pass shellcheck
         run: |
           set -euo pipefail
-          for f in skills/migrate/general/quality-baseline.sh skills/migrate/general/harness-live.sh; do
+          for f in skills/migrate/general/quality-baseline.sh skills/migrate/general/harness-live.sh skills/migrate/general/harness-refresh.sh; do
             [ -x "$f" ] || { echo "$f is missing or not executable"; exit 1; }
             bash -n "$f"
             shellcheck "$f"
@@ -228,6 +228,8 @@ jobs:
         run: bash scripts/quality-baseline.test.sh
       - name: Harness live check tests
         run: bash scripts/harness-live.test.sh
+      - name: Harness refresh tests
+        run: bash scripts/harness-refresh.test.sh
       - name: Skill fence snapshot tests
         run: bash scripts/check-fences.test.sh
       - name: Fence snapshot freeze tests
