@@ -37,6 +37,7 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+.eslintcache
 
 # Docker (don't copy into image)
 .dockerignore

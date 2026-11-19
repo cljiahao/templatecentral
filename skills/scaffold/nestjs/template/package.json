@@ -14,7 +14,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "lint": "eslint \"{src,test}/**/*.ts\" --fix --cache",
+    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit --incremental",
     "check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" && eslint \"{src,test}/**/*.ts\" && tsc --noEmit",
     "test": "vitest --run",

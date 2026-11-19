@@ -113,7 +113,7 @@ open(f"{out}/count-az.sh", "w").write(next(x["bash"] for x in steps if x.get("di
 PY2
 count_case() { # count_case <script> <merged-total> <merged-failed> <collected-total> -> exit code
   rm -rf "$T/cnt" && mkdir -p "$T/cnt/report"
-  printf '{"numTotalTests":%s,"numFailedTests":%s}' "$2" "$3" > "$T/cnt/report/merged.json"
+  printf '{"numTotalTests":%s,"numFailedTests":%s,"success":%s}' "$2" "$3" "${5:-true}" > "$T/cnt/report/merged.json"
   printf '{"numTotalTests":%s}' "$4" > "$T/cnt/report/collected.json"
   local rc=0
   ( cd "$T/cnt" && bash "$1" ) >/dev/null 2>&1 || rc=$?
@@ -124,8 +124,45 @@ for host in gh az; do
   if [[ "$(count_case "$T/count-$host.sh" 27 0 28)" != 0 ]]; then ok "$host count step fails when a test is missing from the merge"; else bad "$host count step passed with 27 of 28 tests"; fi
   if [[ "$(count_case "$T/count-$host.sh" 28 1 28)" != 0 ]]; then ok "$host count step fails on a failed test"; else bad "$host count step passed with a failed test"; fi
   if [[ "$(count_case "$T/count-$host.sh" 0 0 0)" != 0 ]]; then ok "$host count step fails on zero tests"; else bad "$host count step passed with zero tests"; fi
+  if [[ "$(count_case "$T/count-$host.sh" 28 0 28 false)" != 0 ]]; then ok "$host count step fails when the merged report says success is false"; else bad "$host count step passed with success: false"; fi
 done
-if grep -q 'SHARD_COUNT: "4"' "$CI_DIR/github-ts/.github/workflows/ci.yml" && grep -q 'shardCount: 4' "$CI_DIR/azure-ts/azure-pipelines.yml"; then ok "both TS templates shard the tests four ways"; else bad "a TS template does not use four shards"; fi
+# 4c. shard plan: run the real plan script of each template against a stub `vitest list` with N test files
+python3 - "$CI_DIR" "$T" <<'PY3'
+import sys, yaml
+root, out = sys.argv[1:3]
+gh = yaml.safe_load(open(f"{root}/github-ts/.github/workflows/ci.yml"))
+open(f"{out}/plan-gh.sh", "w").write(next(x["run"] for x in gh["jobs"]["plan"]["steps"] if x.get("id") == "shards"))
+az = yaml.safe_load(open(f"{root}/azure-ts/azure-pipelines.yml"))
+steps = next(j for j in az["jobs"] if j["job"] == "plan")["steps"]
+open(f"{out}/plan-az.sh", "w").write(next(x["bash"] for x in steps if x.get("name") == "shards").replace("$(shardMax)", "4"))
+PY3
+mkdir -p "$T/planbin"
+cat > "$T/planbin/pnpm" <<'STUB'
+#!/usr/bin/env bash
+node -p 'JSON.stringify(Array.from({ length: Number(process.env.STUB_FILES) }, (_, i) => ({ file: "/p/t" + i + ".test.ts" })))'
+STUB
+chmod +x "$T/planbin/pnpm"
+plan_case() { # plan_case <host> <files> -> "<rc> <count> <matrix-or-list size>"
+  local out="$T/plan-out" rc=0
+  : > "$out"
+  ( PATH="$T/planbin:$PATH" STUB_FILES="$2" SHARD_MAX=4 GITHUB_OUTPUT="$out" bash "$T/plan-$1.sh" ) > "$T/plan-log" 2>&1 || rc=$?
+  if [[ "$1" == gh ]]; then
+    echo "$rc $(sed -n 's/^count=//p' "$out") $(sed -n 's/^list=//p' "$out")"
+  else
+    echo "$rc $(sed -n 's/^##vso\[task.setvariable variable=count;isOutput=true\]//p' "$T/plan-log") $(sed -n 's/^##vso\[task.setvariable variable=matrix;isOutput=true\]//p' "$T/plan-log" | node -p 'Object.keys(JSON.parse(require("fs").readFileSync(0, "utf8") || "{}")).length')"
+  fi
+}
+for host in gh az; do
+  for pair in "1 1" "3 3" "4 4" "9 4"; do
+    read -r files shards <<<"$pair"
+    got=$(plan_case "$host" "$files")
+    if [[ "$host" == gh ]]; then want="0 $shards $(node -p "JSON.stringify(Array.from({ length: $shards }, (_, i) => i + 1))")"; else want="0 $shards $shards"; fi
+    if [[ "$got" == "$want" ]]; then ok "$host plan: $files test files give $shards shards"; else bad "$host plan: $files test files should give $shards shards, got: $got"; fi
+  done
+  got=$(plan_case "$host" 0)
+  if [[ "$got" =~ ^[1-9] ]]; then ok "$host plan fails when vitest resolves no test files"; else bad "$host plan passed with zero test files: $got"; fi
+done
+if grep -q 'SHARD_MAX: "4"' "$CI_DIR/github-ts/.github/workflows/ci.yml" && grep -q 'shardMax: 4' "$CI_DIR/azure-ts/azure-pipelines.yml"; then ok "both TS templates cap the shards at four"; else bad "a TS template does not cap the shards at four"; fi
 if grep -rq -- ' -n auto' "$CI_DIR/github-py" "$CI_DIR/azure-py"; then bad "a Python CI template runs pytest with xdist"; else ok "Python CI templates run pytest serially"; fi
 
 # 5. static guards over all four templates
@@ -285,23 +322,40 @@ COUNT_CHECK = ('set -euo pipefail\n'
                'const merged = read("report/merged.json");\n'
                'const collected = read("report/collected.json");\n'
                'console.log("merged " + merged.numTotalTests + ", unsharded " + collected.numTotalTests + ", failed " + merged.numFailedTests);\n'
-               'const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0;\n'
+               'const ok = merged.numTotalTests === collected.numTotalTests && merged.numTotalTests > 0 && merged.numFailedTests === 0 && merged.success === true;\n'
                'process.exit(ok ? 0 : 1);\n'
                "'\n")
+PLAN_BODY = ("node -e '\n"
+             'const fs = require("node:fs");\n'
+             'const files = JSON.parse(fs.readFileSync(0, "utf8")).length;\n'
+             'if (files < 1) {\n'
+             '  console.error("vitest resolved no test files");\n'
+             '  process.exit(1);\n'
+             '}\n'
+             'const count = Math.min(Number(process.env.SHARD_MAX), files);\n')
+GH_PLAN = ('set -euo pipefail\n'
+           'pnpm exec vitest list --filesOnly --json | ' + PLAN_BODY +
+           'const list = Array.from({ length: count }, (_, i) => i + 1);\n'
+           'fs.appendFileSync(process.env.GITHUB_OUTPUT, "count=" + count + "\\nlist=" + JSON.stringify(list) + "\\n");\n'
+           'console.log(files + " test files, " + count + " shards");\n'
+           "'\n")
+AZ_PLAN = ('set -euo pipefail\n'
+           'pnpm exec vitest list --filesOnly --json | SHARD_MAX="$(shardMax)" ' + PLAN_BODY +
+           'const matrix = {};\n'
+           'for (let i = 1; i <= count; i++) matrix["shard" + i] = { shard: String(i) };\n'
+           'console.log(files + " test files, " + count + " shards");\n'
+           'console.log("##vso[task.setvariable variable=count;isOutput=true]" + count);\n'
+           'console.log("##vso[task.setvariable variable=matrix;isOutput=true]" + JSON.stringify(matrix));\n'
+           "'\n")
 MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                'needs': {'plan': [],
                          'quality': [],
                          'test': ['plan'],
-                         'coverage': ['test'],
+                         'coverage': ['plan', 'test'],
                          'changelog': [],
                          'comment-hygiene': [],
                          'dependency-review': []},
-               'gates': [('shard plan',
-                          'plan',
-                          'run',
-                          'set -euo pipefail\n'
-                          "list=$(node -p 'JSON.stringify(Array.from({ length: Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')\n"
-                          'echo "list=$list" >> "$GITHUB_OUTPUT"\n'),
+               'gates': [('shard plan', 'plan', 'run', GH_PLAN),
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
@@ -313,7 +367,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'test',
                           'run',
                           'pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ '
-                          'matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ env.SHARD_COUNT }}"'),
+                          'matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ needs.plan.outputs.count }}"'),
                          ('shard upload', 'test', 'uses', 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'),
                          ('shard download', 'coverage', 'uses', 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'),
                          ('shard count assertion', 'coverage', 'run', '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'),
@@ -361,16 +415,17 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           'uses',
                           'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')]},
  'azure-ts': {'file': 'azure-ts/azure-pipelines.yml',
-              'needs': {'quality': [], 'test': [], 'coverage': ['test']},
-              'gates': [('format, lint and typecheck', 'quality', 'bash', 'pnpm run check'),
+              'needs': {'plan': [], 'quality': [], 'test': ['plan'], 'coverage': ['plan', 'test']},
+              'gates': [('shard plan', 'plan', 'bash', AZ_PLAN),
+                        ('format, lint and typecheck', 'quality', 'bash', 'pnpm run check'),
                         ('jscpd', 'quality', 'bash', 'pnpm exec jscpd'),
                         ('gates include', 'quality', 'template', 'azure-pipelines/templatecentral-gates.yml'),
                         ('tests',
                          'test',
                          'bash',
                          'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
-                         '--outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" '
-                         '--shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"'),
+                         '--outputFile.blob="blob/shard-$(shard).json" '
+                         '--shard="$(shard)/$(shardCount)"'),
                         ('shard upload', 'test', 'task', 'PublishPipelineArtifact@1'),
                         ('shard download', 'coverage', 'task', 'DownloadPipelineArtifact@2'),
                         ('shard collect',
@@ -454,15 +509,16 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
 # `uses` is compared by action name, its SHA is checked separately. Anything added, removed, reordered or changed,
 # so an inserted rewrite step, a gate-step env/working-directory/target or a shorter hard-coded shard list, fails.
 PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
-                                 'timeout-minutes': 2,
-                                 'outputs': {'shards': '${{ steps.shards.outputs.list }}'}},
+                                 'timeout-minutes': 5,
+                                 'outputs': {'shards': '${{ steps.shards.outputs.list }}',
+                                             'count': '${{ steps.shards.outputs.count }}'}},
                         'quality': {'runs-on': 'ubuntu-latest', 'timeout-minutes': 20},
                         'test': {'needs': 'plan',
                                  'runs-on': 'ubuntu-latest',
                                  'timeout-minutes': 20,
                                  'strategy': {'fail-fast': False,
                                               'matrix': {'shard': '${{ fromJSON(needs.plan.outputs.shards) }}'}}},
-                        'coverage': {'needs': 'test', 'runs-on': 'ubuntu-latest', 'timeout-minutes': 10},
+                        'coverage': {'needs': ['plan', 'test'], 'runs-on': 'ubuntu-latest', 'timeout-minutes': 10},
                         'changelog': {'if': "github.event_name == 'pull_request'",
                                       'runs-on': 'ubuntu-latest',
                                       'timeout-minutes': 5},
@@ -472,11 +528,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
-               'steps': {'plan': [{'id': 'shards',
-                                   'run': 'set -euo pipefail\n'
-                                          "list=$(node -p 'JSON.stringify(Array.from({ length: "
-                                          "Number(process.env.SHARD_COUNT) }, (_, i) => i + 1))')\n"
-                                          'echo "list=$list" >> "$GITHUB_OUTPUT"\n'}],
+               'steps': {'plan': [{'uses': 'actions/checkout'},
+                                  {'uses': 'pnpm/action-setup'},
+                                  {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
+                                  {'run': 'pnpm install --frozen-lockfile'},
+                                  {'id': 'shards', 'run': GH_PLAN}],
                          'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
                                      {'uses': 'pnpm/action-setup'},
                                      {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
@@ -495,7 +551,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                   {'run': 'pnpm install --frozen-lockfile'},
                                   {'run': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
                                           '--outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ '
-                                          'matrix.shard }}/${{ env.SHARD_COUNT }}"'},
+                                          'matrix.shard }}/${{ needs.plan.outputs.count }}"'},
                                   {'uses': 'actions/upload-artifact',
                                    'with': {'name': 'vitest-blob-${{ matrix.shard }}',
                                             'path': 'blob',
@@ -507,7 +563,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                       {'run': 'pnpm install --frozen-lockfile'},
                                       {'uses': 'actions/download-artifact',
                                        'with': {'pattern': 'vitest-blob-*', 'path': 'blob', 'merge-multiple': True}},
-                                      {'run': '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'},
+                                      {'env': {'SHARD_COUNT': '${{ needs.plan.outputs.count }}'},
+                                       'run': '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'},
                                       {'run': 'pnpm exec vitest run --merge-reports=blob --coverage'},
                                       {'run': 'pnpm exec vitest run --merge-reports=blob --reporter=json '
                                               '--outputFile.json=report/merged.json'},
@@ -530,10 +587,22 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
- 'azure-ts': {'jobs': {'quality': {'timeoutInMinutes': 20},
-                       'test': {'timeoutInMinutes': 20, 'strategy': {'parallel': '${{ variables.shardCount }}'}},
-                       'coverage': {'dependsOn': 'test', 'timeoutInMinutes': 10}},
-              'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
+ 'azure-ts': {'jobs': {'plan': {'timeoutInMinutes': 5},
+                       'quality': {'timeoutInMinutes': 20},
+                       'test': {'dependsOn': 'plan',
+                                'timeoutInMinutes': 20,
+                                'variables': {'shardCount': "$[ dependencies.plan.outputs['shards.count'] ]"},
+                                'strategy': {'matrix': "$[ dependencies.plan.outputs['shards.matrix'] ]"}},
+                       'coverage': {'dependsOn': ['plan', 'test'],
+                                    'timeoutInMinutes': 10,
+                                    'variables': {'shardCount': "$[ dependencies.plan.outputs['shards.count'] ]"}}},
+              'steps': {'plan': [{'checkout': 'self'},
+                                 {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
+                                 {'bash': 'npm install -g "$(node -p '
+                                          '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
+                                 {'bash': 'pnpm install --frozen-lockfile'},
+                                 {'bash': AZ_PLAN}],
+                        'quality': [{'checkout': 'self', 'fetchDepth': 0},
                                     {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
                                     {'bash': 'npm install -g "$(node -p '
                                              '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
@@ -547,11 +616,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                           '"require(\'./package.json\').packageManager.split(\'+\')[0]")"'},
                                  {'bash': 'pnpm install --frozen-lockfile'},
                                  {'bash': 'pnpm exec vitest run --coverage --reporter=default --reporter=blob '
-                                          '--outputFile.blob="blob/shard-$(System.JobPositionInPhase).json" '
-                                          '--shard="$(System.JobPositionInPhase)/$(System.TotalJobsInPhase)"'},
+                                          '--outputFile.blob="blob/shard-$(shard).json" '
+                                          '--shard="$(shard)/$(shardCount)"'},
                                  {'task': 'PublishPipelineArtifact@1',
                                   'inputs': {'targetPath': 'blob',
-                                             'artifact': 'vitest-blob-$(System.JobPositionInPhase)'}}],
+                                             'artifact': 'vitest-blob-$(shard)'}}],
                         'coverage': [{'checkout': 'self', 'fetchDepth': 0},
                                      {'task': 'NodeTool@0', 'inputs': {'versionSpec': '26.x'}},
                                      {'bash': 'npm install -g "$(node -p '
@@ -717,7 +786,7 @@ def manifest_errors(rel, doc, entry, needs_key, gate_file=False):
         for st in found:
             if "shell" in st:
                 errors.append(f"{rel}: required gate '{gate}' in job {job} must not set shell: {st['shell']}")
-GH_ENV_KEYS = {"DIFF_COVER_VERSION", "JSCPD_VERSION", "SHARD_COUNT", "NODE_OPTIONS"}
+GH_ENV_KEYS = {"DIFF_COVER_VERSION", "JSCPD_VERSION", "SHARD_MAX", "NODE_OPTIONS"}
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:")
 USES_PINNED = re.compile(r"^\s*(?:-\s+)?uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d[\w.+-]*\s*$")
 def workflow_errors(rel, doc, lines):
@@ -816,7 +885,7 @@ mutate "condition: always() on the diff-cover step (azure-ts)" azure-ts/azure-pi
 mutate "if: always() on the diff-cover step (github-py)" github-py/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: always()\n        name: Changed-line coverage (>= 80%)' static
 mutate "--fail-under=80 removed (azure-py)" azure-py/azure-pipelines.yml ' --fail-under=80' '' static
 mutate "merge command removed (github-ts)" github-ts/.github/workflows/ci.yml '--merge-reports=blob --coverage' '--coverage' static
-mutate "job-level if: always() on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    if: always()\n    needs: test\n' static
+mutate "job-level if: always() on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    if: always()\n    needs: [plan, test]\n' static
 mutate "|| true inside the Azure merge script (azure-ts)" azure-ts/azure-pipelines.yml 'vitest run --merge-reports=blob --coverage' 'vitest run --merge-reports=blob --coverage || true' static
 mutate "GitHub shard assertion replaced by a no-op" github-ts/.github/workflows/ci.yml "run: '[ \"\$(find blob" "run: 'true || [ \"\$(find blob" github
 mutate "|| true mid-command before a following command (github-ts nosonar)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh nosonar' 'run: bash .claude/ci-gates.sh nosonar || true; echo done' static
@@ -831,7 +900,7 @@ mutate "if: false on the merge step (github-ts)" github-ts/.github/workflows/ci.
 mutate "if: false on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: false\n        name: Changed-line coverage (>= 80%)' static
 mutate "condition: false on the jscpd step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Duplication (production source <= 3%, per .jscpd.json)' '        condition: false\n        displayName: Duplication (production source <= 3%, per .jscpd.json)' static
 mutate "condition: false on the nosonar step (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '    displayName: No NOSONAR suppression markers' '    condition: false\n    displayName: No NOSONAR suppression markers' static
-mutate "job-level if != pull_request on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' "  coverage:\n    if: github.event_name != 'pull_request'\n    needs: test\n" static
+mutate "job-level if != pull_request on the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' "  coverage:\n    if: github.event_name != 'pull_request'\n    needs: [plan, test]\n" static
 mutate "job-level if != pull_request on the quality job (github-py)" github-py/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' "  quality:\n    if: github.event_name != 'pull_request'\n    runs-on: ubuntu-latest\n" static
 mutate "job-level if: false on a PR-only job (github-ts changelog)" github-ts/.github/workflows/ci.yml "  changelog:\n    if: github.event_name == 'pull_request'" '  changelog:\n    if: false' static
 mutate "different condition on a PR-only job (github-py comment-hygiene)" github-py/.github/workflows/ci.yml "  comment-hygiene:\n    if: github.event_name == 'pull_request'" "  comment-hygiene:\n    if: github.event_name != 'push'" static
@@ -878,7 +947,7 @@ mutate "condition: false on the Tests step (azure-ts)" azure-ts/azure-pipelines.
 mutate "continueOnError: true on the Tests step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Tests (this shard' '        continueOnError: true\n        displayName: Tests (this shard' static
 mutate "condition: false on the Tests step (azure-py)" azure-py/azure-pipelines.yml '        displayName: Tests with coverage' '        condition: false\n        displayName: Tests with coverage' static
 mutate "timeoutInMinutes: 0 on the Tests step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Tests (this shard' '        timeoutInMinutes: 0\n        displayName: Tests (this shard' static
-mutate "job-level continue-on-error (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    continue-on-error: true\n    needs: test\n' static
+mutate "job-level continue-on-error (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    continue-on-error: true\n    needs: [plan, test]\n' static
 mutate "job-level continueOnError (azure-py quality)" azure-py/azure-pipelines.yml '  - job: quality\n' '  - job: quality\n    continueOnError: true\n' static
 mutate "step include of an unchecked template (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml' '      - template: azure-pipelines/other.yml' static
 mutate "allowlisted setup-uv step with a changed if value (github-py)" github-py/.github/workflows/ci.yml "      - if: hashFiles('uv.lock') != ''" "      - if: hashFiles('other.lock') != ''" static
@@ -892,17 +961,17 @@ mutate "docs check deleted (github-ts)" github-ts/.github/workflows/ci.yml '    
 mutate "docs check deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
 mutate "docs check deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n' '' static
 mutate "docs check made non-failing (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash scripts/check-docs.sh' 'run: bash scripts/check-docs.sh || true' static
-mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(System.JobPositionInPhase).json\" --shard=\"\$(System.JobPositionInPhase)/\$(System.TotalJobsInPhase)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
-mutate "needs: test removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n' static
-mutate "dependsOn: test removed from coverage (azure-ts)" azure-ts/azure-pipelines.yml '    dependsOn: test\n' '' static
+mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(shard).json\" --shard=\"\$(shard)/\$(shardCount)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
+mutate "needs removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n' static
+mutate "dependsOn removed from coverage (azure-ts)" azure-ts/azure-pipelines.yml '    dependsOn: [plan, test]\n' '' static
 mutate "set +e prefixed to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec vitest run --coverage --reporter=default' 'run: set +e; pnpm exec vitest run --coverage --reporter=default' static
-mutate "&& exit 0 appended to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml "--shard=\"\${{ matrix.shard }}/\${{ env.SHARD_COUNT }}\"\\n" "--shard=\"\${{ matrix.shard }}/\${{ env.SHARD_COUNT }}\" && exit 0\\n" static
+mutate "&& exit 0 appended to the Tests command (github-ts)" github-ts/.github/workflows/ci.yml "--shard=\"\${{ matrix.shard }}/\${{ needs.plan.outputs.count }}\"\\n" "--shard=\"\${{ matrix.shard }}/\${{ needs.plan.outputs.count }}\" && exit 0\\n" static
 mutate "shell: bash {0} on the dependency audit (github-ts)" github-ts/.github/workflows/ci.yml '        run: bash .claude/ci-gates.sh deps\n' '        run: bash .claude/ci-gates.sh deps\n        shell: bash {0}\n' static
 mutate "dependency audit run replaced by echo skip (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh deps' 'run: echo skip' static
 mutate "needs edge removed from test (github-ts)" github-ts/.github/workflows/ci.yml '  test:\n    needs: plan\n' '  test:\n' static
 mutate "unlisted extra job (github-py)" github-py/.github/workflows/ci.yml '  changelog:\n' '  extra:\n    runs-on: ubuntu-latest\n    steps: []\n  changelog:\n' static
 mutate "gates include removed from the quality job (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '' static
-mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage: { needs: test, if: false }\n  extra:\n    needs: test\n' static
+mutate "flow-style job mapping with a forbidden if (github-ts coverage)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage: { needs: [plan, test], if: false }\n  extra:\n    needs: test\n' static
 mutate "if-no-files-found: ignore on the shard upload (github-ts)" github-ts/.github/workflows/ci.yml 'if-no-files-found: error' 'if-no-files-found: ignore' static
 mutate "if-no-files-found removed from the shard upload (github-ts)" github-ts/.github/workflows/ci.yml '          if-no-files-found: error\n' '' static
 mutate "jscpd step replaced (github-ts)" github-ts/.github/workflows/ci.yml 'run: pnpm exec jscpd' 'run: echo skipped' static
@@ -929,13 +998,16 @@ mutate "target on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '     
 mutate "LABELS env changed on the changelog gate (azure gates)" "azure/azure-pipelines/templatecentral-gates.yml" "    displayName: Changelog gate\n    env: { LABELS: \$(LABELS) }" "    displayName: Changelog gate\n    env: { LABELS: skip-changelog }" "static" "differ from the pinned ordered list"
 mutate "workflow-level defaults with a working-directory (github-ts)" github-ts/.github/workflows/ci.yml 'permissions: { contents: read }\n' 'permissions: { contents: read }\ndefaults:\n  run:\n    working-directory: docs\n' static "workflow-level defaults"
 mutate "job-level defaults with a working-directory (github-py quality)" github-py/.github/workflows/ci.yml '  quality:\n    runs-on: ubuntu-latest\n' '  quality:\n    defaults:\n      run:\n        working-directory: docs\n    runs-on: ubuntu-latest\n' static "key defaults must be None"
-mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: test\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: test\n' static "key env must be None"
+mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: [plan, test]\n' static "key env must be None"
 mutate "step inserted before the first gate (github-ts quality)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '      - run: echo "{}" > .claude/dep-audit-allow.txt\n      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' static "differ from the pinned ordered list"
 mutate "step inserted between install and the gates (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - bash: rm -f .jscpd.json\n      - template: azure-pipelines/templatecentral-gates.yml\n' static "differ from the pinned ordered list"
 mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
 mutate "gates reordered (github-py, secret scan before tests)" "github-py/.github/workflows/ci.yml" "      # PR: the PR's commits; push: full history\n      - name: Secret scan (gitleaks CLI, checksum-verified)\n        env:\n          BASE_REF: \${{ github.base_ref }}\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\n" "" "static"
 mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/ci.yml" "shard: \${{ fromJSON(needs.plan.outputs.shards) }}" "shard: [1]" "static" "key strategy must be"
-mutate "hard-coded parallel count (azure-ts)" "azure-ts/azure-pipelines.yml" "parallel: \${{ variables.shardCount }}" "parallel: 1" "static" "key strategy must be"
+mutate "hard-coded matrix (azure-ts)" "azure-ts/azure-pipelines.yml" "matrix: \$[ dependencies.plan.outputs['shards.matrix'] ]" "matrix: { shard1: { shard: 1 } }" "static" "key strategy must be"
+mutate "constant shard count restored, larger than the file count (github-ts)" github-ts/.github/workflows/ci.yml "Math.min(Number(process.env.SHARD_MAX), files)" "Number(process.env.SHARD_MAX)" static "required gate 'shard plan'"
+mutate "constant shard count restored, larger than the file count (azure-ts)" azure-ts/azure-pipelines.yml "Math.min(Number(process.env.SHARD_MAX), files)" "Number(process.env.SHARD_MAX)" static "required gate 'shard plan'"
+mutate "zero test files no longer fails the plan (github-ts)" github-ts/.github/workflows/ci.yml "if (files < 1) {" "if (files < 0) {" static "required gate 'shard plan'"
 mutate "parameters passed to the gates include (azure-ts)" azure-ts/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { skipDeps: true }\n' static "differ from the pinned ordered list"
 mutate "parameters passed to the gates include (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - template: azure-pipelines/templatecentral-gates.yml\n        parameters: { runDeps: false }\n' static "differ from the pinned ordered list"
 mutate "parameters block declared in the gates include" azure/azure-pipelines/templatecentral-gates.yml 'steps:\n' 'parameters:\n  - name: runDeps\n    default: true\nsteps:\n' static "only a steps list"
@@ -1002,7 +1074,9 @@ dep_mutate "daily instead of weekly (github-py)" github-py 'interval: weekly' 'i
 dep_mutate "major updates grouped (github-ts)" github-ts 'update-types: [minor, patch]' 'update-types: [minor, patch, major]'
 dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: pip' 'package-ecosystem: npm'
 
-# 7. passWithNoTests must not appear anywhere in the seeded templates (a shard with no test files would pass silently)
+# 7. passWithNoTests must not appear anywhere in the seeded templates (it would let a project with no test files pass).
+# Vitest itself fails a shard that gets no file (--shard=i/N with N above the file count), so the plan job derives N
+# from the project: min(4, test files), and fails when there are none.
 nopass_check() { # nopass_check <scaffold dir>
   local hits
   hits=$(grep -rIn -e 'passWithNoTests' "$1" 2>/dev/null | grep '/template' || true)
