@@ -31,26 +31,29 @@ kind_of() {
     scripts/test-budget.sh | */scripts/test-budget.sh) echo budget ;;
     .claude/gates.txt | */.claude/gates.txt) echo gates ;;
     .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
-    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | lefthook.yml | */lefthook.yml) echo guard ;;
+    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
     *) echo "" ;;
   esac
 }
 
-# A new config file with one of these names competes with a ratcheted config; prints why and returns 0.
+# True when the merge base tracked this exact path.
+base_has() { printf '%s\n' "$base_paths" | grep -Fxq -- "$1"; }
+
+# A new config file with one of these names competes with a ratcheted config that the merge base already had; prints why and returns 0.
 shadow_reason() {
   local name fam fams dir f
   name=${1##*/}
+  dir=""
+  case "$1" in */*) dir=${1%/*}/ ;; esac
   case "$name" in
-    ruff.toml | .ruff.toml) echo "ruff reads it instead of pyproject.toml"; return 0 ;;
-    .coveragerc) echo "coverage reads it instead of pyproject.toml"; return 0 ;;
-    .gitleaksignore) echo "gitleaks reads it besides .gitleaks.toml"; return 0 ;;
-    .eslintignore) echo "it adds ignores besides eslint.config"; return 0 ;;
-    jscpd.json | .jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) echo "jscpd may read it instead of .jscpd.json"; return 0 ;;
+    ruff.toml | .ruff.toml) if base_has "${dir}pyproject.toml"; then echo "ruff reads it instead of pyproject.toml"; return 0; fi ;;
+    .coveragerc) if base_has "${dir}pyproject.toml"; then echo "coverage reads it instead of pyproject.toml"; return 0; fi ;;
+    .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
+    .eslintignore) if printf '%s\n' "$base_paths" | grep -Eq "^${dir}eslint[.]config[.][^/]*$"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
+    jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
     eslint.config.* | vitest.config.* | vite.config.* | jest.config.*)
       fam=${name%%.config.*}
       case "$fam" in vite | vitest) fams="vite vitest" ;; *) fams=$fam ;; esac
-      dir=""
-      case "$1" in */*) dir=${1%/*}/ ;; esac
       for f in $fams; do
         if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}.config." 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }'; then
           echo "a $f.config.* file already exists, and only one is read"
@@ -60,6 +63,13 @@ shadow_reason() {
       ;;
   esac
   return 1
+}
+
+# CI file text with the tracked coverage number and any pinned action or task version masked, so a routine pin bump is not a change.
+mask_ci() {
+  sed -E -e 's/--fail-under[= ]+[0-9]+([.][0-9]+)?/--fail-under=N/g' \
+    -e 's/(uses:[[:space:]]*[^@[:space:]]+)@[^[:space:]]+([[:space:]]+#.*)?$/\1@V/' \
+    -e 's/(task:[[:space:]]*[^@[:space:]]+)@[^[:space:]]+/\1@V/'
 }
 
 # Content check for files whose behaviour is not a parsed value; tracked numbers are masked because the parsed comparison covers them.
@@ -72,8 +82,8 @@ content_ok() {
       cmp -s "$wd/base.m" "$wd/head.m"
       ;;
     ci)
-      sed -E 's/--fail-under[= ]+[0-9]+([.][0-9]+)?/--fail-under=N/g' "$wd/base" > "$wd/base.m"
-      sed -E 's/--fail-under[= ]+[0-9]+([.][0-9]+)?/--fail-under=N/g' "$wd/head" > "$wd/head.m"
+      mask_ci < "$wd/base" > "$wd/base.m"
+      mask_ci < "$wd/head" > "$wd/head.m"
       cmp -s "$wd/base.m" "$wd/head.m"
       ;;
     gates)
@@ -173,6 +183,27 @@ function tok(p,   n, c, s) {
   return s
 }
 
+function sq(s) { gsub(/[ \t\n]+/, " ", s); gsub(/^ | $/, "", s); return s }
+
+# Value text from index p up to the comma or closing bracket that ends it at depth 0; VEND is the index of that terminator.
+function vtext(p,   n, c, d, j, ch, s0) {
+  n = length(T); d = 0; s0 = p
+  while (p <= n) {
+    c = substr(T, p, 1)
+    if (c == "\"" || c == "'" || c == "`") {
+      j = p + 1
+      while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == c) break; j++ }
+      p = j + 1; continue
+    }
+    if (c == "(" || c == "[" || c == "{") d++
+    else if (c == ")" || c == "]" || c == "}") { if (d == 0) break; d-- }
+    else if (c == "," && d == 0) break
+    p++
+  }
+  VEND = p
+  return sq(substr(T, s0, p - s0))
+}
+
 # Every <name>: [ ... ] array in T becomes one fact of the given kind per string.
 function arrays_named(name, kind,   from) {
   from = 1
@@ -202,6 +233,21 @@ function json_dups(   i, n, c, d, st, nid, j, ch, key, tail) {
   }
 }
 
+# Top-level keys of the JSON object: each key not in KN (tracked or neutral) becomes a cfg fact, so an unknown setting that changes is a finding.
+function json_top(   p, n, j, ch, key, v) {
+  n = length(T); p = index(T, "{") + 1
+  while (p > 1 && p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) != "\"") break
+    j = p + 1
+    while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
+    key = substr(T, p + 1, j - p - 1); p = j + 1
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    v = vtext(p); p = VEND
+    if (!(key in KN)) emit("cfg", key, v)
+  }
+}
+
 # A numeric JSON key that must be a plain decimal; absent means def (a default the tool applies) when def is set.
 function jnum(key, fact, def,   v) {
   if (find("\"" key "\"[ \t\n]*:[ \t\n]*", 1)) {
@@ -211,8 +257,11 @@ function jnum(key, fact, def,   v) {
   } else if (def != "") emit("max", fact, def)
 }
 
-function do_jscpd(   from, v) {
+function do_jscpd(   from, v, i, kl) {
   json_dups()
+  split("threshold minTokens minLines path gitignore skipLocal ignore reporters output silent verbose absolute blame", kl, " ")
+  for (i in kl) KN[kl[i]] = 1
+  json_top()
   if (!find("\"threshold\"[ \t\n]*:[ \t\n]*", 1)) fail("no \"threshold\" value")
   v = tok(MS + ML)
   if (!plain_num(v)) fail("\"threshold\" is not a plain decimal literal: " v)
@@ -261,6 +310,28 @@ function occurrences(s, needle,   c, p) {
   return c
 }
 
+# The entries of the exported config array: spreads and bare presets by text, object entries by count.
+function eslint_entries(   p, id, v, nobj) {
+  p = 0
+  if (match(T, /export[ \t\n]+default[ \t\n]+[A-Za-z_$][A-Za-z0-9_$]*[ \t\n]*;/)) {
+    id = substr(T, RSTART, RLENGTH); sub(/^export[ \t\n]+default[ \t\n]+/, "", id); sub(/[ \t\n]*;$/, "", id)
+    if (find("(const|let|var)[ \t\n]+" id "[ \t\n]*=[ \t\n]*[[]", 1)) p = MS + ML
+  } else if (match(T, /export[ \t\n]+default[ \t\n]+[[]/)) p = RSTART + RLENGTH
+  else if (match(T, /export[ \t\n]+default[ \t\n]+[^(;]*[(][ \t\n]*[[]?/)) p = RSTART + RLENGTH
+  if (!p) fail("cannot find the exported config array")
+  nobj = 0
+  while (p <= length(T)) {
+    while (p <= length(T) && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) ~ /[])]/) break
+    v = vtext(p)
+    if (v ~ /^[{]/) nobj++
+    else emit("req", "entry", v)
+    if (substr(T, VEND, 1) != ",") break
+    p = VEND + 1
+  }
+  emit("min", "eslint-config-objects", nobj)
+}
+
 function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
   seen = 0; from = 1
   brace_map()
@@ -284,9 +355,32 @@ function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
   arrays_named("ignores", "set")
   emit("max", "eslint-disable-comments", occurrences(T0, "eslint-disable") - occurrences(T, "eslint-disable"))
   if (!seen) fail("no lint rules or presets found")
+  eslint_entries()
+}
+
+# Keys of the coverage object at index p (just after its brace): tracked keys are read elsewhere, neutral ones ignored, the rest become cfg facts.
+function cov_walk(p, pre,   n, k, kn, v, e) {
+  n = length(T)
+  while (p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (p > n || substr(T, p, 1) == "}") return
+    if (match(substr(T, p), /^(["'][^"']*["']|[A-Za-z0-9_$]+)[ \t\n]*:[ \t\n]*/)) {
+      k = substr(T, p, RLENGTH); p += RLENGTH
+      kn = k; sub(/[ \t\n]*:[ \t\n]*$/, "", kn); gsub(/["']/, "", kn)
+      v = vtext(p); e = VEND
+      if (pre == "" && kn == "thresholds" && v ~ /^[{]/) cov_walk(p + 1, "thresholds.")
+      else if (pre == "" && kn ~ /^(include|exclude|provider|reporter|reportsDirectory|reportOnFailure)$/) { }
+      else if (pre == "thresholds." && kn ~ /^(lines|functions|branches|statements)$/) { }
+      else emit("cfg", "coverage." pre kn, v)
+      p = e
+    } else {
+      v = vtext(p); emit("cfg", "coverage." pre "?", v); p = VEND
+    }
+  }
 }
 
 function do_vitest(   from, m, name, v) {
+  if (find("coverage[ \t\n]*:[ \t\n]*[{]", 1)) cov_walk(MS + ML, "")
   from = 1
   while (find("(lines|functions|branches|statements)[ \t\n]*:[ \t\n]*", from)) {
     m = substr(T, MS, ML); name = substr(m, 1, index(m, ":") - 1); gsub(/[ \t\n]/, "", name)
@@ -302,7 +396,7 @@ function do_vitest(   from, m, name, v) {
 }
 
 # Line-by-line walk of a TOML file; dotted keys are folded into their section so a.b.c = v reads like [a.b] c = v.
-function toml_lines(   i, line, raw, rest, p, sect, pos, kind, s2, k2, n, parts, j, pre, v) {
+function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n, parts, j, pre, v, known, vtxt, d3, q, e, qe) {
   NL = 0; p = 1
   while (p <= length(T)) {
     i = index(substr(T, p), "\n"); NL++; LO[NL] = p
@@ -312,7 +406,15 @@ function toml_lines(   i, line, raw, rest, p, sect, pos, kind, s2, k2, n, parts,
   sect = ""
   for (i = 1; i <= NL; i++) {
     line = LT[i]
-    if (line ~ /^[ \t]*[[]/) { sect = line; gsub(/^[ \t]*[[]+[ \t]*/, "", sect); gsub(/[ \t]*[]]+[ \t]*$/, "", sect); SECTS[sect] = 1; continue }
+    if (line ~ /^[ \t]*[[]/) {
+      sect = line; gsub(/^[ \t]*[[]+[ \t]*/, "", sect); gsub(/[ \t]*[]]+[ \t]*$/, "", sect); SECTS[sect] = 1
+      csect = sect
+      if (line ~ /^[ \t]*[[][[]/) {
+        HC[sect]++; csect = sect "#" HC[sect]
+        if (cfg_scope(sect) && !(sect ~ /allowlist/)) emit("cfg", "[[" csect "]]", "")
+      }
+      continue
+    }
     if (!match(line, /^[ \t]*([A-Za-z0-9_.-]+[.])?("[^"]*"|[A-Za-z0-9_.-]+)[ \t]*=/)) continue
     raw = substr(line, 1, RLENGTH - 1); gsub(/^[ \t]*/, "", raw); gsub(/[ \t]*$/, "", raw)
     rest = substr(line, RLENGTH + 1); pos = LO[i] + RLENGTH
@@ -327,21 +429,44 @@ function toml_lines(   i, line, raw, rest, p, sect, pos, kind, s2, k2, n, parts,
     }
     gsub(/"/, "", k2)
     v = rest; gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
+    known = 0; vtxt = v
     if (rest ~ /^[ \t]*[[{]/) {
       kind = toml_kind(s2, k2)
       p = index(rest, (rest ~ /^[ \t]*[[]/) ? "[" : "{")
       scan_array(pos + p - 1, (kind == "" ? "skip" : (kind == "req" ? "req" : "set")), (kind == "" ? "" : toml_key(s2, k2)))
+      vtxt = sq(substr(T, pos + p - 1, ARR_END - (pos + p - 1) + 1)); known = (kind != "")
       while (i < NL && LO[i + 1] <= ARR_END) i++
+    } else if (rest ~ /^[ \t]*('''|""")/) {
+      d3 = (rest ~ /^[ \t]*'''/) ? "'''" : "\"\"\""
+      q = pos + index(rest, d3) - 1
+      e = index(substr(T, q + 3), d3)
+      if (!e) fail("unterminated multi-line string")
+      qe = q + e + 4; vtxt = sq(substr(T, q, qe - q + 1))
+      while (i < NL && LO[i + 1] <= qe) i++
     } else if (toml_track(s2, k2)) {
       if (!plain_num(v)) fail(k2 " is not a plain decimal literal: " v)
-      emit(TK, TN, v)
+      emit(TK, TN, v); known = 1
     } else if (MODE == "gitleaks" && (s2 ~ /allowlist/ || s2 == "extend") && k2 ~ /^(path|paths|regex|regexes|commit|commits|stopword|stopwords|url)$/) {
-      emit("set", "allow:" k2, v)
+      emit("set", "allow:" k2, v); known = 1
     } else if (MODE == "pyproject" && s2 ~ /^tool[.]ruff$/ && k2 == "extend") {
-      emit("set", "ruff-extend", v)
+      emit("set", "ruff-extend", v); known = 1
     }
+    if (!known && cfg_scope(s2) && !cfg_neutral(s2, k2)) emit("cfg", csect "|" raw, vtxt)
     if (k2 == "useDefault" && rest ~ /true/) emit("req", "extend", "useDefault")
   }
+}
+# Tables whose every key must be known: all of .gitleaks.toml, and the ruff and coverage tables of pyproject.toml.
+function cfg_scope(s) {
+  if (MODE == "gitleaks") return 1
+  return (s ~ /^tool[.](ruff|coverage)([.]|$)/)
+}
+# Keys that change nothing about what a gate catches.
+function cfg_neutral(s, k) {
+  if (MODE == "gitleaks") return (k ~ /^(title|description)$/ || (s == "extend" && k == "useDefault"))
+  if (s ~ /^tool[.]ruff[.]format/ || s ~ /^tool[.]ruff[.]lint[.]isort/) return 1
+  if (s == "tool.ruff" && k ~ /^(line-length|indent-width|target-version|src|output-format|cache-dir)$/) return 1
+  if (s == "tool.coverage.report" && k ~ /^(show_missing|skip_covered|precision)$/) return 1
+  return 0
 }
 function toml_kind(s, k) {
   if (MODE == "gitleaks") {
@@ -442,6 +567,7 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
   if (FILENAME == ARGV[1]) {
     if ($1 == "set") bset[k SUBSEP $3] = 1
     else if ($1 == "req") breq[k SUBSEP $3] = 1
+    else if ($1 == "cfg") bcfg[$2] = $3
     else {
       if (!(k in bagg)) { bagg[k] = $3; order[++no] = k }
       else if (($1 == "max" && $3 + 0 > bagg[k] + 0) || ($1 != "max" && $3 + 0 < bagg[k] + 0)) bagg[k] = $3
@@ -452,6 +578,7 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
   } else {
     if ($1 == "set") { if (!((k SUBSEP $3) in hset) && !((k SUBSEP $3) in bset)) hnew[++nn] = k SUBSEP $3; hset[k SUBSEP $3] = 1 }
     else if ($1 == "req") hreq[k SUBSEP $3] = 1
+    else if ($1 == "cfg") hcfg[$2] = $3
     else if (!(k in hagg)) { hagg[k] = $3; horder[++nh] = k }
     else if (($1 == "max" && $3 + 0 > hagg[k] + 0) || ($1 != "max" && $3 + 0 < hagg[k] + 0)) hagg[k] = $3
   }
@@ -475,6 +602,11 @@ END {
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
   for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  for (k in bcfg) {
+    if (!(k in hcfg)) { printf "WEAKENED %s: setting %s was '%s', now removed (a setting the checker does not know must stay as it was)\n", F, k, bcfg[k]; bad = 1 }
+    else if (hcfg[k] != bcfg[k]) { printf "WEAKENED %s: setting %s was '%s', now '%s' (a setting the checker does not know must stay as it was)\n", F, k, bcfg[k], hcfg[k]; bad = 1 }
+  }
+  for (k in hcfg) if (!(k in bcfg)) { printf "WEAKENED %s: new setting %s = '%s' (a setting the checker does not know must stay as it was)\n", F, k, hcfg[k]; bad = 1 }
   for (k in breq) if (!(k in hreq)) { split(k, p, SUBSEP); printf "WEAKENED %s: required %s '%s' was present, now removed\n", F, p[2], p[3]; bad = 1 }
   exit bad
 }
@@ -483,6 +615,10 @@ AWK
 base_paths=$(git ls-tree -r --name-only "$mb" 2>/dev/null)
 paths=$( { printf '%s\n' "$base_paths"; git ls-tree -r --name-only HEAD; } 2>/dev/null | sort -u)
 [ -n "$paths" ] || die "cannot list tracked files"
+if ! printf '%s\n' "$base_paths" | grep -Eq '(^|/)[.]claude/gates[.]txt$'; then
+  echo "gate-ratchet: first adoption: the merge base has no .claude/gates.txt, nothing to compare"
+  exit 0
+fi
 renames=$(git diff -M --name-status --diff-filter=R "$mb" HEAD 2>/dev/null)
 
 weakened=0
@@ -513,17 +649,17 @@ while IFS= read -r path; do
       unreadable=1
       continue
     fi
-    if [ "$have_base" -eq 1 ]; then
-      if ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
-        printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
-        : > "$wd/base.f"
-      fi
+    if [ "$have_base" -eq 0 ]; then continue; fi
+    if ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
+      printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
+      : > "$wd/base.f"
     fi
     if ! awk -v F="$path" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
       file_bad=1
     fi
   fi
-  if [ "$file_bad" -eq 0 ] && [ "$have_base" -eq 1 ] && ! content_ok "$kind"; then
+  if [ "$have_base" -eq 0 ]; then continue; fi
+  if [ "$file_bad" -eq 0 ] && ! content_ok "$kind"; then
     printf 'WEAKENED %s: gate script, runner or manifest changed (content differs from the merge base)\n' "$path"
     file_bad=1
   fi

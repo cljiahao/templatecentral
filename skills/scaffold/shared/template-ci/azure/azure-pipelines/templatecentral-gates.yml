@@ -18,6 +18,11 @@ steps:
   - bash: bash .claude/ci-gates.sh comments "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Comment hygiene gate
     env: { LABELS: $(LABELS) }
-  - bash: bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+  # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
+  - bash: |
+      branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
+      branch="${branch#refs/heads/}"
+      if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" > "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi
+      bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Gate ratchet (no gate weaker than the base branch)
     env: { LABELS: $(LABELS) }

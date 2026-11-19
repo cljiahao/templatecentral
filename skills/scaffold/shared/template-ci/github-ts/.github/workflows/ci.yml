@@ -197,11 +197,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0 }
+      # The merge-base copy of ci-gates.sh runs, so a PR cannot rewrite the entry point that judges it.
       - name: Require no weaker gate config (apply 'allow-gate-change' label to bypass)
         env:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-        run: bash .claude/ci-gates.sh ratchet "$BASE_REF"
+        run: |
+          set -euo pipefail
+          if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" > "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi
+          bash .claude/ci-gates.sh ratchet "$BASE_REF"
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

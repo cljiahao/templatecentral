@@ -36,6 +36,10 @@ seed() {
     cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$SH/template-ci/github-ts/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
+    mkdir -p "$R/.claude/hooks" "$R/azure-pipelines"
+    cp "$SH/template-ts/.claude/hooks/protect-files.sh" "$R/.claude/hooks/protect-files.sh"
+    cp "$SH/template-ci/azure/azure-pipelines/templatecentral-gates.yml" "$R/azure-pipelines/templatecentral-gates.yml"
+    cp "$SH/template-ci/azure-ts/azure-pipelines.yml" "$R/azure-pipelines.yml"
     python3 - "$R/vitest.config.ts" <<'PY'
 import sys
 p = sys.argv[1]
@@ -71,6 +75,26 @@ PY
 # ratchet: sets OUT and EC from running the script on the current branch against main.
 ratchet() {
   OUT=$(cd "$R" && bash "$RATCHET" main 2>&1)
+  EC=$?
+}
+
+# edit_more <file> <old> <new>: like edit, but stacks on the current branch.
+edit_more() {
+  python3 - "$R/$1" "$2" "$3" <<'PY'
+import sys
+p, old, new = sys.argv[1:4]
+s = open(p).read()
+if old not in s:
+    sys.exit("fixture text not found: " + old)
+open(p, "w").write(s.replace(old, new, 1))
+PY
+  git_ commit -q -am more
+}
+
+# ci_gate <labels>: sets OUT and EC from the CI entry point on the current branch against main.
+ci_gate() {
+  git_ update-ref refs/remotes/origin/main main
+  OUT=$(cd "$R" && LABELS="$1" bash .claude/ci-gates.sh ratchet main 2>&1)
   EC=$?
 }
 
@@ -110,6 +134,7 @@ expect() {
   for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
 }
 
+NEWSHA=$(printf 'a%.0s' {1..40})
 seed ts
 ratchet
 check 0 "$EC" "unchanged branch passes ($OUT)"
@@ -201,10 +226,6 @@ weakens .claude/verify-harness.sh "set -euo pipefail" "set -euo pipefail
 exit 0" "verify-harness changed" "gate script, runner or manifest changed"
 weakens lefthook.yml "parallel: false" "parallel: true" "lefthook changed" "gate script, runner or manifest changed"
 
-add_file ruff.toml "line-length = 100"
-expect 1 "ruff.toml shadows pyproject" "ruff.toml" "competes"
-add_file .ruff.toml "line-length = 100"
-expect 1 ".ruff.toml shadows pyproject" ".ruff.toml" "competes"
 add_file eslint.config.js "export default [];"
 expect 1 "second eslint config" "eslint.config.js" "competes"
 add_file vitest.config.mts "export default {};"
@@ -213,8 +234,6 @@ add_file vite.config.js "export default {};"
 expect 1 "vite config competes with vitest config" "vite.config.js" "competes"
 add_file jest.config.js "module.exports = {};"
 expect 0 "first jest config in a repo without one"
-add_file .coveragerc "[run]"
-expect 1 ".coveragerc" ".coveragerc" "competes"
 add_file .gitleaksignore "abc"
 expect 1 ".gitleaksignore" ".gitleaksignore" "competes"
 add_file .eslintignore "src"
@@ -263,6 +282,148 @@ expect 2 "diff coverage not a plain literal" "UNREADABLE .github/workflows/ci.ym
 
 passes .claude/gates.txt "# Required merge gates" "# Required merge gates (edited comment)" "gates comment edit"
 passes eslint.config.mjs "        { ignore: ['eslint-enable'] }," "        { ignore: ['eslint-enable'] }, // note" "trailing comment"
+
+git_ checkout -q -B work main
+sed -i.bak 's/lines: 80/lines: 60/' "$R/vitest.config.ts" && rm -f "$R/vitest.config.ts.bak"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$R/scripts/test-budget.sh"
+python3 - "$R/.github/workflows/ci.yml" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+i = s.index("gate-ratchet:")
+j = s.index("dependency-review:")
+blk = s[i:j]
+blk = blk.replace("""          LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}\"""", "          LABELS: allow-gate-change")
+k = blk.index("        run: |")
+blk = blk[:k] + "        run: bash .claude/ci-gates.sh ratchet \"$BASE_REF\"\n  "
+open(p, "w").write(s[:i] + blk + s[j:])
+PY
+git_ commit -q -am "self-granted waiver"
+ci_gate ""
+check 1 "$EC" "waiver M1: CI file grants its own label, exits 1 ($OUT)"
+has "cannot waive a change to the files that enforce" "$OUT" "waiver M1: says the label cannot waive enforcer files"
+has "WEAKENED" "$OUT" "waiver M1: still prints the findings"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver M1: label with enforcer change still exits 1 ($OUT)"
+has "cannot waive" "$OUT" "waiver M1: label does not waive an enforcer change"
+
+git_ checkout -q -B work main
+sed -i.bak 's/lines: 80/lines: 60/' "$R/vitest.config.ts" && rm -f "$R/vitest.config.ts.bak"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$R/scripts/test-budget.sh"
+sed -i.bak 's/LABELS: [$](LABELS)/LABELS: allow-gate-change/' "$R/azure-pipelines/templatecentral-gates.yml" && rm -f "$R/azure-pipelines/templatecentral-gates.yml.bak"
+git_ commit -q -am "azure self-granted waiver"
+ci_gate ""
+check 1 "$EC" "waiver M1: azure gates file, exits 1 ($OUT)"
+has "cannot waive" "$OUT" "waiver M1: azure says the label cannot waive"
+
+edit eslint.config.mjs "['error', 15]" "['error', 25]"
+ci_gate ""
+check 1 "$EC" "waiver: non-enforcer finding without the label exits 1 ($OUT)"
+ci_gate "allow-gate-change"
+check 0 "$EC" "waiver: non-enforcer finding with the label exits 0 ($OUT)"
+has "waived every finding printed above" "$OUT" "waiver: visible waiver line"
+has "WEAKENED" "$OUT" "waiver: findings are still printed"
+
+edit .claude/hooks/protect-files.sh "#!/usr/bin/env bash" "#!/usr/bin/env bash
+exit 0"
+expect 1 "protect-files hook change" ".claude/hooks/protect-files.sh" "gate script, runner or manifest changed"
+
+passes .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "actions/checkout@${NEWSHA} # v7.0.2" "pinned action bump"
+passes azure-pipelines.yml "NodeTool@0" "NodeTool@1" "azure task version bump"
+weakens .github/workflows/ci.yml "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "evil/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1" "action swapped for another repo" "gate script, runner or manifest changed"
+weakens azure-pipelines.yml "NodeTool@0" "OtherTool@0" "azure task swapped" "gate script, runner or manifest changed"
+
+git_ checkout -q -B work main
+mv "$R/.claude/gates.txt" "$R/.claude/gates.txt.gone"
+OUT=$(cd "$R" && bash .claude/ci-gates.sh list 2>&1)
+check 1 "$?" "list: missing manifest exits 1 ($OUT)"
+mv "$R/.claude/gates.txt.gone" "$R/.claude/gates.txt"
+printf '# nothing\n' > "$R/.claude/gates.txt"
+OUT=$(cd "$R" && bash .claude/ci-gates.sh list 2>&1)
+check 1 "$?" "list: empty manifest exits 1 ($OUT)"
+git_ checkout -q -f work
+git_ checkout -q -B work main
+
+for pair in 'format|"format": ["css"]' 'maxSize|"maxSize": "1b"' 'maxLines|"maxLines": 1' 'mode|"mode": "weak"' 'ignorePattern|"ignorePattern": ["x"]' 'exitCode|"exitCode": 0'; do
+  edit .jscpd.json '"threshold": 3' "\"threshold\": 3, ${pair#*|}"
+  expect 1 "jscpd unknown key ${pair%%|*}" ".jscpd.json" "does not know"
+done
+passes .jscpd.json '"reporters": ["console"]' '"reporters": ["console", "json"]' "jscpd neutral reporters key"
+weakens .gitleaks.toml "useDefault = true" "useDefault = true
+
+[[rules]]
+id = \"generic-api-key\"
+regex = '''zzz-never'''
+" "gitleaks rule reusing a default id" "generic-api-key"
+weakens vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
+      all: false," "vitest coverage all: false" "coverage.all"
+weakens vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, perFile: false }," "vitest perFile false" "perFile"
+passes vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
+      reporter: ['text']," "vitest coverage reporter edit"
+weakens eslint.config.mjs "  eslint.configs.recommended,
+" "" "eslint entry removed (M4)" "eslint.configs.recommended"
+passes eslint.config.mjs "// @ts-check" "// @ts-check
+import globals from 'globals';" "new eslint import"
+passes eslint.config.mjs "  eslint.configs.recommended," "  eslint.configs.recommended,
+  { languageOptions: { globals: { process: 'readonly' } } }," "new eslint config object"
+
+R_TS=$R
+R="$T/next"
+rm -rf "$R"
+mkdir -p "$R/.claude" "$R/scripts"
+cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+cp "$SH/../nextjs/template/eslint.config.mjs" "$R/"
+git -C "$R" init -q -b main
+git_ add -A
+git_ commit -q -m base
+ratchet
+check 0 "$EC" "nextjs eslint seed: unchanged passes ($OUT)"
+weakens eslint.config.mjs "  ...typescript,
+" "" "nextjs: typescript preset spread removed" "typescript"
+weakens eslint.config.mjs "  ...coreWebVitals,
+" "" "nextjs: coreWebVitals preset spread removed" "coreWebVitals"
+R=$R_TS
+
+R="$T/adopt"
+rm -rf "$R"
+mkdir -p "$R/src"
+echo 'export const a = 1;' > "$R/src/a.ts"
+cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
+git -C "$R" init -q -b main
+git_ add -A
+git_ commit -q -m "plain project"
+git_ checkout -q -b work
+mkdir -p "$R/.claude" "$R/scripts"
+cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
+cp "$SH/template/.gitleaks.toml" "$R/.gitleaks.toml"
+echo "abc" > "$R/.gitleaksignore"
+echo "src" > "$R/.eslintignore"
+git_ add -A
+git_ commit -q -m "adopt the harness"
+expect 0 "first adoption: base without gates.txt" "first adoption"
+
+seed ts
+git_ checkout -q -B work main
+git_ rm -q .jscpd.json
+git_ commit -q -m "base without jscpd"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
+git_ add -A
+git_ commit -q -m "add jscpd"
+expect 0 "base without a jscpd config: adding one is not a shadow"
+git_ checkout -q -B main work~1
+git_ checkout -q -B work main
+git_ rm -q .gitleaks.toml
+git_ commit -q -m "base drop gitleaks"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+echo abc > "$R/.gitleaksignore"
+git_ add -A
+git_ commit -q -m "add ignore"
+expect 0 "base without .gitleaks.toml: .gitleaksignore is not a shadow"
+seed ts
 
 git_ checkout -q -B main main
 printf '#!/usr/bin/env bash\necho BASE-COPY-RAN\nexit 7\n' > "$R/scripts/gate-ratchet.sh"
@@ -319,6 +480,28 @@ for bad in '15 + 5' '1e1' '"15"'; do
 done
 edit pyproject.toml "fail_under = 80" "fail_under = 1e2"
 expect 2 "coverage fail_under in exponent form" "UNREADABLE pyproject.toml" "plain decimal"
+add_file ruff.toml "line-length = 100"
+expect 1 "ruff.toml shadows pyproject" "ruff.toml" "competes"
+add_file .ruff.toml "line-length = 100"
+expect 1 ".ruff.toml shadows pyproject" ".ruff.toml" "competes"
+add_file .coveragerc "[run]"
+expect 1 ".coveragerc" ".coveragerc" "competes"
+for kv in 'fix = true' 'preview = true' 'exclude = ["src"]'; do
+  edit pyproject.toml "line-length = 88" "line-length = 88
+$kv"
+  expect 1 "ruff unknown key [$kv]" "pyproject.toml"
+done
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.report]
+exclude_lines = [\"def \"]" "coverage exclude_lines" "exclude_lines"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+source = [\"x\"]
+[tool.coverage.report]" "coverage run source" "source"
+passes pyproject.toml "[tool.coverage.report]" "[tool.ruff.format]
+quote-style = \"single\"
+[tool.coverage.report]" "ruff format quote-style"
+passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"-q\"
+[tool.coverage.report]" "pytest options edit"
 git_ checkout -q -B work main
 sed -i.bak 's/tool[.]ruff/tool.rff/g' "$R/pyproject.toml" && rm -f "$R/pyproject.toml.bak"
 git_ commit -q -am rename

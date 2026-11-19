@@ -433,7 +433,14 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                           '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
-                         ('gate ratchet', 'gate-ratchet', 'run', 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'),
+                         ('gate ratchet',
+                          'gate-ratchet',
+                          'run',
+                          'set -euo pipefail\n'
+                          'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
+                          '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
+                          'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                          'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
@@ -457,7 +464,14 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
-                         ('gate ratchet', 'gate-ratchet', 'run', 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'),
+                         ('gate ratchet',
+                          'gate-ratchet',
+                          'run',
+                          'set -euo pipefail\n'
+                          'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
+                          '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
+                          'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                          'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'),
                          ('dependency review at high',
                           'dependency-review',
                           'uses',
@@ -551,7 +565,12 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                            ('Gate ratchet (no gate weaker than the base branch)',
                             '(gates include)',
                             'bash',
-                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"')]}}
+                            'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
+                            'branch="${branch#refs/heads/}"\n'
+                            'if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" '
+                            '> "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then '
+                            'cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                            'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n')]}}
 
 # Full pin of every job and step: for each job the exact non-step keys (runs-on, timeout, strategy, outputs, needs, if,
 # permissions, defaults, env, container) and the full ordered list of steps with every key except name/displayName; a
@@ -642,7 +661,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                           {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
-                                           'run': 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'}],
+                                           'run': 'set -euo pipefail\n'
+                                                  'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
+                                                  '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
+                                                  'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                  'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-ts': {'jobs': {'plan': {'timeoutInMinutes': 5},
@@ -758,7 +781,11 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                           {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
-                                           'run': 'bash .claude/ci-gates.sh ratchet "$BASE_REF"'}],
+                                           'run': 'set -euo pipefail\n'
+                                                  'if git show "$(git merge-base "origin/$BASE_REF" HEAD):.claude/ci-gates.sh" '
+                                                  '> "$RUNNER_TEMP/ci-gates.base" 2>/dev/null; then '
+                                                  'cp "$RUNNER_TEMP/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                  'bash .claude/ci-gates.sh ratchet "$BASE_REF"\n'}],
                          'dependency-review': [{'uses': 'actions/dependency-review-action',
                                                 'with': {'fail-on-severity': 'high'}}]}},
  'azure-py': {'jobs': {'quality': {'timeoutInMinutes': 20}},
@@ -792,8 +819,12 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                {'bash': 'bash .claude/ci-gates.sh comments '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
-                                               {'bash': 'bash .claude/ci-gates.sh ratchet '
-                                                        '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
+                                               {'bash': 'branch="${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n'
+                                                        'branch="${branch#refs/heads/}"\n'
+                                                        'if [ -n "$branch" ] && git show "$(git merge-base "origin/$branch" HEAD):.claude/ci-gates.sh" '
+                                                        '> "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" 2>/dev/null; then '
+                                                        'cp "${AGENT_TEMPDIRECTORY:-/tmp}/ci-gates.base" .claude/ci-gates.sh; fi\n'
+                                                        'bash .claude/ci-gates.sh ratchet "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"\n',
                                                 'env': {'LABELS': '$(LABELS)'}}]}}}
 
 for _h, _p in PINNED.items():

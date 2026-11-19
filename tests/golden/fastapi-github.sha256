@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-d7404c3e7b8f981feb9879157ccbcad7632ff656f343db388b7354a22914f29e  .claude/ci-gates.sh
+7b59b34c623b81985273de4a006c8b9d103caefd7eb685e2ab056199c883ddb9  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 b3cb572ea9aa90f11611a015f657fa44c2feb44b7d7524babcdffc491a5b93e8  .claude/gates.txt
 f2999526a7230160997249fd5d317cf9e58379e951ba64b6cc9f2eb006de4445  .claude/hooks/block-no-verify.sh
@@ -24,7 +24,7 @@ fb8fb6405ccaf6f0c8b2e565a3a1b9b1c71b972e344429576ada176f8328a30d  .claude/verify
 f653017b648f781dcb87349a24e97dffeb70609921c093f860cc7f021a58df41  .dockerignore
 a97615c61d170790b07cc942d2cc7ba151dda0d6761a31b1d81a55cd50ee75f4  .env.example
 d6c671f1736718eeb910cfe8b3e3afff6c2cf69c8e63a0f95e9e785b77afafb3  .github/dependabot.yml
-5a9a3d3eaabaeb063e17d28f40868be8279c5639ab5d60c1c090fae35a52423b  .github/workflows/ci.yml
+70bbb0a6d3af0321bcf5f37e48b6bb739a07bdc5434fee6fa59d5b848b51debb  .github/workflows/ci.yml
 5eff04975232de20facd4a5ddca68f65669ab3baecaf68fa567b1aff6e4d6d50  .gitignore
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 62c219b862a518b702784f4f9087984d08788bfa6241ab72da280026de019e7c  .jscpd.json
@@ -37,13 +37,13 @@ d403fc06dd3807b7bd8c330f396f973962523086e8ca65150e6d01ac37379ff8  FUTURE.md
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-test-each-behaviour-once.md
 66a649febfc52d831936f2f1e93a53011839dd0204a2be57ca89c7748a495929  docs/architecture.md
-23fa48dc03ec0443f1b07e6c2b38b4dba813abc5521cb26a4897ca8d5b9df510  docs/harness.md
+152ff737f2e39e9d5fe1abf7c2a0e57a36b6682c4de9e9cfd8814828d26c416c  docs/harness.md
 654eb8359cebdb49bef15fced823cecab2ddcaf57da38ea04fb4f9ac83b38b3f  lefthook.yml
 bc0876fb5a4780062f49f5491e7baf542161c59c28b65475011c215225239e2c  pyproject.toml
 3b0ac975a7fdec02ad26e5e8b0c8444fcc8d0efac12f925aa22811fb4cdb91fb  pyrightconfig.json
 23979e4edd8d9a498ff73a63428073bdce270f14af7d88fb8d75a9187becc3a1  requirements-dev.txt
 0c4561464783a416b276ddc377916bb722af6d207f266bd710926b9753827b0f  scripts/check-docs.sh
-258851d7bc8e3f00793bd17cf1c12026ec02cde9d19cdb22fef83a196024dfda  scripts/gate-ratchet.sh
+6200bcbbbed929fb87a7766a2cea987e792a7bdf891203f98a419f40c8e7b506  scripts/gate-ratchet.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 eb854c347a9bfb07636fe89a776ab16caa05f8ec9173ffb5a12fc8b0dd8ec278  sonar-project.properties
 a5097809f3068374c0ecaf2eb8f052860899cfe03f1891c2ae1cdfbe013afe07  src/.env.default

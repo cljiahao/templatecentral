@@ -103,10 +103,15 @@ case "$gate" in
     mbase=$(git merge-base "$base" HEAD) || fail "no merge base with $base — check out with full history (fetch-depth 0)"
     runner_tmp=$(mktemp "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gate-ratchet.XXXXXX") || fail "cannot create a temporary file"
     if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then runner=$runner_tmp; else [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"; fi
-    GATE_RATCHET_REEXEC=1 bash "$runner" "$base"
+    findings=$(GATE_RATCHET_REEXEC=1 bash "$runner" "$base" 2>&1)
     rc=$?
     rm -f "$runner_tmp"
+    printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
+      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget)[.]sh)$'
+      if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
+        fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
+      fi
       if bypassed allow-gate-change; then echo "gate-ratchet: the allow-gate-change label waived every finding printed above"; exit 0; fi
       fail "a gate is weaker than at the base branch, or its config is unreadable (output above). Restore it, or have a maintainer apply the 'allow-gate-change' label after review."
     fi
@@ -118,7 +123,7 @@ case "$gate" in
     ;;
   nosonar)
     # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
-    hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude') && rc=0 || rc=$?
+    if hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2

@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-d7404c3e7b8f981feb9879157ccbcad7632ff656f343db388b7354a22914f29e  .claude/ci-gates.sh
+7b59b34c623b81985273de4a006c8b9d103caefd7eb685e2ab056199c883ddb9  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 b3cb572ea9aa90f11611a015f657fa44c2feb44b7d7524babcdffc491a5b93e8  .claude/gates.txt
 e3a24182b897024313fc137ee44d82eb5318306bc36c326dbe3f3ad00f530a50  .claude/hooks/block-no-verify.sh
@@ -25,7 +25,7 @@ fb8fb6405ccaf6f0c8b2e565a3a1b9b1c71b972e344429576ada176f8328a30d  .claude/verify
 ec0e64c9102bf53f381a2a32c68fcb3f479a8ac0ae5c8463299b21f3f98a53c5  .dockerignore
 4fc6511297d080990d54f97fe25551b2901dacca53149e205671badf66862283  .env.example
 cf81c32c8b4ca8dea27781577ea4a4f29f31f2c1930728f30bb0ae2fcde0cbb7  .github/dependabot.yml
-588306c1caac5a3b12b5cc0f0cd2e2b8171ba106ac6160bc258ef5b63ad4eecb  .github/workflows/ci.yml
+9c85c04d4535ac9c8185134b1623a609ba54d706e2e62e7d916829afdfe9b7ac  .github/workflows/ci.yml
 53ae7f3c700dc593398c934519c5ab029814c04d196aae40153ba1449c9d377e  .gitignore
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 f130b83deb64b249c1c91030fcbec6c742690e2adf78fd12284630cea296615e  .jscpd.json
@@ -42,7 +42,7 @@ c587baf49bdcd12005ef8c42d49269e6c53f51e46e8999097573b7e26897a113  docker-entrypo
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
 f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-test-each-behaviour-once.md
 21a17d72154eb256f35b3ecbfab6aeaabd1f75b9cf9af3a0f7d23a29c5a9bb86  docs/architecture.md
-23fa48dc03ec0443f1b07e6c2b38b4dba813abc5521cb26a4897ca8d5b9df510  docs/harness.md
+152ff737f2e39e9d5fe1abf7c2a0e57a36b6682c4de9e9cfd8814828d26c416c  docs/harness.md
 eaa4bc56a8d74bc6d191d26c9bd8f1b3a767c571944872c93abec70eb08c2528  eslint.config.mjs
 fc2d4368984695c756e5be157023857a0e7d59b977db8226baa005490666d209  lefthook.yml
 24ef3debcc1509fe691e0ae5a9dce3d00f6584e77ffc0801af0399bbe0a679b2  next.config.ts
@@ -53,7 +53,7 @@ ce6bcee1376163e3c8adb1495cf7f70810b474bbf071fe7ca50ee2eb2a1f8a5a  public/image_a
 7f364931e0cf19f7308563f479cae21677d6f1318b065d13856b36caf60c1517  public/image_assets/logo.svg
 0c4561464783a416b276ddc377916bb722af6d207f266bd710926b9753827b0f  scripts/check-docs.sh
 e72bc0d164a525080a2e59c70abf3ea9415cdedc7c788fb87a03d9c850cb4a33  scripts/check-route-logging.mjs
-258851d7bc8e3f00793bd17cf1c12026ec02cde9d19cdb22fef83a196024dfda  scripts/gate-ratchet.sh
+6200bcbbbed929fb87a7766a2cea987e792a7bdf891203f98a419f40c8e7b506  scripts/gate-ratchet.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 3acdf69eee8401eaa33d1a78c41894e2009568d809bdf05061af88ebf22ea333  sonar-project.properties
 96df2c5e47a8bf7eb3dd54b3e2b47b824dc248f25bf55feadd322fb95b7fed53  src/app/(public)/layout.tsx
