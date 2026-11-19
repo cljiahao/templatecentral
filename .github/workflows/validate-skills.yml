@@ -177,6 +177,8 @@ jobs:
         run: bash scripts/test-budget.test.sh
       - name: Seeded gate ratchet tests
         run: bash scripts/gate-ratchet.test.sh
+      - name: Seeded supply-chain, workflow, env-example and Dockerfile checks
+        run: bash scripts/supply-chain.test.sh
       - name: Install PyYAML for the CI template guard
         run: |
           python3 -m venv "$RUNNER_TEMP/ci-templates-venv"

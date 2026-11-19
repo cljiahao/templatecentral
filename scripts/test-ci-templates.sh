@@ -404,6 +404,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
                          ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
+                         ('supplychain', 'quality', 'run', 'bash .claude/ci-gates.sh supplychain'),
+                         ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
+                         ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
+                         ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
@@ -454,6 +458,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
                          ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
+                         ('supplychain', 'quality', 'run', 'bash .claude/ci-gates.sh supplychain'),
+                         ('workflows', 'quality', 'run', 'bash .claude/ci-gates.sh workflows'),
+                         ('envexample', 'quality', 'run', 'bash .claude/ci-gates.sh envexample'),
+                         ('dockerfile', 'quality', 'run', 'bash .claude/ci-gates.sh dockerfile'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
                          ('jscpd', 'quality', 'run', 'npx --yes jscpd@${JSCPD_VERSION}'),
@@ -558,6 +566,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             'bash',
                             'bash .claude/ci-gates.sh deps'),
                            ('No NOSONAR suppression markers', '(gates include)', 'bash', 'bash .claude/ci-gates.sh nosonar'),
+                           ('Supply chain (install scripts, release age, lockfile hosts, frozen installs)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh supplychain'),
+                           ('Workflow hardening (pinned actions, token permissions, no injection)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh workflows'),
+                           ('.env.example matches the variables the code reads', '(gates include)', 'bash', 'bash .claude/ci-gates.sh envexample'),
+                           ('Dockerfile lint (digest pin, non-root USER, hadolint)', '(gates include)', 'bash', 'bash .claude/ci-gates.sh dockerfile'),
                            ('Changelog gate',
                             '(gates include)',
                             'bash',
@@ -608,12 +620,12 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
-               'steps': {'plan': [{'uses': 'actions/checkout'},
+               'steps': {'plan': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
                                   {'uses': 'pnpm/action-setup'},
                                   {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                   {'run': 'pnpm install --frozen-lockfile'},
                                   {'id': 'shards', 'run': GH_PLAN}],
-                         'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                      {'uses': 'pnpm/action-setup'},
                                      {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                      {'run': 'pnpm install --frozen-lockfile'},
@@ -622,11 +634,15 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash scripts/check-docs.sh'},
                                      {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
+                                     {'run': 'bash .claude/ci-gates.sh supplychain'},
+                                     {'run': 'bash .claude/ci-gates.sh workflows'},
+                                     {'run': 'bash .claude/ci-gates.sh envexample'},
+                                     {'run': 'bash .claude/ci-gates.sh dockerfile'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
-                         'test': [{'uses': 'actions/checkout'},
+                         'test': [{'uses': 'actions/checkout', 'with': {'persist-credentials': False}},
                                   {'uses': 'pnpm/action-setup'},
                                   {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                   {'run': 'pnpm install --frozen-lockfile'},
@@ -639,7 +655,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                             'path': 'blob',
                                             'if-no-files-found': 'error',
                                             'retention-days': 1}}],
-                         'coverage': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'coverage': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                       {'uses': 'pnpm/action-setup'},
                                       {'uses': 'actions/setup-node', 'with': {'node-version': '26', 'cache': 'pnpm'}},
                                       {'run': 'pnpm install --frozen-lockfile'},
@@ -656,17 +672,17 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                        'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" '
                                               'coverage/cobertura-coverage.xml '
                                               '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'}],
-                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
                                                           '}}'},
                                         'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
-                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
-                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                           {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
@@ -754,14 +770,14 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                         'dependency-review': {'if': "github.event_name == 'pull_request'",
                                               'runs-on': 'ubuntu-latest',
                                               'timeout-minutes': 5}},
-               'steps': {'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+               'steps': {'quality': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                      {'uses': 'actions/setup-python',
                                       'with': {'python-version': '3.14',
                                                'cache': 'pip',
                                                'cache-dependency-path': 'requirements*.txt'}},
                                      {'if': "hashFiles('uv.lock') != ''", 'uses': 'astral-sh/setup-uv'},
                                      {'run': 'set -euo pipefail\n'
-                                             'pip install -r requirements.txt\n'
+                                             'pip install --require-hashes -r requirements.txt\n'
                                              'if [ -f requirements-dev.txt ]; then pip install -r '
                                              'requirements-dev.txt; fi\n'},
                                      {'run': 'bash .claude/ci-gates.sh deps'},
@@ -769,6 +785,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash scripts/check-docs.sh'},
                                      {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
+                                     {'run': 'bash .claude/ci-gates.sh supplychain'},
+                                     {'run': 'bash .claude/ci-gates.sh workflows'},
+                                     {'run': 'bash .claude/ci-gates.sh envexample'},
+                                     {'run': 'bash .claude/ci-gates.sh dockerfile'},
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
@@ -778,17 +798,17 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                       'run': 'bash .claude/ci-gates.sh secrets "$BASE_REF"'}],
-                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                        {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                 'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' ') "
                                                           '}}'},
                                         'run': 'bash .claude/ci-gates.sh changelog "$BASE_REF"'}],
-                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'comment-hygiene': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                              {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                       'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                                 "') }}"},
                                               'run': 'bash .claude/ci-gates.sh comments "$BASE_REF"'}],
-                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0}},
+                         'gate-ratchet': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
                                           {'env': {'BASE_REF': '${{ github.base_ref }}',
                                                    'LABELS': "${{ join(github.event.pull_request.labels.*.name, ' "
                                                              "') }}"},
@@ -805,7 +825,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
               'steps': {'quality': [{'checkout': 'self', 'fetchDepth': 0},
                                     {'task': 'UsePythonVersion@0', 'inputs': {'versionSpec': '3.14'}},
                                     {'bash': 'set -euo pipefail\n'
-                                             'python -m pip install -r requirements.txt\n'
+                                             'python -m pip install --require-hashes -r requirements.txt\n'
                                              'if [ -f requirements-dev.txt ]; then python -m pip install -r '
                                              'requirements-dev.txt; fi\n'
                                              '# the deps gate exports uv.lock with uv\n'
@@ -826,6 +846,10 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh deps'},
                                                {'bash': 'bash .claude/ci-gates.sh nosonar'},
+                                               {'bash': 'bash .claude/ci-gates.sh supplychain'},
+                                               {'bash': 'bash .claude/ci-gates.sh workflows'},
+                                               {'bash': 'bash .claude/ci-gates.sh envexample'},
+                                               {'bash': 'bash .claude/ci-gates.sh dockerfile'},
                                                {'bash': 'bash .claude/ci-gates.sh changelog '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"',
                                                 'env': {'LABELS': '$(LABELS)'}},
@@ -1192,8 +1216,10 @@ for host, eco in want.items():
             bad.append(f"{rel}: {u.get('package-ecosystem')} must update / weekly")
         if sorted(grp.get("update-types") or []) != ["minor", "patch"] or grp.get("patterns") != ["*"]:
             bad.append(f"{rel}: {u.get('package-ecosystem')} must group minor and patch updates over *")
-        if set(u) != {"package-ecosystem", "directory", "schedule", "groups"}:
-            bad.append(f"{rel}: {u.get('package-ecosystem')} may only set package-ecosystem, directory, schedule and groups, found {sorted(map(str, u))}")
+        if set(u) != {"package-ecosystem", "directory", "schedule", "groups", "cooldown"}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} may only set package-ecosystem, directory, schedule, groups and cooldown, found {sorted(map(str, u))}")
+        if u.get("cooldown") != {"default-days": 7}:
+            bad.append(f"{rel}: {u.get('package-ecosystem')} needs cooldown: {{ default-days: 7 }} so a fresh release waits before it is proposed")
         if u.get("schedule") != {"interval": "weekly"} or set(u.get("groups") or {}) != {"minor-and-patch"} or set(grp) != {"patterns", "update-types"}:
             bad.append(f"{rel}: {u.get('package-ecosystem')} schedule and groups may hold nothing beyond weekly and the minor-and-patch group")
     if set(doc) != {"version", "updates"}:
@@ -1222,6 +1248,8 @@ dep_mutate "open-pull-requests-limit 0 (github-ts)" github-ts '  - package-ecosy
 dep_mutate "ignore list added (github-py)" github-py '  - package-ecosystem: pip\n    directory: /' '  - package-ecosystem: pip\n    ignore:\n      - dependency-name: "*"\n    directory: /'
 dep_mutate "ignore added to github-actions (github-ts)" github-ts '  - package-ecosystem: github-actions\n    directory: /' '  - package-ecosystem: github-actions\n    ignore:\n      - dependency-name: "*"\n    directory: /'
 dep_mutate "extra top-level key (github-py)" github-py 'version: 2' 'version: 2\nregistries: {}'
+dep_mutate "cooldown removed (github-ts)" github-ts '    cooldown: { default-days: 7 }\n    groups' '    groups'
+dep_mutate "cooldown shortened to 1 day (github-py)" github-py 'default-days: 7' 'default-days: 1'
 dep_mutate "schedule day added (github-ts)" github-ts 'schedule: { interval: weekly }' 'schedule: { interval: weekly, day: sunday }'
 dep_mutate "stack ecosystem changed (github-py)" github-py 'package-ecosystem: pip' 'package-ecosystem: npm'
 

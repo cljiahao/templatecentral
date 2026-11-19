@@ -177,7 +177,7 @@ for combo in $COMBOS; do
   out=$(run_copy "$tgt" "$v" "$h"); ec=$?
   check 0 "$ec" "copy_keeps_dotfiles[$combo]: copy exits 0 ($out)"
   ci_file=.github/workflows/ci.yml; [[ $h == azure ]] && ci_file="azure-pipelines/templatecentral-gates.yml azure-pipelines.yml"
-  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh scripts/check-docs.sh lefthook.yml $ci_file"
+  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh scripts/check-docs.sh scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-secret-scanner.sh .claude/registry-hosts.txt lefthook.yml $ci_file"
   missing=""
   for p in $want; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
   check "" "$missing" "copy_keeps_dotfiles[$combo]: dotfiles and CI file arrived"
