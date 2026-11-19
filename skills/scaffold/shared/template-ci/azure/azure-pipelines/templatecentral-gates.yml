@@ -4,6 +4,8 @@ steps:
     displayName: Harness integrity
   - bash: bash scripts/check-docs.sh
     displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)
+  - bash: bash .claude/ci-gates.sh testbudget
+    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)
   - bash: bash .claude/ci-gates.sh secrets "${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"
     displayName: Secret scan (gitleaks CLI, checksum-verified)
   - bash: bash .claude/ci-gates.sh deps

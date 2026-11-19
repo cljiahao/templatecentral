@@ -36,6 +36,8 @@ jobs:
         run: bash .claude/verify-harness.sh
       - name: Docs check (links and paths in README.md, AGENTS.md, docs/)
         run: bash scripts/check-docs.sh
+      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)
+        run: bash .claude/ci-gates.sh testbudget
       - name: No NOSONAR suppression markers
         run: bash .claude/ci-gates.sh nosonar
       - run: ruff check src/ test/ && ruff format --check src/ test/

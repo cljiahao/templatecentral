@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-db10ddde02fd7561bbf541bc9b1cdeedb46b4004d5b44d1c583d34641884a6bf  .claude/ci-gates.sh
+8087fb0303a3994884d9af5b026b588d642fb67ee870da154e9d6c3adfcaa197  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 e3a24182b897024313fc137ee44d82eb5318306bc36c326dbe3f3ad00f530a50  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
@@ -23,7 +23,7 @@ f982226eaa82f369106eacdb44bc0b7a2e2ad6a539081ee94f5c6d6e56d57157  .claude/verify
 bd94a2fe74c8ec8e562e462ac8a87dc2571a98110ccff8bd6cb1f97873d35671  .dockerignore
 5707cdbef3c210a1b4fbe6a1c7168a39ab23affd7283edda80559fde83b8e843  .env.example
 cf81c32c8b4ca8dea27781577ea4a4f29f31f2c1930728f30bb0ae2fcde0cbb7  .github/dependabot.yml
-06b797547294f62ecc3984cc605cadb6bfa3ed6dd4d3cdd25ac2acd2b2c8da8d  .github/workflows/ci.yml
+bcf22ddcdf1c955dd2abff18fd9c9f49e7e98b83ddd208a1a18da0e64858b4cf  .github/workflows/ci.yml
 e96d49d3c822c9088d8ec0f0e691c80d419e0f72d6c6bc918b33e03befce71ec  .gitignore
 a1978b7a1e366072692ed55ab372a83b62908ccf6eaa5e2e261906c92c704e43  .gitleaks.toml
 f130b83deb64b249c1c91030fcbec6c742690e2adf78fd12284630cea296615e  .jscpd.json
@@ -44,7 +44,7 @@ aa305fc153b84d9c6cb3e5f64cc41aad97df4064b8cd0f6ff7292d14a0847f7c  docs/architect
 110764b424b8f17721f9e48c2e2ffa627f1de0c1a7d0f6d6c08bba3a2853636f  docs/harness.md
 d637e85017a390e52949f80f4541975de6a31fdb73fe06de755a88acfa08e26a  eslint.config.mjs
 aaea542dcd638a628af0dbadf04d299101629c453cf324746d7c9ab4908eb648  index.html
-554b1c4663abdf327b5a84d2c388c622c5b10fa743b97088fcbf5bcdb19860cf  lefthook.yml
+fc2d4368984695c756e5be157023857a0e7d59b977db8226baa005490666d209  lefthook.yml
 3d8d54b7c1848ee8570ee099866b2f1f26b0836fd0f11c73b6641cf49a58d176  nginx.conf.template
 7a9ca1c0ab0fa3587b9f4bd140a2197cb51010d55a3b485d901659ec4946e94d  package.json
 35f7127b3752726162f6f7dcf8366838322d7efb1ee62c2618e92a8b0ec82e1d  pnpm-workspace.yaml

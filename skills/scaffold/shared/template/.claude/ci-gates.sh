@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -71,6 +71,11 @@ case "$gate" in
       printf '%s\n' "$flagged"
       fail "Change-narration comments found (listed above). State WHAT the code does now, or apply the 'skip-comment-check' label."
     fi
+    ;;
+  testbudget)
+    # ADR-0001: test code may not outgrow source code; the limit lives in scripts/test-budget.sh.
+    [ -f scripts/test-budget.sh ] || fail "scripts/test-budget.sh is missing"
+    bash scripts/test-budget.sh || fail "test budget exceeded or unreadable (output above). Consolidate duplicate tests with the test-consolidate skill."
     ;;
   nosonar)
     # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
@@ -241,7 +246,7 @@ JS
     fi
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget> [base-branch]" >&2
     exit 2
     ;;
 esac

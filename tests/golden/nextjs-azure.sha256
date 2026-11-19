@@ -2,7 +2,7 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-db10ddde02fd7561bbf541bc9b1cdeedb46b4004d5b44d1c583d34641884a6bf  .claude/ci-gates.sh
+8087fb0303a3994884d9af5b026b588d642fb67ee870da154e9d6c3adfcaa197  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 e3a24182b897024313fc137ee44d82eb5318306bc36c326dbe3f3ad00f530a50  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
@@ -35,7 +35,7 @@ d76c138f28da0f0acb33eb0048b6213930b9e67072421202bd77f04981bdb8f3  .npmrc
 d74b313a63b9b961cbbb53726e6d99c2ace7ba7ce270241f2773a5ea3851b95b  Dockerfile
 d403fc06dd3807b7bd8c330f396f973962523086e8ca65150e6d01ac37379ff8  FUTURE.md
 0f435dde5cb8c473a3f20b1e6ee38eec692e79e0c8c0e96241c854d79e8443a2  azure-pipelines.yml
-e16da00d9b927c903a9cd3d2b3aa0ebeef55c6d87a57b129f1e69318e352d0a8  azure-pipelines/templatecentral-gates.yml
+51f55cbfeeefa48b00f11fddb38a8c81c7807eec4136eca7f0f577ddf71326f6  azure-pipelines/templatecentral-gates.yml
 13f4720a1f45a2f5788190326ed3ca1a3f326da360638197c19edec2ac74db95  components.json
 c587baf49bdcd12005ef8c42d49269e6c53f51e46e8999097573b7e26897a113  docker-entrypoint.sh
 69928a70190e23d3a0624f98ddf56e67a96c9358b4b4e2c4e4fc937663fb4615  docs/CONSTITUTION.md
@@ -43,7 +43,7 @@ f62f6d822cd73580c8ac858385aef13f627eca4aad0b54bdca2ec8d03001a142  docs/adr/0001-
 21a17d72154eb256f35b3ecbfab6aeaabd1f75b9cf9af3a0f7d23a29c5a9bb86  docs/architecture.md
 110764b424b8f17721f9e48c2e2ffa627f1de0c1a7d0f6d6c08bba3a2853636f  docs/harness.md
 eaa4bc56a8d74bc6d191d26c9bd8f1b3a767c571944872c93abec70eb08c2528  eslint.config.mjs
-554b1c4663abdf327b5a84d2c388c622c5b10fa743b97088fcbf5bcdb19860cf  lefthook.yml
+fc2d4368984695c756e5be157023857a0e7d59b977db8226baa005490666d209  lefthook.yml
 24ef3debcc1509fe691e0ae5a9dce3d00f6584e77ffc0801af0399bbe0a679b2  next.config.ts
 cfaa605b08aed867dd96b7f7d125f4492d118dbbf6b663ea076b705f9fa41939  package.json
 70508a84150d919b317b7f54959bcc9ec82cca787ede00adca546cd7dd79bb0a  pnpm-workspace.yaml

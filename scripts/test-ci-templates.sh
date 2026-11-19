@@ -402,6 +402,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
+                         ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('format, lint and typecheck', 'quality', 'run', 'pnpm run check'),
                          ('jscpd', 'quality', 'run', 'pnpm exec jscpd'),
@@ -441,6 +442,7 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                'gates': [('dependency audit', 'quality', 'run', 'bash .claude/ci-gates.sh deps'),
                          ('harness integrity', 'quality', 'run', 'bash .claude/verify-harness.sh'),
                          ('docs check', 'quality', 'run', 'bash scripts/check-docs.sh'),
+                         ('test budget', 'quality', 'run', 'bash .claude/ci-gates.sh testbudget'),
                          ('nosonar', 'quality', 'run', 'bash .claude/ci-gates.sh nosonar'),
                          ('lint and format', 'quality', 'run', 'ruff check src/ test/ && ruff format --check src/ test/'),
                          ('typecheck', 'quality', 'run', 'python -m pyright src/'),
@@ -523,6 +525,10 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                             '(gates include)',
                             'bash',
                             'bash scripts/check-docs.sh'),
+                           ('Test budget (test code <= 35 lines per 100 source lines, ADR-0001)',
+                            '(gates include)',
+                            'bash',
+                            'bash .claude/ci-gates.sh testbudget'),
                            ('Secret scan (gitleaks CLI, checksum-verified)',
                             '(gates include)',
                             'bash',
@@ -577,6 +583,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
                                      {'run': 'bash scripts/check-docs.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'pnpm run check'},
                                      {'run': 'pnpm exec jscpd'},
@@ -709,6 +716,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'bash .claude/ci-gates.sh deps'},
                                      {'run': 'bash .claude/verify-harness.sh'},
                                      {'run': 'bash scripts/check-docs.sh'},
+                                     {'run': 'bash .claude/ci-gates.sh testbudget'},
                                      {'run': 'bash .claude/ci-gates.sh nosonar'},
                                      {'run': 'ruff check src/ test/ && ruff format --check src/ test/'},
                                      {'run': 'python -m pyright src/'},
@@ -751,6 +759,7 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                              '--compare-branch="origin/${target#refs/heads/}" --fail-under=80\n'}]}},
  'azure-gates': {'steps': {'(gates include)': [{'bash': 'bash .claude/verify-harness.sh'},
                                                {'bash': 'bash scripts/check-docs.sh'},
+                                               {'bash': 'bash .claude/ci-gates.sh testbudget'},
                                                {'bash': 'bash .claude/ci-gates.sh secrets '
                                                         '"${SYSTEM_PULLREQUEST_TARGETBRANCH:-}"'},
                                                {'bash': 'bash .claude/ci-gates.sh deps'},
@@ -993,6 +1002,10 @@ mutate "harness integrity deleted (azure gates)" azure/azure-pipelines/templatec
 mutate "docs check deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
 mutate "docs check deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Docs check (links and paths in README.md, AGENTS.md, docs/)\n        run: bash scripts/check-docs.sh\n' '' static
 mutate "docs check deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n' '' static
+mutate "test budget deleted (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n        run: bash .claude/ci-gates.sh testbudget\n' '' static
+mutate "test budget deleted (github-py)" github-py/.github/workflows/ci.yml '      - name: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n        run: bash .claude/ci-gates.sh testbudget\n' '' static
+mutate "test budget deleted (azure gates)" azure/azure-pipelines/templatecentral-gates.yml '  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n' '' static
+mutate "test budget made non-failing (github-py)" github-py/.github/workflows/ci.yml 'run: bash .claude/ci-gates.sh testbudget' 'run: bash .claude/ci-gates.sh testbudget || true' static
 mutate "docs check made non-failing (github-ts)" github-ts/.github/workflows/ci.yml 'run: bash scripts/check-docs.sh' 'run: bash scripts/check-docs.sh || true' static
 mutate "Tests step deleted (azure-ts)" azure-ts/azure-pipelines.yml "      - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob=\"blob/shard-\$(shard).json\" --shard=\"\$(shard)/\$(shardCount)\"\\n        displayName: Tests (this shard, coverage in the blob report)\\n" "" static
 mutate "needs removed from coverage (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n' static
@@ -1034,7 +1047,7 @@ mutate "job-level defaults with a working-directory (github-py quality)" github-
 mutate "job-level env added to the coverage job (github-ts)" github-ts/.github/workflows/ci.yml '  coverage:\n    needs: [plan, test]\n' '  coverage:\n    env: { BASE_REF: HEAD }\n    needs: [plan, test]\n' static "key env must be None"
 mutate "step inserted before the first gate (github-ts quality)" github-ts/.github/workflows/ci.yml '      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' '      - run: echo "{}" > .claude/dep-audit-allow.txt\n      - name: Dependency audit (high/critical; allowlist .claude/dep-audit-allow.txt)\n        run: bash .claude/ci-gates.sh deps\n' static "differ from the pinned ordered list"
 mutate "step inserted between install and the gates (azure-py)" azure-py/azure-pipelines.yml '      - template: azure-pipelines/templatecentral-gates.yml\n' '      - bash: rm -f .jscpd.json\n      - template: azure-pipelines/templatecentral-gates.yml\n' static "differ from the pinned ordered list"
-mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
+mutate "gates reordered (azure gates, harness integrity after secret scan)" "azure/azure-pipelines/templatecentral-gates.yml" "  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n" "  - bash: bash scripts/check-docs.sh\n    displayName: Docs check (links and paths in README.md, AGENTS.md, docs/)\n  - bash: bash .claude/ci-gates.sh testbudget\n    displayName: Test budget (test code <= 35 lines per 100 source lines, ADR-0001)\n  - bash: bash .claude/ci-gates.sh secrets \"\${SYSTEM_PULLREQUEST_TARGETBRANCH:-}\"\n    displayName: Secret scan (gitleaks CLI, checksum-verified)\n  - bash: bash .claude/verify-harness.sh\n    displayName: Harness integrity\n" "static" "differ from the pinned ordered list"
 mutate "gates reordered (github-py, secret scan before tests)" "github-py/.github/workflows/ci.yml" "      # PR: the PR's commits; push: full history\n      - name: Secret scan (gitleaks CLI, checksum-verified)\n        env:\n          BASE_REF: \${{ github.base_ref }}\n        run: bash .claude/ci-gates.sh secrets \"\$BASE_REF\"\n" "" "static"
 mutate "hard-coded shorter shard list (github-ts)" "github-ts/.github/workflows/ci.yml" "shard: \${{ fromJSON(needs.plan.outputs.shards) }}" "shard: [1]" "static" "key strategy must be"
 mutate "hard-coded matrix (azure-ts)" "azure-ts/azure-pipelines.yml" "matrix: \$[ dependencies.plan.outputs['shards.matrix'] ]" "matrix: { shard1: { shard: 1 } }" "static" "key strategy must be"

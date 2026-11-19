@@ -173,6 +173,8 @@ jobs:
         run: bash scripts/pre-guard.test.sh
       - name: Seeded harness-kit hook regression tests
         run: bash scripts/test-harness-kit.sh
+      - name: Seeded test budget script tests
+        run: bash scripts/test-budget.test.sh
       - name: Install PyYAML for the CI template guard
         run: |
           python3 -m venv "$RUNNER_TEMP/ci-templates-venv"
