@@ -368,7 +368,7 @@ weakens .github/dependabot.yml "default-days: 7" "default-days: 0" "dependabot c
 passes .github/dependabot.yml "default-days: 7" "default-days: 14" "dependabot cooldown raised"
 weakens .github/dependabot.yml "default-days: 7" "default-days: \"0\"" "dependabot cooldown zeroed with quotes" "dependabot-cooldown"
 passes .github/dependabot.yml "default-days: 7" "default-days: \"14\"" "dependabot cooldown raised with quotes"
-edit scripts/check-dockerfile.sh 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064"' 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064 DL3013"'
+edit scripts/check-dockerfile.sh 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018"' 'DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3013"'
 expect 1 "dockerfile gate ignore list grown" "scripts/check-dockerfile.sh" "gate script, runner or manifest changed"
 weakens .npmrc "# note" "# note
 ignore-scripts=false" "npmrc re-enables scripts" "ignore-scripts=false"

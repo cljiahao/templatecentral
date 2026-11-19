@@ -305,6 +305,22 @@ def check_actions(cfg, root):
                     err(rel(p, root), n, f"{m.group(1)}@{m.group(2)[:12]} but versions.txt says {want[0][:12]}")
 
 
+def check_exact_pip_pins(cfg, root):
+    """Every `name==X.Y.Z` in any skills/ file (templates, Dockerfiles, CI, prose) must equal an exact (`==`) pip record."""
+    exact = {n: v for n, v in cfg["pip"].items() if v.startswith("==")}
+    for name, want in exact.items():
+        rx = re.compile(r"(?<![\w.\-/])" + re.escape(name) + r"==([0-9][0-9A-Za-z.*]*)")
+        for p in files(root, "skills/**/*"):
+            if p == root / VERSIONS:
+                continue
+            text = read(p)
+            if text is None:
+                continue
+            for m in rx.finditer(text):
+                if "==" + m.group(1) != want:
+                    err(rel(p, root), lineno(text, m.start()), f"{name}=={m.group(1)} but versions.txt says {name}{want}")
+
+
 def check_pip_and_npm_in_text(cfg, root):
     pips = {name: pip_re(name) for name in cfg["pip"]}
     install = re.compile(r"\b(?:pnpm (?:add|install|i)|npm (?:i|install)|pip install|pip3 install)\b")
@@ -477,6 +493,7 @@ def main(argv):
     check_template_tokens(cfg, root)
     check_actions(cfg, root)
     check_pip_and_npm_in_text(cfg, root)
+    check_exact_pip_pins(cfg, root)
     check_prose_floors(cfg, root)
     check_image_tokens_in_skills(cfg, root)
     if errors:

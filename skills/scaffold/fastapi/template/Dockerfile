@@ -1,7 +1,7 @@
 # ---- Global build arguments ----
 # PYTHON:         Base Python image (pinned for reproducible builds)
 # APP_UID/GID:    Non-root user/group IDs for container security
-# APP_USERNAME:   Non-root username inside the container
+# APP_USER:   Non-root username inside the container
 # APP_GROUPNAME:  Non-root group name inside the container
 # APP_DIR:        Working directory for all stages
 # PORT:           Port the application server listens on
@@ -10,7 +10,7 @@
 ARG PYTHON=python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 ARG APP_UID=1001
 ARG APP_GID=1001
-ARG APP_USERNAME=container-user
+ARG APP_USER=container-user
 ARG APP_GROUPNAME=container-group
 ARG APP_DIR=/app
 ARG PORT=8000
@@ -22,7 +22,7 @@ FROM ${PYTHON} AS base
 ARG APP_DIR
 ARG APP_UID
 ARG APP_GID
-ARG APP_USERNAME
+ARG APP_USER
 ARG APP_GROUPNAME
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -36,7 +36,7 @@ WORKDIR ${APP_DIR}
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dumb-init \
     && groupadd -g ${APP_GID} ${APP_GROUPNAME} \
-    && useradd -l -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USERNAME} \
+    && useradd -l -u ${APP_UID} -g ${APP_GID} -s /sbin/nologin -d ${APP_DIR} ${APP_USER} \
     && chown ${APP_UID}:${APP_GID} ${APP_DIR} \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

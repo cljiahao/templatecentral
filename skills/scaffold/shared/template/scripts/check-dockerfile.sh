@@ -131,8 +131,8 @@ done
 # so any edit is reported. Each rule is skipped for one reason:
 #   DL3008 apt-get install without version pins: the base image is already pinned by digest, and an OS package pin breaks the build when the mirror drops that exact version.
 #   DL3018 apk add without version pins: same reason, for the Alpine base.
-#   DL3064 ARG or ENV whose name looks sensitive: APP_USERNAME holds the container account name, not a secret.
-DOCKERFILE_IGNORED_RULES="DL3008 DL3018 DL3064"
+# DL3064 (a sensitive-looking ARG or ENV name with a literal value) is NOT skipped: it is the only check that catches a literal secret in ARG or ENV.
+DOCKERFILE_IGNORED_RULES="DL3008 DL3018"
 
 run_hadolint() {
   local cfg="$1" f="$2" var

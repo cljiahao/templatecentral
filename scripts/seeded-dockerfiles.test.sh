@@ -41,7 +41,7 @@ if ! obtain_hadolint; then
     echo "seeded-dockerfiles.test: FAIL hadolint is not available in CI. The seeded Dockerfiles were not linted." >&2
     exit 1
   fi
-  echo "seeded-dockerfiles.test: SKIPPED. hadolint is not installed and could not be downloaded here, so the seeded Dockerfiles were NOT linted. Install hadolint and run again; CI runs this for real."
+  echo "SKIPPED: hadolint is not installed and could not be downloaded here, so the seeded Dockerfiles were NOT linted and the gate was NOT proven. Install hadolint and run again; CI runs this for real."
   exit 0
 fi
 
@@ -58,6 +58,13 @@ printf 'FROM python:3.14.0-slim@sha256:%064d\nRUN pip install flask\nUSER 1000\n
 printf 'ignored:\n  - DL3013\n' > "$T/bad/.hadolint.yaml"
 (cd "$T/bad" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS bash "$GATE" Dockerfile > /dev/null 2>&1)
 check 1 $? "unpinned pip install fails the gate even with .hadolint.yaml ignoring DL3013"
+
+for form in ENV ARG; do
+  mkdir "$T/sec-$form"
+  printf 'FROM python:3.14.0-slim@sha256:%064d\n%s DB_PASSWORD=hunter2\nUSER 1000\n' 0 "$form" > "$T/sec-$form/Dockerfile"
+  (cd "$T/sec-$form" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS bash "$GATE" Dockerfile > /dev/null 2>&1)
+  check 1 $? "$form DB_PASSWORD=hunter2 fails the gate (DL3064 is not ignored)"
+done
 
 echo "seeded-dockerfiles.test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

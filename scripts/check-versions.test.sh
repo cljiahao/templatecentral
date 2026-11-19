@@ -44,6 +44,9 @@ t node_version_drift 1 "sub $CI 's/node-version: \"[0-9][0-9]*\"/node-version: \
 t gitleaks_drift 1 "sub skills/scaffold/shared/template/.claude/ci-gates.sh 's/GITLEAKS_VERSION=\"[^\"]*\"/GITLEAKS_VERSION=\"0.0.1\"/'" "GITLEAKS_VERSION is 0.0.1"
 t pip_requirement_drift 1 "sub skills/scaffold/fastapi/template/requirements-dev.txt 's/^pytest>=.*/pytest>=1.0/'" "pytest is"
 t pip_spec_in_prose 1 "printf '\nUse pytest==9.0 here.\n' >> $DOC" "prose states a version for pytest"
+t uv_pin_drift_dockerfile 1 "sub skills/scaffold/fastapi/template/Dockerfile 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6 but versions.txt says uv==0.13.7"
+t uv_pin_drift_ci 1 "sub skills/scaffold/shared/template-ci/azure-py/azure-pipelines.yml 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6"
+t uv_pin_drift_prose 1 "sub skills/scaffold/fastapi/source-files.md 's/uv==0\\.13\\.7/uv==0.13.6/'" "uv==0.13.6"
 t package_pin_in_prose 1 "printf '\nInstall vitest@4.1.8 first.\n' >> $DOC" "prose states a version for vitest"
 # versions.txt itself
 t versions_missing 1 "rm $V" "not found"
