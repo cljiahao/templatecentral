@@ -89,6 +89,17 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: "26", cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Require a valid shard count (a positive integer from the plan job)
+        env:
+          SHARD_COUNT: ${{ needs.plan.outputs.count }}
+        run: |
+          set -euo pipefail
+          case "$SHARD_COUNT" in
+            ''|*[!0-9]*|0*)
+              echo "invalid shard count: '$SHARD_COUNT'" >&2
+              exit 1
+              ;;
+          esac
       - name: Tests (shard ${{ matrix.shard }}/${{ needs.plan.outputs.count }}, coverage in the blob report)
         run: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-${{ matrix.shard }}.json" --shard="${{ matrix.shard }}/${{ needs.plan.outputs.count }}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -118,7 +129,19 @@ jobs:
       - name: Require one blob report per shard (a missing shard must fail, not shrink coverage)
         env:
           SHARD_COUNT: ${{ needs.plan.outputs.count }}
-        run: '[ "$(find blob -name "*.json" | wc -l)" -eq "$SHARD_COUNT" ]'
+        run: |
+          set -euo pipefail
+          case "$SHARD_COUNT" in
+            ''|*[!0-9]*|0*)
+              echo "invalid shard count: '$SHARD_COUNT'" >&2
+              exit 1
+              ;;
+          esac
+          found=$(find blob -name "*.json" | wc -l)
+          if [ "$found" -ne "$SHARD_COUNT" ]; then
+            echo "expected $SHARD_COUNT shard reports, found $found" >&2
+            exit 1
+          fi
       - name: Merge shard reports (writes coverage/cobertura-coverage.xml)
         run: pnpm exec vitest run --merge-reports=blob --coverage
       - name: Build one test report from the shard reports

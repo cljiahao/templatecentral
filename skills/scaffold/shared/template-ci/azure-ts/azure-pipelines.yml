@@ -79,6 +79,15 @@ jobs:
         displayName: pnpm (the version pinned in packageManager)
       - bash: pnpm install --frozen-lockfile
         displayName: Install deps
+      - bash: |
+          set -euo pipefail
+          case "$(shardCount)" in
+            ''|*[!0-9]*|0*)
+              echo "invalid shard count: '$(shardCount)'" >&2
+              exit 1
+              ;;
+          esac
+        displayName: Require a valid shard count (a positive integer from the plan job)
       - bash: pnpm exec vitest run --coverage --reporter=default --reporter=blob --outputFile.blob="blob/shard-$(shard).json" --shard="$(shard)/$(shardCount)"
         displayName: Tests (this shard, coverage in the blob report)
       - task: PublishPipelineArtifact@1
@@ -112,6 +121,12 @@ jobs:
       # Own step: a missing shard must fail the job, not shrink coverage.
       - bash: |
           set -euo pipefail
+          case "$(shardCount)" in
+            ''|*[!0-9]*|0*)
+              echo "invalid shard count: '$(shardCount)'" >&2
+              exit 1
+              ;;
+          esac
           count=$(find blob -name '*.json' | wc -l)
           if [ "$count" -ne "$(shardCount)" ]; then
             echo "expected $(shardCount) shard reports, found $count" >&2
