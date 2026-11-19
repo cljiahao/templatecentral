@@ -7,7 +7,7 @@
 e3a24182b897024313fc137ee44d82eb5318306bc36c326dbe3f3ad00f530a50  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
-a8ed94723bc2257a0c72ab42000bd044869951760cd843e57349a46406aeb98a  .claude/hooks/protect-files.sh
+d8309fa58f38ab563834cde3674c853c3be169e4e97ec62c5b50978373e1d9e6  .claude/hooks/protect-files.sh
 4e517dcc5ce3a9cc41828cded849f4734a5b9c8bdf89d7d0d2122476e9054171  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
 d997f39290833016bb42d7b079e961e78cc1469bfd185f1d7e768f373e71aa1b  .claude/hooks/stop-checks.sh
@@ -20,7 +20,7 @@ c9819579dba2e4f3d1259620e1cda67d2effdaaf4cddaf0e64e06ff2644b29e6  .claude/regen-
 6a34b8d1287b7ea4e1c51f0e7dc16a671e4f678dd980fc0681436dc0406073f5  .claude/skills/next-verify/SKILL.md
 8436a463b24cffbcfcbba9e6f9d88e1aee3048957c54424deef018d0b024a5b4  .claude/skills/skill-audit/SKILL.md
 805c987b975e0a4c66019d6de553ffcf1503c3f78c459bec67ff4fa5b9251bd5  .claude/skills/test-consolidate/SKILL.md
-f982226eaa82f369106eacdb44bc0b7a2e2ad6a539081ee94f5c6d6e56d57157  .claude/verify-harness.sh
+9728c4a57a7b497202a636d148b609d0b62b0b200cb147a6e091e2b5cccf35d2  .claude/verify-harness.sh
 ec0e64c9102bf53f381a2a32c68fcb3f479a8ac0ae5c8463299b21f3f98a53c5  .dockerignore
 4fc6511297d080990d54f97fe25551b2901dacca53149e205671badf66862283  .env.example
 cf81c32c8b4ca8dea27781577ea4a4f29f31f2c1930728f30bb0ae2fcde0cbb7  .github/dependabot.yml

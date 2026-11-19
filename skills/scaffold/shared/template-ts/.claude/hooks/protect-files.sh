@@ -52,6 +52,7 @@ case "$rel" in
   .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
   .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
   .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh) reason="harness integrity or CI gate script — an edit can defeat drift detection" ;;
+  scripts/check-docs.sh|*/scripts/check-docs.sh|scripts/test-budget.sh|*/scripts/test-budget.sh) reason="seeded gate script — an edit can defeat the docs or test-budget gate" ;;
   .claude/dep-audit-allow.txt|*/.claude/dep-audit-allow.txt) reason="dependency-audit allowlist — an edit can suppress a known vulnerability" ;;
   .claude/.harness-base/*|*/.claude/.harness-base/*) reason="merge base snapshot — editing it can poison harness re-sync merges" ;;
   Dockerfile|*/Dockerfile) reason="container image definition" ;;
