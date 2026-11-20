@@ -221,6 +221,15 @@ suite() {
   run --apply
   lacks "every seeded file reads as modified" "$OUT" "no all-differ line when only one differs"
 
+  fixture newline
+  printf '{"seeded_files":{"a":{"path":".claude/hooks/block.sh\\nscripts/check-docs.sh","origin_hash":"x"},"b":{"path":"lefthook.yml","origin_hash":"%s"}}}\n' "$(sha "$D/lefthook.yml")" > "$D/.claude/harness.json"
+  run --apply
+  check 2 "$EC" "a path with an embedded newline refuses the manifest ($OUT)"
+  has "cannot parse" "$OUT" "newline refusal message"
+  exists .claude/hooks/block.sh "newline entry removes nothing"
+  exists scripts/check-docs.sh "second half of a split newline entry is not removed"
+  exists lefthook.yml "valid entry beside a newline entry is not removed"
+
   fixture usage
   run --bogus
   check 2 "$EC" "unknown flag exits 2"

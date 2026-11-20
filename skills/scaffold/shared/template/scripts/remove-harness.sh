@@ -46,14 +46,14 @@ sha() {
   fi
 }
 
-# Prints "path<TAB>origin_hash" for every seeded file.
+# Prints "path<TAB>origin_hash" for every seeded file; fails when any path or hash holds a control character (newline, tab, NUL).
 read_manifest() {
   if command -v jq > /dev/null 2>&1; then
-    jq -er '.seeded_files | to_entries[] | "\(.value.path)\t\(.value.origin_hash)"' "$manifest"
+    jq -er '.seeded_files | to_entries[] | if ((.value.path | tostring | explode | any(. < 32)) or (.value.origin_hash | tostring | explode | any(. < 32))) then error("control character in an entry") else "\(.value.path)\t\(.value.origin_hash)" end' "$manifest"
   elif command -v node > /dev/null 2>&1; then
-    node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files))console.log(v.path+"\t"+v.origin_hash)'
+    node -e 'const m=JSON.parse(require("fs").readFileSync(".claude/harness.json","utf8"));for(const v of Object.values(m.seeded_files)){const a=String(v.path),b=String(v.origin_hash);if(/[\x00-\x1f]/.test(a+b))throw new Error("control character");console.log(a+"\t"+b)}'
   elif command -v python3 > /dev/null 2>&1; then
-    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) for v in m["seeded_files"].values()]'
+    python3 -c 'import json;m=json.load(open(".claude/harness.json"));[print(str(v["path"])+"\t"+str(v["origin_hash"])) if not any(ord(c)<32 for c in str(v["path"])+str(v["origin_hash"])) else (_ for _ in ()).throw(ValueError("control character")) for v in m["seeded_files"].values()]'
   else
     return 3
   fi

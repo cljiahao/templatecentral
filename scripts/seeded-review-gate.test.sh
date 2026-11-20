@@ -94,7 +94,8 @@ record_pass() {
 # manual_record <sha> <base> <hash> <verdict>: writes a record by hand.
 manual_record() {
   mkdir -p "$D/.claude/review"
-  printf 'sha=%s\nbase=%s\ndiff_hash=%s\nverdict=%s\n' "$1" "$2" "$3" "$4" > "$D/.claude/review/$1.record"
+  mbv=$(git -C "$D" merge-base "$2" HEAD 2> /dev/null) || mbv=$(printf '%040d' 0)
+  printf 'sha=%s\nbase=%s\ndiff_hash=%s\nmerge_base=%s\nverdict=%s\n' "$1" "$2" "$3" "$mbv" "$4" > "$D/.claude/review/$1.record"
 }
 
 zeros=$(printf '%064d' 0)
@@ -127,14 +128,14 @@ suite() {
   record_pass
   second_hash=$(sed -n 's/^diff_hash=//p' "$D/.claude/review/$(cd "$D" && git rev-parse HEAD).record")
   (cd "$D" && git reset -q --hard HEAD~1 && echo different > b.txt && git add -A && git commit -q -m different)
-  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$second_hash" pass
+  manual_record "$(cd "$D" && git rev-parse HEAD)" origin/main "$second_hash" pass
   gate_fail "record whose hash belongs to other content"
   local_has "stale" "stale message for changed content"
 
   fixture stalehash
   record_pass
   sha=$(cd "$D" && git rev-parse HEAD)
-  manual_record "$sha" main "$zeros" pass
+  manual_record "$sha" origin/main "$zeros" pass
   gate_fail "record with another diff hash"
   local_has "stale" "stale message"
 
@@ -150,25 +151,31 @@ suite() {
   record_pass
   sha=$(cd "$D" && git rev-parse HEAD)
   rec="$D/.claude/review/$sha.record"
-  printf 'sha=%s\nbase=main\nverdict=pass\nsurprise=1\n' "$sha" > "$rec"
+  mbv=$(git -C "$D" merge-base origin/main HEAD)
+  printf 'sha=%s\nbase=origin/main\nverdict=pass\nsurprise=1\n' "$sha" > "$rec"
+  printf 'merge_base=%s\n' "$mbv" >> "$rec"
   gate_fail "malformed record"
   local_has "malformed" "malformed message"
   printf 'sha=%s\nbase=--evil\ndiff_hash=%s\nverdict=pass\n' "$sha" "$zeros" > "$rec"
   gate_fail "record with an option-like base"
-  printf 'sha=%s\nbase=main\ndiff_hash=short\nverdict=pass\n' "$sha" > "$rec"
+  printf 'sha=%s\nbase=origin/main\ndiff_hash=short\nverdict=pass\n' "$sha" > "$rec"
+  printf 'merge_base=%s\n' "$mbv" >> "$rec"
   gate_fail "record with a short hash"
-  printf 'sha=%s\nbase=main\ndiff_hash=%s\nverdict=maybe\n' "$sha" "$zeros" > "$rec"
+  printf 'sha=%s\nbase=origin/main\ndiff_hash=%s\nverdict=maybe\n' "$sha" "$zeros" > "$rec"
+  printf 'merge_base=%s\n' "$mbv" >> "$rec"
   gate_fail "record with an unknown verdict"
-  printf 'sha=%s\r\nbase=main\r\ndiff_hash=%s\r\nverdict=pass\r\n' "$sha" "$zeros" > "$rec"
+  printf 'sha=%s\r\nbase=origin/main\r\ndiff_hash=%s\r\nverdict=pass\r\n' "$sha" "$zeros" > "$rec"
+  printf 'merge_base=%s\n' "$mbv" >> "$rec"
   gate_fail "CRLF record"
   local_has "carriage return" "CRLF message"
-  printf 'sha=%s\nbase=main\ndiff_hash=%s\nverdict=fail\nverdict=pass\n' "$sha" "$zeros" > "$rec"
+  printf 'sha=%s\nbase=origin/main\ndiff_hash=%s\nverdict=fail\nverdict=pass\n' "$sha" "$zeros" > "$rec"
+  printf 'merge_base=%s\n' "$mbv" >> "$rec"
   gate_fail "record with a duplicate key"
   local_has "duplicate verdict" "duplicate-key message"
 
   fixture orphan
   (cd "$D" && git checkout -q --orphan solo && git commit -q -m solo)
-  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$zeros" pass
+  manual_record "$(cd "$D" && git rev-parse HEAD)" origin/main "$zeros" pass
   gate_fail "orphan branch with no merge base"
   local_has "no merge base" "no-merge-base message"
   reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"
@@ -196,7 +203,7 @@ suite() {
   prep
   check 1 "$EC" "empty diff is refused by prepare"
   has "nothing to review" "$OUT" "empty-diff message"
-  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$zeros" pass
+  manual_record "$(cd "$D" && git rev-parse HEAD)" origin/main "$zeros" pass
   gate_fail "record for a branch with no commits beyond base"
   local_has "nothing to review" "gate empty-diff message"
 
@@ -326,6 +333,52 @@ suite() {
   IN="$T/pass.txt" run record-review.sh
   check 0 "$EC" "record reads the reply from stdin ($OUT)"
   IN=""
+
+  fixture nearer
+  (cd "$D" && echo two > c.txt && git add -A && git commit -q -m two && git branch near HEAD~1)
+  EXTRA=(TC_REVIEW_BASE=near)
+  record_pass
+  check 0 "$EC" "record against a nearer branch is written ($OUT)"
+  EXTRA=(TC_NOOP=1)
+  gate_fail "record made against a nearer base than the gate wants"
+  local_has "base 'near' but the base now is 'origin/main'" "base-mismatch message names both"
+  EXTRA=(TC_REVIEW_BASE=near)
+  run check-review-record.sh
+  check 0 "$EC" "same base passes (control) ($OUT)"
+  EXTRA=(TC_NOOP=1)
+
+  fixture movedbase
+  (cd "$D" && echo two > c.txt && git add -A && git commit -q -m two)
+  record_pass
+  (cd "$D" && git update-ref refs/remotes/origin/main HEAD~1)
+  gate_fail "base ref moved to a different merge base"
+  local_has "stale" "moved-base message"
+
+  fixture ghfalse
+  OUT=$(cd "$D" && env -u TF_BUILD GITHUB_ACTIONS=false bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 1 "$EC" "GITHUB_ACTIONS=false does not skip ($OUT)"
+  OUT=$(cd "$D" && env -u TF_BUILD GITHUB_ACTIONS=true bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 0 "$EC" "GITHUB_ACTIONS=true skips (control)"
+  OUT=$(cd "$D" && env -u GITHUB_ACTIONS TF_BUILD=1 bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 1 "$EC" "TF_BUILD=1 does not skip"
+
+  fixture nohash
+  mkdir -p "$T/nohash-bin"
+  for t in git bash sed cut cat rm mktemp dirname tr cmp grep head wc env awk sort; do
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v "$t")" > "$T/nohash-bin/$t"
+    chmod +x "$T/nohash-bin/$t"
+  done
+  OUT=$(cd "$D" && env "${ENVARGS[@]}" PATH="$T/nohash-bin" bash scripts/check-review-record.sh --emit 2>&1 < /dev/null)
+  EC=$?
+  check 2 "$EC" "--emit with no hash tool exits 2 ($OUT)"
+  has "need shasum or sha256sum" "$OUT" "no-hash-tool message"
+  OUT=$(cd "$D" && env "${ENVARGS[@]}" PATH="$T/nohash-bin" bash scripts/record-review.sh --prepare 2>&1 < /dev/null)
+  EC=$?
+  check 2 "$EC" "record-review with no hash tool exits 2"
+  check 0 "$(find "$D/.claude/review" -name "*.record" 2> /dev/null | wc -l | tr -d ' ')" "no record written without a hash tool"
 
   fixture noignore noignore
   reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"

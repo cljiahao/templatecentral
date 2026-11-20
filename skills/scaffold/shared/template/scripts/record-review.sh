@@ -27,10 +27,23 @@ if ! git check-ignore -q "$dir/x"; then
   die "$dir is not gitignored. Add the line '.claude/review/' to .gitignore first, so records are never committed."
 fi
 
-emit=$(bash "$gate" --emit "${TC_REVIEW_BASE:-}") || die "cannot compute the diff hash (see the message above)."
+emit=$(bash "$gate" --emit "${TC_REVIEW_BASE:-}")
+ec=$?
+if [ "$ec" -ne 0 ]; then
+  printf 'record-review: cannot compute the diff hash (see the message above).\n' >&2
+  exit "$ec"
+fi
 base=$(printf '%s\n' "$emit" | sed -n 1p)
 sha=$(printf '%s\n' "$emit" | sed -n 2p)
 diff_hash=$(printf '%s\n' "$emit" | sed -n 3p)
+merge_base=$(printf '%s\n' "$emit" | sed -n 4p)
+
+# Refuses to go on when the values from the gate script are empty or malformed.
+case "$sha" in *[!0-9a-f]* | '') die "the gate script returned a bad commit sha." ;; esac
+case "$merge_base" in *[!0-9a-f]* | '') die "the gate script returned a bad merge base." ;; esac
+case "$diff_hash" in *[!0-9a-f]* | '') die "the gate script returned a bad diff hash." ;; esac
+[ "${#diff_hash}" -eq 64 ] || die "the gate script returned a bad diff hash."
+case "$base" in '' | -* | *[!A-Za-z0-9._/-]*) die "the gate script returned a bad base ref." ;; esac
 
 if [ "${1:-}" = "--prepare" ]; then
   mkdir -p "$dir" || die "cannot create $dir"
@@ -75,5 +88,5 @@ trap 'rm -f "$fresh"' EXIT
 bash "$gate" --print-diff "$base" > "$fresh" || die "cannot compute the diff of HEAD."
 cmp -s "$fresh" "$dir/current.diff" || die "current.diff is stale: run 'bash scripts/record-review.sh --prepare' again, then the reviewer."
 
-printf 'sha=%s\nbase=%s\ndiff_hash=%s\nverdict=%s\n' "$sha" "$base" "$diff_hash" "$verdict" > "$dir/$sha.record" || die "cannot write the record."
+printf 'sha=%s\nbase=%s\ndiff_hash=%s\nmerge_base=%s\nverdict=%s\n' "$sha" "$base" "$diff_hash" "$merge_base" "$verdict" > "$dir/$sha.record" || die "cannot write the record."
 printf 'record-review: wrote %s/%s.record (verdict %s, %s blocking finding(s)).\n' "$dir" "$sha" "$verdict" "$blocking"
