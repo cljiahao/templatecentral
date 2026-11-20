@@ -44,6 +44,8 @@ repo() {
   (cd "$D" && git init -q -b main . && echo base > README.md && git add -A && git commit -q -m base && git checkout -q -b work)
 }
 commit_all() { (cd "$D" && git add -A && git commit -q -m change); }
+# base_commit: puts what is in the working tree onto main as a second base commit and moves the work branch onto it, so the merge base has it.
+base_commit() { (cd "$D" && git checkout -q main && git add -A -- "${@:-.}" && git commit -q -m base2 && git checkout -q work && git rebase -q main); }
 
 repo control
 lines 10 "$D/a.txt"
@@ -125,41 +127,128 @@ commit_all
 run "$D" BASE_REF=main
 check 1 "$EC" "*.map and *.snap names alone do not exclude a file"
 
-repo marked
-mkdir -p "$D/src/generated"
-lines 5000 "$D/src/generated/types.ts"
-lines 5000 "$D/src/api.generated.ts"
-lines 5000 "$D/other.ts"
-lines 20 "$D/real.txt"
-printf 'src/generated/* linguist-generated\n*.generated.ts linguist-generated=true\n' > "$D/.gitattributes"
+# attrs_repo <name> <.gitattributes text>: a repository whose merge base already carries the attributes.
+attrs_repo() {
+  repo "$1"
+  printf '%s' "$2" > "$D/.gitattributes"
+  base_commit
+}
+generated_files() {
+  mkdir -p "$D/src/generated"
+  lines 5000 "$D/src/generated/types.ts"
+  lines 5000 "$D/src/api.generated.ts"
+  lines 5000 "$D/other.ts"
+  lines 20 "$D/real.txt"
+}
+attrs_repo marked 'src/generated/* linguist-generated
+*.generated.ts linguist-generated=true
+'
+generated_files
 commit_all
 run "$D" BASE_REF=main
-check 1 "$EC" "files marked linguist-generated are dropped but an unmarked big file still counts"
-has "5022 changed lines" "$OUT" "5000 + 20 + two .gitattributes lines, no generated lines"
-printf 'src/generated/* linguist-generated\n*.generated.ts linguist-generated=true\nother.ts linguist-generated\n' > "$D/.gitattributes"
+check 1 "$EC" "files marked linguist-generated at the merge base are dropped but an unmarked big file still counts"
+has "5020 changed lines" "$OUT" "5000 + 20, no generated lines"
+attrs_repo marked-all 'src/generated/* linguist-generated
+*.generated.ts linguist-generated=true
+other.ts linguist-generated
+'
+generated_files
 commit_all
 run "$D" BASE_REF=main
 check 0 "$EC" "marking the third file too brings the change within budget ($OUT)"
-printf 'src/generated/* -linguist-generated\n' > "$D/.gitattributes"
+attrs_repo marked-unset 'src/generated/* -linguist-generated
+'
+generated_files
 commit_all
 run "$D" BASE_REF=main
 check 1 "$EC" "-linguist-generated (unset) does not exclude"
 
-# The exclude file is data: a line there is honoured.
+# A change cannot switch off its own gate: attributes and the exclude list come from the merge base.
+repo selfattr
+(cd "$D" && seq 50000 > big.txt && echo '* linguist-generated' > .gitattributes)
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a .gitattributes added by the change does not exclude the change"
+has "changed lines (budget 800)" "$OUT" "message gives the budget"
+repo selfattr-uncommitted
+(cd "$D" && seq 50000 > big.txt && echo '* linguist-generated' > .gitattributes)
+run "$D" BASE_REF=main
+check 1 "$EC" "an uncommitted .gitattributes does not exclude the change"
+repo selfexclude
+(cd "$D" && seq 50000 > big.txt && echo '*' >> .claude/change-size-exclude.txt)
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a catch-all added to the exclude list by the change does not exclude the change"
+has "changed lines (budget 800)" "$OUT" "message gives the budget for the exclude repro"
+repo selfexclude-uncommitted
+(cd "$D" && seq 50000 > big.txt && echo '*' >> .claude/change-size-exclude.txt)
+run "$D" BASE_REF=main
+check 1 "$EC" "an uncommitted catch-all in the exclude list does not exclude the change"
+repo baseexclude
+printf 'big.txt\n' >> "$D/.claude/change-size-exclude.txt"
+base_commit
+(cd "$D" && seq 50000 > big.txt)
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: an exclusion already at the merge base is honoured ($OUT)"
+repo baseattr
+printf 'big.txt linguist-generated\n' > "$D/.gitattributes"
+base_commit
+(cd "$D" && seq 50000 > big.txt)
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "control: an attribute already at the merge base is honoured ($OUT)"
+
+# Without git check-attr --source the attributes cannot be read at the merge base: fail closed, never read the working tree.
+repo nosource
+lines 10 "$D/a.txt"
+commit_all
+mkdir -p "$D/shim"
+REAL_GIT=$(command -v git)
+cat > "$D/shim/git" << EOS
+#!/bin/sh
+case "\$*" in
+  *check-attr*--source*) echo "error: unknown option 'source'" >&2; exit 129 ;;
+esac
+exec "$REAL_GIT" "\$@"
+EOS
+chmod +x "$D/shim/git"
+run "$D" BASE_REF=main PATH="$D/shim:$PATH"
+check 2 "$EC" "a git without check-attr --source fails closed"
+has "needs git 2.40 or newer" "$OUT" "message states the minimum git version"
+run "$D" BASE_REF=main
+check 0 "$EC" "control: the same repository passes with the real git ($OUT)"
+
+# The exclude file is data: a line there is honoured when it is at the merge base.
 repo custom
 lines 5000 "$D/vendor-data.txt"
 printf 'vendor-data.txt\n' >> "$D/.claude/change-size-exclude.txt"
+base_commit .claude/change-size-exclude.txt
 lines 20 "$D/real.txt"
 commit_all
 run "$D" BASE_REF=main
-check 0 "$EC" "a line added to the exclude file is honoured ($OUT)"
+check 0 "$EC" "a line in the exclude file at the merge base is honoured ($OUT)"
 printf '# only comments\n' > "$D/other-exclude.txt"
 run "$D" BASE_REF=main CHANGE_SIZE_EXCLUDE_FILE=other-exclude.txt
 check 1 "$EC" "CHANGE_SIZE_EXCLUDE_FILE points the gate at another list"
+repo noexclude
 rm "$D/.claude/change-size-exclude.txt"
+base_commit
+lines 10 "$D/a.txt"
+commit_all
 run "$D" BASE_REF=main
 check 2 "$EC" "a missing exclude file cannot be measured"
 has "change-size-exclude.txt is missing" "$OUT" "message names the exclude file"
+repo fallback
+rm "$D/.claude/change-size-exclude.txt"
+base_commit
+mkdir -p "$D/.claude"
+cp "$EXCLUDE" "$D/.claude/change-size-exclude.txt"
+lines 5000 "$D/pnpm-lock.yaml"
+lines 10 "$D/a.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "with no list at the merge base the working-tree list is used ($OUT)"
 
 # Overrides that can widen the gate are refused in CI.
 repo ci
@@ -236,17 +325,17 @@ lines 900 "$D/README.md"
 run "$D" BASE_REF=main
 check 1 "$EC" "uncommitted edits to tracked files count"
 
-repo quoted
+attrs_repo quoted 'web/café?x.lock linguist-generated
+'
 mkdir -p "$D/sp ace" "$D/web"
 lines 5000 "$D/web/café x.lock"
-printf 'web/café?x.lock linguist-generated\n' > "$D/.gitattributes"
 lines 5000 "$D/bun.lock"
 printf 'x' > "$D/bun.lockb"
 lines 7 "$D/sp ace/naïve file.txt"
 commit_all
 run "$D" BASE_REF=main
 check 0 "$EC" "paths with spaces and non-ASCII names under excluded rules are handled ($OUT)"
-has "ok (8 lines in 2 files" "$OUT" "bun.lock, bun.lockb and the marked file are excluded; the spaced path and .gitattributes count"
+has "ok (7 lines in 1 files" "$OUT" "bun.lock, bun.lockb and the marked file are excluded; the spaced path counts"
 lines 900 "$D/sp ace/naïve file.txt"
 commit_all
 run "$D" BASE_REF=main

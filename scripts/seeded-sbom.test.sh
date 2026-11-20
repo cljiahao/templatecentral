@@ -366,6 +366,9 @@ if [ "$real_ok" -eq 1 ]; then
   # The exact requirements.in the scaffold writes, read from its source file so the two cannot drift.
   awk '/^cat > requirements.in <<.REQ.$/ { on = 1; next } /^REQ$/ { on = 0 } on' "$SH/../fastapi/source-files.md" > "$D/requirements.in"
   check 1 "$(grep -c '^certifi' "$D/requirements.in")" "the seeded requirements.in was extracted"
+  sed -n '/^cat > requirements.in <<.REQ.$/,/^REQ$/p' "$SH/../fastapi/source-files.md" | sed '1d;$d' > "$T/req-expected.in"
+  check 0 "$(cmp -s "$T/req-expected.in" "$D/requirements.in"; echo $?)" "the extracted requirements.in equals the seeded block"
+  check 1 "$([ -s "$D/requirements.in" ] && echo 1)" "the extracted requirements.in is not empty"
   (cd "$D" && uv pip compile requirements.in --universal --generate-hashes -o requirements.txt > "$T/py-compile.log" 2>&1)
   check 0 $? "fastapi requirements.txt compiles: $(tail -n 3 "$T/py-compile.log" | tr '\n' ' ')"
   run "$D"

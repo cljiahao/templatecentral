@@ -3,7 +3,7 @@
 # Reads the installed packages only (pnpm licenses list for package.json, the project's own Python environment for requirements.txt or pyproject.toml): no account, no key, no hosted service.
 # A project with both manifests is checked for both. Dependencies must be installed first: a missing node_modules or Python environment fails, it never passes.
 # Python needs the project environment (VIRTUAL_ENV, else .venv) and every package named in requirements.txt must be installed in it.
-# LICENCES_SCOPE=prod|all applies to pnpm only. It defaults to prod because dev tools are not shipped; Python checks every package installed in the environment.
+# LICENCES_SCOPE=prod|all defaults to prod because dev tools are not shipped: pnpm gets --prod, and Python checks only the packages named in the hashed requirements.txt (the environment may also hold dev tools). all checks everything installed.
 # The Python reading lives in py-env.py next to this script, shared with generate-sbom.sh. In GitHub Actions and Azure Pipelines the list-path overrides are refused.
 # Strict by design: several Python licence classifiers on one package are joined with AND, so a dual-licensed package that lists two classifiers needs both allowed.
 # Exit: 0 ok, 1 a licence is not allowed, 2 the check could not run.
@@ -49,7 +49,7 @@ list_pnpm() {
     process.stdin.on("data", (d) => { s += d; }).on("end", () => {
       const j = JSON.parse(s || "{}");
       for (const [lic, pkgs] of Object.entries(j)) {
-        for (const p of pkgs) console.log(p.name + "@" + (p.versions || []).join(",") + "\t" + lic);
+        for (const p of pkgs) console.log(p.name + "@" + (p.versions || []).join(",") + "\t" + lic.replace(/\s+/g, " ").trim());
       }
     });
   ' < "$tmp/pnpm.json" || die "cannot read the pnpm licence report"
@@ -66,7 +66,7 @@ list_python() {
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
   if [ -f requirements.txt ]; then req=requirements.txt; fi
-  "$py" "$helper" licences "$req" "$tmp/py.note" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
+  "$py" "$helper" licences "$req" "$scope" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
 }
 
 # Reads the data file; prints "name<TAB>licence" for each package whose licence is not allowed, then one sentinel line "__judged__<TAB>count".
@@ -151,11 +151,15 @@ else
   : > "$tmp/exc.txt"
 fi
 exc=$tmp/exc.txt
-grep -qE '^[[:space:]]*\*+([[:space:]]|$)' "$exc"
+# A package pattern needs a literal prefix of 3 characters before its first '*', so one line cannot cover most packages.
+awk '
+  { line = $0; sub(/#.*$/, "", line); sub(/^[[:space:]]+/, "", line); sub(/[[:space:]].*$/, "", line) }
+  line != "" && index(line, "*") > 0 && index(line, "*") <= 3 { print line; exit 3 }
+' "$exc" > "$tmp/badpat.txt"
 case $? in
-  0) die "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt} has a bare '*' package pattern, which would allow a licence for every package. Name the package, for example 'certifi MPL-2.0'." ;;
-  1) ;;
-  *) die "cannot read the exceptions file" ;;
+  0) ;;
+  3) die "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt} has the package pattern '$(cat "$tmp/badpat.txt")', which covers too many packages. A pattern needs a literal prefix of at least 3 characters before the first '*', for example '@img/sharp-*'. Name the package, for example 'certifi MPL-2.0'." ;;
+  *) die "the licence check failed to run: cannot read the exceptions file" ;;
 esac
 
 : > "$tmp/all.tsv"
@@ -185,11 +189,10 @@ grep -v '^__judged__' "$tmp/judged.txt" > "$tmp/bad.tsv"
 if [ "$?" -gt 1 ]; then die "cannot read the licence findings"; fi
 bad_count=$(wc -l < "$tmp/bad.tsv" | tr -d ' ')
 if [ "$bad_count" -gt 0 ]; then
-  sort -u "$tmp/bad.tsv" > "$tmp/bad.sorted" || die "cannot sort the licence findings"
+  if ! sort -u "$tmp/bad.tsv" > "$tmp/bad.sorted" 2> /dev/null || [ ! -s "$tmp/bad.sorted" ]; then cp "$tmp/bad.tsv" "$tmp/bad.sorted" || die "cannot read the licence findings"; fi
   while IFS="$(printf '\t')" read -r pkg lic; do
     printf 'check-licences: %s has licence %s, which is not in %s. Replace the package, or add the licence to the list (or one package to %s) after a human decision (legal review).\n' "$pkg" "$lic" "$allow" "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt}" >&2
   done < "$tmp/bad.sorted"
   exit 1
 fi
 echo "check-licences: ok ($total packages, $stacks)"
-if [ -s "$tmp/py.note" ]; then printf 'check-licences: note: %s\n' "$(cat "$tmp/py.note")"; fi

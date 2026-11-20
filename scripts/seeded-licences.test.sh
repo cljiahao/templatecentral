@@ -235,7 +235,9 @@ dist() {
   { printf 'Metadata-Version: 2.4\nName: %s\nVersion: %s\n' "$name" "$version"; for h in "$@"; do printf '%s\n' "$h"; done; } > "$SITE/$name-$version.dist-info/METADATA"
 }
 
-env_fixture py-meta ''
+env_fixture py-meta 'okpkg==1.0
+nopkg==1.0
+'
 dist okpkg 1.0 'License-Expression: MIT'
 dist nopkg 1.0
 run "$D" PYTHONPATH="$SITE"
@@ -290,11 +292,13 @@ rm -r "$D/.venv"
 run "$D" PYTHONPATH="$SITE" VIRTUAL_ENV="$D/venvx"
 check 0 "$EC" "VIRTUAL_ENV names the environment ($OUT)"
 
-env_fixture py-two-classifiers ''
+env_fixture py-two-classifiers 'twolic==1.0
+'
 dist twolic 1.0 'Classifier: License :: OSI Approved :: MIT License' 'Classifier: License :: OSI Approved :: BSD License'
 run "$D" PYTHONPATH="$SITE"
 check 0 "$EC" "several allowed classifiers on one package pass ($OUT)"
-env_fixture py-two-classifiers-bad ''
+env_fixture py-two-classifiers-bad 'twolic==1.0
+'
 dist twolic 1.0 'Classifier: License :: OSI Approved :: MIT License' 'Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)'
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "several classifiers are joined with AND, so one outside the list fails"
@@ -349,22 +353,57 @@ exit 0
 EOS
 run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "a sort that prints nothing still fails a bad package"
+has "copyleft-lib@1.2.3 has licence GPL-3.0-only" "$OUT" "the finding is printed from the unsorted list"
 pnpm_fixture sort-fail "$(report GPL-3.0-only copyleft-lib)"
 stub_tool "$D/stub" sort << 'EOS'
 exit 1
 EOS
 run "$D" PATH="$D/stub:$PATH"
-check 2 "$EC" "a failing sort cannot read as a pass"
+check 1 "$EC" "a failing sort cannot read as a pass"
+has "copyleft-lib@1.2.3 has licence GPL-3.0-only" "$OUT" "the finding is printed from the unsorted list when sort fails"
 
-# A bare * exception would allow a licence for every package.
+# An exception pattern needs a literal prefix of 3 characters before its first '*'.
 pnpm_fixture star "$(report GPL-3.0-only any-lib)"
-printf '* GPL-3.0-only\n' > "$D/star-exc.txt"
-run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
-check 2 "$EC" "a bare * exception pattern is refused"
-has "bare '*' package pattern" "$OUT" "message says why"
-printf '  *   GPL-3.0-only\n' > "$D/star-exc.txt"
-run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
-check 2 "$EC" "a bare * with extra spaces is refused too"
+for pat in '*' '  *  ' '*a*' '*g' '*-*' '@*/*' 'ba*' 'ab*'; do
+  printf '%s GPL-3.0-only\n' "$pat" > "$D/star-exc.txt"
+  run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
+  check 2 "$EC" "exception pattern '$pat' is refused"
+  has "literal prefix of at least 3 characters before the first '*'" "$OUT" "message states the rule for '$pat'"
+done
+for pat in 'any-*' '@img/sharp-libvips-*' 'copyleft-lib' 'abc*'; do
+  printf '%s GPL-3.0-only\n' "$pat" > "$D/star-exc.txt"
+  run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
+  hasnt "literal prefix" "$OUT" "pattern '$pat' is accepted by the rule"
+done
+
+# A tab inside a licence string must not cut it short.
+pnpm_fixture tab-node "$(printf '{"MIT\\tGPL-3.0-only":[{"name":"tab-lib","versions":["1.0.0"]}]}')"
+run "$D" PATH="$D/stub:$PATH"
+check 1 "$EC" "a pnpm licence with a tab inside fails"
+has "tab-lib@1.0.0 has licence MIT GPL-3.0-only" "$OUT" "the full licence string is named"
+env_fixture py-tab 'tabpkg==1.0
+'
+dist tabpkg 1.0 "License: MIT$(printf '\t')GPL-3.0-only"
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a Python licence with a tab inside fails"
+has "tabpkg@1.0 has licence MIT GPL-3.0-only" "$OUT" "the full Python licence string is named"
+env_fixture py-tab-ok 'tabpkg==1.0
+'
+dist tabpkg 1.0 "License: MIT$(printf '\t')BSD License"
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a tab-joined unknown pair still fails (control for the allowed list)"
+
+# Python prod scope checks the locked names only; all checks the whole environment.
+env_fixture py-scope 'okpkg==1.0
+'
+dist okpkg 1.0 'License-Expression: MIT'
+dist devtool 2.0 'License-Expression: GPL-3.0-only'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "prod scope ignores an installed package that is not locked ($OUT)"
+has "ok (1 packages, python)" "$OUT" "prod scope counts the locked package only"
+run "$D" PYTHONPATH="$SITE" LICENCES_SCOPE=all
+check 1 "$EC" "all scope checks the whole environment"
+has "devtool@2.0 has licence GPL-3.0-only" "$OUT" "all scope names the dev package"
 
 # File overrides can widen the gate, so CI refuses them.
 pnpm_fixture ci "$(report GPL-3.0-only copyleft-lib)"
@@ -458,6 +497,9 @@ if [ "$real_ok" -eq 1 ]; then
   cp "$EXC" "$D/.claude/licence-exceptions.txt"
   awk '/^cat > requirements.in <<.REQ.$/ { on = 1; next } /^REQ$/ { on = 0 } on' "$SH/../fastapi/source-files.md" > "$D/requirements.in"
   check 1 "$(grep -c '^certifi' "$D/requirements.in")" "the seeded requirements.in was extracted and lists certifi"
+  sed -n '/^cat > requirements.in <<.REQ.$/,/^REQ$/p' "$SH/../fastapi/source-files.md" | sed '1d;$d' > "$T/req-expected.in"
+  check 0 "$(cmp -s "$T/req-expected.in" "$D/requirements.in"; echo $?)" "the extracted requirements.in equals the seeded block"
+  check 1 "$([ -s "$D/requirements.in" ] && echo 1)" "the extracted requirements.in is not empty"
   has "fastapi>=" "$(cat "$D/requirements.in")" "the seeded requirements.in lists fastapi"
   (cd "$D" && uv pip compile requirements.in --universal --generate-hashes -o requirements.txt > "$T/py-compile.log" 2>&1)
   check 0 $? "fastapi requirements.txt compiles: $(tail -n 3 "$T/py-compile.log" | tr '\n' ' ')"
@@ -466,10 +508,16 @@ if [ "$real_ok" -eq 1 ]; then
   has "no project Python environment" "$OUT" "real failure says to create the environment"
   (cd "$D" && uv venv .venv > /dev/null 2>&1 && uv pip install --python .venv/bin/python --require-hashes -r requirements.txt > "$T/py-install.log" 2>&1)
   check 0 $? "fastapi scaffold installs: $(tail -n 3 "$T/py-install.log" | tr '\n' ' ')"
+  (cd "$D" && uv pip install --python .venv/bin/python -r requirements-dev.txt > "$T/py-install-dev.log" 2>&1)
+  check 0 $? "fastapi dev requirements install as scaffold Step 4 does: $(tail -n 3 "$T/py-install-dev.log" | tr '\n' ' ')"
   run "$D"
-  check 0 "$EC" "real fastapi scaffold passes the licence gate ($OUT)"
+  check 0 "$EC" "real fastapi scaffold passes the licence gate in prod scope ($OUT)"
   echo "real run fastapi: $OUT"
   has "packages, python)" "$OUT" "real fastapi run checked python packages and was not skipped"
+  run "$D" LICENCES_SCOPE=all
+  check 1 "$EC" "real fastapi scaffold with scope all fails on a dev-only package"
+  has "nodeenv@" "$OUT" "scope all names nodeenv"
+  has "nodeenv@1" "$OUT" "scope all finding carries a version"
   rm "$D/.claude/licence-exceptions.txt"
   run "$D"
   check 1 "$EC" "real fastapi scaffold without the exceptions file fails on certifi"

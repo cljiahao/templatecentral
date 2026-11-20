@@ -19,13 +19,13 @@ def stop(message):
 
 def licence(meta):
     """Returns the licence text and whether it is an SPDX expression, from License-Expression, License, then classifiers joined with AND."""
-    expr = (meta.get("License-Expression") or "").strip()
+    expr = " ".join((meta.get("License-Expression") or "").split())
     if expr:
         return expr, True
-    text = (meta.get("License") or "").strip()
+    text = " ".join((meta.get("License") or "").split())
     if text and "\n" not in text and len(text) <= 100 and text.upper() != "UNKNOWN":
         return text, False
-    labels = [c.split("::")[-1].strip() for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
+    labels = [" ".join(c.split("::")[-1].split()) for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
     labels = sorted({x for x in labels if x != "OSI Approved"})
     return (" AND ".join(labels), False) if labels else ("Unknown", False)
 
@@ -34,7 +34,7 @@ def installed():
     """Returns a map of named distributions and a list of dist-info folders that have no Name."""
     named, nameless = {}, []
     for d in md.distributions():
-        name = d.metadata["Name"]
+        name = d.metadata.get("Name")
         if name:
             named.setdefault((norm(name), d.version), (name, d))
         else:
@@ -79,16 +79,19 @@ def require_installed(req, named):
     return unchecked
 
 
-def cmd_licences(req, note):
+def cmd_licences(req, scope):
     named, nameless = installed()
+    require_installed(req, named)
+    locked = None
+    if req and scope != "all":
+        locked = set(wanted(req)[0])
     for key, version in sorted(named):
+        if locked is not None and key not in locked:
+            continue
         name, d = named[(key, version)]
         print("%s@%s\t%s" % (name, version, licence(d.metadata)[0]))
     for folder in nameless:
         print("%s@?\tUnknown" % folder)
-    unchecked = require_installed(req, named)
-    if unchecked:
-        open(note, "w").write("%d requirement lines with markers were not checked (the packaging module is not installed)" % unchecked)
 
 
 def cmd_sbom(req, out):
@@ -153,7 +156,7 @@ def main(argv):
     elif len(argv) == 3 and argv[1] == "check":
         cmd_check(argv[2])
     else:
-        sys.exit("usage: py-env.py licences <requirements.txt or ''> <note file> | sbom <requirements.txt or ''> <out> | check <file>")
+        sys.exit("usage: py-env.py licences <requirements.txt or ''> <prod|all> | sbom <requirements.txt or ''> <out> | check <file>")
 
 
 main(sys.argv)

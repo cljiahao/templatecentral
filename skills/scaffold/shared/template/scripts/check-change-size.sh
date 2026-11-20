@@ -3,7 +3,7 @@
 # Compares the working tree with the merge base of <base-ref> (argument, BASE_REF, else origin/main). Local git only, no network.
 # Counts committed and uncommitted changes to tracked files, plus untracked files that are not ignored.
 # Budgets (env overrides): CHANGE_SIZE_MAX_LINES lines added plus deleted, CHANGE_SIZE_MAX_FILES files changed.
-# Not counted: paths matching .claude/change-size-exclude.txt (lockfiles), and files marked linguist-generated in .gitattributes. A rename counts as a delete plus an add.
+# Not counted: paths matching .claude/change-size-exclude.txt (lockfiles), and files marked linguist-generated in .gitattributes. Both are read at the merge base, so a change cannot exclude itself; this needs git 2.40 or newer. A rename counts as a delete plus an add.
 # A binary file weighs one line per 4 KB, rounded up, so a large binary is not free.
 # Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget, no exclude file).
 # In GitHub Actions and Azure Pipelines the budget and exclude-file overrides are refused.
@@ -32,19 +32,6 @@ for v in CHANGE_SIZE_MAX_LINES CHANGE_SIZE_MAX_FILES CHANGE_SIZE_EXCLUDE_FILE; d
   if [ -n "${!v:-}" ]; then refuse_in_ci "$v"; fi
 done
 
-# True for a path that matches a pattern in the exclude file.
-excluded() {
-  local pat
-  for pat in ${patterns[@]+"${patterns[@]}"}; do
-    # The pattern is a glob on purpose.
-    # shellcheck disable=SC2254
-    case "$1" in
-      $pat) return 0 ;;
-    esac
-  done
-  return 1
-}
-
 # Prints the weight of a binary file of $1 bytes: one line per 4 KB, rounded up.
 binary_weight() {
   echo $((($1 + 4095) / 4096))
@@ -59,18 +46,23 @@ git rev-parse --git-dir > /dev/null 2>&1 || die "not a git repository"
 git rev-parse --verify --quiet "${base}^{commit}" > /dev/null || die "base ref '$base' not found, so the change size cannot be measured. Fetch it (git fetch origin main), or pass another base ref as the first argument."
 mb=$(git merge-base "$base" HEAD 2> /dev/null) || die "no merge base between '$base' and HEAD (shallow clone?). Fetch full history (git fetch --unshallow), or pass another base ref."
 
-exclude_file=${CHANGE_SIZE_EXCLUDE_FILE:-.claude/change-size-exclude.txt}
-if [ ! -f "$exclude_file" ]; then die "$exclude_file is missing. Restore it from the scaffold: it lists the lockfiles that do not count."; fi
-patterns=()
-while IFS= read -r line || [ -n "$line" ]; do
-  line=${line%%#*}
-  line=${line#"${line%%[![:space:]]*}"}
-  line=${line%"${line##*[![:space:]]}"}
-  if [ -n "$line" ]; then patterns+=("$line"); fi
-done < "$exclude_file"
-
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-change-size.XXXXXX") || die "cannot create a temporary folder"
 trap 'rm -rf "$tmp"' EXIT
+
+# The exclude list and the linguist-generated attributes are read as they were at the merge base, so a change cannot switch off its own gate.
+# The working-tree list is used only when the merge base has none yet, or when CHANGE_SIZE_EXCLUDE_FILE names one (refused in CI).
+exclude_path=.claude/change-size-exclude.txt
+if [ -n "${CHANGE_SIZE_EXCLUDE_FILE:-}" ]; then
+  if [ ! -f "$CHANGE_SIZE_EXCLUDE_FILE" ]; then die "$CHANGE_SIZE_EXCLUDE_FILE is missing."; fi
+  cp "$CHANGE_SIZE_EXCLUDE_FILE" "$tmp/exclude.txt" || die "cannot read $CHANGE_SIZE_EXCLUDE_FILE"
+elif git cat-file -e "$mb:./$exclude_path" 2> /dev/null; then
+  git show "$mb:./$exclude_path" > "$tmp/exclude.txt" 2> "$tmp/err.txt" || die "cannot read $exclude_path at the merge base: $(head -n 1 "$tmp/err.txt")"
+elif [ -f "$exclude_path" ]; then
+  cp "$exclude_path" "$tmp/exclude.txt" || die "cannot read $exclude_path"
+else
+  die "$exclude_path is missing. Restore it from the scaffold: it lists the lockfiles that do not count."
+fi
+git check-attr --source="$mb" linguist-generated -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git check-attr --source needs git 2.40 or newer to read the attributes at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
 
 tab=$(printf '\t')
 : > "$tmp/counted.txt"
@@ -81,7 +73,7 @@ while IFS= read -r -d '' rec; do
   rest=${rec#*"$tab"}
   deleted=${rest%%"$tab"*}
   path=${rest#*"$tab"}
-  if [ -z "$path" ] || excluded "$path"; then continue; fi
+  if [ -z "$path" ]; then continue; fi
   if [ "$added" = - ]; then
     if [ -f "$path" ]; then
       bytes=$(wc -c < "$path" | tr -d ' ')
@@ -98,7 +90,6 @@ done < "$tmp/numstat.z"
 
 git -c core.quotepath=false ls-files -z --others --exclude-standard > "$tmp/untracked.z" 2> "$tmp/err.txt" || die "git ls-files failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
 while IFS= read -r -d '' path; do
-  if excluded "$path"; then continue; fi
   n=0
   if [ -f "$path" ] && [ ! -L "$path" ]; then
     n=$(LC_ALL=C grep -I -c '' "$path" 2> "$tmp/err.txt")
@@ -114,7 +105,7 @@ done < "$tmp/untracked.z"
 cut -f2- "$tmp/counted.txt" | tr '\n' '\0' > "$tmp/paths.z"
 : > "$tmp/generated.txt"
 if [ -s "$tmp/paths.z" ]; then
-  git -c core.quotepath=false check-attr -z linguist-generated --stdin < "$tmp/paths.z" > "$tmp/attr.z" 2> "$tmp/err.txt" || die "git check-attr failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  git -c core.quotepath=false check-attr --source="$mb" -z linguist-generated --stdin < "$tmp/paths.z" > "$tmp/attr.z" 2> "$tmp/err.txt" || die "git check-attr failed: $(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
   while IFS= read -r -d '' apath && IFS= read -r -d '' _attr && IFS= read -r -d '' aval; do
     case "$aval" in
       set | true) printf '%s\n' "$apath" >> "$tmp/generated.txt" ;;
@@ -125,6 +116,28 @@ if [ -s "$tmp/generated.txt" ]; then
   awk -F '\t' 'NR == FNR { g[$0] = 1; next } { p = $0; sub(/^[^\t]*\t/, "", p); if (!(p in g)) print }' "$tmp/generated.txt" "$tmp/counted.txt" > "$tmp/kept.txt" || die "cannot drop generated files"
   mv "$tmp/kept.txt" "$tmp/counted.txt" || die "cannot update the counted list"
 fi
+
+awk -F '\t' -v pattern_file="$tmp/exclude.txt" '
+  function glob2re(g,   i, c, r) {
+    r = "^"
+    for (i = 1; i <= length(g); i++) {
+      c = substr(g, i, 1)
+      if (c == "*") r = r ".*"
+      else if (index("\\.^$()[]{}|+?/", c) > 0) r = r "\\" c
+      else r = r c
+    }
+    return r "$"
+  }
+  BEGIN {
+    while ((getline line < pattern_file) > 0) {
+      sub(/#.*$/, "", line)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      if (line != "") re[++n] = glob2re(line)
+    }
+  }
+  { p = $0; sub(/^[^\t]*\t/, "", p); for (i = 1; i <= n; i++) if (p ~ re[i]) next; print }
+' "$tmp/counted.txt" > "$tmp/kept.txt" || die "cannot apply the exclude list"
+mv "$tmp/kept.txt" "$tmp/counted.txt" || die "cannot update the counted list"
 
 files=$(wc -l < "$tmp/counted.txt" | tr -d ' ')
 lines=$(awk -F '\t' '{ s += $1 } END { print s + 0 }' "$tmp/counted.txt") || die "cannot add up the changed lines"
