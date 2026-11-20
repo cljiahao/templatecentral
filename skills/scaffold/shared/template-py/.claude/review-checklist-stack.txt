@@ -1,4 +1,3 @@
 # Python additions: id|check.
-py-except|A bare or broad except hides the failure.
-py-default|A mutable default argument or shared module-level state.
 py-input|External input is used before it is validated into a typed model.
+py-async|Blocking I/O or CPU work runs inside an async handler and stalls every request.

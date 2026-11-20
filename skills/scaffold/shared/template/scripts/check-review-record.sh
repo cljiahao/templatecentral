@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Review gate: passes only when .claude/review/<HEAD sha>.record holds a pass verdict for this exact diff.
 # Offline: reads git and one local file, calls no model and no network. Exit 0 pass, 1 gate failure, 2 environment error.
+# Fails closed: no merge base, empty diff, base equal to HEAD, dirty tree, or any bad record is a failure.
+# Skips only on a real CI host signal (GITHUB_ACTIONS or TF_BUILD), because records are local and gitignored and CI cannot hold one.
+# A bare CI=1 on a developer machine does not skip it.
 # Also used by record-review.sh: --emit [base] prints base, HEAD sha and diff hash; --print-diff <base> prints the diff.
-# The record is an honesty aid inside one session, not a security boundary. CI skips this gate: records are local and gitignored.
+# The record is an honesty aid inside one session, not a security boundary.
 set -uo pipefail
 
 dir=.claude/review
+cr=$(printf '\r')
 
 fail() {
   printf 'check-review-record: %s\n' "$1" >&2
-  printf 'check-review-record: fix: run "bash scripts/record-review.sh --prepare", ask Claude to use the code-reviewer agent on .claude/review/current.diff, fix its findings and commit, repeat until it ends with "VERDICT: pass", then save its reply to a file and run "bash scripts/record-review.sh <file>".\n' >&2
+  printf 'check-review-record: fix: run "bash scripts/record-review.sh --prepare", ask Claude to use the code-reviewer agent on .claude/review/current.diff, fix its findings and commit, repeat until it ends with "VERDICT: pass", then save the agent'"'"'s reply verbatim to a file and run "bash scripts/record-review.sh <file>".\n' >&2
   exit 1
 }
 
@@ -18,34 +22,15 @@ die() {
   exit 2
 }
 
-# Prints the SHA-256 of stdin.
-hash_stdin() {
+# Prints the SHA-256 of a file.
+hash_file() {
   if command -v shasum > /dev/null 2>&1; then
-    shasum -a 256 | cut -d' ' -f1
+    shasum -a 256 "$1" | cut -d' ' -f1
   elif command -v sha256sum > /dev/null 2>&1; then
-    sha256sum | cut -d' ' -f1
+    sha256sum "$1" | cut -d' ' -f1
   else
     die "need shasum or sha256sum"
   fi
-}
-
-# Prints the first usable base ref: the argument, then the upstream, then the usual default branches.
-resolve_base() {
-  local c
-  for c in "$1" "$(git rev-parse --abbrev-ref '@{upstream}' 2> /dev/null)" origin/main origin/master main master; do
-    if [ -n "$c" ] && git rev-parse --verify --quiet "$c^{commit}" > /dev/null 2>&1; then
-      printf '%s\n' "$c"
-      return 0
-    fi
-  done
-  return 1
-}
-
-# Prints the committed diff of this project from the merge base of $1 to HEAD.
-print_diff() {
-  local mb
-  mb=$(git merge-base "$1" HEAD 2> /dev/null) || return 1
-  git diff --no-ext-diff --no-color --no-renames "$mb" HEAD -- .
 }
 
 safe_ref() {
@@ -55,33 +40,76 @@ safe_ref() {
   return 0
 }
 
+# Prints the base ref: the explicit argument must exist; otherwise origin/main, then origin/master.
+resolve_base() {
+  local c
+  if [ -n "$1" ]; then
+    safe_ref "$1" || fail "base ref '$1' is not a plain branch name."
+    git rev-parse --verify --quiet "$1^{commit}" > /dev/null 2>&1 || fail "base ref '$1' does not exist here: set TC_REVIEW_BASE to a branch such as origin/main."
+    printf '%s\n' "$1"
+    return 0
+  fi
+  for c in origin/main origin/master; do
+    if git rev-parse --verify --quiet "$c^{commit}" > /dev/null 2>&1; then
+      printf '%s\n' "$c"
+      return 0
+    fi
+  done
+  fail "no base ref found (looked for origin/main and origin/master): fetch it, or set TC_REVIEW_BASE to a branch."
+}
+
+# Writes the committed diff of this project from the merge base of $1 to HEAD into file $2; fails closed on every problem.
+write_diff() {
+  local bsha hsha mb
+  hsha=$(git rev-parse HEAD 2> /dev/null) || fail "no commit yet: commit first, then review."
+  bsha=$(git rev-parse --verify --quiet "$1^{commit}" 2> /dev/null) || fail "base ref '$1' does not exist here."
+  [ "$bsha" != "$hsha" ] || fail "base ref '$1' is HEAD itself: there is nothing to review."
+  mb=$(git merge-base "$1" HEAD 2> /dev/null) || fail "no merge base between '$1' and HEAD (shallow clone or unrelated history): fetch more history, for example git fetch --unshallow, or set TC_REVIEW_BASE."
+  [ "$mb" != "$hsha" ] || fail "HEAD has no commit beyond '$1': there is nothing to review."
+  git -c core.quotepath=false -c diff.noprefix=false -c diff.mnemonicPrefix=false diff \
+    --no-ext-diff --no-textconv --no-color --no-renames --full-index \
+    --src-prefix=a/ --dst-prefix=b/ -U3 --diff-algorithm=myers "$mb" HEAD -- . > "$2" 2> /dev/null || fail "git diff failed against '$1'."
+  [ -s "$2" ] || fail "the diff against '$1' is empty: there is nothing to review."
+}
+
+require_clean() {
+  local st
+  st=$(git status --porcelain -- . 2> /dev/null) || fail "cannot read the git status."
+  [ -z "$st" ] || fail "the working tree has uncommitted or untracked changes: commit the changes, then review again."
+}
+
 root=$(cd "$(dirname "$0")/.." && pwd) || die "cannot find the project root"
 cd "$root" || die "cannot enter $root"
 git rev-parse --git-dir > /dev/null 2>&1 || die "not a git repository"
+tmpf=$(mktemp "${TMPDIR:-/tmp}/review-record.XXXXXX") || die "cannot create a temporary file"
+trap 'rm -f "$tmpf"' EXIT
 
 mode=${1:-}
 case "$mode" in
   --emit)
-    base=$(resolve_base "${2:-${TC_REVIEW_BASE:-}}") || die "no base ref found: set TC_REVIEW_BASE to a branch such as origin/main"
-    diff_hash=$(print_diff "$base" | hash_stdin)
-    printf '%s\n%s\n%s\n' "$base" "$(git rev-parse HEAD)" "$diff_hash"
+    require_clean
+    base=$(resolve_base "${2:-${TC_REVIEW_BASE:-}}") || exit 1
+    write_diff "$base" "$tmpf"
+    printf '%s\n%s\n%s\n' "$base" "$(git rev-parse HEAD)" "$(hash_file "$tmpf")"
     exit 0
     ;;
   --print-diff)
     safe_ref "${2:-}" || die "usage: --print-diff <base-ref>"
-    print_diff "$2" || die "no merge base between $2 and HEAD"
+    write_diff "$2" "$tmpf"
+    cat "$tmpf"
     exit 0
     ;;
   '') ;;
   *) die "usage: check-review-record.sh" ;;
 esac
 
-if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${TF_BUILD:-}" ]; then
+if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${TF_BUILD:-}" ]; then
   echo "check-review-record: SKIP in CI: review records are local and gitignored."
   exit 0
 fi
 
-sha=$(git rev-parse HEAD 2> /dev/null) || die "no commit yet: commit first, then review"
+sha=$(git rev-parse HEAD 2> /dev/null) || fail "no commit yet: commit first, then review."
+require_clean
 rec="$dir/$sha.record"
 [ -f "$rec" ] || fail "no review record for commit $sha."
 
@@ -89,14 +117,24 @@ r_sha=""
 r_base=""
 r_hash=""
 r_verdict=""
+seen=" "
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
-    sha=*) r_sha=${line#sha=} ;;
-    base=*) r_base=${line#base=} ;;
-    diff_hash=*) r_hash=${line#diff_hash=} ;;
-    verdict=*) r_verdict=${line#verdict=} ;;
-    '') ;;
+    *"$cr"*) fail "review record $rec is malformed (carriage return)." ;;
+    '') continue ;;
+    sha=* | base=* | diff_hash=* | verdict=*) ;;
     *) fail "review record $rec is malformed (unknown line)." ;;
+  esac
+  key=${line%%=*}
+  case "$seen" in
+    *" $key "*) fail "review record $rec is malformed (duplicate $key)." ;;
+  esac
+  seen="$seen$key "
+  case "$key" in
+    sha) r_sha=${line#*=} ;;
+    base) r_base=${line#*=} ;;
+    diff_hash) r_hash=${line#*=} ;;
+    verdict) r_verdict=${line#*=} ;;
   esac
 done < "$rec"
 
@@ -111,8 +149,8 @@ case "$r_verdict" in
   *) fail "review record $rec is malformed (verdict must be pass or fail)." ;;
 esac
 
-git rev-parse --verify --quiet "$r_base^{commit}" > /dev/null 2>&1 || fail "base ref $r_base from the record does not exist here."
-now_hash=$(print_diff "$r_base" | hash_stdin)
+write_diff "$r_base" "$tmpf"
+now_hash=$(hash_file "$tmpf")
 [ "$now_hash" = "$r_hash" ] || fail "review record is stale: the diff against $r_base changed since it was reviewed."
 [ "$r_verdict" = pass ] || fail "the recorded review verdict is fail."
 echo "check-review-record: ok, commit $sha reviewed against $r_base."

@@ -1,15 +1,13 @@
-# One check per line: id|check. Read by the code-reviewer agent.
-logic|Wrong results on empty, null, zero, boundary, duplicate or concurrent input.
-errors|A caught error is swallowed, logged and ignored, or turned into a default value.
-injection|User input reaches a query, shell command, path, template or HTML without escaping or parameters.
+# One check per line: id|check. Read by the code-reviewer agent. Only what a linter or hook cannot see.
+logic|An input the request allows (empty, null, zero, duplicate, very large) gives wrong data or a crash, or the code handles only the happy path.
+errors|A caught error is swallowed, logged and ignored, or replaced by a default, so callers cannot tell the work failed.
+injection|User input reaches a query, shell command, file path, template or HTML without escaping or parameters.
 authz|A route or action runs without checking who is asking and what they may touch.
-secrets|A key, token or password appears in code, logs, tests or error messages.
 deserialise|Untrusted data goes into an unsafe parser or loader.
 test-empty|A test asserts nothing, only that no error was thrown, or only that a mock was called.
 test-mirror|A test repeats the implementation's own logic, so it cannot fail when the logic is wrong.
-dead|Unused code, parameters, branches, flags or files were added or left behind.
-duplicate|The same logic exists twice in the diff or already exists in the project.
-naming|A name hides what the thing does or says something it does not.
-comment|A comment restates the code or describes history instead of the reason.
-workaround|A lint disable, type cast to any, skipped test, loosened threshold or catch-all hides a problem instead of fixing it.
-scope|The diff adds options, layers or features the request did not ask for.
+test-removed|A test was deleted, skipped or loosened to make the build pass.
+reuse|New code repeats a helper or behaviour the project already has in another file.
+naming|A name says something the code does not do, such as a getter that writes or a predicate that returns a string.
+comment-wrong|A comment or doc says something the code no longer does.
+scope|The diff changes behaviour, config or files the request did not ask for.

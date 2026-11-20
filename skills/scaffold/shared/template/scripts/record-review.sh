@@ -4,10 +4,14 @@
 #        record-review.sh [file]             records the reviewer's reply from a file or stdin
 # This record is an honesty aid inside one session, not a security boundary: the same session can write it.
 # It stops a push without a review and a record reused for other content; it does not prove a review happened.
-# Finding lines read: <file>:<line> | <blocker|major|minor|nit> | <problem> | <fix>. Last line: VERDICT: pass|fail.
+# Reply format: finding lines "<where> | <blocker|major|minor|nit> | <problem> | <fix>" (any prefix, any case), then
+# "FINDINGS: none" when there are no finding lines, and as the last non-empty line "VERDICT: pass" or "VERDICT: fail".
+# A pass needs no blocker or major line, and either a finding line or "FINDINGS: none". The diff the reviewer read
+# (.claude/review/current.diff) must equal the diff of HEAD now.
 set -uo pipefail
 
 dir=.claude/review
+sev='\|[[:space:]]*(blocker|major|minor|nit)[[:space:]]*\|'
 
 die() {
   printf 'record-review: %s\n' "$1" >&2
@@ -37,21 +41,39 @@ fi
 
 if [ -n "${1:-}" ]; then
   [ -f "$1" ] || die "no such file: $1"
-  reply=$(cat "$1")
+  reply=$(tr -d '\r' < "$1")
 else
-  reply=$(cat)
+  reply=$(tr -d '\r')
 fi
 [ -n "$reply" ] || die "empty reviewer reply: pass the code-reviewer output as a file or on stdin."
 
-verdict_lines=$(printf '%s\n' "$reply" | grep -cE '^VERDICT: (pass|fail)[[:space:]]*$')
-[ "$verdict_lines" -eq 1 ] || die "the reply needs exactly one line 'VERDICT: pass' or 'VERDICT: fail' (found $verdict_lines)."
-verdict=$(printf '%s\n' "$reply" | sed -n 's/^VERDICT: \([a-z]*\)[[:space:]]*$/\1/p')
+last=$(printf '%s\n' "$reply" | awk 'NF { l = $0 } END { print l }' | sed 's/[[:space:]]*$//')
+case "$last" in
+  "VERDICT: pass") verdict=pass ;;
+  "VERDICT: fail") verdict=fail ;;
+  *) die "the last non-empty line of the reply must be 'VERDICT: pass' or 'VERDICT: fail'." ;;
+esac
+verdict_lines=$(printf '%s\n' "$reply" | grep -cE '^[[:space:]]*VERDICT:')
+[ "$verdict_lines" -eq 1 ] || die "the reply needs exactly one VERDICT line (found $verdict_lines)."
 
-blocking=$(printf '%s\n' "$reply" | grep -cE '^[^[:space:]|]+:[0-9]+ \| (blocker|major) \|')
+findings=$(printf '%s\n' "$reply" | grep -ciE "$sev")
+blocking=$(printf '%s\n' "$reply" | grep -ciE '\|[[:space:]]*(blocker|major)[[:space:]]*\|')
+none_lines=$(printf '%s\n' "$reply" | grep -cE '^FINDINGS: none[[:space:]]*$')
+if [ "$none_lines" -gt 0 ] && [ "$findings" -gt 0 ]; then
+  die "refused: the reply says 'FINDINGS: none' but also lists $findings finding line(s)."
+fi
 if [ "$verdict" = pass ] && [ "$blocking" -gt 0 ]; then
   die "refused: the verdict is pass but $blocking blocker or major finding(s) are listed. Fix them and review again, or record the reviewer's fail verdict."
 fi
+if [ "$verdict" = pass ] && [ "$findings" -eq 0 ] && [ "$none_lines" -eq 0 ]; then
+  die "refused: a pass with no finding lines needs the line 'FINDINGS: none'. Ask the reviewer to state it."
+fi
 
-mkdir -p "$dir" || die "cannot create $dir"
+[ -f "$dir/current.diff" ] || die "no $dir/current.diff: run 'bash scripts/record-review.sh --prepare', then the reviewer."
+fresh=$(mktemp "${TMPDIR:-/tmp}/record-review.XXXXXX") || die "cannot create a temporary file"
+trap 'rm -f "$fresh"' EXIT
+bash "$gate" --print-diff "$base" > "$fresh" || die "cannot compute the diff of HEAD."
+cmp -s "$fresh" "$dir/current.diff" || die "current.diff is stale: run 'bash scripts/record-review.sh --prepare' again, then the reviewer."
+
 printf 'sha=%s\nbase=%s\ndiff_hash=%s\nverdict=%s\n' "$sha" "$base" "$diff_hash" "$verdict" > "$dir/$sha.record" || die "cannot write the record."
 printf 'record-review: wrote %s/%s.record (verdict %s, %s blocking finding(s)).\n' "$dir" "$sha" "$verdict" "$blocking"

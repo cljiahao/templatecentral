@@ -19,7 +19,7 @@ has() { # has <needle> <haystack> <description>
 T=$(mktemp -d "${TMPDIR:-/tmp}/review-gate.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
-# fixture <name> [ignore]: a git repo with main and a feature branch one commit ahead; sets D.
+# fixture <name> [noignore]: a git repo with main (also origin/main) and a feature branch one commit ahead; sets D.
 fixture() {
   D="$T/$1"
   rm -rf "$D"
@@ -32,10 +32,11 @@ fixture() {
     git config user.email t@example.com
     git config user.name t
     git config commit.gpgsign false
-    if [ "${2:-ignore}" = ignore ]; then echo ".claude/review/" > .gitignore; else echo "node_modules/" > .gitignore; fi
+    if [ "${2:-}" = noignore ]; then echo "node_modules/" > .gitignore; else echo ".claude/review/" > .gitignore; fi
     echo base > a.txt
     git add -A
     git commit -q -m base
+    git update-ref refs/remotes/origin/main main
     git checkout -q -b feature
     echo change > b.txt
     git add -A
@@ -48,14 +49,14 @@ run() {
   local s=$1
   shift
   if [ -n "${IN:-}" ]; then
-    OUT=$(cd "$D" && env "${ENVARGS[@]}" bash "scripts/$s" "$@" 2>&1 < "$IN")
+    OUT=$(cd "$D" && env "${ENVARGS[@]}" "${EXTRA[@]}" bash "scripts/$s" "$@" 2>&1 < "$IN")
   else
-    OUT=$(cd "$D" && env "${ENVARGS[@]}" bash "scripts/$s" "$@" 2>&1 < /dev/null)
+    OUT=$(cd "$D" && env "${ENVARGS[@]}" "${EXTRA[@]}" bash "scripts/$s" "$@" 2>&1 < /dev/null)
   fi
   EC=$?
 }
 
-# reply <file> <body...>: writes a reviewer reply.
+# reply <file> <lines...>: writes a reviewer reply.
 reply() {
   local f=$1
   shift
@@ -73,14 +74,40 @@ gate_fail() {
   fi
 }
 
+# local_has <needle> <description>: asserts message text on the last OUT, local mode only.
+local_has() {
+  if [ "$MODE" = local ]; then has "$1" "$OUT" "$2"; fi
+}
+
+# prep: runs --prepare in $D.
+prep() {
+  run record-review.sh --prepare
+}
+
+# record_pass: prepares, then records a pass reply with no findings.
+record_pass() {
+  prep
+  reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"
+  run record-review.sh "$T/pass.txt"
+}
+
+# manual_record <sha> <base> <hash> <verdict>: writes a record by hand.
+manual_record() {
+  mkdir -p "$D/.claude/review"
+  printf 'sha=%s\nbase=%s\ndiff_hash=%s\nverdict=%s\n' "$1" "$2" "$3" "$4" > "$D/.claude/review/$1.record"
+}
+
+zeros=$(printf '%064d' 0)
+
 suite() {
   fixture nofile
   gate_fail "no record"
-  [ "$MODE" = local ] && has "no review record for commit" "$OUT" "no-record message"
-  [ "$MODE" = local ] && has "code-reviewer agent" "$OUT" "no-record message tells how to fix"
+  local_has "no review record for commit" "no-record message"
+  local_has "code-reviewer agent" "no-record message tells how to fix"
+  local_has "verbatim" "fix message says to save the reply verbatim"
 
   fixture good
-  run record-review.sh --prepare
+  prep
   check 0 "$EC" "prepare succeeds ($OUT)"
   has "current.diff" "$OUT" "prepare names the diff file"
   has "+change" "$(cat "$D/.claude/review/current.diff")" "prepared diff holds the change"
@@ -90,67 +117,218 @@ suite() {
   has "verdict pass" "$OUT" "record message names the verdict"
   run check-review-record.sh
   check 0 "$EC" "valid pass record passes (control) ($OUT)"
-  if [ "$MODE" = local ]; then has "ok, commit" "$OUT" "pass message"; fi
+  local_has "ok, commit" "pass message"
 
   (cd "$D" && echo more > c.txt && git add -A && git commit -q -m more)
   gate_fail "record for another commit"
-  (cd "$D" && git reset -q --hard HEAD~1)
 
-  fixture stale
-  run record-review.sh < /dev/null
-  reply "$T/pass.txt" "VERDICT: pass"
-  run record-review.sh "$T/pass.txt"
+  fixture content
+  (cd "$D" && echo second > c.txt && git add -A && git commit -q -m second)
+  record_pass
+  second_hash=$(sed -n 's/^diff_hash=//p' "$D/.claude/review/$(cd "$D" && git rev-parse HEAD).record")
+  (cd "$D" && git reset -q --hard HEAD~1 && echo different > b.txt && git add -A && git commit -q -m different)
+  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$second_hash" pass
+  gate_fail "record whose hash belongs to other content"
+  local_has "stale" "stale message for changed content"
+
+  fixture stalehash
+  record_pass
   sha=$(cd "$D" && git rev-parse HEAD)
-  sed 's/^diff_hash=.*/diff_hash=0000000000000000000000000000000000000000000000000000000000000000/' "$D/.claude/review/$sha.record" > "$T/r" && cp "$T/r" "$D/.claude/review/$sha.record"
+  manual_record "$sha" main "$zeros" pass
   gate_fail "record with another diff hash"
-  [ "$MODE" = local ] && has "stale" "$OUT" "stale message"
+  local_has "stale" "stale message"
 
   fixture failv
+  prep
   reply "$T/fail.txt" "b.txt:1 | major | errors: swallowed | rethrow" "VERDICT: fail"
   run record-review.sh "$T/fail.txt"
   check 0 "$EC" "record of a fail verdict is written ($OUT)"
   gate_fail "fail verdict"
-  [ "$MODE" = local ] && has "verdict is fail" "$OUT" "fail verdict message"
+  local_has "verdict is fail" "fail verdict message"
 
   fixture bad
-  reply "$T/pass.txt" "VERDICT: pass"
-  run record-review.sh "$T/pass.txt"
+  record_pass
   sha=$(cd "$D" && git rev-parse HEAD)
-  printf 'sha=%s\nbase=main\nverdict=pass\nsurprise=1\n' "$sha" > "$D/.claude/review/$sha.record"
+  rec="$D/.claude/review/$sha.record"
+  printf 'sha=%s\nbase=main\nverdict=pass\nsurprise=1\n' "$sha" > "$rec"
   gate_fail "malformed record"
-  [ "$MODE" = local ] && has "malformed" "$OUT" "malformed message"
-  printf 'sha=%s\nbase=--evil\ndiff_hash=%s\nverdict=pass\n' "$sha" "$(printf '%064d' 0)" > "$D/.claude/review/$sha.record"
+  local_has "malformed" "malformed message"
+  printf 'sha=%s\nbase=--evil\ndiff_hash=%s\nverdict=pass\n' "$sha" "$zeros" > "$rec"
   gate_fail "record with an option-like base"
-  printf 'sha=%s\nbase=main\ndiff_hash=short\nverdict=pass\n' "$sha" > "$D/.claude/review/$sha.record"
+  printf 'sha=%s\nbase=main\ndiff_hash=short\nverdict=pass\n' "$sha" > "$rec"
   gate_fail "record with a short hash"
-  printf 'sha=%s\nbase=main\ndiff_hash=%s\nverdict=maybe\n' "$sha" "$(printf '%064d' 0)" > "$D/.claude/review/$sha.record"
+  printf 'sha=%s\nbase=main\ndiff_hash=%s\nverdict=maybe\n' "$sha" "$zeros" > "$rec"
   gate_fail "record with an unknown verdict"
+  printf 'sha=%s\r\nbase=main\r\ndiff_hash=%s\r\nverdict=pass\r\n' "$sha" "$zeros" > "$rec"
+  gate_fail "CRLF record"
+  local_has "carriage return" "CRLF message"
+  printf 'sha=%s\nbase=main\ndiff_hash=%s\nverdict=fail\nverdict=pass\n' "$sha" "$zeros" > "$rec"
+  gate_fail "record with a duplicate key"
+  local_has "duplicate verdict" "duplicate-key message"
+
+  fixture orphan
+  (cd "$D" && git checkout -q --orphan solo && git commit -q -m solo)
+  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$zeros" pass
+  gate_fail "orphan branch with no merge base"
+  local_has "no merge base" "no-merge-base message"
+  reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"
+  run record-review.sh "$T/pass.txt"
+  check 1 "$EC" "record-review refuses with no merge base"
+  has "no merge base" "$OUT" "record-review names the missing merge base"
+
+  fixture dirty
+  record_pass
+  run check-review-record.sh
+  check 0 "$EC" "clean tree passes (control) ($OUT)"
+  echo more >> "$D/b.txt"
+  gate_fail "dirty tree"
+  local_has "commit the changes, then review again" "dirty-tree message"
+  (cd "$D" && git checkout -q -- b.txt && echo new > untracked.txt)
+  gate_fail "untracked file"
+  rm -f "$D/untracked.txt"
+  echo more >> "$D/b.txt"
+  prep
+  check 1 "$EC" "prepare refuses a dirty tree"
+  has "commit the changes, then review again" "$OUT" "prepare dirty-tree message"
+
+  fixture empty
+  (cd "$D" && git checkout -q main && git checkout -q -b same)
+  prep
+  check 1 "$EC" "empty diff is refused by prepare"
+  has "nothing to review" "$OUT" "empty-diff message"
+  manual_record "$(cd "$D" && git rev-parse HEAD)" main "$zeros" pass
+  gate_fail "record for a branch with no commits beyond base"
+  local_has "nothing to review" "gate empty-diff message"
+
+  fixture headbase
+  EXTRA=(TC_REVIEW_BASE=HEAD)
+  prep
+  check 1 "$EC" "base equal to HEAD is refused"
+  has "HEAD itself" "$OUT" "base-is-HEAD message"
+  EXTRA=(TC_NOOP=1)
+
+  fixture detached
+  (cd "$D" && git checkout -q --detach)
+  record_pass
+  check 0 "$EC" "detached HEAD records ($OUT)"
+  run check-review-record.sh
+  check 0 "$EC" "detached HEAD passes (control) ($OUT)"
+
+  fixture badbase
+  EXTRA=(TC_REVIEW_BASE=nope/branch)
+  prep
+  check 1 "$EC" "unknown TC_REVIEW_BASE is refused"
+  has "does not exist" "$OUT" "unknown-base message"
+  EXTRA=(TC_REVIEW_BASE=--evil)
+  prep
+  check 1 "$EC" "option-like TC_REVIEW_BASE is refused"
+  has "not a plain branch name" "$OUT" "option-like base message"
+  EXTRA=(TC_NOOP=1)
+
+  fixture nobase
+  (cd "$D" && git update-ref -d refs/remotes/origin/main && git config branch.feature.remote . && git config branch.feature.merge refs/heads/feature)
+  prep
+  check 1 "$EC" "the upstream is not used as a base"
+  has "no base ref found" "$OUT" "no-base message"
+  EXTRA=(TC_NOOP=1)
+
+  fixture originbase
+  prep
+  has "base origin/main" "$OUT" "default base is origin/main"
+
+  fixture config
+  run check-review-record.sh --emit
+  h1=$(printf '%s\n' "$OUT" | sed -n 3p)
+  (cd "$D" && git config core.abbrev 4 && git config diff.noprefix true && git config diff.mnemonicPrefix true && git config diff.algorithm patience && git config color.ui always && git config diff.context 9)
+  run check-review-record.sh --emit
+  h2=$(printf '%s\n' "$OUT" | sed -n 3p)
+  check "$h1" "$h2" "diff hash ignores user git config"
+  check 64 "${#h1}" "diff hash is 64 hex characters"
+
+  fixture ci1
+  OUT=$(cd "$D" && env -u GITHUB_ACTIONS -u TF_BUILD CI=1 bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 1 "$EC" "a bare CI=1 does not skip the gate ($OUT)"
+  OUT=$(cd "$D" && env -u GITHUB_ACTIONS -u TF_BUILD CI=true bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 1 "$EC" "a bare CI=true does not skip the gate"
+  OUT=$(cd "$D" && env TF_BUILD=True bash scripts/check-review-record.sh 2>&1 < /dev/null)
+  EC=$?
+  check 0 "$EC" "TF_BUILD skips the gate"
+  has "SKIP in CI" "$OUT" "TF_BUILD skip message"
 
   fixture blocking
+  prep
   reply "$T/block.txt" "b.txt:1 | blocker | injection: raw query | use parameters" "VERDICT: pass"
   run record-review.sh "$T/block.txt"
   check 1 "$EC" "pass verdict with a blocker finding is refused"
   has "refused" "$OUT" "refusal message"
   has "1 blocker or major" "$OUT" "refusal counts findings"
   check 0 "$([ -e "$D/.claude/review/$(cd "$D" && git rev-parse HEAD).record" ] && echo 1 || echo 0)" "refused pass wrote no record"
-  reply "$T/major.txt" "b.txt:2 | major | logic: edge | fix" "VERDICT: pass"
-  run record-review.sh "$T/major.txt"
+  reply "$T/x.txt" "b.txt:2 | major | logic: edge | fix" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
   check 1 "$EC" "pass verdict with a major finding is refused"
+  reply "$T/x.txt" "- \`dir with space/f.ts:3-9\` | Blocker | injection: x | y" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "bulleted finding with a spaced path and a range is refused"
+  has "refused" "$OUT" "bulleted refusal message"
+  reply "$T/x.txt" "src/app.ts | MAJOR | logic: x | y" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "finding with no line number and upper case is refused"
+  reply "$T/x.txt" "> a.ts:1 |blocker| x | y" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "finding with tight pipes is refused"
 
-  fixture noverdict
-  reply "$T/nov.txt" "b.txt:1 | nit | naming: x | y"
-  run record-review.sh "$T/nov.txt"
+  fixture verdicts
+  prep
+  reply "$T/x.txt" "b.txt:1 | nit | naming: x | y"
+  run record-review.sh "$T/x.txt"
   check 1 "$EC" "reply without a verdict line is refused"
   has "VERDICT" "$OUT" "missing-verdict message"
+  reply "$T/x.txt" "VERDICT: pass" "FINDINGS: none"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "verdict that is not the last line is refused"
+  reply "$T/x.txt" "FINDINGS: none" "VERDICT: fail" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "two verdict lines are refused"
+  reply "$T/x.txt" "b.txt:1 | nit | naming: x | y" "VERDICT: pass"
+  printf 'FINDINGS: none\r\nVERDICT: pass\r\n' > "$T/crlf.txt"
+  run record-review.sh "$T/crlf.txt"
+  check 0 "$EC" "a CRLF reply is accepted (control) ($OUT)"
+  rm -f "$D/.claude/review/"*.record
+  reply "$T/x.txt" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "pass with no finding lines and no FINDINGS: none is refused"
+  has "FINDINGS: none" "$OUT" "explicit-none message"
+  reply "$T/x.txt" "b.txt:1 | nit | naming: x | y" "FINDINGS: none" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "FINDINGS: none beside a finding line is refused"
+  reply "$T/x.txt" "VERDICT: fail"
+  run record-review.sh "$T/x.txt"
+  check 0 "$EC" "a fail verdict needs no FINDINGS line ($OUT)"
+
+  fixture stalediff
+  record_pass
+  check 0 "$EC" "record with a fresh current.diff succeeds (control) ($OUT)"
+  (cd "$D" && echo more > c.txt && git add -A && git commit -q -m more)
+  reply "$T/x.txt" "FINDINGS: none" "VERDICT: pass"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "record with a stale current.diff is refused"
+  has "current.diff is stale: run" "$OUT" "stale current.diff message"
+  rm -f "$D/.claude/review/current.diff"
+  run record-review.sh "$T/x.txt"
+  check 1 "$EC" "record without current.diff is refused"
+  has "run 'bash scripts/record-review.sh --prepare'" "$OUT" "missing current.diff message"
 
   fixture stdin
-  reply "$T/pass.txt" "VERDICT: pass"
+  prep
+  reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"
   IN="$T/pass.txt" run record-review.sh
   check 0 "$EC" "record reads the reply from stdin ($OUT)"
   IN=""
 
   fixture noignore noignore
-  reply "$T/pass.txt" "VERDICT: pass"
+  reply "$T/pass.txt" "FINDINGS: none" "VERDICT: pass"
   run record-review.sh "$T/pass.txt"
   check 1 "$EC" "record refuses when .claude/review/ is not gitignored"
   has ".claude/review/" "$OUT" "gitignore message names the line"
@@ -158,11 +336,12 @@ suite() {
 
 for MODE in local ci; do
   if [ "$MODE" = local ]; then
-    ENVARGS=(-u CI -u GITHUB_ACTIONS -u TF_BUILD)
+    ENVARGS=(-u CI -u GITHUB_ACTIONS -u TF_BUILD -u TC_REVIEW_BASE)
   else
-    ENVARGS=(CI=true GITHUB_ACTIONS=true)
+    ENVARGS=(-u TC_REVIEW_BASE CI=true GITHUB_ACTIONS=true)
   fi
   IN=""
+  EXTRA=(TC_NOOP=1)
   suite
 done
 

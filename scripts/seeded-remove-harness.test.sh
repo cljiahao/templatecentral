@@ -87,7 +87,7 @@ suite() {
   check "$before" "$after" "dry run changes nothing"
   has "would remove .claude/hooks/block.sh" "$OUT" "dry run lists a hook"
   has "dry run, nothing changed" "$OUT" "dry run says so"
-  has "KEEP .env: project file" "$OUT" "dry run names .env as kept"
+  has "KEEP .env: not a seeded harness location" "$OUT" "dry run names .env as kept"
   has "KEEP pnpm-lock.yaml" "$OUT" "dry run names the lockfile as kept"
   has "KEEP src/main.ts" "$OUT" "dry run names source as kept"
   has "already absent 1" "$OUT" "dry run counts the absent file"
@@ -108,7 +108,7 @@ suite() {
   survivors apply
   absent .claude/harness.json "manifest removed once no seeded file is left"
   run --apply
-  check 2 "$EC" "a second run after removal reports the missing manifest ($OUT)"
+  check 0 "$EC" "a second run after removal exits 0 ($OUT)"
   has "already removed" "$OUT" "second run says already removed"
   survivors apply-twice
 
@@ -139,8 +139,9 @@ suite() {
   fixture nomanifest
   rm "$D/.claude/harness.json"
   run --apply
-  check 2 "$EC" "missing manifest exits 2"
-  has "harness.json is missing" "$OUT" "missing-manifest message"
+  check 0 "$EC" "missing manifest exits 0 ($OUT)"
+  has "already removed" "$OUT" "missing-manifest message"
+  exists .claude/hooks/block.sh "missing manifest removes nothing"
 
   fixture badjson
   echo 'not json' > "$D/.claude/harness.json"
@@ -153,7 +154,72 @@ suite() {
   printf '{"seeded_files":{"x":{"path":"../outside.txt","origin_hash":"%s"}}}\n' "$(sha "$T/outside.txt")" > "$D/.claude/harness.json"
   run --apply
   check 1 "$([ -e "$T/outside.txt" ] && echo 1 || echo 0)" "path outside the project is never removed"
-  has "path leaves the project" "$OUT" "escape path message"
+  has "KEEP ../outside.txt: not a seeded harness location" "$OUT" "escape path message"
+
+  fixture symlink-parent
+  mkdir -p "$T/elsewhere/hooks"
+  echo precious > "$T/elsewhere/hooks/block.sh"
+  rm -rf "$D/.claude/hooks"
+  ln -s "$T/elsewhere/hooks" "$D/.claude/hooks"
+  run --apply
+  check "precious" "$(cat "$T/elsewhere/hooks/block.sh")" "file behind a symlinked parent folder is not deleted"
+  has "KEEP .claude/hooks/block.sh: the file or a parent folder is a symbolic link" "$OUT" "symlink-parent message"
+  exists .claude/harness.json "manifest stays while a symlink keep remains"
+
+  fixture symlink-scripts
+  mkdir -p "$T/realscripts"
+  echo precious > "$T/realscripts/check-docs.sh"
+  cp "$SC/remove-harness.sh" "$T/realscripts/"
+  rm -rf "$D/scripts"
+  ln -s "$T/realscripts" "$D/scripts"
+  run --apply
+  check "precious" "$(cat "$T/realscripts/check-docs.sh")" "file behind a symlinked scripts folder is not deleted"
+  has "KEEP scripts/check-docs.sh: the file or a parent folder is a symbolic link" "$OUT" "symlinked scripts message"
+
+  fixture symlink-leaf
+  echo victim > "$T/leaf.txt"
+  rm -f "$D/lefthook.yml"
+  ln -s "$T/leaf.txt" "$D/lefthook.yml"
+  run --apply
+  check "victim" "$(cat "$T/leaf.txt")" "symlink leaf target is not touched"
+  exists lefthook.yml "symlink leaf itself is kept"
+
+  fixture userfile
+  echo mine > "$D/notes.md"
+  echo mine > "$D/src/app.ts"
+  printf '{"seeded_files":{"x":{"path":"notes.md","origin_hash":"%s"},"y":{"path":"src/app.ts","origin_hash":"%s"}}}\n' "$(sha "$D/notes.md")" "$(sha "$D/src/app.ts")" > "$D/.claude/harness.json"
+  run --apply
+  exists notes.md "manifest line pointing at a user file does not delete it"
+  exists src/app.ts "manifest line pointing at a source file does not delete it"
+  has "KEEP notes.md: not a seeded harness location" "$OUT" "user-file message"
+  run --apply --force notes.md
+  exists notes.md "--force does not delete a non-harness file"
+
+  fixture refused
+  mkdir -p "$D/.git"
+  echo cfg > "$D/.git/config"
+  printf '{"seeded_files":{"a":{"path":".git/config","origin_hash":"x"},"b":{"path":"/etc/hosts","origin_hash":"x"},"c":{"path":"scripts/../src/main.ts","origin_hash":"x"},"d":{"path":".claude/hooks/a b.sh","origin_hash":"x"}}}\n' > "$D/.claude/harness.json"
+  run --apply
+  exists .git/config ".git entry is never removed"
+  exists src/main.ts "dot-dot entry is never removed"
+  has "KEEP .git/config" "$OUT" ".git entry is named as kept"
+  has "KEEP /etc/hosts" "$OUT" "absolute entry is named as kept"
+  has "KEEP scripts/../src/main.ts" "$OUT" "dot-dot entry is named as kept"
+
+  fixture tabfield
+  printf '{"seeded_files":{"a":{"path":".claude/hooks/block.sh","origin_hash":"x\\ty"}}}\n' > "$D/.claude/harness.json"
+  run --apply
+  exists .claude/hooks/block.sh "entry with a tab in a field is not removed"
+
+  fixture alldiffer
+  for f in .claude/hooks/block.sh .claude/agents/code-reviewer.md scripts/check-docs.sh lefthook.yml; do echo more >> "$D/$f"; done
+  run --apply
+  has "every seeded file reads as modified" "$OUT" "all-differ summary line"
+  has ".claude/.harness-base/" "$OUT" "all-differ line says where to look"
+  fixture somediffer
+  echo more >> "$D/lefthook.yml"
+  run --apply
+  lacks "every seeded file reads as modified" "$OUT" "no all-differ line when only one differs"
 
   fixture usage
   run --bogus
@@ -165,7 +231,7 @@ for MODE in local ci; do
   if [ "$MODE" = local ]; then
     ENVARGS=(-u CI -u GITHUB_ACTIONS -u TF_BUILD)
   else
-    ENVARGS=(CI=true GITHUB_ACTIONS=true)
+    ENVARGS=(-u TF_BUILD CI=true GITHUB_ACTIONS=true)
   fi
   suite
 done
