@@ -1,0 +1,4 @@
+# TypeScript additions: id|check.
+ts-any|any, non-null assertions or as-casts used to silence the compiler.
+ts-await|A promise is not awaited, or errors in it are lost.
+ts-input|External input is used before it is parsed into a typed shape.
