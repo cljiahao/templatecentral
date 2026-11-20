@@ -99,9 +99,15 @@ def wanted(path):
                 refuse(number, raw, "a # is only allowed at the start of a line, because pip joins a continuation first and then drops everything after #, which can drop a hash")
             if "$" in raw:
                 refuse(number, raw, "a $ is only allowed in a full-line comment, because pip expands ${VAR} before it reads the line")
+            if "\t" in raw:
+                refuse(number, raw, "a tab is only allowed in a full-line comment, because pip splits a joined line on a space only")
+            if ends and not raw[:-1].endswith(" "):
+                refuse(number, raw, "a line that continues must end with a space and then the backslash, because pip joins the lines without adding a space")
         if continued:
             if not HASH.match(body.lstrip()):
                 refuse(number, raw, "a continuation line must be --hash=<alg>:<hex> only" if body.strip() else "a continuation line is empty")
+            if not raw.startswith(" "):
+                refuse(number, raw, "a hash continuation line must start with a space, because pip joins the lines without adding one")
             continued = ends
             continue
         stripped = body

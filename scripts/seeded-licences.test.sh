@@ -524,6 +524,24 @@ hashrule 'a trailing comment on a hash line' $'ok==1.0 \\\n    --hash=sha256:aa 
 hashrule 'a trailing comment on an option line' $'--require-hashes # c\nok==1.0 \\\n'"$H" 1 'a # is only allowed at the start of a line'
 hashrule 'an environment variable in an option line' $'--find-links ${X}\nok==1.0 \\\n'"$H" 1 'a $ is only allowed in a full-line comment'
 hashrule 'a dollar sign in a requirement line' $'ok==1.0$ \\\n'"$H" 1 'a $ is only allowed in a full-line comment'
+# pip joins a continuation by removing the backslash and newline and then splits on a space only, so each shape below reads as unhashed to pip.
+hashrule 'a tab before the backslash' $'foo==1.0\t\\\n--hash=sha256:aa\n' 1 'a tab is only allowed in a full-line comment'
+hashrule 'no space before the backslash' $'foo==1.0\\\n--hash=sha256:aa\n' 1 'must end with a space and then the backslash'
+hashrule 'a tab before the hash' $'foo==1.0 \\\n\t--hash=sha256:aa\n' 2 'a tab is only allowed in a full-line comment'
+hashrule 'a tab after a marker' $'foo==1.0 ; python_version<\'3\'\t\\\n--hash=sha256:aa\n' 1 'a tab is only allowed in a full-line comment'
+hashrule 'an unindented hash line' $'foo==1.0 \\\n--hash=sha256:aa\n' 2 'a hash continuation line must start with a space'
+hashrule 'no space before the backslash between hash lines' $'ok==1.0 \\\n    --hash=sha256:aa\\\n    --hash=sha256:bb\n' 2 'must end with a space and then the backslash'
+hashrule 'an unindented second hash line' $'ok==1.0 \\\n    --hash=sha256:aa \\\n--hash=sha256:bb\n' 3 'a hash continuation line must start with a space'
+hashrule 'a comment line ending in a backslash' $'# via x \\\nok==1.0 \\\n'"$H" 1 'a comment line must not end with a backslash'
+hashrule 'a continuation that is not a hash' $'ok==1.0 \\\n    other\n' 2 'a continuation line must be --hash=<alg>:<hex> only'
+raw_env_fixture py-spaces $'ok==1.0   \\\n '"--hash=sha256:aa"$' \\\n   --hash=sha256:bb\n'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: several spaces before a backslash and a one-space hash indent pass ($OUT)"
+raw_env_fixture py-tab-comment $'# a\ttab in a note\nok==1.0 \\\n'"$H"
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: a tab inside a full-line comment passes ($OUT)"
 raw_env_fixture py-dollar-comment $'# cost $5 and ${X} in a note\n  # indented $ note\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
