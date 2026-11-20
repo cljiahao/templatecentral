@@ -231,24 +231,36 @@ check 0 "$EC" "a line in the exclude file at the merge base is honoured ($OUT)"
 printf '# only comments\n' > "$D/other-exclude.txt"
 run "$D" BASE_REF=main CHANGE_SIZE_EXCLUDE_FILE=other-exclude.txt
 check 1 "$EC" "CHANGE_SIZE_EXCLUDE_FILE points the gate at another list"
+# With no list at the merge base nothing is excluded, and the working-tree list is never read.
 repo noexclude
 rm "$D/.claude/change-size-exclude.txt"
 base_commit
 lines 10 "$D/a.txt"
+lines 5000 "$D/pnpm-lock.yaml"
 commit_all
 run "$D" BASE_REF=main
-check 2 "$EC" "a missing exclude file cannot be measured"
-has "change-size-exclude.txt is missing" "$OUT" "message names the exclude file"
-repo fallback
+check 1 "$EC" "with no list at the merge base a lockfile counts"
+has "Exclusions apply once the file is on the base branch" "$OUT" "message says exclusions apply once the file is on the base branch"
+repo noexclude-self
 rm "$D/.claude/change-size-exclude.txt"
 base_commit
 mkdir -p "$D/.claude"
-cp "$EXCLUDE" "$D/.claude/change-size-exclude.txt"
+echo '*' > "$D/.claude/change-size-exclude.txt"
+seq 50000 > "$D/big.txt"
+run "$D" BASE_REF=main
+check 1 "$EC" "a catch-all list added by the change is not read when the base has none"
+has "changed lines (budget 800)" "$OUT" "message gives the budget"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "the same catch-all list, committed, is not read either"
+repo withexclude
 lines 5000 "$D/pnpm-lock.yaml"
 lines 10 "$D/a.txt"
 commit_all
 run "$D" BASE_REF=main
-check 0 "$EC" "with no list at the merge base the working-tree list is used ($OUT)"
+check 0 "$EC" "control: the same lockfile with the list at the merge base passes ($OUT)"
+hasnt_msg() { if [[ "$2" == *"$1"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] in [$2]"; else PASS=$((PASS + 1)); fi; }
+hasnt_msg "Exclusions apply once" "$OUT" "control prints no missing-list line"
 
 # Overrides that can widen the gate are refused in CI.
 repo ci

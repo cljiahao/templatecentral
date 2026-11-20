@@ -158,7 +158,7 @@ awk '
 ' "$exc" > "$tmp/badpat.txt"
 case $? in
   0) ;;
-  3) die "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt} has the package pattern '$(cat "$tmp/badpat.txt")', which covers too many packages. A pattern needs a literal prefix of at least 3 characters before the first '*', for example '@img/sharp-*'. Name the package, for example 'certifi MPL-2.0'." ;;
+  3) die "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt} has the package pattern '$(cat "$tmp/badpat.txt")', which covers too many packages. A pattern needs a literal prefix of at least 3 characters before the first '*' (a 2-character prefix such as 'pg*' is refused by design), for example '@img/sharp-*'. Name the package, for example 'certifi MPL-2.0'." ;;
   *) die "the licence check failed to run: cannot read the exceptions file" ;;
 esac
 

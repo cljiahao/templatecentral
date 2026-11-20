@@ -393,6 +393,58 @@ dist tabpkg 1.0 "License: MIT$(printf '\t')BSD License"
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "a tab-joined unknown pair still fails (control for the allowed list)"
 
+# A lock line behind an environment marker is still checked when it is installed, and may be absent when it is not.
+env_fixture py-marker-bad 'ok==1.0
+uvloop==1.0 ; sys_platform != '"'win32'"' \
+    --hash=sha256:aa
+'
+dist ok 1.0 'License-Expression: MIT'
+dist uvloop 1.0 'License-Expression: GPL-3.0-only'
+run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
+check 1 "$EC" "a marker line that is installed with a bad licence fails"
+has "uvloop@1.0 has licence GPL-3.0-only" "$OUT" "the marker-line finding is named"
+env_fixture py-marker-good 'ok==1.0
+uvloop==1.0 ; sys_platform != '"'win32'"' \
+    --hash=sha256:aa
+'
+dist ok 1.0 'License-Expression: MIT'
+dist uvloop 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: a marker line installed with an allowed licence passes ($OUT)"
+has "ok (2 packages, python)" "$OUT" "the marker package is counted"
+env_fixture py-marker-absent 'ok==1.0
+uvloop==1.0 ; sys_platform == '"'win32'"'
+'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "a marker line that is not installed passes ($OUT)"
+env_fixture py-plain-absent 'ok==1.0
+uvloop==1.0
+'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 2 "$EC" "a line without a marker that is not installed fails closed"
+has "requirements.txt lists uvloop, which is not installed" "$OUT" "message names the missing package"
+
+# An included file would escape the prod closure, so the lock must be self-contained.
+for inc in '-r other.txt' '--requirement=other.txt' '-c cons.txt' '--constraint cons.txt'; do
+  env_fixture py-include "ok==1.0
+$inc
+"
+  dist ok 1.0 'License-Expression: MIT'
+  dist bad 1.0 'License-Expression: GPL-3.0-only'
+  run "$D" PYTHONPATH="$SITE"
+  check 2 "$EC" "'$inc' in the lock is refused in prod scope"
+  has "must be self-contained" "$OUT" "message says the lock must be self-contained for '$inc'"
+  has "$inc" "$OUT" "message names the offending line '$inc'"
+done
+env_fixture py-include-all 'ok==1.0
+-r other.txt
+'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE" LICENCES_SCOPE=all
+check 0 "$EC" "scope all does not read the lock, so an include line is not refused ($OUT)"
+
 # Python prod scope checks the locked names only; all checks the whole environment.
 env_fixture py-scope 'okpkg==1.0
 '

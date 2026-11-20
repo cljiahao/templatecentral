@@ -5,7 +5,7 @@
 # Budgets (env overrides): CHANGE_SIZE_MAX_LINES lines added plus deleted, CHANGE_SIZE_MAX_FILES files changed.
 # Not counted: paths matching .claude/change-size-exclude.txt (lockfiles), and files marked linguist-generated in .gitattributes. Both are read at the merge base, so a change cannot exclude itself; this needs git 2.40 or newer. A rename counts as a delete plus an add.
 # A binary file weighs one line per 4 KB, rounded up, so a large binary is not free.
-# Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget, no exclude file).
+# Exit: 0 within budget, 1 over budget, 2 it could not measure (no git, no base ref, bad budget).
 # In GitHub Actions and Azure Pipelines the budget and exclude-file overrides are refused.
 # Usage: bash scripts/check-change-size.sh [base-ref]        Env: CHANGE_SIZE_EXCLUDE_FILE overrides the exclude file path.
 set -uo pipefail
@@ -50,17 +50,16 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-change-size.XXXXXX") || die "cannot creat
 trap 'rm -rf "$tmp"' EXIT
 
 # The exclude list and the linguist-generated attributes are read as they were at the merge base, so a change cannot switch off its own gate.
-# The working-tree list is used only when the merge base has none yet, or when CHANGE_SIZE_EXCLUDE_FILE names one (refused in CI).
+# The working-tree list is never read: with no list at the merge base nothing is excluded, so every changed line counts. CHANGE_SIZE_EXCLUDE_FILE names another list (refused in CI).
 exclude_path=.claude/change-size-exclude.txt
 if [ -n "${CHANGE_SIZE_EXCLUDE_FILE:-}" ]; then
   if [ ! -f "$CHANGE_SIZE_EXCLUDE_FILE" ]; then die "$CHANGE_SIZE_EXCLUDE_FILE is missing."; fi
   cp "$CHANGE_SIZE_EXCLUDE_FILE" "$tmp/exclude.txt" || die "cannot read $CHANGE_SIZE_EXCLUDE_FILE"
 elif git cat-file -e "$mb:./$exclude_path" 2> /dev/null; then
   git show "$mb:./$exclude_path" > "$tmp/exclude.txt" 2> "$tmp/err.txt" || die "cannot read $exclude_path at the merge base: $(head -n 1 "$tmp/err.txt")"
-elif [ -f "$exclude_path" ]; then
-  cp "$exclude_path" "$tmp/exclude.txt" || die "cannot read $exclude_path"
 else
-  die "$exclude_path is missing. Restore it from the scaffold: it lists the lockfiles that do not count."
+  : > "$tmp/exclude.txt"
+  printf 'check-change-size: %s is not on %s yet, so nothing is excluded and every changed line counts. Exclusions apply once the file is on the base branch.\n' "$exclude_path" "$base" >&2
 fi
 git check-attr --source="$mb" linguist-generated -- "$exclude_path" > /dev/null 2> "$tmp/err.txt" || die "git check-attr --source needs git 2.40 or newer to read the attributes at the merge base ($(git --version)): $(head -n 1 "$tmp/err.txt")"
 

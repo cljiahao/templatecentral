@@ -43,48 +43,42 @@ def installed():
     return named, sorted(set(nameless))
 
 
-def wanted(path):
-    """Returns the normalised names in requirements.txt and the count of marker lines that could not be evaluated."""
-    try:
-        from packaging.markers import Marker
-    except ImportError:
-        Marker = None
-    names, unchecked = [], 0
-    for raw in open(path, encoding="utf-8"):
-        if not raw.strip() or raw[0] in " \t#-":
+def wanted(path, strict):
+    """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
+    required, optional = [], []
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    for raw in lines:
+        if not raw.strip() or raw[0] in " \t#":
+            continue
+        if raw.startswith("-"):
+            if strict and re.match(r"(-r|-c|--requirement|--constraint)\b", raw):
+                stop("%s has the line '%s', which includes another file. The hashed lock must be self-contained, so compile it into one requirements.txt." % (path, raw.strip()))
             continue
         m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", raw)
         if not m:
             continue
-        marker = raw.split(";", 1)[1].strip().rstrip("\\").strip() if ";" in raw else ""
-        if marker:
-            if Marker is None:
-                unchecked += 1
-                continue
-            if not Marker(marker).evaluate():
-                continue
-        names.append(norm(m.group(0)))
-    return names, unchecked
+        marked = ";" in raw and raw.split(";", 1)[1].strip().rstrip("\\").strip() != ""
+        (optional if marked else required).append(norm(m.group(0)))
+    return required, optional
 
 
-def require_installed(req, named):
-    """Stops when a package named in requirements.txt is not installed; returns the unchecked-marker count."""
+def require_installed(req, named, strict):
+    """Stops when a package named in requirements.txt without a marker is not installed; returns every locked name."""
     if not req:
-        return 0
-    names, unchecked = wanted(req)
+        return set()
+    required, optional = wanted(req, strict)
     have = {k for (k, _v) in named}
-    missing = sorted({n for n in names if n not in have})
+    missing = sorted({n for n in required if n not in have})
     if missing:
         stop("%s lists %s, which %s not installed. Install first: uv pip install --require-hashes -r requirements.txt" % (req, ", ".join(missing[:5]), "is" if len(missing) == 1 else "are"))
-    return unchecked
+    return set(required) | set(optional)
 
 
 def cmd_licences(req, scope):
     named, nameless = installed()
-    require_installed(req, named)
-    locked = None
-    if req and scope != "all":
-        locked = set(wanted(req)[0])
+    names = require_installed(req, named, scope != "all")
+    locked = names if req and scope != "all" else None
     for key, version in sorted(named):
         if locked is not None and key not in locked:
             continue
@@ -98,7 +92,7 @@ def cmd_sbom(req, out):
     named, nameless = installed()
     if nameless:
         stop("the environment has a package with no Name in its metadata (%s), so it cannot be listed." % ", ".join(nameless[:3]))
-    require_installed(req, named)
+    require_installed(req, named, True)
     latest = {}
     for (key, _version), (_name, d) in sorted(named.items()):
         latest.setdefault(key, d)
