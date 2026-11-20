@@ -11,3 +11,4 @@ reuse|New code repeats a helper or behaviour the project already has in another 
 naming|A name says something the code does not do, such as a getter that writes or a predicate that returns a string.
 comment-wrong|A comment or doc says something the code no longer does.
 scope|The diff changes behaviour, config or files the request did not ask for.
+cached-failure|A cached promise, singleton client or memoised connection is not cleared when it rejects, so a failed first attempt is served forever instead of retried.
