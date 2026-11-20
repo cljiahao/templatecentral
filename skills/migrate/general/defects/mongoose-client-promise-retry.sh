@@ -3,11 +3,12 @@
 # The older client awaits the cached promise with no reset, so one failed connect fails every later request.
 # Matches when an awaited X.promise has no reset of X.promise (to null or undefined, delete X.promise, or X = { promise: null }) in the catch
 # block of a try that contains the await, or inside a .catch(...) call. A reset in finally, or in a catch of an unrelated try, does not count.
-# Known limits: only the shape "await X.promise" is read, not "const p = X.promise; await p", Promise.all([...]) or a dotted receiver;
+# Files are found by content (a mongoose.connect( call), not by file name. Known limits: only the shape "await X.promise" is read, not "const p = X.promise; await p", Promise.all([...]) or a dotted receiver;
 # regex literals and braces inside template literals are not parsed. A false match is possible when the reset is made by a helper.
 export id=mongoose-client-promise-retry
 export level=high
-export names="mongoose-client.ts"
+export names="*.ts *.js *.mjs *.cjs"
+export content="mongoose.connect("
 export template=skills/add/database/typescript/nextjs-mongoose/template/src/integrations/database/mongoose-client.ts
 export desc="the Mongoose client awaits a cached connect promise and never resets it in a catch after a failure, so one failed connect fails every later request; a reset only in finally is a different pattern and still matches"
 export fix="wrap the await in try/catch, set cached.promise = null in the catch, and rethrow"

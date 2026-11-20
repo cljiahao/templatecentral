@@ -2,8 +2,12 @@
 # Known-defect report: list the older templateCentral template patterns a project still carries. Read-only.
 # Usage: defect-report.sh [project-dir]   (default: the current directory)
 # Runs every check in defects/*.sh next to this script. There is no version filter: a harness refresh rewrites the recorded
-# version, so a filter by version would report clean for source that was never touched. A check whose target file is absent
-# counts as "not installed", never as clean.
+# version, so a filter by version would report clean for source that was never touched. A check finds its files by content:
+# names are file-name globs (for example *.ts) and content is the literal text a candidate must contain, so a renamed file or
+# function is still found. Test files, *.d.ts and files in test, tests, __tests__ or __mocks__ folders are not candidates.
+# A check with no matching file counts as "no matching file found", never as clean.
+# A candidate that is skipped (symlink, over 1 MB, newline in the path) is counted on stderr. When a skipped file over 1 MB holds the
+# check's content text and nothing else was scanned, the run exits 2, because that file may be the match.
 # Output per match: file:line  <id>  <level>  matches an older template pattern: <description>. Fix: <fix>. Current template: <path>
 # A check function prints one file:line per match and exits 0; any other exit status from it is an error and ends the run with exit 2.
 # Exit 0 when nothing matched or only "check" level matched, 1 when a "high" level check matched, 2 when it cannot run.
@@ -79,6 +83,33 @@ line_of() {
   echo "${n:-1}"
 }
 
+# True when the path (relative to the project root) is a test, mock or type-declaration file, which no check scans.
+is_test_file() {
+  case "${1#"$P"/}" in
+    *.test.*|*.spec.*|*.d.ts|test_*.py|*_test.py|*/test_*.py|conftest.py|*/conftest.py) return 0 ;;
+    test/*|tests/*|__tests__/*|__mocks__/*|*/test/*|*/tests/*|*/__tests__/*|*/__mocks__/*) return 0 ;;
+  esac
+  return 1
+}
+
+# True when the project source declares a unique index ("unique: true", also quoted); used by the checks that matter only then.
+UNIQ_RE='(^|[^A-Za-z0-9_])["'"'"']?unique["'"'"']?[[:space:]]*:[[:space:]]*true'
+has_unique_index() {
+  local f rc
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    is_test_file "$f" && continue
+    grep -qE -- "$UNIQ_RE" "$f"
+    rc=$?
+    [ "$rc" -ne 2 ] || die "cannot read $f"
+    [ "$rc" -eq 0 ] || continue
+    if strip_comments "$f" | grep -qE -- "$UNIQ_RE"; then return 0; fi
+  done <<EOF
+$(find_files "$P" '*.ts' '*.js' '*.mjs' '*.cjs')
+EOF
+  return 1
+}
+
 # Print every regular file under the project with one of the given base names, pruning dependency and build folders below the root only.
 # Files over 1 MB and symlinks are skipped, so nothing outside the project is read.
 find_files() {
@@ -145,7 +176,7 @@ for def in "$DEFECTS"/*.sh; do
   # shellcheck source=/dev/null
   loaded=$( . "$def" >/dev/null 2>&1 </dev/null; echo loaded )
   [ "$loaded" = loaded ] || die "check file $def exits or fails while loading"
-  id='' level='' names='' template='' desc='' fix=''
+  id='' level='' names='' content='' template='' desc='' fix=''
   unset -f check
   # shellcheck source=/dev/null
   . "$def" || die "cannot read $def"
@@ -154,6 +185,8 @@ for def in "$DEFECTS"/*.sh; do
   command -v check >/dev/null 2>&1 || die "no check function in $def"
   RUN=$((RUN + 1))
   read -r -a namearr <<< "$names"
+  contentargs=()
+  for w in $content; do contentargs=("${contentargs[@]+"${contentargs[@]}"}" -e "$w"); done
   if ! found=$(find_files "$P" "${namearr[@]}"); then die "find failed in $P"; fi
   if ! skipped=$(find_skipped "$P" "${namearr[@]}"); then die "find failed in $P"; fi
   list=
@@ -161,6 +194,13 @@ for def in "$DEFECTS"/*.sh; do
     [ -n "$f" ] || continue
     if [ -f "$f" ] && [ ! -L "$f" ]; then
       [ -r "$f" ] || die "cannot read $f (check $id)"
+      if is_test_file "$f"; then continue; fi
+      if [ -n "$content" ]; then
+        grep -qF "${contentargs[@]}" -- "$f"
+        rc=$?
+        [ "$rc" -ne 2 ] || die "cannot read $f (check $id)"
+        [ "$rc" -eq 0 ] || continue
+      fi
       list="$list$f$NL"
     else
       skipped="$skipped$NL$f"
@@ -170,8 +210,16 @@ $found
 EOF
   nskip=$(printf '%s\n' "$skipped" | grep -c . || true)
   if [ "$nskip" -gt 0 ]; then SKIPPED="$SKIPPED$skipped$NL"; fi
+  bigmatch=0
+  if [ "$nskip" -gt 0 ] && [ -n "$content" ]; then
+    while IFS= read -r s; do
+      if [ -f "$s" ] && [ ! -L "$s" ] && grep -qF "${contentargs[@]}" -- "$s"; then bigmatch=1; fi
+    done <<EOF
+$skipped
+EOF
+  fi
   if [ -z "$list" ]; then
-    [ "$nskip" -eq 0 ] || die "check $id: every candidate file was skipped (symlink, over 1 MB, or a newline in the path), so nothing was scanned"
+    [ "$nskip" -eq 0 ] || { [ -n "$content" ] && [ "$bigmatch" -eq 0 ]; } || die "check $id: every candidate file was skipped (symlink, over 1 MB, or a newline in the path), so nothing was scanned"
     [ -z "$DIRLINKS" ] || die "check $id: a symlinked directory below the project is not followed, so its file may be behind it ($(printf '%s' "$DIRLINKS" | head -n 1))"
     ABSENT=$((ABSENT + 1))
     continue
@@ -204,5 +252,5 @@ NSKIP=$(printf '%s' "$SKIPPED" | grep . | LC_ALL=C sort -u | grep -c . || true)
 if [ "$NSKIP" -gt 0 ]; then
   echo "defect-report: $NSKIP candidate file(s) were not scanned (symlink, over 1 MB, or a newline in the path)" >&2
 fi
-echo "$RUN checks run, $MATCHED matched, $ABSENT not installed. This is a list of known older template patterns, not an audit."
+echo "$RUN checks run, $MATCHED matched, $ABSENT with no matching file found. This is a list of known older template patterns, not an audit."
 [ "$HIGH" -eq 0 ]

@@ -63,5 +63,5 @@ Each entry: what the older template did, how to recognise it, the fix, the id. C
 ## Review by hand: malformed JSON handling
 
 - Older: a malformed JSON body or a validation error could return a 500.
-- Recognise: send a request with an invalid JSON body to any endpoint and read the status code.
-- Fix: map both cases to a 400 in the framework's exception filter or handler. See the endpoint leaves under `skills/add/` for the current mapping.
+- Recognise: send a request with an invalid JSON body to any endpoint and read the status code. Anything in the 500 range is the defect.
+- Fix: return a client error, and use the code the stack's current template uses. NestJS and Next.js: 400 for both a malformed body and a validation failure (Next.js: `request.json().catch(() => null)`, then a Zod check). FastAPI: 422 for both, because the template's `RequestValidationError` handler returns 422 by default; domain validation failures raised by a service are 400. Do not change FastAPI to 400 unless the project's clients already expect it. See the endpoint and error-handling leaves under `skills/add/` for the current mapping.

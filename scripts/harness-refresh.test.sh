@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # Behavioural test for skills/migrate/general/harness-refresh.sh.
 # Seeds a fixture project with tc-copy.sh, ages or edits files, and checks each class, the dry run, --apply and the refusals.
+# The script runs from a copy of the plugin in a temp dir, so its pristine-hashes.txt can list the "older released" files the cases make.
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SCRIPT="$ROOT/skills/migrate/general/harness-refresh.sh"
 COPY="$ROOT/skills/scaffold/shared/tc-copy.sh"
 T=$(mktemp -d "${TMPDIR:-/tmp}/refreshtest.XXXXXX") || exit 1
 trap '[ -d "$T" ] && rm -rf "$T"' EXIT
+PLUG="$T/plugin"
+mkdir -p "$PLUG/skills/migrate" "$PLUG/skills/scaffold"
+cp -R "$ROOT/skills/migrate/general" "$PLUG/skills/migrate/general"
+cp -R "$ROOT/skills/scaffold/shared" "$PLUG/skills/scaffold/shared"
+cp -R "$ROOT/.claude-plugin" "$PLUG/.claude-plugin"
+SCRIPT="$PLUG/skills/migrate/general/harness-refresh.sh"
+PRIST="$PLUG/skills/migrate/general/pristine-hashes.txt"
+printf '%s\t7.0.0\tdocs/never-used.md\n' "$(printf 'x' | { shasum -a 256 2>/dev/null || sha256sum; } | cut -d' ' -f1)" >"$PRIST"
 fail=0
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: expected [$2] got [$3]"; fail=1; fi; }
 contains() { case "$3" in *"$2"*) echo "ok   $1" ;; *) echo "FAIL $1: [$2] not in output"; fail=1 ;; esac; }
@@ -54,6 +62,7 @@ seed() {
 age() {
   local d=$1 p=$2
   printf '# older template line\n' >>"$d/$p"
+  printf '%s\t7.0.0\t%s\n' "$(sha "$d/$p")" "$p" >>"$PRIST"
   cp "$d/$p" "$d/.claude/.harness-base/$p"
   (cd "$d" && python3 - "$p" <<'PY'
 import hashlib, json, sys
@@ -91,11 +100,11 @@ printf '# local note\n' >>"$T/rec/docs/adr/0001-test-each-behaviour-once.md"
 commit "$T/rec" aged
 out=$(run "$T/rec"); rc=$?
 check "recorded files: a local edit exits 1" 1 $rc
-contains "test-budget.sh aged is REPLACE" "REPLACE   scripts/test-budget.sh  (unmodified since seeded)" "$out"
-contains "harness.md aged is REPLACE" "REPLACE   docs/harness.md  (unmodified since seeded)" "$out"
-contains "dependabot.yml aged is REPLACE" "REPLACE   .github/dependabot.yml  (unmodified since seeded)" "$out"
-contains "test-consolidate skill aged is REPLACE" "REPLACE   .claude/skills/test-consolidate/SKILL.md  (unmodified since seeded)" "$out"
-contains "edited ADR is MODIFIED" "MODIFIED  docs/adr/0001-test-each-behaviour-once.md  (differs from its recorded origin hash)" "$out"
+contains "test-budget.sh aged is REPLACE" "REPLACE   scripts/test-budget.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "harness.md aged is REPLACE" "REPLACE   docs/harness.md  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "dependabot.yml aged is REPLACE" "REPLACE   .github/dependabot.yml  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "test-consolidate skill aged is REPLACE" "REPLACE   .claude/skills/test-consolidate/SKILL.md  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "edited ADR is MODIFIED" "MODIFIED  docs/adr/0001-test-each-behaviour-once.md  (not identical to any released template; treated as edited)" "$out"
 
 # every class at once, on one project
 seed "$T/p" nestjs
@@ -122,10 +131,10 @@ check "dry run with a modified file exits 1" 1 $rc
 check "dry run changes nothing (tree hash)" "$before" "$(treehash "$T/p")"
 check "dry run adds no file" 0 "$(find "$T/p" -name '*.templatecentral-new' | wc -l | tr -d ' ')"
 contains "SAME class" "SAME      .claude/hooks/session-context.sh" "$out"
-contains "REPLACE class (aged, proven)" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded)" "$out"
+contains "REPLACE class (aged, proven)" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
 contains "REPLACE class (aged lefthook)" "REPLACE   lefthook.yml" "$out"
 contains "REPLACE class (mode only)" "REPLACE   .claude/hooks/block-no-verify.sh  (content identical; mode set to 755)" "$out"
-contains "MODIFIED class (edited)" "MODIFIED  .claude/hooks/protect-files.sh  (differs from its recorded origin hash)" "$out"
+contains "MODIFIED class (edited)" "MODIFIED  .claude/hooks/protect-files.sh  (not identical to any released template; treated as edited)" "$out"
 contains "MODIFIED class (no proof: record not updated)" "MODIFIED  .claude/comment-hygiene-patterns.txt" "$out"
 contains "ADD class" "ADD       .claude/hooks/subagent-stop.sh" "$out"
 contains "GONE class" "GONE      .claude/hooks/post-tool-failure.sh  (no longer seeded; still on disk, left alone)" "$out"
@@ -190,19 +199,19 @@ age "$T/ng" .claude/hooks/stop-checks.sh
 rm -rf "$T/ng/.git"
 out=$(run "$T/ng" --apply); check "no git: apply refused with 2" 2 $?
 
-# proof missing: no base snapshot, no record
+# the project records are not the proof: a missing base snapshot or record changes nothing
 seed "$T/nb" nestjs
 age "$T/nb" .claude/hooks/stop-checks.sh
 rm -rf "$T/nb/.claude/.harness-base"
 commit "$T/nb" nobase
 out=$(run "$T/nb")
-contains "no base copy: not replaced" "MODIFIED  .claude/hooks/stop-checks.sh  (no seeded copy under .claude/.harness-base" "$out"
+contains "no base copy: the pristine proof does not need it" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
 seed "$T/nr" nestjs
 printf '# older\n' >>"$T/nr/.claude/hooks/stop-checks.sh"
 rm "$T/nr/.claude/harness.json"
 commit "$T/nr" norecord
 out=$(run "$T/nr")
-contains "no record: not replaced" "MODIFIED  .claude/hooks/stop-checks.sh  (no origin hash recorded" "$out"
+contains "no record, not on the released list: not replaced" "MODIFIED  .claude/hooks/stop-checks.sh  (not identical to any released template; treated as edited)" "$out"
 out=$(run "$T/nr" --apply); check "no records: apply still exits 1" 1 $?
 
 # other stacks detect and plan
@@ -286,14 +295,33 @@ contains "partial summary lists what was not" "not written: .claude/hooks/protec
 absent "partial run: no commit advice" "then commit the refresh" "$out"
 check "partial run: PARTIAL is the last line" "PARTIAL" "$(printf '%s\n' "$out" | tail -n 1 | cut -c1-7)"
 
-# a .templatecentral-new that is a regular file is not overwritten
+# a .templatecentral-new that already exists is never overwritten; an identical one is a merge still pending
 seed "$T/sf" nestjs
 printf 'edit\n' >>"$T/sf/.claude/hooks/protect-files.sh"
 printf 'my merge in progress\n' >"$T/sf/.claude/hooks/protect-files.sh.templatecentral-new"
 commit "$T/sf" sidecarfile
-out=$(run "$T/sf" --apply); check "sidecar is a file: exits 1" 1 $?
-check "sidecar is a file: kept as it was" "my merge in progress" "$(cat "$T/sf/.claude/hooks/protect-files.sh.templatecentral-new")"
-contains "sidecar is a file: told to merge or remove" "it already exists; merge or remove it first" "$out"
+out=$(run "$T/sf" --apply); check "differing sidecar: exits 1" 1 $?
+check "differing sidecar: kept as it was" "my merge in progress" "$(cat "$T/sf/.claude/hooks/protect-files.sh.templatecentral-new")"
+contains "differing sidecar: reported as kept, not overwritten" "kept     .claude/hooks/protect-files.sh.templatecentral-new (an older or edited sidecar differs from the new version and is not overwritten" "$out"
+absent "differing sidecar: not a failure" "FAILED" "$out"
+absent "differing sidecar: no PARTIAL line" "PARTIAL" "$out"
+contains "differing sidecar: exit message says merges are pending" "Exit 1: 1 file(s) wait for a merge; the refresh itself did not fail." "$out"
+seed "$T/sp" nestjs
+printf 'edit\n' >>"$T/sp/.claude/hooks/protect-files.sh"
+commit "$T/sp" edited
+out=$(run "$T/sp" --apply); check "first apply: exits 1" 1 $?
+contains "first apply: sidecar written" "wrote    .claude/hooks/protect-files.sh.templatecentral-new" "$out"
+commit "$T/sp" sidecar
+out=$(run "$T/sp" --apply); check "second apply with the same sidecar: still exits 1" 1 $?
+contains "second apply: pending, not failed" "pending  .claude/hooks/protect-files.sh.templatecentral-new (already written, identical to the new version" "$out"
+absent "second apply: no FAILED" "FAILED" "$out"
+absent "second apply: no PARTIAL" "PARTIAL" "$out"
+contains "second apply: exit message says merges are pending" "Exit 1: 1 file(s) wait for a merge" "$out"
+rm "$T/sp/.claude/hooks/protect-files.sh.templatecentral-new"
+cp "$ROOT/skills/scaffold/shared/template-ts/.claude/hooks/protect-files.sh" "$T/sp/.claude/hooks/protect-files.sh"
+commit "$T/sp" merged
+out=$(run "$T/sp" --apply); check "control, merged and sidecar removed: exits 0" 0 $?
+absent "control: nothing pending" "pending " "$out"
 
 # a REPLACE file that changes between the plan and the write is treated as MODIFIED
 mkdir -p "$T/gitbin"
@@ -331,14 +359,14 @@ printf '# sneaky local edit\n' >>"$T/fr/.claude/hooks/stop-checks.sh"
 rehash "$T/fr" .claude/hooks/stop-checks.sh
 commit "$T/fr" forged
 out=$(run "$T/fr")
-contains "forged record: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its seeded copy" "$out"
-# base copy mismatch alone: file equals its record, base copy differs
+contains "forged record: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (not identical to any released template; treated as edited)" "$out"
+# base copy drift alone: the file is a released one, so the drift does not matter
 seed "$T/bm" nestjs
 age "$T/bm" .claude/hooks/stop-checks.sh
 printf '# base drift\n' >>"$T/bm/.claude/.harness-base/.claude/hooks/stop-checks.sh"
 commit "$T/bm" basedrift
 out=$(run "$T/bm")
-contains "base mismatch alone: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its seeded copy" "$out"
+contains "base drift alone: still REPLACE" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
 # whitespace-only and CRLF edits are edits
 seed "$T/ws" nestjs
 age "$T/ws" .claude/hooks/stop-checks.sh
@@ -347,8 +375,8 @@ sed -i.bak '1s/$/ /' "$T/ws/.claude/hooks/stop-checks.sh"; rm -f "$T/ws/.claude/
 awk '{ printf "%s\r\n", $0 }' "$T/ws/lefthook.yml" >"$T/ws/lefthook.crlf" && mv "$T/ws/lefthook.crlf" "$T/ws/lefthook.yml"
 commit "$T/ws" whitespace
 out=$(run "$T/ws")
-contains "whitespace-only edit: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (differs from its recorded origin hash)" "$out"
-contains "CRLF edit: MODIFIED" "MODIFIED  lefthook.yml  (differs from its recorded origin hash)" "$out"
+contains "whitespace-only edit: MODIFIED" "MODIFIED  .claude/hooks/stop-checks.sh  (not identical to any released template; treated as edited)" "$out"
+contains "CRLF edit: MODIFIED" "MODIFIED  lefthook.yml  (not identical to any released template; treated as edited)" "$out"
 
 # record entries that point outside the project are never written or removed
 seed "$T/ev" nestjs
@@ -368,5 +396,115 @@ contains "outside record path: ignored" "GONE      ../evil  (record path is outs
 contains "absolute record path: ignored" "GONE      $T/abs-file  (record path is outside the project or under a symlink; ignored)" "$out"
 check "outside record path: file kept" "keep" "$(cat "$T/evil")"
 check "absolute record path: file kept" "keep" "$(cat "$T/abs-file")"
+
+# Item 1 (the blocker): a customised file whose record and base copy were rewritten to match it is not proven unmodified.
+# customise <dir> <path>: a local edit, then the record and the base copy rewritten from it (what regen-harness.sh and the re-baseline do).
+customise() {
+  if [ "$2" = .claude/settings.json ]; then
+    python3 - "$1/$2" <<'PY'
+import json, sys
+j = json.load(open(sys.argv[1]))
+j["x-project"] = "kept"
+json.dump(j, open(sys.argv[1], "w"), indent=2)
+PY
+  else
+    printf '# customised by the project\n' >>"$1/$2"
+  fi
+  rehash "$1" "$2"
+  cp "$1/$2" "$1/.claude/.harness-base/$2"
+}
+seed "$T/bk" nestjs
+for f in .claude/settings.json lefthook.yml .claude/ci-gates.sh; do customise "$T/bk" "$f"; done
+commit "$T/bk" customised
+out=$(run "$T/bk")
+for f in .claude/settings.json lefthook.yml .claude/ci-gates.sh; do
+  contains "customised $f with forged record and base: MODIFIED" "MODIFIED  $f  (not identical to any released template; treated as edited)" "$out"
+  mkdir -p "$T/bk-before/$(dirname "$f")"; cp "$T/bk/$f" "$T/bk-before/$f"
+done
+out=$(run "$T/bk" --apply); check "customised files: apply exits 1" 1 $?
+for f in .claude/settings.json lefthook.yml .claude/ci-gates.sh; do
+  check "customised $f is byte-identical after apply" "$(sha "$T/bk-before/$f")" "$(sha "$T/bk/$f")"
+done
+check "customised settings.json: sidecar written" 1 "$(find "$T/bk/.claude" -name 'settings.json.templatecentral-new' | wc -l | tr -d ' ')"
+check "customised lefthook.yml: sidecar equals the template" "$(sha "$ROOT/skills/scaffold/shared/template-ts/lefthook.yml")" "$(sha "$T/bk/lefthook.yml.templatecentral-new")"
+check "customised ci-gates.sh: sidecar equals the template" "$(sha "$ROOT/skills/scaffold/shared/template/.claude/ci-gates.sh")" "$(sha "$T/bk/.claude/ci-gates.sh.templatecentral-new")"
+# control: the same project with the files left as seeded and aged to a released version is replaced
+seed "$T/bkc" nestjs
+age "$T/bkc" lefthook.yml
+age "$T/bkc" .claude/ci-gates.sh
+commit "$T/bkc" aged
+out=$(run "$T/bkc" --apply); check "control, released files: apply exits 0" 0 $?
+check "control: lefthook.yml replaced" "$(sha "$ROOT/skills/scaffold/shared/template-ts/lefthook.yml")" "$(sha "$T/bkc/lefthook.yml")"
+# fail closed: no list, nothing is proven
+mv "$PRIST" "$PRIST.off"
+out=$(run "$T/rec")
+contains "no pristine list: fails closed to MODIFIED" "MODIFIED  scripts/test-budget.sh  (pristine-hashes.txt is missing; cannot prove it unmodified)" "$out"
+absent "no pristine list: nothing is REPLACE" "REPLACE   scripts/test-budget.sh" "$out"
+mv "$PRIST.off" "$PRIST"
+# a project seeded by an older version that is not on the list gets a sidecar, never a replace
+seed "$T/old" nestjs
+printf '# a version before the list\n' >>"$T/old/scripts/test-budget.sh"
+commit "$T/old" oldversion
+out=$(run "$T/old" --apply)
+contains "older seed not on the list: MODIFIED" "MODIFIED  scripts/test-budget.sh  (not identical to any released template; treated as edited)" "$out"
+check "older seed not on the list: file kept" 1 "$(grep -c '^# a version before the list$' "$T/old/scripts/test-budget.sh")"
+
+# Item 3: settings.json waits while new hooks land; the output says so and gives the next step.
+seed "$T/wm" nestjs
+age "$T/wm" .claude/hooks/stop-checks.sh
+customise "$T/wm" .claude/settings.json
+commit "$T/wm" waiting
+out=$(run "$T/wm" --apply); check "waiting settings.json: exits 1" 1 $?
+contains "waiting settings.json: block present" "WAITING FOR MERGE: .claude/settings.json was kept as it is." "$out"
+contains "waiting settings.json: names the written hook" ".claude/hooks/stop-checks.sh" "$(printf '%s\n' "$out" | grep '^WAITING')"
+contains "waiting settings.json: says the checks fail until the merge" "verify-harness.sh and the live check above fail" "$out"
+contains "waiting settings.json: gives the next step" "Next: merge .claude/settings.json.templatecentral-new into .claude/settings.json structurally" "$out"
+contains "waiting settings.json: the live check still ran" "live check:" "$out"
+absent "control, clean apply: no waiting block" "WAITING FOR MERGE" "$(run "$T/c")"
+
+# Item 5: the recorded version is bumped only when nothing waits for a merge.
+PV=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$PLUG/.claude-plugin/plugin.json" | head -n 1)
+setver() { python3 - "$1/.claude/harness.json" <<'PY'
+import json, sys
+j = json.load(open(sys.argv[1]))
+j["templatecentral_version"] = "0.0.1"
+json.dump(j, open(sys.argv[1], "w"), indent=2)
+PY
+}
+recver() { python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['templatecentral_version'])" "$1/.claude/harness.json"; }
+seed "$T/vc" nestjs
+age "$T/vc" .claude/hooks/stop-checks.sh
+setver "$T/vc"
+commit "$T/vc" ver
+run "$T/vc" --apply >/dev/null
+check "control, nothing waits: version bumped to the plugin version" "$PV" "$(recver "$T/vc")"
+seed "$T/vm" nestjs
+age "$T/vm" .claude/hooks/stop-checks.sh
+printf 'edit\n' >>"$T/vm/.claude/hooks/protect-files.sh"
+setver "$T/vm"
+commit "$T/vm" ver
+out=$(run "$T/vm" --apply)
+check "a file waits: version stays as it was" "0.0.1" "$(recver "$T/vm")"
+contains "a file waits: the run says the version is not bumped" "version not bumped: 1 file(s) wait for merge" "$out"
+contains "a file waits: AGENTS.md marker is named as the project's" "The refresh does not edit AGENTS.md: its line-1 marker and the version line are yours" "$out"
+absent "control: no 'not bumped' line when nothing waits" "version not bumped" "$(run "$T/c")"
+
+# Item 8: plan notes where a seeded file lands next to the project's own CI or hook manager.
+seed "$T/n1" nestjs
+rm "$T/n1/.github/dependabot.yml" "$T/n1/lefthook.yml" "$T/n1/sonar-project.properties"
+mkdir -p "$T/n1/.githooks"
+printf 'name: own\n' >"$T/n1/.github/workflows/own.yml"
+commit "$T/n1" own
+out=$(run "$T/n1")
+contains "own CI: a CI file added next to it is noted" "note: .github/dependabot.yml will be added next to the project's own CI (.github/workflows/own.yml); review it before you commit." "$out"
+contains "other hook manager: lefthook.yml is noted" "note: lefthook.yml will be added but the project already uses another git-hook manager (.githooks)" "$out"
+contains "sonar-project.properties: noted, stays seeded" "note: sonar-project.properties is seeded as a file only; it runs no scanner." "$out"
+contains "sonar-project.properties: still an ADD" "ADD       sonar-project.properties" "$out"
+seed "$T/n2" nestjs
+rm "$T/n2/.github/dependabot.yml" "$T/n2/lefthook.yml"
+commit "$T/n2" plain
+out=$(run "$T/n2")
+absent "control, no own CI: no CI note" "next to the project's own CI" "$out"
+absent "control, no other hook manager: no hook note" "another git-hook manager" "$out"
 
 exit $fail
