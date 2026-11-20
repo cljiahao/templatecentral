@@ -2,6 +2,7 @@
 # SBOM: writes a CycloneDX JSON bill of materials to dist/sbom/bom.cdx.json (SBOM_OUT overrides the path).
 # pnpm projects use `pnpm sbom` on the lockfile (production dependencies). Python projects are built from the project's own environment (VIRTUAL_ENV, else .venv)
 # by py-env.py (shared with check-licences.sh), from the installed package metadata, checked against requirements.txt when there is one. Nothing is downloaded, uploaded or signed in to.
+# Limit: a requirements.txt line behind a marker that applies here but is not installed passes silently, and the SBOM omits it.
 # A project with both manifests gets two files, <name>-pnpm.json and <name>-python.json, and no <name>.json.
 # Components and dependencies are sorted, so two runs on one lockfile differ only in serialNumber and metadata.timestamp.
 # Each document is parsed before it is kept: it must be CycloneDX with a components array that is not empty when the lockfile lists dependencies.

@@ -66,7 +66,7 @@ list_python() {
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
   if [ -f requirements.txt ]; then req=requirements.txt; fi
-  "$py" "$helper" licences "$req" "$scope" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
+  "$py" "$helper" licences "$req" "$scope" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')"
 }
 
 # Reads the data file; prints "name<TAB>licence" for each package whose licence is not allowed, then one sentinel line "__judged__<TAB>count".

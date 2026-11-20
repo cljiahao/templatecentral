@@ -427,7 +427,7 @@ check 2 "$EC" "a line without a marker that is not installed fails closed"
 has "requirements.txt lists uvloop, which is not installed" "$OUT" "message names the missing package"
 
 # An included file would escape the prod closure, so the lock must be self-contained.
-for inc in '-r other.txt' '--requirement=other.txt' '-c cons.txt' '--constraint cons.txt'; do
+for inc in '-r other.txt' '--requirement=other.txt' '-c cons.txt' '--constraint cons.txt' '-rother.txt' '-cother.txt' '  -r other.txt' '--unknown-flag' '-X'; do
   env_fixture py-include "ok==1.0
 $inc
 "
@@ -436,8 +436,45 @@ $inc
   run "$D" PYTHONPATH="$SITE"
   check 2 "$EC" "'$inc' in the lock is refused in prod scope"
   has "must be self-contained" "$OUT" "message says the lock must be self-contained for '$inc'"
-  has "$inc" "$OUT" "message names the offending line '$inc'"
+  has "'$(printf '%s' "$inc" | sed 's/^ *//')'" "$OUT" "message names the offending line '$inc'"
+  hasnt "Create the environment and install first" "$OUT" "the self-contained error carries no install hint for '$inc'"
 done
+for opt in '--require-hashes' '--index-url https://example.invalid/simple' '-i https://example.invalid/simple' '--extra-index-url x' '-f x' '--find-links x' '--no-binary :all:' '--only-binary :all:' '--trusted-host x' '--prefer-binary' '-e .' '--editable .'; do
+  env_fixture py-opt-ok "$opt
+ok==1.0
+"
+  dist ok 1.0 'License-Expression: MIT'
+  run "$D" PYTHONPATH="$SITE"
+  check 0 "$EC" "control: the allowed option '$opt' is not refused ($OUT)"
+done
+
+# A leading-space line after a line without a backslash is not a continuation; after a backslash it is.
+env_fixture py-lead 'ok==1.0
+  uvloop==1.0
+'
+dist ok 1.0 'License-Expression: MIT'
+dist uvloop 1.0 'License-Expression: GPL-3.0-only'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "an indented requirement line is still read, not skipped as a continuation"
+has "uvloop@1.0 has licence GPL-3.0-only" "$OUT" "the indented line is checked"
+env_fixture py-cont 'ok==1.0 \
+    --hash=sha256:aa \
+    --hash=sha256:bb
+'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: hash continuation lines are skipped ($OUT)"
+# A comment holding a semicolon does not make a required line optional.
+env_fixture py-comment 'ok==1.0
+uvloop==1.0 # a;b
+'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 2 "$EC" "a ; inside a trailing comment does not make a missing line optional"
+has "requirements.txt lists uvloop, which is not installed" "$OUT" "the commented line is still required"
+dist uvloop 1.0 'License-Expression: GPL-3.0-only'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "the commented line is checked when installed"
 env_fixture py-include-all 'ok==1.0
 -r other.txt
 '

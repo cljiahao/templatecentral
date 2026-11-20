@@ -1,4 +1,4 @@
-# Lists the packages in the project Python environment for check-licences.sh and generate-sbom.sh; exit 3 means a wrong project or document.
+# Lists the project Python environment for check-licences.sh and generate-sbom.sh; limit: a marker line that applies here but is not installed passes, and the SBOM omits it.
 import datetime
 import importlib.metadata as md
 import json
@@ -13,6 +13,7 @@ def norm(name):
 
 
 def stop(message):
+    """Prints the message and exits 3, which means a wrong project or document."""
     sys.stderr.write(message + "\n")
     sys.exit(3)
 
@@ -43,22 +44,29 @@ def installed():
     return named, sorted(set(nameless))
 
 
+ALLOWED_OPTIONS = {"--hash", "-e", "--editable", "-i", "--index-url", "--extra-index-url", "-f", "--find-links", "--no-binary", "--only-binary", "--trusted-host", "--prefer-binary", "--require-hashes"}
+
+
 def wanted(path, strict):
     """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
     required, optional = [], []
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
+    continued = False
     for raw in lines:
-        if not raw.strip() or raw[0] in " \t#":
+        skip = continued
+        continued = raw.rstrip().endswith("\\")
+        line = re.sub(r"\s#.*$", "", raw.strip())
+        if skip or not line or line.startswith("#"):
             continue
-        if raw.startswith("-"):
-            if strict and re.match(r"(-r|-c|--requirement|--constraint)\b", raw):
-                stop("%s has the line '%s', which includes another file. The hashed lock must be self-contained, so compile it into one requirements.txt." % (path, raw.strip()))
+        if line.startswith("-"):
+            if strict and re.split(r"[=\s]", line, 1)[0] not in ALLOWED_OPTIONS:
+                stop("%s has the line '%s', which is not a plain requirement or a known pip option (an include such as -r or -c escapes the prod check). The hashed lock must be self-contained, so compile it into one requirements.txt." % (path, line))
             continue
-        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", raw)
+        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", line)
         if not m:
             continue
-        marked = ";" in raw and raw.split(";", 1)[1].strip().rstrip("\\").strip() != ""
+        marked = ";" in line and line.split(";", 1)[1].strip().rstrip("\\").strip() != ""
         (optional if marked else required).append(norm(m.group(0)))
     return required, optional
 
