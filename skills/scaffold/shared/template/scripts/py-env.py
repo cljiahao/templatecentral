@@ -94,12 +94,17 @@ def wanted(path):
         if raw.rstrip().endswith("\\") and not ends:
             refuse(number, raw, "a backslash must be the last character of the line")
         body = (raw[:-1] if ends else raw).rstrip()
+        if not raw.lstrip().startswith("#"):
+            if "#" in raw:
+                refuse(number, raw, "a # is only allowed at the start of a line, because pip joins a continuation first and then drops everything after #, which can drop a hash")
+            if "$" in raw:
+                refuse(number, raw, "a $ is only allowed in a full-line comment, because pip expands ${VAR} before it reads the line")
         if continued:
             if not HASH.match(body.lstrip()):
                 refuse(number, raw, "a continuation line must be --hash=<alg>:<hex> only" if body.strip() else "a continuation line is empty")
             continued = ends
             continue
-        stripped = re.sub(r"\s#.*$", "", body)
+        stripped = body
         if not stripped.strip() and not ends:
             continue
         if stripped.lstrip().startswith("#"):

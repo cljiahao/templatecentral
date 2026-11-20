@@ -214,6 +214,16 @@ dist alpha 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "a coding comment in a lock is refused"
 has "a coding comment makes pip decode" "$OUT" "message says why"
+raw_env_fixture py-trailing $'alpha==1.0 # c \\\n    --hash=sha256:aa\n'
+dist alpha 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a trailing comment before a continuation is refused"
+has "a # is only allowed at the start of a line" "$OUT" "message says why"
+raw_env_fixture py-envvar $'--find-links ${X}\nalpha==1.0 \\\n    --hash=sha256:aa\n'
+dist alpha 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "an environment variable in a lock is refused"
+has "a \$ is only allowed in a full-line comment" "$OUT" "message says why"
 raw_env_fixture py-bomcrlf $'\xef\xbb\xbfalpha==1.0 \\\r\n    --hash=sha256:aa\r\n'
 dist alpha 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"

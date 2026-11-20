@@ -499,18 +499,35 @@ raw_env_fixture py-crlf $'# via x\r\nok==1.0 \\\r\n    --hash=sha256:aa \\\r\n  
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
 check 0 "$EC" "control: CRLF line endings parse ($OUT)"
-raw_env_fixture py-comments $'# a comment\n\nok==1.0 # trailing; with semicolon \\\n    --hash=sha256:aa\n    # via something\nuvloop==1.0 ; sys_platform == "win32" # c \\\n    --hash=sha256:bb\n'
+raw_env_fixture py-comments $'# a comment\n\nok==1.0 \\\n    --hash=sha256:aa\n    # via something\nuvloop==1.0 ; sys_platform == "win32" \\\n    --hash=sha256:bb\n'
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
-check 0 "$EC" "control: comments, blank lines and a not-installed marker line parse ($OUT)"
-raw_env_fixture py-comment-semicolon $'ok==1.0 \\\n'"$H"$'uvloop==1.0 # a;b \\\n'"$H"
+check 0 "$EC" "control: full-line comments, blank lines and a not-installed marker line parse ($OUT)"
+raw_env_fixture py-coding-word $'# coding standards note\nok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
-check 2 "$EC" "a ; inside a trailing comment does not make a missing line optional"
-has "requirements.txt lists uvloop, which is not installed" "$OUT" "the commented line is still required"
-dist uvloop 1.0 'License-Expression: GPL-3.0-only'
+check 0 "$EC" "control: a comment on line 1 with the word coding but no : or = passes ($OUT)"
+# pip drops everything after a # once a continuation is joined, and expands ${VAR} before it reads a line: both are refused outside full-line comments.
+# hashrule <label> <lock text> <line number> <message part>
+hashrule() {
+  raw_env_fixture py-hashrule "$2"
+  dist ok 1.0 'License-Expression: MIT'
+  run "$D" PYTHONPATH="$SITE"
+  check 2 "$EC" "$1 is refused"
+  has "requirements.txt line $3 '" "$OUT" "message names line $3 for $1"
+  has "$4" "$OUT" "message says why for $1"
+}
+hashrule 'a trailing comment with a continuation' $'foo==1.0 # c \\\n'"$H" 1 'a # is only allowed at the start of a line'
+hashrule 'a trailing comment without a continuation' $'ok==1.0 \\\n'"$H"$'foo==1.0 # c\n' 3 'a # is only allowed at the start of a line'
+hashrule 'a marker and a trailing comment' $'foo==1.0 ; sys_platform == "win32" # c \\\n'"$H" 1 'a # is only allowed at the start of a line'
+hashrule 'a trailing comment on a hash line' $'ok==1.0 \\\n    --hash=sha256:aa # c\n' 2 'a # is only allowed at the start of a line'
+hashrule 'a trailing comment on an option line' $'--require-hashes # c\nok==1.0 \\\n'"$H" 1 'a # is only allowed at the start of a line'
+hashrule 'an environment variable in an option line' $'--find-links ${X}\nok==1.0 \\\n'"$H" 1 'a $ is only allowed in a full-line comment'
+hashrule 'a dollar sign in a requirement line' $'ok==1.0$ \\\n'"$H" 1 'a $ is only allowed in a full-line comment'
+raw_env_fixture py-dollar-comment $'# cost $5 and ${X} in a note\n  # indented $ note\nok==1.0 \\\n'"$H"
+dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
-check 1 "$EC" "the commented line is checked when installed"
+check 0 "$EC" "control: a $ and a # inside full-line comments pass ($OUT)"
 
 # The lock is read as bytes: a byte pip could read as a line break or another encoding is refused, naming the line and the byte.
 # byte_case <label> <bad body with @ for the bad bytes, as printf %b> <bad bytes as printf %b> <line> <byte shown>
