@@ -156,7 +156,13 @@ run "$D"
 check 2 "$EC" "a folder with no stack file cannot generate"
 
 # env_fixture <name> <requirements text>: a Python project whose .venv/bin/python is the real interpreter without the global site-packages; sets D and SITE.
+# raw_env_fixture <name> <requirements text>: like env_fixture, with the lock text written as given.
+# env_fixture <name> <requirements text>: the lock text gets a --hash continuation under each bare name==version line, as uv pip compile writes it.
 env_fixture() {
+  raw_env_fixture "$1" "$2"
+  awk '/\\$/ { print; next } /^[A-Za-z0-9][A-Za-z0-9._-]*==/ { print $0 " \\"; print "    --hash=sha256:aa"; next } { print }' "$D/requirements.txt" > "$D/requirements.hashed" && mv "$D/requirements.hashed" "$D/requirements.txt"
+}
+raw_env_fixture() {
   D="$T/$1"
   SITE="$D/site"
   mkdir -p "$D/.venv/bin" "$SITE"

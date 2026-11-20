@@ -219,7 +219,13 @@ has "gpl-lib@3.0 has licence GPL-3.0-only" "$OUT" "python message names the pack
 
 # Python read by the real metadata code from a fake environment.
 # env_fixture <name> <requirements text>: a Python project whose .venv/bin/python is the real interpreter without the global site-packages; sets D and SITE.
+# raw_env_fixture <name> <requirements text>: like env_fixture, with the lock text written as given.
+# env_fixture <name> <requirements text>: the lock text gets a --hash continuation under each bare name==version line, as uv pip compile writes it.
 env_fixture() {
+  raw_env_fixture "$1" "$2"
+  awk '/\\$/ { print; next } /^[A-Za-z0-9][A-Za-z0-9._-]*==/ { print $0 " \\"; print "    --hash=sha256:aa"; next } { print }' "$D/requirements.txt" > "$D/requirements.hashed" && mv "$D/requirements.hashed" "$D/requirements.txt"
+}
+raw_env_fixture() {
   base_fixture "$1"
   SITE="$D/site"
   mkdir -p "$D/.venv/bin" "$SITE"
@@ -426,48 +432,78 @@ run "$D" PYTHONPATH="$SITE"
 check 2 "$EC" "a line without a marker that is not installed fails closed"
 has "requirements.txt lists uvloop, which is not installed" "$OUT" "message names the missing package"
 
-# An included file would escape the prod closure, so the lock must be self-contained.
-for inc in '-r other.txt' '--requirement=other.txt' '-c cons.txt' '--constraint cons.txt' '-rother.txt' '-cother.txt' '  -r other.txt' '--unknown-flag' '-X'; do
-  env_fixture py-include "ok==1.0
-$inc
-"
+# The lock must be exactly what uv pip compile --generate-hashes writes: anything else is refused with the line named.
+# refused <label> <lock text> <line number> <line text>
+refused() {
+  raw_env_fixture py-refused "$2"
   dist ok 1.0 'License-Expression: MIT'
   dist bad 1.0 'License-Expression: GPL-3.0-only'
   run "$D" PYTHONPATH="$SITE"
-  check 2 "$EC" "'$inc' in the lock is refused in prod scope"
-  has "must be self-contained" "$OUT" "message says the lock must be self-contained for '$inc'"
-  has "'$(printf '%s' "$inc" | sed 's/^ *//')'" "$OUT" "message names the offending line '$inc'"
-  hasnt "Create the environment and install first" "$OUT" "the self-contained error carries no install hint for '$inc'"
-done
-for opt in '--require-hashes' '--index-url https://example.invalid/simple' '-i https://example.invalid/simple' '--extra-index-url x' '-f x' '--find-links x' '--no-binary :all:' '--only-binary :all:' '--trusted-host x' '--prefer-binary' '-e .' '--editable .'; do
-  env_fixture py-opt-ok "$opt
-ok==1.0
-"
+  check 2 "$EC" "$1 is refused"
+  has "requirements.txt line $3 '$4'" "$OUT" "message names line $3 for $1"
+  has "name==version with hashes" "$OUT" "message says the lock must list every package as name==version with hashes for $1"
+  hasnt "Create the environment and install first" "$OUT" "no install hint for $1"
+}
+H=$'    --hash=sha256:aa\n'
+refused 'an editable' $'ok==1.0 \\\n'"$H"$'-e ./pkg\n' 3 '-e ./pkg'
+refused 'an editable with an include' $'-e . -r o.txt\n' 1 '-e . -r o.txt'
+refused 'an index option with an include' $'--index-url x --requirement o.txt\n' 1 '--index-url x --requirement o.txt'
+refused 'a hash on its own line with an include' $'--hash=sha256:aa -r o.txt\n' 1 '--hash=sha256:aa -r o.txt'
+refused 'a backslash followed by a blank' $'ok==1.0 \\ \n  foo==1\n' 1 $'ok==1.0 \\'
+refused 'a requirement inside a continuation' $'ok==1.0 \\\n  missing==1 \\\n--hash=x\n' 2 $'missing==1 \\'
+refused 'a lone backslash line' $'\\\nmissing==1\n' 1 $'\\'
+refused 'a local path' $'./local/pkg\n' 1 './local/pkg'
+refused 'a bare dot' $'.\n' 1 '.'
+refused 'a name starting with an underscore' $'_missing==1\n' 1 '_missing==1'
+refused 'a quoted name' $'"q"==1\n' 1 '"q"==1'
+refused 'extras alone' $'[extra]\n' 1 '[extra]'
+refused 'a bare URL' $'https://x/y.whl\n' 1 'https://x/y.whl'
+refused 'a glued include' $'-rother.txt\n' 1 '-rother.txt'
+refused 'a glued constraint' $'-cother.txt\n' 1 '-cother.txt'
+refused 'an include with =' $'--requirement=other.txt\n' 1 '--requirement=other.txt'
+refused 'a spaced include' $'-r other.txt\n' 1 '-r other.txt'
+refused 'a spaced constraint' $'-c cons.txt\n' 1 '-c cons.txt'
+refused 'a long editable' $'--editable ./pkg\n' 1 '--editable ./pkg'
+refused 'an unknown option' $'--unknown-flag\n' 1 '--unknown-flag'
+refused 'a short unknown option' $'-X\n' 1 '-X'
+refused 'an option with a second option token' $'--index-url x -e\n' 1 '--index-url x -e'
+refused 'an option whose argument is an option' $'--index-url -e\n' 1 '--index-url -e'
+refused 'an option with its argument missing' $'--index-url\n' 1 '--index-url'
+refused 'a flag with an argument' $'--require-hashes yes\n' 1 '--require-hashes yes'
+refused 'a direct reference' $'ok @ https://x/y.whl \\\n'"$H" 1 $'ok @ https://x/y.whl \\'
+refused 'a VCS requirement' $'git+https://x/y.git#egg=ok \\\n'"$H" 1 $'git+https://x/y.git#egg=ok \\'
+refused 'an unpinned requirement' $'ok>=1.0 \\\n'"$H" 1 $'ok>=1.0 \\'
+refused 'a name with no version' $'ok \\\n'"$H" 1 $'ok \\'
+refused 'a wildcard pin' $'ok==1.* \\\n'"$H" 1 $'ok==1.* \\'
+refused 'a requirement without a hash continuation' $'ok==1.0\n' 1 'ok==1.0'
+refused 'a requirement followed by a non-hash line' $'ok==1.0 \\\n  other\n' 2 'other'
+refused 'a requirement followed by an empty continuation' $'ok==1.0 \\\n\n' 2 ''
+refused 'a hash line with no backslash before it' $'ok==1.0\n--hash=sha256:aa\n' 1 'ok==1.0'
+refused 'a stray hash line' $'--hash=sha256:aa\n' 1 '--hash=sha256:aa'
+refused 'a malformed hash' $'ok==1.0 \\\n    --hash=sha256:zz\n' 2 '--hash=sha256:zz'
+refused 'a hash plus another word' $'ok==1.0 \\\n    --hash=sha256:aa extra\n' 2 '--hash=sha256:aa extra'
+refused 'a last line that ends in a backslash' $'ok==1.0 \\\n    --hash=sha256:aa \\\n' 2 $'--hash=sha256:aa \\'
+refused 'an indented requirement' $'ok==1.0 \\\n'"$H"$'  uvloop==1.0 \\\n'"$H" 3 $'uvloop==1.0 \\'
+refused 'a comment line ending in a backslash' $'# via x \\\nok==1.0 \\\n'"$H" 1 $'# via x \\'
+for opt in '--require-hashes' '--index-url https://example.invalid/simple' '--index-url=https://example.invalid/simple' '-i https://example.invalid/simple' '--extra-index-url x' '-f x' '--find-links x' '--no-binary :all:' '--only-binary :all:' '--trusted-host x' '--prefer-binary'; do
+  raw_env_fixture py-opt-ok "$opt"$'\nok==1.0 \\\n'"$H"
   dist ok 1.0 'License-Expression: MIT'
   run "$D" PYTHONPATH="$SITE"
-  check 0 "$EC" "control: the allowed option '$opt' is not refused ($OUT)"
+  check 0 "$EC" "control: the allowed option '$opt' passes ($OUT)"
 done
-
-# A leading-space line after a line without a backslash is not a continuation; after a backslash it is.
-env_fixture py-lead 'ok==1.0
-  uvloop==1.0
-'
-dist ok 1.0 'License-Expression: MIT'
-dist uvloop 1.0 'License-Expression: GPL-3.0-only'
-run "$D" PYTHONPATH="$SITE"
-check 1 "$EC" "an indented requirement line is still read, not skipped as a continuation"
-has "uvloop@1.0 has licence GPL-3.0-only" "$OUT" "the indented line is checked"
-env_fixture py-cont 'ok==1.0 \
-    --hash=sha256:aa \
-    --hash=sha256:bb
-'
+raw_env_fixture py-bom $'\xef\xbb\xbfok==1.0 \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
-check 0 "$EC" "control: hash continuation lines are skipped ($OUT)"
-# A comment holding a semicolon does not make a required line optional.
-env_fixture py-comment 'ok==1.0
-uvloop==1.0 # a;b
-'
+check 0 "$EC" "control: a UTF-8 BOM before the first name parses ($OUT)"
+raw_env_fixture py-crlf $'# via x\r\nok==1.0 \\\r\n    --hash=sha256:aa \\\r\n    --hash=sha256:bb\r\n'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: CRLF line endings parse ($OUT)"
+raw_env_fixture py-comments $'# a comment\n\nok==1.0 # trailing; with semicolon \\\n    --hash=sha256:aa\n    # via something\nuvloop==1.0 ; sys_platform == "win32" # c \\\n    --hash=sha256:bb\n'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: comments, blank lines and a not-installed marker line parse ($OUT)"
+raw_env_fixture py-comment-semicolon $'ok==1.0 \\\n'"$H"$'uvloop==1.0 # a;b \\\n'"$H"
 dist ok 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
 check 2 "$EC" "a ; inside a trailing comment does not make a missing line optional"
@@ -475,12 +511,6 @@ has "requirements.txt lists uvloop, which is not installed" "$OUT" "the commente
 dist uvloop 1.0 'License-Expression: GPL-3.0-only'
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "the commented line is checked when installed"
-env_fixture py-include-all 'ok==1.0
--r other.txt
-'
-dist ok 1.0 'License-Expression: MIT'
-run "$D" PYTHONPATH="$SITE" LICENCES_SCOPE=all
-check 0 "$EC" "scope all does not read the lock, so an include line is not refused ($OUT)"
 
 # Python prod scope checks the locked names only; all checks the whole environment.
 env_fixture py-scope 'okpkg==1.0
@@ -603,6 +633,13 @@ if [ "$real_ok" -eq 1 ]; then
   check 0 "$EC" "real fastapi scaffold passes the licence gate in prod scope ($OUT)"
   echo "real run fastapi: $OUT"
   has "packages, python)" "$OUT" "real fastapi run checked python packages and was not skipped"
+  check 1 "$(grep -c '^ *# via' "$D/requirements.txt" | awk '{ print ($1 > 0) }')" "the real lock has # via comments"
+  check 1 "$(grep -c ' ; ' "$D/requirements.txt" | awk '{ print ($1 > 0) }')" "the real lock has marker lines"
+  cp "$D/requirements.txt" "$T/req-real.txt"
+  sed 's/$/\r/' "$T/req-real.txt" > "$D/requirements.txt"
+  run "$D"
+  check 0 "$EC" "a CRLF copy of the real lock passes ($OUT)"
+  cp "$T/req-real.txt" "$D/requirements.txt"
   run "$D" LICENCES_SCOPE=all
   check 1 "$EC" "real fastapi scaffold with scope all fails on a dev-only package"
   has "nodeenv@" "$OUT" "scope all names nodeenv"

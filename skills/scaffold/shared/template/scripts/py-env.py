@@ -4,6 +4,7 @@ import importlib.metadata as md
 import json
 import os
 import re
+import shlex
 import sys
 import uuid
 
@@ -44,38 +45,83 @@ def installed():
     return named, sorted(set(nameless))
 
 
-ALLOWED_OPTIONS = {"--hash", "-e", "--editable", "-i", "--index-url", "--extra-index-url", "-f", "--find-links", "--no-binary", "--only-binary", "--trusted-host", "--prefer-binary", "--require-hashes"}
+NAME = r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?"
+REQUIREMENT = re.compile(r"^(" + NAME + r")(?:\[[A-Za-z0-9._,\s-]*\])?==([A-Za-z0-9._+!-]+)\s*(?:;\s*(\S.*?))?\s*$")
+HASH = re.compile(r"^--hash=[A-Za-z0-9_]+:[0-9a-fA-F]+$")
+OPTION_ARGS = {"--index-url": 1, "-i": 1, "--extra-index-url": 1, "--find-links": 1, "-f": 1, "--trusted-host": 1, "--no-binary": 1, "--only-binary": 1, "--prefer-binary": 0, "--require-hashes": 0}
 
 
-def wanted(path, strict):
+def why(line):
+    """Returns a short reason a line is not part of a hashed lock."""
+    if re.match(r"-(e|r|c)|--(editable|requirement|constraint)", line):
+        return "an editable or an include adds packages outside the lock"
+    if "@" in line or "://" in line or line[0] in "./~" or re.match(r"(git|hg|svn|bzr)\+", line):
+        return "a direct reference, URL, path or VCS requirement is not pinned by hash"
+    if re.search(r"[<>~!]=|[<>]|===", line):
+        return "only name==version is allowed"
+    return "it is not name==version, a --hash line or a known global option"
+
+
+def wanted(path):
     """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
     required, optional = [], []
-    with open(path, encoding="utf-8") as f:
-        lines = f.read().splitlines()
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        lines = f.read().replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+
+    def refuse(number, text, reason):
+        stop("%s line %d '%s': %s. The hashed lock must list every package as name==version with hashes (uv pip compile --generate-hashes), so recompile it." % (path, number, text.strip(), reason))
+
     continued = False
-    for raw in lines:
-        skip = continued
-        continued = raw.rstrip().endswith("\\")
-        line = re.sub(r"\s#.*$", "", raw.strip())
-        if skip or not line or line.startswith("#"):
+    for number, raw in enumerate(lines, 1):
+        ends = raw.endswith("\\")
+        if raw.rstrip().endswith("\\") and not ends:
+            refuse(number, raw, "a backslash must be the last character of the line")
+        body = (raw[:-1] if ends else raw).rstrip()
+        if continued:
+            if not HASH.match(body.lstrip()):
+                refuse(number, raw, "a continuation line must be --hash=<alg>:<hex> only" if body.strip() else "a continuation line is empty")
+            continued = ends
             continue
-        if line.startswith("-"):
-            if strict and re.split(r"[=\s]", line, 1)[0] not in ALLOWED_OPTIONS:
-                stop("%s has the line '%s', which is not a plain requirement or a known pip option (an include such as -r or -c escapes the prod check). The hashed lock must be self-contained, so compile it into one requirements.txt." % (path, line))
+        stripped = re.sub(r"\s#.*$", "", body)
+        if not stripped.strip() and not ends:
             continue
-        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", line)
+        if stripped.lstrip().startswith("#"):
+            if ends:
+                refuse(number, raw, "a comment line must not end with a backslash")
+            continue
+        if ends and not stripped.strip():
+            refuse(number, raw, "a lone backslash line")
+        if stripped.startswith("-"):
+            if ends:
+                refuse(number, raw, "an option line must not end with a backslash")
+            try:
+                tokens = shlex.split(stripped)
+            except ValueError:
+                refuse(number, raw, "the line cannot be tokenised")
+            head, eq, rest = tokens[0].partition("=")
+            args = ([rest] if eq else []) + tokens[1:]
+            if head not in OPTION_ARGS or len(args) != OPTION_ARGS[head] or any(a.startswith("-") for a in args):
+                refuse(number, raw, why(stripped))
+            continue
+        m = REQUIREMENT.match(stripped)
         if not m:
-            continue
-        marked = ";" in line and line.split(";", 1)[1].strip().rstrip("\\").strip() != ""
-        (optional if marked else required).append(norm(m.group(0)))
+            refuse(number, raw, why(stripped.strip() or raw))
+        if not ends:
+            refuse(number, raw, "a requirement needs at least one --hash continuation")
+        (optional if m.group(3) else required).append(norm(m.group(1)))
+        continued = True
+    if continued:
+        refuse(len(lines), lines[-1], "the last line must not end with a backslash")
     return required, optional
 
 
-def require_installed(req, named, strict):
+def require_installed(req, named):
     """Stops when a package named in requirements.txt without a marker is not installed; returns every locked name."""
     if not req:
         return set()
-    required, optional = wanted(req, strict)
+    required, optional = wanted(req)
     have = {k for (k, _v) in named}
     missing = sorted({n for n in required if n not in have})
     if missing:
@@ -85,7 +131,7 @@ def require_installed(req, named, strict):
 
 def cmd_licences(req, scope):
     named, nameless = installed()
-    names = require_installed(req, named, scope != "all")
+    names = require_installed(req, named)
     locked = names if req and scope != "all" else None
     for key, version in sorted(named):
         if locked is not None and key not in locked:
@@ -100,7 +146,7 @@ def cmd_sbom(req, out):
     named, nameless = installed()
     if nameless:
         stop("the environment has a package with no Name in its metadata (%s), so it cannot be listed." % ", ".join(nameless[:3]))
-    require_installed(req, named, True)
+    require_installed(req, named)
     latest = {}
     for (key, _version), (_name, d) in sorted(named.items()):
         latest.setdefault(key, d)
