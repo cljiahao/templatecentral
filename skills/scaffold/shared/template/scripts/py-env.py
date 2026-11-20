@@ -65,8 +65,23 @@ def why(line):
 def wanted(path):
     """Returns the normalised names in requirements.txt: those that must be installed, and those behind an environment marker."""
     required, optional = [], []
-    with open(path, encoding="utf-8-sig", newline="") as f:
-        lines = f.read().replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        stop("cannot read %s: %s. The hashed lock must be a readable requirements.txt." % (path, e.strerror or e))
+    if data.startswith(b"\xef\xbb\xbf"):
+        data = data[3:]
+    for i, b in enumerate(data):
+        if b in (9, 10) or 32 <= b <= 126:
+            continue
+        if b == 13 and data[i + 1 : i + 2] == b"\n":
+            continue
+        stop("%s line %d: byte 0x%02x is not allowed (only tab, LF, CRLF and printable ASCII), because pip may read it as a line break or another encoding. The hashed lock must be plain ASCII as uv pip compile --generate-hashes writes it, so recompile it." % (path, data.count(b"\n", 0, i) + 1, b))
+    lines = data.decode("ascii").replace("\r\n", "\n").split("\n")
+    for number, text in enumerate(lines[:2], 1):
+        if re.match(r"[ \t]*#.*?coding[:=][ \t]*[-\w.]+", text):
+            stop("%s line %d '%s': a coding comment makes pip decode the file in another encoding. Remove it: the hashed lock must be plain ASCII as uv pip compile --generate-hashes writes it." % (path, number, text.strip()))
     if lines and lines[-1] == "":
         lines.pop()
 
@@ -188,7 +203,7 @@ def cmd_check(path):
     try:
         with open(path, encoding="utf-8") as f:
             doc = json.load(f)
-    except ValueError:
+    except (OSError, ValueError):
         stop("the Python SBOM is not valid JSON.")
     if not isinstance(doc, dict) or doc.get("bomFormat") != "CycloneDX" or not isinstance(doc.get("components"), list):
         stop("the Python SBOM is not a CycloneDX document with a components array.")

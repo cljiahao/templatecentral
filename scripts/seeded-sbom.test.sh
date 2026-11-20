@@ -204,6 +204,21 @@ check 1 "$EC" "a requirement that is not installed fails"
 has "requirements.txt lists ghost, which is not installed" "$OUT" "message names the missing package"
 check 1 "$(gone "$D/dist/sbom/bom.cdx.json")" "a failed Python run leaves no stale SBOM"
 
+raw_env_fixture py-formfeed $'alpha==1.0 \\\n    --hash=sha256:aa\n# c\x0cghost==2.0 --hash=sha256:aa\n'
+dist alpha 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a form feed in a lock comment is refused, not read as a line break"
+has "requirements.txt line 3: byte 0x0c is not allowed" "$OUT" "message names the line and the byte"
+raw_env_fixture py-coding $'# coding: utf-7 +AAo-ghost==2.0\nalpha==1.0 \\\n    --hash=sha256:aa\n'
+dist alpha 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a coding comment in a lock is refused"
+has "a coding comment makes pip decode" "$OUT" "message says why"
+raw_env_fixture py-bomcrlf $'\xef\xbb\xbfalpha==1.0 \\\r\n    --hash=sha256:aa\r\n'
+dist alpha 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: a lock with a BOM and CRLF line endings generates ($OUT)"
+
 env_fixture py-empty 'alpha==1.0
 '
 run "$D" PYTHONPATH="$SITE"

@@ -512,6 +512,65 @@ dist uvloop 1.0 'License-Expression: GPL-3.0-only'
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "the commented line is checked when installed"
 
+# The lock is read as bytes: a byte pip could read as a line break or another encoding is refused, naming the line and the byte.
+# byte_case <label> <bad body with @ for the bad bytes, as printf %b> <bad bytes as printf %b> <line> <byte shown>
+byte_case() {
+  local body=${2//@/$3} control=${2//@/ }
+  raw_env_fixture py-byte $'ok==1.0 \\\n'"$H"
+  printf '%b' "$body" >> "$D/requirements.txt"
+  dist ok 1.0 'License-Expression: MIT'
+  run "$D" PYTHONPATH="$SITE"
+  check 2 "$EC" "$1 is refused"
+  has "requirements.txt line $4: byte $5 is not allowed" "$OUT" "message names line $4 and byte $5 for $1"
+  has "plain ASCII" "$OUT" "message says the lock must be plain ASCII for $1"
+  raw_env_fixture py-byte-ok $'ok==1.0 \\\n'"$H"
+  printf '%b' "$control" >> "$D/requirements.txt"
+  dist ok 1.0 'License-Expression: MIT'
+  run "$D" PYTHONPATH="$SITE"
+  check 0 "$EC" "control: the same file without the bad byte passes for $1 ($OUT)"
+}
+byte_case 'a vertical tab in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\x0b' 3 0x0b
+byte_case 'a form feed in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\x0c' 3 0x0c
+byte_case 'a file separator in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\x1c' 3 0x1c
+byte_case 'a record separator in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\x1e' 3 0x1e
+byte_case 'NEL as UTF-8 in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\xc2\x85' 3 0xc2
+byte_case 'U+2028 in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\xe2\x80\xa8' 3 0xe2
+byte_case 'U+2029 in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\xe2\x80\xa9' 3 0xe2
+byte_case 'a lone CR in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\r' 3 0x0d
+byte_case 'a NUL in a comment' '# c@evil==1.0 --hash=sha256:aa\n' '\0' 3 0x00
+byte_case 'a non-ASCII letter in a comment' '# caf@\n' '\xc3\xa9' 3 0xc3
+byte_case 'invalid UTF-8 0xff in a comment' '# c@\n' '\xff' 3 0xff
+byte_case 'a DEL byte in a comment' '# c@\n' '\x7f' 3 0x7f
+# A coding comment in the first two lines changes how pip decodes the file: refused. Line 3 or later is only a comment.
+coding_case() {
+  raw_env_fixture py-coding "$2"
+  dist ok 1.0 'License-Expression: MIT'
+  run "$D" PYTHONPATH="$SITE"
+  check 2 "$EC" "$1 is refused"
+  has "requirements.txt line $3 '" "$OUT" "message names line $3 for $1"
+  has "coding comment" "$OUT" "message says why for $1"
+}
+coding_case 'a utf-7 coding comment on line 1' $'# coding: utf-7 +AAo-evil==1.0 --hash=sha256:aa\nok==1.0 \\\n'"$H" 1
+coding_case 'an = coding comment on line 1' $'# -*- coding=latin-1 -*-\nok==1.0 \\\n'"$H" 1
+coding_case 'a coding comment on line 2' $'# x\n# coding: utf-7\nok==1.0 \\\n'"$H" 2
+coding_case 'an indented coding comment on line 1' $'  \t# vim: set fileencoding=utf-8 coding:utf-8\nok==1.0 \\\n'"$H" 1
+raw_env_fixture py-coding-late $'# x\n# y\n# coding: utf-7\nok==1.0 \\\n'"$H"
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: a coding comment on line 3 is only a comment ($OUT)"
+raw_env_fixture py-bom-crlf $'\xef\xbb\xbf# via x\r\nok==1.0 \\\r\n    --hash=sha256:aa\r\n'
+dist ok 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "control: a BOM with CRLF line endings parses ($OUT)"
+# The helper never shows a traceback: a missing file or a directory is a clean refusal.
+PYENV="$(dirname "$GATE")/py-env.py"
+for target in "$T/no-such-requirements.txt" "$T"; do
+  PO=$(python3 -S "$PYENV" licences "$target" prod 2>&1)
+  check 3 $? "helper exits 3 for the unreadable path $target"
+  has "cannot read $target" "$PO" "helper says it cannot read the path"
+  hasnt "Traceback" "$PO" "helper shows no traceback for the unreadable path"
+done
+
 # Python prod scope checks the locked names only; all checks the whole environment.
 env_fixture py-scope 'okpkg==1.0
 '
@@ -633,6 +692,7 @@ if [ "$real_ok" -eq 1 ]; then
   check 0 "$EC" "real fastapi scaffold passes the licence gate in prod scope ($OUT)"
   echo "real run fastapi: $OUT"
   has "packages, python)" "$OUT" "real fastapi run checked python packages and was not skipped"
+  check 0 "$(LC_ALL=C tr -d '\t\n\040-\176' < "$D/requirements.txt" | wc -c | tr -d ' ')" "the real uv lock holds only tab, LF and printable ASCII"
   check 1 "$(grep -c '^ *# via' "$D/requirements.txt" | awk '{ print ($1 > 0) }')" "the real lock has # via comments"
   check 1 "$(grep -c ' ; ' "$D/requirements.txt" | awk '{ print ($1 > 0) }')" "the real lock has marker lines"
   cp "$D/requirements.txt" "$T/req-real.txt"
