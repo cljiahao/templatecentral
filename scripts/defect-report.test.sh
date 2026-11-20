@@ -25,6 +25,11 @@ lacks() { # lacks <needle> <haystack> <description>
 T=$(mktemp -d "${TMPDIR:-/tmp}/dr.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
+# truth <command...>: print 1 when the command succeeds, 0 when it fails.
+truth() {
+  if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi
+}
+
 # run <dir> [args]: sets OUT and EC from running the report with the CI markers cleared.
 run() {
   local d=$1
@@ -65,7 +70,7 @@ for def in "$DEFECTS"/*.sh; do
   level=$(meta "$def" level)
   template=$(meta "$def" template)
   old="$FIXTURES/$id/old"
-  check 1 "$([[ -d "$old" ]] && echo 1 || echo 0)" "fixture exists for $id"
+  check 1 "$(truth test -d "$old")" "fixture exists for $id"
   [[ -d "$old" ]] || continue
 
   run "$old"
@@ -257,7 +262,14 @@ run "$T/c5"
 lacks "sqlalchemy-tls-verify  " "$OUT" "an async engine with sslmode in connect_args is clean"
 printf '"""Docstring about sslmode."""\nengine = create_engine(url)\n' > "$T/c6/session.py"
 run "$T/c6"
-has "sqlalchemy-tls-verify  check" "$OUT" "a docstring naming sslmode does not hide the match"
+lacks "sqlalchemy-tls-verify  " "$OUT" "a docstring naming sslmode counts as a string (documented limit)"
+mkdir -p "$T/c7" "$T/c8"
+printf 'URL = """postgresql://h/db?sslmode=require"""\nengine = create_async_engine(URL)\n' > "$T/c7/session.py"
+run "$T/c7"
+lacks "sqlalchemy-tls-verify  " "$OUT" "a triple-quoted URL carrying sslmode is not flagged"
+printf 'engine = create_engine (url)\n' > "$T/c8/session.py"
+run "$T/c8"
+has "session.py:1  sqlalchemy-tls-verify  check" "$OUT" "a space before the paren of create_engine is still matched"
 
 # A bearer-token auth service is not flagged; a cookie-mode one without the header is.
 mkdir -p "$T/b1" "$T/b2" "$T/b3"
@@ -281,16 +293,111 @@ EOF
 run "$T/b3"
 has "vite-auth-csrf  high" "$OUT" "a comment naming X-CSRF-Token does not hide the match"
 
+# More shapes for the promise-retry check. xclient <name> <body> writes a client file and runs the report on it.
+xclient() {
+  local d="$T/x-$1"
+  mkdir -p "$d/src"
+  printf '%s\n' "$2" > "$d/src/mongoose-client.ts"
+  run "$d"
+}
+xclient catch-call-then-helper 'x.catch(noop);
+export function resetCache() { cached.promise = null; }
+export async function connectDB() { cached.conn = await cached.promise; return cached.conn; }'
+flagged ".catch(fn) with no brace does not turn a later block into a catch"
+xclient other-function-catch 'export async function connectDB() { cached.conn = await cached.promise; return cached.conn; }
+export async function disconnectDB() { try { await mongoose.disconnect(); } catch (e) { cached.promise = null; } }'
+flagged "a reset in another function's catch does not count"
+xclient try-without-catch 'export async function connectDB() { try { cached.conn = await cached.promise; } finally { cached.promise = null; } }'
+flagged "a reset only in finally still flags"
+xclient destructured-catch 'export async function connectDB() {
+  try { cached.conn = await cached.promise; } catch ({ message }) { cached.promise = null; throw new Error(message); }
+}'
+unflagged "a destructured catch binding with a reset"
+xclient optional-catch 'export async function connectDB() { try { cached.conn = await cached.promise; } catch { cached.promise = null; throw new Error("x"); } }'
+unflagged "a catch with no binding and a reset"
+xclient delete-reset 'export async function connectDB() { try { cached.conn = await cached.promise; } catch (e) { delete cached.promise; throw e; } }'
+unflagged "delete cached.promise in the catch"
+xclient object-reset 'export async function connectDB() { try { cached.conn = await cached.promise; } catch (e) { cached = { conn: null, promise: null }; throw e; } }'
+unflagged "whole-object reassign in the catch"
+xclient arrow-reset 'export async function connectDB() { cached.conn = await cached.promise.catch((e) => (cached.promise = null, Promise.reject(e))); }'
+unflagged "reset inside a braceless .catch arrow"
+xclient nested-try 'export async function connectDB() { try { try { cached.conn = await cached.promise; } finally { log(); } } catch (e) { cached.promise = null; throw e; } }'
+unflagged "an await in an inner try with the reset in the outer catch"
+xclient crlf 'export async function connectDB() {
+  try { cached.conn = await
+ cached.promise; } catch (e) { cached.promise =
+ null; throw e; }
+}'
+printf 'export async function connectDB() {\r\n  try { cached.conn = await\r\n cached.promise; } catch (e) { cached.promise =\r\n null; throw e; }\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
+run "$T/x-crlf"
+unflagged "CRLF line ends around await and the reset"
+printf 'export async function connectDB() {\r\n  cached.conn = await\r\n cached.promise;\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
+run "$T/x-crlf"
+flagged "CRLF line ends around an await with no reset"
+
+# A 300 KB client is read in linear time.
+mkdir -p "$T/perf/src"
+{
+  head -n 1 "$T/x-crlf/src/mongoose-client.ts" | tr -d '\r'
+  i=0
+  while [[ $i -lt 6000 ]]; do printf 'const value%d = { a: 1, b: "text %d", c: [1, 2, 3] }; // note\n' "$i" "$i"; i=$((i + 1)); done
+  printf 'export async function connectDB() { cached.conn = await cached.promise; }\n'
+} > "$T/perf/src/mongoose-client.ts"
+start=$SECONDS
+run "$T/perf"
+took=$((SECONDS - start))
+flagged "a 300 KB client is still flagged"
+check 1 "$(truth test "$took" -le 5)" "a 300 KB client finishes within 5 seconds (took ${took}s)"
+
+# Comments and strings for the hook and the Argon2 checks.
+mkdir -p "$T/r1" "$T/r2" "$T/r3" "$T/r4" "$T/a1" "$T/a2" "$T/a3"
+printf '// TODO read tool_response instead\nconst o = input.tool_output;\n' > "$T/r1/redact-sensitive-output.cjs"
+run "$T/r1"
+has "redact-sensitive-output.cjs:2  redaction-tool-output  high" "$OUT" "a comment naming tool_response does not hide the older hook"
+printf '// was tool_output\nconst o = input.tool_response;\n' > "$T/r2/redact-sensitive-output.cjs"
+run "$T/r2"
+lacks "redaction-tool-output  " "$OUT" "a fixed hook with tool_output only in a comment is clean"
+printf '# TODO read tool_response instead\no = data.get("tool_output")\n' > "$T/r3/redact_sensitive_output.py"
+run "$T/r3"
+has "redact_sensitive_output.py:2  redaction-tool-output  high" "$OUT" "a Python comment naming tool_response does not hide the older hook"
+printf 'o = data.get("tool_response")  # not tool_output\n' > "$T/r4/redact_sensitive_output.py"
+run "$T/r4"
+lacks "redaction-tool-output  " "$OUT" "a fixed Python hook with tool_output only in a comment is clean"
+LIT="\$argon2id\$v=19\$m=65536,t=3,p=1\$c29tZXNhbHRzb21lc2E\$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
+printf '// const DUMMY = argon2.hash(randomUUID());\nconst DUMMY_HASH = "%s";\n' "$LIT" > "$T/a1/auth.service.ts"
+run "$T/a1"
+has "auth.service.ts:2  argon2-dummy-hash-literal  check" "$OUT" "a commented-out fix beside the live literal still flags"
+printf '// old: "%s"\nconst DUMMY_HASH = argon2.hash(randomUUID());\n' "$LIT" > "$T/a2/auth.service.ts"
+run "$T/a2"
+lacks "argon2-dummy-hash-literal  " "$OUT" "the literal only in a comment is clean"
+printf '# old\nDUMMY_HASH = "%s"\n' "$LIT" > "$T/a3/auth_service.py"
+run "$T/a3"
+has "auth_service.py:2  argon2-dummy-hash-literal  check" "$OUT" "the literal in Python code flags"
+
+# A symlinked directory pointing outside the project is reported, never read, and never counted as "not installed".
+mkdir -p "$T/dl/proj" "$T/dl/outside/src" "$T/dl/inside/src"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/dl/outside/src/"
+ln -s "$T/dl/outside" "$T/dl/proj/vendor"
+run "$T/dl/proj"
+check 2 "$EC" "a symlinked directory pointing outside the project exits 2 when a check found nothing"
+has "symlinked directory" "$OUT" "the symlinked directory is named as the cause"
+mkdir -p "$T/dl/proj2/real/src"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/dl/proj2/real/src/"
+ln -s "$T/dl/proj2/real" "$T/dl/proj2/alias"
+run "$T/dl/proj2"
+check 1 "$EC" "a symlinked directory that stays inside the project is harmless"
+lacks "not scanned" "$OUT" "an inner link is not reported as skipped"
+
 # Every path and heading the notes name exists in the tree.
 notes="$REPO_ROOT/skills/migrate/general/UPGRADE-NOTES.md"
 while IFS= read -r ref; do
   case "$ref" in
-    skills/*) check 1 "$([[ -e "$REPO_ROOT/$ref" ]] && echo 1 || echo 0)" "notes: path exists: $ref" ;;
+    skills/*) check 1 "$(truth test -e "$REPO_ROOT/$ref")" "notes: path exists: $ref" ;;
   esac
 done < <(grep -oE "\`[^\`]*\`" "$notes" | tr -d '\`')
-check 1 "$(grep -q '^## Completing Auth Integration$' "$REPO_ROOT/skills/add/database/typescript/nestjs-drizzle.md" && echo 1 || echo 0)" "notes: nestjs-drizzle heading exists"
+check 1 "$(truth grep -q '^## Completing Auth Integration$' "$REPO_ROOT/skills/add/database/typescript/nestjs-drizzle.md")" "notes: nestjs-drizzle heading exists"
 check 0 "$(grep -c "nestjs-drizzle.md\` (Step" "$notes")" "notes: no step letter named for the nestjs-drizzle guide"
-check 1 "$(grep -q '^### Step C ' "$REPO_ROOT/skills/add/database/python/sqlalchemy.md" && echo 1 || echo 0)" "notes: sqlalchemy Step C heading exists"
+check 1 "$(truth grep -q '^### Step C ' "$REPO_ROOT/skills/add/database/python/sqlalchemy.md")" "notes: sqlalchemy Step C heading exists"
 
 # A path with spaces works.
 mkdir -p "$T/with space/my proj"

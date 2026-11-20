@@ -32,26 +32,26 @@ at() {
   echo "$1:${n:-1}"
 }
 
-# Print FILE with comments blanked and line numbers kept. Strings stay. .py uses # and triple quotes; everything else uses // and /* */.
+# Print FILE with comments blanked and line numbers kept. Strings stay, triple-quoted ones too. .py uses #; everything else uses // and /* */.
+# Limits: nested template literals, regex literals and Python docstrings count as strings, so text in them is not blanked.
 strip_comments() {
   local mode=slash
   case "$1" in *.py) mode='hash' ;; esac
-  awk -v mode="$mode" '
-    BEGIN { st = 0; q = ""; tq = "" }
+  LC_ALL=C awk -v mode="$mode" '
+    BEGIN { st = 0; q = "" }
     {
       line = $0; out = ""; n = length(line); i = 1
       while (i <= n) {
         c = substr(line, i, 1); d = substr(line, i, 2); t = substr(line, i, 3)
         if (st == 1) {
-          if (mode == "slash" && d == "*/") { st = 0; i += 2 }
-          else if (mode == "hash" && t == tq) { st = 0; i += 3 }
-          else i++
+          if (d == "*/") { st = 0; i += 2 } else i++
           continue
         }
         if (q != "") {
+          if (length(q) == 3 && t == q) { out = out t; q = ""; i += 3; continue }
           out = out c
           if (c == "\\") { out = out substr(line, i + 1, 1); i += 2; continue }
-          if (c == q) q = ""
+          if (length(q) == 1 && c == q) q = ""
           i++
           continue
         }
@@ -61,7 +61,7 @@ strip_comments() {
           if (c == "\"" || c == "\047" || c == "`") { q = c; out = out c; i++; continue }
         } else {
           if (c == "#") break
-          if (t == "\"\"\"" || t == "\047\047\047") { st = 1; tq = t; out = out " "; i += 3; continue }
+          if (t == "\"\"\"" || t == "\047\047\047") { q = t; out = out t; i += 3; continue }
           if (c == "\"" || c == "\047") { q = c; out = out c; i++; continue }
         }
         out = out c
@@ -90,6 +90,18 @@ find_files() {
   find "$root" -mindepth 1 \( -name node_modules -o -name .venv -o -name venv -o -name .next -o -name dist -o -name build \
     -o -name coverage -o -name .git -o -name __pycache__ \) -prune -o \
     -type f -size -"$((MAXBYTES + 1))"c \( "${expr[@]}" \) -print
+}
+
+# Print each symlink below the root that points at a directory outside the project. It is not followed, so what is behind it is not scanned.
+find_dirlinks() {
+  local root=$1 l real
+  find "$root" -mindepth 1 \( -name node_modules -o -name .venv -o -name venv -o -name .next -o -name dist -o -name build \
+    -o -name coverage -o -name .git -o -name __pycache__ \) -prune -o -type l -print | while IFS= read -r l; do
+    [ -d "$l" ] || continue
+    real=$(cd -P -- "$l" 2>/dev/null && pwd -P) || continue
+    case "$real/" in "$root"/*) continue ;; esac
+    echo "$l"
+  done
 }
 
 # Print the files with one of the given base names that the scan skips: symlinks, files over 1 MB, and names with a newline.
@@ -125,7 +137,8 @@ RUN=0
 MATCHED=0
 ABSENT=0
 HIGH=0
-SKIPPED=
+if ! DIRLINKS=$(find_dirlinks "$P"); then die "find failed in $P"; fi
+SKIPPED=$DIRLINKS$NL
 for def in "$DEFECTS"/*.sh; do
   [ -f "$def" ] || die "no checks found in $DEFECTS"
   # A check file that exits while it loads never reaches the marker, so it is refused.
@@ -159,6 +172,7 @@ EOF
   if [ "$nskip" -gt 0 ]; then SKIPPED="$SKIPPED$skipped$NL"; fi
   if [ -z "$list" ]; then
     [ "$nskip" -eq 0 ] || die "check $id: every candidate file was skipped (symlink, over 1 MB, or a newline in the path), so nothing was scanned"
+    [ -z "$DIRLINKS" ] || die "check $id: a symlinked directory below the project is not followed, so its file may be behind it ($(printf '%s' "$DIRLINKS" | head -n 1))"
     ABSENT=$((ABSENT + 1))
     continue
   fi

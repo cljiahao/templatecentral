@@ -11,7 +11,8 @@ Each entry: what the older template did, how to recognise it, the fix, the id. C
 ## mongoose-client-promise-retry (Next.js)
 
 - Older: `connectDB()` awaited the cached connect promise and never reset it, so one failed connect failed every later request until restart.
-- Recognise: `mongoose-client.ts` awaits `cached.promise` and has no `cached.promise = null`.
+- Recognise: `mongoose-client.ts` awaits `X.promise` and has no reset of `X.promise` (to `null` or `undefined`, `delete X.promise`, or `X = { promise: null }`) in the catch block of a try that holds the await, or inside a `.catch(...)` call. Comments are ignored. A reset only in `finally` still matches: that is a different pattern.
+- Limits: only the shape `await X.promise` is read, not `const p = X.promise; await p`, `Promise.all([...])` or a dotted receiver. A reset made by a helper function is not seen, so verify by hand.
 - Fix: wrap the await in try/catch, set `cached.promise = null` in the catch, rethrow.
 - Current: `skills/add/database/typescript/nextjs-mongoose/template/src/integrations/database/mongoose-client.ts`.
 
@@ -33,8 +34,8 @@ Each entry: what the older template did, how to recognise it, the fix, the id. C
 ## vite-auth-csrf
 
 - Older: the Vite auth service sent login and logout without a CSRF token, and logout ignored a failed response.
-- Recognise: `src/features/auth/api/auth-service.ts` has `/logout` and no `csrfHeader` or `X-CSRF-Token`.
-- Applies when the backend uses cookie-mode auth (HttpOnly session cookie plus an `XSRF-TOKEN` cookie). A backend that takes a bearer token needs no change.
+- Recognise: `src/features/auth/api/auth-service.ts` has `loginWithCredentials`, a `/logout` call and `credentials: 'include'`, and has no `csrfHeader`, `X-CSRF-Token`, `Authorization` or `Bearer`. Comments are ignored.
+- Applies when the backend uses cookie-mode auth (HttpOnly session cookie plus an `XSRF-TOKEN` cookie). A client that sends a bearer token is not reported. A CSRF header set in a shared fetch wrapper in another file is still reported: verify by hand.
 - Fix: add `src/lib/clients/csrf.ts` and send `csrfHeader()` on the login and logout POSTs.
 - Current: `skills/add/auth/vite-react/template/src/features/auth/api/auth-service.ts`.
 

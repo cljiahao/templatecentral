@@ -8,20 +8,14 @@ export template=skills/add/database/python/sqlalchemy/template/src/database/sess
 export desc="the SQLAlchemy engine sets no sslmode, so a PostgreSQL connection may not verify the server certificate; this is a false match if TLS is set in the URL or the database is not PostgreSQL"
 export fix="pass connect_args with sslmode verify-full and sslrootcert outside dev, for PostgreSQL only"
 
-# Match a session module that builds an engine (sync or async) and never mentions sslmode outside comments.
+# Match a session module that builds an engine (sync or async, blanks before the paren allowed) and never mentions sslmode outside comments.
 check() {
-  local text pat
+  local text n
   text=$(strip_comments "$1") || return 1
-  pat=
-  case "$text" in
-    *'create_async_engine('*) pat='create_async_engine(' ;;
-  esac
-  case "$text" in
-    *'create_engine('*) pat='create_engine(' ;;
-  esac
-  [ -n "$pat" ] || return 0
+  n=$(printf '%s\n' "$text" | awk '/create_(async_)?engine[ \t]*\(/ { print NR; exit }')
+  [ -n "$n" ] || return 0
   case "$text" in
     *sslmode*) ;;
-    *) echo "$1:$(line_of "$text" "$pat")" ;;
+    *) echo "$1:$n" ;;
   esac
 }

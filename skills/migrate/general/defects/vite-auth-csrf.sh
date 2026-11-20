@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sourced by defect-report.sh. Fixed in e9724984: the Vite auth service sends X-CSRF-Token on login and logout.
-# Level stays high because the file itself shows cookie mode: it sends credentials: 'include' and no Authorization header. A bearer-token client does neither, so it is not flagged.
+# A CSRF header set in a shared fetch wrapper in another file still matches here and needs a check by hand. Level stays high because the file itself shows cookie mode: it sends credentials: 'include' and no Authorization header. A bearer-token client does neither, so it is not flagged.
 export id=vite-auth-csrf
 export level=high
 export names="auth-service.ts"
