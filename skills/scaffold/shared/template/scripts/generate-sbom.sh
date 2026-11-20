@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SBOM: writes a CycloneDX JSON bill of materials to dist/sbom/bom.cdx.json (SBOM_OUT overrides the path).
 # pnpm projects use `pnpm sbom` on the lockfile (production dependencies). Python projects are built from the project's own environment (VIRTUAL_ENV, else .venv)
-# with its interpreter and the installed package metadata, checked against requirements.txt. Nothing is downloaded, uploaded or signed in to.
+# by py-env.py (shared with check-licences.sh), from the installed package metadata, checked against requirements.txt when there is one. Nothing is downloaded, uploaded or signed in to.
 # A project with both manifests gets two files, <name>-pnpm.json and <name>-python.json, and no <name>.json.
 # Components and dependencies are sorted, so two runs on one lockfile differ only in serialNumber and metadata.timestamp.
 # Each document is parsed before it is kept: it must be CycloneDX with a components array that is not empty when the lockfile lists dependencies.
@@ -10,6 +10,7 @@
 set -uo pipefail
 
 out=${SBOM_OUT:-dist/sbom/bom.cdx.json}
+helper=$(dirname "${BASH_SOURCE[0]}")/py-env.py
 
 die() {
   printf 'generate-sbom: %s\n' "$1" >&2
@@ -25,6 +26,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 # Parses the pnpm SBOM $1, rejects an invalid or empty one, and writes it sorted to $2: pnpm lists components in a different order on each run.
 check_and_sort_pnpm() {
+  local rc=''
   node -e '
     const fs = require("fs");
     const stop = (m) => { console.error(m); process.exit(3); };
@@ -46,7 +48,13 @@ check_and_sort_pnpm() {
       for (const d of j.dependencies) if (Array.isArray(d.dependsOn)) d.dependsOn.sort();
     }
     fs.writeFileSync(process.argv[2], JSON.stringify(j, null, 2) + "\n");
-  ' "$1" "$2" 2> "$tmp/node.err" || fail "$(head -n 2 "$tmp/node.err" | tr '\n' ' ')"
+  ' "$1" "$2" 2> "$tmp/node.err"
+  rc=$?
+  if [ "$rc" -eq 3 ]; then
+    fail "$(head -n 2 "$tmp/node.err" | tr '\n' ' ')"
+  elif [ "$rc" -ne 0 ]; then
+    die "node could not read the SBOM: $(head -n 2 "$tmp/node.err" | tr '\n' ' ')"
+  fi
 }
 
 # Writes the SBOM of a pnpm project to $1.
@@ -60,8 +68,7 @@ sbom_pnpm() {
 
 # Writes the SBOM of a Python project to $1, built from the packages installed in the project environment.
 sbom_python() {
-  local py='' rc=''
-  if [ ! -f requirements.txt ]; then die "requirements.txt is missing. Compile it first: uv pip compile requirements.in --universal --generate-hashes -o requirements.txt"; fi
+  local py='' req='' rc=''
   if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
     py=$VIRTUAL_ENV/bin/python
   elif [ -x .venv/bin/python ]; then
@@ -69,93 +76,21 @@ sbom_python() {
   else
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
-  "$py" - requirements.txt "$1" << 'PYEOF' 2> "$tmp/err.txt"
-import datetime
-import importlib.metadata as md
-import json
-import re
-import sys
-import uuid
-
-def norm(n):
-    return re.sub(r"[-_.]+", "-", n).lower()
-
-def wanted(path):
-    try:
-        from packaging.markers import Marker
-    except ImportError:
-        Marker = None
-    names = []
-    for raw in open(path, encoding="utf-8"):
-        if not raw.strip() or raw[0] in " \t#-":
-            continue
-        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", raw)
-        if not m:
-            continue
-        marker = raw.split(";", 1)[1].strip().rstrip("\\").strip() if ";" in raw else ""
-        if marker and Marker is not None and not Marker(marker).evaluate():
-            continue
-        names.append(norm(m.group(0)))
-    return names
-
-def stop(message):
-    sys.stderr.write(message + "\n")
-    sys.exit(3)
-
-dists = {}
-for d in md.distributions():
-    name = d.metadata["Name"]
-    if name:
-        dists.setdefault(norm(name), d)
-names = wanted(sys.argv[1])
-missing = sorted({n for n in names if n not in dists})
-if missing:
-    stop("requirements.txt lists %s, which %s not installed in the project environment. Install first: uv pip install --require-hashes -r requirements.txt" % (", ".join(missing[:5]), "is" if len(missing) == 1 else "are"))
-
-components, dependencies = [], []
-for key in sorted(dists):
-    d = dists[key]
-    ref = "pkg:pypi/%s@%s" % (key, d.version)
-    component = {"type": "library", "bom-ref": ref, "name": d.metadata["Name"], "version": d.version, "purl": ref}
-    expr = (d.metadata.get("License-Expression") or "").strip()
-    if expr:
-        component["licenses"] = [{"expression": expr}]
-    components.append(component)
-    depends = set()
-    for r in d.requires or []:
-        if ";" in r and "extra" in r.split(";", 1)[1]:
-            continue
-        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r.strip())
-        if m and norm(m.group(0)) in dists:
-            depends.add("pkg:pypi/%s@%s" % (norm(m.group(0)), dists[norm(m.group(0))].version))
-    dependencies.append({"ref": ref, "dependsOn": sorted(depends)})
-
-if names and not components:
-    stop("requirements.txt lists packages, but the project environment has none installed.")
-stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-doc = {
-    "bomFormat": "CycloneDX",
-    "specVersion": "1.6",
-    "serialNumber": "urn:uuid:" + str(uuid.uuid4()),
-    "version": 1,
-    "metadata": {"timestamp": stamp, "tools": {"components": [{"type": "application", "name": "generate-sbom.sh"}]}},
-    "components": components,
-    "dependencies": dependencies,
-}
-with open(sys.argv[2], "w", encoding="utf-8") as f:
-    json.dump(doc, f, indent=2)
-    f.write("\n")
-with open(sys.argv[2], encoding="utf-8") as f:
-    back = json.load(f)
-if back.get("bomFormat") != "CycloneDX" or not isinstance(back.get("components"), list):
-    stop("the SBOM written is not a CycloneDX document.")
-PYEOF
+  if [ -f requirements.txt ]; then req=requirements.txt; fi
+  "$py" "$helper" sbom "$req" "$1" 2> "$tmp/err.txt"
   rc=$?
-  if [ "$rc" -eq 3 ]; then fail "$(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"; fi
-  if [ "$rc" -ne 0 ]; then die "cannot read the installed Python packages: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')"; fi
-  "$py" -c 'import json, sys
-j = json.load(open(sys.argv[1]))
-sys.exit(0 if j.get("bomFormat") == "CycloneDX" and isinstance(j.get("components"), list) else 3)' "$1" 2> "$tmp/err.txt" || fail "the Python SBOM is not valid CycloneDX JSON with a components array."
+  if [ "$rc" -eq 3 ]; then
+    fail "$(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  elif [ "$rc" -ne 0 ]; then
+    die "cannot read the installed Python packages: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')"
+  fi
+  "$py" "$helper" check "$1" 2> "$tmp/err.txt"
+  rc=$?
+  if [ "$rc" -eq 3 ]; then
+    fail "$(head -n 2 "$tmp/err.txt" | tr '\n' ' ')"
+  elif [ "$rc" -ne 0 ]; then
+    die "cannot check the Python SBOM: $(head -n 3 "$tmp/err.txt" | tr '\n' ' ')"
+  fi
 }
 
 has_pnpm=0

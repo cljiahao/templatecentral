@@ -3,3 +3,5 @@
 # Adding a line is a human decision (legal review). Say why in a comment above it.
 # libvips binaries that sharp ships for next/image (LGPL-3.0-or-later), used unmodified as a separate library.
 @img/sharp-* LGPL-3.0-or-later
+# certifi ships the CA bundle that fastapi's HTTP stack (uvicorn[standard]) needs: MPL-2.0 is file-level copyleft and the package is used unmodified.
+certifi MPL-2.0

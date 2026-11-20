@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/seeded-change-size.test.sh — the seeded check-change-size gate: it fails over the line or file budget, ignores lockfiles, generated files and snapshots,
+# scripts/seeded-change-size.test.sh — the seeded check-change-size gate: it fails over the line or file budget, ignores the lockfiles in its exclude file and files marked linguist-generated, weighs binaries by size,
 # and fails closed without a base ref. Fixtures are throwaway git repositories; a real run uses a freshly scaffolded nextjs project.
 # Usage: bash scripts/seeded-change-size.test.sh
 set -uo pipefail
@@ -7,6 +7,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SH="$REPO_ROOT/skills/scaffold/shared"
 GATE="$SH/template/scripts/check-change-size.sh"
+EXCLUDE="$SH/template/.claude/change-size-exclude.txt"
 
 PASS=0
 FAIL=0
@@ -28,7 +29,7 @@ export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT
 run() {
   local d=$1
   shift
-  OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS -u BASE_REF -u CHANGE_SIZE_MAX_LINES -u CHANGE_SIZE_MAX_FILES "$@" "$BASH_BIN" "$GATE" 2>&1)
+  OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS -u BASE_REF -u CHANGE_SIZE_MAX_LINES -u CHANGE_SIZE_MAX_FILES -u CHANGE_SIZE_EXCLUDE_FILE "$@" "$BASH_BIN" "$GATE" 2>&1)
   EC=$?
 }
 # lines <n> <file>: writes n lines.
@@ -38,6 +39,8 @@ lines() { seq 1 "$1" > "$2"; }
 repo() {
   D="$T/$1"
   mkdir -p "$D"
+  mkdir -p "$D/.claude"
+  cp "$EXCLUDE" "$D/.claude/change-size-exclude.txt"
   (cd "$D" && git init -q -b main . && echo base > README.md && git add -A && git commit -q -m base && git checkout -q -b work)
 }
 commit_all() { (cd "$D" && git add -A && git commit -q -m change); }
@@ -89,17 +92,95 @@ repo excluded
 lines 5000 "$D/pnpm-lock.yaml"
 lines 5000 "$D/uv.lock"
 lines 5000 "$D/requirements.txt"
-mkdir -p "$D/src/__snapshots__" "$D/src/generated"
-lines 5000 "$D/src/__snapshots__/a.snap"
-lines 5000 "$D/src/__snapshots__/b.txt"
-lines 5000 "$D/src/api.generated.ts"
-lines 5000 "$D/src/generated/types.ts"
-lines 5000 "$D/dist.min.js"
+mkdir -p "$D/web"
+lines 5000 "$D/web/package-lock.json"
 lines 20 "$D/real.txt"
 commit_all
 run "$D" BASE_REF=main
-check 0 "$EC" "lockfiles, generated files and snapshots are not counted ($OUT)"
+check 0 "$EC" "the lockfiles in the exclude file are not counted ($OUT)"
 has "ok (20 lines in 1 files" "$OUT" "only the real file is counted"
+
+# Names that look generated are counted, unless .gitattributes marks the file.
+repo lookalike
+mkdir -p "$D/src/generated"
+lines 900 "$D/src/api.generated.ts"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a *.generated.* name alone does not exclude a file"
+repo lookalike2
+mkdir -p "$D/src/generated"
+lines 900 "$D/src/generated/types.ts"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a generated/ folder name alone does not exclude a file"
+repo lookalike3
+lines 900 "$D/app.min.js"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a *.min.js name alone does not exclude a file"
+repo lookalike4
+lines 900 "$D/app.js.map"
+lines 900 "$D/a.snap"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "*.map and *.snap names alone do not exclude a file"
+
+repo marked
+mkdir -p "$D/src/generated"
+lines 5000 "$D/src/generated/types.ts"
+lines 5000 "$D/src/api.generated.ts"
+lines 5000 "$D/other.ts"
+lines 20 "$D/real.txt"
+printf 'src/generated/* linguist-generated\n*.generated.ts linguist-generated=true\n' > "$D/.gitattributes"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "files marked linguist-generated are dropped but an unmarked big file still counts"
+has "5022 changed lines" "$OUT" "5000 + 20 + two .gitattributes lines, no generated lines"
+printf 'src/generated/* linguist-generated\n*.generated.ts linguist-generated=true\nother.ts linguist-generated\n' > "$D/.gitattributes"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "marking the third file too brings the change within budget ($OUT)"
+printf 'src/generated/* -linguist-generated\n' > "$D/.gitattributes"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "-linguist-generated (unset) does not exclude"
+
+# The exclude file is data: a line there is honoured.
+repo custom
+lines 5000 "$D/vendor-data.txt"
+printf 'vendor-data.txt\n' >> "$D/.claude/change-size-exclude.txt"
+lines 20 "$D/real.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "a line added to the exclude file is honoured ($OUT)"
+printf '# only comments\n' > "$D/other-exclude.txt"
+run "$D" BASE_REF=main CHANGE_SIZE_EXCLUDE_FILE=other-exclude.txt
+check 1 "$EC" "CHANGE_SIZE_EXCLUDE_FILE points the gate at another list"
+rm "$D/.claude/change-size-exclude.txt"
+run "$D" BASE_REF=main
+check 2 "$EC" "a missing exclude file cannot be measured"
+has "change-size-exclude.txt is missing" "$OUT" "message names the exclude file"
+
+# Overrides that can widen the gate are refused in CI.
+repo ci
+lines 900 "$D/big.txt"
+commit_all
+printf 'big.txt\n' > "$D/ex.txt"
+for ci in GITHUB_ACTIONS=true TF_BUILD=True; do
+  run "$D" BASE_REF=main "$ci" CHANGE_SIZE_MAX_LINES=5000
+  check 2 "$EC" "CHANGE_SIZE_MAX_LINES is refused with $ci"
+  has "not allowed in CI" "$OUT" "line-budget refusal under $ci says why"
+  run "$D" BASE_REF=main "$ci" CHANGE_SIZE_MAX_FILES=500
+  check 2 "$EC" "CHANGE_SIZE_MAX_FILES is refused with $ci"
+  run "$D" BASE_REF=main "$ci" CHANGE_SIZE_EXCLUDE_FILE=ex.txt
+  check 2 "$EC" "CHANGE_SIZE_EXCLUDE_FILE is refused with $ci"
+done
+run "$D" BASE_REF=main CHANGE_SIZE_MAX_LINES=5000
+check 0 "$EC" "CHANGE_SIZE_MAX_LINES is allowed outside CI ($OUT)"
+run "$D" BASE_REF=main CHANGE_SIZE_EXCLUDE_FILE=ex.txt
+check 0 "$EC" "CHANGE_SIZE_EXCLUDE_FILE is allowed outside CI ($OUT)"
+run "$D" BASE_REF=main GITHUB_ACTIONS=true
+check 1 "$EC" "CI without overrides still measures"
 
 repo notexcluded
 lines 5000 "$D/package-lock.json.bak"
@@ -111,8 +192,39 @@ repo binary
 head -c 2000 /dev/urandom > "$D/image.bin"
 commit_all
 run "$D" BASE_REF=main
-check 0 "$EC" "a binary file counts as a file with no lines ($OUT)"
-has "ok (0 lines in 1 files" "$OUT" "binary counts one file"
+check 0 "$EC" "a small binary counts one line ($OUT)"
+has "ok (1 lines in 1 files" "$OUT" "2000 bytes weigh one line"
+
+repo bigbinary
+head -c 5000000 /dev/urandom > "$D/video.bin"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a 5 MB committed binary fails the line budget"
+has "1221 changed lines" "$OUT" "5000000 bytes weigh 1221 lines (4 KB each, rounded up)"
+
+repo binuntracked
+head -c 5000000 /dev/urandom > "$D/video.bin"
+run "$D" BASE_REF=main
+check 1 "$EC" "a 5 MB untracked binary fails the line budget"
+has "1221 changed lines" "$OUT" "an untracked binary weighs the same"
+
+repo bindeleted
+head -c 5000000 /dev/urandom > "$D/video.bin"
+commit_all
+git -C "$D" checkout -q main
+git -C "$D" checkout -q -b work4
+git -C "$D" checkout -q work -- video.bin
+git -C "$D" commit -q -m addbin
+git -C "$D" checkout -q -b work5
+git -C "$D" rm -q video.bin
+git -C "$D" commit -q -m rmbin
+git -C "$D" checkout -q work4
+git -C "$D" reset -q --hard main
+git -C "$D" checkout -q work -- video.bin
+git -C "$D" commit -q -m addbin2
+git -C "$D" rm -q video.bin
+run "$D" BASE_REF=main
+check 0 "$EC" "a binary added and removed again counts nothing ($OUT)"
 
 repo uncommitted
 lines 900 "$D/tracked.txt"
@@ -125,15 +237,16 @@ run "$D" BASE_REF=main
 check 1 "$EC" "uncommitted edits to tracked files count"
 
 repo quoted
-mkdir -p "$D/generated" "$D/sp ace"
-lines 5000 "$D/generated/café x.ts"
+mkdir -p "$D/sp ace" "$D/web"
+lines 5000 "$D/web/café x.lock"
+printf 'web/café?x.lock linguist-generated\n' > "$D/.gitattributes"
 lines 5000 "$D/bun.lock"
 printf 'x' > "$D/bun.lockb"
 lines 7 "$D/sp ace/naïve file.txt"
 commit_all
 run "$D" BASE_REF=main
 check 0 "$EC" "paths with spaces and non-ASCII names under excluded rules are handled ($OUT)"
-has "ok (7 lines in 1 files" "$OUT" "bun.lock, bun.lockb and the generated file are excluded; the spaced path counts once"
+has "ok (8 lines in 2 files" "$OUT" "bun.lock, bun.lockb and the marked file are excluded; the spaced path and .gitattributes count"
 lines 900 "$D/sp ace/naïve file.txt"
 commit_all
 run "$D" BASE_REF=main
@@ -146,7 +259,7 @@ run "$D" BASE_REF=main
 check 1 "$EC" "an untracked file counts toward the budget"
 has "900 changed lines (budget 800)" "$OUT" "message counts the untracked lines"
 has "new.txt" "$OUT" "message names the untracked file"
-has "untracked files are" "$OUT" "message says untracked files are counted"
+has "untracked files and binaries" "$OUT" "message says untracked files are counted"
 printf 'new.txt\n' > "$D/.gitignore"
 run "$D" BASE_REF=main
 check 0 "$EC" "an ignored file does not count ($OUT)"
@@ -178,7 +291,7 @@ has "git fetch origin main" "$OUT" "message says how to fix it"
 run "$D"
 check 2 "$EC" "the default origin/main is missing here, so it fails closed"
 has "base ref 'origin/main' not found" "$OUT" "default base is origin/main"
-OUT=$(cd "$D" && env -u CI "$BASH_BIN" "$GATE" main 2>&1)
+OUT=$(cd "$D" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD "$BASH_BIN" "$GATE" main 2>&1)
 check 0 $? "a base ref given as an argument works ($OUT)"
 
 D="$T/notgit"
@@ -192,6 +305,8 @@ D="$T/real"
 mkdir -p "$D"
 TC_STACK=nextjs TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null
 check 0 $? "nextjs scaffold copies"
+mkdir -p "$D/.claude"
+cp "$EXCLUDE" "$D/.claude/change-size-exclude.txt"
 (cd "$D" && git init -q -b main . && git add -A && git commit -q -m scaffold && git checkout -q -b feature && printf '\n// change\n' >> next.config.ts && git commit -qam change)
 run "$D" BASE_REF=main
 check 0 "$EC" "real nextjs scaffold with a small edit passes ($OUT)"

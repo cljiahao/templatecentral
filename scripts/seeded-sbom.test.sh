@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/seeded-sbom.test.sh — the seeded generate-sbom gate: it writes a CycloneDX file, fails closed when it cannot, and never leaves a stale file.
-# A stubbed pnpm and a fake Python environment read by the real metadata code cover every rule. The real run scaffolds nextjs and fastapi, installs them
+# A stubbed pnpm and a fake Python environment read by the real metadata code cover every rule. The real run scaffolds all four stacks (fastapi from the exact seeded requirements.in), installs them
 # (network to the public registries only, no key), generates real SBOMs twice and compares the runs apart from serialNumber and timestamp.
 # A missing tool for the real run fails the test; ALLOW_SKIP_REAL=1 skips it with a SKIPPED: line.
 # Usage: bash scripts/seeded-sbom.test.sh
@@ -30,7 +30,7 @@ echo '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[{"bom-ref":"pkg
 run() {
   local d=$1
   shift
-  OUT=$(cd "$d" && env -u VIRTUAL_ENV -u SBOM_OUT "$@" "$BASH_BIN" "$GATE" 2>&1)
+  OUT=$(cd "$d" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u VIRTUAL_ENV -u SBOM_OUT "$@" "$BASH_BIN" "$GATE" 2>&1)
   EC=$?
 }
 # stub <dir> <name>: an executable stub tool whose body is read from stdin.
@@ -212,28 +212,88 @@ check 2 "$EC" "no project environment cannot generate, even when the global pyth
 has "no project Python environment" "$OUT" "message says there is no environment"
 has "Create the environment and install first" "$OUT" "message says how to fix it"
 
-env_fixture py-nolock ''
+env_fixture py-pyproject ''
 rm "$D/requirements.txt"
 echo '[project]' > "$D/pyproject.toml"
+dist alpha 1.0 'License-Expression: MIT'
 run "$D" PYTHONPATH="$SITE"
-check 2 "$EC" "python without requirements.txt cannot generate"
-has "requirements.txt is missing" "$OUT" "message says to compile the lockfile"
+check 0 "$EC" "a pyproject-only project lists everything installed ($OUT)"
+has '"purl": "pkg:pypi/alpha@1.0"' "$(cat "$D/dist/sbom/bom.cdx.json")" "the pyproject-only SBOM lists the installed package"
 
 env_fixture py-badjson 'alpha==1.0
 '
 dist alpha 1.0
 stub "$D/.venv/bin" python << 'EOS'
-if [ "$1" = -c ]; then exec python3 "$@"; fi
-cat > /dev/null
+if [ "$2" = check ]; then exec python3 "$@"; fi
 out=
 for a in "$@"; do out=$a; done
 echo 'not json' > "$out"
 EOS
 run "$D" PYTHONPATH="$SITE"
 check 1 "$EC" "a generator that writes invalid JSON does not pass"
-has "not valid CycloneDX JSON" "$OUT" "message says the document is invalid"
+has "not valid JSON" "$OUT" "message says the document is invalid"
 hasnt_ok=$(printf '%s' "$OUT" | grep -c 'wrote ')
 check 0 "$hasnt_ok" "no wrote line after invalid JSON"
+
+# Exit codes of the helpers: 3 is a bad document (exit 1), any other failure is a crash that cannot generate (exit 2).
+env_fixture py-crash 'alpha==1.0
+'
+dist alpha 1.0
+stub "$D/.venv/bin" python << 'EOS'
+exit 5
+EOS
+run "$D" PYTHONPATH="$SITE"
+check 2 "$EC" "a Python helper that crashes cannot generate (exit 2, not a finding)"
+has "cannot read the installed Python packages" "$OUT" "message says the helper crashed"
+stub "$D/.venv/bin" python << 'EOS'
+echo "bad document" >&2
+exit 3
+EOS
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a Python helper that reports a bad document fails (exit 1)"
+pnpm_fixture node-crash
+stub "$D/stub" node << 'EOS'
+echo "node blew up" >&2
+exit 5
+EOS
+run "$D" PATH="$D/stub:$PATH"
+check 2 "$EC" "a node that crashes cannot generate (exit 2, not a finding)"
+has "node could not read the SBOM" "$OUT" "message says node failed"
+check 1 "$(gone "$D/dist/sbom/bom.cdx.json")" "a node crash leaves no SBOM"
+stub "$D/stub" node << 'EOS'
+echo "bad document" >&2
+exit 3
+EOS
+run "$D" PATH="$D/stub:$PATH"
+check 1 "$EC" "a node that reports a bad document fails (exit 1)"
+
+# A distribution with no Name cannot be listed, so it fails instead of being skipped.
+env_fixture py-nameless 'alpha==1.0
+'
+dist alpha 1.0 'License-Expression: MIT'
+mkdir -p "$SITE/nameless-1.0.dist-info"
+printf 'Metadata-Version: 2.4\nVersion: 1.0\n' > "$SITE/nameless-1.0.dist-info/METADATA"
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a package with no Name fails the SBOM"
+has "nameless-1.0.dist-info" "$OUT" "message names the dist-info folder"
+
+# The licence fallback matches check-licences.sh: License-Expression, then License, then classifiers.
+env_fixture py-lic 'a==1
+b==1
+c==1
+d==1
+'
+dist a 1 'License-Expression: Apache-2.0'
+dist b 1 'License: BSD-3-Clause'
+dist c 1 'Classifier: License :: OSI Approved :: MIT License'
+dist d 1
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "licence fallbacks generate ($OUT)"
+J="$D/dist/sbom/bom.cdx.json"
+has '"expression": "Apache-2.0"' "$(cat "$J")" "License-Expression becomes an expression"
+has '"name": "BSD-3-Clause"' "$(cat "$J")" "the License field is the fallback"
+has '"name": "MIT License"' "$(cat "$J")" "a classifier is the last fallback"
+check 3 "$(grep -c '"licenses"' "$J")" "a package with no licence gets no licences entry"
 
 # Both manifests: two files, neither skipped.
 env_fixture both 'alpha==1.0
@@ -287,11 +347,25 @@ if [ "$real_ok" -eq 1 ]; then
   check 0 "$EC" "a second real run succeeds"
   check "$(stable "$T/first.json" | cksum)" "$(stable "$D/dist/sbom/bom.cdx.json" | cksum)" "two nextjs runs agree apart from serialNumber and timestamp"
 
+  for stack in vite-react nestjs; do
+    D="$T/real-$stack"
+    mkdir -p "$D"
+    TC_STACK=$stack TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null
+    check 0 $? "$stack scaffold copies"
+    (cd "$D" && env -u CI pnpm install > "$T/$stack-install.log" 2>&1)
+    check 0 $? "$stack scaffold installs: $(tail -n 3 "$T/$stack-install.log" | tr '\n' ' ')"
+    run "$D"
+    check 0 "$EC" "real $stack scaffold produces an SBOM ($OUT)"
+    echo "real run $stack: $OUT ($(grep -c '"purl"' "$D/dist/sbom/bom.cdx.json") components with a purl)"
+  done
+
   D="$T/real-py"
   mkdir -p "$D"
   TC_STACK=fastapi TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null
   check 0 $? "fastapi scaffold copies"
-  printf 'fastapi\npydantic\nstructlog\nuvicorn\n' > "$D/requirements.in"
+  # The exact requirements.in the scaffold writes, read from its source file so the two cannot drift.
+  awk '/^cat > requirements.in <<.REQ.$/ { on = 1; next } /^REQ$/ { on = 0 } on' "$SH/../fastapi/source-files.md" > "$D/requirements.in"
+  check 1 "$(grep -c '^certifi' "$D/requirements.in")" "the seeded requirements.in was extracted"
   (cd "$D" && uv pip compile requirements.in --universal --generate-hashes -o requirements.txt > "$T/py-compile.log" 2>&1)
   check 0 $? "fastapi requirements.txt compiles: $(tail -n 3 "$T/py-compile.log" | tr '\n' ' ')"
   run "$D"

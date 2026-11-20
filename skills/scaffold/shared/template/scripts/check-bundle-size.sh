@@ -3,9 +3,22 @@
 # Reads the build output only (.next/static for Next.js, dist for Vite): no network. The frontend folder is the current one, or BUNDLE_DIR when it sits in a subfolder.
 # A folder with no next.config.* or vite.config.* exits 0 with a one-line reason, unless its package.json depends on next or vite: that fails, it never passes silently.
 # Exit: 0 within budget (or no browser bundle), 1 over budget, 2 it could not measure (no build, bad budget, unreadable output).
+# A trailing '# comment' on the budget line is allowed. In CI the budget-file override is refused.
 # Usage: bash scripts/check-bundle-size.sh        Env: BUNDLE_DIR frontend folder, BUNDLE_BUDGET_FILE budget file path (relative paths start at the folder you run this from).
 set -uo pipefail
 export LC_ALL=C
+
+die() {
+  printf 'check-bundle-size: %s\n' "$1" >&2
+  exit 2
+}
+
+# The budget file path can widen the gate, so it is not allowed in GitHub Actions or Azure Pipelines.
+if [ -n "${BUNDLE_BUDGET_FILE:-}" ]; then
+  case "${GITHUB_ACTIONS:-}${TF_BUILD:-}" in
+    *[Tt][Rr][Uu][Ee]*) die "BUNDLE_BUDGET_FILE is set, which can widen the gate. It is not allowed in CI: change .claude/bundle-budget.txt and review the change." ;;
+  esac
+fi
 
 root=$PWD
 budget_file=${BUNDLE_BUDGET_FILE:-.claude/bundle-budget.txt}
@@ -13,11 +26,6 @@ case "$budget_file" in
   /*) ;;
   *) budget_file=$root/$budget_file ;;
 esac
-
-die() {
-  printf 'check-bundle-size: %s\n' "$1" >&2
-  exit 2
-}
 
 if [ -n "${BUNDLE_DIR:-}" ]; then
   cd "$BUNDLE_DIR" 2> /dev/null || die "BUNDLE_DIR '$BUNDLE_DIR' is not a folder."
@@ -37,9 +45,9 @@ else
 fi
 
 if [ ! -f "$budget_file" ]; then die "$budget_file is missing. Restore it from the scaffold: it holds 'max_gzip_kb <number>'."; fi
-max_kb=$(awk '$1 == "max_gzip_kb" { $1 = ""; sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$budget_file") || die "cannot read $budget_file"
+max_kb=$(awk '$1 == "max_gzip_kb" { $1 = ""; sub(/#.*$/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$budget_file") || die "cannot read $budget_file"
 case "$max_kb" in
-  '' | *[!0-9]* | 0*) die "$budget_file needs a line 'max_gzip_kb <whole number above 0, no leading zeros>', for example 'max_gzip_kb 400' (got '$max_kb')." ;;
+  '' | *[!0-9]* | 0* | [0-9][0-9][0-9][0-9][0-9][0-9][0-9]*) die "$budget_file needs a line 'max_gzip_kb <whole number above 0, 6 digits at most, no leading zeros>', for example 'max_gzip_kb 400' (got '$max_kb')." ;;
 esac
 if [ ! -d "$dir" ]; then die "no build output at $dir. Build first (pnpm build), then run this again."; fi
 

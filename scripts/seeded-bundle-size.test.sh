@@ -29,7 +29,7 @@ BASH_BIN=$(command -v bash)
 run() {
   local d=$1
   shift
-  OUT=$(cd "$d" && env -u BUNDLE_DIR -u BUNDLE_BUDGET_FILE "$@" "$BASH_BIN" "$GATE" 2>&1)
+  OUT=$(cd "$d" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u BUNDLE_DIR -u BUNDLE_BUDGET_FILE "$@" "$BASH_BIN" "$GATE" 2>&1)
   EC=$?
 }
 # blob <kb> <file>: an incompressible file of about <kb> KB, so its gzip size is about the same.
@@ -111,11 +111,11 @@ has "bundle-budget.txt is missing" "$OUT" "message names the budget file"
 
 fixture bad-budget vite-react 100
 blob 1 "$D/dist/a.js"
-for bad in lots 0 -5 "" 007 1.5 "5 0"; do
+for bad in lots 0 -5 "" 007 1.5 "5 0" 12345678901234567890 1234567; do
   printf 'max_gzip_kb %s\n' "$bad" > "$D/.claude/bundle-budget.txt"
   run "$D"
   check 2 "$EC" "budget '$bad' is rejected"
-  has "needs a line 'max_gzip_kb <whole number above 0, no leading zeros>'" "$OUT" "budget '$bad' message says the fix"
+  has "needs a line 'max_gzip_kb <whole number above 0, 6 digits at most, no leading zeros>'" "$OUT" "budget '$bad' message says the fix"
 done
 printf '# no key here\n' > "$D/.claude/bundle-budget.txt"
 run "$D"
@@ -128,6 +128,29 @@ check 1 "$EC" "control for the override: over a 1 KB budget"
 printf 'max_gzip_kb 100\n' > "$D/other-budget.txt"
 run "$D" BUNDLE_BUDGET_FILE=other-budget.txt
 check 0 "$EC" "BUNDLE_BUDGET_FILE points the gate at another budget ($OUT)"
+
+# Six digits is the cap; a trailing comment is allowed.
+printf 'max_gzip_kb 999999\n' > "$D/.claude/bundle-budget.txt"
+run "$D"
+check 0 "$EC" "a 6-digit budget is accepted ($OUT)"
+printf 'max_gzip_kb 100 # raised for the charts page\n' > "$D/.claude/bundle-budget.txt"
+run "$D"
+check 0 "$EC" "a trailing comment on the budget line is accepted ($OUT)"
+printf 'max_gzip_kb 1 # tight\n' > "$D/.claude/bundle-budget.txt"
+run "$D"
+check 1 "$EC" "the number before the comment is the budget"
+
+# A budget-file override widens the gate, so CI refuses it.
+printf 'max_gzip_kb 100\n' > "$D/other-budget.txt"
+for ci in GITHUB_ACTIONS=true TF_BUILD=True; do
+  run "$D" "$ci" BUNDLE_BUDGET_FILE=other-budget.txt
+  check 2 "$EC" "BUNDLE_BUDGET_FILE is refused with $ci"
+  has "not allowed in CI" "$OUT" "refusal under $ci says why"
+done
+run "$D" BUNDLE_BUDGET_FILE=other-budget.txt
+check 0 "$EC" "BUNDLE_BUDGET_FILE is allowed outside CI ($OUT)"
+run "$D" GITHUB_ACTIONS=true
+check 1 "$EC" "without the override, CI still measures against the seeded budget file"
 
 # A sub-KB overshoot must not round down to a pass.
 fixture round vite-react 1

@@ -3,7 +3,8 @@
 # Reads the installed packages only (pnpm licenses list for package.json, the project's own Python environment for requirements.txt or pyproject.toml): no account, no key, no hosted service.
 # A project with both manifests is checked for both. Dependencies must be installed first: a missing node_modules or Python environment fails, it never passes.
 # Python needs the project environment (VIRTUAL_ENV, else .venv) and every package named in requirements.txt must be installed in it.
-# LICENCES_SCOPE=prod|all applies to pnpm only (default prod); Python checks every package installed in the environment.
+# LICENCES_SCOPE=prod|all applies to pnpm only. It defaults to prod because dev tools are not shipped; Python checks every package installed in the environment.
+# The Python reading lives in py-env.py next to this script, shared with generate-sbom.sh. In GitHub Actions and Azure Pipelines the list-path overrides are refused.
 # Strict by design: several Python licence classifiers on one package are joined with AND, so a dual-licensed package that lists two classifiers needs both allowed.
 # Exit: 0 ok, 1 a licence is not allowed, 2 the check could not run.
 # Usage: bash scripts/check-licences.sh        Env: ALLOWED_LICENCES_FILE, LICENCE_EXCEPTIONS_FILE override the list paths.
@@ -12,11 +13,24 @@ set -uo pipefail
 allow=${ALLOWED_LICENCES_FILE:-.claude/allowed-licences.txt}
 exc=${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt}
 scope=${LICENCES_SCOPE:-prod}
+helper=$(dirname "${BASH_SOURCE[0]}")/py-env.py
 
 die() {
   printf 'check-licences: %s\n' "$1" >&2
   exit 2
 }
+
+# Refuses an environment override that could widen the gate when the run is in CI.
+refuse_in_ci() {
+  case "${GITHUB_ACTIONS:-}" in
+    [Tt][Rr][Uu][Ee]) die "$1 is set, which can widen the gate. It is not allowed in CI: use the files in .claude/ and review the change." ;;
+  esac
+  case "${TF_BUILD:-}" in
+    [Tt][Rr][Uu][Ee]) die "$1 is set, which can widen the gate. It is not allowed in CI: use the files in .claude/ and review the change." ;;
+  esac
+}
+if [ -n "${ALLOWED_LICENCES_FILE:-}" ]; then refuse_in_ci ALLOWED_LICENCES_FILE; fi
+if [ -n "${LICENCE_EXCEPTIONS_FILE:-}" ]; then refuse_in_ci LICENCE_EXCEPTIONS_FILE; fi
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-licences.XXXXXX") || die "cannot create a temporary folder"
 trap 'rm -rf "$tmp"' EXIT
@@ -52,64 +66,7 @@ list_python() {
     die "no project Python environment (VIRTUAL_ENV or .venv). Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
   fi
   if [ -f requirements.txt ]; then req=requirements.txt; fi
-  "$py" - "$req" "$tmp/py.note" << 'PYEOF' 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
-import importlib.metadata as md
-import re
-import sys
-
-def norm(n):
-    return re.sub(r"[-_.]+", "-", n).lower()
-
-def licence(meta):
-    expr = (meta.get("License-Expression") or "").strip()
-    if expr:
-        return expr
-    lic = (meta.get("License") or "").strip()
-    if lic and "\n" not in lic and len(lic) <= 100 and lic.upper() != "UNKNOWN":
-        return lic
-    labels = [c.split("::")[-1].strip() for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
-    labels = [x for x in labels if x not in ("OSI Approved",)]
-    return " AND ".join(sorted(set(labels))) if labels else "Unknown"
-
-def wanted(path):
-    try:
-        from packaging.markers import Marker
-    except ImportError:
-        Marker = None
-    names, unchecked = [], 0
-    for raw in open(path, encoding="utf-8"):
-        if not raw.strip() or raw[0] in " \t#-":
-            continue
-        m = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", raw)
-        if not m:
-            continue
-        marker = raw.split(";", 1)[1].strip().rstrip("\\").strip() if ";" in raw else ""
-        if marker:
-            if Marker is None:
-                unchecked += 1
-                continue
-            if not Marker(marker).evaluate():
-                continue
-        names.append(norm(m.group(0)))
-    return names, unchecked
-
-seen = {}
-for d in md.distributions():
-    name = d.metadata["Name"]
-    if name:
-        seen.setdefault((norm(name), d.version), (name, licence(d.metadata)))
-for (key, version), (name, lic) in sorted(seen.items()):
-    print("%s@%s\t%s" % (name, version, lic))
-
-if sys.argv[1]:
-    names, unchecked = wanted(sys.argv[1])
-    installed = {k for (k, _v) in seen}
-    missing = sorted({n for n in names if n not in installed})
-    if missing:
-        sys.exit("%s lists %s, which %s not installed. " % (sys.argv[1], ", ".join(missing[:5]), "is" if len(missing) == 1 else "are"))
-    if unchecked:
-        open(sys.argv[2], "w").write("%d requirement lines with markers were not checked (the packaging module is not installed)" % unchecked)
-PYEOF
+  "$py" "$helper" licences "$req" "$tmp/py.note" 2> "$tmp/py.err" || die "cannot read the installed Python packages: $(head -n 3 "$tmp/py.err" | tr '\n' ' ')Create the environment and install first: uv venv && uv pip install --require-hashes -r requirements.txt"
 }
 
 # Reads the data file; prints "name<TAB>licence" for each package whose licence is not allowed, then one sentinel line "__judged__<TAB>count".
@@ -194,6 +151,12 @@ else
   : > "$tmp/exc.txt"
 fi
 exc=$tmp/exc.txt
+grep -qE '^[[:space:]]*\*+([[:space:]]|$)' "$exc"
+case $? in
+  0) die "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt} has a bare '*' package pattern, which would allow a licence for every package. Name the package, for example 'certifi MPL-2.0'." ;;
+  1) ;;
+  *) die "cannot read the exceptions file" ;;
+esac
 
 : > "$tmp/all.tsv"
 stacks=
@@ -218,13 +181,14 @@ judge "$tmp/all.tsv" > "$tmp/judged.txt" 2> "$tmp/judge.err" || die "the licence
 if [ "$(tail -n 1 "$tmp/judged.txt")" != "$(printf '__judged__\t%s' "$total")" ]; then
   die "the licence check did not look at all $total packages, so it cannot vouch for them."
 fi
-grep -v '^__judged__' "$tmp/judged.txt" | sort -u > "$tmp/bad.tsv"
-sort_status=$?
-if [ "$sort_status" -gt 1 ]; then die "cannot sort the licence findings"; fi
-if [ -s "$tmp/bad.tsv" ]; then
+grep -v '^__judged__' "$tmp/judged.txt" > "$tmp/bad.tsv"
+if [ "$?" -gt 1 ]; then die "cannot read the licence findings"; fi
+bad_count=$(wc -l < "$tmp/bad.tsv" | tr -d ' ')
+if [ "$bad_count" -gt 0 ]; then
+  sort -u "$tmp/bad.tsv" > "$tmp/bad.sorted" || die "cannot sort the licence findings"
   while IFS="$(printf '\t')" read -r pkg lic; do
     printf 'check-licences: %s has licence %s, which is not in %s. Replace the package, or add the licence to the list (or one package to %s) after a human decision (legal review).\n' "$pkg" "$lic" "$allow" "${LICENCE_EXCEPTIONS_FILE:-.claude/licence-exceptions.txt}" >&2
-  done < "$tmp/bad.tsv"
+  done < "$tmp/bad.sorted"
   exit 1
 fi
 echo "check-licences: ok ($total packages, $stacks)"

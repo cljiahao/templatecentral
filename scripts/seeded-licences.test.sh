@@ -30,7 +30,7 @@ trap 'rm -rf "$T"' EXIT
 run() {
   local d=$1
   shift
-  OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS -u VIRTUAL_ENV -u LICENCES_SCOPE "$@" bash "$GATE" 2>&1)
+  OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS -u VIRTUAL_ENV -u LICENCES_SCOPE -u ALLOWED_LICENCES_FILE -u LICENCE_EXCEPTIONS_FILE "$@" bash "$GATE" 2>&1)
   EC=$?
 }
 
@@ -147,6 +147,16 @@ rm "$D/.claude/licence-exceptions.txt"
 run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "without the exceptions file the same package fails"
 has "@img/sharp-libvips-darwin-arm64@1.2.3 has licence LGPL-3.0-or-later" "$OUT" "message names the package and licence"
+check 0 "$(grep -c "^MPL" "$LIST")" "the global list does not allow MPL-2.0 for every package"
+pnpm_fixture mpl-certifi "$(report MPL-2.0 certifi)"
+run "$D" PATH="$D/stub:$PATH"
+check 0 "$EC" "the seeded exception lets certifi carry MPL-2.0 ($OUT)"
+pnpm_fixture mpl-other "$(report MPL-2.0 other-lib)"
+run "$D" PATH="$D/stub:$PATH"
+check 1 "$EC" "the certifi exception does not cover another MPL-2.0 package"
+pnpm_fixture mpl-certifi-gpl "$(report GPL-3.0-only certifi)"
+run "$D" PATH="$D/stub:$PATH"
+check 1 "$EC" "the certifi exception covers only MPL-2.0, not another licence"
 pnpm_fixture lgpl-other "$(report LGPL-3.0-or-later other-lib)"
 run "$D" PATH="$D/stub:$PATH"
 check 1 "$EC" "the exception does not cover another package"
@@ -192,7 +202,7 @@ py_fixture() {
   base_fixture "$1"
   mkdir -p "$D/.venv/bin"
   : > "$D/requirements.txt"
-  printf '#!/bin/sh\ncat > /dev/null\nprintf '"'"'%s\\n'"'"'\n' "$2" > "$D/.venv/bin/python"
+  printf '#!/bin/sh\nprintf '"'"'%s\\n'"'"'\n' "$2" > "$D/.venv/bin/python"
   chmod +x "$D/.venv/bin/python"
 }
 py_fixture py-good 'fastapi@0.1	MIT'
@@ -321,6 +331,67 @@ printf '#!/bin/sh\nexit 1\n' > "$D/stub/pnpm"
 run "$D" PYTHONPATH="$SITE" PATH="$D/stub:$PATH"
 check 2 "$EC" "python plus package.json: a failing pnpm is not skipped"
 
+# A distribution with no Name is a finding named by its folder, never skipped.
+env_fixture py-nameless 'okpkg==1.0
+'
+dist okpkg 1.0 'License-Expression: MIT'
+mkdir -p "$SITE/nameless-1.0.dist-info"
+printf 'Metadata-Version: 2.4\nVersion: 1.0\n' > "$SITE/nameless-1.0.dist-info/METADATA"
+run "$D" PYTHONPATH="$SITE"
+check 1 "$EC" "a Python distribution with no Name fails instead of being skipped"
+has "nameless-1.0.dist-info" "$OUT" "the finding names the dist-info folder"
+has "Unknown" "$OUT" "the nameless distribution has an unknown licence"
+
+# The verdict comes from the findings, not from a sort that could succeed with no output.
+pnpm_fixture sort-lie "$(report GPL-3.0-only copyleft-lib)"
+stub_tool "$D/stub" sort << 'EOS'
+exit 0
+EOS
+run "$D" PATH="$D/stub:$PATH"
+check 1 "$EC" "a sort that prints nothing still fails a bad package"
+pnpm_fixture sort-fail "$(report GPL-3.0-only copyleft-lib)"
+stub_tool "$D/stub" sort << 'EOS'
+exit 1
+EOS
+run "$D" PATH="$D/stub:$PATH"
+check 2 "$EC" "a failing sort cannot read as a pass"
+
+# A bare * exception would allow a licence for every package.
+pnpm_fixture star "$(report GPL-3.0-only any-lib)"
+printf '* GPL-3.0-only\n' > "$D/star-exc.txt"
+run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
+check 2 "$EC" "a bare * exception pattern is refused"
+has "bare '*' package pattern" "$OUT" "message says why"
+printf '  *   GPL-3.0-only\n' > "$D/star-exc.txt"
+run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/star-exc.txt"
+check 2 "$EC" "a bare * with extra spaces is refused too"
+
+# File overrides can widen the gate, so CI refuses them.
+pnpm_fixture ci "$(report GPL-3.0-only copyleft-lib)"
+printf 'copyleft-lib GPL-3.0-only\n' > "$D/ok-exc.txt"
+printf 'MIT\nGPL-3.0-only\n' > "$D/wide-list.txt"
+for ci in GITHUB_ACTIONS=true TF_BUILD=True; do
+  run "$D" PATH="$D/stub:$PATH" "$ci" LICENCE_EXCEPTIONS_FILE="$D/ok-exc.txt"
+  check 2 "$EC" "LICENCE_EXCEPTIONS_FILE is refused with $ci"
+  has "not allowed in CI" "$OUT" "exceptions refusal under $ci says why"
+  run "$D" PATH="$D/stub:$PATH" "$ci" ALLOWED_LICENCES_FILE="$D/wide-list.txt"
+  check 2 "$EC" "ALLOWED_LICENCES_FILE is refused with $ci"
+done
+run "$D" PATH="$D/stub:$PATH" LICENCE_EXCEPTIONS_FILE="$D/ok-exc.txt"
+check 0 "$EC" "LICENCE_EXCEPTIONS_FILE is allowed outside CI ($OUT)"
+run "$D" PATH="$D/stub:$PATH" ALLOWED_LICENCES_FILE="$D/wide-list.txt"
+check 0 "$EC" "ALLOWED_LICENCES_FILE is allowed outside CI ($OUT)"
+run "$D" PATH="$D/stub:$PATH" GITHUB_ACTIONS=true
+check 1 "$EC" "CI without overrides still judges against the seeded lists"
+
+# pyproject only (no requirements.txt): everything installed is listed.
+env_fixture py-pyproject ''
+rm "$D/requirements.txt"
+: > "$D/pyproject.toml"
+dist okpkg 1.0 'License-Expression: MIT'
+run "$D" PYTHONPATH="$SITE"
+check 0 "$EC" "a pyproject-only project lists everything installed ($OUT)"
+
 # real_required <what>: the real run needs tools that are missing.
 real_required() {
   if [ "${ALLOW_SKIP_REAL:-}" = 1 ]; then
@@ -348,23 +419,36 @@ if [ "$real_ok" -eq 1 ]; then
     mkdir -p "$D/.claude"
     cp "$LIST" "$D/.claude/allowed-licences.txt"
     cp "$EXC" "$D/.claude/licence-exceptions.txt"
-    (cd "$D" && pnpm install > "$T/$1-install.log" 2>&1)
+    (cd "$D" && env -u CI pnpm install > "$T/$1-install.log" 2>&1)
     check 0 $? "$1 scaffold installs: $(tail -n 3 "$T/$1-install.log" | tr '\n' ' ')"
     run "$D"
   }
-  real_pnpm nextjs
-  check 0 "$EC" "real nextjs scaffold passes the licence gate ($OUT)"
-  echo "real run nextjs: $OUT"
-  grep -v '^CC-BY-4.0$' "$LIST" > "$D/.claude/allowed-licences.txt"
-  run "$D"
-  check 1 "$EC" "real nextjs scaffold fails once CC-BY-4.0 leaves the list"
-  has "caniuse-lite" "$OUT" "real failure names caniuse-lite"
-  cp "$LIST" "$D/.claude/allowed-licences.txt"
-  rm "$D/.claude/licence-exceptions.txt"
-  run "$D" LICENCES_SCOPE=all
-  echo "real run nextjs without the exceptions file, scope all: EC=$EC"
-  printf '%s\n' "$OUT"
+  for stack in nextjs vite-react nestjs; do
+    real_pnpm "$stack"
+    check 0 "$EC" "real $stack scaffold passes the licence gate ($OUT)"
+    echo "real run $stack: $OUT"
+    has "packages, pnpm)" "$OUT" "real $stack run checked pnpm packages and was not skipped"
+    if [ "$stack" = nextjs ]; then
+      grep -v '^CC-BY-4.0$' "$LIST" > "$D/.claude/allowed-licences.txt"
+      run "$D"
+      check 1 "$EC" "real nextjs scaffold fails once CC-BY-4.0 leaves the list"
+      has "caniuse-lite" "$OUT" "real failure names caniuse-lite"
+      cp "$LIST" "$D/.claude/allowed-licences.txt"
+      rm "$D/.claude/licence-exceptions.txt"
+      run "$D"
+      check 1 "$EC" "real nextjs scaffold without the exceptions file fails on the sharp libvips LGPL"
+      has "@img/sharp-libvips" "$OUT" "real failure names the sharp libvips package"
+      has "has licence LGPL-3.0-or-later" "$OUT" "real failure names the licence"
+      cp "$EXC" "$D/.claude/licence-exceptions.txt"
+      run "$D" LICENCES_SCOPE=all
+      check 1 "$EC" "real nextjs scaffold with scope all fails on a dev-only licence"
+      has "has licence" "$OUT" "scope all names the finding"
+      echo "real run nextjs scope all: EC=$EC"
+      printf '%s\n' "$OUT"
+    fi
+  done
 
+  # The fastapi tree is built from the exact requirements.in the scaffold writes (read from its source file, so the two cannot drift).
   D="$T/real-py"
   mkdir -p "$D"
   TC_STACK=fastapi TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null
@@ -372,7 +456,9 @@ if [ "$real_ok" -eq 1 ]; then
   mkdir -p "$D/.claude"
   cp "$LIST" "$D/.claude/allowed-licences.txt"
   cp "$EXC" "$D/.claude/licence-exceptions.txt"
-  printf 'fastapi\npydantic\nstructlog\nuvicorn\n' > "$D/requirements.in"
+  awk '/^cat > requirements.in <<.REQ.$/ { on = 1; next } /^REQ$/ { on = 0 } on' "$SH/../fastapi/source-files.md" > "$D/requirements.in"
+  check 1 "$(grep -c '^certifi' "$D/requirements.in")" "the seeded requirements.in was extracted and lists certifi"
+  has "fastapi>=" "$(cat "$D/requirements.in")" "the seeded requirements.in lists fastapi"
   (cd "$D" && uv pip compile requirements.in --universal --generate-hashes -o requirements.txt > "$T/py-compile.log" 2>&1)
   check 0 $? "fastapi requirements.txt compiles: $(tail -n 3 "$T/py-compile.log" | tr '\n' ' ')"
   run "$D"
@@ -383,6 +469,12 @@ if [ "$real_ok" -eq 1 ]; then
   run "$D"
   check 0 "$EC" "real fastapi scaffold passes the licence gate ($OUT)"
   echo "real run fastapi: $OUT"
+  has "packages, python)" "$OUT" "real fastapi run checked python packages and was not skipped"
+  rm "$D/.claude/licence-exceptions.txt"
+  run "$D"
+  check 1 "$EC" "real fastapi scaffold without the exceptions file fails on certifi"
+  has "certifi@" "$OUT" "real failure names certifi"
+  has "has licence MPL-2.0" "$OUT" "real failure names MPL-2.0"
 fi
 
 echo "seeded-licences.test: $PASS passed, $FAIL failed"
