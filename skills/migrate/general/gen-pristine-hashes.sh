@@ -26,6 +26,9 @@ if ! GEN=$(cd -- "$(dirname -- "$src")" 2>/dev/null && pwd -P); then die "cannot
 OUT=$GEN/pristine-hashes.txt
 REPO=$(git -C "$GEN" rev-parse --show-toplevel 2>/dev/null) || die "not inside a git checkout"
 SHARED=skills/scaffold/shared
+# The trees tc-copy.sh and harness-refresh.sh copy from (template-tail is appended to AGENTS.md, never a file).
+# The destination is the manifest path minus its tree, as in both of them.
+TREES="template template-ts template-py template-settings-ts template-settings-py template-late template-ci/github-ts template-ci/github-py template-ci/azure template-ci/azure-ts template-ci/azure-py"
 
 TMP=$(mktemp "${TMPDIR:-/tmp}/pristine.XXXXXX") || die "cannot create a temp file"
 trap 'rm -f "$TMP"' EXIT
@@ -33,8 +36,12 @@ trap 'rm -f "$TMP"' EXIT
 for tag in $(git -C "$REPO" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | LC_ALL=C sort); do
   ver=${tag#v}
   man=$(git -C "$REPO" show "$tag:$SHARED/template.manifest" 2>/dev/null) || continue
-  printf '%s\n' "$man" | awk '/^#/ || NF == 0 { next } $3 == "-" { print $1 }' | while IFS= read -r path; do
-    rel=${path#*/}
+  printf '%s\n' "$man" | awk -v sel="$TREES" '
+    BEGIN { n = split(sel, s, " ") }
+    /^#/ || NF == 0 { next }
+    $3 != "-" { next }
+    { for (i = 1; i <= n; i++) if (index($1, s[i] "/") == 1) { print $1 "\t" substr($1, length(s[i]) + 2); next } }
+  ' | while IFS="$TAB" read -r path rel; do
     dest=${rel%.tmpl}
     git -C "$REPO" cat-file -e "$tag:$SHARED/$path" 2>/dev/null || continue
     h=$(git -C "$REPO" show "$tag:$SHARED/$path" | sha)
@@ -45,6 +52,8 @@ done
 # One line per hash and path, keeping the earliest version that shipped it.
 awk -F "$TAB" '!seen[$1 FS $3]++' "$TMP" | LC_ALL=C sort -t "$TAB" -k3,3 -k1,1 >"$TMP.out"
 trap 'rm -f "$TMP" "$TMP.out"' EXIT
+bad=$(awk -F "$TAB" '$3 ~ /^(template(-[a-z]+)?|template-ci\/.*|github-(ts|py)|azure(-ts|-py)?)\// { print $3 }' "$TMP.out" | head -n 3)
+if [ -n "$bad" ]; then die "a listed path still carries its tree name: $bad"; fi
 if [ ! -s "$TMP.out" ]; then die "no tagged release with a template.manifest found; fetch the tags first"; fi
 
 if [ "$CHECK" -eq 1 ]; then

@@ -5,6 +5,8 @@ export id=redaction-tool-output
 export level=high
 export names="*.cjs *.js *.mjs *.py"
 export content="tool_output"
+# Only hook files are candidates: the same text in an app file (for example a vendored script) is not a hook.
+export under="/.claude/hooks/"
 export template=skills/add/redaction/hook-node/template/.claude/hooks/redact-sensitive-output.cjs
 export desc="the redaction hook reads the tool_output field, which hook input does not carry, so it masks nothing"
 export fix="read tool_response instead of tool_output (Python template: skills/add/redaction/hook-python/template/.claude/hooks/redact_sensitive_output.py)"

@@ -358,19 +358,75 @@ flagged "a 300 KB client is still flagged"
 check 1 "$(truth test "$took" -le 5)" "a 300 KB client finishes within 5 seconds (took ${took}s)"
 
 # Comments and strings for the hook and the Argon2 checks.
-mkdir -p "$T/r1" "$T/r2" "$T/r3" "$T/r4" "$T/a1" "$T/a2" "$T/a3"
-printf '// TODO read tool_response instead\nconst o = input.tool_output;\n' > "$T/r1/redact-sensitive-output.cjs"
+mkdir -p "$T/r1/.claude/hooks" "$T/r2/.claude/hooks" "$T/r3/.claude/hooks" "$T/r4/.claude/hooks" "$T/a1" "$T/a2" "$T/a3"
+printf '// TODO read tool_response instead\nconst o = input.tool_output;\n' > "$T/r1/.claude/hooks/redact-sensitive-output.cjs"
 run "$T/r1"
-has "redact-sensitive-output.cjs:2  redaction-tool-output  high" "$OUT" "a comment naming tool_response does not hide the older hook"
-printf '// was tool_output\nconst o = input.tool_response;\n' > "$T/r2/redact-sensitive-output.cjs"
+has ".claude/hooks/redact-sensitive-output.cjs:2  redaction-tool-output  high" "$OUT" "a comment naming tool_response does not hide the older hook"
+printf '// was tool_output\nconst o = input.tool_response;\n' > "$T/r2/.claude/hooks/redact-sensitive-output.cjs"
 run "$T/r2"
 lacks "redaction-tool-output  " "$OUT" "a fixed hook with tool_output only in a comment is clean"
-printf '# TODO read tool_response instead\no = data.get("tool_output")\n' > "$T/r3/redact_sensitive_output.py"
+printf '# TODO read tool_response instead\no = data.get("tool_output")\n' > "$T/r3/.claude/hooks/redact_sensitive_output.py"
 run "$T/r3"
-has "redact_sensitive_output.py:2  redaction-tool-output  high" "$OUT" "a Python comment naming tool_response does not hide the older hook"
-printf 'o = data.get("tool_response")  # not tool_output\n' > "$T/r4/redact_sensitive_output.py"
+has ".claude/hooks/redact_sensitive_output.py:2  redaction-tool-output  high" "$OUT" "a Python comment naming tool_response does not hide the older hook"
+printf 'o = data.get("tool_response")  # not tool_output\n' > "$T/r4/.claude/hooks/redact_sensitive_output.py"
 run "$T/r4"
 lacks "redaction-tool-output  " "$OUT" "a fixed Python hook with tool_output only in a comment is clean"
+# The redaction check looks at hook files under .claude/hooks only: the same text in an app file is not a hook.
+mkdir -p "$T/rv/public" "$T/rv/src"
+printf 'var o = input.tool_output;\n' > "$T/rv/public/vendor.js"
+printf 'o = data.get("tool_output")\n' > "$T/rv/src/client.py"
+printf 'export const x = payload.tool_output;\n' > "$T/rv/src/redact-sensitive-output.cjs"
+run "$T/rv"
+lacks "redaction-tool-output  " "$OUT" "tool_output in app files (vendor.js, client.py, a look-alike name outside .claude/hooks) is not reported"
+mkdir -p "$T/rv/.claude/hooks"
+printf 'var o = input.tool_output;\n' > "$T/rv/.claude/hooks/other-hook.js"
+run "$T/rv"
+has ".claude/hooks/other-hook.js:1  redaction-tool-output  high" "$OUT" "the same text in a hook file under .claude/hooks is reported"
+
+# Prune list: virtualenvs, .tox and site-packages are not scanned; build and dist are pruned at the project root only.
+PYENG='from sqlalchemy import create_engine\nengine = create_engine(URL)\n'
+mkdir -p "$T/pv/env/lib" "$T/pv/.tox/py" "$T/pv/lib/python3.12/site-packages/pkg" "$T/pv/other"
+printf 'home = /usr/bin\n' > "$T/pv/env/pyvenv.cfg"
+printf '%b' "$PYENG" > "$T/pv/env/lib/db.py"
+printf '%b' "$PYENG" > "$T/pv/.tox/py/db.py"
+printf '%b' "$PYENG" > "$T/pv/lib/python3.12/site-packages/pkg/db.py"
+run "$T/pv"
+lacks "sqlalchemy-tls-verify  " "$OUT" "a non-dot virtualenv (pyvenv.cfg), .tox and site-packages are not scanned"
+printf '%b' "$PYENG" > "$T/pv/other/db.py"
+run "$T/pv"
+has "other/db.py:2  sqlalchemy-tls-verify" "$OUT" "control: an ordinary folder beside them is scanned"
+for deep in build dist; do
+  mkdir -p "$T/pd-$deep/src/$deep"
+  cp -R "$FIXTURES/mongoose-client-promise-retry/old/." "$T/pd-$deep/src/$deep/"
+  run "$T/pd-$deep"
+  has "mongoose-client-promise-retry  high" "$OUT" "src/$deep below the project root is scanned"
+done
+
+# 4000 small files finish within a bound. The runner reads candidates with one search per check, not one process per file.
+mkdir -p "$T/many/src"
+i=0
+while [[ $i -lt 4000 ]]; do printf 'export const v%d = %d;\n' "$i" "$i" > "$T/many/src/f$i.ts"; i=$((i + 1)); done
+start=$SECONDS
+run "$T/many"
+took=$((SECONDS - start))
+check 0 "$EC" "4000 small files: exit 0"
+check 1 "$(truth test "$took" -le 30)" "4000 small .ts files finish within 30 seconds (took ${took}s)"
+
+# A single-line minified file is skipped, and the run says so.
+mkdir -p "$T/mini/src"
+{
+  printf 'mongoose.connect(URL);'
+  i=0
+  while [[ $i -lt 20000 ]]; do printf 'var a%d={b:"x%d",c:[1,2,3]};' "$i" "$i"; i=$((i + 1)); done
+  printf 'async function connectDB(){cached.conn=await cached.promise}\n'
+} > "$T/mini/src/mongoose-client.ts"
+start=$SECONDS
+run "$T/mini"
+took=$((SECONDS - start))
+has "mongoose-client.ts" "$OUT" "minified file: named in the skip notice"
+has "skipped" "$OUT" "minified file: the run says it skipped the file"
+check 1 "$(truth test "$took" -le 10)" "a 600 KB single-line file finishes within 10 seconds (took ${took}s)"
+
 LIT="\$argon2id\$v=19\$m=65536,t=3,p=1\$c29tZXNhbHRzb21lc2E\$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
 printf '// const DUMMY = argon2.hash(randomUUID());\nconst DUMMY_HASH = "%s";\n' "$LIT" > "$T/a1/auth.service.ts"
 run "$T/a1"

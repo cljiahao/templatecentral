@@ -507,4 +507,57 @@ out=$(run "$T/n2")
 absent "control, no own CI: no CI note" "next to the project's own CI" "$out"
 absent "control, no other hook manager: no hook note" "another git-hook manager" "$out"
 
+# Pristine list: destination paths. The generator maps a manifest path to the project path like tc-copy.sh does.
+GENS="$ROOT/skills/migrate/general/gen-pristine-hashes.sh"
+G="$T/gen"
+mkdir -p "$G/skills/migrate/general" "$G/skills/scaffold/shared/template-ci/github-ts/.github/workflows" "$G/skills/scaffold/shared/template-ci/azure/azure-pipelines" "$G/skills/scaffold/shared/template-ci/azure-ts" "$G/skills/scaffold/shared/template-late/docs" "$G/skills/scaffold/shared/template/.claude"
+cp "$GENS" "$G/skills/migrate/general/gen-pristine-hashes.sh"
+SH_G="$G/skills/scaffold/shared"
+printf 'old ci\n' >"$SH_G/template-ci/github-ts/.github/workflows/ci.yml"
+printf 'old gates\n' >"$SH_G/template-ci/azure/azure-pipelines/gates.yml"
+printf 'old pipeline\n' >"$SH_G/template-ci/azure-ts/azure-pipelines.yml"
+printf 'old doc __TC_NAME__\n' >"$SH_G/template-late/docs/title.md"
+printf 'old gate script\n' >"$SH_G/template/.claude/gate.sh"
+printf '%s\n' \
+  'template-ci/github-ts/.github/workflows/ci.yml 644 - -' \
+  'template-ci/azure/azure-pipelines/gates.yml 644 - -' \
+  'template-ci/azure-ts/azure-pipelines.yml 644 - -' \
+  'template-late/docs/title.md 644 __TC_NAME__ -' \
+  'template/.claude/gate.sh 755 - -' >"$SH_G/template.manifest"
+(cd "$G" && git init -q -b main && git add -A && git -c user.email=t@t -c user.name=t commit -qm one && git tag v7.0.0)
+out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" 2>&1); check "generator: runs on a tagged fixture" 0 $?
+GL="$G/skills/migrate/general/pristine-hashes.txt"
+for want in .github/workflows/ci.yml azure-pipelines/gates.yml azure-pipelines.yml .claude/gate.sh; do
+  check "generator: lists the project path $want" 1 "$(cut -f3 "$GL" | grep -cx -- "$want")"
+done
+check "generator: no path keeps its tree name" 0 "$(cut -f3 "$GL" | grep -cE '^(template|github-|azure-ts/|azure/)')"
+check "generator: placeholder file is left out" 0 "$(cut -f3 "$GL" | grep -c 'title.md')"
+out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" --check 2>&1); check "generator: --check passes on a fresh list" 0 $?
+sed 's|\t\.github/workflows/ci.yml$|\tgithub-ts/.github/workflows/ci.yml|' "$GL" >"$GL.bad" && mv "$GL.bad" "$GL"
+out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" --check 2>&1); check "generator: --check fails on a list with a tree-prefixed path" 1 $?
+bash "$G/skills/migrate/general/gen-pristine-hashes.sh" >/dev/null 2>&1
+# the real list: every CI path it holds is a path tc-copy.sh writes
+mkdir -p "$T/cpaths/g" "$T/cpaths/a"
+TC_STACK=nestjs TC_PART=base bash "$COPY" "$T/cpaths/g" >/dev/null 2>&1; TC_STACK=nestjs TC_PART=ci TC_CI=github bash "$COPY" "$T/cpaths/g" >/dev/null 2>&1
+TC_STACK=nestjs TC_PART=base bash "$COPY" "$T/cpaths/a" >/dev/null 2>&1; TC_STACK=nestjs TC_PART=ci TC_CI=azure bash "$COPY" "$T/cpaths/a" >/dev/null 2>&1
+TC_STACK=fastapi TC_PART=base bash "$COPY" "$T/cpaths/f" >/dev/null 2>&1 || { mkdir -p "$T/cpaths/f"; TC_STACK=fastapi TC_PART=base bash "$COPY" "$T/cpaths/f" >/dev/null 2>&1; }
+TC_STACK=fastapi TC_PART=ci TC_CI=github bash "$COPY" "$T/cpaths/f" >/dev/null 2>&1
+TC_STACK=fastapi TC_PART=ci TC_CI=azure bash "$COPY" "$T/cpaths/f" >/dev/null 2>&1
+REALL="$ROOT/skills/migrate/general/pristine-hashes.txt"
+miss=$(cut -f3 "$REALL" | grep -E '^(\.github/|azure-pipelines)' | sort -u | while IFS= read -r p; do
+  [ -f "$T/cpaths/g/$p" ] || [ -f "$T/cpaths/a/$p" ] || [ -f "$T/cpaths/f/$p" ] || echo "$p"; done)
+check "real list: every CI path is one tc-copy.sh writes" "" "$miss"
+check "real list: has the CI workflow path" 1 "$(cut -f3 "$REALL" | sort -u | grep -cx '.github/workflows/ci.yml')"
+# a pristine CI file gets REPLACE, an edited one MODIFIED, using the generated list
+cp "$GL" "$PRIST"
+seed "$T/ci1" nestjs
+printf 'old ci\n' >"$T/ci1/.github/workflows/ci.yml"
+commit "$T/ci1" oldci
+out=$(run "$T/ci1")
+contains "pristine old ci.yml: REPLACE" "REPLACE" "$(printf '%s\n' "$out" | grep -F '.github/workflows/ci.yml')"
+printf 'old ci\n# local edit\n' >"$T/ci1/.github/workflows/ci.yml"
+commit "$T/ci1" editedci
+out=$(run "$T/ci1")
+contains "edited ci.yml: MODIFIED" "MODIFIED  .github/workflows/ci.yml" "$out"
+
 exit $fail
