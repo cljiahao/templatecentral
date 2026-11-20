@@ -2,7 +2,7 @@
 # scripts/seeded-bundle-size.test.sh — the seeded check-bundle-size gate: it fails over the gzip budget, fails closed without build output, and skips stacks with no browser bundle.
 # Fixtures use incompressible files so the gzip size is known. A real run scaffolds nextjs and vite-react, installs, builds and measures the real output
 # (public registry only, no key). shadcn components are not part of the template, so the real build uses tiny stand-ins for them.
-# Without pnpm or python3 the real run prints a loud SKIP locally and fails when CI is set.
+# A missing tool for the real run fails the test; ALLOW_SKIP_REAL=1 skips it with a SKIPPED: line.
 # Usage: bash scripts/seeded-bundle-size.test.sh
 set -uo pipefail
 
@@ -29,7 +29,7 @@ BASH_BIN=$(command -v bash)
 run() {
   local d=$1
   shift
-  OUT=$(cd "$d" && env -u CI -u TF_BUILD -u GITHUB_ACTIONS "$@" "$BASH_BIN" "$GATE" 2>&1)
+  OUT=$(cd "$d" && env -u BUNDLE_DIR -u BUNDLE_BUDGET_FILE "$@" "$BASH_BIN" "$GATE" 2>&1)
   EC=$?
 }
 # blob <kb> <file>: an incompressible file of about <kb> KB, so its gzip size is about the same.
@@ -62,6 +62,8 @@ blob 5 "$D/.next/static/css/app.css"
 run "$D"
 check 1 "$EC" "nextjs output over the budget fails"
 has "budget 100 KB" "$OUT" "message gives the budget"
+has "bytes gzip of JS and CSS" "$OUT" "message reports bytes, not a truncated KB"
+has "KB rounded up" "$OUT" "message says the KB figure is rounded up"
 has "big-chunk.js" "$OUT" "message lists the biggest file"
 has "dynamic import" "$OUT" "message says how to fix it"
 case "$OUT" in
@@ -90,34 +92,34 @@ check 0 "$EC" "fonts and source maps are not counted ($OUT)"
 
 fixture next-nobuild nextjs 100
 run "$D"
-check 1 "$EC" "no build output fails closed"
+check 2 "$EC" "no build output cannot be measured (exit 2)"
 has "Build first" "$OUT" "message says to build first"
 
 fixture next-nojs nextjs 100
 mkdir -p "$D/.next/static/media"
 blob 1 "$D/.next/static/media/logo.png"
 run "$D"
-check 1 "$EC" "a build folder with no JS or CSS fails closed"
+check 2 "$EC" "a build folder with no JS or CSS cannot be measured"
 has "no .js or .css files" "$OUT" "message says nothing was found"
 
 fixture no-budget vite-react 100
 rm "$D/.claude/bundle-budget.txt"
 blob 1 "$D/dist/a.js"
 run "$D"
-check 1 "$EC" "a missing budget file fails closed"
+check 2 "$EC" "a missing budget file cannot be measured"
 has "bundle-budget.txt is missing" "$OUT" "message names the budget file"
 
 fixture bad-budget vite-react 100
 blob 1 "$D/dist/a.js"
-for bad in lots 0 -5 ""; do
+for bad in lots 0 -5 "" 007 1.5 "5 0"; do
   printf 'max_gzip_kb %s\n' "$bad" > "$D/.claude/bundle-budget.txt"
   run "$D"
-  check 1 "$EC" "budget '$bad' fails closed"
+  check 2 "$EC" "budget '$bad' is rejected"
+  has "needs a line 'max_gzip_kb <whole number above 0, no leading zeros>'" "$OUT" "budget '$bad' message says the fix"
 done
-has "max_gzip_kb" "$OUT" "message names the budget key"
 printf '# no key here\n' > "$D/.claude/bundle-budget.txt"
 run "$D"
-check 1 "$EC" "a budget file without the key fails closed"
+check 2 "$EC" "a budget file without the key is rejected"
 
 fixture override vite-react 1
 blob 5 "$D/dist/a.js"
@@ -126,6 +128,48 @@ check 1 "$EC" "control for the override: over a 1 KB budget"
 printf 'max_gzip_kb 100\n' > "$D/other-budget.txt"
 run "$D" BUNDLE_BUDGET_FILE=other-budget.txt
 check 0 "$EC" "BUNDLE_BUDGET_FILE points the gate at another budget ($OUT)"
+
+# A sub-KB overshoot must not round down to a pass.
+fixture round vite-react 1
+mkdir -p "$D/dist"
+head -c 1500 /dev/urandom > "$D/dist/a.js"
+run "$D"
+check 1 "$EC" "about 1.5 KB gzip fails a 1 KB budget (rounded up, not truncated)"
+
+# BUNDLE_DIR: the frontend lives in a subfolder.
+D="$T/mono"
+mkdir -p "$D/.claude" "$D/backend" "$D/frontend"
+echo '{"dependencies":{"next":"16"}}' > "$D/frontend/package.json"
+: > "$D/frontend/next.config.ts"
+printf 'max_gzip_kb 100\n' > "$D/.claude/bundle-budget.txt"
+blob 20 "$D/frontend/.next/static/a.js"
+run "$D" BUNDLE_DIR=frontend
+check 0 "$EC" "BUNDLE_DIR points the gate at the frontend folder ($OUT)"
+run "$D" BUNDLE_DIR=nowhere
+check 2 "$EC" "BUNDLE_DIR that is not a folder cannot measure"
+has "BUNDLE_DIR 'nowhere' is not a folder" "$OUT" "message names the folder"
+printf 'max_gzip_kb 1\n' > "$D/.claude/bundle-budget.txt"
+run "$D" BUNDLE_DIR=frontend
+check 1 "$EC" "BUNDLE_DIR with a tight budget fails over budget"
+
+# package.json depends on next or vite but no config is found: never a silent skip.
+D="$T/noconfig-next"
+mkdir -p "$D"
+echo '{"dependencies":{"next":"16"}}' > "$D/package.json"
+run "$D"
+check 2 "$EC" "package.json with next and no next.config.* cannot be measured, not skipped"
+has "depends on next or vite, but there is no next.config.* or vite.config.*" "$OUT" "message names the problem"
+has "BUNDLE_DIR" "$OUT" "message says how to fix it"
+D="$T/noconfig-vite"
+mkdir -p "$D"
+echo '{"devDependencies":{"vite":"8"}}' > "$D/package.json"
+run "$D"
+check 2 "$EC" "package.json with vite and no vite.config.* cannot be measured, not skipped"
+D="$T/node-only"
+mkdir -p "$D"
+echo '{"dependencies":{"@nestjs/core":"11"}}' > "$D/package.json"
+run "$D"
+check 0 "$EC" "package.json with neither next nor vite is skipped ($OUT)"
 
 D="$T/nest"
 mkdir -p "$D"
@@ -140,13 +184,17 @@ echo fastapi > "$D/requirements.txt"
 run "$D"
 check 0 "$EC" "a fastapi project is skipped ($OUT)"
 
-in_ci=0
-for v in "${CI:-}" "${TF_BUILD:-}" "${GITHUB_ACTIONS:-}"; do
-  case "$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" in "" | false | 0 | no) ;; *) in_ci=1 ;; esac
-done
 real_ok=1
 for tool in pnpm python3; do
-  command -v "$tool" > /dev/null 2>&1 || real_ok=0
+  if ! command -v "$tool" > /dev/null 2>&1; then
+    real_ok=0
+    if [ "${ALLOW_SKIP_REAL:-}" = 1 ]; then
+      echo "SKIPPED: $tool is not installed, so the real scaffold builds did NOT happen and the gate was NOT proven on a real build (ALLOW_SKIP_REAL=1)."
+    else
+      FAIL=$((FAIL + 1))
+      echo "FAIL: $tool is not installed, so the real scaffold builds cannot happen. Install it, or set ALLOW_SKIP_REAL=1 to skip them on purpose."
+    fi
+  fi
 done
 
 # stub_ui <dir>: the template leaves shadcn components to `shadcn add`; write minimal stand-ins for the ones the source imports.
@@ -179,19 +227,14 @@ real_build() {
   TC_STACK=$1 TC_PART=stack bash "$SH/tc-copy.sh" "$D" > /dev/null || return 1
   mkdir -p "$D/.claude"
   cp "$BUDGET" "$D/.claude/bundle-budget.txt"
-  (cd "$D" && pnpm install > "$T/$2-install.log" 2>&1) || return 1
+  cd "$D" || return 1
+  pnpm install > "$T/$2-install.log" 2>&1 || return 1
+  cd "$OLDPWD" || return 1
   stub_ui "$D" || return 1
-  (cd "$D" && env -u CI NEXT_TELEMETRY_DISABLED=1 pnpm build > "$T/$2-build.log" 2>&1)
+  (cd "$D" && env NEXT_TELEMETRY_DISABLED=1 pnpm build > "$T/$2-build.log" 2>&1)
 }
 
-if [ "$real_ok" -eq 0 ]; then
-  if [ "$in_ci" -eq 1 ]; then
-    echo "seeded-bundle-size.test: FAIL pnpm or python3 is not available in CI, so the real run did not happen." >&2
-    FAIL=$((FAIL + 1))
-  else
-    echo "SKIPPED: pnpm or python3 is not installed, so the real scaffold builds did NOT happen and the gate was NOT proven on a real build."
-  fi
-else
+if [ "$real_ok" -eq 1 ]; then
   for pair in nextjs:real-next vite-react:real-vite; do
     stack=${pair%%:*}
     name=${pair##*:}
@@ -208,7 +251,7 @@ else
     printf '%s\n' "$OUT"
     rm -rf "$D/.next" "$D/dist"
     run "$D"
-    check 1 "$EC" "real $stack project without a build fails closed"
+    check 2 "$EC" "real $stack project without a build cannot be measured"
     has "Build first" "$OUT" "real failure says to build first"
   done
 fi

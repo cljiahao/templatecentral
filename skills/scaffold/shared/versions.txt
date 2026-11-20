@@ -28,7 +28,6 @@ image  python python:3.14.10-slim
 image  nginx  nginx:1.30.5-alpine3.24
 image  beanie-python python:3.13.16-slim   # held on 3.13 (beanie declares <3.14), used only by add/database/python/beanie.md
 
-tool   CYCLONEDX_BOM 8.0.1
 tool   DIFF_COVER  11.0.3
 tool   GITLEAKS    8.30.1
 tool   HADOLINT    2.15.1

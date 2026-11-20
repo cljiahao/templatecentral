@@ -124,6 +124,36 @@ lines 900 "$D/README.md"
 run "$D" BASE_REF=main
 check 1 "$EC" "uncommitted edits to tracked files count"
 
+repo quoted
+mkdir -p "$D/generated" "$D/sp ace"
+lines 5000 "$D/generated/café x.ts"
+lines 5000 "$D/bun.lock"
+printf 'x' > "$D/bun.lockb"
+lines 7 "$D/sp ace/naïve file.txt"
+commit_all
+run "$D" BASE_REF=main
+check 0 "$EC" "paths with spaces and non-ASCII names under excluded rules are handled ($OUT)"
+has "ok (7 lines in 1 files" "$OUT" "bun.lock, bun.lockb and the generated file are excluded; the spaced path counts once"
+lines 900 "$D/sp ace/naïve file.txt"
+commit_all
+run "$D" BASE_REF=main
+check 1 "$EC" "a spaced non-ASCII path is counted in full"
+has "naïve file.txt" "$OUT" "message prints the path unquoted"
+
+repo untracked
+lines 900 "$D/new.txt"
+run "$D" BASE_REF=main
+check 1 "$EC" "an untracked file counts toward the budget"
+has "900 changed lines (budget 800)" "$OUT" "message counts the untracked lines"
+has "new.txt" "$OUT" "message names the untracked file"
+has "untracked files are" "$OUT" "message says untracked files are counted"
+printf 'new.txt\n' > "$D/.gitignore"
+run "$D" BASE_REF=main
+check 0 "$EC" "an ignored file does not count ($OUT)"
+lines 5000 "$D/pnpm-lock.yaml"
+run "$D" BASE_REF=main
+check 0 "$EC" "an untracked lockfile does not count ($OUT)"
+
 repo override
 lines 900 "$D/big.txt"
 commit_all

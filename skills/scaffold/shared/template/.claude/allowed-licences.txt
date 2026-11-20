@@ -2,6 +2,7 @@
 # check-licences.sh fails on any licence not listed here, and on a missing or unknown licence.
 # Adding a line is a human decision: get the licence reviewed first. Do not add one just to make the gate pass.
 # An "A OR B" expression passes when one alternative is listed; "A AND B" needs both.
+# A licence that one package needs goes in licence-exceptions.txt instead, so it is not allowed for every package.
 MIT
 MIT-0
 ISC
@@ -16,8 +17,6 @@ Python-2.0
 PSF-2.0
 # caniuse-lite browser data (CC-BY-4.0), pulled in by the build tooling.
 CC-BY-4.0
-# libvips binaries that sharp ships for next/image (LGPL-3.0-or-later), used unmodified as a separate library.
-LGPL-3.0-or-later
 # Python packages without an SPDX expression report their licence classifier label instead.
 MIT License
 BSD License
