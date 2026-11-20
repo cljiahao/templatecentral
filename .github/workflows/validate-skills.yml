@@ -181,6 +181,12 @@ jobs:
         run: bash scripts/supply-chain.test.sh
       - name: Seeded Dockerfiles pass the dockerfile gate with real hadolint
         run: bash scripts/seeded-dockerfiles.test.sh
+      - name: Seeded workaround detector, secret scan, nosonar and diff-coverage gates and hook messages
+        run: bash scripts/seeded-gates.test.sh
+      - name: Day-one proof, every stack and CI host passes its offline seeded gates
+        run: bash scripts/day-one.test.sh
+      - name: Golden regeneration script tests
+        run: bash scripts/regen-golden.test.sh
       - name: Install PyYAML for the CI template guard
         run: |
           python3 -m venv "$RUNNER_TEMP/ci-templates-venv"

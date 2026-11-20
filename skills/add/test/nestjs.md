@@ -174,7 +174,7 @@ test/
 pnpm test        # unit
 pnpm test:watch  # unit, watch mode
 pnpm test:cov    # coverage report
-pnpm test:e2e    # e2e (vitest.config.e2e.ts)
+pnpm test:e2e    # e2e (vitest.config.e2e.mts)
 ```
 
 ### Rules

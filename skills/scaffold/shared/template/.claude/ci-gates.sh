@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]
+# CI merge gates for GitHub Actions and Azure Pipelines: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]
 set -uo pipefail
 gate=${1:-}
 branch=${2:-}
@@ -31,7 +31,7 @@ pr_only() {
 }
 
 case "$gate" in
-  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile)
+  secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover)
     gate_listed "$gate" || fail "gate '$gate' is not listed in .claude/gates.txt"
     ;;
   list)
@@ -56,10 +56,11 @@ case "$gate" in
       # No sudo: works on hosted and self-hosted Linux x64 agents
       PATH="$tmp:$PATH"
     fi
+    [ -f scripts/scan-secrets.sh ] || fail "scripts/scan-secrets.sh is missing"
     if [ -n "$branch" ]; then
-      gitleaks git --redact --no-banner --log-opts="$base..HEAD" || fail "gitleaks found secrets in this PR's commits"
+      bash scripts/scan-secrets.sh git --log-opts="$base..HEAD" || fail "possible secrets in this PR's commits (file, line and rule above). Remove the value, rotate it if it was ever pushed, and read it from the environment."
     else
-      gitleaks git --redact --no-banner || fail "gitleaks found secrets in history"
+      bash scripts/scan-secrets.sh git || fail "possible secrets in history (file, line and rule above). Remove the value, rotate it, and read it from the environment."
     fi
     ;;
   changelog)
@@ -108,7 +109,7 @@ case "$gate" in
     rm -f "$runner_tmp"
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
-      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
+      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-workarounds|scan-secrets|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
       if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
@@ -125,12 +126,12 @@ case "$gate" in
     bash scripts/test-budget.sh || fail "test budget exceeded or unreadable (output above). Consolidate duplicate tests with the test-consolidate skill."
     ;;
   nosonar)
-    # ESLint's no-warning-comments bans the marker in TS; ruff has no equivalent, so this covers Python (and TS source too).
-    if hits=$(git grep -nIiE 'NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude'); then rc=0; else rc=$?; fi
+    # Matches a marker inside a comment only, so the ESLint rule that bans the word (terms: ['nosonar']) never trips it.
+    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude' ':!eslint.config.*'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2
-      fail "NOSONAR markers found (listed above). Fix the finding instead of suppressing it."
+      fail "NOSONAR markers found (file:line above). Delete the marker and fix the finding it hides; if the rule is wrong for the whole project, change it in config in its own reviewed change."
     fi
     ;;
   deps)
@@ -291,6 +292,25 @@ JS
       printf '%s\n' "$blocked" >&2
       fail "High/critical advisories or unaudited packages (listed above). Upgrade the dependency, or allowlist an audited advisory in $allow with an expiry date and a reason. Unaudited packages cannot be allowlisted: install the missing audit tool or make the package auditable, or remove it."
     fi
+    echo "deps: no unallowlisted high or critical advisories, every package audited"
+    ;;
+  workarounds)
+    pr_only
+    [ -f scripts/check-workarounds.sh ] || fail "scripts/check-workarounds.sh is missing"
+    bash scripts/check-workarounds.sh "$base" || fail "this change silences a tool or removes covering tests (output above). Fix the cause; there is no waiver."
+    ;;
+  diffcover)
+    # The CI step runs diff-cover --fail-under=80 and keeps its output in diff-cover.txt; diff-cover exits 0 when the diff has no covered lines, so this gate turns that into a failure whenever source changed.
+    pr_only
+    changed=$(git diff --name-only "$base"...HEAD) || fail "cannot diff against $base"
+    src=$(grep -E '^src/.*[.](py|ts|tsx|js|jsx|mjs|cjs)$' <<< "$changed" | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|(^|/)test_[^/]*[.]py$|_test[.]py$|[.]d[.]ts$') || src=""
+    if [ -z "$src" ]; then echo "diffcover: no source file changed — skipped"; exit 0; fi
+    out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
+    [ -f "$out" ] || fail "$out is missing although source changed. The diff-cover step must run first and keep its output there."
+    if grep -q "No lines with coverage information" "$out"; then
+      fail "source changed but the coverage report has no lines for it ($(printf '%s' "$src" | tr '\n' ' ')). The tests did not run with coverage, or the report is stale; regenerate it. Do not exclude the files."
+    fi
+    echo "diffcover: the coverage report covers the changed source lines"
     ;;
   supplychain)
     [ -f scripts/check-supply-chain.sh ] || fail "scripts/check-supply-chain.sh is missing"
@@ -323,7 +343,7 @@ JS
     bash scripts/check-dockerfile.sh || fail "Dockerfile check failed (output above)."
     ;;
   *)
-    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|list> [base-branch]" >&2
+    echo "usage: ci-gates.sh <secrets|changelog|comments|deps|nosonar|testbudget|ratchet|supplychain|workflows|envexample|dockerfile|workarounds|diffcover|list> [base-branch]" >&2
     exit 2
     ;;
 esac

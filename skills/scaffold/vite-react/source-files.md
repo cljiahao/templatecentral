@@ -47,17 +47,7 @@ Both must print nothing.
 - `src/components/layout/site-footer.tsx`: replace the `'Built with templateCentral'` default with the project description
 - `src/pages/home.tsx`: replace the `"Vite + React Template"` heading with the project title
 
-### 3. Copy `.env.example` to `.env`
-
-```bash
-cp .env.example .env
-```
-
-If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
-
-**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
-
-### 4. Initialize git and install dependencies
+### 3. Initialize git and install dependencies
 
 Before the first install, run kit Step **0** again as `TC_STACK=vite-react TC_PART=base bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies the harness files, `lefthook.yml` among them, so the `prepare` script wires the git hooks during the install instead of writing a stub config that Step 0 would then refuse to overwrite.
 
@@ -68,7 +58,7 @@ pnpm install
 
 `pnpm install` runs the `prepare` script, installing the lefthook git hooks. Verify installation completed without errors.
 
-### 5. Install shadcn components
+### 4. Install shadcn components
 
 ```bash
 npx shadcn@latest add accordion avatar button button-group card checkbox dialog dropdown-menu field form input input-group label select separator skeleton sonner tabs textarea
@@ -78,7 +68,11 @@ npx shadcn@latest add accordion avatar button button-group card checkbox dialog 
 
 Current shadcn emits `import { cn } from 'cn'` (its own `cn` package, added to `dependencies`) in generated primitives; project code keeps using `cn` from `@/lib/utils`. Both merge Tailwind classes the same way — do not hand-edit the generated imports.
 
-### 6. Verification gate
+### 5. Copy `.env.example` to `.env`
+
+The user runs this copy themselves (`cp .env.example .env`); the seeded guards block agent access to a real env file, so never read or write one. Continue without it: the quality gates run on the defaults.
+
+### 5b. Verification gate
 
 Generate `AGENTS.md` only after all of these pass. Prettier drift on newly generated files makes `pnpm check` fail until they are formatted, so run `pnpm format` once first:
 
@@ -91,7 +85,7 @@ pnpm test         # all tests pass
 
 If any check fails, diagnose and fix before proceeding.
 
-### 7. Write project `AGENTS.md`
+### 6. Write project `AGENTS.md`
 
 Only after the verification gate passes. Run kit Step **0** a third time as `TC_STACK=vite-react TC_PART=agents bash "<skill-dir>/shared/tc-copy.sh" "<target>"`: it copies `AGENTS.md` from `<skill-dir>/vite-react/template-agents/` and refuses when the project already holds one. Then, with the Edit tool, replace `__TC_PROJECT_TITLE__` in `AGENTS.md` with the project title. The title must be a single line: if it contains a newline, stop and ask the user for a one-line title, and edit nothing.
 
@@ -103,7 +97,7 @@ grep -rn '__TC_' . --exclude-dir=node_modules --exclude-dir=.git
 
 It must print nothing.
 
-### 7b. Seed the agent harness (shared kit)
+### 6b. Seed the agent harness (shared kit)
 
 Load the rest of the shared harness kit (the index was loaded in Step 1) using the **vite-react** row of its delta table:
 
@@ -115,11 +109,11 @@ cat "<skill-dir>/shared/harness-kit-finalize.md"
 
 Kit Step **0** (`TC_PART=base`) already ran before the install. Execute kit Steps **A through D** now (settings.json with `TC_PART=settings`, the hook notes, then FUTURE.md, CONSTITUTION.md and the `/skill-audit` skill with `TC_PART=late`, each a run of `tc-copy.sh` with `TC_STACK=vite-react`). The verify skill (7c) is already in place, which Step E requires.
 
-### 7c. Project skill files (`.claude/skills/`)
+### 6c. Project skill files (`.claude/skills/`)
 
 `.claude/skills/vite-verify/SKILL.md` was copied in Step 1 with the rest of the template. Each project skill is a **directory** with `SKILL.md` as the entrypoint — flat `.claude/skills/<name>.md` files are silently ignored.
 
-### 7d. Seed additional project skills
+### 6d. Seed additional project skills
 
 Use the scaffold Step 1 answer on extra project skills; ask the user only if scaffold Step 1 did not settle it. Common candidates:
 - `vite-feature` — scaffold a new feature module (components + query hook + page)
@@ -129,7 +123,7 @@ For each workflow the user named, create a skill in `.claude/skills/` and add a 
 
 ---
 
-### 8. Generate `CLAUDE.md` (optional — Claude Code users only)
+### 7. Generate `CLAUDE.md` (optional — Claude Code users only)
 
 Use the scaffold Step 1 answer on `CLAUDE.md`; ask only if scaffold Step 1 did not settle it. Skip this step if the user does not use Claude Code.
 
@@ -143,7 +137,7 @@ This imports `AGENTS.md` fully into every Claude Code session. Do not duplicate 
 
 Step E, in the finish step below, hashes it into `seeded_files`.
 
-### 9. Optional: Task management
+### 7b. Optional: Task management
 
 Use the scaffold Step 1 answer on task management; ask only if scaffold Step 1 did not settle it. If yes, append the task-management section to the project's `AGENTS.md` (the command does not read the file):
 
@@ -156,7 +150,7 @@ cat "<skill-dir>/vite-react/template-tail/task-management.md" >> AGENTS.md
 
 Execute kit Steps **E through H** using the **vite-react** row: harness.json (Step E, with the `vite-verify` hash), the base snapshot (E2), project docs (E3), the `.agents` symlink (F), the AGENTS.md tail and final format pass (G) and plugin install (H). The scaffold is not finished until Step H is done or skipped.
 
-### 10. Optional: Remove example code
+### 8. Optional: Remove example code
 
 Use the scaffold Step 1 answer on removing example code; ask only if scaffold Step 1 did not settle it. If yes, once the project is verified and the user confirms it runs, remove the example code:
 
@@ -171,11 +165,11 @@ Or use the cleanup utility — load it with: `cat "<skill-dir>/../cleanup/SKILL.
 ## Rules
 
 - Always update `package.json` name before installing dependencies
-- Copy `.env.example` to `.env` before the first run; do not commit `.env` or put secrets in `AGENTS.md` / `CLAUDE.md`
+- The user copies `.env.example` to `.env` before the first run; do not commit `.env` or put secrets in `AGENTS.md` / `CLAUDE.md`
 - Update the `index.html` title; it is the browser tab name
 - Routes are defined in `src/router.tsx`, not by filesystem convention
 - Read env only through `import.meta.env.VITE_*` in `src/lib/constants/env.ts`; `process.env` is undefined in the browser
-- Pass the Step 6 gate (`pnpm format`, `pnpm build`, `pnpm check`, `pnpm test`) before generating `AGENTS.md`
+- Pass the Step 5b gate (`pnpm format`, `pnpm build`, `pnpm check`, `pnpm test`) before generating `AGENTS.md`
 - Remove example code only after the user confirms the project runs
 - Leave `node_modules/` and `dist/` out of the scaffold; they are installed or built
 - The scaffold is complete only once the project `AGENTS.md` exists; check for it before handing off

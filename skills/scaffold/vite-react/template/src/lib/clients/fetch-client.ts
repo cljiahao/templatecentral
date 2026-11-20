@@ -120,10 +120,11 @@ export abstract class FetchClient {
   }
 
   private async fallbackParse<T>(res: Response): Promise<T> {
+    const text = await res.text();
     try {
-      return (await res.json()) as T;
+      return JSON.parse(text) as T;
     } catch {
-      return (await res.text()) as T;
+      return text as T;
     }
   }
 

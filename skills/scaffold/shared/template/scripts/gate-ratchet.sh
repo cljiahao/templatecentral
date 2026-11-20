@@ -8,7 +8,14 @@ die() {
 }
 
 base_ref=${1:-}
-[ -n "$base_ref" ] || die "usage: gate-ratchet.sh <base-ref> (for example origin/main)"
+if [ "$base_ref" = auto ]; then
+  base_ref=""
+  for cand in '@{upstream}' origin/HEAD origin/main origin/master; do
+    if git rev-parse --verify -q "$cand^{commit}" >/dev/null 2>&1; then base_ref=$cand; break; fi
+  done
+  if [ -z "$base_ref" ]; then echo "gate-ratchet: no base branch found (no upstream, origin/main or origin/master), so nothing to compare; CI runs this gate on the pull request"; exit 0; fi
+fi
+[ -n "$base_ref" ] || die "usage: gate-ratchet.sh <base-ref|auto> (for example origin/main; auto picks the upstream or origin/main)"
 git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
 mb=$(git merge-base "$base_ref" HEAD 2>/dev/null) || die "no merge base between $base_ref and HEAD (check out with full history)"
 wd=$(mktemp -d "${TMPDIR:-/tmp}/gate-ratchet.XXXXXX") || die "cannot create a temporary folder"
@@ -36,7 +43,7 @@ kind_of() {
     .npmrc | */.npmrc) echo npmrc ;;
     .hadolint.yaml | */.hadolint.yaml | .hadolint.yml | */.hadolint.yml) echo hadolint ;;
     .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
-    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | scripts/check-supply-chain.sh | */scripts/check-supply-chain.sh | scripts/check-workflows.sh | */scripts/check-workflows.sh | scripts/check-env-example.sh | */scripts/check-env-example.sh | scripts/check-dockerfile.sh | */scripts/check-dockerfile.sh | scripts/check-secret-scanner.sh | */scripts/check-secret-scanner.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
+    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | scripts/check-supply-chain.sh | */scripts/check-supply-chain.sh | scripts/check-workflows.sh | */scripts/check-workflows.sh | scripts/check-env-example.sh | */scripts/check-env-example.sh | scripts/check-dockerfile.sh | */scripts/check-dockerfile.sh | scripts/check-secret-scanner.sh | */scripts/check-secret-scanner.sh | scripts/check-workarounds.sh | */scripts/check-workarounds.sh | scripts/scan-secrets.sh | */scripts/scan-secrets.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
     *) echo "" ;;
   esac
 }
@@ -747,10 +754,12 @@ done <<< "$added"
 
 if [ "$weakened" -eq 1 ]; then
   echo "gate-ratchet: FAIL, a gate is weaker than at the merge base ($checked config files compared)"
+  echo "Fix: restore each WEAKENED setting above to its merge-base value. If the rule is wrong for the whole project, change it in its own reviewed change that touches only that config."
   exit 1
 fi
 if [ "$unreadable" -eq 1 ]; then
   echo "gate-ratchet: FAIL, a gate config file could not be read ($checked config files compared)"
+  echo "Fix: make the file parseable again (restore it from the merge base), then rerun."
   exit 2
 fi
 echo "gate-ratchet: ok, no gate weaker than at the merge base ($checked config files compared)"

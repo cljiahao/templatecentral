@@ -42,11 +42,7 @@ In `src/config/env.config.ts`, set the `PROJECT_NAME` default (`'My Project'`) t
 
 ### 3. Create Environment File
 
-`cp .env.example .env`
-
-If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
-
-**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+The user runs this copy themselves (`cp .env.example .env`); the seeded guards block agent access to a real env file, so never read or write one. Continue without it: the quality gates run on the defaults.
 
 ### 4. Install Dependencies
 
@@ -69,7 +65,7 @@ pnpm test
 pnpm test:e2e
 ```
 
-`pnpm test:e2e` and `vitest.config.e2e.ts` remain for local use; CI runs the single combined suite (`test:ci`).
+`pnpm test:e2e` and `vitest.config.e2e.mts` remain for local use; CI runs the single combined suite (`test:ci`).
 
 If any command fails, fix it before proceeding.
 

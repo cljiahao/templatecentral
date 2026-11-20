@@ -30,3 +30,5 @@ cat "<skill-dir>/<stack>/source-files.md"
 ```
 
 **Step 3** — Follow the loaded guide fully.
+
+**Step 4** — Before the first commit, create a branch (`git checkout -b <name>`, as its own command: the seeded hook blocks commits on `main`) and commit the lockfile the install wrote (`pnpm-lock.yaml`, `uv.lock`): CI installs frozen from it.

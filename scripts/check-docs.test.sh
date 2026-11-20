@@ -29,6 +29,7 @@ scaffold() {
   TC_STACK=$st TC_PART=ci TC_CI=$ci bash "$SHARED/tc-copy.sh" "$dir" > /dev/null 2>&1
   TC_STACK=$st TC_PART=tail bash "$SHARED/tc-copy.sh" "$dir" > /dev/null 2>&1
   TC_STACK=$st TC_PART=manifest bash "$SHARED/tc-copy.sh" "$dir" > /dev/null 2>&1
+  printf '# project\n\nA test project.\n\n## Run\n\n## Test\n\n## Build\n' > "$dir/README.md"
 }
 
 # run_check <dir> [args...] — runs the project's own copy; sets OUT and EC.
@@ -58,6 +59,14 @@ d="$T/clean-azure"
 scaffold fastapi azure "$d"
 run_check "$d"
 check 0 "$EC" "clean_scaffold[azure]: exits 0 ($OUT)"
+
+# no root README.md: the whole-project run fails and names the file; a run on named files does not require it
+d="$T/no-readme"
+scaffold fastapi github "$d"
+rm "$d/README.md"
+expect_finding "$d" "missing_readme" '^README\.md:1: missing; create README\.md'
+run_check "$d" docs/architecture.md
+check 0 "$EC" "missing_readme: a run on named files exits 0 ($OUT)"
 
 # the shared ts and py templates alone: the script runs against a bare project made from the shared layer
 for variant in ts py; do
@@ -186,6 +195,7 @@ bare_project() {
   mkdir -p "$d/scripts" "$d/docs"
   cp "$CHECK" "$d/scripts/check-docs.sh"
   printf '# p\n' > "$d/docs/architecture.md"
+  printf '# p\n' > "$d/README.md"
   echo "$d"
 }
 

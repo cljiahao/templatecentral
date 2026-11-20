@@ -8,7 +8,7 @@ manifest=".claude/harness.json"
 [ -f "$manifest" ] || { echo "verify-harness: $manifest missing" >&2; exit 2; }
 
 # Enforcement layer only — AGENTS.md / CLAUDE.md / *-verify skills legitimately evolve.
-guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-secret-scanner)\.sh$|\.claude/registry-hosts\.txt$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
+guard='^(\.claude/hooks/|\.claude/settings\.json$|\.claude/(verify|regen)-harness\.sh$|\.claude/comment-hygiene-patterns\.txt$|lefthook\.yml$|\.lefthook/|\.gitleaks\.toml$|\.github/workflows/|\.claude/ci-gates\.sh$|scripts/(check-docs|test-budget|gate-ratchet|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-workarounds|scan-secrets|check-secret-scanner)\.sh$|\.claude/registry-hosts\.txt$|\.claude/gates\.txt$|azure-pipelines/templatecentral-gates\.yml$|azure-pipelines\.yml$)'
 
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 read_manifest() {
@@ -77,7 +77,7 @@ fi
 [ "$unfilled" -eq 0 ] || { echo "❌ $manifest still has unfilled origin_hash placeholders — finish Step E" >&2; exit 2; }
 [ "$checked" -gt 0 ] || { echo "❌ verify-harness checked zero enforcement-layer entries — manifest empty or malformed" >&2; exit 2; }
 if [ "$drift" -ne 0 ]; then
-  echo "❌ harness integrity drift. If intentional, a human runs: bash .claude/regen-harness.sh" >&2
+  echo "❌ harness integrity drift. Restore each file listed above from git (git checkout <merge-base> -- <file>). If the change is intentional, a human runs: bash .claude/regen-harness.sh" >&2
   exit 1
 fi
 echo "✓ harness integrity OK ($checked enforcement files)"

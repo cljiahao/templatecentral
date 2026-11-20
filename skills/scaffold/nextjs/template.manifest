@@ -40,6 +40,7 @@ template/src/app/dashboard/layout.tsx 644 - -
 template/src/app/error.tsx 644 - -
 template/src/app/globals.css 644 - -
 template/src/app/layout.tsx 644 - -
+template/src/app/not-found.tsx 644 - -
 template/src/components/layout/index.ts 644 - -
 template/src/components/layout/navbar.tsx 644 - -
 template/src/components/layout/providers.tsx 644 - -
@@ -87,6 +88,9 @@ template/src/lib/utils/with-logging.ts 644 - -
 template/src/proxy.ts 644 - -
 template/test/api/health.test.ts 644 - -
 template/test/api/with-logging.test.ts 644 - -
+template/test/components/render.test.tsx 644 - -
+template/test/integrations/clients.test.ts 644 - -
+template/test/lib/errors.test.ts 644 - -
 template/test/lib/frame-protection.test.ts 644 - -
 template/tsconfig.json 644 - -
 template/vitest.config.ts 644 - -

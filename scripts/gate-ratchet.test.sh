@@ -33,7 +33,7 @@ seed() {
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
   cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
-    cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
+    cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
     cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
@@ -51,7 +51,7 @@ seed() {
 import sys
 p = sys.argv[1]
 s = open(p).read()
-s = s.replace("      include: ['src/**/*.ts'],", "      include: ['src/**/*.ts'],\n      thresholds: { lines: 80, branches: 70 },", 1)
+s = s.replace("thresholds: { lines: 80 },", "thresholds: { lines: 80, branches: 70 },", 1)
 open(p, "w").write(s)
 PY
   else
@@ -236,7 +236,7 @@ weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-lates
     if: false" "CI job disabled" "gate script, runner or manifest changed"
 weakens .github/workflows/ci.yml "runs-on: ubuntu-latest" "runs-on: ubuntu-latest
     continue-on-error: true" "CI job may fail" "gate script, runner or manifest changed"
-weakens .claude/gates.txt "ratchet|-|ci-gates.sh ratchet" "ratchet|-|ratchet" "gate needle rewritten" "gate script, runner or manifest changed"
+weakens .claude/gates.txt "ratchet|scripts/gate-ratchet.sh|ci-gates.sh ratchet" "ratchet|scripts/gate-ratchet.sh|ratchet" "gate needle rewritten" "gate script, runner or manifest changed"
 weakens .claude/ci-gates.sh "set -uo pipefail" "set -uo pipefail
 exit 0" "ci-gates changed" "gate script, runner or manifest changed"
 weakens .claude/verify-harness.sh "set -euo pipefail" "set -euo pipefail
@@ -449,7 +449,7 @@ R="$T/adopt"
 rm -rf "$R"
 mkdir -p "$R/src"
 echo 'export const a = 1;' > "$R/src/a.ts"
-cp "$SH/../nestjs/template/eslint.config.mjs" "$SH/../nestjs/template/vitest.config.ts" "$R/"
+cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
 git -C "$R" init -q -b main
 git_ add -A
 git_ commit -q -m "plain project"

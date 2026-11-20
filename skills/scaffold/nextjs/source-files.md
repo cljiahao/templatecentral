@@ -19,6 +19,7 @@ The source files are real files in `<skill-dir>/nextjs/template/` (and `AGENTS.m
 - `public/image_assets/default-square.svg` — **Required.** Default `src` for `FloatingShape`.
 - `src/components/widgets/brand-text.tsx` — Replace `template` and `Central` with the project's brand name, split as fits, or one `<span>` if no gradient split is needed.
 - `src/app/error.tsx` — Root error boundary for render errors no route-segment `error.tsx` catches.
+- `src/app/not-found.tsx` — Styled 404 with the navbar, the footer and a link home; the Vite template's `NotFoundPage` matches it.
 - `src/app/api/health/route.ts` — The single health endpoint. `/api/health` is the path the Dockerfile `HEALTHCHECK` probes and the only one `templatecentral:add (auth)` puts in `PUBLIC_API_PREFIXES` — do not add a sibling handler at `/api`, which would start returning 401 the moment auth lands.
 - `src/lib/security/frame-protection.ts` — The app's CSP and anti-clickjacking headers, applied by `src/proxy.ts`. When the platform injects `APPCENTRAL_PORTAL_ORIGIN` and it passes the origin check, only that portal may frame the app; otherwise framing is denied. The only place the CSP is set.
 - `src/proxy.ts` — Applies those headers to every response. `templatecentral:add (auth)` replaces it with a route-protection proxy that keeps the `applyFrameProtection` call.
@@ -79,13 +80,7 @@ Current shadcn emits `import { cn } from 'cn'` in generated primitives; project 
 
 ### 5. Copy `.env.example` to `.env.local`
 
-```bash
-cp .env.example .env.local
-```
-
-If a guard in your session blocks writing the env file, ask the user to run this copy and continue once it exists.
-
-**No interactive user** (headless run): skip the copy, continue, and note in your final report that the env file was not created. The quality gates run on the defaults.
+The user runs this copy themselves (`cp .env.example .env.local`); the seeded guards block agent access to a real env file, so never read or write one. Continue without it: the quality gates run on the defaults.
 
 Never commit `.env.local`.
 
@@ -181,7 +176,7 @@ It deletes `src/features/example/` and the `ExampleList` import in `src/app/dash
 ## Rules
 
 - Always update `package.json` name before `pnpm install` — affects Docker image names and lockfiles
-- Always copy `.env.example` to `.env.local` before first run — never commit `.env.local`
+- The user copies `.env.example` to `.env.local` before first run; never commit `.env.local`
 - Never put secrets in `NEXT_PUBLIC_*` — exposed to every browser
 - Never skip AGENTS.md — scaffolding is not complete without it
 - Never copy `node_modules/` or `.next/` — generated at install/build time

@@ -19,7 +19,7 @@ describe('ExampleService', () => {
   it('finds an item by id', () => {
     const item = ExampleService.getById('item-1');
     expect(item).toBeDefined();
-    expect(item?.title).toBe('First item');
+    expect(item?.title).toBe('Feature modules');
   });
 
   it('returns undefined for unknown id', () => {

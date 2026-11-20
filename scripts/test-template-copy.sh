@@ -177,7 +177,7 @@ for combo in $COMBOS; do
   out=$(run_copy "$tgt" "$v" "$h"); ec=$?
   check 0 "$ec" "copy_keeps_dotfiles[$combo]: copy exits 0 ($out)"
   ci_file=.github/workflows/ci.yml; [[ $h == azure ]] && ci_file="azure-pipelines/templatecentral-gates.yml azure-pipelines.yml"
-  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh scripts/check-docs.sh scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-secret-scanner.sh .claude/registry-hosts.txt lefthook.yml $ci_file"
+  want=".claude/ci-gates.sh .claude/comment-hygiene-patterns.txt .claude/hooks/session-context.sh .claude/hooks/skill-usage-log.sh .claude/hooks/protect-files.sh .claude/verify-harness.sh .claude/regen-harness.sh .gitleaks.toml .lefthook/commit-msg.sh scripts/check-docs.sh scripts/check-supply-chain.sh scripts/check-workflows.sh scripts/check-env-example.sh scripts/check-dockerfile.sh scripts/check-workarounds.sh scripts/scan-secrets.sh scripts/check-secret-scanner.sh .claude/registry-hosts.txt lefthook.yml $ci_file"
   missing=""
   for p in $want; do [[ -f "$tgt/$p" ]] || missing+=" $p"; done
   check "" "$missing" "copy_keeps_dotfiles[$combo]: dotfiles and CI file arrived"
@@ -1845,8 +1845,8 @@ check 1 "$([[ "$(stack_manifest_diff "$sk/nestjs")" == *"MODE template/docker-en
 
 # placeholders_only_in_small_files, for nestjs
 check "" "$(big_placeholders "$NS/template" "$NS/template-agents" "$SHARED"/template*)" "placeholders_only_in_small_files: nestjs with every shared tree"
-sk=$(alt_ns big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/nestjs/template/vitest.config.ts"
-check 1 "$([[ "$(big_placeholders "$sk/nestjs/template")" == "BIG vitest.config.ts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a nestjs file over 4 KB is reported"
+sk=$(alt_ns big-ph); python3 -c 'import sys; open(sys.argv[1],"a").write("// __TC_PROJECT_NAME__\n"+"x"*5000+"\n")' "$sk/nestjs/template/vitest.config.mts"
+check 1 "$([[ "$(big_placeholders "$sk/nestjs/template")" == "BIG vitest.config.mts"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: a placeholder in a nestjs file over 4 KB is reported"
 sk=$(alt_ns many-ph); for f in .npmrc .prettierrc .gitignore .dockerignore .env.example tsconfig.json; do printf '__TC_X__\n' >> "$sk/nestjs/template/$f"; done
 check 1 "$([[ "$(big_placeholders "$sk/nestjs/template")" == *"TOOMANY"* ]] && echo 1 || echo 0)" "placeholders_only_in_small_files: more than 5 nestjs placeholder files is reported"
 

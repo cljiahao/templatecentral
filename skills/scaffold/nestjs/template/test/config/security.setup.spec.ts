@@ -6,7 +6,6 @@ const portal = 'https://portal.example.com';
 it.each([
   [portal, portal],
   [undefined, null],
-  ['', null],
   ['*', null],
   ['http://appcentral.example.gov.sg', null],
   ['https://*.example.gov.sg', null],

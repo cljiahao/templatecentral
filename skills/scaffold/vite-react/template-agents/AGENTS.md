@@ -5,7 +5,7 @@
 Vite 8 · React 19 · TypeScript strict · shadcn/ui · Tailwind CSS 4 · React Router 8 · TanStack Query 5 · React Hook Form + Zod · Vitest · pnpm · Node ≥26.12.1 Client-side SPA: no SSR, no API handlers.
 
 ## Commands
-`pnpm dev` · `pnpm build` (tsc -b && vite build) · `pnpm test` · `pnpm check` (format + lint + typecheck)
+`pnpm dev` · `pnpm build` (tsc -b && vite build) · `pnpm preview` (serve the build; no `start` script) · `pnpm test` · `pnpm check` (format + lint + typecheck)
 
 ## Layout
 - `src/features/<name>/` (api/, components/, hooks/, types.ts); `src/router.tsx` route definitions

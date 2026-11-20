@@ -184,7 +184,7 @@ For a single endpoint, put `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()` on th
 
 #### 13. Test Env + Auth Tests
 
-Vitest does not load `.env`, and `env.config.ts` now throws without `JWT_SECRET`. In **both** `vitest.config.ts` and `vitest.config.e2e.ts`, add under `test:`:
+Vitest does not load `.env`, and `env.config.ts` now throws without `JWT_SECRET`. In **both** `vitest.config.mts` and `vitest.config.e2e.mts`, add under `test:`:
 
 ```typescript
     // Vitest does not load .env, and env.config.ts rejects missing required values at import.

@@ -3,7 +3,7 @@
 # Exit 0 clean, 1 findings, 2 internal failure (missing tool, unreadable file, failed temp folder) with one line naming the cause.
 # Checks README.md, AGENTS.md, docs/**/*.md and boundary READMEs: relative links and backticked repo paths must exist,
 # and a README must not carry a `## Contents` heading or a list naming every child of its own folder.
-# With arguments only those files are checked (pre-commit); without, the whole project (pre-push, CI).
+# With arguments only those files are checked (pre-commit); without, the whole project (pre-push, CI), which also requires a root README.md.
 # An argument is a path from the caller's folder (relative or absolute) and must sit inside the project; one outside it exits 2.
 # Path rule: a path a doc names that does not exist is stale and reported, unless it is an example: a placeholder
 # (<name>, {a}, *), an ellipsis, a path/to/... prefix, or an extensionless two-part name whose first folder does not exist.
@@ -610,6 +610,8 @@ if [ "$ntargets" -gt 0 ]; then
   done < "$workdir/cands"
   [ -z "$cur" ] || check_listing "$cur" "$toks"
 fi
+
+[ "$explicit" -gt 0 ] || [ -f README.md ] || report README.md 1 "missing; create README.md with the project name, one line on what it is, and the Run, Test and Build commands"
 
 filter_ignored
 

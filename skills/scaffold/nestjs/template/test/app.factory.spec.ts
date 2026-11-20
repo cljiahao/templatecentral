@@ -34,7 +34,11 @@ describe('app factory', () => {
 
   it('serves /health with security headers', async () => {
     const result = await request('/health');
-    expect([result.statusCode, result.headers['x-content-type-options']]).toEqual([200, 'nosniff']);
+    expect([result.statusCode, result.payload, result.headers['x-content-type-options']]).toEqual([
+      200,
+      '{"status":"ok"}',
+      'nosniff',
+    ]);
   });
 
   it.each([

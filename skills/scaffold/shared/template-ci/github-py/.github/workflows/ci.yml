@@ -59,7 +59,11 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80
+        run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt
+      - name: Changed source has covered lines (fails closed on an empty report)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh diffcover "$BASE_REF"
       # PR: the PR's commits; push: full history
       - name: Secret scan (gitleaks CLI, checksum-verified)
         env:
@@ -89,6 +93,17 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           LABELS: "${{ join(github.event.pull_request.labels.*.name, ' ') }}"
         run: bash .claude/ci-gates.sh comments "$BASE_REF"
+  workarounds:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Require no suppression markers and no removed covering tests
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .claude/ci-gates.sh workarounds "$BASE_REF"
   gate-ratchet:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

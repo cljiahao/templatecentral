@@ -1,6 +1,8 @@
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/features/auth';
 import { PAGE_ROUTES } from '@/lib/constants/routes';
 import { cn } from '@/lib/utils';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 
 const NAV_LINKS = [
   { label: 'Home', href: PAGE_ROUTES.HOME },
@@ -9,6 +11,13 @@ const NAV_LINKS = [
 
 export function Navbar() {
   const { pathname } = useLocation();
+  const { isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await logout();
+    navigate(PAGE_ROUTES.HOME);
+  };
 
   return (
     <header className="bg-card sticky top-0 z-50 w-full border-b">
@@ -17,7 +26,7 @@ export function Navbar() {
           templateCentral
         </Link>
 
-        <nav aria-label="Main" className="flex gap-6">
+        <nav aria-label="Main" className="flex items-center gap-6">
           {NAV_LINKS.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -35,6 +44,11 @@ export function Navbar() {
               </Link>
             );
           })}
+          {isAuthenticated && (
+            <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
+              Sign out
+            </Button>
+          )}
         </nav>
       </div>
     </header>

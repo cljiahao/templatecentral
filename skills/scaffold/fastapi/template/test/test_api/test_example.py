@@ -13,8 +13,14 @@ def test_example_greets_and_repeats(client: TestClient) -> None:
     assert data["items"] == ["Hello, Alice!"] * 3
 
 
-@pytest.mark.parametrize("repeat_count", [0, 11, 99], ids=["below-min", "above-max", "far-above"])
-def test_example_rejects_out_of_range_count(client: TestClient, repeat_count: int) -> None:
-    response = client.post("/example", json=create_example_request(repeat_count=repeat_count))
+@pytest.mark.parametrize(
+    "repeat_count", [0, 11, 99], ids=["below-min", "above-max", "far-above"]
+)
+def test_example_rejects_out_of_range_count(
+    client: TestClient, repeat_count: int
+) -> None:
+    response = client.post(
+        "/example", json=create_example_request(repeat_count=repeat_count)
+    )
 
     assert response.status_code == 422

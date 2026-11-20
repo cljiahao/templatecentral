@@ -25,6 +25,8 @@ Reference detail for the rules in `AGENTS.md` (`## AI Harness`, `## Skills Secur
 - a changelog-touched check and a comment-hygiene check on added lines. Bypass labels: `skip-changelog`, `skip-comment-check` (on Azure, queue with variable `LABELS`);
 - a dependency-audit gate (`deps`): fails on high/critical advisories, no label bypass. The only suppression is the expiring allowlist `dep-audit-allow.txt` in the `.claude` folder.
 
+A workaround detector (`scripts/check-workarounds.sh`, pre-push and the CI `workarounds` gate) fails on added suppression markers (`# noqa`, `eslint-disable`, `@ts-ignore`, `NOSONAR` and similar), skipped or focused tests, `as any`, and a commit that deletes test files while their source remains; there is no waiver, so fix the cause or change the rule in config in its own reviewed change. Coverage has a global 80% line floor locally on every stack, and the `diffcover` gate fails when source changed but diff-cover found no lines.
+
 GitHub also gates changed-line coverage (`diff-cover` ≥80%) and lockfile-in-sync (`--frozen-lockfile`). On Azure the pipeline that includes the template owns those steps (the seeded `azure-pipelines.yml` runs both).
 
 **Supply-chain and container gates** (all offline and keyless; CI runs each through `.claude/ci-gates.sh`, and the fast ones also run in lefthook):
