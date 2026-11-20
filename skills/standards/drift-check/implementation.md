@@ -31,7 +31,7 @@ Then exit, unless the request asked for a quality check: then go to Step 7.
 
 ## Step 3 — Compare (semver `major.minor.patch`)
 
-- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently, unless the request asked for a quality check: then go to Step 7.
+- Project version ≥ plugin version → conventions are current (or the installed plugin is older than the project). Skip Step 4, run Step 4b. If the project `AGENTS.md` contains `<!-- templateCentral-check-deps -->`, go to Step 5; otherwise exit silently, unless the request asked for a quality check: then go to Step 7.
 - Project version < plugin version → drift. Continue.
 
 ## Step 4 — Convention drift report
@@ -55,6 +55,10 @@ Stack floors not met:
 
 Convention updates are manual — review the above and apply what is relevant.
 ```
+
+## Step 4b — Known older patterns (read-only, any version)
+
+Run `bash "<skill-dir>/../migrate/general/defect-report.sh" <project-dir>`. It filters by file, not by version, so run it whatever Step 3 found. Show its output only when it matched something. It writes nothing and needs no login, key or network. Change project source only after the user confirms each fix; the notes are `<skill-dir>/../migrate/general/UPGRADE-NOTES.md`.
 
 ## Step 5 — Dependency drift (optional)
 
