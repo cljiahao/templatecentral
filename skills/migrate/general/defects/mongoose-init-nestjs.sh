@@ -7,9 +7,16 @@ export template=skills/add/database/typescript/nestjs-mongoose/template/src/data
 export desc="DatabaseModule does not call init() on the registered models, so a unique index may not exist when the first write lands; verify against your models"
 export fix="implement OnModuleInit and await Promise.all(Object.values(this.connection.models).map((model) => model.init()))"
 
-# Match a module that connects through MongooseModule.forRoot and never calls init().
+# Match a module that connects through MongooseModule.forRoot and never calls init(), ignoring comments.
 check() {
-  if has "$1" 'MongooseModule.forRoot' && lacks "$1" '.init()'; then
-    at "$1" 'MongooseModule.forRoot'
-  fi
+  local text
+  text=$(strip_comments "$1") || return 1
+  case "$text" in
+    *MongooseModule.forRoot*)
+      case "$text" in
+        *'.init()'*) ;;
+        *) echo "$1:$(line_of "$text" 'MongooseModule.forRoot')" ;;
+      esac
+      ;;
+  esac
 }

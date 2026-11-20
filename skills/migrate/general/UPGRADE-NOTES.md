@@ -43,7 +43,7 @@ Each entry: what the older template did, how to recognise it, the fix, the id. C
 - Older: the login path verified a fixed literal Argon2 hash when the email was unknown. The current templates build the dummy hash at startup with the project's own hasher.
 - Recognise: `auth.service.ts` (NestJS) or `auth_service.py` (FastAPI) contains the literal whose salt part is `c29tZXNhbHRzb21lc2E`.
 - Fix: build the dummy hash with the project's hasher at startup and verify it on the unknown-email path.
-- Current: `skills/add/database/typescript/nestjs-drizzle.md` (Step B) and `skills/add/database/python/sqlalchemy.md` (Step C).
+- Current: `skills/add/database/typescript/nestjs-drizzle.md` (section "Completing Auth Integration") and `skills/add/database/python/sqlalchemy.md` (Step C under "Completing Auth Integration (SQLAlchemy)").
 
 ## sqlalchemy-tls-verify (check)
 

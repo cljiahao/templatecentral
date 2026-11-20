@@ -126,16 +126,171 @@ for skip in node_modules .venv venv .next dist build coverage .git __pycache__; 
   check "$NCHECKS checks run, 0 matched, $NCHECKS not installed. $SUMMARY_TAIL" "$OUT" "a match inside $skip counts as not installed"
 done
 
-# A file over 1 MB is skipped; a symlink is not followed.
+# A skipped candidate (over 1 MB, symlink, newline in the path) is never scanned and never counted as not installed.
 mkdir -p "$T/big/src/integrations/database"
 cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/big/src/integrations/database/"
 head -c 1100000 /dev/zero | tr '\0' ' ' >> "$T/big/src/integrations/database/mongoose-client.ts"
 run "$T/big"
-check 0 "$EC" "a file over 1 MB is skipped"
+check 2 "$EC" "a file over 1 MB as the only candidate exits 2"
+has "every candidate file was skipped" "$OUT" "over 1 MB: the run says nothing was scanned"
 mkdir -p "$T/link/src"
 ln -s "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/link/src/mongoose-client.ts"
 run "$T/link"
-check 0 "$EC" "a symlink is not followed"
+check 2 "$EC" "a symlink as the only candidate exits 2"
+has "every candidate file was skipped" "$OUT" "symlink: the run says nothing was scanned"
+mkdir -p "$T/nl/a
+b"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nl/a
+b/"
+run "$T/nl"
+check 2 "$EC" "a newline in the path as the only candidate exits 2"
+
+# One scanned file plus skipped ones: the scan runs, one stderr line gives the number skipped.
+mkdir -p "$T/mix/src" "$T/mix/other"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/mix/src/"
+ln -s "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/mix/other/mongoose-client.ts"
+head -c 1100000 /dev/zero | tr '\0' ' ' > "$T/mix/other/big-pad"
+cp "$T/mix/src/mongoose-client.ts" "$T/mix/other/pad.ts"
+head -c 1100000 /dev/zero | tr '\0' ' ' >> "$T/mix/other/pad.ts"
+mkdir -p "$T/mix/deep"
+cp "$T/mix/other/pad.ts" "$T/mix/deep/mongoose-client.ts"
+run "$T/mix"
+check 1 "$EC" "skipped files beside a scanned one: the scanned one is still flagged"
+has "2 candidate file(s) were not scanned" "$OUT" "skipped count is printed once on stderr"
+
+# A project folder named like a pruned folder is still scanned.
+for root in build dist coverage venv node_modules; do
+  mkdir -p "$T/rootname/$root"
+  cp -R "$FIXTURES/mongoose-client-promise-retry/old/." "$T/rootname/$root/"
+  run "$T/rootname/$root"
+  check 1 "$EC" "a project directory named $root is scanned (exit)"
+  has "mongoose-client-promise-retry  high" "$OUT" "a project directory named $root is scanned (match)"
+done
+
+# An unreadable target file exits 2 and names the file.
+mkdir -p "$T/unread"
+cp -R "$FIXTURES/mongoose-client-promise-retry/old/." "$T/unread/"
+chmod 000 "$T/unread/src/integrations/database/mongoose-client.ts"
+if [[ ! -r "$T/unread/src/integrations/database/mongoose-client.ts" ]]; then
+  run "$T/unread"
+  check 2 "$EC" "an unreadable target file exits 2"
+  has "src/integrations/database/mongoose-client.ts (check mongoose-client-promise-retry)" "$OUT" "the unreadable file is named"
+fi
+chmod 644 "$T/unread/src/integrations/database/mongoose-client.ts"
+
+# A check that fails, exits non-zero at load, or exits at the top level fails closed.
+cp -R "$REPO_ROOT/skills/migrate/general" "$T/gen2"
+printf 'id=zz\nlevel=check\nnames=mongoose-client.ts\ntemplate=t\ndesc=d\nfix=f\ncheck() { false; }\n' > "$T/gen2/defects/zz.sh"
+OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD bash "$T/gen2/defect-report.sh" "$FIXTURES/mongoose-client-promise-retry/old" 2>&1)
+check 2 "$?" "a check that exits non-zero ends the run with exit 2"
+has "check zz failed" "$OUT" "the failing check is named by id"
+cat > "$T/gen2/defects/zz.sh" <<'EOF'
+id=zz
+level=check
+names=mongoose-client.ts
+template=t
+desc=d
+fix=f
+check() { echo "$1:1"; return 3; }
+EOF
+OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD bash "$T/gen2/defect-report.sh" "$FIXTURES/mongoose-client-promise-retry/old" 2>&1)
+check 2 "$?" "a check that prints a match and then fails still exits 2"
+printf 'id=zz\nlevel=check\nnames=mongoose-client.ts\ntemplate=t\ndesc=d\nfix=f\ncheck() { :; }\nexit 0\n' > "$T/gen2/defects/zz.sh"
+OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD bash "$T/gen2/defect-report.sh" "$T/empty" 2>&1)
+check 2 "$?" "a check file with a top-level exit ends the run with exit 2"
+has "exits or fails while loading" "$OUT" "the top-level exit is named"
+rm -f "$T/gen2/defects/zz.sh"
+
+# strip_comments variants for the promise-retry check: the old pattern is flagged, the fixed pattern is clean.
+# vclient <name> <ident> <await-expr> <catch-body> <extra>: writes a client and runs the report on it.
+vclient() {
+  local d="$T/v-$1"
+  mkdir -p "$d/src"
+  printf 'const %s = { conn: null, promise: null };\nexport async function connectDB() {\n  if (!%s.promise) { %s.promise = mongoose.connect(URL); }\n  try {\n    const conn = %s;\n    %s.conn = conn;\n  } catch (error) {\n    %s\n    throw error;\n  }\n}\n%s\n' \
+    "$2" "$2" "$2" "$3" "$2" "$4" "$5" > "$d/src/mongoose-client.ts"
+  run "$d"
+}
+flagged() { has "mongoose-client-promise-retry  high" "$OUT" "$1: flagged"; }
+unflagged() { lacks "mongoose-client-promise-retry  " "$OUT" "$1: not flagged"; }
+
+vclient old-plain cached 'await cached.promise' '' ''
+flagged "old client with no reset"
+vclient old-disconnect cached 'await cached.promise' '' 'export async function disconnect() { cached.promise = null; }'
+flagged "old client, reset only in a disconnect helper"
+vclient old-comment cached 'await cached.promise' '// cached.promise = null' '/* cached.promise = null */'
+flagged "old client, reset only inside comments"
+vclient old-spaces cached 'await   cached.promise' '' ''
+flagged "old client, await with extra spaces"
+vclient old-paren cached 'await (cached.promise)' '' ''
+flagged "old client, await in parentheses"
+vclient old-renamed cache 'await cache.promise' '' ''
+flagged "old client, renamed variable"
+vclient old-other-ident cached 'await cached.promise' 'other.promise = null;' ''
+flagged "old client, a different identifier is reset"
+vclient old-eq cached 'await cached.promise' 'cached.promise == null;' ''
+flagged "old client, a comparison is not a reset"
+vclient fixed-nospace cached 'await cached.promise' 'cached.promise=null;' ''
+unflagged "fixed client, reset without spaces"
+vclient fixed-undefined cached 'await cached.promise' 'cached.promise = undefined;' ''
+unflagged "fixed client, reset to undefined"
+vclient fixed-renamed cache 'await cache.promise' 'cache.promise = null;' ''
+unflagged "fixed client, renamed variable with its reset"
+vclient fixed-catch-call cached 'await cached.promise' '' 'export const f = () => cached.promise.catch(() => { cached.promise = null; });'
+unflagged "fixed client, reset in a .catch callback"
+
+# Comments never hide or fake a match for the other checks.
+mkdir -p "$T/c1/src" "$T/c2/src" "$T/c3" "$T/c4" "$T/c5" "$T/c6"
+printf '// connectDB\nexport const x = 1;\n' > "$T/c1/src/mongoose-client.ts"
+run "$T/c1"
+lacks "mongoose-init-nextjs  " "$OUT" "a comment naming connectDB does not match"
+printf 'export async function connectDB() {\n  // call .init() later\n  return 1;\n}\n' > "$T/c2/src/mongoose-client.ts"
+run "$T/c2"
+has "mongoose-init-nextjs  check" "$OUT" "a comment naming .init() does not hide the match"
+printf 'MongooseModule.forRoot(url);\n/* every model .init() */\n' > "$T/c3/database.module.ts"
+run "$T/c3"
+has "mongoose-init-nestjs  check" "$OUT" "a block comment naming .init() does not hide the nestjs match"
+printf 'from sqlalchemy import create_async_engine\n# sslmode=verify-full\nengine = create_async_engine(url)\n' > "$T/c4/session.py"
+run "$T/c4"
+has "session.py:3  sqlalchemy-tls-verify  check" "$OUT" "an async engine with sslmode only in a comment is flagged"
+printf 'engine = create_async_engine(url, connect_args={"sslmode": "verify-full"})\n' > "$T/c5/session.py"
+run "$T/c5"
+lacks "sqlalchemy-tls-verify  " "$OUT" "an async engine with sslmode in connect_args is clean"
+printf '"""Docstring about sslmode."""\nengine = create_engine(url)\n' > "$T/c6/session.py"
+run "$T/c6"
+has "sqlalchemy-tls-verify  check" "$OUT" "a docstring naming sslmode does not hide the match"
+
+# A bearer-token auth service is not flagged; a cookie-mode one without the header is.
+mkdir -p "$T/b1" "$T/b2" "$T/b3"
+cat > "$T/b1/auth-service.ts" <<'EOF'
+export async function loginWithCredentials() {}
+await fetch(`${base}/logout`, { headers: { Authorization: `Bearer ${t}` } });
+EOF
+run "$T/b1"
+lacks "vite-auth-csrf  " "$OUT" "a bearer-token client is not flagged"
+cat > "$T/b2/auth-service.ts" <<'EOF'
+export async function loginWithCredentials() { await fetch(u, { credentials: "include" }); }
+await fetch(`${base}/logout`, { method: "POST", credentials: "include" });
+EOF
+run "$T/b2"
+has "vite-auth-csrf  high" "$OUT" "a cookie-mode client with no CSRF header is flagged"
+cat > "$T/b3/auth-service.ts" <<'EOF'
+// X-CSRF-Token
+export async function loginWithCredentials() { await fetch(u, { credentials: "include" }); }
+await fetch(`${base}/logout`, { credentials: "include" });
+EOF
+run "$T/b3"
+has "vite-auth-csrf  high" "$OUT" "a comment naming X-CSRF-Token does not hide the match"
+
+# Every path and heading the notes name exists in the tree.
+notes="$REPO_ROOT/skills/migrate/general/UPGRADE-NOTES.md"
+while IFS= read -r ref; do
+  case "$ref" in
+    skills/*) check 1 "$([[ -e "$REPO_ROOT/$ref" ]] && echo 1 || echo 0)" "notes: path exists: $ref" ;;
+  esac
+done < <(grep -oE "\`[^\`]*\`" "$notes" | tr -d '\`')
+check 1 "$(grep -q '^## Completing Auth Integration$' "$REPO_ROOT/skills/add/database/typescript/nestjs-drizzle.md" && echo 1 || echo 0)" "notes: nestjs-drizzle heading exists"
+check 0 "$(grep -c "nestjs-drizzle.md\` (Step" "$notes")" "notes: no step letter named for the nestjs-drizzle guide"
+check 1 "$(grep -q '^### Step C ' "$REPO_ROOT/skills/add/database/python/sqlalchemy.md" && echo 1 || echo 0)" "notes: sqlalchemy Step C heading exists"
 
 # A path with spaces works.
 mkdir -p "$T/with space/my proj"

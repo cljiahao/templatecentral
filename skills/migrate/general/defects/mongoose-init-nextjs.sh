@@ -7,9 +7,16 @@ export template=skills/add/database/typescript/nextjs-mongoose/template/src/inte
 export desc="connectDB does not call init() on the registered models, so a unique index may not exist when the first write lands; verify against your models"
 export fix="after the connect, await Promise.all(conn.modelNames().map((name) => conn.model(name).init())) and import model modules before the first connectDB() call"
 
-# Match a client that defines connectDB and never calls init().
+# Match a client that defines connectDB and never calls init(), ignoring comments.
 check() {
-  if has "$1" 'connectDB' && lacks "$1" '.init()'; then
-    at "$1" 'connectDB'
-  fi
+  local text
+  text=$(strip_comments "$1") || return 1
+  case "$text" in
+    *connectDB*)
+      case "$text" in
+        *'.init()'*) ;;
+        *) echo "$1:$(line_of "$text" 'connectDB')" ;;
+      esac
+      ;;
+  esac
 }
