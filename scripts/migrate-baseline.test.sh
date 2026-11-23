@@ -21,7 +21,9 @@ gb() { local d=$1; shift; bash "$G" -C "$d" "$@" 2>&1; }
 newproj() { mkdir -p "$T/$1"; echo "$T/$1"; }
 BL=.claude/gate-baseline.txt
 tab=$(printf '\t')
-HEADER_LINE='# templatecentral gate baseline v1'
+HEADER_LINE='# templatecentral gate baseline v2'
+# nent <file>: the number of entry lines (gate lines excluded).
+nent() { tail -n +2 "$1" | grep -vc '^# gate'; }
 
 OLD='src/a.ts:3:1: Unexpected any [Error/no-any]
 src/a.ts:9:5: Unused variable x [Error/no-unused]
@@ -32,13 +34,14 @@ P=$(newproj rec)
 out=$(printf '%s\n\n3 problems\n' "$OLD" | gb "$P" record lint colon); check "record exits 0" 0 $?
 contains "record counts findings" "recorded 3 finding(s) in 3 entr" "$out"
 h1=$(sha "$P/$BL")
-check "file starts with the header" "# templatecentral gate baseline v1" "$(head -n 1 "$P/$BL")"
+check "file starts with the header" "# templatecentral gate baseline v2" "$(head -n 1 "$P/$BL")"
 contains "entry names gate, file, count, fingerprint" "lint${tab}src/a.ts${tab}1${tab}Unexpected any [Error/no-any]" "$(cat "$P/$BL")"
 absent "no line number in the file" ":3:1" "$(cat "$P/$BL")"
 out=$(printf '%s\n' "$OLD" | gb "$P" record lint colon); check "rerun exits 0" 0 $?
 contains "rerun says unchanged" "unchanged" "$out"
 check "rerun leaves the file byte-identical" "$h1" "$(sha "$P/$BL")"
 out=$(gb "$P" validate); check "validate passes on a recorded file" 0 $?
+check "gate line names the tool" "# gate${tab}lint${tab}colon" "$(sed -n 2p "$P/$BL")"
 check "entries sorted" "$(tail -n +2 "$P/$BL")" "$(tail -n +2 "$P/$BL" | LC_ALL=C sort -t "$tab" -k1,1 -k2,2 -k4)"
 
 # the gate: old findings pass, a new one fails
@@ -68,7 +71,7 @@ cp "$P/$BL" "$T/before-prune.txt"
 FIXED=$(printf '%s\n' "$OLD" | sed '/Missing return/d')
 out=$(printf '%s\nsrc/new.ts:1:1: Brand new [Error/new]\n' "$FIXED" | gb "$P" prune lint colon); check "prune exits 0" 0 $?
 contains "prune reports" "1 entr(ies) removed" "$out"
-check "prune removed the fixed entry" 2 "$(tail -n +2 "$P/$BL" | wc -l | tr -d ' ')"
+check "prune removed the fixed entry" 2 "$(nent "$P/$BL")"
 absent "prune did not add the new finding" "Brand new" "$(cat "$P/$BL")"
 out=$(printf '%s\n' "$OLD" | gb "$P" check lint colon); check "after prune the removed finding is new again" 1 $?
 cp "$T/before-prune.txt" "$P/$BL"
@@ -176,7 +179,8 @@ contains "run dry reports lint" "lint would record 3 finding(s)" "$out"
 contains "run dry reports types" "types would record 2 finding(s)" "$out"
 exists=no; [ -e "$R/$BL" ] && exists=yes; check "run dry writes nothing" no "$exists"
 out=$(runh record); check "run record exits 0" 0 $?
-check "run record wrote both gates" 5 "$(tail -n +2 "$R/$BL" | wc -l | tr -d ' ')"
+check "run record wrote both gates' entries" 5 "$(nent "$R/$BL")"
+check "run record wrote the tools" "# gate${tab}lint${tab}eslint # gate${tab}types${tab}tsc" "$(grep '^# gate' "$R/$BL" | tr '\n' ' ' | sed 's/ $//')"
 out=$(runh check); check "run check passes on the recorded state" 0 $?
 printf '%s\nsrc/n.ts:1:1: New [Error/n]\n' "$OLD" >"$T/lint.txt"
 out=$(runh check); check "run check fails on a new lint finding" 1 $?
@@ -218,7 +222,7 @@ out=$(refresh --apply --baseline --allow-dirty); contains "a shrunk gate is not 
 check "the file did not change without --prune" "$h2" "$(sha "$A/$BL")"
 out=$(refresh --apply --baseline --prune --allow-dirty)
 contains "--prune lowers the baseline" "1 entr(ies) removed" "$out"
-check "the file shrank with --prune" 4 "$(tail -n +2 "$A/$BL" | wc -l | tr -d ' ')"
+check "the file shrank with --prune" 4 "$(nent "$A/$BL")"
 printf '%s\nsrc/n.ts:1:1: New [Error/n]\n' "$FIXED" >"$T/lint.txt"
 out=$(refresh --apply --baseline --prune --allow-dirty); check "--prune never adds a new finding" 0 "$(grep -c 'New \[Error' "$A/$BL")"
 
@@ -235,7 +239,7 @@ out=$(runh2 check); check "empty baseline, clean gate passes" 0 $?
 printf 'a.ts:1:1: NEW [Error/new]\n' >"$T/lint2.txt"
 out=$(runh2 check); check "empty baseline, new lint finding fails" 1 $?
 contains "empty baseline names the finding" "NEW lint: a.ts" "$out"
-printf '%s\ntypes\tsrc/x.ts\t1\tType problem\n' "$HEADER_LINE" >"$R2/$BL"
+printf '%s\n# gate\ttypes\ttsc\ntypes\tsrc/x.ts\t1\tType problem\n' "$HEADER_LINE" >"$R2/$BL"
 : >"$T/lint2.txt"
 out=$(runh2 check); check "entries only for another gate, clean lint passes" 0 $?
 printf 'a.ts:1:1: NEW [Error/new]\n' >"$T/lint2.txt"
@@ -262,7 +266,7 @@ out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R3" run check 2>&1); check 
 # run prune: a gate with entries whose tool cannot run fails
 R4=$(newproj prunefail)
 mkdir -p "$R4/.claude"; printf '{}\n' >"$R4/package.json"; printf 'export default []\n' >"$R4/eslint.config.mjs"
-printf '%s\nlint\ta.ts\t1\tOld [Error/old]\n' "$HEADER_LINE" >"$R4/$BL"
+printf '%s\n# gate\tlint\teslint\nlint\ta.ts\t1\tOld [Error/old]\n' "$HEADER_LINE" >"$R4/$BL"
 out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R4" run prune 2>&1); check "run prune fails when the tool cannot run" 1 $?
 mkdir -p "$R4/node_modules"; printf 'a.ts:1:1: Old [Error/old]\n' >"$T/lint4.txt"
 out=$(STUB_LINT="$T/lint4.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R4" run prune 2>&1); check "control: run prune with a working tool passes" 0 $?
@@ -270,7 +274,8 @@ out=$(STUB_LINT="$T/lint4.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin
 # rc 0 does not hide output
 out=$(printf '%s\nsrc/new.ts:1:1: Sneaky [Error/s]\n' "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0 with a new finding fails" 1 $?
 out=$(printf '%s\n' "$OLD" | gb "$P" check lint colon --rc 0); check "control: rc 0 with only old findings passes" 0 $?
-out=$(printf '%s\nwhat is this\n' "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0 with an unreadable line fails" 1 $?
+out=$(printf '%s\nwhat is this\n' "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0 ignores a line that is not a finding" 0 $?
+out=$(printf '%s\nwhat is this\n' "$OLD" | gb "$P" check lint colon --rc 1); check "control: rc 1 fails on the same line" 1 $?
 out=$(printf 'check-workflows: ok (2 files)\n' | gb "$P" check lint colon --rc 0); check "rc 0 success banner passes" 0 $?
 
 # tool output quirks
@@ -290,9 +295,9 @@ printf -- '-dash.ts:5:1: Dash [Error/d]\nsrc/é ü.ts:9:2: Accent [Error/a]\nsrc
 # validate: a carriage return in an entry; format only
 CR=$(newproj crfile)
 mkdir -p "$CR/.claude"
-printf '%s\nlint\ta.ts\t1\tOld\r\n' "$HEADER_LINE" >"$CR/$BL"
+printf '%s\n# gate\tlint\tcolon\nlint\ta.ts\t1\tOld\r\n' "$HEADER_LINE" >"$CR/$BL"
 out=$(gb "$CR" validate); check "an entry with a carriage return fails validate" 1 $?
-printf '%s\nlint\ta.ts\t1\tOld\n' "$HEADER_LINE" >"$CR/$BL"
+printf '%s\n# gate\tlint\tcolon\nlint\ta.ts\t1\tOld\n' "$HEADER_LINE" >"$CR/$BL"
 out=$(gb "$CR" validate); check "control: the same entry without it passes" 0 $?
 
 # growth: not a repository, unreadable file, subdirectory, absolute -f
@@ -313,6 +318,202 @@ out=$(gb "$SUB/app" growth HEAD~1); check "growth from a subdirectory sees the f
 contains "subdirectory growth names the file" "WEAKENED .claude/gate-baseline.txt" "$out"
 out=$(gb "$SUB/app" growth HEAD); check "control: subdirectory, same commit, no growth" 0 $?
 out=$(bash "$G" -C "$SUB/app" -f "$SUB/app/$BL" growth HEAD~1 2>&1); check "growth with an absolute -f exits 2" 2 $?
+
+# round 2: a finding line is a finding even when it starts like a summary
+FF=$(newproj findfirst)
+printf 'old.ts:1:1: Old\n' | gb "$FF" record lint colon >/dev/null
+out=$(printf 'old.ts:1:1: Old\n' | gb "$FF" check lint colon); check "control: only the old finding passes" 0 $?
+out=$(printf 'old.ts:1:1: Old\n1 error.ts:1:1: New\n' | gb "$FF" check lint colon); check "a file named '1 error.ts' is a finding" 1 $?
+contains "the file named like a summary is reported" "NEW lint: 1 error.ts" "$out"
+out=$(printf 'old.ts:1:1: Old\n2 errors/x.ts:1:1: New\n' | gb "$FF" check lint colon); check "a folder named '2 errors/' is a finding" 1 $?
+out=$(printf 'old.ts:1:1: Old\ncheck-workflows: ok a.ts:1:1: New\n' | gb "$FF" check lint colon); check "a finding after 'check-x: ok' is a finding" 1 $?
+out=$(printf 'old.ts:1:1: Old\n\n1 problem\n' | gb "$FF" check lint colon); check "control: the real summary line passes" 0 $?
+out=$(printf 'old.ts:1:1: Old\n1 problem found nearby\n' | gb "$FF" check lint colon); check "a summary pattern is anchored at the end" 1 $?
+out=$(printf 'old.ts:1:1: Old\ncheck-workflows: ok (2 files) extra\n' | gb "$FF" check lint colon); check "the ok banner is anchored at the end" 1 $?
+
+# round 2: escape sequences
+BEL=$(printf '\007')
+printf '%s[?25lsrc/a.ts:3:1: Unexpected any [Error/no-any]%s[?25h\n' "$ESC" "$ESC" | gb "$Q" check lint colon >/dev/null; check "ESC [ ? 25 l is stripped" 0 $?
+printf '%s]8;;http://h/x%s\\src/a.ts:3:1: Unexpected any [Error/no-any]%s]8;;%s\\\n' "$ESC" "$ESC" "$ESC" "$ESC" | gb "$Q" check lint colon >/dev/null; check "an OSC 8 hyperlink ended by ESC backslash is stripped" 0 $?
+printf '%s]8;;http://h/x%ssrc/a.ts:3:1: Unexpected any [Error/no-any]%s]8;;%s\n' "$ESC" "$BEL" "$ESC" "$BEL" | gb "$Q" check lint colon >/dev/null; check "an OSC 8 hyperlink ended by BEL is stripped" 0 $?
+printf '%s]8;;http://h/x%ssrc/new.ts:3:1: Unexpected any [Error/no-any]%s]8;;%s\n' "$ESC" "$BEL" "$ESC" "$BEL" | gb "$Q" check lint colon >/dev/null; check "control: a new finding inside a hyperlink still fails" 1 $?
+
+# round 2: tool noise passes at rc 0 and fails at a non-zero rc
+NOISE='WARN  Unsupported engine: wanted node 26
+(node:123) ExperimentalWarning: something
+npm notice New version available'
+out=$(printf '%s\n%s\n' "$NOISE" "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0: package-manager and runtime noise is ignored" 0 $?
+out=$(printf '%s\n%s\n' "$NOISE" "$OLD" | gb "$P" check lint colon --rc 1); check "rc 1: the same noise fails" 1 $?
+out=$(printf '%s\n%s\nsrc/new.ts:1:1: Sneaky [Error/s]\n' "$NOISE" "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0: a new finding between noise fails" 1 $?
+
+# round 2: a version 1 file asks to record again
+V1=$(newproj v1file)
+mkdir -p "$V1/.claude"
+printf '# templatecentral gate baseline v1\nlint\ta.ts\t1\tOld\n' >"$V1/$BL"
+out=$(gb "$V1" validate); check "a v1 file fails validate" 1 $?
+contains "the v1 message says to record again" "Record it again" "$out"
+out=$(printf 'a.ts:1:1: Old\n' | gb "$V1" check lint colon); check "a v1 file fails check with exit 2" 2 $?
+
+# round 2: a change cannot switch a gate off
+RS=$(newproj switch)
+mkdir -p "$RS/node_modules" "$RS/.claude" "$T/ruffbin"
+printf '{}\n' >"$RS/package.json"; printf 'export default []\n' >"$RS/eslint.config.mjs"
+cat >"$T/ruffbin/ruff" <<'STUB'
+#!/usr/bin/env bash
+cat "$STUB_RUFF"; exit "${STUB_RUFF_RC:-0}"
+STUB
+cat >"$T/ruffbin/pyright" <<'STUB'
+#!/usr/bin/env bash
+cat "$STUB_PYR"; exit "${STUB_PYR_RC:-0}"
+STUB
+chmod +x "$T/ruffbin/ruff" "$T/ruffbin/pyright"
+printf '%s\n' "$OLD" >"$T/lint5.txt"; printf 'All checks passed!\n' >"$T/ruffok.txt"
+runs() { local pth=$1; shift; STUB_LINT="$T/lint5.txt" STUB_TSC="$T/empty.txt" STUB_RUFF="$T/ruffok.txt" PATH="$pth:/usr/bin:/bin" bash "$G" -C "$RS" run "$@" 2>&1; }
+out=$(runs "$T/stubbin" record); check "switch: record exits 0" 0 $?
+contains "switch: the gate line names eslint" "# gate${tab}lint${tab}eslint" "$(cat "$RS/$BL")"
+out=$(runs "$T/stubbin" check); check "switch: control passes" 0 $?
+mv "$RS/eslint.config.mjs" "$RS/eslint-cfg.mjs"
+out=$(runs "$T/ruffbin:$T/stubbin" check); check "switch: renamed config with a clean ruff on PATH fails" 1 $?
+contains "switch: the tool change is named" "ran with 'ruff'" "$out"
+out=$(runs "$T/stubbin" check); check "switch: renamed config with no ruff fails" 1 $?
+contains "switch: the recorded gate cannot run" "cannot run here" "$out"
+out=$(runs "$T/ruffbin:$T/stubbin" prune); check "switch: prune with another tool fails" 1 $?
+out=$(runs "$T/stubbin" prune); check "switch: prune with no tool fails" 1 $?
+mv "$RS/eslint-cfg.mjs" "$RS/eslint.config.mjs"
+out=$(runs "$T/stubbin" check); check "switch: control passes again with the config back" 0 $?
+RS2=$(newproj neverhad)
+mkdir -p "$RS2/.claude"; printf '%s\n' "$HEADER_LINE" >"$RS2/$BL"
+out=$(STUB_RUFF="$T/ruffok.txt" PATH="$T/ruffbin:/usr/bin:/bin" bash "$G" -C "$RS2" run check 2>&1); check "a project that never had the gate passes with a clean ruff" 0 $?
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$RS2" run check 2>&1); check "a project that never had the gate skips it" 0 $?
+contains "the skip is explained" "does not apply" "$out"
+
+# round 2: the gate line is covered by growth
+GR=$(newproj gline)
+(cd "$GR" && git init -q -b main) >/dev/null 2>&1
+printf '%s\n' "$OLD" | gb "$GR" record lint colon >/dev/null
+printf 'a.ts:1:1: E\n' | gb "$GR" record types colon --tool tsc >/dev/null
+: | gb "$GR" record dockerfile colon --tool script >/dev/null
+(cd "$GR" && git add -A && gitc commit -qm base && git tag base)
+out=$(gb "$GR" growth base); check "gate lines: control, no change" 0 $?
+grep -v "^# gate${tab}dockerfile${tab}" "$GR/$BL" >"$T/gl1.txt" && cp "$T/gl1.txt" "$GR/$BL"
+(cd "$GR" && git add -A && gitc commit -qm "drop empty gate")
+out=$(gb "$GR" growth base); check "removing the gate line of a gate with no findings fails" 1 $?
+contains "the removed gate is named" "the gate line for dockerfile" "$out"
+(cd "$GR" && gitc reset -q --hard base)
+grep -v -e "^# gate${tab}types${tab}" -e "^types${tab}" "$GR/$BL" >"$T/gl2.txt" && cp "$T/gl2.txt" "$GR/$BL"
+(cd "$GR" && git add -A && gitc commit -qm "drop types")
+out=$(gb "$GR" growth base); check "removing a gate with its entries fails" 1 $?
+(cd "$GR" && gitc reset -q --hard base)
+sed "s/^# gate${tab}lint${tab}colon/# gate${tab}lint${tab}other/" "$GR/$BL" >"$T/gl3.txt" && cp "$T/gl3.txt" "$GR/$BL"
+(cd "$GR" && git add -A && gitc commit -qm "change tool")
+out=$(gb "$GR" growth base); check "changing the tool of a gate fails" 1 $?
+contains "the tool change is named" "the tool of gate lint changed" "$out"
+(cd "$GR" && gitc reset -q --hard base)
+out=$(gb "$GR" growth base); check "control: back at base passes" 0 $?
+
+# round 2: growth refuses a path outside the project or a wrong folder
+GT=$(newproj growpath)
+(cd "$GT" && git init -q -b main && mkdir app && echo x >app/f) >/dev/null 2>&1
+printf '%s\n' "$OLD" | gb "$GT" record lint colon >/dev/null
+(cd "$GT" && git add -A && gitc commit -qm base)
+out=$(gb "$GT" growth HEAD); check "growth path: control at the project root" 0 $?
+out=$(gb "$GT/app" growth HEAD); check "growth in a folder without the baseline exits 2" 2 $?
+contains "the wrong folder is explained" "probably wrong" "$out"
+out=$(gb "$GT" -f ../x growth HEAD); check "growth with -f ../x exits 2" 2 $?
+out=$(gb "$GT" -f .claude/../gate-baseline.txt growth HEAD); check "growth with a .. segment exits 2" 2 $?
+out=$(gb "$GT" -f .claude/gate-baseline.txt growth HEAD); check "control: -f with the real relative path passes" 0 $?
+GN=$(newproj nobl)
+(cd "$GN" && git init -q -b main && echo x >f && git add -A && gitc commit -qm base) >/dev/null 2>&1
+out=$(gb "$GN" growth HEAD); check "control: a repository that never had a baseline passes" 0 $?
+
+# round 2: the full-line summaries of check-dockerfile.sh
+DK=$(newproj dockerline)
+printf 'Dockerfile:1: base image x is not pinned by digest.\n' | gb "$DK" record dockerfile colon >/dev/null
+out=$(printf 'Dockerfile:1: base image x is not pinned by digest.\ncheck-dockerfile: no Dockerfile found, nothing to check\n' | gb "$DK" check dockerfile colon --rc 1); check "the no Dockerfile line is a summary" 0 $?
+out=$(printf 'Dockerfile:1: base image x is not pinned by digest.\nWARNING check-dockerfile: hadolint is not installed, so the Dockerfile was only linted by the built-in rules; CI runs hadolint and will fail on what it finds.\nWARNING check-dockerfile: install it with: brew install hadolint   (Linux: https://github.com/hadolint/hadolint/releases)\n' | gb "$DK" check dockerfile colon --rc 1); check "the WARNING check-dockerfile lines are summaries" 0 $?
+out=$(printf 'Dockerfile:1: base image x is not pinned by digest.\nWARNING check-other: something\n' | gb "$DK" check dockerfile colon --rc 1); check "control: another WARNING line fails" 1 $?
+out=$(printf 'Dockerfile:1: base image x is not pinned by digest.\ncheck-dockerfile: hadolint is not installed, and CI never skips it. Run it through ci-gates.sh dockerfile, which installs the pinned release.\n' | gb "$DK" check dockerfile colon --rc 1); check "control: the CI hadolint-missing line fails" 1 $?
+
+# round 2: the Dockerfile skip and the workflow globs
+DF=$(newproj dfskip)
+mkdir -p "$DF/scripts" "$DF/.claude" "$DF/node_modules"
+printf '#!/usr/bin/env bash\necho "check-dockerfile: boom" >&2\nexit 1\n' >"$DF/scripts/check-dockerfile.sh"
+printf '%s\n' "$HEADER_LINE" >"$DF/$BL"
+out=$(bash "$G" -C "$DF" run check 2>&1); check "no Dockerfile: the gate does not apply" 0 $?
+: >"$DF/node_modules/Dockerfile"
+out=$(bash "$G" -C "$DF" run check 2>&1); check "a Dockerfile under node_modules does not count" 0 $?
+: >"$DF/Dockerfile"
+out=$(bash "$G" -C "$DF" run check 2>&1); check "a Dockerfile makes the gate run, and its failure counts" 1 $?
+rm -f "${DF:?}/Dockerfile"; mkdir -p "$DF/sub"; : >"$DF/sub/Dockerfile.prod"
+out=$(bash "$G" -C "$DF" run check 2>&1); check "a nested Dockerfile.prod makes the gate run" 1 $?
+glob_case() {
+  local d rc
+  d=$(newproj "glob-$1"); mkdir -p "$d/scripts" "$d/.claude" "$(dirname "$d/$2")"
+  printf '#!/usr/bin/env bash\necho "check-workflows: boom" >&2\nexit 1\n' >"$d/scripts/check-workflows.sh"
+  printf '%s\n' "$HEADER_LINE" >"$d/$BL"
+  : >"$d/$2"
+  out=$(bash "$G" -C "$d" run check 2>&1); rc=$?
+  check "$1 makes the workflows gate run" 1 "$rc"
+}
+glob_case yaml .github/workflows/ci.yaml
+glob_case azroot azure-pipelines.yml
+glob_case azdir azure-pipelines/build.yml
+glob_case actyml .github/actions/x/action.yml
+glob_case actyaml .github/actions/x/action.yaml
+GO=$(newproj glob-none)
+mkdir -p "$GO/scripts" "$GO/.claude" "$GO/notes"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$GO/scripts/check-workflows.sh"; : >"$GO/notes/ci.yml"
+printf '%s\n' "$HEADER_LINE" >"$GO/$BL"
+out=$(bash "$G" -C "$GO" run check 2>&1); check "control: a yml file outside the workflow folders does not count" 0 $?
+
+# round 2: the ruff, pyright and hadolint paths with stubs on PATH
+RF=$(newproj ruffproj)
+mkdir -p "$RF/.claude"
+printf 'app/m.py:1:8: F401 [*] os imported but unused\napp/m.py:3:1: E402 Module level import not at top of file\nFound 2 errors.\n[*] 1 fixable with the \140--fix\140 option.\n' >"$T/ruff2.txt"
+runr() { STUB_RUFF="$T/ruff2.txt" STUB_RUFF_RC="${RUFF_RC:-1}" PATH="$T/ruffbin:/usr/bin:/bin" bash "$G" -C "$RF" run "$@" 2>&1; }
+out=$(runr record); check "ruff: record exits 0" 0 $?
+check "ruff: both findings are entries" 2 "$(nent "$RF/$BL")"
+contains "ruff: the gate line names ruff" "# gate${tab}lint${tab}ruff" "$(cat "$RF/$BL")"
+out=$(runr check); check "ruff: control passes" 0 $?
+printf 'app/m.py:9:1: F401 [*] os imported but unused\napp/m.py:30:1: E402 Module level import not at top of file\nFound 2 errors.\n' >"$T/ruff2.txt"
+out=$(runr check); check "ruff: moved findings pass" 0 $?
+printf 'app/m.py:1:8: F401 [*] os imported but unused\napp/m.py:3:1: E402 Module level import not at top of file\napp/n.py:1:1: F821 Undefined name x\n' >"$T/ruff2.txt"
+out=$(runr check); check "ruff: a new finding fails" 1 $?
+contains "ruff: the new finding is named" "NEW lint: app/n.py" "$out"
+PYP=$(newproj pyproj)
+mkdir -p "$PYP/.claude"; printf '{}\n' >"$PYP/pyrightconfig.json"
+printf '/abs/proj/app/m.py\n  /abs/proj/app/m.py:4:5 - error: "x" is not defined (reportUndefinedVariable)\n1 error, 0 warnings, 0 informations \n' >"$T/pyr2.txt"
+runp() { STUB_PYR="$T/pyr2.txt" STUB_PYR_RC=1 PATH="$T/ruffbin:/usr/bin:/bin" bash "$G" -C "$PYP" run "$@" 2>&1; }
+out=$(runp record); check "pyright: record exits 0" 0 $?
+check "pyright: one entry" 1 "$(nent "$PYP/$BL")"
+contains "pyright: the gate line names pyright" "# gate${tab}types${tab}pyright" "$(cat "$PYP/$BL")"
+out=$(runp check); check "pyright: control passes" 0 $?
+sed 's/4:5/44:5/' "$T/pyr2.txt" >"$T/pyr3.txt"; cp "$T/pyr3.txt" "$T/pyr2.txt"
+out=$(runp check); check "pyright: a moved finding passes" 0 $?
+sed 's/reportUndefinedVariable/reportOther/' "$T/pyr2.txt" >"$T/pyr3.txt"; cp "$T/pyr3.txt" "$T/pyr2.txt"
+out=$(runp check); check "pyright: a changed rule fails" 1 $?
+HD=$(newproj hado)
+mkdir -p "$HD/scripts" "$HD/.claude" "$T/hadobin"
+cp "$ROOT/skills/scaffold/shared/template/scripts/check-dockerfile.sh" "$HD/scripts/check-dockerfile.sh"
+printf 'FROM node:22@sha256:%064d\nUSER 1000\n' 0 >"$HD/Dockerfile"
+cat >"$T/hadobin/hadolint" <<'STUB'
+#!/usr/bin/env bash
+cat "$STUB_HADO"; exit "${STUB_HADO_RC:-0}"
+STUB
+chmod +x "$T/hadobin/hadolint"
+printf 'Dockerfile:2 DL3059 info: Multiple consecutive RUN instructions. Consider consolidation.\n' >"$T/hado.txt"
+runhd() { STUB_HADO="$T/hado.txt" STUB_HADO_RC="${HADO_RC:-1}" PATH="$T/hadobin:/usr/bin:/bin" bash "$G" -C "$HD" run "$@" 2>&1; }
+out=$(runhd record); check "hadolint: record exits 0" 0 $?
+check "hadolint: the finding is one entry" 1 "$(nent "$HD/$BL")"
+contains "hadolint: the entry has the code and message" "Dockerfile${tab}1${tab}DL3059 info: Multiple consecutive" "$(cat "$HD/$BL")"
+out=$(runhd check); check "hadolint: control passes with its summary line in the output" 0 $?
+sed 's/Dockerfile:2/Dockerfile:7/' "$T/hado.txt" >"$T/hado2.txt"; cp "$T/hado2.txt" "$T/hado.txt"
+out=$(runhd check); check "hadolint: a moved finding passes" 0 $?
+printf 'Dockerfile:7 DL3059 info: Multiple consecutive RUN instructions. Consider consolidation.\nDockerfile:9 DL3025 warning: Use arguments JSON notation for CMD and ENTRYPOINT arguments\n' >"$T/hado.txt"
+out=$(runhd check); check "hadolint: a new finding fails" 1 $?
+contains "hadolint: the new finding is named" "NEW dockerfile: Dockerfile: DL3025 warning" "$out"
+HADO_RC=0; : >"$T/hado.txt"
+out=$(runhd check); check "hadolint: clean output passes" 0 $?
 
 if [ "$fail" -eq 0 ]; then echo "all migrate-baseline checks passed"; fi
 exit "$fail"
