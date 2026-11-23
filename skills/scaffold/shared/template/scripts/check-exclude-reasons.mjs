@@ -3,7 +3,17 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-const defaults = new Set((process.env.TC_EXCLUDE_DEFAULTS || '').split('\n').filter(Boolean));
+// Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does: no !, ^, trailing $, no ./ or // or /./, regex spellings as globs.
+function normPat(x) {
+  let p = String(x).replace(/^!/, '').replace(/^\^/, '').replace(/\$$/, '');
+  p = p.split('\\.').join('.').split('.*').join('*');
+  while (p.includes('//') || p.includes('/./')) p = p.split('//').join('/').split('/./').join('/');
+  while (p.startsWith('./') || p.startsWith('/')) p = p.startsWith('./') ? p.slice(2) : p.slice(1);
+  if (p === '.') p = '';
+  return p.replace(/\/$/, '');
+}
+const defaults = new Set((process.env.TC_EXCLUDE_DEFAULTS || '').split('\n').filter(Boolean).map(normPat));
+defaults.delete('');
 const REASON = /^reason:\s+\S+(\s+\S+){2,}\s*$/;
 const PLACEHOLDERS = new Set((process.env.TC_REASON_PLACEHOLDERS || '').split('\n').filter(Boolean));
 // A reason: at least 3 different words of 3+ letters; not a repeated single letter, not a path segment of the entries, no placeholder.
@@ -25,10 +35,14 @@ const emit = (...fields) => console.log(fields.map(clean).join('\t'));
 const args = process.argv.slice(2);
 let root = process.cwd();
 const files = [];
+// --as=MODE, with MODE one of jest, vitest, stryker or nyc, sets the scan mode of the files after it, whatever their names; --as= clears it.
+let asMode = null;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--root') root = path.resolve(args[++i] || '.');
-  else files.push(args[i]);
+  else if (args[i].startsWith('--as=')) asMode = args[i].slice(5) || null;
+  else files.push([args[i], asMode]);
 }
+let forced = null;
 
 const tsCache = new Map();
 function loadTs(dir) {
@@ -137,7 +151,7 @@ function scan(file, depth = 0, inherited = null) {
     return null;
   };
 
-  const isDefault = (t) => defaults.has(t.startsWith('!') ? t.slice(1) : t);
+  const isDefault = (t) => defaults.has(normPat(t));
 
   // One E record per entry: a reason is the comment line directly above it, or above the key when the list has one non-default entry.
   const emitExcludes = (kind, member, items) => {
@@ -389,7 +403,9 @@ function scan(file, depth = 0, inherited = null) {
       emit('X', file, 1, 'JSON config root is not an object, so it cannot be read');
       return;
     }
-    if (isPackageJson) {
+    if (!isPackageJson && forced) {
+      walk(rootObj, forced);
+    } else if (isPackageJson) {
       for (const m of rootObj.properties) {
         const k = nameOf(m);
         if (!ts.isPropertyAssignment(m)) continue;
@@ -409,7 +425,7 @@ function scan(file, depth = 0, inherited = null) {
     }
     return;
   }
-  const mode = vitestLike ? 'vitest' : jestLike ? 'jest' : strykerLike ? 'stryker' : inherited;
+  const mode = forced || (vitestLike ? 'vitest' : jestLike ? 'jest' : strykerLike ? 'stryker' : inherited);
   if (!mode) return;
   const relevant = mode !== 'vitest' || !/^vite\.config\./.test(base) || /coverage|vitest/.test(text);
   const rootSpreads = () => {
@@ -451,7 +467,8 @@ function scan(file, depth = 0, inherited = null) {
   walk(sf, mode);
 }
 
-for (const f of files) {
+for (const [f, as] of files) {
+  forced = as;
   try {
     scan(f);
   } catch (err) {

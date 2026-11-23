@@ -2,6 +2,11 @@ node_modules/**
 /node_modules/
 dist/**
 build/**
+dist/**/*
+build/**/*
+coverage/**/*
+node_modules/**/*
+.next/**/*
 coverage/**
 .next/**
 .venv/*

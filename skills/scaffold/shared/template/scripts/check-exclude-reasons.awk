@@ -46,7 +46,18 @@ function valid(t,   w, n, i, r) {
   }
   return (goodwords(t) >= 3)
 }
-function isdefault(e) { sub(/^!/, "", e); return (e in dflt) }
+# Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does.
+function norm(p) {
+  sub(/^!/, "", p); sub(/^\^/, "", p); sub(/\$$/, "", p)
+  gsub(/\\\./, ".", p)
+  gsub(/\.\*/, "*", p)
+  while (index(p, "//") > 0 || index(p, "/./") > 0) { gsub(/\/\//, "/", p); gsub(/\/\.\//, "/", p) }
+  while (p ~ /^\.\// || p ~ /^\//) sub(/^\.?\//, "", p)
+  if (p == ".") p = ""
+  sub(/\/$/, "", p)
+  return p
+}
+function isdefault(e) { e = norm(e); return (e != "" && (e in dflt)) }
 function lineat(off,   k, r) {
   r = segline[1]
   for (k = 1; k <= nseg; k++) if (segoff[k] <= off) r = segline[k]
@@ -139,28 +150,37 @@ function reasontext(t,   i) {
   sub(/[ \t]*\*\/.*$/, "", t)
   return trim(t)
 }
-function cm(body, nr, raw,   low, kind, st, prevt, at) {
+function cm(body, nr, raw, own,   low, kind, st, prevt, at, rest, big, whole, nn) {
   low = tolower(body)
   sub(/^[ \t*]+/, "", low)
-  kind = ""
+  kind = ""; big = 0; whole = 0
   if (isjs) {
     if (match(low, /^(istanbul|c8|v8)[ \t]+ignore[ \t]+(file|next|if|else|start|stop)/) || match(low, /^node:coverage[ \t]+(ignore|disable)/)) kind = substr(low, RSTART, RLENGTH)
+    else if (match(low, /^stryker[ \t]+disable[ \t]+next-line/)) kind = "stryker disable next-line"
+    else if (match(low, /^stryker[ \t]+disable([ \t]|$)/)) { kind = "stryker disable"; whole = 1 }
   } else if (match(low, /^pragma[: \t]*no[ \t]*(cover|branch)/)) kind = "# " substr(low, RSTART, RLENGTH)
+  if (kind == "" && match(low, /^nosonar/)) kind = "nosonar"
   if (kind == "") return
   if (kind ~ /ignore[ \t]+stop$/) {
     if (nstack > 0) nstack--
     return
   }
+  # ignore next N with N above 20 covers a block, not a line: it reads like an ignore start with no stop.
+  if (kind ~ /ignore[ \t]+next$/) {
+    rest = substr(low, length(kind) + 1)
+    if (match(rest, /^[ \t]+[0-9]+/)) { nn = substr(rest, RSTART, RLENGTH) + 0; if (nn > 20) big = 1 }
+  }
   setsegs("")
   at = raw
   sub(/\r$/, "", at)
-  st = (valid(reasontext(at)) ? "reason" : "none")
-  if (st == "none") {
+  # The reason comes from the marker's own comment, or from a comment-only line above it; never from code or a string on the line.
+  st = (valid(reasontext(own)) ? "reason" : "none")
+  if (st == "none" && prev ~ /^[ \t]*(\/\/+|#+|\/\*+|\*+)/) {
     prevt = prev
     sub(/^[ \t]*(\/\/+|#+|\/\*+|\*+)[ \t]*/, "", prevt)
     if (valid(reasontext(prevt))) st = "reason"
   }
-  if (kind ~ /ignore[ \t]+file$/) st = "file"
+  if (kind ~ /ignore[ \t]+file$/ || whole || big) st = "file"
   at = trim(at)
   if (length(at) > 100) at = substr(at, 1, 100)
   nrec++
@@ -176,16 +196,40 @@ function flush(   k, f) {
   nrec = 0; nstack = 0
 }
 # Walk one line outside strings: call cm() with the text after each comment opener.
-function lex(raw, nr,   i, n, c, d, two, rest, j, q, blank) {
+# A JS "/" starts a regular expression literal when the token before it cannot end a value; a quote inside one is not a string.
+function rxok() {
+  if (lastsig == "") return 1
+  if (lastsig == "a") return (index(" return typeof case in of delete void throw new else do yield await instanceof ", " " lastword " ") > 0)
+  return (index("(,=:[!&|?{;+-*%>~^", lastsig) > 0)
+}
+function rxend(raw, i, n,   j, c, incls) {
+  j = i + 1; incls = 0
+  while (j <= n) {
+    c = substr(raw, j, 1)
+    if (c == "\\") { j += 2; continue }
+    if (incls) { if (c == "]") incls = 0 }
+    else if (c == "[") incls = 1
+    else if (c == "/") {
+      j++
+      while (substr(raw, j, 1) ~ /[A-Za-z]/) j++
+      return j - 1
+    }
+    j++
+  }
+  return 0
+}
+function lex(raw, nr,   i, n, c, d, two, rest, j, q, blank, own) {
   n = length(raw); i = 1
+  lastsig = ""; lastword = ""
   while (i <= n) {
     if (inblock) {
       j = index(substr(raw, i), "*/")
       rest = (j > 0 ? substr(raw, i, j - 1) : substr(raw, i))
-      if (pendfirst && rest !~ /^[ \t*]*$/) { cm(rest, nr, raw); pendfirst = 0 }
+      if (pendfirst && rest !~ /^[ \t*]*$/) { cm(rest, nr, raw, rest); pendfirst = 0 }
       if (j == 0) return
       inblock = 0; pendfirst = 0
       i += j + 1
+      lastsig = ""; lastword = ""
       continue
     }
     if (tq != "") {
@@ -197,25 +241,35 @@ function lex(raw, nr,   i, n, c, d, two, rest, j, q, blank) {
     if (bt) {
       c = substr(raw, i, 1)
       if (c == "\\") { i += 2; continue }
-      if (c == "`") bt = 0
+      if (c == "`") { bt = 0; lastsig = "a"; lastword = "" }
       i++
       continue
     }
     c = substr(raw, i, 1); two = substr(raw, i, 2)
     if (isjs) {
-      if (two == "//") { cm(substr(raw, i + 2), nr, raw); return }
+      if (two == "//") { own = substr(raw, i + 2); cm(own, nr, raw, own); return }
       if (two == "/*") {
         j = index(substr(raw, i + 2), "*/")
         rest = (j > 0 ? substr(raw, i + 2, j - 1) : substr(raw, i + 2))
         blank = (rest ~ /^[ \t*]*$/)
-        if (!blank) cm(rest, nr, raw)
+        if (!blank) cm(rest, nr, raw, rest)
         if (j > 0) { i += j + 3; continue }
         inblock = 1; pendfirst = blank
         return
       }
       if (c == "`") { bt = 1; i++; continue }
     } else {
-      if (c == "#") { cm(substr(raw, i + 1), nr, raw); return }
+      if (c == "#") {
+        # Every # segment of the comment is tested: x = 1  # noqa  # pragma: no cover
+        own = substr(raw, i + 1); rest = own
+        while (1) {
+          cm(rest, nr, raw, own)
+          j = index(rest, "#")
+          if (j == 0) break
+          rest = substr(rest, j + 1)
+        }
+        return
+      }
       q = substr(raw, i, 3)
       if (q == "\042\042\042" || q == "\047\047\047") { tq = q; i += 3; continue }
     }
@@ -228,8 +282,24 @@ function lex(raw, nr,   i, n, c, d, two, rest, j, q, blank) {
         i++
       }
       i++
+      lastsig = "a"; lastword = ""
       continue
     }
+    if (isjs && c == "/") {
+      if (rxok()) {
+        j = rxend(raw, i, n)
+        if (j > 0) { i = j + 1; lastsig = "a"; lastword = ""; continue }
+      }
+      lastsig = c; lastword = ""; i++
+      continue
+    }
+    if (c ~ /[A-Za-z0-9_$]/) {
+      match(substr(raw, i), /^[A-Za-z0-9_$]+/)
+      lastword = substr(raw, i, RLENGTH); lastsig = "a"
+      i += RLENGTH
+      continue
+    }
+    if (c != " " && c != "\t") { lastsig = c; lastword = "" }
     i++
   }
 }
@@ -237,7 +307,7 @@ function markline(raw, nr) { lex(raw, nr) }
 BEGIN {
   marks = (mode == "marks")
   n = split(ENVIRON["TC_EXCLUDE_DEFAULTS"], d, "\n")
-  for (k = 1; k <= n; k++) dflt[d[k]] = 1
+  for (k = 1; k <= n; k++) dflt[norm(d[k])] = 1
   nblk = 0; incont = 0; prev = ""
   nph = split(ENVIRON["TC_REASON_PLACEHOLDERS"], ph, "\n")
 }

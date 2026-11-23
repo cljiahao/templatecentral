@@ -44,10 +44,39 @@ export fix="give each exclude a one-line comment above it that starts with reaso
 
 # Print the audit lines of one scanner's output (tab separated records) for FILE, grouped by state:
 # no reason (and anything that cannot be read), hides source, has reason, framework default.
+# "py" for a coverage.py config file (its omit and include patterns are fnmatch patterns on the absolute path), else nothing.
+py_flag() {
+  local b=${1##*/}
+  case "$b" in
+    pyproject.toml | .coveragerc* | setup.cfg | tox.ini | *.toml | *.ini | *.cfg) printf py ;;
+  esac
+}
+
 audit_records() {
-  local tab tag file line kind entry status marker lines_none='' lines_hides='' lines_reason='' lines_default='' text norm root cdir
+  local tab tag file line kind entry status marker lines_none='' lines_hides='' lines_reason='' lines_default='' text norm root cdir recs
+  local unions ufile ukind uline ulist ucdir keep uentry
   tab=$(printf '\t')
-  while IFS="$tab" read -r tag file line kind entry status; do
+  recs=$(cat)
+  # Judge each exclude list as a whole too: entries that are narrow alone but together leave out a whole source scope.
+  unions=$(printf '%s\n' "$recs" | rules_union_groups)
+  while IFS="$tab" read -r ufile ukind uline ulist; do
+    [ -n "$ufile" ] || continue
+    ucdir=$(dirname "${ufile#"$P"/}")
+    keep=
+    while IFS= read -r uentry; do
+      [ -n "$uentry" ] || continue
+      if ! hides_source "$uentry" "$ucdir" "$(py_flag "$ufile")"; then keep="$keep$uentry$NL"; fi
+    done <<EOT
+$(printf '%s' "$ulist" | tr '\001' '\n')
+EOT
+    [ "$(printf '%s' "$keep" | grep -c .)" -ge 2 ] || continue
+    if hides_union "${keep%?}" "$ucdir" "$(py_flag "$ufile")"; then
+      lines_hides="$lines_hides$ufile:$uline the $ukind entries of this list together hide hand-written source (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there, and no reason can cover that)$NL"
+    fi
+  done <<EOT
+$unions
+EOT
+  while IFS="$tab" read -r tag file line kind entry status <&3; do
     case "$tag" in
       E)
         case "$status" in
@@ -59,7 +88,7 @@ audit_records() {
         text="$file:$line $kind '$entry': "
         if [ "$status" = default ]; then
           lines_default="$lines_default$text$marker$NL"
-        elif [ "$kind" != sonar-issue-ignore ] && cdir=$(dirname "${file#"$P"/}") && hides_source "$entry" "$cdir"; then
+        elif [ "$kind" != sonar-issue-ignore ] && cdir=$(dirname "${file#"$P"/}") && hides_source "$entry" "$cdir" "$(py_flag "$file")"; then
           lines_hides="$lines_hides${text}hides hand-written source (${RULES_WHY:-it matches every source file of the project, of one package or of one top-level source folder, or every source file of one type there}, and no reason can cover that), $marker$NL"
         else
           if [ "$kind" != sonar-issue-ignore ] && root=$(under_source_root "$entry"); then
@@ -74,7 +103,7 @@ audit_records() {
         ;;
       I)
         cdir=$(dirname "${file#"$P"/}")
-        if include_covers "$entry" "$cdir"; then continue; fi
+        if include_covers "$entry" "$cdir" "$(py_flag "$file")"; then continue; fi
         if [ "$status" = reason ]; then marker="has reason"; else marker="no reason"; fi
         lines_hides="$lines_hides$file:$line $kind list '$entry' is an allow-list: it excludes every file it does not list, $marker$NL"
         ;;
@@ -93,7 +122,9 @@ audit_records() {
         fi
         ;;
     esac
-  done
+  done 3<<EOT
+$recs
+EOT
   printf '%s%s%s%s' "$lines_none" "$lines_hides" "$lines_reason" "$lines_default"
 }
 
@@ -133,8 +164,40 @@ cmd_lines() {
 # Sort one file into the scanner list for its type; false when the gate and the audit cannot read this type. The lists are kept in
 # the strings A_JS, A_PY, A_PROP and A_OTHER (newline separated, absolute paths); a file already listed is not added twice.
 add_config() {
-  local abs=$1 base=${1##*/}
+  local abs=$1 tool=${2:-} base=${1##*/} jsmode=
   case "$NL$A_SEEN" in *"$NL$abs$NL"*) return 0 ;; esac
+  if [ -n "$tool" ]; then
+    # The tool word of the command line that pointed at the file decides the scan mode, never the file name.
+    case "$tool" in
+      jest | vitest | stryker) jsmode=$tool ;;
+      nyc | c8) jsmode=nyc ;;
+      pytest | py.test | coverage | mutmut)
+        case "$base" in
+          *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | *.properties | *.yml | *.yaml) return 1 ;;
+        esac
+        A_PY="$A_PY$abs$NL"
+        A_SEEN="$A_SEEN$abs$NL"
+        return 0
+        ;;
+      sonar-scanner | sonar-scanner-cli)
+        case "$base" in
+          *.properties) A_PROP="$A_PROP$abs$NL" ;;
+          *) return 1 ;;
+        esac
+        A_SEEN="$A_SEEN$abs$NL"
+        return 0
+        ;;
+      *) return 1 ;;
+    esac
+    case "$base" in
+      *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) ;;
+      *) return 1 ;;
+    esac
+    A_JS="$A_JS$abs$NL"
+    A_MODES="$A_MODES$abs$(printf '\t')$jsmode$NL"
+    A_SEEN="$A_SEEN$abs$NL"
+    return 0
+  fi
   case "$base" in
     *.properties) A_PROP="$A_PROP$abs$NL" ;;
     pyproject.toml | .coveragerc | setup.cfg | tox.ini | *.toml | *.ini | *.cfg) A_PY="$A_PY$abs$NL" ;;
@@ -243,7 +306,12 @@ js_audit() {
     return 0
   fi
   words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || words=
-  TC_EXCLUDE_DEFAULTS=$(cat "$DEFECTS/exclusion-audit/defaults.txt") TC_REASON_PLACEHOLDERS=$words node "$DEFECTS/exclusion-audit/scan.mjs" --root "$P" "${cands[@]}" > "$cache" 2>&1 || printf 'X\t%s\t1\tthe JS config scanner failed\n' "${cands[0]}" >> "$cache"
+  local jargs=() jm
+  for c in "${cands[@]}"; do
+    jm=$(printf '%s' "$A_MODES" | awk -F'\t' -v f="$c" '$1 == f { print $2; exit }')
+    jargs+=("--as=$jm" "$c")
+  done
+  TC_EXCLUDE_DEFAULTS=$(cat "$DEFECTS/exclusion-audit/defaults.txt") TC_REASON_PLACEHOLDERS=$words node "$DEFECTS/exclusion-audit/scan.mjs" --root "$P" "${jargs[@]}" > "$cache" 2>&1 || printf 'X\t%s\t1\tthe JS config scanner failed\n' "${cands[0]}" >> "$cache"
   audit_records < "$cache"
 }
 
@@ -255,7 +323,7 @@ audit_all() {
   FILES=$(rules_files "$P")
   rules_init "$FILES"
   big=$(find "$P" \( -name node_modules -o -name .git \) -prune -o -type f -size +"${MAXBYTES:-1048576}"c -print 2> /dev/null)
-  A_JS='' A_PY='' A_PROP='' A_OTHER='' A_SEEN='' A_POINTED=''
+  A_JS='' A_PY='' A_PROP='' A_OTHER='' A_SEEN='' A_POINTED='' A_MODES=''
   POINTERS=
   a_cmd=() a_mark=()
   local a_pnpm=()
@@ -273,6 +341,12 @@ audit_all() {
       *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.mts | *.cts | *.vue | *.svelte | *.py) a_mark+=("$abs") ;;
     esac
     case "$base" in
+      *.properties)
+        # Any properties file that holds a sonar. key is a Sonar config, whatever its name.
+        if grep -qaE '^[[:space:]]*sonar\.[A-Za-z]' "$abs" 2> /dev/null; then add_config "$abs" || true; fi
+        ;;
+    esac
+    case "$base" in
       vitest*.config.* | vitest.workspace.* | vite.config.* | jest*.config.* | stryker*.conf* | .stryker*.conf* | .nycrc* | .c8rc* | .jscpd.json | sonar-project*.properties | pyproject.toml | .coveragerc | setup.cfg | tox.ini | karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml | package.json) add_config "$abs" || true ;;
       pnpm-workspace.yaml | .npmrc) a_pnpm+=("$abs") ;;
     esac
@@ -280,6 +354,7 @@ audit_all() {
       package.json | */package.json | *.sh | *.bash | Makefile | */Makefile | Makefile.* | */Makefile.* | *.mk | Taskfile* | */Taskfile* | justfile | */justfile | Justfile | */Justfile | Dockerfile* | */Dockerfile* | *.dockerfile | \
         .github/workflows/*.yml | .github/workflows/*.yaml | */.github/workflows/*.yml | */.github/workflows/*.yaml | .github/actions/*/*.yml | .github/actions/*/*.yaml | \
         lefthook*.yml | */lefthook*.yml | lefthook*.yaml | */lefthook*.yaml | .lefthook*.yml | .gitlab-ci.yml | */.gitlab-ci.yml | .gitlab/*.yml | azure-pipelines*.yml | */azure-pipelines*.yml | bitbucket-pipelines.yml | Jenkinsfile | */Jenkinsfile | \
+        pyproject.toml | */pyproject.toml | pytest.ini | */pytest.ini | tox.ini | */tox.ini | setup.cfg | */setup.cfg | \
         .circleci/*.yml | .travis.yml | appveyor.yml | .drone.yml | cloudbuild.y*ml | .buildkite/*.yml | .woodpecker/*.yml | .woodpecker.yml)
         a_cmd+=("$abs")
         ;;
@@ -316,7 +391,7 @@ EOF
       echo "$pfile:$pline points $ptool at $ppath, which does not exist, so its excludes are unaudited"
     elif [ -L "$target" ]; then
       echo "$pfile:$pline points $ptool at $target, a symlink the audit does not follow, so its excludes are unaudited"
-    elif add_config "$target"; then
+    elif add_config "$target" "$ptool"; then
       A_POINTED="$A_POINTED$target$NL"
     else
       echo "$pfile:$pline points $ptool at $target, a file type the audit cannot read, so its excludes are unaudited"

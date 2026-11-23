@@ -5,7 +5,26 @@ import os
 import re
 import sys
 
-DEFAULTS = set(filter(None, os.environ.get("TC_EXCLUDE_DEFAULTS", "").split("\n")))
+def norm_pat(x):
+    """Reduce an entry to a plain pattern, as norm_pat in check-exclude-rules.sh does."""
+    p = str(x)
+    if p.startswith("!"):
+        p = p[1:]
+    if p.startswith("^"):
+        p = p[1:]
+    if p.endswith("$"):
+        p = p[:-1]
+    p = p.replace("\\.", ".").replace(".*", "*")
+    while "//" in p or "/./" in p:
+        p = p.replace("//", "/").replace("/./", "/")
+    while p.startswith("./") or p.startswith("/"):
+        p = p[2:] if p.startswith("./") else p[1:]
+    if p == ".":
+        p = ""
+    return p[:-1] if p.endswith("/") else p
+
+
+DEFAULTS = {norm_pat(d) for d in os.environ.get("TC_EXCLUDE_DEFAULTS", "").split("\n") if d} - {""}
 REASON = re.compile(r"^reason:\s+\S+(\s+\S+){2,}\s*$")
 PLACEHOLDERS = {w for w in os.environ.get("TC_REASON_PLACEHOLDERS", "").split("\n") if w}
 DYNAMIC = "is not a plain list of strings; write it as a literal list of strings so each entry can carry a reason"
@@ -252,12 +271,12 @@ def has_reason(comments, line, entries=()):
 
 
 def emit_excludes(file, kind, comments, key_line, entries):
-    own = [e for e in entries if e[0] not in DEFAULTS]
+    own = [e for e in entries if norm_pat(e[0]) not in DEFAULTS]
     per_line = {}
     for _, line in own:
         per_line[line] = per_line.get(line, 0) + 1
     for text, line in entries:
-        if text in DEFAULTS:
+        if norm_pat(text) in DEFAULTS:
             status = "default"
         elif per_line[line] > 1:
             status = "shared"
@@ -459,7 +478,7 @@ for path in sys.argv[1:]:
         emit("X", path, 1, "config could not be read: %s" % err)
         continue
     try:
-        if name == "pyproject.toml":
+        if name.endswith(".toml"):
             scan_toml(path, body)
         else:
             scan_ini(path, body, ini_sections(name))

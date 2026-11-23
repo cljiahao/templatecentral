@@ -3,7 +3,7 @@
 # exclusion-audit/rules.sh. Sourced, never run; it defines functions only and has no side effects.
 #   rules_files ROOT        print every project file, relative to ROOT, one per line. Inside a git work tree it is `git ls-files -co
 #                           --exclude-standard` (tracked and untracked, ignored files left out); elsewhere it is every file except
-#                           node_modules, .git and any folder that holds a pyvenv.cfg, and a caller that finds rules_in_git ROOT false prints RULES_NOTE.
+#                           node_modules, .git and a virtual environment folder (outside git only), and a caller that finds rules_in_git ROOT false prints RULES_NOTE.
 #                           Config discovery and the marker scan both read this one list: no folder is skipped by its name alone.
 #   rules_init LIST         read the project facts from the file list LIST: the non-test source files and the package folders.
 #   hides_source ENTRY DIR  true when the exclude ENTRY, written in a config in folder DIR, leaves out every non-test source file of the
@@ -102,7 +102,7 @@ rules_in_git() {
 
 # Print the project files, relative to ROOT, one per line.
 rules_files() {
-  local root=$1 raw f venvs='' line
+  local root=$1 raw f nogit=0
   if rules_in_git "$root"; then
     raw=$(git -C "$root" -c core.quotepath=off ls-files -co --exclude-standard 2> /dev/null) || raw=
     local keep=
@@ -115,22 +115,28 @@ $raw
 EOF
     raw=$keep
   else
+    nogit=1
     raw=$(cd "$root" && find . \( -name node_modules -o -name .git \) -prune -o \( -type f -o -type l \) -print 2> /dev/null | sed 's|^\./||')
   fi
-  while IFS= read -r line; do
-    case "$line" in
-      pyvenv.cfg) ;;
-      */pyvenv.cfg) venvs="$venvs${line%/pyvenv.cfg}
-" ;;
-    esac
-  done <<EOF
-$raw
-EOF
-  VENVS=$venvs printf '%s\n' "$raw" | VENVS=$venvs awk '
-    BEGIN { n = split(ENVIRON["VENVS"], v, "\n") }
-    $0 == "" { next }
-    $0 ~ /(^|\/)(node_modules|\.git)\// { next }
-    { for (i = 1; i <= n; i++) if (v[i] != "" && index($0, v[i] "/") == 1) next; print }'
+  # Outside git only: a folder is a virtual environment when it holds a pyvenv.cfg and also bin/python*, Scripts/python* or
+  # lib/python*/site-packages. A pyvenv.cfg alone (a stray file in src/) hides nothing.
+  printf '%s\n' "$raw" | NOGIT=$nogit awk '
+    { l[++n] = $0 }
+    END {
+      if (ENVIRON["NOGIT"] == "1") {
+        for (i = 1; i <= n; i++) if (l[i] ~ /\/pyvenv\.cfg$/) { d = l[i]; sub(/\/pyvenv\.cfg$/, "", d); cand[d] = 1 }
+        for (i = 1; i <= n; i++) for (d in cand) if (index(l[i], d "/") == 1) {
+          r = substr(l[i], length(d) + 2)
+          if (r ~ /^bin\/python[^\/]*$/ || r ~ /^Scripts\/python[^\/]*$/ || r ~ /^lib\/python[^\/]*\/site-packages(\/|$)/) ok[d] = 1
+        }
+      }
+      for (i = 1; i <= n; i++) {
+        if (l[i] == "" || l[i] ~ /(^|\/)(node_modules|\.git)\//) continue
+        hid = 0
+        for (d in ok) if (index(l[i], d "/") == 1) hid = 1
+        if (!hid) print l[i]
+      }
+    }'
 }
 
 # Read the project facts from the file list $1 (newline separated, relative paths): RULES_SRC holds the non-test source files and
@@ -146,6 +152,8 @@ rules_init() {
       if (b ~ /\.(test|spec)\.[a-z]+$/) return 0
       if (b ~ /^test_.*\.py$/ || b ~ /_test\.py$/ || b == "conftest.py") return 0
       if (p ~ /(^|\/)(test|tests|__tests__)\//) return 0
+      # Files the scaffold seeds (the source-type entries of skills/scaffold/shared/template.manifest) are harness, not project source.
+      if (p ~ /^scripts\/check-exclude-reasons\.(mjs|py)$/ || p ~ /^\.claude\/hooks\/user-prompt-guard\.(py|cjs)$/) return 0
       return 1
     }
     issrc($0) { print }')
@@ -163,7 +171,7 @@ rules_init() {
 # MODE incl: exit 0 when the union of the patterns covers every source file below DIR. Exit 1 otherwise, 3 when a form cannot be evaluated,
 # 4 when there are no source files to judge by.
 rules_eval() {
-  RULES_PAT=$2 RULES_PKGLIST=$RULES_PKGS printf '%s\n' "$RULES_SRC" | RULES_PAT=$2 RULES_PKGLIST=$RULES_PKGS awk -v mode="$1" -v cdir="$3" '
+  printf '%s\n' "$RULES_SRC" | RULES_FN=${RULES_FN:-} RULES_PAT=$2 RULES_PKGLIST=$RULES_PKGS awk -v mode="$1" -v cdir="$3" '
     function g2re(g,   i, c, n, r, d, j, depth) {
       r = ""; n = length(g); i = 1; depth = 0
       while (i <= n) {
@@ -189,10 +197,39 @@ rules_eval() {
       if (depth != 0) return ""
       return "^(" r ")(/.*)?$"
     }
+    function fn2re(g,   i, c, n, r, j, d) {
+      if (substr(g, 1, 1) == "/") return "a^b"
+      n = length(g); r = ""; i = 1
+      while (i <= n) {
+        c = substr(g, i, 1)
+        if (c == "*") { r = r ".*"; i++; continue }
+        if (c == "?") { r = r "."; i++; continue }
+        if (c == "[") {
+          j = index(substr(g, i + 1), "]")
+          if (j == 0) { r = r "\\["; i++; continue }
+          d = substr(g, i + 1, j - 1)
+          if (substr(d, 1, 1) == "!") d = "^" substr(d, 2)
+          r = r "[" d "]"; i += j + 1; continue
+        }
+        if (c ~ /[.+^$(){}|\\]/) { r = r "\\" c; i++; continue }
+        r = r c; i++
+      }
+      if (substr(g, 1, 1) !~ /[*?]/) r = "/" r
+      return "^" r "$"
+    }
+    function mt(i, k,   q) {
+      if (mode == "excu") {
+        for (q = 1; q <= np; q++) if (fs[i] ~ re[q]) return 1
+        return 0
+      }
+      return (fs[i] ~ re[k])
+    }
     BEGIN {
+      fn = (ENVIRON["RULES_FN"] == "1")
       np = split(ENVIRON["RULES_PAT"], pat, "\n")
       npk = split(ENVIRON["RULES_PKGLIST"], pk, "\n")
       for (k = 1; k <= np; k++) {
+        if (fn) { re[k] = fn2re(pat[k]); continue }
         if (pat[k] ~ /[!@+?*]\(/) { bad = 1 }
         re[k] = g2re(pat[k])
         if (re[k] == "") bad = 1
@@ -213,6 +250,7 @@ rules_eval() {
       }
       nf++
       f[nf] = p
+      fs[nf] = (fn ? "/" p : p)
     }
     END {
       if (bad) exit 3
@@ -234,15 +272,16 @@ rules_eval() {
       if (mode == "incl") {
         for (i = 1; i <= nf; i++) {
           ok = 0
-          for (k = 1; k <= np; k++) if (f[i] ~ re[k]) { ok = 1; break }
+          for (k = 1; k <= np; k++) if (fs[i] ~ re[k]) { ok = 1; break }
           if (!ok) exit 1
         }
         exit 0
       }
-      for (k = 1; k <= np; k++) {
+      nk = (mode == "excu" ? 1 : np)
+      for (k = 1; k <= nk; k++) {
         split("", hit)
         for (i = 1; i <= nf; i++) {
-          if (f[i] !~ re[k]) continue
+          if (!mt(i, k)) continue
           e = pe[i]
           hit["P"]++; hit["P|" e]++
           if (ptop[i] != "") { hit["T:" ptop[i]]++; hit["T:" ptop[i] "|" e]++ }
@@ -294,7 +333,7 @@ hide_one() {
 }
 
 hides_source() {
-  local alt p dir=${2:-}
+  local alt p dir=${2:-} rc
   [ "$dir" != . ] || dir=
   RULES_WHY=
   while IFS= read -r alt; do
@@ -303,17 +342,80 @@ hides_source() {
   done <<EOF
 $(expand_braces "$1")
 EOF
+  # A coverage.py omit or include pattern is an fnmatch pattern on the absolute path: * crosses / and a pattern led by * can start anywhere.
+  if [ "${3:-}" = py ] && [ -n "$RULES_SRC" ] && [ -n "$1" ]; then
+    RULES_FN=1 rules_eval excl "$1" "$dir"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      RULES_WHY="as a coverage.py pattern ('$1', where * also matches /) it matches every source file of the project, of one package or of one top-level source folder"
+      return 0
+    fi
+  fi
   return 1
 }
 
+# True when the entries of one exclude list (ENTRIES, newline separated), none of which hides source alone, together leave out every non-test
+# source file of the project, of one package or of one top-level folder, or every file of one type there. Splitting a broad pattern into
+# narrower ones, each with a reason, hides the same code. PY as the third argument adds the coverage.py reading.
+hides_union() {
+  local entries=$1 dir=${2:-} e alt p list='' raws='' rc
+  [ "$dir" != . ] || dir=
+  [ -n "$RULES_SRC" ] || return 1
+  while IFS= read -r e; do
+    [ -n "$e" ] || continue
+    raws="$raws$e
+"
+    while IFS= read -r alt; do
+      p=$(norm_pat "$alt")
+      case "$p" in
+        '' | *'!('* | *'@('* | *'+('* | *'?('* | *'*('*) continue ;;
+      esac
+      list="$list$p
+"
+    done <<EOF
+$(expand_braces "$e")
+EOF
+  done <<EOF
+$entries
+EOF
+  if [ -n "$list" ]; then
+    rules_eval excu "${list%?}" "$dir"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then return 0; fi
+  fi
+  if [ "${3:-}" = py ] && [ -n "$raws" ]; then
+    RULES_FN=1 rules_eval excu "${raws%?}" "$dir"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then return 0; fi
+  fi
+  return 1
+}
+
+# Read E records (tab separated, as the scanners print them) on stdin and print one line per exclude list that has two or more entries which
+# are not defaults: file<TAB>kind<TAB>first line<TAB>the entries joined by the SOH byte. Entries of one file and kind form one list.
+rules_union_groups() {
+  awk -F'\t' '
+    $1 == "E" && $6 != "default" && $4 != "sonar-issue-ignore" {
+      k = $2 "\t" $4
+      if (!(k in first)) { first[k] = $3; order[++n] = k }
+      cnt[k]++
+      list[k] = list[k] (cnt[k] > 1 ? "\001" : "") $5
+    }
+    END { for (i = 1; i <= n; i++) { k = order[i]; if (cnt[k] >= 2) printf "%s\t%s\t%s\n", k, first[k], list[k] } }'
+}
+
 include_covers() {
-  local list='' alt p dir=${2:-} item
+  local list='' raw='' alt p dir=${2:-} item rc
   [ "$dir" != . ] || dir=
   [ -n "$RULES_SRC" ] || return 1
   while IFS= read -r item; do
     [ -n "$item" ] || continue
+    raw="$raw$item
+"
     while IFS= read -r alt; do
       p=$(norm_pat "$alt")
+      # An empty pattern (source = . or ./) is the whole project root.
+      if [ -z "$p" ]; then return 0; fi
       case "$p" in
         *'!('* | *'@('* | *'+('* | *'?('* | *'*('*) return 1 ;;
       esac
@@ -326,6 +428,13 @@ EOF
 $(printf '%s\n' "$1" | awk '{ d = 0; o = ""; for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (c == "{" || c == "(") d++; if (c == "}" || c == ")") d--; if (c == "," && d <= 0) { print o; o = "" } else o = o c } print o }' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
 EOF
   rules_eval incl "${list%?}" "$dir"
+  rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  if [ "${3:-}" = py ] && [ -n "$raw" ]; then
+    RULES_FN=1 rules_eval incl "${raw%?}" "$dir"
+    return $?
+  fi
+  return "$rc"
 }
 
 under_source_root() {
@@ -379,29 +488,44 @@ cmd_scan() {
       if (t == "nyc" || t == "c8" || t == "jest" || t == "vitest" || t == "stryker" || t == "mutmut" || t == "coverage" || t == "pytest" || t == "py.test" || t == "sonar-scanner" || t == "sonar-scanner-cli") return t
       return ""
     }
-    function seg(s, ln,   n, t, k, w, cmd, i, v, hasflag) {
+    # An exclude, include or mutate-path flag in S. Plain --exclude and --include count only for the tools that take them, or when GENERIC is set.
+    function flagged(s, cmd, generic) {
+      if (s ~ /-D[ ]?sonar\.[A-Za-z.]*(exclusions|inclusions)/ || s ~ /sonar\.issue\.ignore/ || s ~ /--coverage\.(exclude|include)/) return 1
+      if (s ~ /--(coveragePathIgnorePatterns|collectCoverageFrom|omit|cov-omit|paths-to-exclude|do-not-mutate|mutate|paths-to-mutate)([ =]|$)/) return 1
+      if ((generic || cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && s ~ /--(exclude|include)([ =]|$)/) return 1
+      return 0
+    }
+    function seg(s, ln,   n, t, k, w, cmd, i, v, hasflag, toolk, runner, after, dd) {
       n = split(s, t, /[ \t]+/)
-      cmd = ""
+      cmd = ""; toolk = 0; runner = ""
       for (k = 1; k <= n; k++) {
         w = clean(t[k])
         if (w == "" || w == "@") continue
         sub(/^@/, "", w)
+        if (runner == "" && (w == "npm" || w == "pnpm" || w == "yarn" || w == "bun")) runner = w
         if (isenv(w) || iswrap(w) || substr(w, 1, 1) == "-") continue
         cmd = tool(w)
+        if (cmd != "") toolk = k
         break
       }
-      if (cmd == "") return
-      hasflag = 0
-      if (s ~ /-D[ ]?sonar\.[A-Za-z.]*(exclusions|inclusions)/ || s ~ /sonar\.issue\.ignore/ || s ~ /--coverage\.(exclude|include)/) hasflag = 1
-      if (s ~ /--(coveragePathIgnorePatterns|collectCoverageFrom|omit|cov-omit|paths-to-exclude|do-not-mutate|mutate)([ =]|$)/) hasflag = 1
-      if ((cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && s ~ /--(exclude|include)([ =]|$)/) hasflag = 1
-      if (hasflag) printf "F\t%s\t%d\n", FILENAME, ln
-      for (k = 1; k <= n; k++) {
+      if (cmd == "") {
+        # npm run cov -- --coverage.exclude=x: the flags after -- reach whatever tool the script runs.
+        if (runner == "") return
+        after = ""; dd = 0
+        for (k = 1; k <= n; k++) {
+          if (dd) after = after " " t[k]
+          else if (t[k] == "--") dd = 1
+        }
+        if (flagged(s, "", 0) || (dd && flagged(after, "", 1))) printf "F\t%s\t%d\n", curfile, ln
+        return
+      }
+      if (flagged(s, cmd, 0)) printf "F\t%s\t%d\n", curfile, ln
+      for (k = toolk + 1; k <= n; k++) {
         w = clean(t[k]); v = ""
         if (w ~ /^--(config|cov-config|rcfile|nycrc-path)=/) { v = w; sub(/^[^=]*=/, "", v) }
         else if (w ~ /^-Dproject\.settings=/) { v = w; sub(/^[^=]*=/, "", v) }
         else if (w == "--config" || w == "--cov-config" || w == "--rcfile" || w == "--nycrc-path" || w == "-Dproject.settings" || ((w == "-c") && (cmd == "jest" || cmd == "vitest" || cmd == "pytest"))) { if (k < n) v = clean(t[k + 1]) }
-        if (v != "") printf "P\t%s\t%d\t%s\t%s\n", FILENAME, ln, cmd, v
+        if (v != "") printf "P\t%s\t%d\t%s\t%s\n", curfile, ln, cmd, v
       }
     }
     function lineseg(line, ln,   n, parts, i) {
@@ -411,7 +535,40 @@ cmd_scan() {
       n = split(line, parts, "\001")
       for (i = 1; i <= n; i++) seg(parts[i], ln)
     }
-    FNR == 1 { pkg = (FILENAME ~ /package\.json$/) }
+    function endad() { lineseg("pytest " adtext, adln); ad = 0; adtext = "" }
+    function finbuf() { if (buf != "") lineseg(buf, bufln); buf = ""; bufln = 0 }
+    function fin() {
+      if (pend != "") lineseg(pend, pendln)
+      pend = ""; pendln = 0
+      finbuf(); inblock = 0
+      if (ad) endad()
+    }
+    FNR == 1 {
+      fin()
+      curfile = FILENAME
+      pkg = (FILENAME ~ /package\.json$/)
+      bn = FILENAME; sub(/^.*\//, "", bn)
+      pyc = (bn == "pyproject.toml" || bn == "pytest.ini" || bn == "tox.ini" || bn == "setup.cfg")
+      ad = 0; adtext = ""
+    }
+    # pytest settings: only addopts is a command line (it may point at a coverage config).
+    pyc {
+      line = $0
+      if (ad) {
+        if (ad == 2) { adtext = adtext " " line; if (line ~ /\]/) endad(); next }
+        if (ad == 3) { adtext = adtext " " line; if (line ~ /"""/) endad(); next }
+        if (line ~ /^[ \t]+[^ \t]/) { adtext = adtext " " line; next }
+        endad()
+      }
+      if (match(line, /^[ \t]*addopts[ \t]*[=:]/)) {
+        v = substr(line, RLENGTH + 1)
+        adtext = v; adln = FNR; ad = 1
+        tq = v; nq = gsub(/"""/, "", tq)
+        if (v ~ /^[ \t]*\[/ && v !~ /\]/) ad = 2
+        else if (nq == 1) ad = 3
+      }
+      next
+    }
     {
       line = $0
       if (pkg) {
@@ -424,8 +581,25 @@ cmd_scan() {
         }
         next
       }
-      lineseg(line, FNR)
-    }' "$@" 2> /dev/null
+      pind = (match(line, /[^ \t]/) ? RSTART - 1 : 0)
+      # A line ending in a backslash continues on the next line: join them before looking for a tool and its flags.
+      if (match(line, /\\[ \t]*$/)) {
+        sub(/\\[ \t]*$/, "", line)
+        if (pend == "") { pendind = pind; pendln = FNR }
+        pend = pend " " line
+        next
+      }
+      if (pend != "") { line = pend " " line; ln = pendln; ind = pendind; pend = ""; pendln = 0 } else { ln = FNR; ind = pind }
+      # A YAML block scalar (run: | or run: >) is one command text: join its lines.
+      if (inblock) {
+        if (line ~ /^[ \t]*$/) next
+        if (ind > blockind) { buf = buf " " line; if (!bufln) bufln = ln; next }
+        finbuf(); inblock = 0
+      }
+      lineseg(line, ln)
+      if (line ~ /:[ \t]*[|>][-+0-9]*[ \t]*(#.*)?$/) { inblock = 1; blockind = ind; buf = ""; bufln = 0 }
+    }
+    END { fin() }' "$@" 2> /dev/null
 }
 
 # Print "line:text" for the first line of FILE (a karma, nyc.config or codecov file, which no scanner reads) that sets an exclude, ignore or omit key.

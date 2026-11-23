@@ -447,7 +447,7 @@ if grep -q "^dflt 'src/components/ui/\*\*'" "$GATE"; then nok "src/components/ui
 # 3 A folder named build or coverage below the root is read.
 for n in build coverage; do
   expect_fail "r2-pkg-$n" "packages/$n/vitest.config.ts:6 coverage-exclude entry 'src/\*\*' hides hand-written code"
-  revert_proof "r2-pkg-$n" "packages/$n/vitest.config.ts" "$RL" $'$0 ~ /(^|\\/)(node_modules|\\.git)\\// { next }' $'$0 ~ /(^|\\/)(node_modules|\\.git|build|coverage)\\// { next }'
+  revert_proof "r2-pkg-$n" "packages/$n/vitest.config.ts" "$RL" $'l[i] ~ /(^|\\/)(node_modules|\\.git)\\//' $'l[i] ~ /(^|\\/)(node_modules|\\.git|build|coverage)\\//'
 done
 
 # 4 A directory symlink inside the tree fails and is named.
@@ -641,12 +641,13 @@ r3_lost "broad src/**" "$d" "hides hand-written code" "$RL" $'rules_eval excl "$
 # 1 One file list: inside a git work tree it is what git lists; outside one, everything except dependencies, .git and virtualenvs.
 d=$(r3dir venv)
 mk "$d" env/pyvenv.cfg $'home = /usr/bin\n'
+mk "$d" env/bin/python $'#!/bin/sh\n'
 mk "$d" env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
-r3_ok "a virtual environment folder (pyvenv.cfg) is not scanned" "$d"
-rm -f "$d/env/pyvenv.cfg"
-r3_fail "the same folder without pyvenv.cfg is scanned" "$d" "env/lib/site\.py:2 '# pragma: no cover' has no reason"
-mk "$d" env/pyvenv.cfg $'home = /usr/bin\n'
-r3_flip "a virtual environment folder" "$d" "$RL" 'pyvenv.cfg' 'zzz.cfg'
+r3_ok "a virtual environment folder (pyvenv.cfg and bin/python) is not scanned" "$d"
+rm -f "$d/env/bin/python"
+r3_fail "a stray pyvenv.cfg without a python binary hides nothing" "$d" "env/lib/site\.py:2 '# pragma: no cover' has no reason"
+mk "$d" env/bin/python $'#!/bin/sh\n'
+r3_flip "a virtual environment folder" "$d" "$RL" 'r ~ /^bin\/python[^\/]*$/' 'r ~ /^zzz$/'
 d=$(r3dir gitlist)
 mk "$d" .gitignore $'.tox/\n'
 mk "$d" .tox/lib.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
@@ -689,7 +690,7 @@ rm -f "$d/Dockerfile.ci"
 mk "$d" scripts/t.sh $'#!/bin/sh\nc8 --exclude src/gen/** vitest run\n'
 r3_fail "a shell script is scanned" "$d" "scripts/t\.sh:2 passes an exclude or include on the command line"
 mk "$d" scripts/t.sh $'#!/bin/sh\nvitest run --exclude e2e\n'
-r3_flip "command word restriction" "$d" "$RL" $'(cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
+r3_flip "command word restriction" "$d" "$RL" $'if ((generic || cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && s' 'if (s'
 
 # 4 A marker counts only as the first token of a comment, and a start without a stop marks the file.
 d=$(r3dir mark)
@@ -722,7 +723,10 @@ export default defineConfig({
 });
 "
   r3_ok "default entry '$e' needs no reason" "$d"
-  r3_flip "default entry '$e'" "$d" "$G" "dflt '$e'" "dflt 'zzzunused'"
+  case "$e" in
+    dist | dist/ | /dist/) r3_flip "default entry '$e'" "$d" check-exclude-reasons.mjs 'defaults.has(normPat(t))' 'defaults.has(t + "zzz")' ;;
+    *) r3_flip "default entry '$e'" "$d" "$G" "dflt '$e'" "dflt 'zzzunused'" ;;
+  esac
 done
 d=$(r3dir pydefault)
 mk "$d" pyproject.toml $'[tool.coverage.report]\nexclude_lines = [\n    "pragma: no cover",\n    "raise NotImplementedError",\n    "if TYPE_CHECKING:",\n]\n\n[tool.coverage.run]\nomit = ["conftest.py", "**/conftest.py"]\n'
@@ -751,6 +755,200 @@ r3_ok "a link to a regular file" "$d"
 ln -s no-such-folder "$d/src/gone"
 r3_fail "a dangling link" "$d" "src/gone is a symlink that is not a link to a regular file"
 r3_lost "dangling link" "$d" "src/gone is a symlink" "$G" $'if [ -L "$f" ] && [ ! -f "$f" ]; then bad_links' $'if false; then bad_links'
+
+# ---- Round 4 -----------------------------------------------------------------------------------------------------------------------
+# Each case has a clean control and a mutant gate with the fix undone. Item numbers follow the review of round 3.
+r4dir() { # r4dir NAME: a project with four TypeScript sources, no coverage config, typescript linked in
+  local d=$WORK/r4-$1 f
+  rm -rf "$d"
+  mkdir -p "$d/node_modules"
+  ln -s "$TS" "$d/node_modules/typescript"
+  for f in a b c d; do mk "$d" "src/$f.ts" "export const $f = 1;
+"; done
+  mk "$d" vitest.config.ts $'export default { test: { coverage: { reporter: [\'text\'] } } };\n'
+  printf '%s' "$d"
+}
+NR='has no reason'
+CMDP='passes an exclude or include on the command line'
+
+# 1 A --config pointer is scanned in the mode of the tool word, whatever the file is called.
+d=$(r4dir cfg1)
+mk "$d" package.json '{"scripts":{"test":"jest --coverage --config config/unit.json"}}'
+mk "$d" config/unit.json '{"coveragePathIgnorePatterns":["src/a.ts"]}'
+r3_fail "item 1: jest --config config/unit.json" "$d" "config/unit\.json:1 .*$NR"
+r3_lost "item 1 jest" "$d" "config/unit\.json:1 .*$NR" "$G" $'jest | vitest | stryker) jsmode=$tool ;;' 'jest | vitest | stryker) return 1 ;;'
+mk "$d" config/unit.json $'{"coveragePathIgnorePatterns":[]}\n'
+r3_ok "item 1 control: the pointed file has no exclude" "$d"
+d=$(r4dir cfg2)
+mk "$d" package.json '{"scripts":{"test":"vitest run --config vitest.unit.mts"}}'
+mk "$d" vitest.unit.mts $'export default { test: { coverage: { exclude: [\'src/a.ts\'] } } };\n'
+r3_fail "item 1: vitest --config vitest.unit.mts" "$d" "vitest\.unit\.mts:1 .*$NR"
+d=$(r4dir cfg3)
+mk "$d" package.json '{"scripts":{"test":"vitest run --config cfg/vt.ts"}}'
+mk "$d" cfg/vt.ts $'export default { test: { coverage: { exclude: [\n  // reason: generated by the build tool, not hand written\n  \'src/a.ts\'] } } };\n'
+r3_ok "item 1 control: cfg/vt.ts with a reason" "$d"
+mk "$d" cfg/vt.ts $'export default { test: { coverage: { exclude: [\'src/a.ts\'] } } };\n'
+r3_fail "item 1: vitest --config cfg/vt.ts" "$d" "cfg/vt\.ts:1 .*$NR"
+
+# 2 Every # segment of a Python comment is tested.
+d=$(r4dir py2)
+mk "$d" app.py $'x = 1  # noqa  # pragma: no cover -- reason: legacy shim code path here\n'
+r3_ok "item 2 control: a reasoned marker after another comment" "$d"
+mk "$d" app.py $'x = 1  # noqa  # pragma: no cover\n'
+r3_fail "item 2: a marker after another comment" "$d" "app\.py:1 .*pragma: no cover.*$NR"
+r3_lost "item 2" "$d" "app\.py:1 .*pragma" check-exclude-reasons.awk $'          cm(rest, nr, raw, own)\n          j = index(rest, "#")\n          if (j == 0) break' $'          cm(rest, nr, raw, own)\n          break'
+
+# 3 NOSONAR and Stryker disable markers follow the same reason rule.
+d=$(r4dir mk3)
+mk "$d" src/a.ts $'// NOSONAR -- reason: the legacy API needs this shape here\nexport const a = 1;\n'
+r3_ok "item 3 control: NOSONAR with a reason" "$d"
+mk "$d" src/a.ts $'// NOSONAR\nexport const a = 1;\n'
+r3_fail "item 3: NOSONAR" "$d" "src/a\.ts:1 .*NOSONAR|src/a\.ts:1 .*nosonar"
+r3_lost "item 3 nosonar" "$d" "src/a\.ts:1" check-exclude-reasons.awk 'match(low, /^nosonar/)' 'match(low, /^zzznosonar/)'
+mk "$d" src/a.ts $'// Stryker disable next-line StringLiteral\nexport const a = 1;\n'
+r3_fail "item 3: Stryker disable next-line without a reason" "$d" "src/a\.ts:1 .*$NR"
+r3_lost "item 3 next-line" "$d" "stryker disable next-line' $NR" check-exclude-reasons.awk '/^stryker[ \t]+disable[ \t]+next-line/' '/^stryker[ \t]+zzz[ \t]+next-line/'
+mk "$d" src/a.ts $'// Stryker disable next-line StringLiteral: reason: generated text only here\nexport const a = 1;\n'
+r3_ok "item 3 control: Stryker disable next-line with a reason" "$d"
+mk "$d" src/a.ts $'// Stryker disable all\nexport const a = 1;\n'
+r3_fail "item 3: Stryker disable all is a whole-file marker" "$d" "src/a\.ts:1 .*whole file"
+
+# 4 A stray pyvenv.cfg hides nothing (see the venv cases above). Outside git a folder with bin/python3 is a virtual environment.
+
+# 5 Splitting a broad pattern into narrow entries is judged as one list.
+d=$(r4dir split5)
+rm -f "$d/src/c.ts" "$d/src/d.ts"
+mk "$d" src/x/p.ts $'export const p = 1;\n'
+mk "$d" src/y/q.ts $'export const q = 1;\n'
+rm -f "$d/src/a.ts" "$d/src/b.ts"
+mk "$d" vitest.config.ts $'export default { test: { coverage: { exclude: [\n  // reason: generated by tooling only here\n  \'src/x/**\',\n  // reason: generated by tooling only here\n  \'src/y/**\'] } } };\n'
+r3_fail "item 5: two entries together hide the whole source folder" "$d" "together hide"
+r3_lost "item 5" "$d" "together hide" "$G" $'if hides_union "${keep%?}"' 'if false'
+mk "$d" vitest.config.ts $'export default { test: { coverage: { exclude: [\n  // reason: generated by tooling only here\n  \'src/x/**\'] } } };\n'
+r3_ok "item 5 control: one narrow entry" "$d"
+
+# 6 coverage.py matches the absolute path, and * crosses /.
+d=$(r4dir cov6)
+rm -f "$d"/src/*.ts
+mk "$d" app/a.py $'x = 1\n'
+mk "$d" app/b.py $'x = 1\n'
+mk "$d" pyproject.toml $'[tool.coverage.run]\n# reason: generated code not hand written\nomit = ["*/app/*"]\n'
+r3_fail "item 6: omit */app/* covers the package" "$d" "hides hand-written"
+r3_lost "item 6" "$d" "hides hand-written" "$RL" $'RULES_FN=1 rules_eval excl "$1" "$dir"' $'rules_eval excl "$1" "$dir"'
+mk "$d" pyproject.toml $'[tool.coverage.run]\n# reason: generated code not hand written\nomit = ["*/app/gen/*"]\n'
+r3_ok "item 6 control: a narrow omit" "$d"
+
+# 7 A whole-root include needs no reason.
+d=$(r4dir root7)
+mk "$d" vitest.config.ts $'export default { test: { coverage: { include: [\'.\'] } } };\n'
+r3_ok "item 7: include ['.'] covers every file" "$d"
+r3_flip "item 7" "$d" "$RL" $'if [ -z "$p" ]; then return 0; fi' $'if [ -z "$p" ]; then return 1; fi'
+d=$(r4dir root7b)
+rm -f "$d"/src/*.ts
+mk "$d" app/a.py $'x = 1\n'
+mk "$d" .coveragerc $'[run]\nsource = .\n'
+r3_ok "item 7: .coveragerc source = ." "$d"
+
+# 8 A flag on a continuation line is found.
+d=$(r4dir cont8)
+mk "$d" Makefile $'t:\n\tvitest run \\\n\t  --coverage.exclude=src/a.ts\n'
+r3_fail "item 8: Makefile continuation" "$d" "Makefile:2 $CMDP"
+r3_lost "item 8 backslash" "$d" "$CMDP" "$RL" 'if (match(line, /\\[ \t]*$/)) {' 'if (0) {'
+mk "$d" Makefile $'t:\n\tvitest run\n'
+r3_ok "item 8 control: Makefile without a flag" "$d"
+d=$(r4dir cont8y)
+mk "$d" .github/workflows/ci.yml $'jobs:\n  t:\n    steps:\n      - run: >\n          vitest run\n          --coverage.exclude=src/a.ts\n'
+r3_fail "item 8: YAML run block" "$d" "ci\.yml:[0-9]+ $CMDP"
+r3_lost "item 8 yaml block" "$d" "$CMDP" "$RL" '      if (inblock) {' '      if (0) {'
+
+# 9 Flags after -- reach the tool the script runs.
+d=$(r4dir dd9)
+mk "$d" package.json '{"scripts":{"cov":"vitest run --coverage","t":"pnpm run cov -- --exclude=src/a.ts"}}'
+r3_fail "item 9: pnpm run cov -- --exclude" "$d" "package\.json:1 $CMDP"
+r3_lost "item 9" "$d" "$CMDP" "$RL" 'else if (t[k] == "--") dd = 1' 'else if (t[k] == "--zzz") dd = 1'
+mk "$d" package.json '{"scripts":{"cov":"vitest run --coverage","t":"npm run cov -- --watch"}}'
+r3_ok "item 9 control: no exclude after --" "$d"
+d=$(r4dir dd9m)
+mk "$d" Makefile $'t:\n\tmutmut run --paths-to-mutate=src/a.py\n'
+r3_fail "item 9: mutmut --paths-to-mutate" "$d" "Makefile:2 $CMDP"
+
+# 10 Sonar properties under other names.
+d=$(r4dir son10)
+mk "$d" .sonarcloud.properties $'sonar.exclusions=src/a.ts\n'
+r3_fail "item 10: .sonarcloud.properties" "$d" "sonarcloud\.properties:1 .*$NR"
+r3_lost "item 10" "$d" "sonarcloud\.properties:1" "$G" "grep -qaE '^[[:space:]]*sonar" "grep -qaE '^zzz[[:space:]]*sonar"
+mk "$d" .sonarcloud.properties $'# reason: generated code not written by hand\nsonar.exclusions=src/a.ts\n'
+r3_ok "item 10 control: a reason on the line above" "$d"
+mk "$d" notes.properties $'greeting=hello\n'
+r3_ok "item 10 control: a properties file without a sonar. key" "$d"
+
+# 11 A coverage config named by pytest addopts is followed.
+d=$(r4dir addopts11)
+rm -f "$d"/src/*.ts
+mk "$d" app/a.py $'x = 1\n'
+mk "$d" pyproject.toml $'[tool.pytest.ini_options]\naddopts = "--cov=app --cov-config=cfg/custom.ini"\n'
+mk "$d" cfg/custom.ini $'[run]\nomit = app/a.py\n'
+r3_fail "item 11: addopts --cov-config" "$d" "cfg/custom\.ini:2 .*$NR"
+r3_lost "item 11" "$d" "cfg/custom\.ini:2" "$RL" 'if (match(line, /^[ \t]*addopts[ \t]*[=:]/)) {' 'if (0) {'
+mk "$d" cfg/custom.ini $'[run]\nbranch = true\n'
+r3_ok "item 11 control: the pointed config has no omit" "$d"
+
+# 12 ignore next N with a large N is a block.
+d=$(r4dir next12)
+mk "$d" src/a.ts $'/* v8 ignore next 99999 -- reason: because of reasons here ok */\nexport const a = 1;\n'
+r3_fail "item 12: ignore next 99999" "$d" "src/a\.ts:1 .*whole file"
+r3_lost "item 12" "$d" "whole file" check-exclude-reasons.awk 'if (nn > 20) big = 1' 'if (nn > 20000000) big = 1'
+mk "$d" src/a.ts $'/* v8 ignore next 3 -- reason: because of reasons here ok */\nexport const a = 1;\n'
+r3_ok "item 12 control: ignore next 3 with a reason" "$d"
+
+# 13 The entry and the default list are normalised before they are compared.
+d=$(r4dir norm13)
+mk "$d" vitest.config.ts $'export default { test: { coverage: { exclude: [\'./dist/**\', \'dist/**/*\', \'./node_modules\'] } } };\n'
+r3_ok "item 13: spelled-out defaults need no reason" "$d"
+r3_flip "item 13" "$d" check-exclude-reasons.mjs 'defaults.has(normPat(t))' 'defaults.has(t)'
+
+# 14 A regex literal holding a quote does not hide a later marker.
+d=$(r4dir rx14)
+mk "$d" src/a.ts $'const r = /"/; /* istanbul ignore next */\nexport const a = 1;\n'
+r3_fail "item 14: marker after a regex with a quote" "$d" "src/a\.ts:1 .*istanbul ignore next.*$NR"
+r3_lost "item 14" "$d" "src/a\.ts:1" check-exclude-reasons.awk $'function rxok() {\n  if (lastsig == "") return 1' $'function rxok() {\n  return 0\n  if (lastsig == "") return 1'
+mk "$d" src/a.ts $'const r = /"/; /* istanbul ignore next -- reason: parser fallback branch here */\nexport const a = 1;\n'
+r3_ok "item 14 control: the same marker with a reason" "$d"
+
+# 15 A reason counts only from the marker's own comment or a comment-only line above.
+d=$(r4dir rs15)
+mk "$d" src/a.ts $'const s = "// reason: not mine here ok"; /* c8 ignore next */\nexport const a = 1;\n'
+r3_fail "item 15: a reason inside a string" "$d" "src/a\.ts:1 .*c8 ignore next.*$NR"
+r3_lost "item 15" "$d" "src/a\.ts:1" check-exclude-reasons.awk 'st = (valid(reasontext(own)) ? "reason" : "none")' 'st = (valid(reasontext(raw)) ? "reason" : "none")'
+mk "$d" src/a.ts $'// reason: not covered by tests on purpose here\n/* c8 ignore next */\nexport const a = 1;\n'
+r3_ok "item 15 control: a comment-only line above" "$d"
+
+# 16 -c is a config pointer only for a tool word, not a shell.
+d=$(r4dir sh16)
+mk "$d" Makefile $'t:\n\tbash -c "vitest --coverage.exclude=src/a.ts"\n'
+r3_fail "item 16: bash -c with a flag inside" "$d" "Makefile:2 $CMDP"
+run_gate "$d"
+if printf '%s' "$OUT" | grep -q 'points'; then nok "item 16: -c of a shell is not a config pointer" "$OUT"; else ok "item 16: -c of a shell is not a config pointer"; fi
+
+# 17 Seeded gate files are harness, not project source, once copied in; the list matches the manifest.
+d=$(r4dir seed17)
+rm -f "$d"/src/*.ts
+mk "$d" src/app.ts $'export const app = 1;\n'
+mk "$d" vitest.config.ts $'export default { test: { coverage: { exclude: [\n  // reason: the seeded gate scripts are harness code\n  \'scripts/**\'] } } };\n'
+mkdir -p "$d/scripts"
+cp "$root/$SCRIPTS"/check-exclude-reasons.mjs "$root/$SCRIPTS"/check-exclude-reasons.py "$d/scripts/"
+r3_ok "item 17: seeded check-exclude-reasons.mjs and .py are not project source" "$d"
+r3_flip "item 17" "$d" "$RL" 'p ~ /^scripts\/check-exclude-reasons\.(mjs|py)$/ ||' ''
+# Drift: every source-type file the manifest seeds from the shared scripts or the hooks is named by the embedded list.
+drift=
+for f in "$root/$SCRIPTS"/*.mjs "$root/$SCRIPTS"/*.py; do
+  b=${f##*/}
+  case "$b" in check-exclude-reasons.mjs | check-exclude-reasons.py) ;; *) drift="$drift $b" ;; esac
+done
+if [ -z "$drift" ]; then ok "item 17: no other shared script is source-typed"; else nok "item 17: shared scripts not named in the seeded-file list:$drift"; fi
+for h in user-prompt-guard.py user-prompt-guard.cjs; do
+  if grep -q "\.claude/hooks/$h " "$root/skills/scaffold/shared/template.manifest" && grep -q 'user-prompt-guard' "$root/$SCRIPTS/check-exclude-rules.sh"; then ok "item 17: manifest hook $h is in the seeded-file list"; else nok "item 17: manifest hook $h is not in the seeded-file list"; fi
+done
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)

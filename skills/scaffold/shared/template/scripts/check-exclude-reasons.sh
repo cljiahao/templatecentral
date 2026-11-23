@@ -25,7 +25,9 @@
 # every vitest*.config.*, jest*.config.*, stryker*.conf*, .nycrc* and .c8rc* file, package.json keys jest, nyc, c8, stryker and jscpd,
 # and .jscpd.json ignore. A config imported from a relative file is followed one level. Any depth is scanned: a folder named build or
 # coverage inside src is read like any other.
-# Broad means judged from the files on disk: a pattern that matches every non-test source file of the project, of one package (a folder
+# Scope: the gate covers the tools the plugin seeds (vitest, jest, pytest-cov and coverage.py, the Sonar properties files, Stryker, mutmut)
+# and inline markers (istanbul, c8, v8, node:coverage, pragma: no cover, NOSONAR, Stryker disable). Other tools (c8 and nyc on the command line, mvn, a Sonar scan action) are outside it.
+# Broad means judged from the files on disk (one list is judged as the union of its non-default entries, so splitting a broad pattern does not help): a pattern that matches every non-test source file of the project, of one package (a folder
 # with its own package.json or pyproject.toml), of one top-level source folder, or every source file of one type in any of those. ./ and
 # // are normalised first, and a pattern form the gate cannot evaluate (such as !(a)) is a finding too.
 # Inline markers in source files (istanbul, c8 and v8 ignore comments, node:coverage, pragma: no cover) count only as the first token of a
@@ -65,6 +67,11 @@ dflt 'node_modules/**' 'installed dependencies at the project root, not project 
 dflt '/node_modules/' 'installed dependencies at the project root, not project code'
 dflt 'dist/**' 'build output at the project root'
 dflt 'build/**' 'build output at the project root'
+dflt 'dist/**/*' 'build output at the project root'
+dflt 'build/**/*' 'build output at the project root'
+dflt 'coverage/**/*' 'coverage report output at the project root'
+dflt 'node_modules/**/*' 'installed dependencies at the project root, not project code'
+dflt '.next/**/*' 'Next.js build output at the project root'
 dflt 'coverage/**' 'coverage report output at the project root'
 dflt '.next/**' 'Next.js build output at the project root'
 dflt '.venv/*' 'Python virtual environment at the project root, installed dependencies'
@@ -178,6 +185,7 @@ bad() {
 }
 
 js_files=()
+js_modes=()
 py_files=()
 prop_files=()
 link_files=()
@@ -196,16 +204,49 @@ FILES=$(rules_files .)
 if ! rules_in_git .; then printf 'check-exclude-reasons: NOTE %s\n' "$RULES_NOTE" >&2; fi
 rules_init "$FILES"
 
-# Put FILE into the scanner list for its type; false when its name is not a type the gate can read.
+# Put FILE into the scanner list for its type; false when no scanner can read it. With a TOOL (the tool word of the command line that pointed
+# at the file) the tool decides the scan mode, never the file name: jest, vitest, stryker, nyc and c8 read a JS, TS or JSON file in their
+# own mode, pytest, coverage and mutmut read a TOML or INI file, sonar-scanner reads a properties file. A file no mode applies to is false.
 add_config() {
-  local f=${1#./} base
+  local f=${1#./} tool=${2:-} base jsmode=
   case "$seen" in *"$NL$f$NL"*) return 0 ;; esac
   base=${f##*/}
+  if [ -n "$tool" ]; then
+    case "$tool" in
+      jest | vitest | stryker) jsmode=$tool ;;
+      nyc | c8) jsmode=nyc ;;
+      pytest | py.test | coverage | mutmut)
+        case "$base" in
+          *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | *.properties | *.yml | *.yaml) return 1 ;;
+        esac
+        py_files+=("$f")
+        seen="$seen$NL$f$NL"
+        return 0
+        ;;
+      sonar-scanner | sonar-scanner-cli)
+        case "$base" in
+          *.properties) prop_files+=("$f") ;;
+          *) return 1 ;;
+        esac
+        seen="$seen$NL$f$NL"
+        return 0
+        ;;
+      *) return 1 ;;
+    esac
+    case "$base" in
+      *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) ;;
+      *) return 1 ;;
+    esac
+    js_files+=("$f")
+    js_modes+=("$jsmode")
+    seen="$seen$NL$f$NL"
+    return 0
+  fi
   case "$base" in
     *.properties) prop_files+=("$f") ;;
     pyproject.toml | .coveragerc | setup.cfg | tox.ini | *.toml | *.ini | *.cfg | .coveragerc*) py_files+=("$f") ;;
     karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml) other_files+=("$f") ;;
-    *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) js_files+=("$f") ;;
+    *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) js_files+=("$f"); js_modes+=("") ;;
     *) return 1 ;;
   esac
   seen="$seen$NL$f$NL"
@@ -222,6 +263,12 @@ while IFS= read -r f; do
       ;;
   esac
   case "$base" in
+    *.properties)
+      # Any properties file that holds a sonar. key is a Sonar config, whatever its name (.sonarcloud.properties, sonar.properties).
+      if [ -f "$f" ] && ! [ -L "$f" ] && grep -qaE '^[[:space:]]*sonar\.[A-Za-z]' "$f" 2> /dev/null; then add_config "$f" || true; fi
+      ;;
+  esac
+  case "$base" in
     vitest*.config.* | vitest.workspace.* | vite.config.* | jest*.config.* | stryker*.conf* | .stryker*.conf* | .nycrc* | .c8rc* | .jscpd.json | sonar-project*.properties | pyproject.toml | .coveragerc | setup.cfg | tox.ini | karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml | package.json)
       if [ -L "$f" ]; then
         if [ -f "$f" ]; then link_files+=("$f"); fi
@@ -234,6 +281,7 @@ while IFS= read -r f; do
     package.json | */package.json | *.sh | *.bash | Makefile | */Makefile | Makefile.* | */Makefile.* | *.mk | Taskfile* | */Taskfile* | justfile | */justfile | Justfile | */Justfile | Dockerfile* | */Dockerfile* | *.dockerfile | \
       .github/workflows/*.yml | .github/workflows/*.yaml | */.github/workflows/*.yml | */.github/workflows/*.yaml | .github/actions/*/*.yml | .github/actions/*/*.yaml | \
       lefthook*.yml | */lefthook*.yml | lefthook*.yaml | */lefthook*.yaml | .lefthook*.yml | .gitlab-ci.yml | */.gitlab-ci.yml | .gitlab/*.yml | azure-pipelines*.yml | */azure-pipelines*.yml | bitbucket-pipelines.yml | Jenkinsfile | */Jenkinsfile | \
+      pyproject.toml | */pyproject.toml | pytest.ini | */pytest.ini | tox.ini | */tox.ini | setup.cfg | */setup.cfg | \
       .circleci/*.yml | .travis.yml | appveyor.yml | .drone.yml | cloudbuild.y*ml | .buildkite/*.yml | .woodpecker/*.yml | .woodpecker.yml)
       if [ -f "$f" ] && [ ! -L "$f" ]; then cmd_files+=("$f"); fi
       ;;
@@ -286,7 +334,7 @@ while IFS="$tab" read -r pfile pline ptool ppath; do
   fi
   if [ -L "$target" ]; then
     link_files+=("$target")
-  elif ! add_config "$target"; then
+  elif ! add_config "$target" "$ptool"; then
     bad "$pfile:$pline points $ptool at $target, a file type the gate cannot read. Fix: use a config file the gate reads (vitest*.config.*, jest*.config.*, a .json config, pyproject.toml, .coveragerc, sonar-project.properties)."
   fi
 done <<EOT
@@ -314,7 +362,13 @@ fi
 
 if [ "${#js_files[@]}" -gt 0 ]; then
   if command -v node > /dev/null 2>&1; then
-    out=$(node "$here/check-exclude-reasons.mjs" "${js_files[@]}" 2>&1) || bad "the JS config scanner failed: $(printf '%s' "$out" | head -n 1). $SUPPORTED"
+    jargs=()
+    ji=0
+    for f in "${js_files[@]}"; do
+      jargs+=("--as=${js_modes[$ji]}" "$f")
+      ji=$((ji + 1))
+    done
+    out=$(node "$here/check-exclude-reasons.mjs" "${jargs[@]}" 2>&1) || bad "the JS config scanner failed: $(printf '%s' "$out" | head -n 1). $SUPPORTED"
     records="$records
 $out"
   else
@@ -343,6 +397,14 @@ if [ "${#mark_files[@]}" -gt 0 ]; then
 $marks"
 fi
 
+# "py" for a coverage.py config file (its omit and include patterns are fnmatch patterns on the absolute path), else nothing.
+py_flag() {
+  local b=${1##*/}
+  case "$b" in
+    pyproject.toml | .coveragerc* | setup.cfg | tox.ini | *.toml | *.ini | *.cfg) printf py ;;
+  esac
+}
+
 note() {
   case "$1" in
     *sonar-project*.properties) printf '%s' "$PROPS_NOTE" ;;
@@ -350,12 +412,33 @@ note() {
   esac
 }
 
+# Judge each exclude list as a whole too: entries that are narrow alone but together leave out a whole source scope fail as one finding.
+unions=$(printf '%s\n' "$records" | rules_union_groups)
+while IFS="$tab" read -r ufile ukind uline ulist; do
+  [ -n "$ufile" ] || continue
+  ucdir=${ufile%/*}
+  [ "$ucdir" != "$ufile" ] || ucdir=.
+  keep=
+  while IFS= read -r uentry; do
+    [ -n "$uentry" ] || continue
+    if ! hides_source "$uentry" "$ucdir" "$(py_flag "$ufile")"; then keep="$keep$uentry$NL"; fi
+  done <<EOT
+$(printf '%s' "$ulist" | tr '\001' '\n')
+EOT
+  [ "$(printf '%s' "$keep" | grep -c .)" -ge 2 ] || continue
+  if hides_union "${keep%?}" "$ucdir" "$(py_flag "$ufile")"; then
+    bad "$ufile:$uline the $ukind entries of this list together hide hand-written code (between them they match every source file of the project, of one package or of one top-level source folder, or every source file of one type there), and no reason can cover it. Fix: remove or narrow the entries so the list leaves out only what is really not hand-written."
+  fi
+done <<EOT
+$unions
+EOT
+
 while IFS="$tab" read -r tag file line kind entry status; do
   case "$tag" in
     E)
       cdir=${file%/*}
       [ "$cdir" != "$file" ] || cdir=.
-      if [ "$kind" != sonar-issue-ignore ] && hides_source "$entry" "$cdir"; then
+      if [ "$kind" != sonar-issue-ignore ] && hides_source "$entry" "$cdir" "$(py_flag "$file")"; then
         why=${RULES_WHY:-it matches every source file of the project, of one package or of one top-level source folder, or every source file of one type there}
         bad "$file:$line $kind entry '$entry' hides hand-written code ($why), and no reason can cover it. Fix: narrow it to the folder or files that are really not hand-written (for example src/generated/**), with $FORM."
         continue
@@ -372,7 +455,7 @@ while IFS="$tab" read -r tag file line kind entry status; do
       [ "$cdir" != "$file" ] || cdir=.
       if [ "$status" = reason ]; then
         checked=$((checked + 1))
-      elif include_covers "$entry" "$cdir"; then
+      elif include_covers "$entry" "$cdir" "$(py_flag "$file")"; then
         :
       else
         bad "$file:$line $kind list '$entry' is an allow-list that leaves out source files, so it excludes every file it does not list, and it has no reason. Fix: add $FORM, or remove the list.$(note "$file")"

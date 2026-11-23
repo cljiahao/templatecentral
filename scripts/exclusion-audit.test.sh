@@ -375,6 +375,51 @@ mk broad4/my_pkg/__init__.py $'x = 1\n'
 mk broad4/my_pkg/m.py $'y = 1\n'
 mk broad4/pyproject.toml $'[tool.coverage.run]\nomit = [\n    # reason: generated code that nobody writes by hand\n    "my_pkg/**",\n]\n'
 mk venv1/env/pyvenv.cfg $'home = /usr/bin\n'
+mk venv1/env/bin/python3 $'#!/bin/sh\n'
+mk venv3/env/pyvenv.cfg $'home = /usr/bin\n'
+mk venv3/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
+mk r4cfg/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4cfg/src/a.ts $'export const x = 1;\n'
+mk r4cfg/src/b.ts $'export const x = 1;\n'
+mk r4cfg/src/c.ts $'export const x = 1;\n'
+mk r4cfg/src/d.ts $'export const x = 1;\n'
+mk r4cfg/package.json '{"scripts":{"test":"jest --coverage --config config/unit.json"}}'
+mk r4cfg/config/unit.json '{"coveragePathIgnorePatterns":["src/a.ts"]}'
+mk r4py/package.json $'{\n  "name": "demo"\n}\n'
+mk r4py/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4py/app.py $'x = 1  # noqa  # pragma: no cover\n'
+mk r4sonar/package.json $'{\n  "name": "demo"\n}\n'
+mk r4sonar/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4sonar/src/a.ts $'export const x = 1;\n'
+mk r4sonar/src/b.ts $'export const x = 1;\n'
+mk r4sonar/src/c.ts $'export const x = 1;\n'
+mk r4sonar/src/d.ts $'export const x = 1;\n'
+mk r4sonar/.sonarcloud.properties $'sonar.exclusions=src/a.ts\n'
+mk r4nosonar/package.json $'{\n  "name": "demo"\n}\n'
+mk r4nosonar/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4nosonar/src/a.ts $'// NOSONAR\nexport const a = 1;\n'
+mk r4next/package.json $'{\n  "name": "demo"\n}\n'
+mk r4next/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4next/src/a.ts $'/* v8 ignore next 99999 -- reason: because of reasons here ok */\nexport const a = 1;\n'
+mk r4rx/package.json $'{\n  "name": "demo"\n}\n'
+mk r4rx/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4rx/src/a.ts $'const r = /"/; /* istanbul ignore next */\nexport const a = 1;\n'
+mk r4cont/package.json $'{\n  "name": "demo"\n}\n'
+mk r4cont/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4cont/src/a.ts $'export const x = 1;\n'
+mk r4cont/src/b.ts $'export const x = 1;\n'
+mk r4cont/src/c.ts $'export const x = 1;\n'
+mk r4cont/src/d.ts $'export const x = 1;\n'
+mk r4cont/Makefile $'t:\n\tvitest run \\\n\t  --coverage.exclude=src/a.ts\n'
+mk r4dd/vitest.config.ts $'export default { test: { coverage: { reporter: [] } } };\n'
+mk r4dd/src/a.ts $'export const x = 1;\n'
+mk r4dd/src/b.ts $'export const x = 1;\n'
+mk r4dd/src/c.ts $'export const x = 1;\n'
+mk r4dd/src/d.ts $'export const x = 1;\n'
+mk r4dd/package.json '{"scripts":{"cov":"vitest run --coverage","t":"pnpm run cov -- --exclude=src/a.ts"}}'
+mk r4add/app/a.py $'x = 1\n'
+mk r4add/pyproject.toml $'[tool.pytest.ini_options]\naddopts = "--cov=app --cov-config=cfg/custom.ini"\n'
+mk r4add/cfg/custom.ini $'[run]\nomit = app/a.py\n'
 mk venv1/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
 mk venv2/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
 mk cmd1/package.json $'{\n  "name": "demo",\n  "scripts": {\n    "ci": "pnpm test:coverage && pnpm lint --config eslint.config.js",\n    "lint:jest": "eslint --config .eslintrc.jest.js tests",\n    "sync": "rsync -a coverage/ --exclude x out/",\n    "unit": "vitest run --exclude e2e",\n    "test:e2e": "jest --config ./test/jest-e2e.json"\n  }\n}\n'
@@ -407,6 +452,16 @@ for n in broad1 broad2 broad3 broad4; do want "$n" "a broad exclude hides source
 unwanted narrow "a narrow exclude hides nothing" "$H"
 want venv2 "a folder without pyvenv.cfg is audited" "^env/lib/site\.py:2 inline coverage marker '# pragma: no cover': no reason$"
 unwanted venv1 "a virtual environment folder is not audited" "pragma"
+want r4cfg "item 1: a --config pointer to config/unit.json is scanned" "^config/unit\.json:1 .*no reason"
+want r4py "item 2: a marker after another comment" "^app\.py:1 inline coverage marker '# pragma: no cover': no reason"
+want r4sonar "item 10: .sonarcloud.properties is scanned" "^\.sonarcloud\.properties:1 sonar-exclude 'src/a\.ts': no reason"
+want r4nosonar "item 3: NOSONAR without a reason" "^src/a\.ts:1 inline coverage marker 'nosonar': no reason"
+want r4next "item 12: ignore next 99999 is a whole-file marker" "^src/a\.ts:1 .*whole-file marker"
+want r4rx "item 14: marker after a regex with a quote" "^src/a\.ts:1 inline coverage marker 'istanbul ignore next': no reason"
+want r4cont "item 8: a flag on a continuation line" "^Makefile:2 passes an exclude or include on the command line"
+want r4dd "item 9: a flag after --" "^package\.json:1 passes an exclude or include on the command line"
+want r4add "item 11: a config named by pytest addopts is read" "^cfg/custom\.ini:[0-9]+ coverage-exclude 'app/a\.py': no reason"
+want venv3 "a lone pyvenv.cfg does not hide its folder" "^env/lib/site\.py:2 inline coverage marker '# pragma: no cover': no reason$"
 unwanted cmd1 "other tools' command lines are not findings" "passes an exclude"
 want cmd2 "a tool segment after && is a finding" "passes an exclude"
 want cmd3 "a CI workflow is scanned" "ci\.yml:4 passes an exclude"
@@ -439,13 +494,21 @@ audit_mutant3() { # audit_mutant3 lose|gain PREFIX PAT FILE OLD NEW
   fi
 }
 AR=defects/exclusion-audit/rules.sh
-audit_mutant3 gain venv1 "pragma" "$AR" 'pyvenv.cfg' 'zzz.cfg'
-audit_mutant3 gain cmd1 "passes an exclude" "$AR" $'(cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
+audit_mutant3 gain venv1 "pragma" "$AR" 'if (l[i] ~ /\/pyvenv\.cfg$/)' 'if (l[i] ~ /\/zzz\.cfg$/)'
+audit_mutant3 gain cmd1 "passes an exclude" "$AR" $'(generic || cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
 audit_mutant3 lose cmd2 "passes an exclude" "$AR" $'gsub(/&&/, "\\001", line)' $'gsub(/&&/, " ", line)'
 audit_mutant3 gain mark1 "inline coverage marker" defects/exclusion-audit/scan.awk $'match(low, /^(istanbul|c8|v8)[ \\t]+ignore' $'match(low, /(istanbul|c8|v8)[ \\t]+ignore'
 audit_mutant3 gain sonar1 "allow-list" defects/exclusion-audit/scan.awk $'if (key ~ /(^|\\.)sonar\\.([A-Za-z0-9_-]+\\.)*test\\.inclusions$/) return' ''
 audit_mutant3 lose broad1 "$H" "$AR" $'rules_eval excl "$p" "$dir"' 'return 1'
 audit_mutant3 gain dflt1 "no reason" defects/exclusion-audit/defaults.txt '**/tests/**' 'zzzunused'
+audit_mutant3 lose r4cfg "config/unit" defects/exclusion-audit.sh $'jest | vitest | stryker) jsmode=$tool ;;' 'jest | vitest | stryker) jsmode= ;;'
+audit_mutant3 lose r4py "pragma" defects/exclusion-audit/scan.awk $'          cm(rest, nr, raw, own)\n          j = index(rest, "#")\n          if (j == 0) break' $'          cm(rest, nr, raw, own)\n          break'
+audit_mutant3 lose r4nosonar "nosonar" defects/exclusion-audit/scan.awk 'match(low, /^nosonar/)' 'match(low, /^zzznosonar/)'
+audit_mutant3 lose r4next "whole-file" defects/exclusion-audit/scan.awk 'if (nn > 20) big = 1' 'if (nn > 20000000) big = 1'
+audit_mutant3 lose r4rx "istanbul" defects/exclusion-audit/scan.awk $'function rxok() {\n  if (lastsig == "") return 1' $'function rxok() {\n  return 0\n  if (lastsig == "") return 1'
+audit_mutant3 lose r4cont "passes an exclude" "$AR" 'if (match(line, /\\[ \t]*$/)) {' 'if (0) {'
+audit_mutant3 lose r4dd "passes an exclude" "$AR" 'else if (t[k] == "--") dd = 1' 'else if (t[k] == "--zzz") dd = 1'
+audit_mutant3 lose r4add "custom" "$AR" 'if (match(line, /^[ \t]*addopts[ \t]*[=:]/)) {' 'if (0) {'
 audit_mutant3 lose links2 "^src/gone:1 is a symlink" defects/exclusion-audit.sh 'is a symlink that is not a link to a regular file, so nothing behind it was audited' 'zz'
 ALLAUD=$SAVED_AUD
 
