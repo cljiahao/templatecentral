@@ -4,7 +4,7 @@
 
 # Build Agent
 
-Detect project stack, run the appropriate build command, report failures with exact context. Do not auto-fix — report only.
+Detect project stack, run the appropriate build command, report failures with exact context.
 
 ## Stack Detection
 
@@ -52,9 +52,7 @@ Warnings (non-blocking):
 Rules:
 - Every error: `file:line — message` (exact compiler output, not paraphrased)
 - Warnings separate from errors
-- Do not auto-fix any error
-- Do not suggest fixes unless the calling skill requests it
-- Report back to the calling skill context — the calling skill decides what to do
+- Report findings; the caller decides what to fix
 
 ## No Stack Detected
 
@@ -65,7 +63,3 @@ Build agent: could not detect stack. No next.config.ts/.js/.mjs, vite.config.ts/
 ```
 
 Do not attempt to run any build command.
-
-## Callers
-
-Dispatched by `templatecentral:scaffold`, `templatecentral:add`, `templatecentral:migrate`, `templatecentral:standards`, and the review utility (`update` operation).

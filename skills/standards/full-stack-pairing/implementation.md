@@ -8,7 +8,7 @@ Connect a templateCentral frontend to a templateCentral backend through a same-o
 
 ## Inputs
 
-Scan the current directory and its immediate subdirectories for `AGENTS.md` files whose line 1 is a `<!-- templateCentral: <stack>@` marker; the stack says which is frontend and backend. Ask only if either side has zero or several candidates.
+Scan the current directory and its immediate subdirectories for `AGENTS.md` files whose line 1 is a `<!-- templateCentral: <stack>@` marker; the stack says which is frontend and backend. Ask only if either side has zero or several candidates. A side without the marker is not a templateCentral project: run `templatecentral:migrate`, and if it is still absent, exit without generating files.
 
 ## Supported Pairings
 
@@ -20,17 +20,6 @@ Scan the current directory and its immediate subdirectories for `AGENTS.md` file
 | Next.js | NestJS | Next.js `rewrites` in `next.config.ts` |
 
 ## Steps
-
-### Step 0 — Verify context
-
-Confirm both `AGENTS.md` files found under **Inputs** carry the line-1 `<!-- templateCentral: <stack>@` marker.
-
-If found → proceed to Step 1.
-
-If not found → invoke `templatecentral:migrate`. Once complete, re-check for
-the marker.
-- Marker now present → proceed to Step 1.
-- Still absent (user chose to stop) → exit. Do not generate any files.
 
 ### 1. Backend CORS — Not Needed for the Paired Frontend
 
@@ -252,7 +241,4 @@ The `rewrites` from Step 2 already run in production; set `BACKEND_URL` in the b
 
 ## Rules
 
-- Keep the backend address in environment variables (`BACKEND_URL`) — never hardcode it.
-- Do not put the backend address in `NEXT_PUBLIC_*` / `VITE_*`; Next.js needs no public backend variable at all.
-- Client-side code never calls the backend by hostname — always the same-origin proxy path (`/api` on Vite, `/api/external` on Next.js).
-- Next.js server components / route handlers call `BACKEND_URL` directly (server-only), forwarding the user's cookies when acting for them.
+- Never hardcode the backend address or put it in `NEXT_PUBLIC_*` / `VITE_*` (Step 3).
