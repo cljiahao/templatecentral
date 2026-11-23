@@ -8,3 +8,8 @@ changeme
 lorem
 ipsum
 n/a
+wip
+temp
+temporary
+later
+hack

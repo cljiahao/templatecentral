@@ -217,7 +217,7 @@ usage_case "missing folder" "$WORK/no-such-folder"
 # Sensitivity: weaken the 3-word rule in a copy of the gate; the short-reason fixture must then pass, which shows the real test bites.
 mut=$WORK/mutant
 mkdir -p "$mut"
-cp skills/scaffold/shared/template/scripts/check-exclude-reasons.* "$mut/"
+cp skills/scaffold/shared/template/scripts/check-exclude-reasons.* skills/scaffold/shared/template/scripts/check-exclude-rules.sh "$mut/"
 sed -e 's/{2,}/{0,}/' -e 's/size >= 3/size >= 0/' "$mut/check-exclude-reasons.mjs" > "$mut/m.tmp" && mv "$mut/m.tmp" "$mut/check-exclude-reasons.mjs"
 d=$(stage nextjs-short)
 OUT=$(bash "$mut/check-exclude-reasons.sh" "$d" 2>&1)
@@ -225,7 +225,7 @@ RC=$?
 if [ "$RC" -eq 0 ]; then ok "a gate with a weaker word rule lets nextjs-short through, so the fixture is a real test"; else nok "mutant did not change the result (exit $RC)" "$OUT"; fi
 
 # One reason belongs to one entry: a reason that names a longer or shorter entry, or two entries, covers neither.
-expect_fail sonar-substr-bad "sonar-project.properties:4 sonar-exclude entry '\*\*' has no reason\. Fix: .*names its own entry as a whole word and no other entry of the list"
+expect_fail sonar-substr-bad "sonar-project.properties:4 sonar-exclude entry 'gen/\*\*' has no reason\. Fix: .*names its own entry as a whole word and no other entry of the list"
 expect_fail sonar-prefix-bad "sonar-project.properties:4 sonar-exclude entry 'src/gen/\*\*' has no reason"
 expect_fail sonar-one-reason-two "sonar-project.properties:4 sonar-exclude entry 'src/legacy/\*\*' has no reason"
 if printf '%s' "$OUT" | grep -q "entry 'src/gen/\*\*' has no reason"; then ok "one reason naming two entries covers neither"; else nok "one reason naming two entries covered an entry" "$OUT"; fi
@@ -297,7 +297,7 @@ expect_fail defaults-test-star "vitest.config.ts:7 coverage-exclude entry 'test/
 expect_fail defaults-py-bad "pyproject.toml:3 coverage-exclude entry '\*/test_\*\.py' has no reason"
 expect_ok defaults-py-ok
 
-# Python without tomllib: one note line, no silent skip.
+# Python without tomllib: a failure that names the Python version needed, never a silent skip.
 shim=$WORK/shim
 mkdir -p "$shim"
 realpy=$(command -v python3)
@@ -305,8 +305,9 @@ printf '#!/bin/sh\nshift\nexec "%s" -I -c %s "$@"\n' "$realpy" "'import sys; sys
 chmod +x "$shim/python3"
 d=$(stage fastapi-omit-ok)
 OUT=$(PATH="$shim:$PATH" bash "$root/$GATE" "$d" 2>&1)
-n=$(printf '%s\n' "$OUT" | grep -c 'this Python has no tomllib')
-if [ "$n" -eq 1 ]; then ok "a Python without tomllib prints one note"; else nok "expected one tomllib note, found $n" "$OUT"; fi
+RC=$?
+n=$(printf '%s\n' "$OUT" | grep -c 'needs 3\.11 or newer (tomllib)')
+if [ "$n" -eq 1 ] && [ "$RC" -eq 1 ]; then ok "a Python without tomllib fails and names Python 3.11"; else nok "expected one tomllib failure (exit 1), found $n (exit $RC)" "$OUT"; fi
 
 # The four real stack templates, as they are today. Three fail because their excludes carry no "reason:" line; the wiring round adds the
 # reasons and turns each expected failure below into expect_template_ok.
@@ -334,6 +335,139 @@ expect_template_fail vite-react "vite\.config\.ts:43 coverage-include list 'src/
 d=$(tpl_stage fastapi)
 run_gate "$d"
 if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "template fastapi passes"; else nok "template fastapi should pass (exit $RC)" "$OUT"; fi
+
+# ---- Round 2 -----------------------------------------------------------------------------------------------------------------------
+# Each failing fixture below has a clean control. Each major item also has a revert proof: a copy of the gate with the fix undone must
+# stop reporting the finding, so the fixture is a real test of that fix.
+SCRIPTS=skills/scaffold/shared/template/scripts
+mutant_run() { # mutant_run NAME FILE OLD NEW: copy the gate, undo one fix, run the copy on fixture NAME
+  local name=$1 file=$2 old=$3 new=$4 d
+  rm -rf "$WORK/mut2"
+  mkdir -p "$WORK/mut2"
+  cp "$root/$SCRIPTS"/check-exclude-reasons.* "$root/$SCRIPTS"/check-exclude-rules.sh "$WORK/mut2/"
+  if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut2/$file"; then
+    MOUT="the mutation '$old' did not apply to $file"
+    MRC=99
+    return
+  fi
+  d=$(stage "$name")
+  MOUT=$(bash "$WORK/mut2/check-exclude-reasons.sh" "$d" 2>&1)
+  MRC=$?
+}
+# revert_proof NAME PATTERN FILE OLD NEW: the real gate reports PATTERN on NAME; with the fix undone it does not.
+revert_proof() {
+  mutant_run "$1" "$3" "$4" "$5"
+  if [ "$MRC" -ne 99 ] && ! printf '%s' "$MOUT" | grep -Eq -- "$2"; then ok "revert proof: $1 stops failing with the fix undone ($3)"; else nok "revert proof: $1 still fails with the fix undone ($3, exit $MRC)" "$MOUT"; fi
+}
+G=check-exclude-reasons.sh
+RL=check-exclude-rules.sh
+
+# 1 A broad exclude fails whatever its reason; a sub-folder of a source root passes with a reason.
+for n in root type brace; do
+  expect_fail "r2-broad-$n" "vitest.config.ts:8 coverage-exclude entry '[^']+' excludes a whole source root or every file of a source type, so it hides hand-written code and no reason can cover it"
+  revert_proof "r2-broad-$n" "excludes a whole source root" "$G" $'hides_source "$entry"' 'false'
+done
+expect_ok r2-broad-ok
+expect_fail r2-sonar-scoped "sonar-project.properties:3 sonar-python-coverage-exclude entry 'app/\*\*' excludes a whole source root"
+
+# 2 Defaults are narrow: root-anchored build output needs no reason, an unanchored build folder does.
+expect_ok r2-anchored-defaults
+expect_fail r2-unanchored-build "vitest.config.ts:7 coverage-exclude entry '\*\*/build/\*\*' has no reason"
+expect_ok r2-unanchored-build-ok
+revert_proof r2-unanchored-build "entry '\*\*/build/\*\*' has no reason" "$G" "dflt 'dist/**'" "dflt '**/build/**' 'x'
+dflt 'dist/**'"
+if grep -q "^dflt 'src/components/ui/\*\*'" "$GATE"; then nok "src/components/ui/** is a default"; else ok "src/components/ui/** is not a default"; fi
+
+# 3 A folder named build or coverage below the root is read.
+for n in build coverage; do
+  expect_fail "r2-pkg-$n" "packages/$n/vitest.config.ts:6 coverage-exclude entry 'src/\*\*' excludes a whole source root"
+  revert_proof "r2-pkg-$n" "packages/$n/vitest.config.ts" "$RL" $'args+=(-o -path "$d/$b")' $'args+=(-o -name "$b")'
+done
+revert_proof r2-pkg-build "packages/build/vitest.config.ts" "$RL" $'args+=(-o -path "$root/$b")' $'args+=(-o -name "$b")'
+
+# 4 A directory symlink inside the tree fails and is named.
+expect_fail r2-symlink-dir "src/alias is a symlink to a folder"
+revert_proof r2-symlink-dir "src/alias is a symlink" "$G" $'; do bad "$f is a symlink to a folder' $'; do : "$f is a symlink to a folder'
+
+# 5 Config variants are read by pattern; a file that sets an exclude the gate cannot parse fails closed.
+expect_fail r2-vitest-unit "vitest.unit.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok r2-vitest-unit-ok
+expect_fail r2-vitest-ws "vitest.workspace.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
+revert_proof r2-vitest-unit "vitest.unit.config.ts:7 coverage-exclude" "$G" "-name 'vitest*.config.*'" "-name 'vitest.config.*'"
+expect_fail r2-codecov-bad "codecov.yml:1 sets an exclude in a file type the gate cannot read for reasons"
+expect_ok r2-codecov-ok
+revert_proof r2-codecov-bad "codecov.yml:1 sets an exclude" "$G" '-o -name codecov.yml' '-o -name zzz.yml'
+expect_fail r2-karma-bad "karma.conf.js:2 sets an exclude in a file type the gate cannot read for reasons"
+revert_proof r2-karma-bad "karma.conf.js:2 sets an exclude" "$RL" 'unparsed_exclude_line() {' 'unparsed_exclude_line() {
+  return 0'
+
+# 6 Command-line excludes are a finding; a pointer at an unread config is a finding; a pointer at a read config passes.
+for k in nyc c8 jest omit makefile; do
+  case "$k" in makefile) f='Makefile:2' ;; *) f='package.json:3' ;; esac
+  expect_fail "r2-flag-$k" "$f passes an exclude or include on the command line, where it cannot carry a reason\. Fix: move it into the coverage, mutation or Sonar config file"
+done
+revert_proof r2-flag-nyc "passes an exclude or include on the command line" "$G" $'$(cmd_flag_lines "${cmd_files[@]}")' $'$(true)'
+expect_ok pkg-flag-clean
+expect_fail r2-pointer-unread "package.json:3 points a coverage tool at conf/cov.cfg, a config file the gate did not read"
+expect_fail r2-pointer-jest "package.json:3 points a coverage tool at conf/jest.custom.js, a config file the gate did not read"
+expect_ok r2-pointer-read
+revert_proof r2-pointer-unread "points a coverage tool at conf/cov.cfg" "$G" $'$(cmd_pointer_lines "${cmd_files[@]}")' $'$(true)'
+
+# 7 Sonar properties do not fail open.
+expect_fail r2-sonar-bom "sonar-project.properties:1 sonar-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok r2-sonar-bom-ok
+revert_proof r2-sonar-bom "sonar-exclude entry 'src/gen/\*\*' has no reason" check-exclude-reasons.awk 'if (NR == 1) sub("^\357\273\277", "", raw)' 'if (0) sub("^\357\273\277", "", raw)'
+expect_fail r2-sonar-scoped "sonar-project.properties:2 sonar-exclude entry 'src/gen/\*\*' has no reason"
+revert_proof r2-sonar-scoped "sonar-exclude entry 'src/gen/\*\*' has no reason" check-exclude-reasons.awk 'else if (key ~ /(^|\.)sonar\.([A-Za-z0-9_-]+\.)*exclusions$/) {' 'else if (key ~ /^sonar\.exclusions$/) {'
+expect_fail r2-sonar-unknown "sonar-project.properties:2 sonar.coverage.exclusion looks like an exclude setting, but the gate does not read it"
+revert_proof r2-sonar-unknown "looks like an exclude setting" check-exclude-reasons.awk 'if (tracked) printf "X' 'if (0) printf "X'
+expect_fail r2-sonar-binary "sonar-project.properties holds a NUL byte, so it is not a text file"
+revert_proof r2-sonar-binary "holds a NUL byte" "$G" $'elif is_binary "$f"; then' 'elif false; then'
+
+# 8 Inline coverage markers need a reason; a whole-file marker is a broad exclude.
+expect_fail r2-marker-bad "src/index.ts:2 'istanbul ignore next' has no reason"
+expect_ok r2-marker-ok
+expect_fail r2-marker-file "src/whole.ts:1 'istanbul ignore file' marks a whole file as not covered, which hides hand-written code and no reason can cover it"
+expect_fail r2-marker-py-bad "app/main.py:2 '# pragma: no cover' has no reason"
+expect_ok r2-marker-py-ok
+revert_proof r2-marker-bad "'istanbul ignore next' has no reason" "$G" $'marks=$(find' $'marks=$(: find'
+revert_proof r2-marker-file "marks a whole file as not covered" "$G" $'marks=$(find' $'marks=$(: find'
+
+# 10 Reason shape: digits, one repeated letter, the entry's own path words and filler phrases are not reasons.
+for n in digits repeat path later; do
+  case "$n" in path) e='src/api/handlers/\*\*' ;; *) e='src/gen/\*\*' ;; esac
+  expect_fail "r2-shape-$n" "vitest.config.ts:8 coverage-exclude entry '$e' has no reason"
+done
+expect_ok r2-shape-ok
+revert_proof r2-shape-digits "has no reason" check-exclude-reasons.mjs "return new Set(good).size >= 3;" "return words.length >= 3;"
+revert_proof r2-shape-repeat "has no reason" check-exclude-reasons.mjs "new Set(letters).size > 1 && " ""
+revert_proof r2-shape-path "has no reason" check-exclude-reasons.mjs " && !segs.has(w)" ""
+revert_proof r2-shape-later "has no reason" "$G" "
+later
+" "
+"
+
+# 11 Narrowing lists are include records.
+expect_fail r2-stryker-mutate "stryker.config.json:2 mutation-include list 'src/core/\*\*/\*\.ts' is an allow-list"
+expect_ok r2-stryker-mutate-ok
+expect_fail r2-pkg-stryker "package.json:3 mutation-include list 'src/core/\*\*/\*\.ts' is an allow-list"
+expect_fail r2-cov-source "pyproject.toml:2 coverage-include list 'app/core' is an allow-list"
+expect_ok r2-cov-source-ok
+expect_fail r2-mutmut-paths "pyproject.toml:2 mutation-include list 'app/core/' is an allow-list"
+expect_ok r2-mutmut-paths-ok
+revert_proof r2-stryker-mutate "is an allow-list" check-exclude-reasons.mjs 'if (negated.length === 0) emitInclude' 'if (false) emitInclude'
+revert_proof r2-pkg-stryker "is an allow-list" check-exclude-reasons.mjs 'if (negated.length === 0) emitInclude' 'if (false) emitInclude'
+revert_proof r2-cov-source "is an allow-list" check-exclude-reasons.py '("source", "include"),' ''
+revert_proof r2-mutmut-paths "is an allow-list" check-exclude-reasons.py '("paths_to_mutate", "mutation-include"),' ''
+
+# 12 A key set twice in one object is a finding.
+expect_fail r2-dup-key "\.c8rc\.json:3 the key 'exclude' appears twice in one object"
+expect_ok r2-dup-key-ok
+revert_proof r2-dup-key "appears twice in one object" check-exclude-reasons.mjs 'if (seen.has(key)) emit(' 'if (false) emit('
+
+# 14 An invalid package.json reports the real JSON error.
+expect_fail r2-badjson "package.json:1 package.json is not valid JSON, so it cannot be read: .*(line 4|position)"
+revert_proof r2-badjson "is not valid JSON" check-exclude-reasons.mjs "pkg = JSON.parse(fs.readFileSync(abs, 'utf8'));" "pkg = {};"
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)

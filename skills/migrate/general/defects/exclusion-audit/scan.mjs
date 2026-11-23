@@ -6,11 +6,18 @@ import path from 'node:path';
 const defaults = new Set((process.env.TC_EXCLUDE_DEFAULTS || '').split('\n').filter(Boolean));
 const REASON = /^reason:\s+\S+(\s+\S+){2,}\s*$/;
 const PLACEHOLDERS = new Set((process.env.TC_REASON_PLACEHOLDERS || '').split('\n').filter(Boolean));
-function validReason(text) {
+// A reason: at least 3 different words of 3+ letters; not a repeated single letter, not a path segment of the entries, no placeholder.
+function validReason(text, entries = []) {
   if (!REASON.test(text)) return false;
-  const words = text.slice('reason:'.length).split(/[\s,;"`()]+/).map((w) => w.replace(/[.:]+$/, '').toLowerCase()).filter(Boolean);
+  const words = text.slice('reason:'.length).split(/[\s,;"`()]+/).map((w) => w.replace(/[.:!?]+$/, '').toLowerCase()).filter(Boolean);
   if (words.some((w) => PLACEHOLDERS.has(w))) return false;
-  return new Set(words.filter((w) => w.length >= 3)).size >= 3;
+  const segs = new Set(entries.flatMap((e) => String(e).toLowerCase().split(/[/*{}, !]+/)).filter(Boolean));
+  const good = words.filter((w) => {
+    if (!/^[a-z][a-z'-]*$/.test(w)) return false;
+    const letters = w.replace(/[^a-z]/g, '');
+    return letters.length >= 3 && new Set(letters).size > 1 && !segs.has(w);
+  });
+  return new Set(good).size >= 3;
 }
 const clean = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
 const emit = (...fields) => console.log(fields.map(clean).join('\t'));
@@ -44,6 +51,17 @@ const visited = new Set();
 function scan(file, depth = 0, inherited = null) {
   const abs = path.resolve(root, file);
   const base = path.basename(file);
+  if (base === 'package.json') {
+    let pkg = null;
+    try {
+      pkg = JSON.parse(fs.readFileSync(abs, 'utf8'));
+    } catch (err) {
+      emit('X', file, 1, `package.json is not valid JSON, so it cannot be read: ${err && err.message ? err.message : err}`);
+      return;
+    }
+    // A package.json with none of the tool keys has nothing to read, so it needs no typescript.
+    if (!pkg || typeof pkg !== 'object' || !['jest', 'nyc', 'c8', 'stryker', 'jscpd'].some((k) => Object.prototype.hasOwnProperty.call(pkg, k))) return;
+  }
   const ts = loadTs(path.dirname(abs));
   if (!ts) {
     emit('X', file, 1, 'typescript is not installed for this project, so the config cannot be read; run the package install first');
@@ -75,7 +93,7 @@ function scan(file, depth = 0, inherited = null) {
     for (const child of node.getChildren(sf)) gather(child);
   };
   gather(sf);
-  const hasReason = (line) => validReason(commentAt.get(line) || '');
+  const hasReason = (line, entries) => validReason(commentAt.get(line) || '', entries);
 
   const unwrap = (e) => {
     let cur = e;
@@ -131,7 +149,7 @@ function scan(file, depth = 0, inherited = null) {
       let status;
       if (isDefault(it.text)) status = 'default';
       else if (perLine.get(it.line) > 1) status = 'shared';
-      else if (hasReason(it.line - 1) || (own.length === 1 && hasReason(keyLine - 1))) status = 'reason';
+      else if (hasReason(it.line - 1, [it.text]) || (own.length === 1 && hasReason(keyLine - 1, [own[0].text]))) status = 'reason';
       else status = 'none';
       emit('E', file, it.line, kind, it.text, status);
     }
@@ -140,7 +158,8 @@ function scan(file, depth = 0, inherited = null) {
   const emitInclude = (kind, member, items) => {
     if (items.length === 0) return;
     const keyLine = lineOf(member.getStart(sf));
-    emit('I', file, keyLine, kind, items.map((it) => it.text).join(', '), hasReason(keyLine - 1) ? 'reason' : 'none');
+    const texts = items.map((it) => it.text);
+    emit('I', file, keyLine, kind, texts.join(', '), hasReason(keyLine - 1, texts) ? 'reason' : 'none');
   };
 
   const THRESHOLD_KEYS = ['lines', 'functions', 'branches', 'statements'];
@@ -223,11 +242,10 @@ function scan(file, depth = 0, inherited = null) {
   const mutateKey = (member) => {
     const items = literalList(member, 'the mutate list');
     if (!items) return;
-    emitExcludes(
-      'mutation-exclude',
-      member,
-      items.filter((it) => it.text.startsWith('!')),
-    );
+    const negated = items.filter((it) => it.text.startsWith('!'));
+    // A mutate list with no ! entry is an allow-list: it mutates only what it names.
+    if (negated.length === 0) emitInclude('mutation-include', member, items);
+    emitExcludes('mutation-exclude', member, negated);
   };
 
   const nycKey = (member, key) => {
@@ -242,14 +260,25 @@ function scan(file, depth = 0, inherited = null) {
     if (items) emitExcludes('mutation-exclude', member, items);
   };
 
-  const vitestLike = /^(vitest|vite)\.(config|workspace)\./.test(base);
-  const jestLike = /^jest\.config\./.test(base);
-  const strykerLike = /^\.?stryker\.(config|conf)\./.test(base);
-  const nycLike = /^\.(nyc|c8)rc(\.json)?$/.test(base);
+  const vitestLike = /^vite(st)?[^/]*(config|workspace)/.test(base);
+  const jestLike = /^jest[^/]*config/.test(base);
+  const strykerLike = /stryker[^/]*conf/.test(base);
+  const nycLike = /^\.(nyc|c8)rc/.test(base);
   const jscpdLike = base === '.jscpd.json';
   const isPackageJson = base === 'package.json';
 
+  const TRACKED = new Set(['exclude', 'include', 'coveragePathIgnorePatterns', 'collectCoverageFrom', 'mutate', 'ignorePatterns', 'excludedMutations', 'ignore', 'coverage', 'test', 'thresholds', 'mutator']);
   const walk = (node, mode) => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const seen = new Set();
+      for (const m of node.properties) {
+        const key = nameOf(m);
+        if (key && TRACKED.has(key)) {
+          if (seen.has(key)) emit('X', file, lineOf(m.getStart(sf)), `the key '${key}' appears twice in one object, so a reason above one of them proves nothing; keep one`);
+          seen.add(key);
+        }
+      }
+    }
     if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node) || ts.isSpreadAssignment(node)) {
       const key = nameOf(node);
       if (mode === 'vitest' && key === 'coverage') coverageBlock(node);
@@ -366,6 +395,8 @@ function scan(file, depth = 0, inherited = null) {
         if (!ts.isPropertyAssignment(m)) continue;
         if (k === 'jest') walk(m.initializer, 'jest');
         else if (k === 'nyc' || k === 'c8') walk(m.initializer, 'nyc');
+        else if (k === 'stryker') walk(m.initializer, 'stryker');
+        else if (k === 'jscpd') walk(m.initializer, 'jscpd');
       }
     } else if (strykerLike) {
       walk(rootObj, 'stryker');

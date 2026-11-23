@@ -170,6 +170,8 @@ class Toml:
             if nxt[1][0] != "tab":
                 raise TomlError("key redefined", line)
             cur = nxt[1][1]
+        if path[-1] in cur:
+            raise TomlError("the key %s is set twice, so a reason above one of them proves nothing; keep one" % ".".join(path), line)
         cur[path[-1]] = (line, node)
 
     def parse(self):
@@ -191,6 +193,8 @@ class Toml:
                 cur = root
                 for part in path:
                     nxt = cur.get(part)
+                    if array and part == path[-1]:
+                        nxt = None
                     if nxt is None:
                         nxt = (self.line, ("tab", {}, self.line))
                         cur[part] = nxt
@@ -230,14 +234,21 @@ def as_strings(file, name, leaf):
     return None
 
 
-def has_reason(comments, line):
+def has_reason(comments, line, entries=()):
+    """A reason: at least 3 different words of 3+ letters; not a repeated single letter, not a path segment of the entries, no placeholder."""
     text = comments.get(line, "")
     if not REASON.match(text):
         return False
-    words = [w.rstrip(".:").lower() for w in re.split(r"[\s,;\"`()]+", text[len("reason:"):]) if w.rstrip(".:")]
+    words = [w.rstrip(".:!?").lower() for w in re.split(r"[\s,;\"`()]+", text[len("reason:"):]) if w.rstrip(".:!?")]
     if any(w in PLACEHOLDERS for w in words):
         return False
-    return len({w for w in words if len(w) >= 3}) >= 3
+    segs = {part for e in entries for part in re.split(r"[/*{}, !]+", str(e).lower()) if part}
+    good = set()
+    for w in words:
+        letters = re.sub(r"[^a-z]", "", w)
+        if re.fullmatch(r"[a-z][a-z'-]*", w) and len(letters) >= 3 and len(set(letters)) > 1 and w not in segs:
+            good.add(w)
+    return len(good) >= 3
 
 
 def emit_excludes(file, kind, comments, key_line, entries):
@@ -250,20 +261,33 @@ def emit_excludes(file, kind, comments, key_line, entries):
             status = "default"
         elif per_line[line] > 1:
             status = "shared"
-        elif has_reason(comments, line - 1) or (len(own) == 1 and has_reason(comments, key_line - 1)):
+        elif has_reason(comments, line - 1, [text]) or (len(own) == 1 and has_reason(comments, key_line - 1, [own[0][0]])):
             status = "reason"
         else:
             status = "none"
         emit("E", file, line, kind, text, status)
 
 
-def emit_include(file, comments, key_line, entries):
+def emit_include(file, comments, key_line, entries, kind="coverage-include"):
     if entries:
-        emit("I", file, key_line, "coverage-include", ", ".join(e[0] for e in entries), "reason" if has_reason(comments, key_line - 1) else "none")
+        texts = [e[0] for e in entries]
+        emit("I", file, key_line, kind, ", ".join(texts), "reason" if has_reason(comments, key_line - 1, texts) else "none")
 
 
-COVERAGE_KEYS = (("omit", "coverage-exclude"), ("exclude_lines", "coverage-exclude"), ("exclude_also", "coverage-exclude"), ("include", "include"))
-MUTMUT_KEYS = (("do_not_mutate", "mutation-exclude"), ("paths_to_exclude", "mutation-exclude"))
+COVERAGE_KEYS = (
+    ("omit", "coverage-exclude"),
+    ("exclude_lines", "coverage-exclude"),
+    ("exclude_also", "coverage-exclude"),
+    ("include", "include"),
+    ("source", "include"),
+    ("source_pkgs", "include"),
+)
+MUTMUT_KEYS = (
+    ("do_not_mutate", "mutation-exclude"),
+    ("paths_to_exclude", "mutation-exclude"),
+    ("paths_to_mutate", "mutation-include"),
+    ("source_paths", "mutation-include"),
+)
 
 
 def handle(file, comments, section_label, key, kind, leaf, key_line):
@@ -272,6 +296,8 @@ def handle(file, comments, section_label, key, kind, leaf, key_line):
         return None
     if kind == "include":
         emit_include(file, comments, key_line, entries)
+    elif kind == "mutation-include":
+        emit_include(file, comments, key_line, entries, "mutation-include")
     else:
         emit_excludes(file, kind, comments, key_line, entries)
     return entries
@@ -291,16 +317,19 @@ def scan_toml(file, text):
         emit("X", file, err.line, "toml cannot be read: %s" % err)
         return
     try:
-        import tomllib  # type: ignore[import-not-found]
-
+        try:
+            import tomllib  # type: ignore[import-not-found]
+        except ImportError:
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+    except ImportError:
+        tomllib = None
+    reference = None
+    if tomllib is not None:
         try:
             reference = tomllib.loads(text)
         except tomllib.TOMLDecodeError as err:
             emit("X", file, 1, "toml has a syntax error: %s" % err)
             return
-    except ImportError:
-        reference = None
-        emit("N", file, 1, "note", "this Python has no tomllib (needs 3.11+), so the cross-check of the TOML reader was skipped")
     comments = parser.comments
     tool = lookup(root, "tool")
     if tool is None:
@@ -325,6 +354,15 @@ def scan_toml(file, text):
         entries = handle(file, comments, "mutmut %s" % key, key, kind, leaf, leaf[0])
         if entries is not None:
             found.append((("mutmut", key), [e[0] for e in entries]))
+    if reference is None and (found or lookup(tool_tab, "coverage") is not None or lookup(tool_tab, "mutmut") is not None):
+        emit(
+            "X",
+            file,
+            1,
+            "the cross-check of the TOML reader is missing: this Python is %d.%d and needs 3.11 or newer (tomllib), or the tomli package, to read coverage and mutation settings"
+            % (sys.version_info[0], sys.version_info[1]),
+        )
+        return
     if reference is not None:
         for path, values in found:
             cur = reference.get("tool", {})
@@ -365,6 +403,8 @@ def scan_ini(file, text, sections):
                 key = m.group(1).strip().lower()
                 current = None
                 if (section, key) in sections:
+                    if (section, key) in wanted:
+                        emit("X", file, n, "[%s] %s is set twice, so a reason above one of them proves nothing; keep one" % (section, key))
                     current = {"key_line": n, "entries": []}
                     wanted[(section, key)] = current
                     if m.group(2).strip():
@@ -381,6 +421,8 @@ def scan_ini(file, text, sections):
             continue
         if kind == "include":
             emit_include(file, comments, info["key_line"], entries)
+        elif kind == "mutation-include":
+            emit_include(file, comments, info["key_line"], entries, "mutation-include")
         elif kind == "threshold":
             pass
         else:

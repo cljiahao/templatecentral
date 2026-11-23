@@ -1,5 +1,5 @@
 [tool.coverage.run]
-source = ["app"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 80

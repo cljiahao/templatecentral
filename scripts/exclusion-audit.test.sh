@@ -253,7 +253,7 @@ if [ "$order" = ok ]; then ok "audit-hides: lines come out in state order, all f
 # The reason rule matches the gate: filler and a reason that names another entry do not count.
 want vitest-filler-todo "TODO filler is no reason" "'src/gen/\*\*': no reason$"
 want vitest-filler-ok "a real reason counts" "'src/gen/\*\*': has reason$"
-want sonar-substr-bad "a reason for src/gen/** does not cover **" "sonar-exclude '\*\*': .*no reason$"
+want sonar-substr-bad "a reason for src/gen/** does not cover gen/**" "sonar-exclude 'gen/\*\*': .*no reason$"
 want sonar-two-reasons-ok "each entry carries its own reason" "sonar-exclude 'src/gen/\*\*': has reason$"
 
 # Configs the audit now reads.
@@ -264,8 +264,87 @@ want jscpd-bad ".jscpd.json ignore with no reason" "^\.jscpd\.json:[0-9]+ .*'src
 want pkg-nyc-bad "nyc key in package.json" "^package\.json:[0-9]+ .*'src/gen/\*\*': no reason$"
 want stryker-ignore-bad "stryker ignorePatterns" "no reason$"
 
+# ---- Round 2 -----------------------------------------------------------------------------------------------------------------------
+# A mutant copy of the migrate folder with one fix undone, run over one staged fixture: the finding must disappear.
+audit_mutant() { # audit_mutant NAME FILE OLD NEW PATTERN (FILE is relative to skills/migrate/general)
+  local name=$1 file=$2 old=$3 new=$4 pat=$5 d mout
+  rm -rf "$WORK/mutaudit"
+  mkdir -p "$WORK/mutaudit"
+  cp -R "$root/skills/migrate/general" "$WORK/mutaudit/general"
+  if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mutaudit/general/$file"; then
+    nok "revert proof: the mutation '$old' did not apply to $file"
+    return
+  fi
+  d=$(stage "$name")
+  mout=$(bash "$WORK/mutaudit/general/defect-report.sh" "$d" 2>&1 | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//')
+  if printf '%s\n' "$mout" | grep -Eq -- "$pat"; then nok "revert proof: $name still reports /$pat/ with the fix undone ($file)" "$mout"; else ok "revert proof: $name stops reporting /$pat/ with the fix undone ($file)"; fi
+}
+
+# 1 and 9 A broad exclude hides source whatever its reason; braces are expanded; any other exclude under a source root is on its own line.
+for n in root type brace; do
+  want "r2-broad-$n" "broad exclude with a reason is marked as hiding source" "^vitest.config.ts:8 coverage-exclude '[^']+': hides hand-written source \(it excludes a whole source root or every file of a source type, and no reason can cover that\), has reason$"
+done
+audit_mutant r2-broad-brace defects/exclusion-audit/rules.sh $'$(expand_braces "$1")' "\$(printf '%s\\n' \"\$1\")" "hides hand-written source"
+want r2-broad-ok "a sub-folder of a source root is has reason" "^vitest.config.ts:8 coverage-exclude 'src/gen/\*\*': has reason$"
+want r2-broad-ok "a sub-folder of a source root is reported as covering hand-written code on its own line" "^vitest.config.ts:8 coverage-exclude 'src/gen/\*\*': covers hand-written code \(it sits under the source root src/"
+unwanted r2-broad-ok "a sub-folder of a source root is not reported as hiding the whole root" "hides hand-written source"
+audit_mutant r2-broad-ok defects/exclusion-audit.sh 'covers hand-written code (it sits under' 'zz (it sits under' "covers hand-written code"
+want ui-seeded "the seeded src/components/ui/** keeps its reason" "coverage-exclude 'src/components/ui/\*\*': seeded exclude \(templateCentral adds it on purpose\), has reason$"
+unwanted ui-seeded "the seeded src/components/ui/** is not reported as covering hand-written code" "src/components/ui/\*\*': (covers|hides|no reason)"
+want ui-seeded-noreason "the seeded src/components/ui/** without its reason line is no reason" "coverage-exclude 'src/components/ui/\*\*': seeded exclude \(templateCentral adds it on purpose\), no reason$"
+
+# 2 Defaults are narrow.
+for e in 'dist/\*\*' 'build/\*\*' 'coverage/\*\*' '\.next/\*\*'; do
+  want r2-anchored-defaults "root-anchored $e is a framework default" "coverage-exclude '$e': framework default$"
+done
+want r2-unanchored-build "an unanchored build folder needs a reason" "coverage-exclude '\*\*/build/\*\*': no reason$"
+want r2-unanchored-build-ok "an unanchored build folder with a reason is has reason" "coverage-exclude '\*\*/build/\*\*': has reason$"
+audit_mutant r2-unanchored-build defects/exclusion-audit/defaults.txt 'dist/**' '**/build/**
+dist/**' "'\*\*/build/\*\*': no reason"
+
+# 4 and 7 to 8 Findings the audit reports.
+want r2-vitest-unit "vitest.unit.config.ts is read" "^vitest.unit.config.ts:7 coverage-exclude 'src/gen/\*\*': no reason$"
+want r2-vitest-unit-ok "a reasoned vitest.unit.config.ts is has reason" "^vitest.unit.config.ts:8 coverage-exclude 'src/gen/\*\*': has reason$"
+want r2-codecov-bad "codecov.yml with an ignore is reported unreadable" "^codecov.yml:1 cannot be read: this file type sets an exclude that the audit does not parse"
+unwanted r2-codecov-ok "codecov.yml without an exclude is not reported" "codecov.yml"
+want r2-karma-bad "karma.conf.js with an exclude is reported unreadable" "^karma.conf.js:2 cannot be read: this file type sets an exclude that the audit does not parse"
+for k in nyc c8 jest omit; do
+  want "r2-flag-$k" "command-line exclude in package.json is a finding" "^package.json:3 passes an exclude or include on the command line, where it cannot carry a reason: move it into the config file with a reason$"
+done
+want r2-flag-makefile "command-line exclude in a Makefile is a finding" "^Makefile:2 passes an exclude or include on the command line"
+unwanted pkg-flag-clean "a clean package.json has no command-line finding" "passes an exclude"
+audit_mutant r2-flag-nyc defects/exclusion-audit.sh 'passes an exclude or include on the command line' 'zz' "passes an exclude or include on the command line"
+want r2-pointer-unread "--cov-config at an unread file is a finding" "^package.json:3 points a coverage tool at conf/cov.cfg, a config file the audit does not read"
+want r2-pointer-jest "--config at an unread file is a finding" "^package.json:3 points a coverage tool at conf/jest.custom.js, a config file the audit does not read"
+unwanted r2-pointer-read "--rcfile at a read file is not a finding" "points a coverage tool"
+want r2-sonar-bom "Sonar file with a byte order mark is read" "^sonar-project.properties:1 sonar-exclude 'src/gen/\*\*': no reason$"
+unwanted r2-sonar-bom-ok "Sonar file with a byte order mark and a reason is clean" "no reason$"
+want r2-sonar-scoped "a key at module scope is read" "^sonar-project.properties:2 sonar-exclude 'src/gen/\*\*': no reason$"
+want r2-sonar-scoped "a language scoped coverage exclude is read, and it hides source" "^sonar-project.properties:3 sonar-python-coverage-exclude 'app/\*\*': hides hand-written source"
+want r2-sonar-unknown "an unrecognised exclusion key is reported" "^sonar-project.properties:2 cannot be read: sonar.coverage.exclusion looks like an exclude setting"
+want r2-sonar-binary "a Sonar file with a NUL byte is reported" "^sonar-project.properties:1 cannot be read: the file holds a NUL byte"
+want r2-marker-bad "an istanbul marker with no reason" "^src/index.ts:2 inline coverage marker 'istanbul ignore next': no reason$"
+want r2-marker-ok "an istanbul marker with a reason" "^src/index.ts:2 inline coverage marker 'istanbul ignore next': has reason$"
+want r2-marker-py-bad "a pragma marker with no reason" "^app/main.py:2 inline coverage marker '# pragma: no cover': no reason$"
+want r2-marker-file "a whole-file marker hides source" "^src/whole.ts:1 inline coverage marker 'istanbul ignore file': hides hand-written source"
+for n in nyc c8; do want "r2-flag-$n" "a flag is found" "passes an exclude"; done
+
+# 10 to 12 Reason shape, include lists, duplicate keys.
+for n in digits repeat later; do want "r2-shape-$n" "filler reason is no reason" "^vitest.config.ts:8 coverage-exclude 'src/gen/\*\*': no reason$"; done
+want r2-shape-path "a reason made of the entry's own path words is no reason" "coverage-exclude 'src/api/handlers/\*\*': no reason$"
+want r2-shape-ok "a real reason is has reason" "coverage-exclude 'src/api/handlers/\*\*': has reason$"
+want r2-stryker-mutate "a mutate list with no ! entry is an allow-list" "^stryker.config.json:2 mutation-include list 'src/core/\*\*/\*\.ts' is an allow-list: .*no reason$"
+want r2-pkg-stryker "the stryker key in package.json is read" "^package.json:3 mutation-include list 'src/core/\*\*/\*\.ts' is an allow-list"
+want r2-cov-source "coverage source is an allow-list" "^pyproject.toml:2 coverage-include list 'app/core' is an allow-list"
+want r2-cov-source-ok "coverage source with a reason is has reason" "coverage-include list 'app/core' is an allow-list: .*has reason$"
+want r2-mutmut-paths "mutmut paths_to_mutate is an allow-list" "^pyproject.toml:2 mutation-include list 'app/core/' is an allow-list"
+want r2-dup-key "a key set twice in one object is reported" "^\.c8rc\.json:3 cannot be read: the key 'exclude' appears twice in one object"
+
+# 15 The audit says its exit code stays 0 by design.
+if [ "$(printf '%s\n' "$ALL" | grep -c 'the audit exit code stays 0 by design, so the findings are in these lines')" -gt 0 ]; then ok "the audit output says the findings are in the lines, not the exit code"; else nok "the audit output does not say the exit code stays 0 by design"; fi
+
 # Self-contained: the audit's scanners are byte copies of the seeded gate's, and the default list matches the gate's.
-for pair in "scan.awk:check-exclude-reasons.awk" "scan.py:check-exclude-reasons.py" "scan.mjs:check-exclude-reasons.mjs"; do
+for pair in "scan.awk:check-exclude-reasons.awk" "scan.py:check-exclude-reasons.py" "scan.mjs:check-exclude-reasons.mjs" "rules.sh:check-exclude-rules.sh"; do
   a=${pair%%:*}
   g=${pair##*:}
   if cmp -s "$AUDITDIR/$a" "$GATEDIR/$g"; then ok "$a is a byte copy of $g"; else nok "$a differs from $g"; fi
