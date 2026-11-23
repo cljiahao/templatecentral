@@ -29,9 +29,9 @@ newrepo() {
   cp "$SH/scripts/check-workarounds.sh" "$SH/scripts/scan-secrets.sh" "$R/scripts/"
   cp "$SH/.claude/ci-gates.sh" "$SH/.claude/gates.txt" "$R/.claude/"
   printf 'export const add = (a: number, b: number): number => a + b;\n' > "$R/src/add.ts"
-  printf 'import { add } from "../src/add";\n' > "$R/test/add.test.ts"
+  printf 'import { add } from "../src/add";\nit("adds", () => add(1, 2));\n' > "$R/test/add.test.ts"
   printf 'def add(a, b):\n    return a + b\n' > "$R/src/calc.py"
-  printf 'from src.calc import add\n' > "$R/test/test_calc.py"
+  printf 'from src.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n' > "$R/test/test_calc.py"
   g add -A
   g commit -q -m base
   g checkout -q -b work
@@ -98,6 +98,28 @@ check_marker src/a.ts '/* v8  ignore next */' 'v8 ignore'
 check_marker src/a.ts '/* ISTANBUL IGNORE NEXT */' 'istanbul ignore'
 check_marker src/a.mts '// @ts-ignore' '@ts-ignore'
 check_marker src/a.cts '// @ts-ignore' '@ts-ignore'
+
+check_marker src/a.py '# ruff: noqa' '# noqa'
+check_marker src/a.py '# ruff: noqa: F401' '# noqa'
+check_marker src/a.py '# flake8: noqa' '# noqa'
+check_marker src/a.py 'pytestmark = pytest.mark.skip' '@pytest.mark.skip / skipif / xfail'
+check_marker src/a.py 'cases = [pytest.param(1, marks=pytest.mark.skip)]' '@pytest.mark.skip / skipif / xfail'
+check_marker src/a.py '@mark.skip' '@pytest.mark.skip / skipif / xfail'
+check_marker src/a.py '@unittest.skip("later")' 'unittest.skip / skipIf / skipUnless / skipTest'
+check_marker src/a.py '@unittest.skipIf(True, "later")' 'unittest.skip / skipIf / skipUnless / skipTest'
+check_marker src/a.py '@skipUnless(False, "later")' 'unittest.skip / skipIf / skipUnless / skipTest'
+check_marker src/a.py 'np = pytest.importorskip("numpy")' 'pytest.importorskip('
+check_marker src/a.py 'pytest.skip("later", allow_module_level=True)' 'pytest.skip( / pytest.xfail('
+check_marker src/a.py '# mypy: ignore-errors' '# mypy: ignore-errors'
+check_marker src/a.py '# pyright: ignore' '# pyright: ignore'
+check_marker src/a.py 'x = 1  # type:ignore' '# type: ignore'
+check_marker src/a.py 'x = 1  # type: ignore[attr-defined]  # noqa' '# noqa'
+check_marker test/a.test.ts 'it.runIf(false)("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts "describe['skip']('later', () => {});" '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'test.fails("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'xtest("later", () => {});' 'xit( / xdescribe( / xtest( / fit( / fdescribe('
+check_marker test/a.test.ts 'xdescribe("later", () => {});' 'xit( / xdescribe( / xtest( / fit( / fdescribe('
+check_marker src/eslint.config.helper.ts '// eslint-disable-next-line no-console' 'eslint-disable'
 
 # ---- clean control: ordinary changes, and the old suppression text, pass.
 newrepo clean
@@ -169,6 +191,74 @@ g commit -q -m work
 runwa
 check 0 "$RC" "renaming a test file is not a removal"
 
+# Ordinary code that only looks like a marker is not flagged: calls on other receivers, strings, and prose in comments.
+newrepo lookalikes2
+printf "const a = qb.skip(10).take(5);\nconst b = opts.skip.length;\nconst y = fit(model);\nconst z = x.only(1);\n// never cast as any here\nconst s = 'see # noqa docs';\nconst t = \`as any \${a} @ts-ignore\`;\nconst r = /eslint-disable/.test(s);\n" > "$R/src/look2.ts"
+printf "s = 'see # noqa docs'\n\"\"\"\n# noqa\npytest.mark.skip\n\"\"\"\nx = 1\n" > "$R/src/look2.py"
+printf 'export const eslintOff = 1;\n// eslint-disable no-console\n' > "$R/eslint.config.mjs"
+g add -A
+g commit -q -m work
+runwa
+check 0 "$RC" "other receivers, strings, template and regex text, docstrings and the root eslint config are not flagged"
+has "no suppression markers added" "$OUT" "second lookalike control prints the success line"
+
+# An added line that starts with two plus signs is content, not a file header.
+newrepo plusplus
+printf 'let i = 0;\n++ i;\n// @ts-ignore\n' > "$R/src/inc.ts"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "a marker after an added line that starts with ++ is still flagged"
+has "src/inc.ts:3: @ts-ignore" "$OUT" "the marker is reported under its own file"
+
+# A block comment carries state across lines, and a skip split from its receiver is still read.
+newrepo multiline
+printf '/*\n * see below\n * eslint-disable no-console\n */\nexport const q = 1;\n' > "$R/src/blk.ts"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "a marker on the continuation line of a block comment is flagged"
+has "src/blk.ts:3: eslint-disable" "$OUT" "block comment continuation names its line"
+
+newrepo chain
+printf 'describe("a", () => {\n  it\n    .skip("later", () => {});\n});\n' > "$R/test/chain.test.ts"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "a skip split from its receiver by a line break is flagged"
+has "test/chain.test.ts:3: .skip( / .skipIf( / .only(" "$OUT" "split chain names the .skip line"
+
+# ---- removed tests: renamed away, emptied, or kept with a test call
+newrepo rename-out
+g mv test/add.test.ts test/add.test.ts.disabled
+g commit -q -m work
+runwa
+check 1 "$RC" "renaming a test file to a name no runner picks up is flagged"
+has "removed test: test/add.test.ts (renamed to test/add.test.ts.disabled, a name no test runner picks up; covers src/add.ts)" "$OUT" "rename-out names old and new path and the source"
+
+newrepo emptied
+printf 'import { add } from "../src/add";\n' > "$R/test/add.test.ts"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "emptying a test file is flagged"
+has "removed test: test/add.test.ts (no test call left in the file)" "$OUT" "emptied test file is named"
+
+newrepo emptied-py
+printf 'from src.calc import add\n' > "$R/test/test_calc.py"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "emptying a python test file is flagged"
+has "removed test: test/test_calc.py (no test call left in the file)" "$OUT" "emptied python test file is named"
+
+newrepo edited-test
+printf 'import { add } from "../src/add";\nit("adds", () => add(1, 2));\nit("adds zero", () => add(0, 0));\n' > "$R/test/add.test.ts"
+g add -A
+g commit -q -m work
+runwa
+check 0 "$RC" "editing a test file that keeps its test calls passes"
+
 # ---- fails closed when the base cannot be found
 newrepo nobase
 OUT=$(cd "$R" && clean bash scripts/check-workarounds.sh no-such-branch 2>&1)
@@ -233,6 +323,75 @@ dc
 check 1 "$RC" "diffcover fails when the diff-cover output is missing"
 has "must run first" "$OUT" "diffcover missing-output message says how to fix"
 
+# A change with no measured line is skipped; the same report for measured code still fails.
+VCFG="export default defineConfig({ test: { coverage: { provider: 'v8', exclude: ['**/*.{test,spec}.{ts,tsx}', '**/*.d.ts', 'src/components/ui/**'], thresholds: { lines: 80 } } } });"
+EMPTYREP='No lines with coverage information in this diff.'
+
+newrepo dc-ui
+mkdir -p "$R/src/components/ui"
+printf 'export const Button = 1;\n' > "$R/src/components/ui/button.tsx"
+printf '%s\n' "$VCFG" > "$R/vitest.config.ts"
+g add -A
+g commit -q -m work
+git -C "$R" update-ref refs/remotes/origin/main main
+printf '%s\n' "$EMPTYREP" > "$R/diff-cover.txt"
+dc
+check 0 "$RC" "diffcover skips a change to a file the coverage config excludes"
+has "no source file changed that needs coverage" "$OUT" "diffcover ui skip says why"
+
+newrepo dc-ui-lib
+mkdir -p "$R/src/lib"
+printf 'export const lib = 1;\n' > "$R/src/lib/x.ts"
+printf '%s\n' "$VCFG" > "$R/vitest.config.ts"
+g add -A
+g commit -q -m work
+git -C "$R" update-ref refs/remotes/origin/main main
+printf '%s\n' "$EMPTYREP" > "$R/diff-cover.txt"
+dc
+check 1 "$RC" "diffcover still fails for a measured file next to the same config"
+has "src/lib/x.ts" "$OUT" "diffcover names the measured file"
+
+newrepo dc-comment
+printf '// explains add\n\n' >> "$R/src/add.ts"
+g add -A
+g commit -q -m work
+git -C "$R" update-ref refs/remotes/origin/main main
+printf '%s\n' "$EMPTYREP" > "$R/diff-cover.txt"
+dc
+check 0 "$RC" "diffcover skips a change whose added lines are only comments and blank lines"
+
+newrepo dc-comment-code
+printf '// explains add\nexport const sub = 1;\n' >> "$R/src/add.ts"
+g add -A
+g commit -q -m work
+git -C "$R" update-ref refs/remotes/origin/main main
+printf '%s\n' "$EMPTYREP" > "$R/diff-cover.txt"
+dc
+check 1 "$RC" "diffcover fails when a comment comes with a code line"
+
+newrepo dc-deleted
+g rm -q src/add.ts
+g commit -q -m work
+git -C "$R" update-ref refs/remotes/origin/main main
+printf '%s\n' "$EMPTYREP" > "$R/diff-cover.txt"
+dc
+check 0 "$RC" "diffcover skips a deleted source file"
+
+newrepo dc-nosonar-nested
+printf 'export const x = 1; // %s\n' "$M_NOSONAR" > "$R/src/eslint.config.helper.ts"
+printf '// %s\n' "$M_NOSONAR" > "$R/eslint.config.mjs"
+printf 'export const y = 1; // %s\n' "$M_NOSONAR" > "$R/src/y.mts"
+printf 'x: int  # %s\n' "$M_NOSONAR" > "$R/src/y.pyi"
+g add -A
+g commit -q -m work
+OUT=$(cd "$R" && clean bash .claude/ci-gates.sh nosonar 2>&1)
+check 1 "$?" "nosonar gate scans nested eslint.config helpers, .mts and .pyi"
+has "src/eslint.config.helper.ts:1:" "$OUT" "nosonar names the nested eslint.config helper"
+has "src/y.mts:1:" "$OUT" "nosonar names the .mts file"
+has "src/y.pyi:1:" "$OUT" "nosonar names the .pyi file"
+hasnt "
+eslint.config.mjs:1:" "$OUT" "nosonar leaves the root eslint config alone"
+
 # ---- scan-secrets.sh needs gitleaks; without it the test says so and moves on.
 if command -v gitleaks > /dev/null 2>&1; then
   newrepo secret-clean
@@ -252,7 +411,11 @@ if command -v gitleaks > /dev/null 2>&1; then
   has "Fix: remove the value" "$OUT" "scan-secrets message says how to fix"
   hasnt "$key" "$OUT" "scan-secrets never prints the secret"
 else
-  echo "skip: gitleaks not installed, scan-secrets cases not run"
+  if [ -n "${CI:-}${GITHUB_ACTIONS:-}${TF_BUILD:-}" ]; then
+    bad "gitleaks not installed in CI: scan-secrets cases must run"
+  else
+    echo "SKIPPED: gitleaks not installed, scan-secrets cases not run"
+  fi
 fi
 
 # ---- hook messages (D2): each block says what is wrong and the next step.
@@ -313,6 +476,8 @@ prot_msg() { # prot_msg <stack> <path> <expected text> <label>
 for st in ts py; do
   prot_msg $st AGENTS.md 'Human approval needed' 'instruction file'
   prot_msg $st vitest.config.ts 'a lower threshold or a wider exclude hides untested' 'coverage config'
+  prot_msg $st sonar-project.properties 'a lower threshold or a wider exclude hides untested' 'sonar config'
+  prot_msg $st vitest.workspace.ts 'a lower threshold or a wider exclude hides untested' 'vitest workspace'
   prot_msg $st scripts/check-workarounds.sh 'workaround or secret-scan gate' 'workaround gate script'
   prot_msg $st "$ENVF" 'Add placeholders to .env.example' 'env file write'
   prot_msg $st secrets/x.txt 'secrets directory' 'secrets directory write'

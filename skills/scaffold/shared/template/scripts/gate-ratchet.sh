@@ -32,7 +32,9 @@ kind_of() {
   case "$1" in
     .jscpd.json | */.jscpd.json) echo jscpd ;;
     eslint.config.* | */eslint.config.*) echo eslint ;;
-    vitest.config.* | vite.config.* | */vitest.config.* | */vite.config.*) echo vitest ;;
+    vitest.config.* | vite.config.* | vitest.workspace.* | */vitest.config.* | */vite.config.* | */vitest.workspace.*) echo vitest ;;
+    sonar-project.properties | */sonar-project.properties) echo sonar ;;
+    package.json | */package.json) echo pkgjson ;;
     pyproject.toml | */pyproject.toml) echo pyproject ;;
     .gitleaks.toml | */.gitleaks.toml) echo gitleaks ;;
     scripts/test-budget.sh | */scripts/test-budget.sh) echo budget ;;
@@ -63,6 +65,16 @@ shadow_reason() {
     .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
     .eslintignore) if printf '%s\n' "$base_paths" | grep -Eq "^${dir}eslint[.]config[.][^/]*$"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
     jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
+    sonar-project.properties | .sonarcloud.properties) if printf '%s\n' "$base_paths" | grep -Eq '(^|/)sonar-project[.]properties$'; then echo "sonar may read it besides the tracked sonar-project.properties"; return 0; fi ;;
+    pytest.ini | tox.ini | setup.cfg) if base_has "${dir}pyproject.toml"; then echo "pytest and coverage read it before pyproject.toml"; return 0; fi ;;
+    vitest.workspace.*)
+      for f in vite.config. vitest.config. vitest.workspace.; do
+        if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}" 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }'; then
+          echo "a workspace file replaces the test projects of ${f}* and only one is read"
+          return 0
+        fi
+      done
+      ;;
     eslint.config.* | vitest.config.* | vite.config.* | jest.config.*)
       fam=${name%%.config.*}
       case "$fam" in vite | vitest) fams="vite vitest" ;; *) fams=$fam ;; esac
@@ -370,19 +382,68 @@ function do_eslint(   from, m, name, rest, sev, seen, p, opt, sc, key, lim) {
   eslint_entries()
 }
 
-# Keys of the coverage object at index p (just after its brace): tracked keys are read elsewhere, neutral ones ignored, the rest become cfg facts.
-function cov_walk(p, pre,   n, k, kn, v, e) {
+# The value at index p must be a bare array literal of plain strings with nothing chained after it; anything else cannot be read, so it fails closed. STRICT_END is the index after the array.
+function strict_array(p, kind, key,   n, c, j, ch, q) {
   n = length(T)
+  if (substr(T, p, 1) != "[") fail(key " is not a bare array literal of strings: " substr(vtext(p), 1, 60))
+  p++
+  while (p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n]/) p++
+    c = substr(T, p, 1)
+    if (c == "]") break
+    if (c != "\"" && c != "'" && c != "`") fail(key " array holds something other than a string literal: " substr(vtext(p), 1, 60))
+    j = p + 1
+    while (j <= n) {
+      ch = substr(T, j, 1)
+      if (ch == "\\") { j += 2; continue }
+      if (ch == c) break
+      if (c == "`" && ch == "$" && substr(T, j + 1, 1) == "{") fail(key " array holds a template string with an expression")
+      j++
+    }
+    if (j > n) fail("unterminated string in " key)
+    emit(kind, key, substr(T, p + 1, j - p - 1))
+    p = j + 1
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n]/) p++
+    c = substr(T, p, 1)
+    if (c == ",") { p++; continue }
+    if (c != "]") fail(key " array element is followed by something other than a comma or ]")
+    break
+  }
+  if (p > n || substr(T, p, 1) != "]") fail("unterminated array in " key)
+  p++
+  while (p <= n && substr(T, p, 1) ~ /[ \t\n]/) p++
+  c = substr(T, p, 1)
+  if (p <= n && c != "," && c != "}") fail(key " array has something chained after it: " substr(vtext(p), 1, 60))
+  STRICT_END = p
+}
+
+# Every quoted or bare <name>: key must hold a strict array; each string becomes one fact of the given kind.
+function strict_named(name, kind,   from) {
+  from = 1
+  while (find("(^|[^A-Za-z0-9_$.])[\"']?" name "[\"']?[ \t\n]*:[ \t\n]*", from)) {
+    strict_array(MS + ML, kind, name); from = STRICT_END
+  }
+}
+
+# Keys of the coverage object at index p (just after its brace): tracked keys are read here or elsewhere, neutral ones ignored, the rest become cfg facts; a repeated key cannot be read.
+function cov_walk(p, pre,   n, k, kn, v, e, id) {
+  n = length(T); id = ++WALKN
   while (p <= n) {
     while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
     if (p > n || substr(T, p, 1) == "}") return
     if (match(substr(T, p), /^(["'][^"']*["']|[A-Za-z0-9_$]+)[ \t\n]*:[ \t\n]*/)) {
       k = substr(T, p, RLENGTH); p += RLENGTH
       kn = k; sub(/[ \t\n]*:[ \t\n]*$/, "", kn); gsub(/["']/, "", kn)
+      if ((id SUBSEP kn) in SEENK) fail("coverage key " pre kn " is given twice, so the file cannot be read reliably")
+      SEENK[id SUBSEP kn] = 1
       v = vtext(p); e = VEND
       if (pre == "" && kn == "thresholds" && v ~ /^[{]/) cov_walk(p + 1, "thresholds.")
-      else if (pre == "" && kn ~ /^(include|exclude|provider|reporter|reportsDirectory|reportOnFailure)$/) { }
-      else if (pre == "thresholds." && kn ~ /^(lines|functions|branches|statements)$/) { }
+      else if (pre == "" && kn ~ /^(include|exclude)$/) strict_array(p, (kn == "exclude" ? "set" : "req"), kn)
+      else if (pre == "" && kn ~ /^(provider|reporter|reportsDirectory|reportOnFailure)$/) { }
+      else if (pre == "thresholds." && kn ~ /^(lines|functions|branches|statements)$/) {
+        if (!plain_num(v)) fail("coverage threshold " kn " is not a plain decimal literal: " v)
+        emit("min", "coverage-" kn, v)
+      }
       else emit("cfg", "coverage." pre kn, v)
       p = e
     } else {
@@ -391,20 +452,30 @@ function cov_walk(p, pre,   n, k, kn, v, e) {
   }
 }
 
-function do_vitest(   from, m, name, v) {
-  if (find("coverage[ \t\n]*:[ \t\n]*[{]", 1)) cov_walk(MS + ML, "")
+function do_vitest(   from, m, name, v, p) {
   from = 1
-  while (find("(lines|functions|branches|statements)[ \t\n]*:[ \t\n]*", from)) {
-    m = substr(T, MS, ML); name = substr(m, 1, index(m, ":") - 1); gsub(/[ \t\n]/, "", name)
+  while (find("(^|[^A-Za-z0-9_$.])[\"']?coverage[\"']?[ \t\n]*:[ \t\n]*", from)) {
+    p = MS + ML
+    if (substr(T, p, 1) != "{") fail("coverage is not an object literal: " substr(vtext(p), 1, 60))
+    cov_walk(p + 1, ""); from = p + 1
+  }
+  from = 1
+  while (find("(lines|functions|branches|statements)[\"']?[ \t\n]*:[ \t\n]*", from)) {
+    m = substr(T, MS, ML); name = substr(m, 1, index(m, ":") - 1); gsub(/[ \t\n"']/, "", name)
     v = tok(MS + ML)
     if (!plain_num(v)) fail("coverage threshold " name " is not a plain decimal literal: " v)
     emit("min", "coverage-" name, v)
     from = MS + ML
   }
-  arrays_named("exclude", "set")
-  arrays_named("include", "req")
+  strict_named("exclude", "set")
+  strict_named("include", "req")
   nopass = "passWith" "NoTests"
-  if (find(nopass "[ \t\n]*:[ \t\n]*true", 1)) emit("set", nopass, "true")
+  from = 1
+  while (find(nopass "[\"']?[ \t\n]*:[ \t\n]*", from)) {
+    v = tok(MS + ML)
+    if (v != "false") emit("set", nopass, v)
+    from = MS + ML
+  }
 }
 
 # Line-by-line walk of a TOML file; dotted keys are folded into their section so a.b.c = v reads like [a.b] c = v.
@@ -419,7 +490,8 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
   for (i = 1; i <= NL; i++) {
     line = LT[i]
     if (line ~ /^[ \t]*[[]/) {
-      sect = line; gsub(/^[ \t]*[[]+[ \t]*/, "", sect); gsub(/[ \t]*[]]+[ \t]*$/, "", sect); SECTS[sect] = 1
+      sect = line; gsub(/^[ \t]*[[]+[ \t]*/, "", sect); gsub(/[ \t]*[]]+[ \t]*$/, "", sect)
+      gsub(/[ \t]*[.][ \t]*/, ".", sect); gsub(/["']/, "", sect); SECTS[sect] = 1
       csect = sect
       if (line ~ /^[ \t]*[[][[]/) {
         HC[sect]++; csect = sect "#" HC[sect]
@@ -427,19 +499,19 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
       }
       continue
     }
-    if (!match(line, /^[ \t]*([A-Za-z0-9_.-]+[.])?("[^"]*"|[A-Za-z0-9_.-]+)[ \t]*=/)) continue
+    if (!match(line, /^[ \t]*([A-Za-z0-9_.-]+[.])?("[^"]*"|'[^']*'|[A-Za-z0-9_.-]+)[ \t]*=/)) continue
     raw = substr(line, 1, RLENGTH - 1); gsub(/^[ \t]*/, "", raw); gsub(/[ \t]*$/, "", raw)
     rest = substr(line, RLENGTH + 1); pos = LO[i] + RLENGTH
     s2 = sect; k2 = raw
-    if (raw !~ /^"/ && match(raw, /[.]"/)) {
+    if (raw !~ /^["']/ && match(raw, /[.]["']/)) {
       pre = substr(raw, 1, RSTART - 1); k2 = substr(raw, RSTART + 1)
       s2 = (sect == "") ? pre : sect "." pre
-    } else if (raw !~ /"/ && raw ~ /[.]/) {
+    } else if (raw !~ /["']/ && raw ~ /[.]/) {
       n = split(raw, parts, "."); k2 = parts[n]; pre = parts[1]
       for (j = 2; j < n; j++) pre = pre "." parts[j]
       s2 = (sect == "") ? pre : sect "." pre
     }
-    gsub(/"/, "", k2)
+    gsub(/["']/, "", k2)
     v = rest; gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
     known = 0; vtxt = v
     if (rest ~ /^[ \t]*[[{]/) {
@@ -458,12 +530,14 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
     } else if (toml_track(s2, k2)) {
       if (!plain_num(v)) fail(k2 " is not a plain decimal literal: " v)
       emit(TK, TN, v); known = 1
+      if (TN == "coverage-fail_under") CFU = v
     } else if (MODE == "gitleaks" && (s2 ~ /allowlist/ || s2 == "extend") && k2 ~ /^(path|paths|regex|regexes|commit|commits|stopword|stopwords|url)$/) {
       emit("set", "allow:" k2, v); known = 1
     } else if (MODE == "pyproject" && s2 ~ /^tool[.]ruff$/ && k2 == "extend") {
       emit("set", "ruff-extend", v); known = 1
     }
     if (!known && cfg_scope(s2) && !cfg_neutral(s2, k2)) emit("cfg", csect "|" raw, vtxt)
+    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage)$/))) emit("cfg", csect "|" raw, vtxt)
     if (k2 == "useDefault" && rest ~ /true/) emit("req", "extend", "useDefault")
   }
 }
@@ -508,13 +582,117 @@ function toml_track(s, k) {
 # A number after a flag must end at whitespace, a quote or the line end.
 function flag_end_ok(c) { return (c == "" || c == " " || c == "\t" || c == "\n" || c == "\"" || c == "'" || c == "\\") }
 
-function do_pyproject(   from) {
+function do_pyproject(   from, r, seen) {
   toml_lines()
   if (!(("tool.ruff" in SECTS) || ("tool.ruff.lint" in SECTS))) fail("no [tool.ruff] section")
+  from = 1; seen = 0
+  while (find("--cov-fail-under", from)) {
+    from = MS + ML
+    r = substr(T, from, 40)
+    if (match(r, /^(=|[ \t]+|["'][ \t\n]*,[ \t\n]*["'])/)) r = substr(r, RLENGTH + 1)
+    else fail("--cov-fail-under is not followed by a plain decimal literal")
+    if (!match(r, /^[0-9]+([.][0-9]+)?/) || !flag_end_ok(substr(r, RLENGTH + 1, 1))) fail("--cov-fail-under is not a plain decimal literal")
+    emit("min", "pytest-cov-fail-under", substr(r, 1, RLENGTH)); seen = 1
+  }
+  if (!seen && CFU != "") emit("min", "pytest-cov-fail-under", CFU)
   from = 1
-  while (find("--cov-fail-under[= ][0-9]+([.][0-9]+)?", from)) {
-    if (!flag_end_ok(substr(T, MS + ML, 1))) fail("--cov-fail-under is not a plain decimal literal")
-    emit("min", "pytest-cov-fail-under", num_in(substr(T, MS + 16, ML - 16))); from = MS + ML
+  while (find("(^|[^A-Za-z0-9_-])--no-cov([^A-Za-z0-9_-]|$)", from)) { emit("set", "pytest-flag", "--no-cov"); from = MS + ML }
+  from = 1
+  while (find("--cov-config", from)) { from = MS + ML; emit("set", "pytest-flag", "--cov-config" tok(from)) }
+  from = 1
+  while (find("(^|[^A-Za-z0-9_-])-p([ \t]|[\"'][ \t\n]*,[ \t\n]*[\"'])?no:(cov|pytest_cov)", from)) { emit("set", "pytest-flag", "-p no:cov"); from = MS + ML }
+  from = 1
+  while (find("(^|[^A-Za-z0-9_-])(-c|--config-file)([ =\t]|[\"'][ \t\n]*,[ \t\n]*[\"'])", from)) { emit("set", "pytest-flag", "config-file"); from = MS + ML }
+}
+
+# One logical properties line: key, then the value after = or : or blanks. Escapes, interpolation and a repeated key cannot be read.
+function sonar_line(l,   key, rest, items, ni, i, it, kk) {
+  if (!match(l, /^[^=: \t\f]+/)) fail("sonar line without a key: " l)
+  key = substr(l, 1, RLENGTH); rest = substr(l, RLENGTH + 1)
+  sub(/^[ \t\f]*[=:]?[ \t\f]*/, "", rest); sub(/[ \t\f]+$/, "", rest)
+  if (key ~ /\\/ || rest ~ /\\/) fail("sonar key or value with an escape sequence: " key)
+  if (rest ~ /[$][{]/) fail("sonar value with interpolation: " key)
+  if (key in SKEY) fail("sonar key " key " is given twice, so the file cannot be read reliably")
+  SKEY[key] = 1
+  kk = key
+  if (kk ~ /^sonar[.](exclusions|coverage[.]exclusions|test[.]exclusions|cpd[.]exclusions)$/ || kk ~ /^sonar[.]issue[.]ignore[.]/) {
+    ni = split(rest, items, ",")
+    for (i = 1; i <= ni; i++) { it = items[i]; gsub(/^[ \t]+|[ \t]+$/, "", it); if (it != "") emit("set", kk, it) }
+  } else if (kk ~ /^sonar[.](inclusions|sources)$/) {
+    if (kk == "sonar.inclusions") emit("set", "sonar-inclusions", "defined")
+    ni = split(rest, items, ",")
+    for (i = 1; i <= ni; i++) { it = items[i]; gsub(/^[ \t]+|[ \t]+$/, "", it); if (it != "") emit("req", kk, it) }
+  } else if (kk ~ /^sonar[.](projectKey|projectName|projectVersion|organization|sourceEncoding|host[.]url|links[.][A-Za-z0-9_.]+|python[.]version)$/) {
+  } else emit("cfg", kk, rest)
+}
+
+function do_sonar(   n, L, i, line, buf, m) {
+  n = split(T, L, "\n"); buf = ""; cont = 0
+  for (i = 1; i <= n; i++) {
+    line = L[i]; sub(/\r$/, "", line)
+    sub(/^[ \t\f]+/, "", line)
+    if (!cont && (line == "" || line ~ /^[#!]/)) continue
+    if (match(line, /\\+$/) && RLENGTH % 2 == 1) { buf = buf substr(line, 1, length(line) - 1); cont = 1; continue }
+    sonar_line(buf line); buf = ""; cont = 0
+  }
+  if (cont) sonar_line(buf)
+}
+
+# Flags that change what a test script measures or which config it reads; each exact word is a fact, so a flag the merge base already had stays allowed and a new one is a finding.
+function script_flags(name, s,   nw, W, i, w, opt, hasv) {
+  if (s ~ /\\u/) fail("script " name " holds a \\u escape, which hides what it runs")
+  hasv = (s ~ /(^|[^A-Za-z0-9_-])vitest([^A-Za-z0-9_-]|$)/)
+  nw = split(s, W, /[ \t]+/)
+  for (i = 1; i <= nw; i++) {
+    w = W[i]; gsub(/^[\\"'(]+/, "", w); gsub(/[\\"');&|]+$/, "", w)
+    if (w == "--coverage") emit("req", "coverage-flag", name)
+    else if (w ~ /^--coverage=/) { if (w !~ /^--coverage=(true|1)$/) emit("set", "script-flag", name ": " w) }
+    else if (w ~ /^--coverage[.]/) {
+      opt = substr(w, 12); sub(/=.*$/, "", opt)
+      if (opt !~ /^(reporter|reportsDirectory|provider|clean|cleanOnRerun|reportOnFailure|skipFull)$/) emit("set", "script-flag", name ": " w)
+    }
+    else if (w == "--no-coverage" || w ~ /^--(pass[W]ithNoTests|pass-with-no-tests)(=|$)/) emit("set", "script-flag", name ": " w)
+    else if (hasv && (w == "--config" || w == "-c" || w == "--workspace" || w == "--root")) emit("set", "script-flag", name ": " w " " W[i + 1])
+    else if (hasv && w ~ /^--(config|workspace|root)=/) emit("set", "script-flag", name ": " w)
+  }
+}
+
+function scripts_walk(p,   n, j, ch, name, c, s) {
+  n = length(T)
+  if (substr(T, p, 1) != "{") fail("scripts is not an object literal")
+  p++
+  while (p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    c = substr(T, p, 1)
+    if (c == "}") return
+    if (c != "\"") fail("a scripts entry has no quoted name")
+    j = p + 1
+    while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
+    name = substr(T, p + 1, j - p - 1); p = j + 1
+    if (name ~ /\\/) fail("script name with an escape sequence: " name)
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    if (substr(T, p, 1) != "\"") fail("script " name " is not a string")
+    j = p + 1
+    while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
+    s = substr(T, p + 1, j - p - 1); p = j + 1
+    script_flags(name, s)
+  }
+  fail("unterminated scripts object")
+}
+
+function do_pkgjson(   p, n, j, ch, key, v) {
+  json_dups()
+  n = length(T); p = index(T, "{") + 1
+  if (p <= 1) fail("package.json is not a JSON object")
+  while (p > 1 && p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) != "\"") break
+    j = p + 1
+    while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
+    key = substr(T, p + 1, j - p - 1); p = j + 1
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    if (key == "scripts") scripts_walk(p)
+    v = vtext(p); p = VEND
   }
 }
 
@@ -622,6 +800,8 @@ END {
   else if (K == "vitest") { T = clean(T, "js"); do_vitest() }
   else if (K == "pyproject") { T = clean(T, "toml"); do_pyproject() }
   else if (K == "gitleaks") { T = clean(T, "toml"); do_gitleaks() }
+  else if (K == "sonar") do_sonar()
+  else if (K == "pkgjson") do_pkgjson()
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()

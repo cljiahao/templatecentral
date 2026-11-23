@@ -25,6 +25,42 @@ gate_listed() {
   done < "$manifest"
   return 1
 }
+# Prints one anchored extended regex for the globs the project's own coverage config leaves out of measurement: the coverage exclude array of the vitest or vite config, or omit of pyproject.toml. Prints nothing when there is none.
+coverage_excludes() {
+  local f
+  for f in vitest.config.ts vitest.config.mts vitest.config.js vitest.config.mjs vite.config.ts vite.config.mts vite.config.js vite.config.mjs pyproject.toml; do
+    [ -f "$f" ] || continue
+    awk -v toml="$([ "$f" = pyproject.toml ] && echo 1 || echo 0)" '
+      function conv(g,   i, n, c, o, d) {
+        n = length(g); o = ""; d = 0; i = 1
+        while (i <= n) {
+          c = substr(g, i, 1)
+          if (substr(g, i, 3) == "**/") { o = o "(.*/)?"; i += 3; continue }
+          if (substr(g, i, 2) == "**") { o = o ".*"; i += 2; continue }
+          if (c == "*") o = o "[^/]*"
+          else if (c == "?") o = o "[^/]"
+          else if (c == "{") { o = o "("; d++ }
+          else if (c == "}") { o = o ")"; d-- }
+          else if (c == "," && d > 0) o = o "|"
+          else if (c ~ /[.+()^$|\\[\]]/) o = o "\\" c
+          else o = o c
+          i++
+        }
+        return o
+      }
+      { T = T $0 "\n" }
+      END {
+        gsub(/\/\/[^\n]*/, "", T)
+        if (toml) { if (!match(T, /\[tool\.coverage\.run\]/)) exit; T = substr(T, RSTART); if (!match(T, /omit[ \t]*=[ \t]*\[/)) exit }
+        else { if (!match(T, /coverage[ \t\n]*:[ \t\n]*\{/)) exit; T = substr(T, RSTART); if (!match(T, /exclude[ \t\n]*:[ \t\n]*\[/)) exit }
+        T = substr(T, RSTART + RLENGTH); e = index(T, "]"); T = substr(T, 1, e - 1)
+        while (match(T, /"[^"]*"|\047[^\047]*\047/)) {
+          g = substr(T, RSTART + 1, RLENGTH - 2); T = substr(T, RSTART + RLENGTH)
+          printf "%s\n", conv(g)
+        }
+      }' "$f"
+  done | paste -sd '|' - | sed 's/^\(.\)/^(\1/; s/\(.\)$/\1)$/'
+}
 pr_only() {
   [ -n "$branch" ] || { echo "$gate: not a pull request — skipped"; exit 0; }
   git rev-parse --verify -q "$base^{commit}" >/dev/null || fail "$base not found — check out with full history (fetch-depth 0)"
@@ -127,7 +163,7 @@ case "$gate" in
     ;;
   nosonar)
     # Matches a marker inside a comment only, so the ESLint rule that bans the word (terms: ['nosonar']) never trips it.
-    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' ':!.claude' ':!eslint.config.*'); then rc=0; else rc=$?; fi
+    if hits=$(git grep -nIiE '(#|//|/[*]|^[[:space:]]*[*]).*NOSONAR' -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' ':(exclude,top).claude' ':(exclude,top)eslint.config.*'); then rc=0; else rc=$?; fi
     [ "$rc" -le 1 ] || fail "git grep failed while scanning for NOSONAR markers"
     if [ -n "$hits" ]; then
       printf '%s\n' "$hits" >&2
@@ -300,11 +336,31 @@ JS
     bash scripts/check-workarounds.sh "$base" || fail "this change silences a tool or removes covering tests (output above). Fix the cause; there is no waiver."
     ;;
   diffcover)
-    # The CI step runs diff-cover --fail-under=80 and keeps its output in diff-cover.txt; diff-cover exits 0 when the diff has no covered lines, so this gate turns that into a failure whenever source changed.
+    # The CI step runs diff-cover --fail-under=80 and keeps its output in diff-cover.txt; diff-cover exits 0 when the diff has no covered lines, so this gate turns that into a failure whenever measured source changed. Deleted files, files the coverage config leaves out, and files whose added lines are all blank or comment-only have no lines to cover and are skipped.
     pr_only
-    changed=$(git diff --name-only "$base"...HEAD) || fail "cannot diff against $base"
+    changed=$(git diff --name-only --diff-filter=d "$base"...HEAD) || fail "cannot diff against $base"
     src=$(grep -E '^src/.*[.](py|ts|tsx|js|jsx|mjs|cjs)$' <<< "$changed" | grep -vE '(^|/)(test|tests|__tests__)/|[.](test|spec)[.]|(^|/)test_[^/]*[.]py$|_test[.]py$|[.]d[.]ts$') || src=""
-    if [ -z "$src" ]; then echo "diffcover: no source file changed — skipped"; exit 0; fi
+    excl=$(coverage_excludes)
+    if [ -n "$excl" ] && [ -n "$src" ]; then src=$(grep -vE "$excl" <<< "$src") || src=""; fi
+    code=""
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if git diff -U0 --no-color --no-ext-diff "$base"...HEAD -- "$f" | awk -v py="$(case "$f" in *.py) echo 1 ;; *) echo 0 ;; esac)" '
+        /^@@/ { inbody = 1; next }
+        inbody && /^[+]/ {
+          t = substr($0, 2); sub(/^[ \t]+/, "", t)
+          if (t == "") next
+          if (py == 1) { if (t ~ /^#/) next }
+          else if (t ~ /^(\/\/|\/\*|\*\/|\*( |$))/) next
+          code = 1
+        }
+        END { exit code ? 0 : 1 }'; then
+        code="$code$f
+"
+      fi
+    done <<< "$src"
+    src=${code%$'\n'}
+    if [ -z "$src" ]; then echo "diffcover: no source file changed that needs coverage (deleted, excluded from coverage, or only comments and blank lines) — skipped"; exit 0; fi
     out=${DIFF_COVER_OUTPUT:-diff-cover.txt}
     [ -f "$out" ] || fail "$out is missing although source changed. The diff-cover step must run first and keep its output there."
     if grep -q "No lines with coverage information" "$out"; then

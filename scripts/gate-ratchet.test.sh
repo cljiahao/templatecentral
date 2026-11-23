@@ -35,6 +35,8 @@ seed() {
   if [[ "$1" == ts ]]; then
     cp "$SH/../nestjs/template/eslint.config.mjs" "$R/" && cp "$SH/../nestjs/template/vitest.config.mts" "$R/vitest.config.ts"
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
+    cp "$SH/template-ts/sonar-project.properties" "$R/sonar-project.properties"
+    cp "$SH/../nestjs/template/package.json" "$R/package.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
     cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
     mkdir -p "$R/.github"
@@ -57,6 +59,7 @@ PY
   else
     cp "$SH/../fastapi/template/pyproject.toml" "$R/pyproject.toml"
     cp "$SH/template-py/.jscpd.json" "$R/.jscpd.json"
+    cp "$SH/template-py/sonar-project.properties" "$R/sonar-project.properties"
     cp "$SH/template-ci/github-py/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
     printf '\n[tool.coverage.report]\nfail_under = 80\n' >> "$R/pyproject.toml"
   fi
@@ -124,6 +127,13 @@ weakens() {
   check 1 "$EC" "$label: exits 1 ($OUT)"
   has "$file" "$OUT" "$label: names the file"
   for frag in "$@"; do has "$frag" "$OUT" "$label: reports $frag"; done
+}
+
+# drop <file>: delete a tracked file on a branch off main.
+drop() {
+  git_ checkout -q -B work main
+  git_ rm -q "$1"
+  git_ commit -q -m drop
 }
 
 # passes <file> <old> <new> <label>: a tightening or unrelated edit must exit 0.
@@ -419,8 +429,7 @@ regex = '''zzz-never'''
 weakens vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
       all: false," "vitest coverage all: false" "coverage.all"
 weakens vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, perFile: false }," "vitest perFile false" "perFile"
-passes vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
-      reporter: ['text']," "vitest coverage reporter edit"
+passes vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "reporter: ['text']," "vitest coverage reporter edit"
 weakens eslint.config.mjs "  eslint.configs.recommended,
 " "" "eslint entry removed (M4)" "eslint.configs.recommended"
 passes eslint.config.mjs "// @ts-check" "// @ts-check
@@ -581,6 +590,112 @@ check 2 "$?" "missing argument: exits 2 ($OUT)"
 OUT=$(cd "$T" && bash "$RATCHET" main 2>&1)
 check 2 "$?" "outside a git repository: exits 2 ($OUT)"
 
+seed ts
+# Sonar scope: exclusions may only shrink, inclusions only grow, the file may not go or be shadowed.
+weakens sonar-project.properties "**/*.d.ts,src/components/ui/**" "**/*.d.ts,src/components/ui/**,src/**" "sonar exclusions widened" "src/**" "sonar.exclusions"
+passes sonar-project.properties "**/*.d.ts,src/components/ui/**" "**/*.d.ts" "sonar exclusions shrunk"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.coverage.exclusions=src/**
+sonar.exclusions=" "sonar coverage exclusions added" "src/**" "sonar.coverage.exclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.cpd.exclusions=src/**
+sonar.exclusions=" "sonar cpd exclusions added" "sonar.cpd.exclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.issue.ignore.multicriteria=e1
+sonar.exclusions=" "sonar issue ignore added" "sonar.issue.ignore.multicriteria"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.inclusions=src/only/**
+sonar.exclusions=" "sonar inclusions added narrows the scan" "sonar-inclusions"
+weakens sonar-project.properties "**/*.test.ts,**/*.test.tsx" "**/*.test.ts,**/*.test.tsx,**" "sonar test inclusions widened" "sonar.test.inclusions"
+weakens sonar-project.properties "sonar.exclusions=" "sonar.projectBaseDir=src
+sonar.exclusions=" "sonar unknown key added" "sonar.projectBaseDir"
+passes sonar-project.properties "sonar.exclusions=" "sonar.projectKey=demo
+sonar.exclusions=" "sonar neutral key added"
+weakens sonar-project.properties "sonar.exclusions=**/node_modules/**,**/.next/**," "sonar.exclusions=**/node_modules/**,\
+  **/.next/**,\
+  src/**,\
+  " "sonar widened through a continuation line" "src/**"
+passes sonar-project.properties "sonar.exclusions=**/node_modules/**,**/.next/**," "sonar.exclusions=**/node_modules/**,\
+  **/.next/**,\
+  " "sonar same items re-flowed through a continuation line"
+drop sonar-project.properties
+expect 1 "sonar file deleted" "sonar-project.properties" "now removed"
+add_file a/sonar-project.properties "sonar.exclusions=**"
+expect 1 "nested sonar file shadows the root one" "a/sonar-project.properties" "competes"
+add_file .sonarcloud.properties "sonar.exclusions=**"
+expect 1 ".sonarcloud.properties shadows sonar-project.properties" ".sonarcloud.properties" "competes"
+edit sonar-project.properties "sonar.exclusions=" "sonar.exclusions=src/**
+sonar.exclusions="
+expect 2 "sonar repeated key cannot be read" "given twice"
+edit sonar-project.properties "sonar.exclusions=**/node_modules/**" "sonar.exclusions=**/node_modules/**,\\,x"
+expect 2 "sonar value with an escape cannot be read" "escape sequence"
+edit sonar-project.properties "sonar.exclusions=**/node_modules/**" "sonar.exclusions=\${EXTRA},**/node_modules/**"
+expect 2 "sonar value with interpolation cannot be read" "interpolation"
+add_file docs/sonar-project.properties.md "not a sonar file"
+expect 0 "a file that only starts like the sonar file is not a shadow"
+
+# Coverage arrays: bare literals of strings, nothing chained, no repeated key; anything else is unreadable.
+EXC="exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'],"
+weakens vitest.config.ts "$EXC" "'exclude': ['**/*.{test,spec}.ts', '**/*.d.ts', 'src/**']," "quoted exclude key with a new item" "src/**"
+passes vitest.config.ts "$EXC" "'exclude': ['**/*.{test,spec}.ts', '**/*.d.ts']," "quoted exclude key with the same items"
+passes vitest.config.ts "$EXC" "exclude: [ '**/*.{test,spec}.ts', '**/*.d.ts', ]," "exclude array with a trailing comma"
+edit vitest.config.ts "$EXC" "exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'].concat(['src/**']),"
+expect 2 "exclude with .concat" "has something chained after it"
+edit vitest.config.ts "$EXC" "exclude: ['**/*.{test,spec}.ts', '**/*.d.ts'].filter(Boolean).concat(process.env.X ? ['src/**'] : []),"
+expect 2 "exclude with filter and a conditional concat" "has something chained after it"
+edit vitest.config.ts "$EXC" "exclude: EXCL,"
+expect 2 "exclude through a constant" "not a bare array literal"
+edit vitest.config.ts "$EXC" "exclude: [...BASE, '**/*.d.ts'],"
+expect 2 "exclude with a spread" "other than a string literal"
+edit vitest.config.ts "$EXC" "exclude: ['a', \`src/\${X}\`],"
+expect 2 "exclude with a template expression" "template string"
+edit vitest.config.ts "$EXC" "exclude,"
+expect 1 "exclude as a shorthand property" "new setting"
+edit vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'].slice(1),"
+expect 2 "include with .slice" "has something chained after it"
+edit vitest.config.ts "include: ['src/**/*.ts']," "include: ['src/**/*.ts'],
+      include: ['x'],"
+expect 2 "include given twice" "given twice"
+edit vitest.config.ts "include: ['src/**/*.ts']," "'include': ['src/**/*.ts'],"
+expect 0 "quoted include key with the same items"
+edit vitest.config.ts "include: ['src/**/*.ts']," "'include': ['x'],"
+expect 1 "quoted include key that drops the item" "required include 'src/**/*.ts'"
+
+# Thresholds: a quoted key is read, and a repeated key is unreadable.
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, 'lines': 1 },"
+expect 2 "quoted duplicate threshold key" "given twice"
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80, branches: 70, lines: 1 },"
+expect 2 "plain duplicate threshold key" "given twice"
+weakens vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { 'lines': 60, branches: 70 }," "quoted threshold key lowered" "was 80" "now 60"
+passes vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { 'lines': 90, branches: 70 }," "quoted threshold key raised"
+edit vitest.config.ts "thresholds: { lines: 80, branches: 70 }," "thresholds: { lines: 80x, branches: 70 },"
+expect 2 "threshold that is not a plain number" "plain decimal"
+edit vitest.config.ts "coverage: {" "coverage: COV, xcoverage: {"
+expect 2 "coverage that is not an object" "not an object literal"
+weakens vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "passWithNoTests: true," "passWithNoTests added" "passWithNoTests"
+weakens vitest.config.ts "reporter: ['text', 'cobertura', 'lcov']," "'passWithNoTests': !!1," "passWithNoTests as a quoted truthy expression" "passWithNoTests"
+passes vitest.config.ts "globals: false," "globals: false, passWithNoTests: false," "passWithNoTests set to false"
+add_file vitest.workspace.ts "export default ['packages/*'];"
+expect 1 "workspace file competes with the vitest config" "vitest.workspace.ts" "competes"
+
+# package.json scripts: flags that override the coverage config, and a dropped --coverage, are findings; forms the base had stay allowed.
+TCI='"test:ci": "vitest --run --coverage",'
+for flag in '--coverage.thresholds.lines=0' '--coverage.exclude=src/**' '--coverage.include=nothing/**' '--coverage.all=false' '--coverage.enabled=false' '--coverage=false' '--no-coverage' '--passWithNoTests' '--pass-with-no-tests' '--config=weak.config.ts' '--coverage.thresholds.autoUpdate=true'; do
+  weakens package.json "$TCI" "\"test:ci\": \"vitest --run --coverage $flag\"," "script flag $flag" "$flag" "script-flag"
+done
+weakens package.json "$TCI" '"test:ci": "vitest --run --coverage --config weak.config.ts",' "script --config added" "weak.config.ts"
+weakens package.json "$TCI" '"test:ci": "pnpm test -- --coverage.thresholds.lines=0",' "flag passed through pnpm" "--coverage.thresholds.lines=0"
+weakens package.json "$TCI" '"test:ci": "vitest --run",' "--coverage dropped from the CI script" "coverage-flag" "test:ci"
+weakens package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:cheat": "vitest --run --no-coverage",' "flag in a new script" "test:cheat: --no-coverage"
+passes package.json "$TCI" '"test:ci": "vitest --run --coverage --coverage.reporter=text --reporter=dot",' "benign coverage reporter flag"
+passes package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:more": "vitest --run src/x.test.ts",' "new script without flags"
+passes package.json '"name":' '"name":' "package.json untouched"
+edit package.json "$TCI" '"test:ci": "vitest --run --coverage",
+    "test:ci": "vitest --run",'
+expect 2 "repeated script name" "duplicate JSON key"
+edit package.json "$TCI" '"test:ci": "vitest --run --no-cover\u0061ge",'
+expect 2 "script hidden behind a \u escape" "escape"
+edit package.json "$TCI" '"test:ci": 3,'
+expect 2 "script that is not a string" "not a string"
+
 seed py
 git_ checkout -q -B work main
 ratchet
@@ -648,6 +763,66 @@ sed -i.bak 's/tool[.]ruff/tool.rff/g' "$R/pyproject.toml" && rm -f "$R/pyproject
 git_ commit -q -am rename
 ratchet
 check 2 "$EC" "pyproject without [tool.ruff]: exits 2 ($OUT)"
+
+# Python: coverage and pytest bypasses, Sonar scope, and shadow config files.
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+'omit' = [\"src/**\"]
+[tool.coverage.report]" "single-quoted omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+\"omit\" = [\"src/**\"]
+[tool.coverage.report]" "double-quoted omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+omit = [\"src/**\"]
+[tool.coverage.report]" "plain omit key" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[ tool . coverage . run ]
+omit = [\"src/**\"]
+[tool.coverage.report]" "omit under a spaced header" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.\"coverage\".run]
+omit = [\"src/**\"]
+[tool.coverage.report]" "omit under a quoted header" "src/**"
+weakens pyproject.toml "[tool.coverage.report]" "[tool]
+coverage = { run = { omit = [\"src/**\"] } }
+[tool.coverage.report]" "coverage inside an inline table of [tool]" "new setting"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage]
+run = { omit = [\"src/**\"] }
+[tool.coverage.report]" "run as an inline table" "new setting"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.report]
+exclude_also = [\"def \"]" "coverage exclude_also" "exclude_also"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.coverage.run]
+source = [\"x\"]
+[tool.coverage.report]" "coverage source" "source"
+passes pyproject.toml "[tool.coverage.report]" "[tool.coverage.report]
+precision = 1" "neutral coverage key"
+for fl in '--no-cov' '--cov-config=weak.rc' '-p no:cov' '-p no:pytest_cov' '-c weak.ini'; do
+  weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"$fl\"
+[tool.coverage.report]" "addopts $fl" "pytest-flag"
+done
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = [\"-q\", \"-p\", \"no:cov\"]
+[tool.coverage.report]" "addopts split -p no:cov" "pytest-flag"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=1\"
+[tool.coverage.report]" "addopts --cov-fail-under=1" "pytest-cov-fail-under" "was 80" "now 1"
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = [\"--cov-fail-under\", \"0\"]
+[tool.coverage.report]" "addopts split --cov-fail-under 0" "pytest-cov-fail-under" "now 0"
+passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=90\"
+[tool.coverage.report]" "addopts --cov-fail-under raised"
+passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--no-cov-on-fail\"
+[tool.coverage.report]" "addopts --no-cov-on-fail is not --no-cov"
+edit pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+addopts = \"--cov-fail-under=abc\"
+[tool.coverage.report]"
+expect 2 "addopts --cov-fail-under not a number" "--cov-fail-under"
+weakens sonar-project.properties "sonar.sources=src" "sonar.sources=" "sonar sources emptied" "sonar.sources" "was present"
+passes sonar-project.properties "sonar.sources=src" "sonar.sources=src,lib" "sonar sources grown"
+for f in pytest.ini tox.ini setup.cfg; do
+  add_file "$f" "[pytest]"
+  expect 1 "$f shadows pyproject" "$f" "competes"
+done
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
