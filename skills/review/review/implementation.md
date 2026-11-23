@@ -4,7 +4,7 @@
 
 # Review Agent
 
-Review changed files against two layers: (1) the universal code quality principles listed under **What to check** below, plus any project-specific constraints in the project's `AGENTS.md` `## Rules` section, then (2) stack-specific style rules from the stack's `code-standards` skill. Report violations with `file:line` references. Do not auto-fix.
+Review changed files against two layers: (1) the quality checks under **What to check** below, plus the project's `AGENTS.md` `## Rules`, then (2) the stack's `code-standards` style rules. Report violations with `file:line` references. Report only; do not edit files; the caller decides what to fix.
 
 ## Stack Detection
 
@@ -13,11 +13,11 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 ## Steps
 
 1. Detect stack
-2. Read the project's `AGENTS.md` — load its `## Rules` section for project-specific constraints (the universal quality principles are listed under **What to check** below, not in `AGENTS.md`)
+2. Read the project's `AGENTS.md` — load its `## Rules` section for project-specific constraints
 3. Cat the shared comment doctrine, then the detected stack's code-standards file:
    `cat "<skill-dir>/../standards/code-standards/comments.md" "<skill-dir>/../standards/code-standards/<detected-stack>.md"`
 4. Identify files to review (see **Scoping** below)
-5. Review each file against both layers — quality principles first, then style rules
+5. Review each file against both layers — quality first, then style rules
 6. Report violations (see **Reporting** below)
 7. Update `.claude/review-baseline.md` (see **Baseline** below)
 
@@ -52,18 +52,12 @@ If the project has no commits yet, skip writing the baseline. This is always the
 
 ## What to check
 
-**Layer 1 — Code quality (universal principles, plus anything the project's `AGENTS.md` `## Rules` adds):**
-- **YAGNI**: extra code not required by the task (unused helpers, methods, files added speculatively)
-- **DRY**: duplicated logic that should be extracted; or logic extracted from a single callsite that should be inlined
-- **SRP**: mixed concerns in one function or file (e.g. route handler containing business logic, service containing HTTP response construction)
-- **SoC**: layers bleeding into each other (UI doing data fetching, validation mixed with business logic, config hardcoded in implementation)
-- **Premature abstractions**: abstracted from only 1–2 callsites — wait for the third
-- **Dead code**: commented-out blocks, unused imports, unused variables, TODO stubs
-- **Comment hygiene**: apply `standards/code-standards/comments.md`
+**Layer 1 — Code quality (plus anything the project's `AGENTS.md` `## Rules` adds).** Lint, typecheck and the secret scan already catch unused imports and variables and hardcoded secrets, and the comments CI gate catches comment patterns only; do not re-check those by eye. Still judge comment hygiene against `standards/code-standards/comments.md`. Look for what no tool sees:
+- **Dead code**: commented-out blocks, TODO stubs
 - **Tech debt markers**: `// fix later`, `// temp`, empty catch blocks, swallowed errors
+- **Mixed concerns**: business logic in a route handler, HTTP response construction in a service, data fetching in UI
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
 - **Overly broad responses**: full DB records or internal fields returned when a subset is sufficient
-- **Hardcoded secrets**: tokens, passwords, connection strings, or API keys anywhere in code
 - **Cryptography and keys**: hand-rolled or custom crypto instead of a vetted, maintained library; keys held in code instead of loaded from a secrets manager or from environment variables injected from one
 - **Log retention and protection**: for an app deployed to production, logs kept only on the app host, with no retention period or protection from alteration
 - **Upload scanning**: where untrusted users upload files, uploads stored or served without a malware scan
@@ -100,9 +94,4 @@ Clean: src/features/projects/types.ts, src/features/projects/constants.ts
 Rules:
 - Every violation: `file:line — rule description`
 - List clean files explicitly
-- Do not auto-fix
-- Do not suggest fixes unless the calling skill requests it
-
-## Callers
-
-Dispatched by: `templatecentral:scaffold` (all stacks, post-scaffold review of the hand-edited files only), `templatecentral:add` (feature), `templatecentral:add` (auth), and any skill that produces a significant code change.
+- Report only; do not edit files; the caller decides what to fix
