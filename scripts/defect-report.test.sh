@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/defect-report.test.sh — tests for skills/migrate/general/defect-report.sh and its checks in defects/*.sh.
 # Each check flags its "old" fixture, stays quiet on the current template file copied from the real template tree,
-# counts an absent file as "not installed", ignores dependency folders, never writes into the project and exits as documented.
+# counts a check with no matching file as "no matching file found", ignores dependency folders, never writes into the project and exits as documented.
 # Usage: bash scripts/defect-report.test.sh
 set -uo pipefail
 
@@ -22,12 +22,22 @@ lacks() { # lacks <needle> <haystack> <description>
   if [[ "$2" == *"$1"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] found in [$2]"; else PASS=$((PASS + 1)); fi
 }
 
+# Result helpers for the promise-retry check; they read OUT, so they sit above every use.
+flagged() { has "mongoose-client-promise-retry  high" "$OUT" "$1: flagged"; }
+unflagged() { lacks "mongoose-client-promise-retry  " "$OUT" "$1: not flagged"; }
+
 T=$(mktemp -d "${TMPDIR:-/tmp}/dr.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
 # truth <command...>: print 1 when the command succeeds, 0 when it fails.
 truth() {
   if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi
+}
+
+# cpu_cs: user plus system CPU time of every child this shell has waited for so far, in hundredths of a second.
+# Time bounds below use CPU time, not wall time: a busy machine stretches wall time but not the work a run does.
+cpu_cs() {
+  times | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }'
 }
 
 # run <dir> [args]: sets OUT and EC from running the report with the CI markers cleared.
@@ -111,15 +121,15 @@ done
 
 # ── runner behaviour ─────────────────────────────────────────────────────────
 
-# An absent file is "not installed", not clean.
+# A check with no matching file is "no matching file found", not clean.
 mkdir -p "$T/empty"
 run "$T/empty"
 check 0 "$EC" "empty project exits 0"
-check "$NCHECKS checks run, 0 matched, $NCHECKS not installed. $SUMMARY_TAIL" "$OUT" "empty project: every check counts as not installed"
+check "$NCHECKS checks run, 0 matched, $NCHECKS with no matching file found. $SUMMARY_TAIL" "$OUT" "empty project: every check counts as no matching file found"
 
-# One installed target: the others stay "not installed".
+# One matching file: the other checks stay "no matching file found".
 run "$FIXTURES/mongoose-client-promise-retry/old"
-has "$NCHECKS checks run, 2 matched, $((NCHECKS - 2)) not installed. $SUMMARY_TAIL" "$OUT" "summary line: checks, matches, not installed"
+has "$NCHECKS checks run, 1 matched, $((NCHECKS - 2)) with no matching file found. $SUMMARY_TAIL" "$OUT" "summary line: checks, matches, no matching file found"
 
 # A match inside a dependency folder is ignored.
 for skip in node_modules .venv venv .next dist build coverage .git __pycache__; do
@@ -128,7 +138,7 @@ for skip in node_modules .venv venv .next dist build coverage .git __pycache__; 
   cp -R "$FIXTURES/mongoose-client-promise-retry/old/." "$d/"
   run "$T/skip-$skip"
   check 0 "$EC" "a match inside $skip is ignored (exit)"
-  check "$NCHECKS checks run, 0 matched, $NCHECKS not installed. $SUMMARY_TAIL" "$OUT" "a match inside $skip counts as not installed"
+  check "$NCHECKS checks run, 0 matched, $NCHECKS with no matching file found. $SUMMARY_TAIL" "$OUT" "a match inside $skip counts as no matching file found"
 done
 
 # A skipped candidate (over 1 MB, symlink, newline in the path) is never scanned and never counted as not installed.
@@ -141,14 +151,30 @@ has "every candidate file was skipped" "$OUT" "over 1 MB: the run says nothing w
 mkdir -p "$T/link/src"
 ln -s "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/link/src/mongoose-client.ts"
 run "$T/link"
-check 2 "$EC" "a symlink as the only candidate exits 2"
-has "every candidate file was skipped" "$OUT" "symlink: the run says nothing was scanned"
+check 0 "$EC" "a symlink as the only candidate is counted, not scanned (exit 0)"
+has "1 candidate file(s) were not scanned" "$OUT" "symlink: the run says one file was not scanned"
 mkdir -p "$T/nl/a
 b"
 cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nl/a
 b/"
 run "$T/nl"
-check 2 "$EC" "a newline in the path as the only candidate exits 2"
+check 2 "$EC" "a newline in the path holding the check's text as the only candidate exits 2, like a file over 1 MB"
+has "every candidate file was skipped" "$OUT" "newline path: the run says nothing was scanned"
+# Control: a scanned file beside the newline path still sets the exit status, and the skipped one is counted once.
+mkdir -p "$T/nlbeside/src/integrations/database" "$T/nlbeside/a
+b"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nlbeside/src/integrations/database/"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nlbeside/a
+b/"
+run "$T/nlbeside"
+check 1 "$EC" "a scanned file beside a newline path: the scanned one sets the exit status"
+flagged "a scanned file beside a newline path"
+has "1 candidate file(s) were not scanned" "$OUT" "newline path: one file is counted once, not once per line"
+# Control: a big file that does not hold the check's text is not the match, so the run goes on.
+mkdir -p "$T/bigplain/src"
+head -c 1100000 /dev/zero | tr '\0' ' ' > "$T/bigplain/src/vendor.ts"
+run "$T/bigplain"
+check 0 "$EC" "a big file without the check text does not stop the run"
 
 # One scanned file plus skipped ones: the scan runs, one stderr line gives the number skipped.
 mkdir -p "$T/mix/src" "$T/mix/other"
@@ -161,7 +187,7 @@ mkdir -p "$T/mix/deep"
 cp "$T/mix/other/pad.ts" "$T/mix/deep/mongoose-client.ts"
 run "$T/mix"
 check 1 "$EC" "skipped files beside a scanned one: the scanned one is still flagged"
-has "2 candidate file(s) were not scanned" "$OUT" "skipped count is printed once on stderr"
+has "3 candidate file(s) were not scanned" "$OUT" "skipped count is printed once on stderr"
 
 # A project folder named like a pruned folder is still scanned.
 for root in build dist coverage venv node_modules; do
@@ -179,7 +205,7 @@ chmod 000 "$T/unread/src/integrations/database/mongoose-client.ts"
 if [[ ! -r "$T/unread/src/integrations/database/mongoose-client.ts" ]]; then
   run "$T/unread"
   check 2 "$EC" "an unreadable target file exits 2"
-  has "src/integrations/database/mongoose-client.ts (check mongoose-client-promise-retry)" "$OUT" "the unreadable file is named"
+  has "src/integrations/database/mongoose-client.ts (check " "$OUT" "the unreadable file is named"
 fi
 chmod 644 "$T/unread/src/integrations/database/mongoose-client.ts"
 
@@ -215,8 +241,6 @@ vclient() {
     "$2" "$2" "$2" "$3" "$2" "$4" "$5" > "$d/src/mongoose-client.ts"
   run "$d"
 }
-flagged() { has "mongoose-client-promise-retry  high" "$OUT" "$1: flagged"; }
-unflagged() { lacks "mongoose-client-promise-retry  " "$OUT" "$1: not flagged"; }
 
 vclient old-plain cached 'await cached.promise' '' ''
 flagged "old client with no reset"
@@ -248,10 +272,12 @@ mkdir -p "$T/c1/src" "$T/c2/src" "$T/c3" "$T/c4" "$T/c5" "$T/c6"
 printf '// connectDB\nexport const x = 1;\n' > "$T/c1/src/mongoose-client.ts"
 run "$T/c1"
 lacks "mongoose-init-nextjs  " "$OUT" "a comment naming connectDB does not match"
-printf 'export async function connectDB() {\n  // call .init() later\n  return 1;\n}\n' > "$T/c2/src/mongoose-client.ts"
+printf 'export async function connectDB() {\n  // call .init() later\n  return mongoose.connect(URL);\n}\n' > "$T/c2/src/mongoose-client.ts"
+printf 'const s = { email: { type: String, unique: true } };\n' > "$T/c2/src/user.ts"
 run "$T/c2"
 has "mongoose-init-nextjs  check" "$OUT" "a comment naming .init() does not hide the match"
 printf 'MongooseModule.forRoot(url);\n/* every model .init() */\n' > "$T/c3/database.module.ts"
+printf 'const s = { email: { type: String, unique: true } };\n' > "$T/c3/user.schema.ts"
 run "$T/c3"
 has "mongoose-init-nestjs  check" "$OUT" "a block comment naming .init() does not hide the nestjs match"
 printf 'from sqlalchemy import create_async_engine\n# sslmode=verify-full\nengine = create_async_engine(url)\n' > "$T/c4/session.py"
@@ -297,7 +323,7 @@ has "vite-auth-csrf  high" "$OUT" "a comment naming X-CSRF-Token does not hide t
 xclient() {
   local d="$T/x-$1"
   mkdir -p "$d/src"
-  printf '%s\n' "$2" > "$d/src/mongoose-client.ts"
+  printf 'const m = mongoose.connect(URL);\n%s\n' "$2" > "$d/src/mongoose-client.ts"
   run "$d"
 }
 xclient catch-call-then-helper 'x.catch(noop);
@@ -328,41 +354,153 @@ xclient crlf 'export async function connectDB() {
  cached.promise; } catch (e) { cached.promise =
  null; throw e; }
 }'
-printf 'export async function connectDB() {\r\n  try { cached.conn = await\r\n cached.promise; } catch (e) { cached.promise =\r\n null; throw e; }\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
+printf 'mongoose.connect(URL);\r\nexport async function connectDB() {\r\n  try { cached.conn = await\r\n cached.promise; } catch (e) { cached.promise =\r\n null; throw e; }\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
 run "$T/x-crlf"
 unflagged "CRLF line ends around await and the reset"
-printf 'export async function connectDB() {\r\n  cached.conn = await\r\n cached.promise;\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
+printf 'mongoose.connect(URL);\r\nexport async function connectDB() {\r\n  cached.conn = await\r\n cached.promise;\r\n}\r\n' > "$T/x-crlf/src/mongoose-client.ts"
 run "$T/x-crlf"
 flagged "CRLF line ends around an await with no reset"
 
 # A 300 KB client is read in linear time.
 mkdir -p "$T/perf/src"
 {
-  head -n 1 "$T/x-crlf/src/mongoose-client.ts" | tr -d '\r'
+  printf 'mongoose.connect(URL);\n'
   i=0
   while [[ $i -lt 6000 ]]; do printf 'const value%d = { a: 1, b: "text %d", c: [1, 2, 3] }; // note\n' "$i" "$i"; i=$((i + 1)); done
   printf 'export async function connectDB() { cached.conn = await cached.promise; }\n'
 } > "$T/perf/src/mongoose-client.ts"
-start=$SECONDS
+start=$(cpu_cs)
 run "$T/perf"
-took=$((SECONDS - start))
+took=$(($(cpu_cs) - start))
 flagged "a 300 KB client is still flagged"
-check 1 "$(truth test "$took" -le 5)" "a 300 KB client finishes within 5 seconds (took ${took}s)"
+check 1 "$(truth test "$took" -le 500)" "a 300 KB client takes at most 5 s of CPU (took ${took} cs)"
 
 # Comments and strings for the hook and the Argon2 checks.
-mkdir -p "$T/r1" "$T/r2" "$T/r3" "$T/r4" "$T/a1" "$T/a2" "$T/a3"
-printf '// TODO read tool_response instead\nconst o = input.tool_output;\n' > "$T/r1/redact-sensitive-output.cjs"
+mkdir -p "$T/r1/.claude/hooks" "$T/r2/.claude/hooks" "$T/r3/.claude/hooks" "$T/r4/.claude/hooks" "$T/a1" "$T/a2" "$T/a3"
+printf '// TODO read tool_response instead\nconst o = input.tool_output;\n' > "$T/r1/.claude/hooks/redact-sensitive-output.cjs"
 run "$T/r1"
-has "redact-sensitive-output.cjs:2  redaction-tool-output  high" "$OUT" "a comment naming tool_response does not hide the older hook"
-printf '// was tool_output\nconst o = input.tool_response;\n' > "$T/r2/redact-sensitive-output.cjs"
+has ".claude/hooks/redact-sensitive-output.cjs:2  redaction-tool-output  high" "$OUT" "a comment naming tool_response does not hide the older hook"
+printf '// was tool_output\nconst o = input.tool_response;\n' > "$T/r2/.claude/hooks/redact-sensitive-output.cjs"
 run "$T/r2"
 lacks "redaction-tool-output  " "$OUT" "a fixed hook with tool_output only in a comment is clean"
-printf '# TODO read tool_response instead\no = data.get("tool_output")\n' > "$T/r3/redact_sensitive_output.py"
+printf '# TODO read tool_response instead\no = data.get("tool_output")\n' > "$T/r3/.claude/hooks/redact_sensitive_output.py"
 run "$T/r3"
-has "redact_sensitive_output.py:2  redaction-tool-output  high" "$OUT" "a Python comment naming tool_response does not hide the older hook"
-printf 'o = data.get("tool_response")  # not tool_output\n' > "$T/r4/redact_sensitive_output.py"
+has ".claude/hooks/redact_sensitive_output.py:2  redaction-tool-output  high" "$OUT" "a Python comment naming tool_response does not hide the older hook"
+printf 'o = data.get("tool_response")  # not tool_output\n' > "$T/r4/.claude/hooks/redact_sensitive_output.py"
 run "$T/r4"
 lacks "redaction-tool-output  " "$OUT" "a fixed Python hook with tool_output only in a comment is clean"
+# The redaction check looks at hook files under .claude/hooks only: the same text in an app file is not a hook.
+mkdir -p "$T/rv/public" "$T/rv/src"
+printf 'var o = input.tool_output;\n' > "$T/rv/public/vendor.js"
+printf 'o = data.get("tool_output")\n' > "$T/rv/src/client.py"
+printf 'export const x = payload.tool_output;\n' > "$T/rv/src/redact-sensitive-output.cjs"
+run "$T/rv"
+lacks "redaction-tool-output  " "$OUT" "tool_output in app files (vendor.js, client.py, a look-alike name outside .claude/hooks) is not reported"
+mkdir -p "$T/rv/.claude/hooks"
+printf 'var o = input.tool_output;\n' > "$T/rv/.claude/hooks/other-hook.js"
+run "$T/rv"
+has ".claude/hooks/other-hook.js:1  redaction-tool-output  high" "$OUT" "the same text in a hook file under .claude/hooks is reported"
+
+# Prune list: virtualenvs, .tox and site-packages are not scanned; build and dist are pruned at the project root only.
+PYENG='from sqlalchemy import create_engine\nengine = create_engine(URL)\n'
+mkdir -p "$T/pv/env/lib" "$T/pv/.tox/py" "$T/pv/lib/python3.12/site-packages/pkg" "$T/pv/other"
+printf 'home = /usr/bin\n' > "$T/pv/env/pyvenv.cfg"
+printf '%b' "$PYENG" > "$T/pv/env/lib/db.py"
+printf '%b' "$PYENG" > "$T/pv/.tox/py/db.py"
+printf '%b' "$PYENG" > "$T/pv/lib/python3.12/site-packages/pkg/db.py"
+run "$T/pv"
+lacks "sqlalchemy-tls-verify  " "$OUT" "a non-dot virtualenv (pyvenv.cfg), .tox and site-packages are not scanned"
+printf '%b' "$PYENG" > "$T/pv/other/db.py"
+run "$T/pv"
+has "other/db.py:2  sqlalchemy-tls-verify" "$OUT" "control: an ordinary folder beside them is scanned"
+for deep in build dist; do
+  mkdir -p "$T/pd-$deep/src/$deep"
+  cp -R "$FIXTURES/mongoose-client-promise-retry/old/." "$T/pd-$deep/src/$deep/"
+  run "$T/pd-$deep"
+  has "mongoose-client-promise-retry  high" "$OUT" "src/$deep below the project root is scanned"
+done
+
+# 4000 small files finish within a bound. The runner reads candidates with one search per check, not one process per file.
+mkdir -p "$T/many/src"
+i=0
+while [[ $i -lt 4000 ]]; do printf 'export const v%d = %d;\n' "$i" "$i" > "$T/many/src/f$i.ts"; i=$((i + 1)); done
+start=$(cpu_cs)
+run "$T/many"
+took=$(($(cpu_cs) - start))
+check 0 "$EC" "4000 small files: exit 0"
+check 1 "$(truth test "$took" -le 1500)" "4000 small .ts files take at most 15 s of CPU (took ${took} cs)"
+
+# A single-line minified file is skipped, and the run says so.
+mkdir -p "$T/mini/src"
+{
+  printf 'mongoose.connect(URL);'
+  i=0
+  while [[ $i -lt 20000 ]]; do printf 'var a%d={b:"x%d",c:[1,2,3]};' "$i" "$i"; i=$((i + 1)); done
+  printf 'async function connectDB(){cached.conn=await cached.promise}\n'
+} > "$T/mini/src/mongoose-client.ts"
+start=$(cpu_cs)
+run "$T/mini"
+took=$(($(cpu_cs) - start))
+check 2 "$EC" "a capped file as the only candidate exits 2, like a file over 1 MB"
+has "mongoose-client.ts" "$OUT" "minified file: named in the skip notice"
+has "every candidate file was skipped" "$OUT" "minified file: the run says nothing was scanned"
+check 1 "$(truth test "$took" -le 1000)" "a 600 KB single-line file takes at most 10 s of CPU (took ${took} cs)"
+
+# A capped hook is never read as clean: it is counted in the summary and on stderr, beside a scanned file.
+mkdir -p "$T/cap/.claude/hooks"
+{
+  printf 'var pad = "'
+  head -c 120000 /dev/zero | tr '\0' 'a'
+  printf '"; var o = input.tool_output;\n'
+} > "$T/cap/.claude/hooks/big-hook.js"
+printf 'var o = input.tool_output;\n' > "$T/cap/.claude/hooks/small-hook.js"
+run "$T/cap"
+check 1 "$EC" "a capped hook beside a scanned one: the scanned one still sets the exit status"
+has "1 candidate file(s) were not scanned" "$OUT" "a capped hook is counted on stderr"
+has "1 file(s) not scanned. This is a list" "$OUT" "a capped hook is counted in the summary line"
+lacks "big-hook.js:1  redaction" "$OUT" "a capped hook is not reported as a match"
+
+# 400 candidate files that name mongoose.connect( with a unique index declared: the index answer is computed once per run.
+mkdir -p "$T/uq/src"
+i=0
+while [[ $i -lt 400 ]]; do printf 'export const c%d = mongoose.connect(URL);\n' "$i" > "$T/uq/src/client$i.ts"; i=$((i + 1)); done
+printf 'const s = new Schema({ email: { type: String, unique: true } });\n' > "$T/uq/src/model.ts"
+start=$(cpu_cs)
+run "$T/uq"
+took=$(($(cpu_cs) - start))
+check 0 "$EC" "400 candidates with a unique index: exit 0"
+has "mongoose-init-nextjs  check" "$OUT" "400 candidates with a unique index: still flagged"
+check 1 "$(truth test "$took" -le 2000)" "400 candidates with a unique index take at most 20 s of CPU (took ${took} cs)"
+
+# A source file with a line over the cap counts as declaring a unique index, and the run says so on stderr.
+mkdir -p "$T/uqcap/src"
+printf 'export const c = mongoose.connect(URL);\n' > "$T/uqcap/src/client.ts"
+{ printf 'var s = { unique: true }; var pad = "'; head -c 120000 /dev/zero | tr '\0' 'a'; printf '";\n'; } > "$T/uqcap/src/bundle.js"
+run "$T/uqcap"
+has "bundle.js: a line over" "$OUT" "a capped source file is named when it stands in for a unique index"
+has "mongoose-init-nextjs  check" "$OUT" "a capped source file: the init check still reports"
+# Control: no capped file, no notice.
+run "$T/uq"
+lacks "counted as declaring a unique index" "$OUT" "control: no capped source file, no notice"
+
+# An awk that fails while measuring line length stops the run: it is never read as "no long line".
+mkdir -p "$T/awkshim" "$T/awkfail/src"
+REALAWK=$(command -v awk)
+export REALAWK
+cat > "$T/awkshim/awk" <<'EOS'
+#!/bin/sh
+case "$*" in *'f = 1; exit'*) exit 2 ;; esac
+exec "$REALAWK" "$@"
+EOS
+chmod +x "$T/awkshim/awk"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/awkfail/src/"
+OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD PATH="$T/awkshim:$PATH" bash "$RUNNER" "$T/awkfail" 2>&1)
+EC=$?
+check 2 "$EC" "awk failing on the line-length measure exits 2"
+has "awk failed" "$OUT" "awk failure: the run names the cause"
+run "$T/awkfail"
+check 1 "$EC" "control: the same project with a working awk runs and flags"
+
 LIT="\$argon2id\$v=19\$m=65536,t=3,p=1\$c29tZXNhbHRzb21lc2E\$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
 printf '// const DUMMY = argon2.hash(randomUUID());\nconst DUMMY_HASH = "%s";\n' "$LIT" > "$T/a1/auth.service.ts"
 run "$T/a1"
@@ -387,6 +525,46 @@ ln -s "$T/dl/proj2/real" "$T/dl/proj2/alias"
 run "$T/dl/proj2"
 check 1 "$EC" "a symlinked directory that stays inside the project is harmless"
 lacks "not scanned" "$OUT" "an inner link is not reported as skipped"
+
+# Item 9: a check finds its file by content, not by path or function name.
+mkdir -p "$T/f1/src/lib/infra" "$T/f2/src/integrations/clients" "$T/f3/src/app/core" "$T/f4/src/lib"
+printf 'const cached = { conn: null, promise: null };\nexport async function getDb() {\n  cached.promise = mongoose.connect(URL);\n  cached.conn = await cached.promise;\n  return cached.conn;\n}\n' > "$T/f1/src/lib/infra/mongoose.ts"
+run "$T/f1"
+has "src/lib/infra/mongoose.ts:4  mongoose-client-promise-retry  high" "$OUT" "a client at src/lib/infra/mongoose.ts is found by content"
+printf 'const cached = { conn: null, promise: null };\nexport async function connectMongoose() {\n  cached.promise = mongoose.connect(URL);\n  cached.conn = await cached.promise;\n  return cached.conn;\n}\n' > "$T/f2/src/integrations/clients/mongoose-client.ts"
+run "$T/f2"
+has "src/integrations/clients/mongoose-client.ts:4  mongoose-client-promise-retry  high" "$OUT" "a client named connectMongoose is found by content"
+printf 'engine = create_engine(url)\n' > "$T/f3/src/app/core/db.py"
+run "$T/f3"
+has "src/app/core/db.py:1  sqlalchemy-tls-verify  check" "$OUT" "an engine in src/app/core/db.py with no TLS argument is found"
+has "no TLS argument" "$OUT" "the message says no TLS argument"
+printf 'engine = create_engine(url, connect_args={"sslmode": "verify-full"})\n' > "$T/f3/src/app/core/db.py"
+run "$T/f3"
+lacks "sqlalchemy-tls-verify  " "$OUT" "control: the same engine with a TLS argument is clean"
+printf 'export async function getDb() {\n  cached.promise = mongoose.connect(URL);\n  try { cached.conn = await cached.promise; } catch (e) { cached.promise = null; throw e; }\n}\n' > "$T/f4/src/lib/mongoose.ts"
+run "$T/f4"
+lacks "mongoose-client-promise-retry  " "$OUT" "control: a client that resets in the catch is clean"
+# A test file that names the same text is not a candidate.
+mkdir -p "$T/f5/src"
+printf 'engine = create_engine(url)\n' > "$T/f5/src/test_db.py"
+printf 'x = mongoose.connect(URL); await x;\n' > "$T/f5/src/client.test.ts"
+run "$T/f5"
+lacks "sqlalchemy-tls-verify  " "$OUT" "a test file is not scanned"
+lacks "mongoose-client-promise-retry  " "$OUT" "a .test.ts file is not scanned"
+
+# Item 10: the mongoose-init checks report only when the source declares a unique index.
+mkdir -p "$T/u1/src" "$T/u2/src" "$T/u3/src"
+printf 'export async function getDb() { return mongoose.connect(URL); }\n' > "$T/u1/src/db.ts"
+run "$T/u1"
+lacks "mongoose-init-nextjs  " "$OUT" "no unique index in source: the init check stays silent"
+printf 'export async function getDb() { return mongoose.connect(URL); }\n' > "$T/u2/src/db.ts"
+printf 'const s = new Schema({ email: { type: String, unique: true } });\n' > "$T/u2/src/user.ts"
+run "$T/u2"
+has "src/db.ts:1  mongoose-init-nextjs  check" "$OUT" "a unique index in source: the init check reports"
+printf 'export async function getDb() { return mongoose.connect(URL); }\n' > "$T/u3/src/db.ts"
+printf '// unique: true\nconst s = new Schema({ email: String });\n' > "$T/u3/src/user.ts"
+run "$T/u3"
+lacks "mongoose-init-nextjs  " "$OUT" "unique: true only in a comment: the init check stays silent"
 
 # Every path and heading the notes name exists in the tree.
 notes="$REPO_ROOT/skills/migrate/general/UPGRADE-NOTES.md"

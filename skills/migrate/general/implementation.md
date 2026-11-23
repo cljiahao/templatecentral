@@ -59,7 +59,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
   ```
   ✓ This project is on the current harness schema (@6.0.0). No migration needed.
   ```
-  Then load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above. To bring the harness files up to the current templates in one run instead, load `general/harness-refresh.md`.
+  Then run the harness refresh first: load `general/harness-refresh.md` and follow it (dry run, confirm, apply, merge the `.templatecentral-new` files). When the refresh is done, load and run **Phase 5** (5a–5c; offer 5d) — see the phase table above — for the source-level checks and the optional extras the refresh does not touch. A project that has `.claude/harness.json` never takes the Phase 1–4 path.
 
 - **`.claude/harness.json` does not exist** → a light adoption wrote the marker but never seeded
   the harness. Do **not** exit. Skip Phases 1–3 and present:
