@@ -3,12 +3,14 @@
 # Usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <nestjs|nextjs|vite-react|fastapi>]
 # Default is a dry run: one line per file, nothing written. Classes:
 #   SAME     identical to the current template
-#   REPLACE  not identical, and proven unmodified since it was seeded (replaced on --apply)
+#   REPLACE  not identical, and identical to a file a released version shipped (replaced on --apply)
 #   MODIFIED a local edit, or no proof either way; --apply writes <path>.templatecentral-new beside it and never touches it
 #   ADD      missing (added on --apply)
 #   GONE     recorded as seeded in .claude/harness.json but no longer in the templates (report only, never deleted)
-# Proof of "unmodified": the file's hash equals its origin_hash in .claude/harness.json and the file is byte-equal to its
-# copy under .claude/.harness-base/. Without both records the file counts as MODIFIED; the script never guesses.
+# Proof of "unmodified": the file's sha256 is on pristine-hashes.txt (beside this script) for that path, the hashes of the files
+# every released version shipped (made by gen-pristine-hashes.sh). The project's own records (origin_hash in .claude/harness.json,
+# the copies under .claude/.harness-base/) prove nothing: regen-harness.sh and the re-baseline step rewrite them from the current
+# file. A file with no hash match, or no list, is MODIFIED; the script never guesses.
 # A file whose template carries a __TC_<NAME>__ placeholder is never replaced: it is SAME or MODIFIED.
 # --apply refuses a dirty git tree (or no git) unless --allow-dirty, so the change is one reviewable diff. It also refreshes the
 # records of the files it wrote, runs harness-live.sh, and with --baseline runs quality-baseline.sh before and after and compares.
@@ -63,6 +65,7 @@ if [ -L "$P/.claude" ]; then die ".claude is a symlink; refusing to touch it"; f
 
 HJ=$P/.claude/harness.json
 BASE=.claude/.harness-base
+PRISTINE=$GEN/pristine-hashes.txt
 
 # Stack from the signals in AGENTS.md; both a frontend and a backend signal means a monorepo root.
 detect_stack() {
@@ -115,7 +118,12 @@ if [ -f "$HJ" ]; then
   records=$(tr -d '\n' <"$HJ" | grep -o '"origin_hash"[[:space:]]*:[[:space:]]*"[0-9a-f]*"[[:space:]]*,[[:space:]]*"path"[[:space:]]*:[[:space:]]*"[^"]*"' \
     | sed 's/.*"origin_hash"[[:space:]]*:[[:space:]]*"\([0-9a-f]*\)".*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1 \2/')
 fi
-origin_of() { printf '%s\n' "$records" | awk -v p="$1" '{ h = $1; $1 = ""; sub(/^ /, ""); if ($0 == p) { print h; exit } }'; }
+
+# pristine_version <rel> <hash>: the released version that shipped this exact file at this path; fails when none did or the list is missing.
+pristine_version() {
+  [ -s "$PRISTINE" ] || return 1
+  awk -F "$TAB" -v h="$2" -v p="$1" '$1 == h && $3 == p { print $2; found = 1; exit } END { exit !found }' "$PRISTINE"
+}
 
 # unsafe_path <rel>: the one check for every write site (targets, sidecars, base copies). Succeeds when the file or any
 # parent below the project is a symlink or not a directory, the path escapes the project, or the nearest existing
@@ -180,12 +188,9 @@ while IFS="$TAB" read -r tree rel mode ph; do
     else add REPLACE "$dest" "$srcf" "$mode" "content identical; mode set to $mode"; fi
     continue
   fi
-  oh=$(origin_of "$dest")
-  if [ -z "$oh" ]; then add MODIFIED "$dest" "$srcf" "$mode" "no origin hash recorded; cannot prove it unmodified"; continue; fi
-  if [ "$(sha "$P/$dest")" != "$oh" ]; then add MODIFIED "$dest" "$srcf" "$mode" "differs from its recorded origin hash"; continue; fi
-  if [ ! -f "$P/$BASE/$dest" ]; then add MODIFIED "$dest" "$srcf" "$mode" "no seeded copy under $BASE; cannot prove it unmodified"; continue; fi
-  if ! cmp -s -- "$P/$BASE/$dest" "$P/$dest"; then add MODIFIED "$dest" "$srcf" "$mode" "differs from its seeded copy under $BASE"; continue; fi
-  add REPLACE "$dest" "$srcf" "$mode" "unmodified since seeded"
+  if pv=$(pristine_version "$dest" "$(sha "$P/$dest")"); then add REPLACE "$dest" "$srcf" "$mode" "identical to the file released in $pv"; continue; fi
+  if [ ! -s "$PRISTINE" ]; then add MODIFIED "$dest" "$srcf" "$mode" "pristine-hashes.txt is missing; cannot prove it unmodified"; continue; fi
+  add MODIFIED "$dest" "$srcf" "$mode" "not identical to any released template; treated as edited"
 done <<TC_PLAN
 $plan
 TC_PLAN
@@ -215,6 +220,29 @@ if [ "$APPLY" -eq 1 ]; then MODE_TXT=apply; else MODE_TXT='dry run, nothing is c
 echo "stack $STACK, ci $CI, git tree $TREE, $MODE_TXT"
 awk -F "$TAB" '{ printf "%-9s %s%s\n", $1, $2, ($5 != "" ? "  (" $5 ")" : "") }' "$RES"
 echo "summary: $N_SAME same, $N_REP to replace, $N_ADD to add, $N_MOD modified (need you), $N_GONE no longer seeded (report only)"
+
+# Plan notes: seeded files that land next to the project's own CI or git-hook manager, for the owner to review.
+OWNCI=
+for f in "$P"/.github/workflows/* "$P"/azure-pipelines*; do
+  [ -e "$f" ] || continue
+  case "$f" in "$P/.github/workflows/ci.yml") continue ;; esac
+  OWNCI="$OWNCI ${f#"$P"/}"
+done
+OTHERHK=
+[ -d "$P/.githooks" ] && OTHERHK="$OTHERHK .githooks"
+[ -f "$P/.pre-commit-config.yaml" ] && OTHERHK="$OTHERHK .pre-commit-config.yaml"
+[ -f "$P/package.json" ] && grep -q '"simple-git-hooks"' "$P/package.json" && OTHERHK="$OTHERHK package.json(simple-git-hooks)"
+while IFS="$TAB" read -r cls path _; do
+  [ "$cls" = ADD ] || continue
+  case "$path" in
+    .github/*|azure-pipelines*)
+      [ -z "$OWNCI" ] || echo "note: $path will be added next to the project's own CI (${OWNCI# }); review it before you commit." ;;
+    lefthook.yml)
+      [ -z "$OTHERHK" ] || echo "note: lefthook.yml will be added but the project already uses another git-hook manager (${OTHERHK# }); two managers can fight over .git/hooks, so choose one." ;;
+    sonar-project.properties)
+      echo "note: sonar-project.properties is seeded as a file only; it runs no scanner. Review the project key and sources, or delete it if the project does not use it." ;;
+  esac
+done <"$RES"
 
 if [ "$APPLY" -eq 0 ]; then
   [ "$TREE" = clean ] || echo "note: the tree is $TREE; --apply refuses it unless --allow-dirty is given."
@@ -274,21 +302,27 @@ WLIST=
 NWLIST=
 # still_proven <path> <note>: the REPLACE proof holds right now, re-checked just before the write.
 still_proven() {
-  local path=$1 note=$2 oh
+  local path=$1 note=$2
   if [ ! -f "$P/$path" ] || [ -L "$P/$path" ]; then return 1; fi
   case "$note" in
     "content identical"*) cmp -s -- "$srcf" "$P/$path" ;;
-    *)
-      oh=$(origin_of "$path")
-      [ -n "$oh" ] && [ "$(sha "$P/$path")" = "$oh" ] && [ -f "$P/$BASE/$path" ] && cmp -s -- "$P/$BASE/$path" "$P/$path" ;;
+    *) pristine_version "$path" "$(sha "$P/$path")" >/dev/null ;;
   esac
 }
 # write_sidecar <path> <srcf>: the new version beside a modified file; never replaces anything that is already there.
+# An identical sidecar is a merge still pending, not a failure; a different one is kept and reported.
 write_sidecar() {
   local path=$1 srcf=$2 sc=$P/$1$NEWSUF
   if [ -L "$sc" ]; then echo "FAILED   $path$NEWSUF (it is a symlink)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
   if [ -e "$sc" ] && [ ! -f "$sc" ]; then echo "FAILED   $path$NEWSUF (it exists and is not a regular file)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
-  if [ -f "$sc" ]; then echo "FAILED   $path$NEWSUF (it already exists; merge or remove it first)"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; return; fi
+  if [ -f "$sc" ] && cmp -s -- "$srcf" "$sc"; then
+    echo "pending  $path$NEWSUF (already written, identical to the new version; merge it into your file, then delete it)"
+    NEWFILES="$NEWFILES$NL$path$NEWSUF"; return
+  fi
+  if [ -f "$sc" ]; then
+    echo "kept     $path$NEWSUF (an older or edited sidecar differs from the new version and is not overwritten; compare it with $srcf, merge, delete it, then run the refresh again)"
+    NEWFILES="$NEWFILES$NL$path$NEWSUF"; return
+  fi
   if write_file "$srcf" "$sc" 644; then echo "wrote    $path$NEWSUF"; NEWFILES="$NEWFILES$NL$path$NEWSUF"; WLIST="$WLIST $path$NEWSUF"
   else echo "FAILED   $path$NEWSUF"; FAILED=1; NWLIST="$NWLIST $path$NEWSUF"; fi
 }
@@ -309,6 +343,8 @@ while IFS="$TAB" read -r cls path srcf mode note; do
       write_sidecar "$path" "$srcf" ;;
   esac
 done <"$RES"
+
+if [ "$N_MOD" -gt 0 ] && [ -f "$HJ" ]; then echo "version not bumped: $N_MOD file(s) wait for merge (templatecentral_version in .claude/harness.json stays as it is)"; fi
 
 # Refresh the records of the files written, so verify-harness.sh and the next run see them as seeded.
 if [ -s "$WROTE" ] && [ -f "$HJ" ]; then
@@ -383,11 +419,21 @@ echo "---"
 if [ -s "$WROTE" ] && grep -q '\.md$' "$WROTE"; then echo "Run the project's formatter over the written Markdown files: the templates are unformatted."; fi
 if [ -n "$NEWFILES" ]; then
   echo "NEEDS YOU: merge each new version into your file, then delete the $NEWSUF file:${NEWFILES}"
+  echo "The refresh does not edit AGENTS.md: its line-1 marker and the version line are yours; see harness-refresh.md."
+fi
+if awk -F "$TAB" '$1 == "MODIFIED" && $2 == ".claude/settings.json" { f = 1 } END { exit !f }' "$RES" && [ -s "$WROTE" ]; then
+  GATEW=$(grep -E '^\.claude/(hooks/|verify-harness\.sh$)' "$WROTE" | tr '\n' ' ')
+  if [ -n "$GATEW" ]; then
+    echo "WAITING FOR MERGE: .claude/settings.json was kept as it is. The refresh wrote ${GATEW% } and the new settings.json is in .claude/settings.json$NEWSUF."
+    echo "Until you merge it, .claude/verify-harness.sh and the live check above fail (for example DENY RULE MISSING: Bash(eval *)) and the new hooks are not registered. That is expected, not a broken refresh."
+    echo "Next: merge .claude/settings.json$NEWSUF into .claude/settings.json structurally (hooks and permissions), delete the $NEWSUF file, then run: bash .claude/verify-harness.sh && bash \"$GEN/harness-live.sh\" ."
+  fi
 fi
 [ "$N_GONE" -eq 0 ] || echo "Report only: $N_GONE recorded file(s) are no longer seeded; nothing was deleted."
 if [ "$FAILED" -eq 0 ]; then echo "Review with git diff, then commit the refresh as one change."; fi
 if [ "$FAILED" -ne 0 ]; then
   echo "PARTIAL: the tree is partly applied. written:${WLIST:- none}. not written:${NWLIST:- none}."
 fi
+if [ "$N_MOD" -gt 0 ] && [ "$FAILED" -eq 0 ]; then echo "Exit 1: $N_MOD file(s) wait for a merge; the refresh itself did not fail."; fi
 if [ "$N_MOD" -gt 0 ] || [ "$FAILED" -ne 0 ] || [ "$LIVE" -ne 0 ] || [ "$CMP" -ne 0 ]; then exit 1; fi
 exit 0

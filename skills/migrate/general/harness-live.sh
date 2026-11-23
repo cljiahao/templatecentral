@@ -10,7 +10,8 @@ P=$(cd "$1" && pwd -P) || exit 2
 
 FAILS=0
 pass() { echo "PASS $1"; }
-fail() { echo "FAIL $1: $2"; FAILS=$((FAILS + 1)); }
+# fail <item> <what is wrong> [<fix>]: every FAIL line states a fix; the fallback points to the guide that defines the item.
+fail() { echo "FAIL $1: $2. Fix: ${3:-see skills/scaffold/shared/harness-kit-enforcement.md for this item}"; FAILS=$((FAILS + 1)); }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # Resolve a tool from the project first, then PATH.
@@ -288,41 +289,50 @@ hook_runs_lefthook() {
 
 # 1. lefthook binary, config and wired git hooks
 lh=$(resolve lefthook)
-if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH"; fi
+if [ -n "$lh" ]; then pass "lefthook binary ($lh)"; else fail "lefthook binary" "not in node_modules/.bin, .venv/bin or PATH" "install lefthook as a dev dependency (pnpm add -D lefthook, or pip install lefthook in the project environment) or put the binary on PATH, then run lefthook install"; fi
 if [ -f "$P/lefthook.yml" ]; then
   for h in pre-commit pre-push; do
     if { section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+commands:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}[A-Za-z0-9_-]+:'; } \
       || { section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]+jobs:' && section_lines "$P/lefthook.yml" "$h" | grep -Eq '^[[:space:]]{4}-[[:space:]]'; }; then pass "lefthook.yml $h defines commands"
-    else fail "lefthook.yml $h" "no $h section with a non-empty commands or jobs block"; fi
+    else fail "lefthook.yml $h" "no $h section with a non-empty commands or jobs block" "add a $h section with at least one command to lefthook.yml; skills/scaffold/shared/template-ts/lefthook.yml is the model"; fi
   done
   gls=$(gitleaks_state "$P/lefthook.yml")
   case "$gls" in
     ok) pass "lefthook.yml pre-commit runs gitleaks" ;;
-    mixed) fail "lefthook.yml gitleaks" "the gitleaks command must be the only command in the run line; a trailing || true, a pipe, a second command, a background marker or a trailing backslash keeps it from blocking; in the docker form use \"\$PWD\" and not \$(pwd)" ;;
-    multi) fail "lefthook.yml gitleaks" "the command that runs gitleaks has more than one run: key; keep exactly one" ;;
-    key:*) fail "lefthook.yml gitleaks" "${gls#key:}: is not an accepted key here and can switch the scan off or narrow it; the check accepts only commands, jobs, scripts, parallel, piped, follow, fail_on_changes and skip: false in pre-commit, and run, name, tags, stage_fixed, fail_text, priority, root and skip: false on the gitleaks command; exclude_tags is refused at the top level" ;;
-    arg:*) fail "lefthook.yml gitleaks" "argument ${gls#arg:} is not accepted; the scan may use only git, protect, detect or dir with --pre-commit, --staged, --redact, -v, --verbose, --no-banner, --no-color, --log-level and a --config value that is a relative path of letters, digits, dot, dash, underscore and slash, with no .. segment, to an existing non-empty regular file inside the project; npm, pnpm, yarn or bun run and a path to gitleaks are not accepted, use the bare gitleaks binary, npx, pnpx, bunx or pnpm, yarn, npm or bun exec or dlx; a positional path is accepted only in the docker form" ;;
-    form) fail "lefthook.yml gitleaks" "lefthook.yml uses a YAML form the check cannot read (a quoted or explicit key, a space before the colon, a merge key, an alias or anchor, a flow mapping, or a list under a command key); write the gitleaks command plainly" ;;
-    dup) fail "lefthook.yml gitleaks" "a command name under commands: is repeated; the later entry can replace the gitleaks one" ;;
-    duphook) fail "lefthook.yml gitleaks" "pre-commit: or a key under it appears more than once; the later one can replace the earlier; keep one" ;;
-    overlay) fail "lefthook.yml gitleaks" "lefthook-local.yml, extends: or remotes: can change the pre-commit hook; check it by hand or remove it" ;;
-    skip) fail "lefthook.yml gitleaks" "the gitleaks command or the pre-commit hook sets skip: true" ;;
-    *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect or dir) outside a comment; the check reads only two-space indentation (commands: at 2 spaces, command names at 4, fields at 6), not 4-space indentation or flow mappings, and a bare gitleaks dir . is not accepted" ;;
+    mixed) fail "lefthook.yml gitleaks" "the gitleaks command must be the only command in the run line; a trailing || true, a pipe, a second command, a background marker or a trailing backslash keeps it from blocking; in the docker form use \"\$PWD\" and not \$(pwd)" "make the pre-commit gitleaks run line one plain gitleaks command" ;;
+    multi) fail "lefthook.yml gitleaks" "the command that runs gitleaks has more than one run: key; keep exactly one" "keep one run: key on the gitleaks command" ;;
+    key:*) fail "lefthook.yml gitleaks" "${gls#key:}: is not an accepted key here and can switch the scan off or narrow it; the check accepts only commands, jobs, scripts, parallel, piped, follow, fail_on_changes and skip: false in pre-commit, and run, name, tags, stage_fixed, fail_text, priority, root and skip: false on the gitleaks command; exclude_tags is refused at the top level" "remove the extra key from the pre-commit hook or the gitleaks command" ;;
+    arg:*) fail "lefthook.yml gitleaks" "argument ${gls#arg:} is not accepted; the scan may use only git, protect, detect or dir with --pre-commit, --staged, --redact, -v, --verbose, --no-banner, --no-color, --log-level and a --config value that is a relative path of letters, digits, dot, dash, underscore and slash, with no .. segment, to an existing non-empty regular file inside the project; npm, pnpm, yarn or bun run and a path to gitleaks are not accepted, use the bare gitleaks binary, npx, pnpx, bunx or pnpm, yarn, npm or bun exec or dlx; a positional path is accepted only in the docker form" "change the gitleaks arguments to the accepted ones" ;;
+    form) fail "lefthook.yml gitleaks" "lefthook.yml uses a YAML form the check cannot read (a quoted or explicit key, a space before the colon, a merge key, an alias or anchor, a flow mapping, or a list under a command key); write the gitleaks command plainly" "rewrite the pre-commit hook in plain two-space YAML" ;;
+    dup) fail "lefthook.yml gitleaks" "a command name under commands: is repeated; the later entry can replace the gitleaks one" "rename or remove the repeated command name" ;;
+    duphook) fail "lefthook.yml gitleaks" "pre-commit: or a key under it appears more than once; the later one can replace the earlier; keep one" "keep one pre-commit: block" ;;
+    overlay) fail "lefthook.yml gitleaks" "lefthook-local.yml, extends: or remotes: can change the pre-commit hook; check it by hand or remove it" "remove lefthook-local.yml, extends: and remotes:, or check them by hand" ;;
+    skip) fail "lefthook.yml gitleaks" "the gitleaks command or the pre-commit hook sets skip: true" "remove skip: true from the hook and the gitleaks command" ;;
+    *) fail "lefthook.yml gitleaks" "no run line in pre-commit invokes gitleaks (git, detect, protect or dir) outside a comment; the check reads only two-space indentation (commands: at 2 spaces, command names at 4, fields at 6), not 4-space indentation or flow mappings, and a bare gitleaks dir . is not accepted" "add a gitleaks command to the pre-commit section of lefthook.yml; skills/scaffold/shared/template-ts/lefthook.yml is the model" ;;
   esac
   if git -C "$P" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     hooks_dir=$(git -C "$P" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
     for h in pre-commit commit-msg pre-push; do
       grep -Eq "^$h:" "$P/lefthook.yml" || continue
       if [ -f "$hooks_dir/$h" ] && [ -x "$hooks_dir/$h" ] && hook_runs_lefthook "$hooks_dir/$h"; then pass "git hook $h executable and calls lefthook"
-      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h is missing, not executable, or does not run lefthook before any top-level exit; run lefthook install"; fi
+      else fail "git hook $h" "lefthook.yml defines it but $hooks_dir/$h is missing, not executable, or does not run lefthook before any top-level exit" "install lefthook first (the lefthook binary item above), then run lefthook install in the project"; fi
     done
-  else fail "git hooks" "not a git repository"; fi
-else fail "lefthook.yml" "missing"; fi
+  else fail "git hooks" "not a git repository" "run git init, then install lefthook and run lefthook install"; fi
+else fail "lefthook.yml" "missing" "run harness-refresh.sh <project> --apply to add it, or copy it from the stack template"; fi
 
 # 2. gitleaks and its config
 gl=$(resolve gitleaks)
-if [ -n "$gl" ]; then pass "gitleaks binary ($gl)"; else fail "gitleaks binary" "not resolvable; install it"; fi
-if [ -f "$P/.gitleaks.toml" ]; then pass ".gitleaks.toml present"; else fail ".gitleaks.toml" "missing"; fi
+if [ -n "$gl" ]; then pass "gitleaks binary ($gl)"; else fail "gitleaks binary" "not resolvable" "install gitleaks (a package manager or a release binary) or put it on PATH"; fi
+if [ -f "$P/.gitleaks.toml" ]; then pass ".gitleaks.toml present"; else fail ".gitleaks.toml" "missing" "run harness-refresh.sh <project> --apply to add it, or copy .gitleaks.toml from the template"; fi
+
+# hook_file <name>: the real hook script, never a sidecar or backup; empty when there is none.
+hook_file() {
+  local e
+  for e in sh py js mjs cjs ts; do
+    if [ -f "$P/.claude/hooks/$1.$e" ]; then echo "$P/.claude/hooks/$1.$e"; return 0; fi
+  done
+  return 0
+}
 
 # 3. agent hooks: seeded, executable when run as scripts, registered under the right event in settings.json in exec form
 # fire <hook-file> <payload>: run a guard in the project on a synthetic payload; prints "<exit status> <stderr>". The guards only read.
@@ -337,70 +347,70 @@ fire() {
 }
 if [ -f "$P/.claude/settings.json" ]; then
   reg=$(settings_hooks) || reg=FAILED
-  if [ "$reg" = FAILED ]; then fail ".claude/settings.json" "unreadable, or neither python3 nor node is available"; reg=; fi
-  if printf '%s\n' "$reg" | grep -q '^__disable__ true'; then fail "settings.json disableAllHooks" "true turns every hook off"; fi
-  if printf '%s\n' "$reg" | grep -q ' ARRAY '; then fail "settings.json hooks" "an array-valued command never runs; use exec form (command + args)"; fi
+  if [ "$reg" = FAILED ]; then fail ".claude/settings.json" "unreadable, or neither python3 nor node is available" "make .claude/settings.json valid JSON and install python3 or node"; reg=; fi
+  if printf '%s\n' "$reg" | grep -q '^__disable__ true'; then fail "settings.json disableAllHooks" "true turns every hook off" "remove disableAllHooks from .claude/settings.json"; fi
+  if printf '%s\n' "$reg" | grep -q ' ARRAY '; then fail "settings.json hooks" "an array-valued command never runs" "write each hook in exec form: command plus args"; fi
   for pair in protect-files:PreToolUse block-no-verify:PreToolUse user-prompt-guard:UserPromptSubmit post-edit-typecheck:PostToolUse post-edit-comment-check:PostToolUse stop-checks:Stop subagent-stop:SubagentStop session-context:SessionStart skill-usage-log:PostToolUse; do
     name=${pair%%:*}; event=${pair#*:}
-    file=$(find "$P/.claude/hooks" -maxdepth 1 -name "$name.*" 2>/dev/null | head -1)
-    if [ -z "$file" ]; then fail "hook $name" "script missing under .claude/hooks"; continue; fi
+    file=$(hook_file "$name")
+    if [ -z "$file" ]; then fail "hook $name" "script missing under .claude/hooks" "run harness-refresh.sh <project> --apply to add it"; continue; fi
     case "$file" in
-      *.sh) [ -x "$file" ] || { fail "hook $name" "$(basename "$file") is not executable"; continue; } ;;
+      *.sh) [ -x "$file" ] || { fail "hook $name" "$(basename "$file") is not executable" "chmod +x .claude/hooks/$(basename "$file")"; continue; } ;;
     esac
     want="/.claude/hooks/$(basename "$file")"
     if printf '%s\n' "$reg" | awk -v w="$want" -v e="$event" '$1 == e { n = length($NF) - length(w) + 1; if (n > 0 && substr($NF, n) == w) f = 1 } END { exit !f }'; then pass "hook $name executable and registered under $event"
-    else fail "hook $name" "not registered under $event in .claude/settings.json"; fi
+    else fail "hook $name" "not registered under $event in .claude/settings.json" "register it under $event in .claude/settings.json; when .claude/settings.json.templatecentral-new waits next to it, merge that file first"; fi
   done
-else fail ".claude/settings.json" "missing"; fi
+else fail ".claude/settings.json" "missing" "run harness-refresh.sh <project> --apply to add it"; fi
 if [ -f "$P/.claude/settings.local.json" ]; then
-  if ! loc=$(settings_hooks "$P/.claude/settings.local.json" 2>/dev/null); then fail "settings.local.json" "unreadable or not valid JSON"
-  elif printf '%s\n' "$loc" | grep -q '^__disable__ true'; then fail "settings.local.json disableAllHooks" "true turns every hook off"
+  if ! loc=$(settings_hooks "$P/.claude/settings.local.json" 2>/dev/null); then fail "settings.local.json" "unreadable or not valid JSON" "make .claude/settings.local.json valid JSON or delete it"
+  elif printf '%s\n' "$loc" | grep -q '^__disable__ true'; then fail "settings.local.json disableAllHooks" "true turns every hook off" "remove disableAllHooks from .claude/settings.local.json"
   else pass "settings.local.json does not disable hooks"; fi
 fi
 
 # 3b. fire the two blocking guards on a synthetic payload; a no-op script passes the checks above but not this
-guard_file() { find "$P/.claude/hooks" -maxdepth 1 -name "$1.*" 2>/dev/null | head -1; }
+guard_file() { hook_file "$1"; }
 gf=$(guard_file protect-files)
 if [ -n "$gf" ]; then
   r=$(fire "$gf" '{"tool_name":"Write","tool_input":{"file_path":".env","content":"x"}}') # PAYLOAD: synthetic, never read
-  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "protect-files blocks a write to an environment file"; else fail "protect-files guard" "a synthetic secret write was not blocked (exit ${r%% *})"; fi
+  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "protect-files blocks a write to an environment file"; else fail "protect-files guard" "a synthetic secret write was not blocked (exit ${r%% *})" "restore .claude/hooks/protect-files.* from the template, or merge the new version from its .templatecentral-new file"; fi
 fi
 gf=$(guard_file block-no-verify)
 if [ -n "$gf" ]; then
   r=$(fire "$gf" '{"tool_name":"Bash","tool_input":{"command":"git commit --no-verify -m x"}}')
-  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "block-no-verify blocks git commit --no-verify"; else fail "block-no-verify guard" "a synthetic --no-verify commit was not blocked (exit ${r%% *})"; fi
+  if [ "${r%% *}" = 2 ] && [[ "$r" == *BLOCKED* ]]; then pass "block-no-verify blocks git commit --no-verify"; else fail "block-no-verify guard" "a synthetic --no-verify commit was not blocked (exit ${r%% *})" "restore .claude/hooks/block-no-verify.* from the template, or merge the new version from its .templatecentral-new file"; fi
 fi
 
 # 3b2. each guard also lets a benign payload through, so a hook that always blocks does not pass
 gf=$(guard_file protect-files)
 if [ -n "$gf" ]; then
   r=$(fire "$gf" '{"tool_name":"Write","tool_input":{"file_path":"src/x.txt","content":"x"}}')
-  if [ "${r%% *}" = 0 ]; then pass "protect-files allows an ordinary write"; else fail "protect-files guard" "an ordinary write was blocked (exit ${r%% *})"; fi
+  if [ "${r%% *}" = 0 ]; then pass "protect-files allows an ordinary write"; else fail "protect-files guard" "an ordinary write was blocked (exit ${r%% *})" "restore .claude/hooks/protect-files.* from the template; a guard that blocks everything is not a guard"; fi
 fi
 gf=$(guard_file block-no-verify)
 if [ -n "$gf" ]; then
   r=$(fire "$gf" '{"tool_name":"Bash","tool_input":{"command":"git status"}}')
-  if [ "${r%% *}" = 0 ]; then pass "block-no-verify allows git status"; else fail "block-no-verify guard" "git status was blocked (exit ${r%% *})"; fi
+  if [ "${r%% *}" = 0 ]; then pass "block-no-verify allows git status"; else fail "block-no-verify guard" "git status was blocked (exit ${r%% *})" "restore .claude/hooks/block-no-verify.* from the template; a guard that blocks everything is not a guard"; fi
 fi
 echo "NOTE: the other hooks are not fired; their content is covered by the .claude/verify-harness.sh hash check below."
 
 # 3c. integrity: seeded guard files still hash to their origin, which also catches a hook replaced by a no-op
 if [ -f "$P/.claude/verify-harness.sh" ]; then
   if vout=$(cd "$P" && bash .claude/verify-harness.sh 2>&1); then pass "verify-harness.sh: enforcement files match their origin hashes"
-  else fail "verify-harness.sh" "$(printf '%s' "$vout" | tr '\n' ' ' | cut -c1-200)"; fi
-else fail ".claude/verify-harness.sh" "missing"; fi
+  else fail "verify-harness.sh" "$(printf '%s' "$vout" | tr '\n' ' ' | cut -c1-200)" "merge every .templatecentral-new file (start with .claude/settings.json), delete it, then run bash .claude/verify-harness.sh; after a person's own edit to a guarded file, run the re-baseline step by hand"; fi
+else fail ".claude/verify-harness.sh" "missing" "run harness-refresh.sh <project> --apply to add it"; fi
 
 # 4. CI workflow runs the gates
 ci=()
 for f in "$P"/.github/workflows/*.yml "$P"/.github/workflows/*.yaml "$P"/azure-pipelines.yml "$P"/azure-pipelines/*.yml; do
   [ -f "$f" ] && ci+=("$f")
 done
-if [ "${#ci[@]}" -eq 0 ]; then fail "CI workflow" "no .github/workflows or azure-pipelines file"
+if [ "${#ci[@]}" -eq 0 ]; then fail "CI workflow" "no .github/workflows or azure-pipelines file" "add a CI workflow that runs bash .claude/ci-gates.sh and bash .claude/verify-harness.sh; create .github/workflows/ci.yml (or azure-pipelines.yml) from the stack template, then run harness-refresh.sh <project> --apply to seed .claude/ci-gates.sh"
 else
-  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'ci-gates.sh'; then pass "CI runs .claude/ci-gates.sh"; else fail "CI gates" "no workflow line outside a comment runs .claude/ci-gates.sh"; fi
-  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'verify-harness.sh'; then pass "CI runs .claude/verify-harness.sh"; else fail "CI harness check" "no workflow line outside a comment runs .claude/verify-harness.sh"; fi
+  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'ci-gates.sh'; then pass "CI runs .claude/ci-gates.sh"; else fail "CI gates" "no workflow line outside a comment runs .claude/ci-gates.sh" "add a CI step that runs bash .claude/ci-gates.sh"; fi
+  if grep -hv '^[[:space:]]*#' "${ci[@]}" | grep -q 'verify-harness.sh'; then pass "CI runs .claude/verify-harness.sh"; else fail "CI harness check" "no workflow line outside a comment runs .claude/verify-harness.sh" "add a CI step that runs bash .claude/verify-harness.sh"; fi
 fi
-[ -f "$P/.claude/ci-gates.sh" ] || fail ".claude/ci-gates.sh" "missing"
+[ -f "$P/.claude/ci-gates.sh" ] || fail ".claude/ci-gates.sh" "missing" "add a CI workflow first; harness-refresh.sh <project> --apply seeds .claude/ci-gates.sh once the project has .github/workflows/ci.yml or an azure-pipelines file"
 
 if [ "$FAILS" -gt 0 ]; then echo "FAIL: $FAILS item(s) not live."; exit 1; fi
 echo "OK: harness is live."

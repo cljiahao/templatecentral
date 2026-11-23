@@ -7,8 +7,8 @@ description: Use when adopting or upgrading a project, switching its DB access l
 
 | Type | Path |
 |---|---|
-| **Adopt / upgrade** — retrofit the harness, or upgrade a templateCentral project | `general/implementation.md` |
-| **Harness refresh** — project already has `.claude/harness.json`; bring its harness files to the current templates without losing edits | `general/harness-refresh.md` |
+| **Harness refresh** — `.claude/harness.json` exists in the project (seeded by any plugin version): bring its harness files to the current templates without losing edits. Pick this row first whenever that file exists | `general/harness-refresh.md` |
+| **Adopt / upgrade** — no `.claude/harness.json` yet (retrofit the harness into a project built without templateCentral), or a pre-6.0.0 project whose hooks need re-seeding | `general/implementation.md` |
 | **DB access layer** — fastapi: SQLAlchemy password → AWS IAM auth; nestjs/nextjs: Drizzle → Kysely (vite-react has no database layer: tell the user and stop) | `database/<fastapi\|nestjs\|nextjs>.md` |
 | **Backend extraction** — Next.js API routes → NestJS or FastAPI service | `nextjs-backend-extraction.md` |
 | **Portal framing** — pre-6.2.0 app framed only by its appCentral portal (`APPCENTRAL_PORTAL_ORIGIN`) | `portal-frame-ancestors.md` |

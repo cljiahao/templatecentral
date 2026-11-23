@@ -521,4 +521,28 @@ gl_ok rn2 'yarn exec gitleaks git --staged'
 gl_ok rn3 'bunx gitleaks git --staged'
 gl_ok rn4 'pnpx gitleaks git --staged'
 gl_ok rn5 'npm exec -- gitleaks git --staged'
+# Item 2: only the real hook file counts; a .templatecentral-new beside a missing hook is not the hook.
+seed "$T/sc1"; rm "$T/sc1/.claude/hooks/subagent-stop.sh"
+cp "$SH/template-ts/.claude/hooks/subagent-stop.sh" "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new" 2>/dev/null || cp "$SH/template/.claude/hooks/subagent-stop.sh" "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new"
+chmod +x "$T/sc1/.claude/hooks/subagent-stop.sh.templatecentral-new"
+out=$(run "$T/sc1"); check "sidecar beside a missing hook: exits 1" 1 $?
+contains "sidecar beside a missing hook: reported missing" "FAIL hook subagent-stop: script missing" "$out"
+seed "$T/sc2"; cp "$T/sc2/.claude/hooks/subagent-stop.sh" "$T/sc2/.claude/hooks/subagent-stop.sh.templatecentral-new"
+out=$(run "$T/sc2"); check "control, real hook plus a sidecar: exits 0" 0 $?
+contains "control: the real hook is the one registered" "PASS hook subagent-stop executable and registered" "$out"
+
+# Item 7: every FAIL line states the fix; the lefthook line names the install step before lefthook install.
+nofix=0
+all=""
+for d in "$T/bare" "$T/m1" "$T/m2" "$T/m3" "$T/m4" "$T/m5" "$T/sc1"; do all="$all$(run "$d")"$'\n'; done
+all="$all$(PATH="$NODEDIR:/usr/bin:/bin" bash "$SCRIPT" "$T/ok" 2>&1)"$'\n'
+while IFS= read -r l; do
+  case "$l" in "FAIL "*) case "$l" in *". Fix: "*) ;; *) nofix=$((nofix + 1)); echo "no fix: $l" ;; esac ;; esac
+done <<EOF
+$all
+EOF
+check "every FAIL line carries a Fix" 0 "$nofix"
+contains "a FAIL is present to make the check real" "FAIL lefthook binary" "$all"
+contains "lefthook FAIL names the install step before lefthook install" "install lefthook as a dev dependency" "$all"
+case "$all" in *"install lefthook as a dev dependency"*"then run lefthook install"*) echo "ok   lefthook install step precedes lefthook install" ;; *) echo "FAIL lefthook install step order"; fail=1 ;; esac
 exit $fail

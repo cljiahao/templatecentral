@@ -3,7 +3,8 @@
 # A CSRF header set in a shared fetch wrapper in another file still matches here and needs a check by hand. Level stays high because the file itself shows cookie mode: it sends credentials: 'include' and no Authorization header. A bearer-token client does neither, so it is not flagged.
 export id=vite-auth-csrf
 export level=high
-export names="auth-service.ts"
+export names="*.ts *.tsx"
+export content="/logout"
 export template=skills/add/auth/vite-react/template/src/features/auth/api/auth-service.ts
 export desc="the Vite auth service posts login and logout with no CSRF token; this applies when the backend uses cookie-mode auth"
 export fix="send csrfHeader() (X-CSRF-Token from the XSRF-TOKEN cookie) on the login and logout POSTs"
