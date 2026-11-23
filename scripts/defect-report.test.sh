@@ -22,6 +22,10 @@ lacks() { # lacks <needle> <haystack> <description>
   if [[ "$2" == *"$1"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] found in [$2]"; else PASS=$((PASS + 1)); fi
 }
 
+# Result helpers for the promise-retry check; they read OUT, so they sit above every use.
+flagged() { has "mongoose-client-promise-retry  high" "$OUT" "$1: flagged"; }
+unflagged() { lacks "mongoose-client-promise-retry  " "$OUT" "$1: not flagged"; }
+
 T=$(mktemp -d "${TMPDIR:-/tmp}/dr.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
@@ -237,8 +241,6 @@ vclient() {
     "$2" "$2" "$2" "$3" "$2" "$4" "$5" > "$d/src/mongoose-client.ts"
   run "$d"
 }
-flagged() { has "mongoose-client-promise-retry  high" "$OUT" "$1: flagged"; }
-unflagged() { lacks "mongoose-client-promise-retry  " "$OUT" "$1: not flagged"; }
 
 vclient old-plain cached 'await cached.promise' '' ''
 flagged "old client with no reset"
