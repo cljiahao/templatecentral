@@ -123,14 +123,12 @@ const analyse = (file, text, ts) => {
     ts.forEachChild(node, collectFunctions);
   };
   collectFunctions(sf);
-  const tableConsts = new Map();
-  const collectTables = (node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && ts.isArrayLiteralExpression(node.initializer)) {
-      if (!tableConsts.has(node.name.text)) tableConsts.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectTables);
+  // Drops `as const`, `satisfies T`, parentheses and type assertions around an expression.
+  const unwrap = (node) => {
+    let n = node;
+    while (n && (ts.isAsExpression(n) || ts.isParenthesizedExpression(n) || ts.isTypeAssertionExpression(n) || (ts.isSatisfiesExpression && ts.isSatisfiesExpression(n)) || ts.isNonNullExpression(n))) n = n.expression;
+    return n;
   };
-  collectTables(sf);
 
   // { base, mods } for `it`, `it.only`, `it.skipIf(x)`, `it.each(t)`, `v.it`, an aliased name, or null.
   const describeCallee = (expr) => {
@@ -268,6 +266,7 @@ const analyse = (file, text, ts) => {
     });
     return into;
   };
+  const boundIn = (name) => identifiersOf(name, new Set());
   const boundNames = (st) => {
     const names = new Set();
     if (ts.isImportDeclaration(st)) {
@@ -286,6 +285,37 @@ const analyse = (file, text, ts) => {
     }
     return names;
   };
+  const sideEffect = (node) => {
+    let found = false;
+    const visit = (n) => {
+      if (found || isFunctionLike(n) || ts.isClassLike(n)) return;
+      if (ts.isCallExpression(n) || ts.isNewExpression(n) || ts.isAwaitExpression(n)) found = true;
+      else ts.forEachChild(n, visit);
+    };
+    visit(node);
+    return found;
+  };
+  const caseIds = new Map();
+  const idsOfCase = (c) => {
+    if (!caseIds.has(c)) {
+      const ids = new Set();
+      for (const part of [...c.fn.parameters, c.fn.body]) if (part) identifiersOf(part, ids);
+      if (c.table) for (const arg of c.table) identifiersOf(arg, ids);
+      caseIds.set(c, ids);
+    }
+    return caseIds.get(c);
+  };
+  const holderRefs = new Map();
+  const referencedBelow = (holder) => {
+    if (!holderRefs.has(holder)) {
+      const ids = new Set();
+      for (const c of cases) {
+        if (c.kind === 'C' && c.call.pos >= holder.pos && c.call.end <= holder.end) for (const id of idsOfCase(c)) ids.add(id);
+      }
+      holderRefs.set(holder, ids);
+    }
+    return holderRefs.get(holder);
+  };
   // Statements of a file or block that are not cases, with the names they bind and the names they use.
   const scopeMemo = new Map();
   const scopeItems = (node) => {
@@ -297,14 +327,32 @@ const analyse = (file, text, ts) => {
       const idents = identifiersOf(st, new Set());
       let always = false;
       if (ts.isImportDeclaration(st)) always = false;
-      else if (names.size > 0) always = false;
-      else always = true;
+      else if (names.size > 0) {
+        const used = referencedBelow(node);
+        always = ts.isVariableStatement(st) && sideEffect(st) && ![...names].some((n) => used.has(n));
+      } else always = true;
       items.push({ st, names, idents, always, text: null });
     }
     scopeMemo.set(node, items);
     return items;
   };
   const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
+
+  // The array literal an identifier names in the nearest enclosing scope, or null unless exactly one same-file array literal.
+  const resolveTable = (id, from) => {
+    for (let p = from.parent; p; p = p.parent) {
+      if ((isFunctionLike(p) || ts.isFunctionDeclaration(p)) && p.parameters.some((param) => boundIn(param.name).has(id.text))) return null;
+      if (!isHolder(p)) continue;
+      const hits = p.statements.filter((st) => boundNames(st).has(id.text));
+      if (hits.length === 0) continue;
+      if (hits.length > 1 || !ts.isVariableStatement(hits[0])) return null;
+      const decls = hits[0].declarationList.declarations.filter((d) => boundIn(d.name).has(id.text));
+      if (decls.length !== 1 || !ts.isIdentifier(decls[0].name) || !decls[0].initializer) return null;
+      const init = unwrap(decls[0].initializer);
+      return ts.isArrayLiteralExpression(init) ? init : null;
+    }
+    return null;
+  };
 
   // Context of one case: ancestor parts, statements it names, and every other statement that runs.
   const caseContext = (chain, refs) => {
@@ -363,8 +411,8 @@ const analyse = (file, text, ts) => {
     }
     const ctx = caseContext(chain, refs);
     const params = c.fn.parameters.map(textOf);
-    let first = c.table && c.table[0];
-    if (first && ts.isIdentifier(first) && tableConsts.has(first.text)) first = tableConsts.get(first.text);
+    let first = c.table && c.table[0] && unwrap(c.table[0]);
+    if (first && ts.isIdentifier(first)) first = resolveTable(first, c.call);
     if (first && ts.isArrayLiteralExpression(first)) {
       const seenRows = new Set();
       for (const el of first.elements) {

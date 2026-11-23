@@ -55,6 +55,7 @@ TSDIR=$(find_typescript) || {
 project() {
   P=$(mktemp -d "$T/p.XXXXXX")
   cp -R "$FIX/$1/." "$P/"
+  git init -q "$P"
   mkdir -p "$P/node_modules"
   ln -s "$TSDIR" "$P/node_modules/typescript"
 }
@@ -169,6 +170,7 @@ check 0 "$?" "empty project: exit"
 has "nothing to check" "$OUT" "empty project: says so, not a pass of compared tests"
 lacks "compared" "$OUT" "empty project: no compared count"
 project ts-exact-dup
+printf 'dist\n.claude\n' > "$P/.gitignore"
 mkdir -p "$P/node_modules/dep" "$P/dist" "$P/.venv" "$P/venv2/lib" "$P/.claude/.harness-base"
 cp "$P/a.test.ts" "$P/node_modules/dep/x.test.ts"
 cp "$P/a.test.ts" "$P/dist/y.test.ts"
@@ -419,6 +421,7 @@ check 1 "$?" "inline comment and environment variables do not switch the check o
 # Round 2. Each major fix has a positive case (must fail) and a clean control (must pass, both cases read).
 newp() { # newp — empty project with typescript installed; sets P.
   P=$(mktemp -d "$T/p.XXXXXX")
+  git init -q "$P"
   mkdir -p "$P/node_modules"
   ln -s "$TSDIR" "$P/node_modules/typescript"
 }
@@ -456,12 +459,13 @@ for d in env out build dist coverage; do
   has "ok, 2 test cases compared" "$OUT" "py clean control under src/$d: both read"
 done
 newp
+printf 'env\ncoverage\n' > "$P/.gitignore"
 ts_case "$P/env/a.test.ts" "" 2
 ts_case "$P/env/b.test.ts" "" 2
 ts_case "$P/coverage/a.test.ts" "" 2
 ts_case "$P/coverage/b.test.ts" "" 2
-verdict 0 "env and coverage at the project root are still skipped"
-lacks "FAIL" "$OUT" "env and coverage at the project root: nothing read"
+verdict 0 "env and coverage that git ignores are not read"
+lacks "FAIL" "$OUT" "env and coverage that git ignores: nothing read"
 newp
 ts_case "$P/src/vendor/node_modules/pkg/a.test.ts" "" 2
 ts_case "$P/src/vendor/node_modules/pkg/b.test.ts" "" 2
@@ -609,32 +613,54 @@ ts_bare() { # ts_bare <file> — like ts_case but imports a package, so the same
   mkdir -p "${1%/*}"
   printf "import { expect, it } from 'vitest';\nimport { f } from 'lib';\nit('x', () => {\n  const r = f(1);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$1"
 }
-# Build output beside a package.json or pyproject.toml is skipped at any depth; source folders of the same names are read.
+# Round 4, major 1: inside a git work tree the file list is what git tracks plus what it does not ignore.
 newp
-mkdir -p "$P/packages/x"
-printf '{}\n' > "$P/packages/x/package.json"
-ts_bare "$P/packages/x/dist/a.test.ts"
-ts_bare "$P/packages/x/dist/b.test.ts"
-ts_bare "$P/packages/x/src/c.test.ts"
-verdict 0 "ts compiled copies under a package dist"
-has "ok, 1 test cases compared" "$OUT" "ts compiled copies under a package dist: only the source is read"
-ts_case "$P/packages/x/src/env/a.test.ts" "" 2
-ts_case "$P/packages/x/src/env/b.test.ts" "" 2
-verdict 1 "ts source folders env and out inside a package are read"
+mkdir -p "$P/src"
+printf '{}\n' > "$P/src/package.json"
+ts_case "$P/src/build/a.test.ts" "" 2
+ts_case "$P/src/build/b.test.ts" "" 2
+git -C "$P" add -A
+verdict 1 "ts tracked tests under src/build beside a package.json"
+has "src/build/a.test.ts:3" "$OUT" "ts tracked tests beside a package.json: read"
+lacks "not a git repository" "$OUT" "git work tree: no build-output note"
+ts_case "$P/src/build/b.test.ts" "" 9
+verdict 0 "ts clean control: tracked tests under src/build differ"
+has "ok, 2 test cases compared" "$OUT" "ts clean control, tracked tests under src/build: both read"
 newp
-ts_bare "$P/packages/y/dist/a.test.ts"
-ts_bare "$P/packages/y/dist/b.test.ts"
-verdict 1 "ts dist with no package.json beside it is read"
+printf '{}\n' > "$P/package.json"
+printf 'dist\n' > "$P/.gitignore"
+ts_bare "$P/dist/a.test.ts"
+ts_bare "$P/dist/b.test.ts"
+ts_bare "$P/src/c.test.ts"
+verdict 0 "ts ignored dist copies of a test"
+has "ok, 1 test cases compared" "$OUT" "ts ignored dist copies: only the source is read"
 newp
-mkdir -p "$P/pkg"
-printf '[project]\nname = "p"\n' > "$P/pkg/pyproject.toml"
-py_case "$P/pkg/build/test_a.py" "" 2
-py_case "$P/pkg/test_c.py" "" 2
-verdict 0 "py compiled copy under a package build"
-has "ok, 1 test cases compared" "$OUT" "py compiled copy under a package build: only the source is read"
-py_case "$P/pkg/src/out/test_a.py" "" 2
-py_case "$P/pkg/src/env/test_b.py" "" 2
-verdict 1 "py source folders out and env inside a package are read"
+printf '[project]\nname = "p"\n' > "$P/pyproject.toml"
+printf 'build\n' > "$P/.gitignore"
+py_case "$P/build/test_a.py" "" 2
+py_case "$P/test_c.py" "" 2
+verdict 0 "py ignored build copy of a test"
+has "ok, 1 test cases compared" "$OUT" "py ignored build copy: only the source is read"
+newp
+rm -rf "$P/.git"
+ts_case "$P/a.test.ts" "" 2
+verdict 0 "outside a git work tree"
+has "NOTE build output was not filtered because the project is not a git repository" "$OUT" "outside a git work tree: names the gap"
+newp
+rm -rf "$P/.git"
+printf '{}\n' > "$P/package.json"
+ts_case "$P/dist/a.test.ts" "" 2
+ts_case "$P/dist/b.test.ts" "" 2
+verdict 1 "outside a git work tree, build output is read"
+
+# Round 4, minor 3: a symlink to a test file that git ignores still counts once.
+newp
+printf 'dist\n' > "$P/.gitignore"
+ts_case "$P/dist/a.test.ts" "" 2
+mkdir -p "$P/src"
+ln -s ../dist/a.test.ts "$P/src/l.test.ts"
+verdict 0 "symlink to an ignored test file"
+has "ok, 1 test cases compared" "$OUT" "symlink to an ignored test file: the link is read once"
 
 # A project with only body-less cases says so.
 newp
@@ -676,6 +702,83 @@ has "declares tests (pkg/sub/deep/package.json)" "$OUT" "deep test script: named
 printf '{"scripts":{"build":"tsc"}}\n' > "$P/pkg/sub/deep/package.json"
 verdict 0 "deep package.json without a test script"
 has "nothing to check" "$OUT" "deep package.json without a test script: nothing to check"
+
+# Round 4, major 2: a table constant resolves in the scope of the each call.
+tsrows() { # tsrows <file> <first rows> <second rows>
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\ndescribe('a', () => {\n  const T = %s;\n  it.each(T)('a %%i', (a, b) => {\n    expect(f(a).a).toBe(b);\n    expect(f(a).b).toBe(3);\n  });\n});\ndescribe('b', () => {\n  const T = %s;\n  it.each(T)('b %%i', (a, b) => {\n    expect(f(a).c).toBe(b);\n    expect(f(a).d).toBe(4);\n  });\n});\n" "$2" "$3" > "$1"
+}
+newp
+tsrows "$P/a.test.ts" "[[1, 1], [1, 1]]" "[[1, 2], [3, 4]]"
+verdict 1 "ts repeat in the first describe only"
+has "a.test.ts:5: the parameter table repeats a row" "$OUT" "ts repeat in the first describe: flagged"
+lacks "a.test.ts:12: the parameter table" "$OUT" "ts distinct table in the second describe: not flagged"
+tsrows "$P/a.test.ts" "[[1, 2], [3, 4]]" "[[1, 1], [1, 1]]"
+verdict 1 "ts repeat in the second describe only"
+has "a.test.ts:12: the parameter table repeats a row" "$OUT" "ts repeat in the second describe: flagged"
+tsrows "$P/a.test.ts" "[[1, 2], [3, 4]]" "[[5, 6], [7, 8]]"
+verdict 0 "ts clean control: distinct tables in both describes"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nfunction run(T) {\n  it.each(T)('a %%i', (a, b) => {\n    expect(f(a).a).toBe(b);\n    expect(f(a).b).toBe(3);\n  });\n}\nconst T = [[1, 1], [1, 1]];\nrun(T);\n" > "$P/a.test.ts"
+verdict 0 "ts table that is a parameter is not resolved to an outer constant"
+
+# Round 4, minor 4: as const, satisfies and parentheses around a table.
+newp
+for wrap in "[[1, 2], [1, 2]] as const" "[[1, 2], [1, 2]] satisfies number[][]" "([[1, 2], [1, 2]])"; do
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nit.each(%s)('a %%i', (a, b) => {\n  expect(f(a).a).toBe(b);\n  expect(f(a).b).toBe(3);\n});\n" "$wrap" > "$P/a.test.ts"
+  verdict 1 "ts inline table repeats a row: $wrap"
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst T = %s;\nit.each(T)('a %%i', (a, b) => {\n  expect(f(a).a).toBe(b);\n  expect(f(a).b).toBe(3);\n});\n" "$wrap" > "$P/a.test.ts"
+  verdict 1 "ts constant table repeats a row: $wrap"
+done
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst T = [[1, 2], [3, 4]] as const;\nit.each(T)('a %%i', (a, b) => {\n  expect(f(a).a).toBe(b);\n  expect(f(a).b).toBe(3);\n});\n" > "$P/a.test.ts"
+verdict 0 "ts clean control: as const table with distinct rows"
+
+# Round 4, minor 5 and 6: Python constant tables and pytest.param ids.
+pyrows() { # pyrows <rows text> — one parametrized test over a module constant
+  printf 'import pytest\nfrom f import f\n\nROWS = %s\n\n\n@pytest.mark.parametrize("x", ROWS)\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n' "$1" > "$P/test_a.py"
+}
+newp
+pyrows "[1, 1]"
+verdict 1 "py constant table repeats a row"
+has "test_a.py:8: the parameter table repeats a row" "$OUT" "py constant table repeats a row: names the case"
+pyrows "(1, 1)"
+verdict 1 "py constant tuple table repeats a row"
+pyrows "[1, 2]"
+verdict 0 "py clean control: constant table with distinct rows"
+printf 'import pytest\nfrom f import f\n\nROWS = [1, 1]\nROWS = [1, 2]\n\n\n@pytest.mark.parametrize("x", ROWS)\ndef test_a(x):\n    assert f(x).a == 2\n' > "$P/test_a.py"
+verdict 0 "py constant assigned twice is not row-checked"
+pparam() { # pparam <id-a> <value-b> <id-b>
+  printf 'import pytest\nfrom f import f\n\n\n@pytest.mark.parametrize("x", [pytest.param(1, id="%s"), pytest.param(2)])\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n\n\n@pytest.mark.parametrize("x", [pytest.param(%s, id="%s"), pytest.param(2)])\ndef test_b(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n' "$1" "$2" "$3" > "$P/test_a.py"
+}
+pparam a 1 b
+verdict 1 "py pytest.param ids differ, tables the same"
+pparam a 3 b
+verdict 0 "py clean control: pytest.param values differ"
+
+# Round 4, minor 7: a declaration with a call that no test names is context.
+newp
+ts_case "$P/a.test.ts" $'const _c = make(\'a\');\n' 2
+ts_case "$P/b.test.ts" $'const _c = make(\'b\');\n' 2
+verdict 0 "ts unreferenced declarations call with different arguments"
+ts_case "$P/b.test.ts" $'const _c = make(\'a\');\n' 2
+verdict 1 "ts unreferenced declarations call with the same arguments"
+ts_case "$P/b.test.ts" $'const _c = \'b\';\n' 2
+ts_case "$P/a.test.ts" $'const _c = \'a\';\n' 2
+verdict 1 "ts clean control: unreferenced plain constants stay filtered"
+for v in a b; do
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\ndescribe('d', () => {\n  const _c = make('%s');\n  it('x', () => {\n    const r = f(1);\n    expect(r.a).toBe(2);\n    expect(r.b).toBe(3);\n  });\n});\n" "$v" > "$P/$v.test.ts"
+done
+verdict 0 "ts unreferenced describe-level call with different arguments"
+newp
+py_case "$P/test_a.py" '_c = make("a")' 2
+py_case "$P/test_b.py" '_c = make("b")' 2
+verdict 0 "py unreferenced assignment calls with different arguments"
+py_case "$P/test_b.py" '_c = make("a")' 2
+verdict 1 "py unreferenced assignment calls with the same arguments"
+py_case "$P/test_a.py" '_c = "a"' 2
+py_case "$P/test_b.py" '_c = "b"' 2
+verdict 1 "py clean control: unreferenced plain constants stay filtered"
+
+# Round 4, minor 8: the Python version message says what to do.
+has "needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" "$(cat "$SCRIPTS/duplicate_tests_py.py")" "py version message"
 
 # Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
 cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out

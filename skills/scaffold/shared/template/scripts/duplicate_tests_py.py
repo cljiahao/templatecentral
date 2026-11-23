@@ -90,6 +90,27 @@ class Source:
             return " ".join(t.string for t in self.span(node, node))
         return " ".join(filter(None, (self.text_of(c) for c in ast.iter_child_nodes(node))))
 
+    def text_ids(self, node):
+        # Like text_of, but the id= keyword of a pytest.param call is left out: it only names the case.
+        if not (hasattr(node, "lineno") and node.end_lineno is not None):
+            return self.text_of(node)
+        lo = bisect.bisect_left(self.starts, (node.lineno, self.char_col(node.lineno, node.col_offset)))
+        hi = bisect.bisect_right(self.ends, (node.end_lineno, self.char_col(node.end_lineno, node.end_col_offset)))
+        drop = set()
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            target = sub.func
+            if (target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else "") != "param":
+                continue
+            for kw in sub.keywords:
+                if kw.arg == "id":
+                    v = kw.value
+                    first = bisect.bisect_left(self.starts, (v.lineno, self.char_col(v.lineno, v.col_offset)))
+                    last = bisect.bisect_right(self.ends, (v.end_lineno, self.char_col(v.end_lineno, v.end_col_offset)))
+                    drop.update(range(first - 3, last))
+        return " ".join(self.tokens[i].string for i in range(lo, hi) if i not in drop)
+
     def body_tokens(self, func):
         body = func.body
         if body and is_docstring(body[0]):
@@ -118,8 +139,21 @@ def conftest_context(root, rel, cache):
     return ",".join(parts)
 
 
-def parametrize_rows(func):
-    """Row texts of every parametrize decorator whose table is a literal list or tuple."""
+def module_table(tree, name):
+    """The list or tuple literal a module-level name is assigned once, or None."""
+    hits = [st for st in tree.body if name in bound_names(st)]
+    if len(hits) != 1:
+        return None
+    st = hits[0]
+    value = st.value if isinstance(st, (ast.Assign, ast.AnnAssign)) else None
+    targets = st.targets if isinstance(st, ast.Assign) else [st.target] if isinstance(st, ast.AnnAssign) else []
+    if len(targets) != 1 or not isinstance(targets[0], ast.Name) or not isinstance(value, (ast.List, ast.Tuple)):
+        return None
+    return value.elts
+
+
+def parametrize_rows(func, tree):
+    """Row nodes of every parametrize decorator whose table is a literal list or tuple, or one module-level constant of that kind."""
     rows = []
     for deco in func.decorator_list:
         if not isinstance(deco, ast.Call):
@@ -131,6 +165,10 @@ def parametrize_rows(func):
         table = deco.args[1]
         if isinstance(table, (ast.List, ast.Tuple)):
             rows.append(table.elts)
+        elif isinstance(table, ast.Name):
+            elts = module_table(tree, table.id)
+            if elts is not None:
+                rows.append(elts)
     return rows
 
 
@@ -169,12 +207,24 @@ def plain_targets(stmt):
     return not any(isinstance(sub, (ast.Attribute, ast.Subscript)) for t in targets for sub in ast.walk(t))
 
 
+def has_effect(value):
+    """True when evaluating the value calls something or awaits; a lambda body does not run."""
+    stack = [value]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, (ast.Call, ast.Await)):
+            return True
+        if not isinstance(n, ast.Lambda):
+            stack.extend(ast.iter_child_nodes(n))
+    return False
+
+
 def deco_text(src, deco):
     if isinstance(deco, ast.Call):
         target = deco.func
         name = target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else ""
         if name == "parametrize":
-            parts = [src.text_of(deco.func)] + [src.text_of(a) for a in deco.args]
+            parts = [src.text_of(deco.func)] + [src.text_ids(a) for a in deco.args]
             return " ".join(parts + [src.text_of(k) for k in deco.keywords if k.arg != "ids"])
     return src.text_of(deco)
 
@@ -227,7 +277,7 @@ def main():
     if len(sys.argv) != 3:
         die("usage: duplicate_tests_py.py <project-root> <file-list>")
     if sys.version_info < (3, 8):
-        die("Python %s is too old: install the Python version this project pins" % VERSION)
+        die("Python %s is too old: this check needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" % VERSION)
     root, list_file = sys.argv[1], sys.argv[2]
     with open(list_file, "rb") as handle:
         rels = [r for r in handle.read().decode("utf-8", "surrogateescape").split("\0") if r]
@@ -250,6 +300,14 @@ def main():
             node = func
             while node is not None:
                 holders.add(node)
+                node = src.parent.get(node)
+        below = {}
+        for func in cases:
+            ids = names_in(func, set())
+            ids.update(a.strip("*") for a in arg_names(func).split(",") if a)
+            node = src.parent.get(func)
+            while node is not None:
+                below.setdefault(node, set()).update(ids)
                 node = src.parent.get(node)
         statement_memo = {}
 
@@ -277,7 +335,9 @@ def main():
                 elif isinstance(child, ast.ClassDef):
                     always = False
                 elif isinstance(child, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
-                    always = "pytestmark" in names or not plain_targets(child)
+                    always = "pytestmark" in names or not plain_targets(child) or (
+                        child.value is not None and has_effect(child.value) and not (names & below.get(node, set()))
+                    )
                 else:
                     always = True
                 used = set()
@@ -353,10 +413,10 @@ def main():
                     if kid not in holders and not (isinstance(kid, ast.stmt) and isinstance(anc, (ast.Module, ast.ClassDef))):
                         names_in(kid, refs)
             ctx_inner = case_context(chain, refs)
-            for table in parametrize_rows(func):
+            for table in parametrize_rows(func, src.tree):
                 seen_rows = set()
                 for elt in table:
-                    row = src.text_of(elt)
+                    row = src.text_ids(elt)
                     if row in seen_rows:
                         out.append("\t".join(["R", rel, str(func.lineno), "0", "-", "-"]))
                         break

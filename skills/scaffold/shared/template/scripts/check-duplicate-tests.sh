@@ -18,6 +18,8 @@
 # A case that passes a named handler the same file does not define (it('a', handler)) is counted and gets a NOTE.
 # Known limits, accepted: a no-op statement or a reordered body defeats rule 1, and the same shape split across files
 #   defeats rule 2. The check finds copy-paste, not every semantic duplicate.
+# Files: in a git work tree, what git tracks plus what it does not ignore; elsewhere everything but node_modules and virtual
+#   environments, with a NOTE that build output was not filtered.
 # Helpers print one record per case: kind, file, line, token count, exact key, shape key (tab-separated).
 # Exit 0 clean (or an empty project that declares no tests), 1 findings, 2 cannot run (missing node, python3 or
 #   typescript, unparsable file, a file name with a tab or newline, test files that hold no test case, a declared test
@@ -31,12 +33,8 @@ export LC_ALL=C
 MIN_BODY_TOKENS=30
 # Rule 2 fails when a file holds at least this many same-shape cases; two cases only print a NOTE.
 SHAPE_GROUP_MIN=3
-# Folders never read at any depth, plus any folder holding a pyvenv.cfg.
+# Folders never read at any depth, plus any folder holding a pyvenv.cfg. In a git work tree git ignore rules drop build output too.
 SKIP_ANY='node_modules .git .venv venv __pycache__ site-packages .mypy_cache .pytest_cache .ruff_cache'
-# Build output and tool folders skipped only at the project root: src/env or src/out can hold real tests.
-SKIP_ROOT='.next .nuxt dist build out coverage env .turbo .claude .tox'
-# Build output skipped at any depth when it sits beside a package.json or pyproject.toml, because compiled tests repeat their source.
-SKIP_PACKAGE='dist build out coverage .next .turbo'
 
 die() {
   printf 'check-duplicate-tests: %s\n' "$1" >&2
@@ -63,10 +61,6 @@ first=1
 for d in $SKIP_ANY; do
   if [ "$first" -eq 1 ]; then first=0; else prune_args+=(-o); fi
   prune_args+=(-name "$d")
-done
-root_glob=$(printf '%s' "$root" | sed 's/[][*?\\]/\\&/g')
-for d in $SKIP_ROOT; do
-  prune_args+=(-o -path "$root_glob/$d")
 done
 
 find "$root" \( -name node_modules -o -name .git \) -prune -o -name pyvenv.cfg -type f -print > "$wd/venvs" 2> /dev/null || die "cannot walk $root"
@@ -96,26 +90,10 @@ resolve_link() {
   printf '%s/%s\n' "$(cd "${p%/*}" 2> /dev/null && pwd -P)" "${p##*/}"
 }
 
-# in_package_output <root-relative path>: succeeds when a folder on the path is build output beside a package.json or pyproject.toml.
-in_package_output() {
-  local rest=${1%/*} dir='' part
-  [ "$rest" != "$1" ] || return 1
-  while [ -n "$rest" ]; do
-    case "$rest" in */*) part=${rest%%/*} rest=${rest#*/} ;; *) part=$rest rest= ;; esac
-    case " $SKIP_PACKAGE " in
-      *" $part "*)
-        if [ -f "$root/$dir/package.json" ] || [ -f "$root/$dir/pyproject.toml" ]; then return 0; fi
-        ;;
-    esac
-    dir=${dir:+$dir/}$part
-  done
-  return 1
-}
-
-# strip_venvs <raw> <out>: drops files under a virtual environment and unusable symlinks, writes root-relative
-# NUL-separated names. A name with a tab or newline would break the tab-separated records: that stops the run.
-strip_venvs() {
-  local f dir skip v target
+# filter_list <raw> <out>: drops files under a virtual environment and, in a git work tree, files git does not list
+# (ignored build output). A name with a tab or newline would break the tab-separated records: that stops the run.
+filter_list() {
+  local f dir skip v
   : > "$2"
   while IFS= read -r -d '' f; do
     case "$f" in
@@ -127,7 +105,16 @@ strip_venvs() {
       case "$f" in "$dir"/*) skip=1 ;; esac
     done < "$wd/venvs"
     [ "$skip" -eq 0 ] || continue
-    if in_package_output "${f#"$root"/}"; then continue; fi
+    if [ "$in_git" -eq 1 ] && ! grep -Fxq -- "${f#"$root"/}" "$wd/gitlist"; then continue; fi
+    printf '%s\0' "$f" >> "$2"
+  done < "$1"
+}
+
+# drop_links <filtered> <out>: drops unusable symlinks and links to a file already listed, writes root-relative NUL-separated names.
+drop_links() {
+  local f target
+  : > "$2"
+  while IFS= read -r -d '' f; do
     if [ -L "$f" ]; then
       target=$(resolve_link "$f")
       case "$target" in
@@ -137,11 +124,12 @@ strip_venvs() {
           continue
           ;;
       esac
-      if [ -s "$wd/real" ] && grep -Fxq -- "$target" "$wd/real"; then continue; fi
+      if grep -Fxq -- "$target" "$wd/real"; then continue; fi
     fi
     printf '%s\0' "${f#"$root"/}" >> "$2"
   done < "$1"
 }
+
 # declared_tests: prints what declares tests (a package.json test script, a vitest or jest config, a pytest config), or nothing.
 declared_tests() {
   local f found=
@@ -156,24 +144,34 @@ declared_tests() {
   printf '%s' "${found# }"
 }
 
+# Inside a git work tree the file list is what git tracks plus what it does not ignore, so build output drops out.
 : > "$wd/notes"
-: > "$wd/real"
+in_git=0
+if command -v git > /dev/null 2>&1 && [ "$(git -C "$root" rev-parse --is-inside-work-tree 2> /dev/null)" = true ]; then
+  in_git=1
+  git -C "$root" ls-files -z -co --exclude-standard 2> /dev/null | tr '\0' '\n' > "$wd/gitlist" || die "cannot list the files of the git work tree $root"
+else
+  printf 'NOTE build output was not filtered because the project is not a git repository: compiled copies of tests are read too.\n' >> "$wd/notes"
+fi
+filter_list "$wd/ts.raw" "$wd/ts.kept"
+filter_list "$wd/py.raw" "$wd/py.kept"
 # Paths of the regular test files first, so a symlink to one of them is skipped, not compared with itself.
-for raw in "$wd/ts.raw" "$wd/py.raw"; do
+: > "$wd/real"
+for kept in "$wd/ts.kept" "$wd/py.kept"; do
   while IFS= read -r -d '' f; do
     [ ! -L "$f" ] || continue
     printf '%s/%s\n' "$(cd "${f%/*}" 2> /dev/null && pwd -P)" "${f##*/}" >> "$wd/real"
-  done < "$raw"
+  done < "$kept"
 done
-strip_venvs "$wd/ts.raw" "$wd/ts.list"
-strip_venvs "$wd/py.raw" "$wd/py.list"
+drop_links "$wd/ts.kept" "$wd/ts.list"
+drop_links "$wd/py.kept" "$wd/py.list"
 
 : > "$wd/records"
 if [ ! -s "$wd/ts.list" ] && [ ! -s "$wd/py.list" ]; then
   cat "$wd/notes"
   declared=$(declared_tests)
   if [ -n "$declared" ]; then
-    die "no test files found, but the project declares tests ($declared): searched $root for *.test.*, *.spec.*, *-test.*, *-spec.*, *.cy.ts(x), *.test-d.ts, __tests__/*, test*.py and *_test.py, skipping $SKIP_ANY and, at the project root, $SKIP_ROOT; move the tests under a searched name or fix the layout"
+    die "no test files found, but the project declares tests ($declared): searched $root for *.test.*, *.spec.*, *-test.*, *-spec.*, *.cy.ts(x), *.test-d.ts, __tests__/*, test*.py and *_test.py, skipping $SKIP_ANY (and, in a git work tree, files git ignores); move the tests under a searched name or fix the layout"
   fi
   printf 'check-duplicate-tests: nothing to check, no test files and no declared test script or config\n'
   exit 0
