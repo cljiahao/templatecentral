@@ -1,4 +1,5 @@
-ITEMS = [
-    # Item one.
-    1,
-]
+def f():
+    return [
+        # Item one.
+        1,
+    ]

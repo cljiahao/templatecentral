@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 # Comment gate for project source: check-comments.sh [--root DIR] [--ts-from DIR] [--full] [base-ref | --all path...]
 # Judges only lines added or changed since the base ref (--all treats every line of the listed paths as new); a reindented line counts as changed. Offline.
-# Judged extensions: ts tsx js jsx mjs cjs mts cts py. Paths are relative to the project root, which may sit in a git subfolder; files outside it are never judged.
+# Judged extensions: ts tsx js jsx mjs cjs mts cts py pyi. Paths are relative to the project root, which may sit in a git subfolder; files outside it are never judged.
 # Rules: a comment sits on its own line at the top of the file or directly above a statement, declaration, member or object property, and never inside a function body.
 # A block is at most MAX_COMMENT_LINES lines, a line at most MAX_LINE_CHARS characters, with no parenthetical aside and no comment wholly in brackets.
 # A code reference such as call foo() first is not an aside. JSDoc blocks do not count @tag lines, Python docstrings do not count blank lines or section entries such as Args.
-# A tool directive is exempt only when it matches that directive's own grammar from its start; its reason is one line of at most MAX_REASON_CHARS characters and is still checked for asides.
+# A tool directive is exempt only when it matches that directive's own grammar from its start, and a directive that suppresses a check must carry a reason:
+# eslint-disable*, istanbul/c8/v8 ignore, NOSONAR, gitleaks:allow, pragma: no cover and noqa take " -- reason" (noqa also needs a rule code); @ts-ignore, @ts-expect-error and @ts-nocheck take the reason as text after them;
+# biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at most MAX_REASON_CHARS characters and is checked for asides.
+# Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. JSDoc @tag lines are capped at MAX_TAG_LINES per block.
+# Comments before the first line of code total at most MAX_COMMENT_LINES lines, except a licence header that starts with a copyright or SPDX marker.
 # Shebangs and a licence header at the top of the file are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
 # Base ref: the argument, else BASE_REF, else the merge base with the default branch. In CI (CI, GITHUB_ACTIONS or TF_BUILD)
 # a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
 # In CI on a push to the target branch HEAD is the base, so there is nothing to compare: the gate says so, exits 0 and judges pull requests only.
+# When no file is judged outside --all the gate prints "nothing checked" and the reason instead of ok. A --all path that does not exist is an error.
 # Exit 0 clean, 1 findings, 2 cannot run (missing runtime or package, no base, unreadable file), always with one line naming the cause.
 set -uo pipefail
 
 MAX_COMMENT_LINES=3
 MAX_LINE_CHARS=120
 MAX_REASON_CHARS=100
+MAX_TAG_LINES=10
 MAX_REPORT_LINES=30
-SOURCE_EXT='ts tsx js jsx mjs cjs mts cts py'
+SOURCE_EXT='ts tsx js jsx mjs cjs mts cts py pyi'
 
 # Generated and vendored paths nobody edits by hand, relative to the project root; one place to extend.
 is_skipped() {
@@ -93,6 +99,9 @@ case "${CI:-}" in '' | false | False | FALSE | 0) ;; *) in_ci=1 ;; esac
 
 if [ "$all" = 1 ]; then
   [ $# -gt 0 ] || die "--all needs at least one path"
+  for p in "$@"; do
+    [ -e "$p" ] || die "path does not exist: $p. Fix: check the path, it is relative to the project root."
+  done
   while IFS= read -r -d '' f; do
     add_spec "${f#./}" all
   done < <(find "$@" -type f -print0 2> /dev/null)
@@ -181,7 +190,7 @@ fi
 : > "$wd/spec.py"
 while IFS= read -r line; do
   case "${line%%$'\t'*}" in
-    *.py) printf '%s\n' "$line" >> "$wd/spec.py" ;;
+    *.py | *.pyi) printf '%s\n' "$line" >> "$wd/spec.py" ;;
     *) printf '%s\n' "$line" >> "$wd/spec.ts" ;;
   esac
 done < "$specs"
@@ -192,7 +201,7 @@ if [ -d docs/adr ] || [ -d docs/decisions ]; then adr=--adr; fi
 
 if [ -s "$wd/spec.ts" ]; then
   command -v node > /dev/null 2>&1 || die "node is missing, so TypeScript and JavaScript comments cannot be read. Fix: install Node.js and re-run."
-  set -- --max "$MAX_COMMENT_LINES" --max-line "$MAX_LINE_CHARS" --max-reason "$MAX_REASON_CHARS" --root "$root"
+  set -- --max "$MAX_COMMENT_LINES" --max-line "$MAX_LINE_CHARS" --max-reason "$MAX_REASON_CHARS" --max-tags "$MAX_TAG_LINES" --root "$root"
   [ -z "$adr" ] || set -- "$@" "$adr"
   [ -z "$ts_from" ] || set -- "$@" --ts-from "$ts_from"
   node "$here/check-comments.mjs" "$@" < "$wd/spec.ts" > "$wd/out.ts" 2> "$wd/err.ts"
@@ -218,6 +227,14 @@ fi
 
 nfiles=$(wc -l < "$specs" | tr -d ' ')
 [ -z "$decision" ] || printf 'check-comments: diff base: %s\n' "$decision"
+if [ "$nfiles" = 0 ]; then
+  if [ "$all" = 1 ]; then why="no source file under the given paths"
+  elif [ "$mb" = "$head_sha" ]; then why="HEAD is the base ($ref) and the work tree has no changed source file"
+  else why="no source file was added, changed or renamed since the base ($ref)"
+  fi
+  printf 'check-comments: nothing checked: %s. This is not a pass.\n' "$why"
+  exit 0
+fi
 total=$(wc -l < "$wd/out" | tr -d ' ')
 if [ "$total" -gt 0 ]; then
   if [ "$full" = 1 ]; then

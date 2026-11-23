@@ -7,26 +7,43 @@ import tokenize
 
 CODES = r"[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*"
 NAMES = r"[\w-]+(?:\s*,\s*[\w-]+)*"
+DASH = r"(?:\s+--\s+(?P<reason>\S.*))"
+HASH = r"(?:\s+#\s*(?P<reason>\S.*))"
 DIRECTIVES = [
-    re.compile(r"^noqa(?=\s|$)(?:\s+(?P<reason>\S.*))?$"),
-    re.compile(r"^noqa:\s*" + CODES + r"(?:\s+(?:--\s*)?(?P<reason>\S.*))?$"),
-    re.compile(r"^ruff:\s*noqa(?::\s*" + CODES + r")?$"),
-    re.compile(r"^type:\s*ignore(?:\[[\w,\s-]+\])?(?:\s+(?P<reason>\S.*))?$"),
-    re.compile(r"^pyright:\s*(?:ignore(?:\[[\w,\s-]+\])?|basic|strict|standard|report\w+\s*=\s*\w+(?:\s*,\s*report\w+\s*=\s*\w+)*)$"),
+    re.compile(r"^noqa:\s*" + CODES + DASH + "$"),
+    re.compile(r"^ruff:\s*noqa:\s*" + CODES + DASH + "$"),
+    re.compile(r"^type:\s*ignore\[[\w,\s-]+\]" + HASH + "$"),
+    re.compile(r"^pyright:\s*ignore\[[\w,\s-]+\]" + HASH + "$"),
+    re.compile(r"^pyright:\s*(?:basic|strict|standard|report\w+\s*=\s*\w+(?:\s*,\s*report\w+\s*=\s*\w+)*)$"),
     re.compile(r"^mypy:\s*[\w-]+(?:\s*=\s*[\w.-]+)?(?:\s*,\s*[\w-]+(?:\s*=\s*[\w.-]+)?)*$"),
-    re.compile(r"^pylint:\s*(?:disable|enable|disable-next|disable-all|skip-file)(?:\s*=\s*" + NAMES + r")?(?:\s+(?P<reason>\S.*))?$"),
+    re.compile(r"^pylint:\s*(?:disable|disable-next|disable-all|skip-file)(?:\s*=\s*" + NAMES + r")?" + DASH + "$"),
+    re.compile(r"^pylint:\s*enable(?:\s*=\s*" + NAMES + r")?$"),
     re.compile(r"^isort:\s*(?:skip_file|skip|off|on|split|dont-add-imports)$"),
     re.compile(r"^fmt:\s*(?:off|on|skip)$"),
-    re.compile(r"^nosec(?:\s+B[0-9]+(?:\s*,\s*B[0-9]+)*)?(?:\s+(?P<reason>\S.*))?$"),
-    re.compile(r"^pragma:\s*no\s+(?:cover|branch)(?:\s+(?P<reason>\S.*))?$"),
-    re.compile(r"^NOSONAR(?:\s*\([\w:,\s.-]*\))?(?:\s+(?P<reason>\S.*))?$"),
-    re.compile(r"^gitleaks:allow$"),
+    re.compile(r"^nosec(?:\s+B[0-9]+(?:\s*,\s*B[0-9]+)*)?" + DASH + "$"),
+    re.compile(r"^pragma:\s*no\s+(?:cover|branch)" + DASH + "$"),
+    re.compile(r"^NOSONAR(?:\s*\([\w:,\s.-]*\))?" + DASH + "$"),
+    re.compile(r"^gitleaks:allow" + DASH + "$"),
     re.compile(r"^-\*-\s*coding:\s*[-\w.]+\s*-\*-$"),
     re.compile(r"^coding[:=]\s*[-\w.]+$"),
     re.compile(r"^!\s*/\S*(?:\s+\S+)*$"),
 ]
-LICENCE = re.compile(r"(Copyright|SPDX-License-Identifier|Licensed under|MIT License|Permission is hereby|Apache License|All rights reserved)", re.I)
+SUPPRESSORS = [
+    (re.compile(r"^noqa\b"), "# noqa: CODE -- reason"),
+    (re.compile(r"^ruff:\s*noqa\b"), "# ruff: noqa: CODE -- reason"),
+    (re.compile(r"^type:\s*ignore\b"), "# type: ignore[code]  # reason"),
+    (re.compile(r"^pyright:\s*ignore\b"), "# pyright: ignore[rule]  # reason"),
+    (re.compile(r"^pylint:\s*disable"), "# pylint: disable=name -- reason"),
+    (re.compile(r"^nosec\b"), "# nosec B101 -- reason"),
+    (re.compile(r"^pragma:\s*no\s+(?:cover|branch)\b"), "# pragma: no cover -- reason"),
+    (re.compile(r"^NOSONAR\b"), "# NOSONAR -- reason"),
+    (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
+]
+LICENCE = re.compile(r"^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b", re.I)
 ASIDE = re.compile(r"(^|\s)\([^()]*\S[^()]*\)")
+ENTRY = re.compile(r"^\*{0,2}\w[\w.]*(?:\s*\([^)]*\))?\s*:\s*\S")
+SPHINX = re.compile(r"^:\w[^:]*:")
+MAX_CONTINUATION = 2
 SECTION = re.compile(r"^(?:Args|Arguments|Parameters|Other Parameters|Keyword Args|Returns?|Yields?|Raises?|Attributes|Examples?|Notes?|See Also|References|Warns|Warnings|Todo):\s*$")
 SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER, tokenize.COMMENT)
 VERSION = sys.version.split()[0]
@@ -64,11 +81,15 @@ def changed_set(spec):
 
 
 def directive_of(text):
+    """Returns three values: is a directive, its reason, and the expected form when a suppressor is malformed."""
     for rx in DIRECTIVES:
         m = rx.match(text)
         if m:
-            return True, (m.groupdict().get("reason") or "")
-    return False, ""
+            return True, (m.groupdict().get("reason") or ""), ""
+    for rx, form in SUPPRESSORS:
+        if rx.match(text):
+            return True, "", form
+    return False, "", ""
 
 
 def header_ends(tokens):
@@ -89,25 +110,36 @@ def header_ends(tokens):
 
 
 def docstring_prose(source_lines, node):
-    """Counts the prose lines of a docstring, leaving out blank lines and section entries such as Args or Returns."""
+    """Counts the prose lines of a docstring. Blank lines, section headers, entry lines and two continuations per entry are left out."""
     doc = node.body[0]
     lines = source_lines[doc.lineno - 1:doc.end_lineno]
     count = 0
     in_section = False
+    entry_indent = None
+    cont = 0
     for idx, raw in enumerate(lines):
         t = raw.strip()
+        indent = len(raw) - len(raw.lstrip())
         if idx == 0:
             t = re.sub(r"^[rRuUbB]*(\"\"\"|''')", "", t)
         if idx == len(lines) - 1:
             t = re.sub(r"(\"\"\"|''')$", "", t).strip()
         if t == "":
             in_section = False
+            entry_indent = None
             continue
         if SECTION.match(t):
             in_section = True
+            entry_indent = None
             continue
-        if in_section or re.match(r":\w+", t):
+        if idx > 0 and entry_indent is not None and indent > entry_indent and cont < MAX_CONTINUATION:
+            cont += 1
             continue
+        if idx > 0 and (SPHINX.match(t) or (in_section and ENTRY.match(t))):
+            entry_indent = indent
+            cont = 0
+            continue
+        entry_indent = None
         count += 1
     return count
 
@@ -154,6 +186,14 @@ def check_file(rel, spec, opt, report):
             funcs.append((hends.get(node.lineno, node.lineno), node.end_lineno, node.col_offset))
         elif isinstance(node, ast.Lambda):
             funcs.append((node.lineno, node.end_lineno, node.col_offset))
+        elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            for e in node.elts:
+                starts.add(e.lineno)
+        elif isinstance(node, ast.Call):
+            for a in node.args:
+                starts.add(a.lineno)
+            for kw in node.keywords:
+                starts.add(getattr(kw, "lineno", kw.value.lineno))
         elif isinstance(node, ast.Dict):
             for k, v in zip(node.keys, node.values):
                 starts.add((k if k is not None else v).lineno)
@@ -167,6 +207,10 @@ def check_file(rel, spec, opt, report):
                     adr = " Cite the ADR by number (for example ADR-0007) instead of restating it." if opt["adr"] else ""
                     report(rel, first.lineno, "comments/length", "docstring is %d prose lines, limit %d. Fix: cut it to %d lines or fewer, section entries such as Args do not count.%s" % (count, opt["max"], opt["max"], adr))
 
+    for idx, tok in enumerate(tokens):
+        if tok.type == tokenize.NAME and tok.string in ("else", "finally") and code_start_by_line.get(tok.start[0]) == tok.start[1]:
+            starts.add(tok.start[0])
+
     items = []
     for tok in tokens:
         if tok.type != tokenize.COMMENT:
@@ -175,10 +219,12 @@ def check_file(rel, spec, opt, report):
         text = tok.string[1:].strip()
         before = code_start_by_line.get(line)
         trailing = before is not None and before < col
-        is_dir, reason = directive_of(text)
-        items.append({"line": line, "col": col, "text": text, "trailing": trailing, "directive": is_dir, "reason": reason, "top": first_code is None or line < first_code})
+        is_dir, reason, bad = directive_of(text)
+        items.append({"line": line, "col": col, "text": text, "trailing": trailing, "directive": is_dir, "reason": reason, "bad": bad, "top": first_code is None or line < first_code})
 
     for it in items:
+        if it["bad"] and touches(it["line"], it["line"]):
+            report(rel, it["line"], "comments/directive", "directive without a reason or in the wrong form. Fix: write it as `%s`, with a one-line reason." % it["bad"])
         if it["trailing"] and not it["directive"] and touches(it["line"], it["line"]):
             report(rel, it["line"], "comments/trailing", "comment shares a line with code. Fix: move it on its own line directly above the statement or declaration it explains, or delete it.")
         if it["directive"] and it["reason"] and touches(it["line"], it["line"]):
@@ -189,6 +235,11 @@ def check_file(rel, spec, opt, report):
 
     own = [it for it in items if not it["trailing"]]
     k = 0
+    seen_top = False
+    top_total = 0
+    top_chains = 0
+    top_line = None
+    top_changed = False
     while k < len(own):
         j = k
         while j + 1 < len(own) and own[j + 1]["line"] == own[j]["line"] + 1:
@@ -202,8 +253,16 @@ def check_file(rel, spec, opt, report):
         counted = [it for it in chain if not it["directive"] or it["reason"]]
         if not counted:
             continue
-        if prose and prose[0]["top"] and LICENCE.search(prose[0]["text"]):
-            continue
+        if prose and prose[0]["top"]:
+            first_top = not seen_top
+            seen_top = True
+            if first_top and LICENCE.search(prose[0]["text"]):
+                continue
+            top_chains += 1
+            top_total += len([it for it in counted if it["text"]])
+            if top_line is None:
+                top_line = counted[0]["line"]
+            top_changed = top_changed or any(touches(it["line"], it["line"]) for it in counted)
         start = counted[0]["line"]
         prose_changed = any(touches(it["line"], it["line"]) for it in prose)
         any_changed = any(touches(it["line"], it["line"]) for it in counted)
@@ -234,6 +293,12 @@ def check_file(rel, spec, opt, report):
             ln = prose[before.count("\n")]["line"]
             if touches(ln, ln):
                 report(rel, ln, "comments/aside", "parenthetical aside in a comment. Fix: make it a plain sentence, or delete it.")
+    report_top(rel, opt, report, top_chains, top_total, top_line, top_changed)
+
+
+def report_top(rel, opt, report, top_chains, top_total, top_line, top_changed):
+    if top_chains > 1 and top_total > opt["max"] and top_changed:
+        report(rel, top_line, "comments/length", "comments before the first line of code total %d lines, limit %d. Fix: cut them to %d lines or fewer; only a licence header is exempt." % (top_total, opt["max"], opt["max"]))
 
 
 def next_code_line(sorted_lines, after):

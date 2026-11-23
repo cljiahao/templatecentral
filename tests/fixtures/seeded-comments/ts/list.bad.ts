@@ -1,4 +1,6 @@
-export const list = [
-  // Item one.
-  1,
-];
+export function f() {
+  return [
+    // Item one.
+    1,
+  ];
+}

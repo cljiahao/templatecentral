@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const argv = process.argv.slice(2);
-const opt = { max: 0, maxLine: 0, maxReason: 0, adr: false, root: process.cwd(), tsFrom: '' };
+const opt = { max: 0, maxLine: 0, maxReason: 0, maxTags: 0, adr: false, root: process.cwd(), tsFrom: '' };
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--max') opt.max = Number(argv[++i]);
   else if (argv[i] === '--max-line') opt.maxLine = Number(argv[++i]);
   else if (argv[i] === '--max-reason') opt.maxReason = Number(argv[++i]);
+  else if (argv[i] === '--max-tags') opt.maxTags = Number(argv[++i]);
   else if (argv[i] === '--adr') opt.adr = true;
   else if (argv[i] === '--root') opt.root = path.resolve(argv[++i]);
   else if (argv[i] === '--ts-from') opt.tsFrom = path.resolve(argv[++i]);
@@ -18,7 +19,7 @@ function die(msg) {
   process.stderr.write(`check-comments: ${msg}\n`);
   process.exit(2);
 }
-if (!(opt.max >= 1 && opt.maxLine >= 1 && opt.maxReason >= 1)) die('internal: --max, --max-line and --max-reason must be positive numbers');
+if (!(opt.max >= 1 && opt.maxLine >= 1 && opt.maxReason >= 1 && opt.maxTags >= 1)) die('internal: --max, --max-line, --max-reason and --max-tags must be positive numbers');
 
 const tsDir = path.join(opt.tsFrom || opt.root, 'node_modules', 'typescript');
 if (!fs.existsSync(path.join(tsDir, 'package.json'))) {
@@ -40,25 +41,39 @@ const RULE_ID = '[@\\w/.][@\\w/.-]*';
 const RULES = `${RULE_ID}(?:\\s*,\\s*${RULE_ID})*`;
 const WEB_VALUE = '(?:"[^"]*"|\'[^\']*\'|\\[[^\\]]*\\]|[^\\s,]+)';
 const WEB_PAIR = `webpack[A-Za-z]+\\s*:\\s*${WEB_VALUE}`;
+const DASH = '(?:\\s+--\\s+(?<reason>\\S.*))';
+const TEXT = '(?:\\s+(?<reason>\\S.*))';
 const DIRECTIVES = [
-  new RegExp(`^eslint-(?:disable|disable-line|disable-next-line|enable)(?:\\s+${RULES})?(?:\\s+--\\s+(?<reason>\\S.*))?$`),
+  new RegExp(`^eslint-(?:disable|disable-line|disable-next-line)(?:\\s+${RULES})?${DASH}$`),
+  new RegExp(`^eslint-enable(?:\\s+${RULES})?(?:\\s+--\\s+\\S.*)?$`),
   /^eslint-env\s+[\w,\s-]+$/,
-  /^@ts-(?:expect-error|ignore)(?:\s+(?<reason>\S.*))?$/,
-  /^@ts-(?:nocheck|check)$/,
+  new RegExp(`^@ts-(?:expect-error|ignore|nocheck)${TEXT}$`),
+  /^@ts-check$/,
   /^prettier-ignore(?:-start|-end)?$/,
-  /^(?:istanbul|c8|v8)\s+ignore\s+(?:next|if|else|file|start|stop)(?:\s+\d+)?(?:\s+(?:--\s*)?(?<reason>\S.*))?$/,
-  /^biome-ignore(?:-all|-start|-end)?(?:\s+\w+(?:\/\w+)+)*(?::\s*(?<reason>\S.*))?$/,
-  /^NOSONAR(?:\s*\([\w:,\s.-]*\))?(?:\s+(?<reason>\S.*))?$/,
-  /^gitleaks:allow$/,
+  new RegExp(`^(?:istanbul|c8|v8)\\s+ignore\\s+(?:next|if|else|file|start)(?:\\s+\\d+)?${DASH}$`),
+  /^(?:istanbul|c8|v8)\s+ignore\s+stop$/,
+  /^biome-ignore-end$/,
+  /^biome-ignore(?:-all|-start)?(?:\s+\w+(?:\/\w+)+)*:\s*(?<reason>\S.*)$/,
+  new RegExp(`^NOSONAR(?:\\s*\\([\\w:,\\s.-]*\\))?${DASH}$`),
+  new RegExp(`^gitleaks:allow${DASH}$`),
   /^[@#]__(?:PURE|NO_SIDE_EFFECTS|INLINE|NOINLINE)__$/,
   new RegExp(`^${WEB_PAIR}(?:\\s*,\\s*${WEB_PAIR})*$`),
   /^@vite-ignore$/,
   /^@jsx(?:Runtime|ImportSource|Frag)?\s+\S+$/,
   /^@(?:vitest|jest)-environment\s+[\w-]+$/,
-  /^pragma:\s*no\s+(?:cover|branch)(?:\s+(?<reason>\S.*))?$/,
+  new RegExp(`^pragma:\\s*no\\s+(?:cover|branch)${DASH}$`),
   /^<reference\s+[\w-]+="[^"]*"(?:\s+[\w-]+="[^"]*")*\s*\/>$/,
 ];
-const LICENCE = /(Copyright|SPDX-License-Identifier|Licensed under|MIT License|Permission is hereby|Apache License|All rights reserved)/i;
+const SUPPRESSORS = [
+  [/^eslint-disable(?:-line|-next-line)?(?=\s|$)/, '// eslint-disable-next-line rule -- reason'],
+  [/^@ts-(?:expect-error|ignore|nocheck)\b/, '// @ts-expect-error reason'],
+  [/^(?:istanbul|c8|v8)\s+ignore\b/, '/* istanbul ignore next -- reason */'],
+  [/^biome-ignore(?:-all|-start)?\b/, '// biome-ignore lint/group/rule: reason'],
+  [/^NOSONAR\b/, '// NOSONAR -- reason'],
+  [/^gitleaks:allow/, '// gitleaks:allow -- reason'],
+  [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
+];
+const LICENCE = /^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b/i;
 const ASIDE = /(^|\s)\([^()]*\S[^()]*\)/g;
 const JSDOC_FIRST = ts.SyntaxKind.FirstJSDocNode;
 const JSDOC_LAST = ts.SyntaxKind.LastJSDocNode;
@@ -139,7 +154,7 @@ function commentLines(text, c, sf) {
     if (i === 0) t = t.replace(/^\/\*+/, '');
     if (i === parts.length - 1) t = t.replace(/\*+\/$/, '');
     t = t.replace(/^\s*\*+ ?/, '').trim();
-    return { line: startLine + i, text: t, counts: t !== '' && !(jsdoc && t.startsWith('@')) };
+    return { line: startLine + i, text: t, counts: t !== '' && !(jsdoc && t.startsWith('@')), tag: jsdoc && t.startsWith('@') };
   });
 }
 
@@ -147,9 +162,10 @@ function directiveOf(lines) {
   const flat = lines.map((l) => l.text.replace(/^[\s*!/]+/, '')).filter((t) => t !== '').join(' ');
   for (const re of DIRECTIVES) {
     const m = re.exec(flat);
-    if (m) return { is: true, reason: (m.groups && m.groups.reason) || '' };
+    if (m) return { is: true, reason: (m.groups && m.groups.reason) || '', bad: '' };
   }
-  return { is: false, reason: '' };
+  for (const [re, form] of SUPPRESSORS) if (re.test(flat)) return { is: true, reason: '', bad: form };
+  return { is: false, reason: '', bad: '' };
 }
 
 function checkFile(rel, rangesSpec, report) {
@@ -187,13 +203,24 @@ function checkFile(rel, rangesSpec, report) {
 
   const targetStarts = new Set();
   const bodies = [];
+  const emptyJsx = [];
   const inList = (list, n) => Array.isArray(list) && list.includes(n);
   const visit = (n) => {
     if (n.kind >= JSDOC_FIRST && n.kind <= JSDOC_LAST) return;
     const p = n.parent;
-    if (p && p.kind !== ts.SyntaxKind.JsxAttributes && (inList(p.statements, n) || inList(p.members, n) || inList(p.properties, n) || inList(p.clauses, n))) {
+    if (p && p.kind !== ts.SyntaxKind.JsxAttributes && (inList(p.statements, n) || inList(p.members, n) || inList(p.properties, n) || inList(p.clauses, n) || inList(p.elements, n) || inList(p.arguments, n) || inList(p.types, n))) {
       targetStarts.add(n.getStart(sf, false));
     }
+    if (n.kind === ts.SyntaxKind.UnionType) {
+      for (const list of n.getChildren(sf)) {
+        if (list.kind === ts.SyntaxKind.SyntaxList) for (const t of list.getChildren(sf)) if (t.kind === ts.SyntaxKind.BarToken) targetStarts.add(t.getStart(sf, false));
+      }
+    }
+    if (n.kind === ts.SyntaxKind.IfStatement && n.elseStatement) {
+      const kw = n.getChildren(sf).find((c) => c.kind === ts.SyntaxKind.ElseKeyword);
+      if (kw) targetStarts.add(kw.getStart(sf, false));
+    }
+    if (n.kind === ts.SyntaxKind.JsxExpression && !n.expression) emptyJsx.push({ start: n.getStart(sf, false), end: n.end });
     if (FUNC_KINDS.has(n.kind) && n.body) bodies.push({ start: n.body.pos, end: n.body.end });
     ts.forEachChild(n, visit);
   };
@@ -219,12 +246,20 @@ function checkFile(rel, rangesSpec, report) {
     items.push({
       c, lines, whole: lines.map((l) => l.text).join('\n'), codeBefore, codeAfter, next,
       startLine: lines[0].line, endLine: lines[lines.length - 1].line,
-      directive: dir.is, reason: dir.reason,
+      directive: dir.is, reason: dir.reason, bad: dir.bad,
       top: c.end <= firstTok,
+      jsx: emptyJsx.some((j) => c.pos >= j.start && c.end <= j.end),
     });
   }
 
   for (const it of items) {
+    if (it.bad && touches(it.startLine, it.endLine)) {
+      report(rel, it.startLine, 'comments/directive', `directive without a reason or in the wrong form. Fix: write it as \`${it.bad}\`, with a one-line reason.`);
+    }
+    if (it.jsx) {
+      if (touches(it.startLine, it.endLine)) report(rel, it.startLine, 'comments/placement', 'comment inside a function body. Fix: delete it, or move the note on its own line directly above the function.');
+      continue;
+    }
     if (it.directive) continue;
     if ((it.codeBefore || it.codeAfter) && touches(it.startLine, it.endLine)) {
       report(rel, it.startLine, 'comments/trailing', 'comment shares a line with code. Fix: move it on its own line directly above the statement or declaration it explains, or delete it.');
@@ -241,8 +276,13 @@ function checkFile(rel, rangesSpec, report) {
     if (new RegExp(ASIDE.source).test(it.reason)) report(rel, at, 'comments/aside', 'parenthetical aside in a directive reason. Fix: make it a plain phrase, or delete it.');
   }
 
-  const own = items.filter((it) => !it.codeBefore && !it.codeAfter);
+  const own = items.filter((it) => !it.codeBefore && !it.codeAfter && !it.jsx);
   let k = 0;
+  let seenTop = false;
+  let topTotal = 0;
+  let topChains = 0;
+  let topLine = null;
+  let topChanged = false;
   while (k < own.length) {
     let j = k;
     while (j + 1 < own.length && own[j + 1].startLine === own[j].endLine + 1) j++;
@@ -250,6 +290,12 @@ function checkFile(rel, rangesSpec, report) {
     k = j + 1;
     const prose = chain.filter((it) => !it.directive);
     for (const it of chain) {
+      if (it.c.block && it.lines.length > 0 && text.startsWith('/**', it.c.pos)) {
+        const tags = it.lines.filter((l) => l.tag).length;
+        if (tags > opt.maxTags && touches(it.startLine, it.endLine)) {
+          report(rel, it.startLine, 'comments/length', `JSDoc block has ${tags} tag lines, limit ${opt.maxTags}. Fix: drop tags that restate the signature, or cut it to ${opt.maxTags} or fewer.`);
+        }
+      }
       for (const l of it.lines) {
         if (l.text.length > opt.maxLine && touches(l.line, l.line)) {
           report(rel, l.line, 'comments/length', `comment line is ${l.text.length} characters, limit ${opt.maxLine}. Fix: cut it or split it into shorter sentences.`);
@@ -258,7 +304,15 @@ function checkFile(rel, rangesSpec, report) {
     }
     const counted = chain.filter((it) => !it.directive || it.reason !== '');
     if (counted.length === 0) continue;
-    if (prose.length > 0 && prose[0].top && LICENCE.test(prose[0].whole)) continue;
+    if (prose.length > 0 && prose[0].top) {
+      const firstTop = !seenTop;
+      seenTop = true;
+      if (firstTop && LICENCE.test(prose[0].whole.trim())) continue;
+      topChains++;
+      topTotal += counted.flatMap((it) => it.lines).filter((l) => l.counts).length;
+      if (topLine === null) topLine = counted[0].startLine;
+      topChanged = topChanged || counted.some((it) => touches(it.startLine, it.endLine));
+    }
     const startLine = counted[0].startLine;
     const proseChanged = prose.some((it) => touches(it.startLine, it.endLine));
     const anyChanged = counted.some((it) => touches(it.startLine, it.endLine));
@@ -296,6 +350,9 @@ function checkFile(rel, rangesSpec, report) {
       const ln = lines[before.split('\n').length - 1].line;
       if (touches(ln, ln)) report(rel, ln, 'comments/aside', 'parenthetical aside in a comment. Fix: make it a plain sentence, or delete it.');
     }
+  }
+  if (topChains > 1 && topTotal > opt.max && topChanged) {
+    report(rel, topLine, 'comments/length', `comments before the first line of code total ${topTotal} lines, limit ${opt.max}. Fix: cut them to ${opt.max} lines or fewer; only a licence header is exempt.`);
   }
 }
 

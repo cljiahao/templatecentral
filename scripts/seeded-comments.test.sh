@@ -113,16 +113,20 @@ for lang in ts py; do
   expect_clean "$lang/directives.ok.$ext"
 done
 expect_clean ts/jsx.ok.tsx
-expect_rule ts/jsx.bad.tsx trailing 2
+expect_rule ts/jsx.bad.tsx placement 2
 expect_clean ts/config.ok.ts
-expect_rule ts/list.bad.ts placement 2
+expect_rule ts/list.bad.ts placement 3
+expect_clean ts/list.ok.ts
 expect_rule ts/arrow.bad.ts placement 2
 expect_rule ts/nested.bad.ts placement 3
 expect_clean ts/jsdoc.ok.ts
 expect_rule ts/jsdoc.bad.ts length 1
 expect_clean ts/coderef.ok.ts
 expect_clean py/config.ok.py
-expect_rule py/list.bad.py placement 2
+expect_rule py/list.bad.py placement 3
+expect_clean py/list.ok.py
+expect_clean py/stub.ok.pyi
+expect_rule py/stub.bad.pyi trailing 1
 expect_rule py/nested.bad.py placement 3
 expect_clean py/docstring.ok.py
 expect_rule py/docstring.bad.py length 2
@@ -151,21 +155,82 @@ inline_clean() {
 inline_rule a.ts aside 1 '// eslint-disable-line -- see (note) essay prose here\nexport const a = 1;\n'
 inline_rule a.ts aside 1 '// This explains the thing @ts-ignore (aside here)\nexport const a = 1;\n'
 inline_rule a.ts aside 1 '// pragma is the thing (aside)\nexport const a = 1;\n'
-inline_rule a.py trailing 1 'x = 1  # noqa: this is an essay\n'
+inline_rule a.py directive 1 'x = 1  # noqa: this is an essay\n'
 inline_rule a.ts length 1 '// note one @ts-ignore\n// note two @ts-ignore\n// note three @ts-ignore\n// note four @ts-ignore\n// note five @ts-ignore\nexport const a = 1;\n'
 inline_rule a.ts length 1 '// @ts-expect-error reason one\n// @ts-expect-error reason two\n// @ts-expect-error reason three\n// @ts-expect-error reason four\n// @ts-expect-error reason five\nexport const a: number = "x";\n'
-inline_rule a.py length 1 '# noqa: this is an essay\n# noqa: this is an essay\n# noqa: this is an essay\n# noqa: this is an essay\n# noqa: this is an essay\nA = 1\n'
-inline_rule a.py length 1 '# noqa: E501 reason one\n# noqa: E501 reason two\n# noqa: E501 reason three\n# noqa: E501 reason four\n# noqa: E501 reason five\nA = 1\n'
+inline_rule a.py length 1 '# noqa: E501 -- reason one\n# noqa: E501 -- reason two\n# noqa: E501 -- reason three\n# noqa: E501 -- reason four\n# noqa: E501 -- reason five\nA = 1\n'
 reason101=$(printf '%0101d' 0)
 inline_rule a.ts length 1 "// @ts-ignore $reason101\nexport const a = 1;\n"
-inline_rule a.py length 2 "A = 1\n# noqa: E501 $reason101\nB = 2\n"
+inline_rule a.py length 2 "A = 1\n# noqa: E501 -- $reason101\nB = 2\n"
 inline_rule a.ts length 1 '/* eslint-disable no-console -- first part\n   second part */\nexport const a = 1;\n'
 inline_rule a.ts aside 1 '// @ts-ignore explained (here)\nexport const a = 1;\n'
 reason100=$(printf '%0100d' 0)
 inline_clean a.ts "// @ts-ignore $reason100\nexport const a: number = 'x';\n"
 inline_clean a.ts '// eslint-disable-next-line no-console -- logs the boot banner\nexport const a = 1;\n'
-inline_clean a.py 'import os  # noqa: F401 kept for the plugin\n'
-inline_clean a.ts 'export const a = 1; // eslint-disable-line no-console, no-undef\n'
+inline_clean a.py 'import os  # noqa: F401 -- kept for the plugin\n'
+inline_clean a.ts 'export const a = 1; // eslint-disable-line no-console, no-undef -- logs once\n'
+
+# a suppressing directive carries a reason, in the form the message states
+inline_rule a.py directive 1 'x = 1  # noqa\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501\n'
+inline_rule a.py directive 1 'x: int = "a"  # type: ignore\n'
+inline_rule a.py directive 1 'x: int = "a"  # type: ignore[assignment]\n'
+inline_rule a.py directive 1 'x: int = "a"  # pyright: ignore[reportAssignmentType]\n'
+inline_rule a.py directive 2 'def f():\n    return 1  # pragma: no cover\n'
+inline_rule a.py directive 1 'x = 1  # nosec B101\n'
+inline_rule a.py directive 1 'x = 1  # NOSONAR\n'
+inline_rule a.py directive 1 'key = "k"  # gitleaks:allow\n'
+inline_rule a.ts directive 1 '// @ts-ignore\nexport const a: number = "x";\n'
+inline_rule a.ts directive 1 '// @ts-expect-error\nexport const a: number = "x";\n'
+inline_rule a.ts directive 1 '// @ts-nocheck\nexport const a = 1;\n'
+inline_rule a.ts directive 1 'export const a = 1; // eslint-disable-line no-console\n'
+inline_rule a.ts directive 1 '// eslint-disable-next-line\nexport const a = 1;\n'
+inline_rule a.ts directive 1 '/* istanbul ignore next */\nexport const h = 1;\n'
+inline_rule a.ts directive 1 '// c8 ignore next\nexport const h = 1;\n'
+inline_rule a.ts directive 1 'export const a = 1; // NOSONAR\n'
+inline_rule a.ts directive 1 "export const k = 'k'; // gitleaks:allow\n"
+inline_rule a.ts directive 1 '// biome-ignore lint/suspicious/noExplicitAny\nexport const a = 1;\n'
+inline_clean a.py 'x: int = "a"  # type: ignore[assignment]  # legacy shape\n'
+inline_clean a.py 'x: int = "a"  # pyright: ignore[reportAssignmentType]  # legacy shape\n'
+inline_clean a.py 'def f():\n    return 1  # pragma: no cover -- exercised by the e2e run\n'
+inline_clean a.ts '// @ts-nocheck legacy file\nexport const a = 1;\n'
+inline_clean a.ts '/* istanbul ignore next -- guarded by the caller */\nexport const h = 1;\n'
+inline_clean a.ts 'export function g() {\n  return 1; // NOSONAR -- reviewed\n}\n'
+inline_clean a.ts '/* eslint-enable no-console */\n// prettier-ignore\nexport const m = [1, 0, 0, 1];\n'
+inline_clean a.py 'x = 1  # fmt: skip\n'
+
+# a Python docstring cannot hide prose behind a section header
+inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Args:\n        a: one\n    prose line a\n    prose line b\n    prose line c\n    prose line d\n    """\n    return 1\n'
+inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Args:\n        a: one\n            cont 1\n            cont 2\n            cont 3\n            cont 4\n            cont 5\n    """\n    return 1\n'
+inline_clean a.py 'def f():\n    """Summary.\n\n    Args:\n        a: one\n        b (int): two\n            wraps here\n        c: three\n        d: four\n    Returns:\n        The sum.\n    """\n    return 1\n'
+inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Returns:\n        prose a\n        prose b\n        prose c\n        prose d\n    """\n    return 1\n'
+
+# stubs are judged like other Python
+inline_rule a.pyi trailing 1 'a: int  # the value\n'
+inline_clean a.pyi 'a: int\n'
+
+# JSDoc tag lines are capped
+tags10=''
+tags11=''
+for n in 1 2 3 4 5 6 7 8 9 10; do tags10="$tags10 * @param p$n value\n"; done
+tags11="$tags10 * @param p11 value\n"
+inline_clean a.ts "/**\n * Summary.\n$tags10 */\nexport function f(p1: number) {\n  return p1;\n}\n"
+inline_rule a.ts length 1 "/**\n * Summary.\n$tags11 */\nexport function f(p1: number) {\n  return p1;\n}\n"
+
+# comments before the first token total at most one chain, except a licence header
+inline_rule a.ts length 1 '// one\n\n// two\n\n// three\n\n// four\nexport const a = 1;\n'
+inline_rule a.py length 1 '# one\n\n# two\n\n# three\n\n# four\nA = 1\n'
+inline_clean a.ts '// Copyright (c) Example.\n// Licensed under the MIT License.\n// Third licence line.\n// Fourth licence line.\n\n// Note one.\n// Note two.\nexport const a = 1;\n'
+inline_clean a.py '# SPDX-License-Identifier: MIT\n# Second licence line.\n# Third licence line.\n# Fourth licence line.\n\n# Note one.\nA = 1\n'
+inline_rule a.ts length 1 '// Licensed under the MIT License.\n// two\n// three\n// four\nexport const a = 1;\n'
+
+# module-level elements, arguments, union members and else branches are legal targets, function bodies are not
+inline_clean a.ts 'export const v = [\n  // element\n  1,\n];\n'
+inline_clean a.py 'import sys\nif sys.argv:\n    A = 1\n# explains else\nelse:\n    A = 2\n'
+inline_rule a.ts placement 3 'export function f() {\n  const v = [\n    // element\n    1,\n  ];\n  return v;\n}\n'
+inline_rule a.ts placement 4 'declare function k(...a: number[]): void;\nexport function f() {\n  k(\n    // argument\n    1,\n  );\n}\n'
+inline_rule a.py placement 3 'def f():\n    return print(\n        # keyword\n        sep="",\n    )\n'
+inline_rule a.py placement 5 'import sys\ndef f():\n    if sys.argv:\n        return 1\n    # else branch\n    else:\n        return 2\n'
 
 # a comment line is capped
 long130=$(printf '%0130d' 0)
@@ -177,7 +242,6 @@ inline_clean a.ts "// $long120\nexport const a = 1;\n"
 # placement: one rule for both languages
 inline_rule a.ts placement 3 'export const z = 0;\nexport function f() {\n  // inside\n  return 1;\n}\n'
 inline_rule a.ts placement 2 'export const z = 0;\n// above a closing brace\n'
-inline_rule a.ts placement 3 'export const z = 0;\nconst v = [\n  // element\n  1,\n];\n'
 inline_clean a.ts 'export const z = 0;\n// above a statement\nexport const y = 1;\n'
 inline_clean a.ts 'export class C {\n  // above a member\n  m = 1;\n}\nexport interface I {\n  // above a signature\n  k: number;\n}\n'
 
@@ -343,7 +407,15 @@ OUT=$(env NODE_PATH="$T/tsroot/node_modules" PATH="$d/bin" /bin/bash "$GATE" --r
 check 2 "$?" "no typescript package: NODE_PATH does not supply one"
 rm "$d/node_modules/typescript"
 OUT=$(env PATH="$d/bin" /bin/bash "$GATE" --root "$d/pyproj" --all nonexistent 2>&1)
-check 0 "$?" "a path with no source files is clean, not an error ($OUT)"
+check 2 "$?" "a path that does not exist fails closed ($OUT)"
+has "path does not exist: nonexistent" "$OUT" "missing path: message names the path"
+OUT=$(env PATH="$d/bin" /bin/bash "$GATE" --root "$d/pyproj" --all . nonexistent 2>&1)
+check 2 "$?" "a missing path after a valid one still fails closed"
+mkdir -p "$d/pyproj/docs-only"
+OUT=$(env PATH="$d/bin" /bin/bash "$GATE" --root "$d/pyproj/docs-only" --all . 2>&1)
+check 0 "$?" "a folder with no source files exits 0"
+has "nothing checked" "$OUT" "no source files: says nothing was checked"
+lacks "check-comments: ok" "$OUT" "no source files: no green ok line"
 mkdir -p "$d/empty"
 OUT=$("${CLEAN_ENV[@]}" /bin/bash "$GATE" --root "$d/empty" 2>&1)
 check 2 "$?" "outside a git work tree: exits 2"
@@ -422,7 +494,8 @@ has "nothing checked" "$OUT" "ci push: final line says nothing was checked"
 lacks "check-comments: ok" "$OUT" "ci push: no green ok line"
 run_push A=1
 check 0 "$EC" "non-ci, HEAD is the base: exits 0"
-has "check-comments: ok (0 file(s) checked)" "$OUT" "non-ci, HEAD is the base: plain ok line"
+has "nothing checked: HEAD is the base" "$OUT" "non-ci, HEAD is the base: says nothing was checked and why"
+lacks "check-comments: ok" "$OUT" "non-ci, HEAD is the base: no green ok line"
 lacks "nothing to compare" "$OUT" "non-ci, HEAD is the base: no push message"
 ci CI=true GITHUB_ACTIONS=true GITHUB_BASE_REF=main --
 lacks "nothing to compare" "$OUT" "ci pull request with changes: no push message"
@@ -480,7 +553,8 @@ printf '\x89PNG\r\n\x1a\n\0\0\0' > "$d/logo.png"
 commit_all "$d" "delete and binary"
 gate_diff "$d" main
 check 0 "$EC" "deleted and binary files: clean ($OUT)"
-has "ok (0 file(s) checked)" "$OUT" "deleted and binary files: nothing to judge"
+has "nothing checked: no source file was added, changed or renamed" "$OUT" "deleted and binary files: says nothing was checked"
+lacks "check-comments: ok" "$OUT" "deleted and binary files: no green ok line"
 
 # a path with a space is read whole
 d=$T/space
