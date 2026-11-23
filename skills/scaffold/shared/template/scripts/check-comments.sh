@@ -7,20 +7,20 @@
 # A code reference such as call foo() first is not an aside. JSDoc blocks do not count @tag lines, Python docstrings do not count blank lines or section entries such as Args.
 # A tool directive is exempt only when it matches that directive's own grammar from its start, and a directive that suppresses a check must carry a reason:
 # eslint-disable*, istanbul/c8/v8 ignore, NOSONAR, gitleaks:allow, pragma: no cover and noqa take " -- reason" (noqa also needs a rule code); @ts-ignore, @ts-expect-error and @ts-nocheck take the reason as text after them;
-# biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at most MAX_REASON_CHARS characters and is checked for asides.
+# biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at least three words that is not only TODO, at most MAX_REASON_CHARS characters, and is checked for asides.
 # Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. JSDoc @tag lines are capped at MAX_TAG_LINES per block.
-# Comments before the first line of code total at most MAX_COMMENT_LINES lines, except a licence header that starts with a copyright or SPDX marker.
+# Comments before the first line of code total at most MAX_COMMENT_LINES lines. A header that starts with a copyright or SPDX marker is exempt only for its leading licence lines, at most 15 of them.
 # Shebangs and a licence header at the top of the file are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
-# Base ref: the argument, else BASE_REF, else the merge base with the default branch. In CI (CI, GITHUB_ACTIONS or TF_BUILD)
-# a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
+# Base ref: the argument, else BASE_REF, else the merge base with the default branch; in CI (CI, GITHUB_ACTIONS or TF_BUILD) the default branch is never guessed,
+# so CI needs the argument or the pipeline target variable. In CI a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
 # In CI on a push to the target branch HEAD is the base, so there is nothing to compare: the gate says so, exits 0 and judges pull requests only.
-# When no file is judged outside --all the gate prints "nothing checked" and the reason instead of ok. A --all path that does not exist is an error.
+# When a change touches no judged file the gate prints "nothing checked" and the reason instead of ok and exits 0. --all with no source file under its paths, or a missing path, exits 2.
 # Exit 0 clean, 1 findings, 2 cannot run (missing runtime or package, no base, unreadable file), always with one line naming the cause.
 set -uo pipefail
 
 MAX_COMMENT_LINES=3
 MAX_LINE_CHARS=120
-MAX_REASON_CHARS=100
+MAX_REASON_CHARS=60
 MAX_TAG_LINES=10
 MAX_REPORT_LINES=30
 SOURCE_EXT='ts tsx js jsx mjs cjs mts cts py pyi'
@@ -75,6 +75,7 @@ trap 'rm -rf "$wd"' EXIT
 specs=$wd/specs
 : > "$specs"
 decision=
+src_seen=0
 
 has_source_ext() {
   local e
@@ -87,6 +88,7 @@ has_source_ext() {
 # Adds one "path<TAB>ranges" line unless the path is skipped or not source.
 add_spec() {
   has_source_ext "$1" || return 0
+  src_seen=1
   is_skipped "$1" && return 0
   case "$1" in *$'\t'* | *$'\n'*) die "path holds a tab or newline, rename it: $1" ;; esac
   printf '%s\t%s\n' "$1" "$2" >> "$specs"
@@ -138,6 +140,8 @@ else
   elif [ "$in_ci" = 1 ] && [ -n "$target" ]; then
     ref=origin/$target
     decision="pipeline target branch ($target)"
+  elif [ "$in_ci" = 1 ]; then
+    die "in CI the base ref is never guessed and no pull-request target variable is set (GITHUB_BASE_REF or SYSTEM_PULLREQUEST_TARGETBRANCH). Fix: pass the base ref as an argument in the pipeline step."
   else
     head_ref=$(git symbolic-ref -q refs/remotes/origin/HEAD 2> /dev/null || true)
     head_ref=${head_ref#refs/remotes/}
@@ -228,7 +232,8 @@ fi
 nfiles=$(wc -l < "$specs" | tr -d ' ')
 [ -z "$decision" ] || printf 'check-comments: diff base: %s\n' "$decision"
 if [ "$nfiles" = 0 ]; then
-  if [ "$all" = 1 ]; then why="no source file under the given paths"
+  [ "$all" = 0 ] || [ "$src_seen" = 1 ] || die "no source file under the given paths: $*. Fix: name a folder or file with one of these extensions: $SOURCE_EXT."
+  if [ "$all" = 1 ]; then why="every source file under the given paths is a skipped generated or vendored path"
   elif [ "$mb" = "$head_sha" ]; then why="HEAD is the base ($ref) and the work tree has no changed source file"
   else why="no source file was added, changed or renamed since the base ($ref)"
   fi

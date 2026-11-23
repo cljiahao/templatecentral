@@ -74,6 +74,10 @@ const SUPPRESSORS = [
   [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
 ];
 const LICENCE = /^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b/i;
+const LICENCE_LINE = /copyright|spdx-|licen[sc]e|all rights reserved|warrant|redistribut|permission|liabilit|merchantab|obtain a copy|distributed under|without limitation|applicable law|agreed to in writing|"as is"|basis|limitations|governing|https?:\/\//i;
+const MAX_LICENCE_LINES = 15;
+const FILLER = new Set(['todo', 'fixme', 'xxx', 'tbd']);
+const MIN_REASON_WORDS = 3;
 const ASIDE = /(^|\s)\([^()]*\S[^()]*\)/g;
 const JSDOC_FIRST = ts.SyntaxKind.FirstJSDocNode;
 const JSDOC_LAST = ts.SyntaxKind.LastJSDocNode;
@@ -158,14 +162,44 @@ function commentLines(text, c, sf) {
   });
 }
 
+function weakReason(reason) {
+  const words = (reason.match(/[\w'-]+/g) || []).filter((w) => !FILLER.has(w.toLowerCase()));
+  return words.length < MIN_REASON_WORDS;
+}
+
+function suppressorForm(flat) {
+  for (const [re, form] of SUPPRESSORS) if (re.test(flat)) return form;
+  return '';
+}
+
 function directiveOf(lines) {
   const flat = lines.map((l) => l.text.replace(/^[\s*!/]+/, '')).filter((t) => t !== '').join(' ');
   for (const re of DIRECTIVES) {
     const m = re.exec(flat);
-    if (m) return { is: true, reason: (m.groups && m.groups.reason) || '', bad: '' };
+    if (m) {
+      const reason = (m.groups && m.groups.reason) || '';
+      if (m.groups && 'reason' in m.groups && weakReason(reason)) return { is: true, reason: '', bad: suppressorForm(flat) };
+      return { is: true, reason, bad: '' };
+    }
   }
-  for (const [re, form] of SUPPRESSORS) if (re.test(flat)) return { is: true, reason: '', bad: form };
+  const form = suppressorForm(flat);
+  if (form) return { is: true, reason: '', bad: form };
   return { is: false, reason: '', bad: '' };
+}
+
+function licenceLines(lines) {
+  const out = new Set();
+  let n = 0;
+  for (const l of lines) {
+    if (l.text === '') {
+      out.add(l);
+      continue;
+    }
+    if (n >= MAX_LICENCE_LINES || !LICENCE_LINE.test(l.text)) break;
+    out.add(l);
+    n++;
+  }
+  return out;
 }
 
 function checkFile(rel, rangesSpec, report) {
@@ -208,13 +242,16 @@ function checkFile(rel, rangesSpec, report) {
   const visit = (n) => {
     if (n.kind >= JSDOC_FIRST && n.kind <= JSDOC_LAST) return;
     const p = n.parent;
-    if (p && p.kind !== ts.SyntaxKind.JsxAttributes && (inList(p.statements, n) || inList(p.members, n) || inList(p.properties, n) || inList(p.clauses, n) || inList(p.elements, n) || inList(p.arguments, n) || inList(p.types, n))) {
+    if (p && p.kind !== ts.SyntaxKind.JsxAttributes && (inList(p.statements, n) || inList(p.members, n) || inList(p.properties, n) || inList(p.clauses, n) || inList(p.elements, n) || inList(p.arguments, n) || inList(p.types, n) || inList(p.parameters, n))) {
       targetStarts.add(n.getStart(sf, false));
     }
     if (n.kind === ts.SyntaxKind.UnionType) {
       for (const list of n.getChildren(sf)) {
         if (list.kind === ts.SyntaxKind.SyntaxList) for (const t of list.getChildren(sf)) if (t.kind === ts.SyntaxKind.BarToken) targetStarts.add(t.getStart(sf, false));
       }
+    }
+    if (n.kind === ts.SyntaxKind.ConditionalExpression) {
+      for (const t of [n.questionToken, n.colonToken]) if (t) targetStarts.add(t.getStart(sf, false));
     }
     if (n.kind === ts.SyntaxKind.IfStatement && n.elseStatement) {
       const kw = n.getChildren(sf).find((c) => c.kind === ts.SyntaxKind.ElseKeyword);
@@ -254,7 +291,7 @@ function checkFile(rel, rangesSpec, report) {
 
   for (const it of items) {
     if (it.bad && touches(it.startLine, it.endLine)) {
-      report(rel, it.startLine, 'comments/directive', `directive without a reason or in the wrong form. Fix: write it as \`${it.bad}\`, with a one-line reason.`);
+      report(rel, it.startLine, 'comments/directive', `directive without a reason or in the wrong form. Fix: write it as \`${it.bad}\`, with a one-line reason of at least three words that is not only TODO.`);
     }
     if (it.jsx) {
       if (touches(it.startLine, it.endLine)) report(rel, it.startLine, 'comments/placement', 'comment inside a function body. Fix: delete it, or move the note on its own line directly above the function.');
@@ -304,12 +341,16 @@ function checkFile(rel, rangesSpec, report) {
     }
     const counted = chain.filter((it) => !it.directive || it.reason !== '');
     if (counted.length === 0) continue;
+    let exempt = new Set();
     if (prose.length > 0 && prose[0].top) {
       const firstTop = !seenTop;
       seenTop = true;
-      if (firstTop && LICENCE.test(prose[0].whole.trim())) continue;
+      if (firstTop && LICENCE.test(prose[0].whole.trim())) {
+        exempt = licenceLines(prose.flatMap((it) => it.lines));
+        if (counted.flatMap((it) => it.lines).every((l) => exempt.has(l) || !l.counts)) continue;
+      }
       topChains++;
-      topTotal += counted.flatMap((it) => it.lines).filter((l) => l.counts).length;
+      topTotal += counted.flatMap((it) => it.lines).filter((l) => l.counts && !exempt.has(l)).length;
       if (topLine === null) topLine = counted[0].startLine;
       topChanged = topChanged || counted.some((it) => touches(it.startLine, it.endLine));
     }
@@ -329,14 +370,15 @@ function checkFile(rel, rangesSpec, report) {
       }
     }
     if (anyChanged) {
-      const count = counted.flatMap((it) => it.lines).filter((l) => l.counts).length;
+      const count = counted.flatMap((it) => it.lines).filter((l) => l.counts && !exempt.has(l)).length;
       if (count > opt.max) {
         const adr = opt.adr ? ' Cite the ADR by number (for example ADR-0007) instead of restating it.' : '';
         report(rel, startLine, 'comments/length', `comment block is ${count} lines, limit ${opt.max}. Fix: cut it to ${opt.max} lines or fewer.${adr}`);
       }
     }
     if (prose.length === 0) continue;
-    const lines = prose.flatMap((it) => it.lines);
+    const lines = prose.flatMap((it) => it.lines).filter((l) => !exempt.has(l));
+    if (lines.length === 0) continue;
     const joined = lines.map((l) => l.text).join('\n').trim();
     if (/^[([{]/.test(joined) && /[)\]}]$/.test(joined) && proseChanged) {
       report(rel, prose[0].startLine, 'comments/bracketed', 'comment is wholly in brackets. Fix: write it as a plain sentence without brackets.');

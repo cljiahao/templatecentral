@@ -157,18 +157,20 @@ inline_rule a.ts aside 1 '// This explains the thing @ts-ignore (aside here)\nex
 inline_rule a.ts aside 1 '// pragma is the thing (aside)\nexport const a = 1;\n'
 inline_rule a.py directive 1 'x = 1  # noqa: this is an essay\n'
 inline_rule a.ts length 1 '// note one @ts-ignore\n// note two @ts-ignore\n// note three @ts-ignore\n// note four @ts-ignore\n// note five @ts-ignore\nexport const a = 1;\n'
-inline_rule a.ts length 1 '// @ts-expect-error reason one\n// @ts-expect-error reason two\n// @ts-expect-error reason three\n// @ts-expect-error reason four\n// @ts-expect-error reason five\nexport const a: number = "x";\n'
-inline_rule a.py length 1 '# noqa: E501 -- reason one\n# noqa: E501 -- reason two\n# noqa: E501 -- reason three\n# noqa: E501 -- reason four\n# noqa: E501 -- reason five\nA = 1\n'
-reason101=$(printf '%0101d' 0)
-inline_rule a.ts length 1 "// @ts-ignore $reason101\nexport const a = 1;\n"
-inline_rule a.py length 2 "A = 1\n# noqa: E501 -- $reason101\nB = 2\n"
-inline_rule a.ts length 1 '/* eslint-disable no-console -- first part\n   second part */\nexport const a = 1;\n'
-inline_rule a.ts aside 1 '// @ts-ignore explained (here)\nexport const a = 1;\n'
-reason100=$(printf '%0100d' 0)
-inline_clean a.ts "// @ts-ignore $reason100\nexport const a: number = 'x';\n"
+inline_rule a.ts length 1 '// @ts-expect-error because of reason one\n// @ts-expect-error because of reason two\n// @ts-expect-error because of reason three\n// @ts-expect-error because of reason four\n// @ts-expect-error because of reason five\nexport const a: number = "x";\n'
+inline_rule a.py length 1 '# noqa: E501 -- because of reason one\n# noqa: E501 -- because of reason two\n# noqa: E501 -- because of reason three\n# noqa: E501 -- because of reason four\n# noqa: E501 -- because of reason five\nA = 1\n'
+rlong=$(printf 'abcd %.0s' $(seq 1 16))
+rlong=${rlong% }
+rok=$(printf 'abcd %.0s' $(seq 1 12))
+rok=${rok% }
+inline_rule a.ts length 1 "// @ts-ignore $rlong\nexport const a = 1;\n"
+inline_rule a.py length 2 "A = 1\n# noqa: E501 -- $rlong\nB = 2\n"
+inline_rule a.ts length 1 '/* eslint-disable no-console -- first part of the reason\n   second part */\nexport const a = 1;\n'
+inline_rule a.ts aside 1 '// @ts-ignore explained here (aside)\nexport const a = 1;\n'
+inline_clean a.ts "// @ts-ignore $rok\nexport const a: number = 'x';\n"
 inline_clean a.ts '// eslint-disable-next-line no-console -- logs the boot banner\nexport const a = 1;\n'
 inline_clean a.py 'import os  # noqa: F401 -- kept for the plugin\n'
-inline_clean a.ts 'export const a = 1; // eslint-disable-line no-console, no-undef -- logs once\n'
+inline_clean a.ts 'export const a = 1; // eslint-disable-line no-console, no-undef -- logs once at boot\n'
 
 # a suppressing directive carries a reason, in the form the message states
 inline_rule a.py directive 1 'x = 1  # noqa\n'
@@ -190,20 +192,54 @@ inline_rule a.ts directive 1 '// c8 ignore next\nexport const h = 1;\n'
 inline_rule a.ts directive 1 'export const a = 1; // NOSONAR\n'
 inline_rule a.ts directive 1 "export const k = 'k'; // gitleaks:allow\n"
 inline_rule a.ts directive 1 '// biome-ignore lint/suspicious/noExplicitAny\nexport const a = 1;\n'
-inline_clean a.py 'x: int = "a"  # type: ignore[assignment]  # legacy shape\n'
-inline_clean a.py 'x: int = "a"  # pyright: ignore[reportAssignmentType]  # legacy shape\n'
+inline_clean a.py 'x: int = "a"  # type: ignore[assignment]  # legacy shape of the data\n'
+inline_clean a.py 'x: int = "a"  # pyright: ignore[reportAssignmentType]  # legacy shape of the data\n'
 inline_clean a.py 'def f():\n    return 1  # pragma: no cover -- exercised by the e2e run\n'
-inline_clean a.ts '// @ts-nocheck legacy file\nexport const a = 1;\n'
+inline_clean a.ts '// @ts-nocheck legacy file from the vendor\nexport const a = 1;\n'
 inline_clean a.ts '/* istanbul ignore next -- guarded by the caller */\nexport const h = 1;\n'
-inline_clean a.ts 'export function g() {\n  return 1; // NOSONAR -- reviewed\n}\n'
+inline_clean a.ts 'export function g() {\n  return 1; // NOSONAR -- reviewed by the owner\n}\n'
 inline_clean a.ts '/* eslint-enable no-console */\n// prettier-ignore\nexport const m = [1, 0, 0, 1];\n'
 inline_clean a.py 'x = 1  # fmt: skip\n'
 
 # a Python docstring cannot hide prose behind a section header
-inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Args:\n        a: one\n    prose line a\n    prose line b\n    prose line c\n    prose line d\n    """\n    return 1\n'
-inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Args:\n        a: one\n            cont 1\n            cont 2\n            cont 3\n            cont 4\n            cont 5\n    """\n    return 1\n'
-inline_clean a.py 'def f():\n    """Summary.\n\n    Args:\n        a: one\n        b (int): two\n            wraps here\n        c: three\n        d: four\n    Returns:\n        The sum.\n    """\n    return 1\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Args:\n        a: one\n    prose line a\n    prose line b\n    prose line c\n    prose line d\n    """\n    return 1\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Args:\n        a: one\n            cont 1\n            cont 2\n            cont 3\n            cont 4\n            cont 5\n    """\n    return 1\n'
+inline_clean a.py 'def f(a, b, c, d):\n    """Summary.\n\n    Args:\n        a: one\n        b (int): two\n            wraps here\n        c: three\n        d: four\n    Returns:\n        The sum.\n    """\n    return 1\n'
 inline_rule a.py length 2 'def f():\n    """Summary.\n\n    Returns:\n        prose a\n        prose b\n        prose c\n        prose d\n    """\n    return 1\n'
+
+# round 3: an entry is exempt only when it names a real parameter, attribute, exception or return, once
+notes40=''
+fields40=''
+dups40=''
+for n in $(seq 1 40); do
+  notes40="$notes40        Note$n: long prose text here\n"
+  fields40="$fields40    :param$n: prose prose\n"
+  dups40="$dups40        a: again\n"
+done
+inline_rule a.py length 2 "def f(a):\n    \"\"\"Summary.\n\n    Args:\n$notes40    \"\"\"\n    return a\n"
+inline_rule a.py length 2 "def f(a):\n    \"\"\"Summary.\n\n$fields40    \"\"\"\n    return a\n"
+inline_rule a.py length 2 "def f(a):\n    \"\"\"Summary.\n\n    Args:\n$dups40    \"\"\"\n    return a\n"
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    :param a: the value\n    :param zz: not a parameter\n    :param yy: not a parameter\n    :param xx: not a parameter\n    """\n    return a\n'
+inline_clean a.py 'def f(a, b):\n    """Summary.\n\n    :param a: the value\n    :param int b: the other value\n    :type a: int\n    :returns: the sum\n    :raises ValueError: when empty\n    """\n    if not a:\n        raise ValueError("empty")\n    return a + b\n'
+inline_clean a.py 'def f(a, *args, **kw) -> int:\n    """Summary.\n\n    Args:\n        a: first\n        *args: rest\n        **kw: options\n\n    Returns:\n        int: the count\n\n    Raises:\n        ValueError: when empty\n    """\n    if not a:\n        raise ValueError("empty")\n    return 1\n'
+inline_clean a.py 'class C:\n    """Summary.\n\n    Attributes:\n        size: how many\n    """\n\n    size = 1\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Args:\n        a: first prose line that is far too long to be one short entry line for a parameter so it counts as prose and not as an entry here\n        a2: x\n        a3: y\n    """\n    return a\n'
+
+# round 3: a directive reason has at least three words, is not only filler, and stays short
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- x\n'
+inline_rule a.py directive 1 'x: int = "a"  # type: ignore[misc]  # TODO\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- TODO fix\n'
+inline_rule a.ts directive 1 '// @ts-ignore TODO\nexport const a: number = "x";\n'
+inline_rule a.ts directive 1 '// eslint-disable-next-line no-console -- x\nexport const a = 1;\n'
+inline_rule a.ts directive 1 '/* istanbul ignore next -- FIXME */\nexport const h = 1;\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- TODO fix it\n'
+inline_clean a.py 'x = 1  # noqa: E501 -- TODO fix the long line\n'
+inline_clean a.ts '// @ts-ignore stale vendor typings\nexport const a: number = "x";\n'
+r79=$rlong
+r59=$rok
+inline_rule a.py length 2 "def f():\n    return 1  # pragma: no cover -- $r79\n"
+inline_rule a.ts length 2 "export function f() {\n  return 1; // NOSONAR -- $r79\n}\n"
+inline_clean a.py "def f():\n    return 1  # pragma: no cover -- $r59\n"
 
 # stubs are judged like other Python
 inline_rule a.pyi trailing 1 'a: int  # the value\n'
@@ -224,6 +260,21 @@ inline_clean a.ts '// Copyright (c) Example.\n// Licensed under the MIT License.
 inline_clean a.py '# SPDX-License-Identifier: MIT\n# Second licence line.\n# Third licence line.\n# Fourth licence line.\n\n# Note one.\nA = 1\n'
 inline_rule a.ts length 1 '// Licensed under the MIT License.\n// two\n// three\n// four\nexport const a = 1;\n'
 
+# round 3: the licence exemption covers licence lines only, at most 15 of them
+prose80=''
+for n in $(seq 1 80); do prose80="$prose80# note $n about the thing\n"; done
+prose80ts=${prose80//#/\/\/}
+inline_rule a.py length 1 "# Copyright 2020\n${prose80}A = 1\n"
+inline_rule a.ts length 1 "// Copyright 2020\n${prose80ts}export const a = 1;\n"
+inline_rule a.py length 1 '# Copyright 2020\n# note one about it\n# note two about it\n# note three about it\n# note four about it\nA = 1\n'
+inline_clean a.py '# Copyright 2020\n# note one about it\n# note two about it\nA = 1\n'
+lic18='# Copyright 2020\n'
+for n in $(seq 1 17); do lic18="$lic18# Licensed under the License, part $n\n"; done
+lic19="$lic18# Licensed under the License, part 19\n"
+inline_clean a.py "${lic18}A = 1\n"
+inline_rule a.py length 1 "${lic19}A = 1\n"
+inline_clean a.ts '/*\n * Copyright 2020 Example Corp.\n *\n * Licensed under the Apache License, Version 2.0 (the "License");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *     http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an "AS IS" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\nexport const a = 1;\n'
+
 # module-level elements, arguments, union members and else branches are legal targets, function bodies are not
 inline_clean a.ts 'export const v = [\n  // element\n  1,\n];\n'
 inline_clean a.py 'import sys\nif sys.argv:\n    A = 1\n# explains else\nelse:\n    A = 2\n'
@@ -231,6 +282,16 @@ inline_rule a.ts placement 3 'export function f() {\n  const v = [\n    // eleme
 inline_rule a.ts placement 4 'declare function k(...a: number[]): void;\nexport function f() {\n  k(\n    // argument\n    1,\n  );\n}\n'
 inline_rule a.py placement 3 'def f():\n    return print(\n        # keyword\n        sep="",\n    )\n'
 inline_rule a.py placement 5 'import sys\ndef f():\n    if sys.argv:\n        return 1\n    # else branch\n    else:\n        return 2\n'
+
+# round 3: function parameters and conditional branches are legal targets at module level
+inline_clean a.ts 'export function f(\n  // first\n  a: number,\n) {\n  return a;\n}\n'
+inline_clean a.py 'def f(\n    # first\n    a,\n):\n    return a\n'
+inline_clean a.ts 'export const v = true\n  // yes\n  ? 1\n  // no\n  : 2;\n'
+inline_clean a.py 'V = (\n    1\n    # yes\n    if True\n    # no\n    else 2\n)\n'
+inline_rule a.ts placement 3 'export function g() {\n  const f = (\n    // first\n    a: number,\n  ) => a;\n  return f;\n}\n'
+inline_rule a.py placement 3 'def g():\n    def f(\n        # first\n        a,\n    ):\n        return a\n    return f\n'
+inline_rule a.ts placement 3 'export const v = [\n  1,\n  // last\n];\n'
+inline_rule a.ts placement 3 'export function g() {\n  return true\n    // yes\n    ? 1\n    : 2;\n}\n'
 
 # a comment line is capped
 long130=$(printf '%0130d' 0)
@@ -413,8 +474,8 @@ OUT=$(env PATH="$d/bin" /bin/bash "$GATE" --root "$d/pyproj" --all . nonexistent
 check 2 "$?" "a missing path after a valid one still fails closed"
 mkdir -p "$d/pyproj/docs-only"
 OUT=$(env PATH="$d/bin" /bin/bash "$GATE" --root "$d/pyproj/docs-only" --all . 2>&1)
-check 0 "$?" "a folder with no source files exits 0"
-has "nothing checked" "$OUT" "no source files: says nothing was checked"
+check 2 "$?" "a folder with no source files fails closed ($OUT)"
+has "no source file under the given paths" "$OUT" "no source files: names the cause"
 lacks "check-comments: ok" "$OUT" "no source files: no green ok line"
 mkdir -p "$d/empty"
 OUT=$("${CLEAN_ENV[@]}" /bin/bash "$GATE" --root "$d/empty" 2>&1)
@@ -487,6 +548,10 @@ run_push() { # run_push <env assignments...> — the gate over a clean clone who
   EC=$?
 }
 run_push CI=true GITHUB_ACTIONS=true
+check 2 "$EC" "ci, no target variable and no argument: fails closed ($OUT)"
+has "never guessed" "$OUT" "ci, no target: says the base is not guessed"
+has "GITHUB_BASE_REF" "$OUT" "ci, no target: names the missing variable"
+run_push CI=true GITHUB_ACTIONS=true GITHUB_BASE_REF=main
 check 0 "$EC" "ci push: exits 0 ($OUT)"
 has "nothing to compare" "$OUT" "ci push: says there is nothing to compare"
 has "judges pull requests" "$OUT" "ci push: says the gate judges pull requests"

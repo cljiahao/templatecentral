@@ -6,7 +6,7 @@
 # Fourth licence line.
 import os  # noqa: F401 -- kept for the plugin
 
-x: int = "a"  # type: ignore[assignment]  # legacy shape
+x: int = "a"  # type: ignore[assignment]  # legacy shape of the data
 
 
 # Returns one.
@@ -22,7 +22,7 @@ def two():
     z = [1,  2]
     # fmt: on
     w = 3  # isort: skip
-    v = 4  # pyright: ignore[reportGeneralTypeIssues]  # legacy shape
+    v = 4  # pyright: ignore[reportGeneralTypeIssues]  # legacy shape of the data
     u = "k"  # gitleaks:allow -- public example key
     t = 5  # pylint: disable=unused-variable -- kept for tracing
     return y, z, w, v, u, t

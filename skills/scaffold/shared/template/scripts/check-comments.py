@@ -40,11 +40,23 @@ SUPPRESSORS = [
     (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
 ]
 LICENCE = re.compile(r"^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b", re.I)
+LICENCE_LINE = re.compile(r"copyright|spdx-|licen[sc]e|all rights reserved|warrant|redistribut|permission|liabilit|merchantab|obtain a copy|distributed under|without limitation|applicable law|agreed to in writing|\"as is\"|basis|limitations|governing|https?://", re.I)
+MAX_LICENCE_LINES = 15
+FILLER = {"todo", "fixme", "xxx", "tbd"}
+MIN_REASON_WORDS = 3
 ASIDE = re.compile(r"(^|\s)\([^()]*\S[^()]*\)")
-ENTRY = re.compile(r"^\*{0,2}\w[\w.]*(?:\s*\([^)]*\))?\s*:\s*\S")
-SPHINX = re.compile(r"^:\w[^:]*:")
+ENTRY = re.compile(r"^\*{0,2}(\w[\w.]*)(?:\s*\([^)]*\))?\s*:\s*\S")
+FIELD = re.compile(r"^:(\w+)(?:\s+([^:]+?))?:(?:\s|$)")
+FIELD_PARAM = {"param", "parameter", "arg", "argument", "key", "keyword", "type"}
+FIELD_ATTR = {"ivar", "cvar", "var", "vartype"}
+FIELD_RAISE = {"raises", "raise", "except", "exception"}
+FIELD_RETURN = {"returns", "return", "rtype", "yields", "yield", "ytype"}
+SECTION_KIND = {
+    "args": "params", "arguments": "params", "parameters": "params", "other parameters": "params", "keyword args": "params",
+    "attributes": "attrs", "raises": "raises", "return": "rets", "returns": "rets", "yield": "rets", "yields": "rets",
+}
 MAX_CONTINUATION = 2
-SECTION = re.compile(r"^(?:Args|Arguments|Parameters|Other Parameters|Keyword Args|Returns?|Yields?|Raises?|Attributes|Examples?|Notes?|See Also|References|Warns|Warnings|Todo):\s*$")
+SECTION = re.compile(r"^(Args|Arguments|Parameters|Other Parameters|Keyword Args|Returns?|Yields?|Raises?|Attributes|Examples?|Notes?|See Also|References|Warns|Warnings|Todo):\s*$")
 SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER, tokenize.COMMENT)
 VERSION = sys.version.split()[0]
 
@@ -80,15 +92,30 @@ def changed_set(spec):
     return out
 
 
+def weak_reason(reason):
+    words = [w for w in re.findall(r"[\w'-]+", reason) if w.lower() not in FILLER]
+    return len(words) < MIN_REASON_WORDS
+
+
+def suppressor_form(text):
+    for rx, form in SUPPRESSORS:
+        if rx.match(text):
+            return form
+    return ""
+
+
 def directive_of(text):
     """Returns three values: is a directive, its reason, and the expected form when a suppressor is malformed."""
     for rx in DIRECTIVES:
         m = rx.match(text)
         if m:
-            return True, (m.groupdict().get("reason") or ""), ""
-    for rx, form in SUPPRESSORS:
-        if rx.match(text):
-            return True, "", form
+            reason = m.groupdict().get("reason") or ""
+            if "reason" in rx.groupindex and weak_reason(reason):
+                return True, "", suppressor_form(text)
+            return True, reason, ""
+    form = suppressor_form(text)
+    if form:
+        return True, "", form
     return False, "", ""
 
 
@@ -109,12 +136,64 @@ def header_ends(tokens):
     return ends
 
 
-def docstring_prose(source_lines, node):
-    """Counts the prose lines of a docstring. Blank lines, section headers, entry lines and two continuations per entry are left out."""
+def annotation_names(node):
+    names = set()
+    if node is not None:
+        for n in ast.walk(node):
+            if isinstance(n, ast.Name):
+                names.add(n.id)
+            elif isinstance(n, ast.Attribute):
+                names.add(n.attr)
+            elif isinstance(n, ast.Constant) and isinstance(n.value, str):
+                names.update(re.findall(r"\w+", n.value))
+    return names
+
+
+def documented_names(node):
+    """Collects the names a docstring may list as entries: parameters, attributes, raised exceptions and return types."""
+    names = {"params": set(), "attrs": set(), "raises": set(), "rets": set()}
+
+    def add_args(fn):
+        a = fn.args
+        for arg in a.posonlyargs + a.args + a.kwonlyargs:
+            names["params"].add(arg.arg)
+        for arg in (a.vararg, a.kwarg):
+            if arg is not None:
+                names["params"].add(arg.arg)
+
+    def add_targets(stmt):
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target] if isinstance(stmt, ast.AnnAssign) else []
+        for t in targets:
+            if isinstance(t, ast.Name):
+                names["attrs"].add(t.id)
+            elif isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+                names["attrs"].add(t.attr)
+
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        add_args(node)
+        names["rets"] = annotation_names(node.returns)
+    for n in ast.walk(node):
+        if isinstance(n, (ast.Assign, ast.AnnAssign)):
+            add_targets(n)
+        elif isinstance(n, ast.FunctionDef) and isinstance(node, ast.ClassDef) and n.name == "__init__":
+            add_args(n)
+        elif isinstance(n, ast.Raise) and n.exc is not None:
+            exc = n.exc.func if isinstance(n.exc, ast.Call) else n.exc
+            if isinstance(exc, ast.Name):
+                names["raises"].add(exc.id)
+            elif isinstance(exc, ast.Attribute):
+                names["raises"].add(exc.attr)
+    return names
+
+
+def docstring_prose(source_lines, node, max_line):
+    """Counts the prose lines of a docstring. An entry line is left out only when it names a parameter, attribute, raised exception or return of the documented code."""
     doc = node.body[0]
     lines = source_lines[doc.lineno - 1:doc.end_lineno]
+    known = documented_names(node)
+    seen = set()
     count = 0
-    in_section = False
+    section = None
     entry_indent = None
     cont = 0
     for idx, raw in enumerate(lines):
@@ -125,23 +204,61 @@ def docstring_prose(source_lines, node):
         if idx == len(lines) - 1:
             t = re.sub(r"(\"\"\"|''')$", "", t).strip()
         if t == "":
-            in_section = False
+            section = None
             entry_indent = None
             continue
-        if SECTION.match(t):
-            in_section = True
+        head = SECTION.match(t)
+        if head:
+            section = SECTION_KIND.get(head.group(1).lower(), "other")
             entry_indent = None
             continue
-        if idx > 0 and entry_indent is not None and indent > entry_indent and cont < MAX_CONTINUATION:
+        if idx > 0 and entry_indent is not None and indent > entry_indent and cont < MAX_CONTINUATION and len(t) <= max_line:
             cont += 1
             continue
-        if idx > 0 and (SPHINX.match(t) or (in_section and ENTRY.match(t))):
+        if idx > 0 and len(t) <= max_line and is_entry(t, section, known, seen):
             entry_indent = indent
             cont = 0
             continue
         entry_indent = None
         count += 1
     return count
+
+
+def is_entry(t, section, known, seen):
+    """True when the line is a section entry or Sphinx field for a real name of the documented code, once per name."""
+    f = FIELD.match(t)
+    if f:
+        kind, arg = f.group(1), (f.group(2) or "").strip()
+        name = arg.split()[-1] if arg else ""
+        if kind in FIELD_RETURN:
+            pool, name = known["rets"] | {""}, ""
+        elif kind in FIELD_PARAM:
+            pool = known["params"]
+        elif kind in FIELD_ATTR:
+            pool = known["attrs"] | known["params"]
+        elif kind in FIELD_RAISE:
+            pool = known["raises"]
+        else:
+            return False
+        key = (kind, name)
+        if name not in pool or key in seen:
+            return False
+        seen.add(key)
+        return True
+    m = ENTRY.match(t)
+    if m is None or section in (None, "other"):
+        return False
+    name = m.group(1).split(".")[-1]
+    key = (section, name)
+    if key in seen:
+        return False
+    if section == "rets":
+        ok = name in known["rets"] if known["rets"] else not any(k[0] == "rets" for k in seen)
+    else:
+        ok = name in known[section]
+    if ok:
+        seen.add(key)
+    return ok
 
 
 def check_file(rel, spec, opt, report):
@@ -186,6 +303,8 @@ def check_file(rel, spec, opt, report):
             funcs.append((hends.get(node.lineno, node.lineno), node.end_lineno, node.col_offset))
         elif isinstance(node, ast.Lambda):
             funcs.append((node.lineno, node.end_lineno, node.col_offset))
+        elif isinstance(node, ast.arg):
+            starts.add(node.lineno)
         elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
             for e in node.elts:
                 starts.add(e.lineno)
@@ -202,13 +321,13 @@ def check_file(rel, spec, opt, report):
         if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
             first = node.body[0]
             if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
-                count = docstring_prose(source_lines, node)
+                count = docstring_prose(source_lines, node, opt["max_line"])
                 if count > opt["max"] and touches(first.lineno, first.end_lineno):
                     adr = " Cite the ADR by number (for example ADR-0007) instead of restating it." if opt["adr"] else ""
                     report(rel, first.lineno, "comments/length", "docstring is %d prose lines, limit %d. Fix: cut it to %d lines or fewer, section entries such as Args do not count.%s" % (count, opt["max"], opt["max"], adr))
 
     for idx, tok in enumerate(tokens):
-        if tok.type == tokenize.NAME and tok.string in ("else", "finally") and code_start_by_line.get(tok.start[0]) == tok.start[1]:
+        if tok.type == tokenize.NAME and tok.string in ("else", "finally", "if") and code_start_by_line.get(tok.start[0]) == tok.start[1]:
             starts.add(tok.start[0])
 
     items = []
@@ -224,7 +343,7 @@ def check_file(rel, spec, opt, report):
 
     for it in items:
         if it["bad"] and touches(it["line"], it["line"]):
-            report(rel, it["line"], "comments/directive", "directive without a reason or in the wrong form. Fix: write it as `%s`, with a one-line reason." % it["bad"])
+            report(rel, it["line"], "comments/directive", "directive without a reason or in the wrong form. Fix: write it as `%s`, with a one-line reason of at least three words that is not only TODO." % it["bad"])
         if it["trailing"] and not it["directive"] and touches(it["line"], it["line"]):
             report(rel, it["line"], "comments/trailing", "comment shares a line with code. Fix: move it on its own line directly above the statement or declaration it explains, or delete it.")
         if it["directive"] and it["reason"] and touches(it["line"], it["line"]):
@@ -253,13 +372,16 @@ def check_file(rel, spec, opt, report):
         counted = [it for it in chain if not it["directive"] or it["reason"]]
         if not counted:
             continue
+        exempt = []
         if prose and prose[0]["top"]:
             first_top = not seen_top
             seen_top = True
             if first_top and LICENCE.search(prose[0]["text"]):
-                continue
+                exempt = licence_items(prose)
+                if all(it in exempt or not it["text"] for it in counted):
+                    continue
             top_chains += 1
-            top_total += len([it for it in counted if it["text"]])
+            top_total += len([it for it in counted if it["text"] and it not in exempt])
             if top_line is None:
                 top_line = counted[0]["line"]
             top_changed = top_changed or any(touches(it["line"], it["line"]) for it in counted)
@@ -278,9 +400,11 @@ def check_file(rel, spec, opt, report):
                 nxt = next_code_line(sorted_code_lines, chain[-1]["line"])
                 if nxt != chain[-1]["line"] + 1 or nxt not in starts:
                     report(rel, first["line"], "comments/placement", "comment is not on its own line at the top of the file or directly above a statement, declaration or dict entry. Fix: move it there, or delete it.")
-        if any_changed and len([it for it in counted if it["text"]]) > opt["max"]:
+        size = len([it for it in counted if it["text"] and it not in exempt])
+        if any_changed and size > opt["max"]:
             adr = " Cite the ADR by number (for example ADR-0007) instead of restating it." if opt["adr"] else ""
-            report(rel, start, "comments/length", "comment block is %d lines, limit %d. Fix: cut it to %d lines or fewer.%s" % (len([it for it in counted if it["text"]]), opt["max"], opt["max"], adr))
+            report(rel, start, "comments/length", "comment block is %d lines, limit %d. Fix: cut it to %d lines or fewer.%s" % (size, opt["max"], opt["max"], adr))
+        prose = [it for it in prose if it not in exempt]
         if not prose:
             continue
         joined = "\n".join(it["text"] for it in prose).strip()
@@ -294,6 +418,21 @@ def check_file(rel, spec, opt, report):
             if touches(ln, ln):
                 report(rel, ln, "comments/aside", "parenthetical aside in a comment. Fix: make it a plain sentence, or delete it.")
     report_top(rel, opt, report, top_chains, top_total, top_line, top_changed)
+
+
+def licence_items(prose):
+    """Returns the leading licence lines of a header, at most MAX_LICENCE_LINES of them; the first other line ends the exemption."""
+    out = []
+    n = 0
+    for it in prose:
+        if not it["text"]:
+            out.append(it)
+            continue
+        if n >= MAX_LICENCE_LINES or not LICENCE_LINE.search(it["text"]):
+            break
+        out.append(it)
+        n += 1
+    return out
 
 
 def report_top(rel, opt, report, top_chains, top_total, top_line, top_changed):
