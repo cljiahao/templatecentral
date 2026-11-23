@@ -1,0 +1,4 @@
+{
+  "name": "demo",
+  "nyc": { "exclude": ["src/gen/**"] }
+}

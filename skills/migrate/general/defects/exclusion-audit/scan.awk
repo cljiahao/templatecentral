@@ -1,14 +1,35 @@
 # Scanner for check-exclude-reasons.sh: reads one sonar-project.properties file.
 # Usage: awk -v file=NAME -f check-exclude-reasons.awk NAME   (framework defaults come from TC_EXCLUDE_DEFAULTS, one per line)
 # Output, tab separated: E file line kind entry status (status reason, none or default); I file line kind entries status.
-# A reason is a "reason:" comment line with at least 3 words in the comment block directly above the key. With one
-# non-default entry any such line counts; with several, each entry must be named in one.
+# A reason is a "reason:" comment line with at least 3 distinct words of 3+ letters and no placeholder word (TC_REASON_PLACEHOLDERS,
+# one per line), in the comment block directly above the key. With one non-default entry any such line counts; with
+# several, a reason must name the entry as a whole word and name no other entry of the list: one reason, one entry.
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
-function valid(t,   w, n) {
+function isplaceholder(w,   k) {
+  w = tolower(w)
+  for (k = 1; k <= nph; k++) if (ph[k] == w) return 1
+  return 0
+}
+function words(t, w,   n, i, c, seen, u) {
+  n = split(t, w, /[ \t,;"`()]+/)
+  c = 0
+  for (i = 1; i <= n; i++) {
+    sub(/[.:]+$/, "", w[i])
+    if (length(w[i]) >= 3 && !(tolower(w[i]) in seen)) { seen[tolower(w[i])] = 1; c++ }
+  }
+  return c
+}
+function valid(t,   w, n, i, c, r) {
   if (t !~ /^reason:/) return 0
   sub(/^reason:/, "", t)
-  n = split(trim(t), w, /[ \t]+/)
-  return (trim(t) != "" && n >= 3)
+  t = trim(t)
+  if (t == "") return 0
+  n = split(t, w, /[ \t,;"`()]+/)
+  for (i = 1; i <= n; i++) {
+    r = w[i]; sub(/[.:]+$/, "", r)
+    if (isplaceholder(r)) return 0
+  }
+  return (words(t, w) >= 3)
 }
 function isdefault(e) { sub(/^!/, "", e); return (e in dflt) }
 function lineat(off,   k, r) {
@@ -16,8 +37,21 @@ function lineat(off,   k, r) {
   for (k = 1; k <= nseg; k++) if (segoff[k] <= off) r = segline[k]
   return r
 }
-function named(e,   k) {
-  for (k = 1; k <= nrs; k++) if (valid(rs[k]) && index(rs[k], e) > 0) return 1
+function hits(t, e,   w, n, i, c, r) {
+  n = split(t, w, /[ \t,;"`()]+/)
+  c = 0
+  for (i = 1; i <= n; i++) { r = w[i]; sub(/[.:]+$/, "", r); if (r == e) c++ }
+  return c
+}
+function named(e,   k, j, t) {
+  for (k = 1; k <= nrs; k++) {
+    if (!valid(rs[k])) continue
+    t = rs[k]
+    sub(/^reason:/, "", t)
+    if (hits(t, e) == 0) continue
+    for (j = 1; j <= nownlist; j++) if (ownlist[j] != e && hits(t, ownlist[j]) > 0) break
+    if (j > nownlist) return 1
+  }
   return 0
 }
 function anyvalid(   k) {
@@ -57,8 +91,8 @@ function finish(   kind, parts, np, i, c, depth, tok, start, entries, ent, nent,
     printf "I\t%s\t%d\tcoverage-include\t%s\t%s\n", file, keyline, tok, (anyvalid() ? "reason" : "none")
     return
   }
-  own = 0
-  for (i = 1; i <= nent; i++) if (!isdefault(ent[i])) own++
+  own = 0; nownlist = 0
+  for (i = 1; i <= nent; i++) if (!isdefault(ent[i])) { own++; ownlist[++nownlist] = ent[i] }
   for (i = 1; i <= nent; i++) {
     if (isdefault(ent[i])) st = "default"
     else if (own == 1) st = (anyvalid() ? "reason" : "none")
@@ -70,6 +104,7 @@ BEGIN {
   n = split(ENVIRON["TC_EXCLUDE_DEFAULTS"], d, "\n")
   for (k = 1; k <= n; k++) dflt[d[k]] = 1
   nblk = 0; incont = 0
+  nph = split(ENVIRON["TC_REASON_PLACEHOLDERS"], ph, "\n")
 }
 {
   raw = $0

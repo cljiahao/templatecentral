@@ -10,6 +10,9 @@ coverage/**
 **/.next/**
 .next/**
 **/__pycache__/**
+.venv/*
+venv/*
+*/__pycache__/*
 **/*.d.ts
 **/*.{test,spec}.ts
 **/*.{test,spec}.tsx
@@ -23,14 +26,9 @@ src/**/*.test.ts
 src/**/*.test.tsx
 src/**/*.spec.ts
 src/**/*.spec.tsx
-**/*.config.*
-**/*.config.{js,ts,mjs,cjs}
-test/*
-tests/*
-*/tests/*
-*/test_*.py
-.venv/*
-venv/*
-*/__pycache__/*
+**/test_*.py
+test/**
+tests/**
+*.config.{js,ts,mjs,cjs}
 pragma: no cover
 # pragma: no cover

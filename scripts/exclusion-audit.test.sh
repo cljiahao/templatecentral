@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Tests for the migrate check skills/migrate/general/defects/exclusion-audit.sh, run through defect-report.sh as the real runner does.
 # Fixtures live in tests/fixtures/exclusions/. Each runs on a copy; the copy and the fixtures are hashed before and after to prove the audit is read-only.
-# The JS and TS scanner needs a typescript install: TC_TEST_TYPESCRIPT, ./node_modules, the global npm root, or a project folder under $HOME.
+# Every fixture is copied into one folder and audited by one runner call; a fixture's lines are the ones prefixed with its name. Only the
+# missing-typescript, empty-project, leftover-file and CPU cases start their own runner. A file named .env* is left out of the copy by name; no .env file is opened.
+# The JS and TS scanner needs a typescript install: TC_TEST_TYPESCRIPT_DIR, ./node_modules, or the pinned version installed once into
+# a cache folder under $TMPDIR. It never scans a home folder.
 # CPU budget for the large-project case: AUDIT_CPU_BUDGET seconds of user plus system time (default 30), measured with the shell's time keyword.
 # Usage: bash scripts/exclusion-audit.test.sh        Needs bash 3.2+, find, awk, node, python3. No network.
 set -uo pipefail
@@ -30,26 +33,38 @@ nok() {
   if [ -n "${2:-}" ]; then printf '%s\n' "$2" | head -n 8 | sed 's/^/    /'; fi
 }
 
+ts_ok() { [ -n "$1" ] && [ -f "$1/package.json" ] && [ -f "$1/lib/typescript.js" ]; }
 find_typescript() {
-  local c
-  for c in "${TC_TEST_TYPESCRIPT:-}" "$root/node_modules/typescript" "$(npm root -g 2> /dev/null)/typescript" \
-    "$HOME"/*/node_modules/typescript "$HOME"/*/*/node_modules/typescript; do
-    if [ -n "$c" ] && [ -f "$c/package.json" ] && [ -f "$c/lib/typescript.js" ]; then
+  local c ver cache
+  for c in "${TC_TEST_TYPESCRIPT_DIR:-}" "$root/node_modules/typescript"; do
+    if ts_ok "$c"; then
       printf '%s' "$c"
       return 0
     fi
   done
+  ver=$(awk '$1 == "npm" && $2 == "typescript" { v = $3; sub(/^[^0-9]*/, "", v); print v }' "$root/skills/scaffold/shared/versions.txt")
+  [ -n "$ver" ] || return 1
+  cache=${TMPDIR:-/tmp}/tc-test-typescript-$ver
+  if ! ts_ok "$cache/node_modules/typescript"; then
+    mkdir -p "$cache" && npm install --prefix "$cache" --no-audit --no-fund --silent "typescript@$ver" > /dev/null 2>&1
+  fi
+  if ts_ok "$cache/node_modules/typescript"; then
+    printf '%s' "$cache/node_modules/typescript"
+    return 0
+  fi
   return 1
 }
 if ! TS=$(find_typescript); then
-  echo "exclusion-audit.test: no typescript install found. Set TC_TEST_TYPESCRIPT to a typescript package folder." >&2
+  echo "exclusion-audit.test: no typescript found. Set TC_TEST_TYPESCRIPT_DIR to a typescript package folder, or allow the pinned version to install into \$TMPDIR." >&2
   exit 1
 fi
 
+# Hash a tree by file name and size from one listing. No file is opened, so a secret-named file in a fixture is never read.
 tree_hash() {
-  (cd "$1" && find . -path ./node_modules -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r f; do shasum "$f"; done | shasum | cut -d' ' -f1)
+  (cd "$1" && find . -path ./node_modules -prune -o -type f -exec ls -ln {} + | awk '{ print $5, $NF }' | LC_ALL=C sort | shasum | cut -d' ' -f1)
 }
 
+# Copy fixture NAME to a fresh folder and link typescript into it (unless the second argument is "no-ts").
 stage() {
   local d=$WORK/$1
   rm -rf "$d"
@@ -62,15 +77,23 @@ stage() {
   printf '%s' "$d"
 }
 
+STAGE=$WORK/all
+mkdir -p "$STAGE/node_modules"
+ln -s "$TS" "$STAGE/node_modules/typescript"
+tar -C "$FIX" --exclude='.env*' -cf - . | tar -C "$STAGE" -xf -
+
+before=$(tree_hash "$FIX")
+stage_before=$(tree_hash "$STAGE")
+ALL=$(bash "$root/$REPORT" "$STAGE" 2>&1)
+RC=$?
+ALLAUD=$(printf '%s\n' "$ALL" | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//')
+stage_after=$(tree_hash "$STAGE")
+
 OUT=
 AUD=
-RC=0
 report() {
-  local d
-  d=$(stage "$1" "${2:-}")
-  OUT=$(bash "$root/$REPORT" "$d" 2>&1)
-  RC=$?
-  AUD=$(printf '%s\n' "$OUT" | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//')
+  AUD=$(printf '%s\n' "$ALLAUD" | awk -v p="$1/" 'index($0, p) == 1 { print substr($0, length(p) + 1) }')
+  OUT=$AUD
 }
 
 # want NAME LABEL REGEX: the audit lines for the fixture match REGEX (extended).
@@ -83,8 +106,6 @@ unwanted() {
   report "$1"
   if printf '%s\n' "$AUD" | grep -Eq -- "$3"; then nok "$1: $2 /$3/" "$OUT"; else ok "$1: $2"; fi
 }
-
-before=$(tree_hash "$FIX")
 
 # Stacks: a reasoned exclude is listed "has reason"; the same fixture without the reason line is listed "no reason".
 for stack in nextjs nestjs vite-react; do
@@ -184,32 +205,64 @@ want no-coverage-ts "TypeScript source and no coverage config" "^package.json:1 
 want no-coverage-py "Python source and no coverage config" "^pyproject.toml:1 no coverage config: .*app/main.py"
 unwanted nextjs-ok "a project with coverage config is not reported" "no coverage config"
 unwanted fastapi-clean "a python project with coverage config is not reported" "no coverage config"
-report empty-project
-if [ -z "$AUD" ] && printf '%s' "$OUT" | grep -q '0 matched'; then ok "empty-project: nothing to audit, nothing reported"; else nok "empty-project should report nothing" "$OUT"; fi
+d=$(stage empty-project)
+OUT=$(bash "$root/$REPORT" "$d" 2>&1)
+if ! printf '%s\n' "$OUT" | grep -q '  exclusion-audit  check  ' && printf '%s' "$OUT" | grep -q '0 matched'; then ok "empty-project: nothing to audit, nothing reported"; else nok "empty-project should report nothing" "$OUT"; fi
 
 # Missing typescript is reported as unreadable, not as clean.
-report nextjs-ok no-ts
-if printf '%s\n' "$AUD" | grep -q 'cannot be read: typescript is not installed'; then ok "missing typescript is reported as unreadable"; else nok "missing typescript should be reported" "$OUT"; fi
+d=$(stage nextjs-ok no-ts)
+OUT=$(bash "$root/$REPORT" "$d" 2>&1)
+if printf '%s\n' "$OUT" | grep -q 'cannot be read: typescript is not installed'; then ok "missing typescript is reported as unreadable"; else nok "missing typescript should be reported" "$OUT"; fi
 
-# The audit lists; it does not fail the run. Exit 0 for every fixture.
-bad=
-for d in "$FIX"/*/; do
-  n=$(basename "$d")
-  report "$n"
-  if [ "$RC" -ne 0 ]; then bad="$bad $n"; fi
-done
-if [ -z "$bad" ]; then ok "exit status is 0 for every fixture (level check)"; else nok "non-zero exit for:$bad"; fi
+# The audit lists; it does not fail the run. Exit 0 for the whole fixture set.
+if [ "$RC" -eq 0 ]; then ok "exit status is 0 (level check)"; else nok "non-zero exit $RC" "$ALL"; fi
 
 # Read-only: the audited copy and the fixtures hash the same before and after.
-for n in nextjs-none fastapi-omit-none sonar-multi-none pnpm-yaml-none jest-collect-none shadow-tox-ini-none; do
-  d=$(stage "$n")
-  h1=$(tree_hash "$d")
-  bash "$root/$REPORT" "$d" > /dev/null 2>&1
-  h2=$(tree_hash "$d")
-  if [ "$h1" = "$h2" ]; then ok "$n: audit leaves the project untouched"; else nok "$n: audit changed the project"; fi
-done
+if [ "$stage_before" = "$stage_after" ]; then ok "audit leaves the project untouched"; else nok "audit changed the project"; fi
 after=$(tree_hash "$FIX")
 if [ "$before" = "$after" ]; then ok "fixtures unchanged by the run"; else nok "fixtures changed during the run"; fi
+
+# No file left behind: the runner run with its own empty temporary folder leaves that folder empty.
+mkdir "$WORK/tmpd"
+d=$(stage nextjs-none)
+TMPDIR=$WORK/tmpd bash "$root/$REPORT" "$d" > "$WORK/leftover.out" 2>&1
+left=$(find "$WORK/tmpd" -mindepth 1)
+if [ -z "$left" ] && grep -q '  exclusion-audit  check  ' "$WORK/leftover.out"; then ok "no temporary file is left behind"; else nok "temporary files left behind (or no audit ran)" "$left"; fi
+
+# Entries that match the project's own source roots are marked, with or without a reason; other entries are not.
+want audit-hides "src/** with a reason is still marked" "^vitest.config.ts:[0-9]+ coverage-exclude 'src/\*\*': hides hand-written source .*, has reason$"
+want audit-hides "**/*.py with no reason is marked" "^vitest.config.ts:[0-9]+ coverage-exclude '\*\*/\*\.py': hides hand-written source .*, no reason$"
+want audit-hides "lib/**/*.ts with no reason is marked" "'lib/\*\*/\*\.ts': hides hand-written source .*, no reason$"
+want audit-hides "a generated folder with a reason is not marked" "'src/gen/\*\*': has reason$"
+unwanted audit-hides "a generated folder is not marked as hiding source" "'src/(gen|legacy)/\*\*': hides"
+want audit-hides "an exclude with no reason that hides nothing" "'src/legacy/\*\*': no reason$"
+unwanted nextjs-ok "clean control hides nothing" "hides"
+
+# Output is grouped by state: no reason, hides source, has reason, framework default.
+report audit-hides
+order=$(printf '%s\n' "$AUD" | awk '
+  { r = 0 }
+  /: no reason$/ && !/hides hand-written/ { r = 1 }
+  /hides hand-written/ { r = 2 }
+  /: has reason$/ && !/hides hand-written/ { r = 3 }
+  /framework default$/ { r = 4 }
+  r > 0 { if (r < last) bad = 1; last = r; seen[r] = 1 }
+  END { n = 0; for (k in seen) n++; print (bad || n < 4) ? "bad" : "ok" }')
+if [ "$order" = ok ]; then ok "audit-hides: lines come out in state order, all four states present"; else nok "audit-hides: lines are not grouped by state" "$AUD"; fi
+
+# The reason rule matches the gate: filler and a reason that names another entry do not count.
+want vitest-filler-todo "TODO filler is no reason" "'src/gen/\*\*': no reason$"
+want vitest-filler-ok "a real reason counts" "'src/gen/\*\*': has reason$"
+want sonar-substr-bad "a reason for src/gen/** does not cover **" "sonar-exclude '\*\*': .*no reason$"
+want sonar-two-reasons-ok "each entry carries its own reason" "sonar-exclude 'src/gen/\*\*': has reason$"
+
+# Configs the audit now reads.
+want nycrc-bad ".nycrc exclude with no reason" "^\.nycrc:[0-9]+ .*'src/gen/\*\*': no reason$"
+want nycrc-ok ".nycrc exclude with a reason" "^\.nycrc:[0-9]+ .*'src/gen/\*\*': has reason$"
+want c8rc-bad ".c8rc exclude with no reason" "^\.c8rc:[0-9]+ .*'src/gen/\*\*': no reason$"
+want jscpd-bad ".jscpd.json ignore with no reason" "^\.jscpd\.json:[0-9]+ .*'src/gen/\*\*': no reason$"
+want pkg-nyc-bad "nyc key in package.json" "^package\.json:[0-9]+ .*'src/gen/\*\*': no reason$"
+want stryker-ignore-bad "stryker ignorePatterns" "no reason$"
 
 # Self-contained: the audit's scanners are byte copies of the seeded gate's, and the default list matches the gate's.
 for pair in "scan.awk:check-exclude-reasons.awk" "scan.py:check-exclude-reasons.py" "scan.mjs:check-exclude-reasons.mjs"; do
@@ -217,11 +270,13 @@ for pair in "scan.awk:check-exclude-reasons.awk" "scan.py:check-exclude-reasons.
   g=${pair##*:}
   if cmp -s "$AUDITDIR/$a" "$GATEDIR/$g"; then ok "$a is a byte copy of $g"; else nok "$a differs from $g"; fi
 done
-awk '/^DEFAULTS=/ { f = 1; sub(/^DEFAULTS=\x27/, "") } f { if ($0 ~ /\x27$/) { sub(/\x27$/, ""); print; exit } print }' "$GATEDIR/check-exclude-reasons.sh" > "$WORK/gate-defaults.txt"
-if cmp -s "$WORK/gate-defaults.txt" "$AUDITDIR/defaults.txt" && [ -s "$AUDITDIR/defaults.txt" ]; then ok "defaults.txt equals the gate's DEFAULTS list"; else nok "defaults.txt differs from the gate's DEFAULTS list"; fi
+sed -n "s/^dflt '\([^']*\)'.*/\1/p" "$GATEDIR/check-exclude-reasons.sh" > "$WORK/gate-defaults.txt"
+if cmp -s "$WORK/gate-defaults.txt" "$AUDITDIR/defaults.txt" && [ -s "$AUDITDIR/defaults.txt" ]; then ok "defaults.txt equals the gate's default entries"; else nok "defaults.txt differs from the gate's default entries"; fi
+awk "/^PLACEHOLDERS='/ { f = 1; sub(/^PLACEHOLDERS='/, \"\") } f { if (\$0 ~ /'\$/) { sub(/'\$/, \"\"); print; exit } print }" "$GATEDIR/check-exclude-reasons.sh" > "$WORK/gate-words.txt"
+if cmp -s "$WORK/gate-words.txt" "$AUDITDIR/placeholders.txt" && [ -s "$AUDITDIR/placeholders.txt" ]; then ok "placeholders.txt equals the gate's placeholder words"; else nok "placeholders.txt differs from the gate's placeholder words"; fi
 # The audit runs with nothing from the adopted project except its own typescript: a project with no scripts folder is audited.
 report nextjs-none
-if [ ! -e "$WORK/nextjs-none/scripts" ] && printf '%s\n' "$AUD" | grep -q 'no reason$'; then ok "audit needs no seeded file in the project"; else nok "audit depended on a seeded file" "$OUT"; fi
+if [ ! -e "$STAGE/nextjs-none/scripts" ] && printf '%s\n' "$AUD" | grep -q 'no reason$'; then ok "audit needs no seeded file in the project"; else nok "audit depended on a seeded file" "$OUT"; fi
 
 # Secrets: no code line in the audit or its scanners names a dotenv file.
 hits=$(for f in "$AUDIT" "$AUDITDIR"/scan.awk "$AUDITDIR"/scan.py "$AUDITDIR"/scan.mjs "$AUDITDIR"/scan-pnpm.awk; do

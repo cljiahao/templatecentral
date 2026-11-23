@@ -7,6 +7,7 @@ import sys
 
 DEFAULTS = set(filter(None, os.environ.get("TC_EXCLUDE_DEFAULTS", "").split("\n")))
 REASON = re.compile(r"^reason:\s+\S+(\s+\S+){2,}\s*$")
+PLACEHOLDERS = {w for w in os.environ.get("TC_REASON_PLACEHOLDERS", "").split("\n") if w}
 DYNAMIC = "is not a plain list of strings; write it as a literal list of strings so each entry can carry a reason"
 
 
@@ -230,7 +231,13 @@ def as_strings(file, name, leaf):
 
 
 def has_reason(comments, line):
-    return bool(REASON.match(comments.get(line, "")))
+    text = comments.get(line, "")
+    if not REASON.match(text):
+        return False
+    words = [w.rstrip(".:").lower() for w in re.split(r"[\s,;\"`()]+", text[len("reason:"):]) if w.rstrip(".:")]
+    if any(w in PLACEHOLDERS for w in words):
+        return False
+    return len({w for w in words if len(w) >= 3}) >= 3
 
 
 def emit_excludes(file, kind, comments, key_line, entries):
@@ -293,6 +300,7 @@ def scan_toml(file, text):
             return
     except ImportError:
         reference = None
+        emit("N", file, 1, "note", "this Python has no tomllib (needs 3.11+), so the cross-check of the TOML reader was skipped")
     comments = parser.comments
     tool = lookup(root, "tool")
     if tool is None:

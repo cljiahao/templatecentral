@@ -2,9 +2,9 @@
 # Tests for the seeded gate skills/scaffold/shared/template/scripts/check-exclude-reasons.sh.
 # Every failing fixture under tests/fixtures/exclusions/ has a clean control that differs only by the reason line. The gate runs on a
 # copy of each fixture, so the fixtures stay untouched; their hashes are compared before and after the run.
-# The JS and TS scanner needs a typescript install to read configs. This script looks in TC_TEST_TYPESCRIPT, ./node_modules,
-# the global npm root and the usual project folders under $HOME, and fails closed when it finds none.
-# Usage: bash scripts/seeded-exclude-reasons.test.sh        Needs bash 3.2+, find, awk, node, python3. No network.
+# The JS and TS scanner needs a typescript install to read configs. This script uses TC_TEST_TYPESCRIPT_DIR, then ./node_modules, then
+# the version pinned in skills/scaffold/shared/versions.txt installed once into a cache folder under $TMPDIR. It never scans a home folder.
+# Usage: bash scripts/seeded-exclude-reasons.test.sh        Needs bash 3.2+, find, awk, node, python3; npm and network only for the first cache install.
 set -uo pipefail
 export LC_ALL=C
 
@@ -27,24 +27,38 @@ nok() {
   if [ -n "${2:-}" ]; then printf '%s\n' "$2" | head -n 6 | sed 's/^/    /'; fi
 }
 
+ts_ok() { [ -n "$1" ] && [ -f "$1/package.json" ] && [ -f "$1/lib/typescript.js" ]; }
 find_typescript() {
-  local c
-  for c in "${TC_TEST_TYPESCRIPT:-}" "$root/node_modules/typescript" "$(npm root -g 2> /dev/null)/typescript" \
-    "$HOME"/*/node_modules/typescript "$HOME"/*/*/node_modules/typescript; do
-    if [ -n "$c" ] && [ -f "$c/package.json" ] && [ -f "$c/lib/typescript.js" ]; then
+  local c ver cache
+  for c in "${TC_TEST_TYPESCRIPT_DIR:-}" "$root/node_modules/typescript"; do
+    if ts_ok "$c"; then
       printf '%s' "$c"
       return 0
     fi
   done
+  ver=$(awk '$1 == "npm" && $2 == "typescript" { v = $3; sub(/^[^0-9]*/, "", v); print v }' "$root/skills/scaffold/shared/versions.txt")
+  [ -n "$ver" ] || return 1
+  cache=${TMPDIR:-/tmp}/tc-test-typescript-$ver
+  if ! ts_ok "$cache/node_modules/typescript"; then
+    mkdir -p "$cache" && npm install --prefix "$cache" --no-audit --no-fund --silent "typescript@$ver" > /dev/null 2>&1
+  fi
+  if ts_ok "$cache/node_modules/typescript"; then
+    printf '%s' "$cache/node_modules/typescript"
+    return 0
+  fi
   return 1
 }
 if ! TS=$(find_typescript); then
-  echo "seeded-exclude-reasons.test: no typescript install found. Set TC_TEST_TYPESCRIPT to a typescript package folder." >&2
+  echo "seeded-exclude-reasons.test: no typescript found. Set TC_TEST_TYPESCRIPT_DIR to a typescript package folder, or allow the pinned version to install into \$TMPDIR." >&2
   exit 1
 fi
 
+# Hash a tree by file name and size only. No file is opened, so a secret-named file in a fixture is never read.
+fsize() { stat -f %z "$1" 2> /dev/null || stat -c %s "$1"; }
 tree_hash() {
-  (cd "$1" && find . -path ./node_modules -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r f; do shasum "$f"; done | shasum | cut -d' ' -f1)
+  (cd "$1" && find . -path ./node_modules -prune -o \( -type f -o -type l -o -type d \) -print | LC_ALL=C sort | while IFS= read -r f; do
+    if [ -f "$f" ]; then printf '%s %s\n' "$f" "$(fsize "$f")"; else printf '%s\n' "$f"; fi
+  done | shasum | cut -d' ' -f1)
 }
 
 # Copy fixture NAME to a fresh folder and link typescript into it (unless the second argument is "no-ts").
@@ -160,12 +174,12 @@ expect_fail sonar-issue "sonar-project.properties:3 sonar-issue-ignore entry"
 expect_ok ui-seeded
 expect_fail ui-seeded-noreason "vitest.config.ts:9 coverage-exclude entry 'src/components/ui/\*\*' has no reason"
 
-# No config at all, and a project with source but no coverage config, pass with a clear line.
-for n in empty-project no-coverage-ts; do
-  d=$(stage "$n")
-  run_gate "$d"
-  if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'no coverage, Sonar or mutation config found; nothing to check'; then ok "$n passes with the nothing-to-check line"; else nok "$n should pass with the nothing-to-check line (exit $RC)" "$OUT"; fi
-done
+# An empty folder passes with its own line; a project with source files and no coverage config fails.
+d=$(stage empty-project)
+run_gate "$d"
+if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'no source files and no coverage, Sonar or mutation config found; nothing to check'; then ok "empty-project passes with the nothing-to-check line"; else nok "empty-project should pass with the nothing-to-check line (exit $RC)" "$OUT"; fi
+expect_fail no-coverage-ts "no coverage, Sonar or mutation config found, but the project has source files \\(for example src/index\\.ts\\)"
+expect_ok no-coverage-py
 
 # A config exists but typescript is not installed: fail closed and say what is supported.
 d=$(stage nextjs-ok no-ts)
@@ -204,11 +218,122 @@ usage_case "missing folder" "$WORK/no-such-folder"
 mut=$WORK/mutant
 mkdir -p "$mut"
 cp skills/scaffold/shared/template/scripts/check-exclude-reasons.* "$mut/"
-sed 's/{2,}/{0,}/' "$mut/check-exclude-reasons.mjs" > "$mut/m.tmp" && mv "$mut/m.tmp" "$mut/check-exclude-reasons.mjs"
+sed -e 's/{2,}/{0,}/' -e 's/size >= 3/size >= 0/' "$mut/check-exclude-reasons.mjs" > "$mut/m.tmp" && mv "$mut/m.tmp" "$mut/check-exclude-reasons.mjs"
 d=$(stage nextjs-short)
 OUT=$(bash "$mut/check-exclude-reasons.sh" "$d" 2>&1)
 RC=$?
 if [ "$RC" -eq 0 ]; then ok "a gate with a weaker word rule lets nextjs-short through, so the fixture is a real test"; else nok "mutant did not change the result (exit $RC)" "$OUT"; fi
+
+# One reason belongs to one entry: a reason that names a longer or shorter entry, or two entries, covers neither.
+expect_fail sonar-substr-bad "sonar-project.properties:4 sonar-exclude entry '\*\*' has no reason\. Fix: .*names its own entry as a whole word and no other entry of the list"
+expect_fail sonar-prefix-bad "sonar-project.properties:4 sonar-exclude entry 'src/gen/\*\*' has no reason"
+expect_fail sonar-one-reason-two "sonar-project.properties:4 sonar-exclude entry 'src/legacy/\*\*' has no reason"
+if printf '%s' "$OUT" | grep -q "entry 'src/gen/\*\*' has no reason"; then ok "one reason naming two entries covers neither"; else nok "one reason naming two entries covered an entry" "$OUT"; fi
+expect_ok sonar-two-reasons-ok
+
+# Filler reasons fail: placeholders, one repeated word, three one-letter words.
+for n in todo abc fixme xxx tbd same; do
+  expect_fail "vitest-filler-$n" "vitest.config.ts:8 coverage-exclude entry 'src/gen/\*\*' has no reason"
+done
+expect_fail vitest-filler-mixed "vitest.config.ts:8 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_fail sonar-filler-mixed "sonar-project.properties:4 sonar-exclude entry 'src/gen/\*\*' has no reason"
+expect_fail py-filler-mixed "pyproject.toml:4 coverage-exclude entry 'app/migrations/\*' has no reason"
+expect_ok vitest-filler-ok
+expect_fail sonar-filler "sonar-project.properties:4 sonar-exclude entry 'src/gen/\*\*' has no reason"
+expect_fail py-filler "pyproject.toml:4 coverage-exclude entry 'app/migrations/\*' has no reason"
+expect_ok py-filler-ok
+
+# Excludes in forms the gate must read or refuse.
+expect_fail vitest-computed-bad "vitest.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok vitest-computed-ok
+expect_fail vitest-computed-dynamic "vitest.config.ts:7 a computed key can hide a coverage setting"
+expect_fail vitest-root-spread "vitest.config.ts:6 a spread in the config root can hide a coverage setting"
+expect_ok vitest-root-nospread
+expect_fail vitest-merge-local-bad "vitest.base.ts:5 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok vitest-merge-local-ok
+expect_fail vitest-merge-pkg "vitest.config.ts:1 the config uses '@acme/vitest-base' from another package"
+expect_fail vitest-merge-missing "vitest.config.ts:1 the config imports './no-such-base', which cannot be found"
+expect_fail vitest-merge-chain "a.ts:1 the config imports './b', which imports further"
+expect_fail deep-bad "packages/a/b/c/vitest.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok deep-ok
+expect_fail jest-json-bad "jest.config.json:3 coverage-exclude entry '<rootDir>/src/gen/' has no reason"
+expect_ok jest-json-ok
+for n in nycrc nycrc-json c8rc c8rc-json; do
+  expect_fail "$n-bad" "\.(nyc|c8)rc(\.json)?:3 coverage-exclude entry 'src/gen/\*\*' has no reason"
+  expect_ok "$n-ok"
+done
+expect_fail nycrc-yaml "\.nycrc\.yml:1 a YAML coverage config cannot be read"
+expect_fail nyc-include-bad "\.nycrc\.json:2 coverage-include list 'src/api/\*\*' is an allow-list"
+expect_fail pkg-nyc-bad "package.json:3 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_fail pkg-c8-bad "package.json:3 coverage-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok pkg-nyc-clean
+expect_fail pkg-flag-bad "package.json:3 passes an exclude or include on the command line"
+expect_fail pkg-flag-include "package.json:3 passes an exclude or include on the command line"
+expect_fail pkg-flag-sonar "package.json:3 passes an exclude or include on the command line"
+expect_fail pkg-flag-sonar-cov "package.json:3 passes an exclude or include on the command line"
+expect_ok pkg-flag-clean
+expect_fail ci-sonar-flag "\.github/workflows/ci\.yml:7 passes an exclude or include on the command line"
+expect_ok ci-clean
+expect_fail lefthook-sonar-flag "lefthook\.yml:4 passes an exclude or include on the command line"
+expect_fail jscpd-bad "\.jscpd\.json:3 cpd-ignore entry 'src/gen/\*\*' has no reason"
+expect_ok jscpd-ok
+expect_fail stryker-ignore-bad "stryker\.config\.json:3 mutation-exclude entry 'src/gen/\*\*' has no reason"
+expect_ok stryker-ignore-ok
+expect_fail stryker-mutation-bad "stryker\.config\.json:4 mutation-exclude entry 'StringLiteral' has no reason"
+expect_ok stryker-mutation-ok
+
+# A symlinked config is not followed, so the gate fails; the same config as a real file passes.
+d=$(stage vitest-filler-ok)
+mv "$d/vitest.config.ts" "$d/real-config.ts"
+ln -s real-config.ts "$d/vitest.config.ts"
+run_gate "$d"
+if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -q 'vitest.config.ts is a symlink'; then ok "a symlinked config fails"; else nok "a symlinked config should fail (exit $RC)" "$OUT"; fi
+
+# Framework defaults are narrow: a config glob at any depth and a one-level test folder need a reason; root configs and test folders do not.
+expect_fail defaults-config-bad "vitest.config.ts:7 coverage-exclude entry '\*\*/\*\.config\.\*' has no reason"
+expect_ok defaults-config-reason
+expect_ok defaults-root-config
+expect_fail defaults-test-star "vitest.config.ts:7 coverage-exclude entry 'test/\*' has no reason"
+expect_fail defaults-py-bad "pyproject.toml:3 coverage-exclude entry '\*/test_\*\.py' has no reason"
+expect_ok defaults-py-ok
+
+# Python without tomllib: one note line, no silent skip.
+shim=$WORK/shim
+mkdir -p "$shim"
+realpy=$(command -v python3)
+printf '#!/bin/sh\nshift\nexec "%s" -I -c %s "$@"\n' "$realpy" "'import sys; sys.modules[\"tomllib\"] = None; sys.argv = sys.argv[1:]; exec(compile(open(sys.argv[0]).read(), sys.argv[0], \"exec\"))'" > "$shim/python3"
+chmod +x "$shim/python3"
+d=$(stage fastapi-omit-ok)
+OUT=$(PATH="$shim:$PATH" bash "$root/$GATE" "$d" 2>&1)
+n=$(printf '%s\n' "$OUT" | grep -c 'this Python has no tomllib')
+if [ "$n" -eq 1 ]; then ok "a Python without tomllib prints one note"; else nok "expected one tomllib note, found $n" "$OUT"; fi
+
+# The four real stack templates, as they are today. Three fail because their excludes carry no "reason:" line; the wiring round adds the
+# reasons and turns each expected failure below into expect_template_ok.
+tpl_stage() {
+  local d=$WORK/tpl-$1
+  rm -rf "$d"
+  mkdir -p "$d"
+  cp -R "$root/skills/scaffold/$1/template/." "$d/"
+  mkdir -p "$d/node_modules"
+  ln -s "$TS" "$d/node_modules/typescript"
+  printf '%s' "$d"
+}
+expect_template_fail() {
+  local d stack=$1 pat
+  shift
+  d=$(tpl_stage "$stack")
+  run_gate "$d"
+  for pat in "$@"; do
+    if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$pat"; then ok "template $stack fails as expected: $pat"; else nok "template $stack should fail with '$pat' (exit $RC)" "$OUT"; fi
+  done
+}
+expect_template_fail nextjs "vitest\.config\.ts:24 coverage-include list 'src/\*\*/\*\.ts, src/\*\*/\*\.tsx' is an allow-list: it excludes every file it does not list, and it has no reason"
+expect_template_fail nestjs "vitest\.config\.ts:15 coverage-include list 'src/\*\*/\*\.ts' is an allow-list: it excludes every file it does not list, and it has no reason"
+expect_template_fail vite-react "vite\.config\.ts:43 coverage-include list 'src/\*\*/\*\.\{ts,tsx\}' is an allow-list: it excludes every file it does not list, and it has no reason" "vite\.config\.ts:45 coverage-exclude entry 'src/test/\*\*' has no reason"
+d=$(tpl_stage fastapi)
+run_gate "$d"
+if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "template fastapi passes"; else nok "template fastapi should pass (exit $RC)" "$OUT"; fi
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)
