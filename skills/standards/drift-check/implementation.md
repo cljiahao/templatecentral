@@ -8,7 +8,13 @@ Compare the project's recorded templateCentral install version to the current pl
 
 ## Step 1 — Confirm a templateCentral project
 
-Line 1 of the project's `AGENTS.md` must be the harness marker `<!-- templateCentral: <stack>@<schema-version> -->`. `@X.Y.Z` is the harness *schema floor*, not the install version — never compare it to the plugin semver. No marker → not a templateCentral project; exit silently.
+Line 1 of the project's `AGENTS.md` must be the harness marker:
+
+```
+<!-- templateCentral: <stack>@<schema-version> -->
+```
+
+`@X.Y.Z` is the harness *schema floor*, not the install version — never compare it to the plugin semver. No marker → not a templateCentral project; exit silently.
 
 ## Step 2 — Read both versions
 
