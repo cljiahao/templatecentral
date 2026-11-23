@@ -228,6 +228,14 @@ Return control; the invoking skill must exit without generating any files.
 
 ---
 
+## Known-defect report (read-only)
+
+After a seed, re-sync or harness refresh, and whenever the user asks which older template code a project still carries, run `bash "<skill-dir>/general/defect-report.sh" <project-dir>` and show its output as printed. It writes nothing and needs no login, key or network. It does not filter by version, because a refresh rewrites the recorded one. Exit 1 means a `high` line, exit 2 means it could not run. Load the notes for the fix details and the two review-by-hand items:
+```bash
+cat "<skill-dir>/general/UPGRADE-NOTES.md"
+```
+Change project source only after the user confirms each fix, one at a time. A line means a known older pattern, not a verdict: `check` lines need a look first.
+
 ## Quality pass (opt-in)
 
 For an unmarked project the question is in the Phase 2 gate. For a marked project (Phase 0 routes into Phase 4 or an approved Phase 5 re-sync), when migrate was invoked directly and the tree is clean after adoption, ask once, separately from every approval above: "Run the quality pass? It runs the project's lint, typecheck and tests, then changes code, tests and config, and needs a clean tree." Never ask after light adoption, Stop or Skip. On yes, load the files listed under "Quality pass" above and follow `quality-pass.md`. On no, print "Quality pass skipped." and finish.
