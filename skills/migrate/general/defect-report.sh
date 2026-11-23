@@ -43,7 +43,10 @@ at() {
 # Limits: nested template literals, regex literals and Python docstrings count as strings, so text in them is not blanked.
 # True when FILE has a line over MAXLINE characters: minified or generated text.
 has_long_line() {
-  LC_ALL=C awk -v m="$MAXLINE" 'length($0) > m { f = 1; exit } END { exit !f }' "$1"
+  local rc=0
+  LC_ALL=C awk -v m="$MAXLINE" 'length($0) > m { f = 1; exit } END { exit !f }' "$1" || rc=$?
+  [ "$rc" -le 1 ] || die "cannot measure the line length of $1 (awk failed)"
+  return "$rc"
 }
 
 # A line over MAXLINE characters is minified or generated text: the file is skipped with a notice, because the scan is quadratic in line length.
@@ -130,7 +133,11 @@ find_unique_index() {
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     is_test_file "$f" && continue
-    if has_long_line "$f"; then UNIQ_INDEX=1; break; fi
+    if has_long_line "$f"; then
+      echo "defect-report: $f: a line over $MAXLINE characters, counted as declaring a unique index (minified or generated)" >&2
+      UNIQ_INDEX=1
+      break
+    fi
     if strip_comments "$f" | grep -qE -- "$UNIQ_RE"; then UNIQ_INDEX=1; break; fi
   done <<EOF
 $files
@@ -312,7 +319,7 @@ EOF
   bigmatch=0
   if [ "$nskip" -gt 0 ] && [ -n "$content" ]; then
     while IFS= read -r s; do
-      case "$s" in *"$(printf '\001')"*) continue ;; esac
+      s=$(printf '%s' "$s" | tr '\001' '\n')
       if [ -f "$s" ] && [ ! -L "$s" ] && grep -qF "${contentargs[@]}" -- "$s"; then bigmatch=1; fi
     done <<EOF
 $skipped

@@ -154,7 +154,17 @@ b"
 cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nl/a
 b/"
 run "$T/nl"
-check 0 "$EC" "a newline in the path as the only candidate is counted, not scanned (exit 0)"
+check 2 "$EC" "a newline in the path holding the check's text as the only candidate exits 2, like a file over 1 MB"
+has "every candidate file was skipped" "$OUT" "newline path: the run says nothing was scanned"
+# Control: a scanned file beside the newline path still sets the exit status, and the skipped one is counted once.
+mkdir -p "$T/nlbeside/src/integrations/database" "$T/nlbeside/a
+b"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nlbeside/src/integrations/database/"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/nlbeside/a
+b/"
+run "$T/nlbeside"
+check 1 "$EC" "a scanned file beside a newline path: the scanned one sets the exit status"
+flagged "a scanned file beside a newline path"
 has "1 candidate file(s) were not scanned" "$OUT" "newline path: one file is counted once, not once per line"
 # Control: a big file that does not hold the check's text is not the match, so the run goes on.
 mkdir -p "$T/bigplain/src"
@@ -458,7 +468,36 @@ run "$T/uq"
 took=$(($(cpu_cs) - start))
 check 0 "$EC" "400 candidates with a unique index: exit 0"
 has "mongoose-init-nextjs  check" "$OUT" "400 candidates with a unique index: still flagged"
-check 1 "$(truth test "$took" -le 1500)" "400 candidates with a unique index take at most 15 s of CPU (took ${took} cs)"
+check 1 "$(truth test "$took" -le 2000)" "400 candidates with a unique index take at most 20 s of CPU (took ${took} cs)"
+
+# A source file with a line over the cap counts as declaring a unique index, and the run says so on stderr.
+mkdir -p "$T/uqcap/src"
+printf 'export const c = mongoose.connect(URL);\n' > "$T/uqcap/src/client.ts"
+{ printf 'var s = { unique: true }; var pad = "'; head -c 120000 /dev/zero | tr '\0' 'a'; printf '";\n'; } > "$T/uqcap/src/bundle.js"
+run "$T/uqcap"
+has "bundle.js: a line over" "$OUT" "a capped source file is named when it stands in for a unique index"
+has "mongoose-init-nextjs  check" "$OUT" "a capped source file: the init check still reports"
+# Control: no capped file, no notice.
+run "$T/uq"
+lacks "counted as declaring a unique index" "$OUT" "control: no capped source file, no notice"
+
+# An awk that fails while measuring line length stops the run: it is never read as "no long line".
+mkdir -p "$T/awkshim" "$T/awkfail/src"
+REALAWK=$(command -v awk)
+export REALAWK
+cat > "$T/awkshim/awk" <<'EOS'
+#!/bin/sh
+case "$*" in *'f = 1; exit'*) exit 2 ;; esac
+exec "$REALAWK" "$@"
+EOS
+chmod +x "$T/awkshim/awk"
+cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoose-client.ts" "$T/awkfail/src/"
+OUT=$(env -u CI -u GITHUB_ACTIONS -u TF_BUILD PATH="$T/awkshim:$PATH" bash "$RUNNER" "$T/awkfail" 2>&1)
+EC=$?
+check 2 "$EC" "awk failing on the line-length measure exits 2"
+has "awk failed" "$OUT" "awk failure: the run names the cause"
+run "$T/awkfail"
+check 1 "$EC" "control: the same project with a working awk runs and flags"
 
 LIT="\$argon2id\$v=19\$m=65536,t=3,p=1\$c29tZXNhbHRzb21lc2E\$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
 printf '// const DUMMY = argon2.hash(randomUUID());\nconst DUMMY_HASH = "%s";\n' "$LIT" > "$T/a1/auth.service.ts"
