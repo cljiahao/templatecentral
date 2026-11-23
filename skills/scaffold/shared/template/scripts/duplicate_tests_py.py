@@ -118,14 +118,53 @@ def conftest_context(root, rel, cache):
     return ",".join(parts)
 
 
-def has_parametrize(func):
+def parametrize_rows(func):
+    """Row texts of every parametrize decorator whose table is a literal list or tuple."""
+    rows = []
     for deco in func.decorator_list:
-        for node in ast.walk(deco):
-            if isinstance(node, ast.Attribute) and node.attr == "parametrize":
-                return True
-            if isinstance(node, ast.Name) and node.id == "parametrize":
-                return True
-    return False
+        if not isinstance(deco, ast.Call):
+            continue
+        target = deco.func
+        name = target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else ""
+        if name != "parametrize" or len(deco.args) < 2:
+            continue
+        table = deco.args[1]
+        if isinstance(table, (ast.List, ast.Tuple)):
+            rows.append(table.elts)
+    return rows
+
+
+def names_in(node, into):
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name):
+            into.add(sub.id)
+        elif isinstance(sub, ast.Attribute):
+            into.add(sub.attr)
+    return into
+
+
+def bound_names(stmt):
+    names = set()
+    if isinstance(stmt, ast.Import):
+        for a in stmt.names:
+            names.add(a.asname or a.name.split(".")[0])
+    elif isinstance(stmt, ast.ImportFrom):
+        for a in stmt.names:
+            names.add(a.asname or a.name)
+    elif isinstance(stmt, FUNCS + (ast.ClassDef,)):
+        names.add(stmt.name)
+    elif isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+        for t in targets:
+            for sub in ast.walk(t):
+                if isinstance(sub, ast.Name):
+                    names.add(sub.id)
+                elif isinstance(sub, ast.Attribute):
+                    names.add(sub.attr)
+    return names
+
+
+IMPLICIT = ("setup", "set_up", "teardown", "tear_down")
 
 
 def arg_names(func):
@@ -197,40 +236,119 @@ def main():
             while node is not None:
                 holders.add(node)
                 node = src.parent.get(node)
-        memo = {}
+        statement_memo = {}
 
-        def context_of(node):
-            if node in memo:
-                return memo[node]
-            parts = []
-            first = True
+        def statements_of(node):
+            if node in statement_memo:
+                return statement_memo[node]
+            items = []
             for child in ast.iter_child_nodes(node):
-                skip = child in holders or (first and is_docstring(child) and isinstance(node, (ast.Module, ast.ClassDef)))
-                if isinstance(node, (ast.Module, ast.ClassDef)):
-                    first = False
-                if skip:
+                if child in holders:
                     continue
+                is_stmt = isinstance(child, ast.stmt) and isinstance(node, (ast.Module, ast.ClassDef))
+                if not is_stmt:
+                    continue
+                if is_docstring(child) and child is node.body[0]:
+                    continue
+                names = bound_names(child)
+                always = False
+                if isinstance(child, (ast.Import, ast.ImportFrom)):
+                    always = False
+                elif isinstance(child, FUNCS):
+                    lower = child.name.lower()
+                    always = lower.startswith(IMPLICIT) or any(
+                        isinstance(sub, ast.keyword) and sub.arg == "autouse" for deco in child.decorator_list for sub in ast.walk(deco)
+                    )
+                elif isinstance(child, ast.ClassDef):
+                    always = False
+                elif isinstance(child, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                    always = "pytestmark" in names
+                else:
+                    always = True
+                used = set()
+                for part in ast.walk(child):
+                    if isinstance(part, ast.Name):
+                        used.add(part.id)
+                    elif isinstance(part, ast.Attribute):
+                        used.add(part.attr)
                 text = src.text_of(child)
                 if isinstance(child, ast.ImportFrom) and child.level:
                     up = os.path.join(os.path.dirname(rel), *([".."] * (child.level - 1)))
                     text = "%s@%s" % (text, os.path.normpath(up))
-                parts.append(text)
-            memo[node] = "\n".join(parts)
-            return memo[node]
+                items.append({"names": names, "used": used, "always": always, "text": text, "on": False})
+            statement_memo[node] = items
+            return items
+
+        other_memo = {}
+
+        def other_context(node):
+            # Parts of a node that are not statements of its body: decorators, bases, headers, loop data, conditions.
+            if node in other_memo:
+                return other_memo[node]
+            parts = []
+            for child in ast.iter_child_nodes(node):
+                if child in holders:
+                    continue
+                if isinstance(child, ast.stmt) and isinstance(node, (ast.Module, ast.ClassDef)):
+                    continue
+                parts.append(src.text_of(child))
+            other_memo[node] = "\n".join(parts)
+            return other_memo[node]
+
+        def case_context(chain, refs):
+            scopes = [statements_of(n) for n in chain if isinstance(n, (ast.Module, ast.ClassDef))]
+            for items in scopes:
+                for item in items:
+                    item["on"] = item["always"]
+                    if item["on"]:
+                        refs.update(item["used"])
+            grew = True
+            while grew:
+                grew = False
+                for items in scopes:
+                    for item in items:
+                        if item["on"] or not (item["names"] & refs):
+                            continue
+                        item["on"] = True
+                        grew = True
+                        refs.update(item["used"])
+            parts = []
+            for node in chain:
+                texts = [other_context(node)]
+                if isinstance(node, (ast.Module, ast.ClassDef)):
+                    texts.append("\n".join(i["text"] for i in statements_of(node) if i["on"]))
+                parts.append("\n".join(t for t in texts if t))
+            return "\n\x03\n".join(p for p in parts if p)
 
         for func in cases:
-            if has_parametrize(func):
-                out.append("\t".join(["P", rel, str(func.lineno), "0", "-", "-"]))
-                continue
             chain = []
             node = src.parent.get(func)
             while node is not None:
                 chain.append(node)
                 node = src.parent.get(node)
             chain.reverse()
+            refs = names_in(func, set())
+            refs.update(a.strip("*") for a in arg_names(func).split(",") if a)
+            for deco in func.decorator_list:
+                for sub in ast.walk(deco):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                        refs.add(sub.value)
+            for anc in chain:
+                for kid in ast.iter_child_nodes(anc):
+                    if kid not in holders and not (isinstance(kid, ast.stmt) and isinstance(anc, (ast.Module, ast.ClassDef))):
+                        names_in(kid, refs)
+            ctx_inner = case_context(chain, refs)
+            for table in parametrize_rows(func):
+                seen_rows = set()
+                for elt in table:
+                    row = src.text_of(elt)
+                    if row in seen_rows:
+                        out.append("\t".join(["R", rel, str(func.lineno), "0", "-", "-"]))
+                        break
+                    seen_rows.add(row)
             toks = src.body_tokens(func)
             decorators = "\n".join(src.text_of(d) for d in func.decorator_list)
-            ctx = "%s\n\x03\n%s\n%s\n%s" % (conf, "\n\x03\n".join(c for c in map(context_of, chain) if c), decorators, arg_names(func))
+            ctx = "%s\n\x03\n%s\n%s\n%s" % (conf, ctx_inner, decorators, arg_names(func))
             exact = "\x02".join(t.string for t in toks)
             shape = "\x02".join("\x01L" if is_literal(t.type, t.string) else t.string for t in toks)
             out.append(

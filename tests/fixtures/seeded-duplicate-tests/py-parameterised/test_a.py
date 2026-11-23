@@ -10,7 +10,7 @@ def test_one(a, b, total):
     assert r.ok is True
 
 
-@pytest.mark.parametrize("a,b,total", [(1, 2, 3)])
+@pytest.mark.parametrize("a,b,total", [(2, 3, 5)])
 def test_two(a, b, total):
     r = compute(a, b)
     assert r.total == total
@@ -18,7 +18,7 @@ def test_two(a, b, total):
     assert r.ok is True
 
 
-@pytest.mark.parametrize("a,b,total", [(1, 2, 3)])
+@pytest.mark.parametrize("a,b,total", [(3, 4, 7)])
 def test_three(a, b, total):
     r = compute(a, b)
     assert r.total == total

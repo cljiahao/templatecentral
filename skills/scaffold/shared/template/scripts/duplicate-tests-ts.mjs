@@ -14,7 +14,16 @@ const root = path.resolve(rootArg);
 
 const SUPPORTED_MAJORS = [5, 6];
 const CASE_BASES = new Set(['it', 'test']);
-const NAME_BASES = new Set(['it', 'test', 'describe', 'suite']);
+const NAME_BASES = new Set(['it', 'test', 'describe', 'suite', 'context']);
+const HOOKS = ['beforeEach', 'afterEach', 'beforeAll', 'afterAll'];
+// Prefixed forms: the base name plus the modifier they stand for.
+const PREFIXED = new Map([
+  ['xit', ['it', 'skip']],
+  ['xtest', ['test', 'skip']],
+  ['xdescribe', ['describe', 'skip']],
+  ['fit', ['it', 'only']],
+  ['fdescribe', ['describe', 'only']],
+]);
 const CASE_MODIFIERS = new Set(['only', 'skip', 'concurrent', 'todo', 'fails', 'failing', 'sequential', 'skipIf', 'runIf']);
 const PARAM_MODIFIERS = new Set(['each', 'for']);
 const DEFAULT_IMPORT_MODULES = new Set(['node:test', 'bun:test']);
@@ -97,7 +106,7 @@ const analyse = (file, text, ts) => {
     if (bindings && ts.isNamedImports(bindings)) {
       for (const el of bindings.elements) {
         const original = (el.propertyName || el.name).text;
-        if (NAME_BASES.has(original) || ['beforeEach', 'afterEach', 'beforeAll', 'afterAll'].includes(original)) {
+        if (NAME_BASES.has(original) || PREFIXED.has(original) || HOOKS.includes(original)) {
           aliases.set(el.name.text, original);
         }
       }
@@ -123,6 +132,10 @@ const analyse = (file, text, ts) => {
       if (ts.isIdentifier(node)) {
         let base = aliases.get(node.text) || node.text;
         if (namespaces.has(node.text) && mods.length > 0) base = mods.shift();
+        if (PREFIXED.has(base)) {
+          mods.unshift(PREFIXED.get(base)[1]);
+          base = PREFIXED.get(base)[0];
+        }
         return { base, mods };
       }
       if (ts.isPropertyAccessExpression(node)) {
@@ -139,11 +152,26 @@ const analyse = (file, text, ts) => {
     const info = describeCallee(call.expression);
     if (!info || !CASE_BASES.has(info.base)) return null;
     if (!info.mods.every((m) => CASE_MODIFIERS.has(m) || PARAM_MODIFIERS.has(m))) return null;
-    if (info.mods.some((m) => PARAM_MODIFIERS.has(m))) return { kind: 'P' };
+    let table = null;
+    if (info.mods.some((m) => PARAM_MODIFIERS.has(m))) {
+      for (let e = call.expression; ; ) {
+        if (ts.isCallExpression(e)) {
+          table = e.arguments;
+          break;
+        }
+        if (ts.isTaggedTemplateExpression(e)) {
+          table = [e.template];
+          break;
+        }
+        if (ts.isPropertyAccessExpression(e)) e = e.expression;
+        else break;
+      }
+      if (!table) return { kind: 'U' };
+    }
     const direct = call.arguments.find((a) => isFunctionLike(a));
-    if (direct) return { kind: 'C', fn: direct };
+    if (direct) return { kind: 'C', fn: direct, table };
     const named = call.arguments.slice(1).find((a) => ts.isIdentifier(a));
-    if (named && functions.has(named.text)) return { kind: 'C', fn: functions.get(named.text) };
+    if (named && functions.has(named.text)) return { kind: 'C', fn: functions.get(named.text), table };
     if (call.arguments.length >= 2) return { kind: 'U' };
     return { kind: 'T' };
   };
@@ -213,13 +241,105 @@ const analyse = (file, text, ts) => {
       if (hasCase.has(kid) || punctuation.has(kid.kind)) continue;
       if (suiteCall && kid === node.expression && !hasCall(kid)) continue;
       if (suiteCall && (ts.isStringLiteral(kid) || ts.isNoSubstitutionTemplateLiteral(kid) || ts.isTemplateExpression(kid))) continue;
-      const tokens = [];
-      leaves(kid, tokens);
-      parts.push(tokens.map(tokenText).join(' '));
+      parts.push(textOf(kid));
     }
     const value = parts.join('\n');
     contextMemo.set(node, value);
     return value;
+  };
+
+  const textOf = (node) => {
+    const tokens = [];
+    leaves(node, tokens);
+    return tokens.map(tokenText).join(' ');
+  };
+  const identifiersOf = (node, into) => {
+    if (ts.isIdentifier(node)) into.add(node.text);
+    ts.forEachChild(node, (kid) => {
+      identifiersOf(kid, into);
+    });
+    return into;
+  };
+  const boundNames = (st) => {
+    const names = new Set();
+    if (ts.isImportDeclaration(st)) {
+      const clause = st.importClause;
+      if (clause && clause.name) names.add(clause.name.text);
+      const nb = clause && clause.namedBindings;
+      if (nb && ts.isNamespaceImport(nb)) names.add(nb.name.text);
+      if (nb && ts.isNamedImports(nb)) for (const el of nb.elements) names.add(el.name.text);
+    } else if (ts.isVariableStatement(st)) {
+      for (const d of st.declarationList.declarations) identifiersOf(d.name, names);
+    } else if (
+      (ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isEnumDeclaration(st) || ts.isInterfaceDeclaration(st) || ts.isTypeAliasDeclaration(st) || ts.isModuleDeclaration(st)) &&
+      st.name
+    ) {
+      names.add(st.name.text);
+    }
+    return names;
+  };
+  const mockLike = /^(vi|jest|expect\.extend|test\.use|it\.use)\b|\bmock\b|\bdoMock\b|\bspyOn\b/;
+  // Statements of a file or block that are not cases, with the names they bind and the names they use.
+  const scopeMemo = new Map();
+  const scopeItems = (node) => {
+    if (scopeMemo.has(node)) return scopeMemo.get(node);
+    const items = [];
+    for (const st of flatChildren(node)) {
+      if (hasCase.has(st) || punctuation.has(st.kind) || st.kind === K.EndOfFileToken) continue;
+      const names = boundNames(st);
+      const idents = identifiersOf(st, new Set());
+      let always = false;
+      if (ts.isImportDeclaration(st)) always = false;
+      else if (names.size > 0) always = false;
+      else if (ts.isExpressionStatement(st)) {
+        const e = st.expression;
+        const callee = ts.isCallExpression(e) ? describeCallee(e.expression) : null;
+        always = Boolean((callee && HOOKS.includes(callee.base)) || mockLike.test(textOf(st)));
+      } else always = true;
+      items.push({ st, names, idents, always, text: null });
+    }
+    scopeMemo.set(node, items);
+    return items;
+  };
+  const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
+
+  // Context of one case: ancestor parts, statements it names, and every hook and mock.
+  const caseContext = (chain, refs) => {
+    const scopes = chain.filter(isHolder).map((n) => scopeItems(n));
+    for (const items of scopes) {
+      for (const it of items) {
+        it.on = it.always;
+        if (it.on) for (const id of it.idents) refs.add(id);
+      }
+    }
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const items of scopes) {
+        for (const it of items) {
+          if (it.on) continue;
+          let hit = false;
+          for (const n of it.names) if (refs.has(n)) hit = true;
+          if (!hit && ts.isExpressionStatement(it.st)) for (const id of it.idents) if (refs.has(id)) hit = true;
+          if (!hit) continue;
+          it.on = true;
+          grew = true;
+          for (const id of it.idents) refs.add(id);
+        }
+      }
+    }
+    const parts = [];
+    for (const node of chain) {
+      if (isHolder(node)) {
+        const texts = [];
+        for (const it of scopeItems(node)) {
+          if (!it.on) continue;
+          if (it.text === null) it.text = textOf(it.st);
+          texts.push(it.text);
+        }
+        parts.push(texts.join('\n'));
+      } else parts.push(contextOf(node));
+    }
+    return parts.filter(Boolean).join('\n\u0003\n');
   };
 
   const records = [];
@@ -231,17 +351,33 @@ const analyse = (file, text, ts) => {
     }
     const chain = [];
     for (let p = c.call.parent; p; p = p.parent) chain.unshift(p);
-    const ctx = chain.map(contextOf).filter(Boolean).join('\n\u0003\n');
-    const params = c.fn.parameters.map((p) => {
-      const t = [];
-      leaves(p, t);
-      return t.map(tokenText).join(' ');
-    });
+    const refs = new Set();
+    for (const part of [...c.fn.parameters, c.fn.body]) if (part) identifiersOf(part, refs);
+    const tableText = c.table ? c.table.map(textOf).join(' , ') : '';
+    if (c.table) for (const arg of c.table) identifiersOf(arg, refs);
+    for (const node of chain) {
+      if (isHolder(node)) continue;
+      for (const kid of flatChildren(node)) if (!hasCase.has(kid) && !punctuation.has(kid.kind)) identifiersOf(kid, refs);
+    }
+    const ctx = caseContext(chain, refs);
+    const params = c.fn.parameters.map(textOf);
+    const first = c.table && c.table[0];
+    if (first && ts.isArrayLiteralExpression(first)) {
+      const seenRows = new Set();
+      for (const el of first.elements) {
+        const row = textOf(el);
+        if (seenRows.has(row)) {
+          records.push(['R', rel, line(c.call), 0, '-', '-']);
+          break;
+        }
+        seenRows.add(row);
+      }
+    }
     const bodyTokens = [];
     if (c.fn.body) leaves(c.fn.body, bodyTokens);
     const exact = bodyTokens.map(tokenText);
     const shape = bodyTokens.map((t) => (literalKinds.has(t.kind) ? '\u0001L' : tokenText(t)));
-    const key = `${ctx}\n\u0004${params.join(',')}`;
+    const key = `${ctx}\n\u0004${params.join(',')}\n\u0005${tableText}`;
     records.push([
       'C',
       rel,

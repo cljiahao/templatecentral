@@ -87,8 +87,9 @@ has "NOTE a.test.ts:4: 2 test cases differ only in literal values" "$OUT" "ts ru
 lacks "FAIL" "$OUT" "ts rule 2 at 2 cases: no failure"
 run ts-shape-3
 check 1 "$EC" "ts rule 2 at 3 cases: exit"
-has "FAIL a.test.ts:4: 3 test cases in one file differ only in literal values (a.test.ts:4, a.test.ts:10, a.test.ts:16)" "$OUT" "ts rule 2 at 3 cases: locations"
-has "it.each / test.each, pytest.mark.parametrize" "$OUT" "ts rule 2 at 3 cases: names the fix"
+has "FAIL a.test.ts:4: 3 test cases in one file differ only in literal values." "$OUT" "ts rule 2 at 3 cases: message"
+has "Cases: a.test.ts:4, a.test.ts:10, a.test.ts:16." "$OUT" "ts rule 2 at 3 cases: names every case with file and line"
+has "merge them into one parameterised test (it.each / test.each, pytest.mark.parametrize) with one row per case" "$OUT" "ts rule 2 at 3 cases: names the fix"
 run ts-shape-cross-file
 check 0 "$EC" "ts same shape in 3 files: exit"
 lacks "NOTE" "$OUT" "ts same shape in 3 files: no note"
@@ -100,8 +101,8 @@ has "a.test.ts:7" "$OUT" "ts nested describe: innermost case"
 
 # Already parameterised, different setup, text in strings and comments, trivial bodies.
 run ts-parameterised
-check 0 "$EC" "ts it.each and test.each never flagged: exit"
-has "ok, 0 test cases compared" "$OUT" "ts it.each and test.each are not compared"
+check 0 "$EC" "ts it.each and test.each with different tables: exit"
+has "ok, 4 test cases compared" "$OUT" "ts it.each and test.each are compared"
 run ts-different-setup
 check 0 "$EC" "ts same body under different beforeEach: exit"
 lacks "FAIL" "$OUT" "ts same body under different beforeEach: no failure"
@@ -131,14 +132,15 @@ check 0 "$EC" "py rule 2 at 2 cases: exit"
 has "NOTE test_a.py:4: 2 test cases differ only in literal values" "$OUT" "py rule 2 at 2 cases: NOTE"
 run py-shape-3
 check 1 "$EC" "py rule 2 at 3 cases: exit"
-has "FAIL test_a.py:4: 3 test cases in one file differ only in literal values (test_a.py:4, test_a.py:12, test_a.py:21)" "$OUT" "py rule 2 at 3 cases: locations, class method included"
+has "FAIL test_a.py:4: 3 test cases in one file differ only in literal values." "$OUT"
+has "Cases: test_a.py:4, test_a.py:12, test_a.py:21." "$OUT" "py rule 2 at 3 cases: locations, class method included"
 has "pytest.mark.parametrize" "$OUT" "py rule 2 at 3 cases: names the fix"
 run py-shape-cross-file
 check 0 "$EC" "py same shape in 3 files: exit"
 lacks "NOTE" "$OUT" "py same shape in 3 files: no note"
 run py-parameterised
-check 0 "$EC" "py parametrize never flagged: exit"
-has "ok, 0 test cases compared" "$OUT" "py parametrize cases are not compared"
+check 0 "$EC" "py parametrize with different tables: exit"
+has "ok, 3 test cases compared" "$OUT" "py parametrize cases are compared"
 run py-different-setup
 check 0 "$EC" "py same body with other fixtures: exit"
 lacks "FAIL" "$OUT" "py same body with other fixtures: no failure"
@@ -163,8 +165,9 @@ P=$(mktemp -d "$T/p.XXXXXX")
 mkdir -p "$P/src"
 printf 'export const a = 1;\n' > "$P/src/a.ts"
 OUT=$(bash "$CHECK" "$P" 2>&1)
-check 0 "$?" "no test files: exit"
-has "no test files found" "$OUT" "no test files: says so"
+check 0 "$?" "empty project: exit"
+has "nothing to check" "$OUT" "empty project: says so, not a pass of compared tests"
+lacks "compared" "$OUT" "empty project: no compared count"
 project ts-exact-dup
 mkdir -p "$P/node_modules/dep" "$P/dist" "$P/.venv" "$P/venv2/lib" "$P/.claude/.harness-base"
 cp "$P/a.test.ts" "$P/node_modules/dep/x.test.ts"
@@ -285,9 +288,10 @@ detect det-ts-jest-globals "ts @jest/globals import" "2 test cases have the same
 detect det-ts-namespace "ts namespace import (v.it, v.test)" "2 test cases have the same body"
 detect det-ts-handler "ts it('a', handler) with same-file handlers" "2 test cases have the same body"
 run det-ts-handler-unresolved
-check 0 "$EC" "ts unresolved named handler: exit"
+check 2 "$EC" "ts unresolved named handler only: exit 2, nothing could be compared"
 has "NOTE a.test.ts:3: the case passes a named handler that is not defined in this file; counted, not compared." "$OUT" "ts unresolved named handler: NOTE"
-has "ok, 0 test cases compared, 2 read" "$OUT" "ts unresolved named handler: counted, not compared"
+has "2 test cases were read but none could be compared" "$OUT" "ts unresolved named handler: names the problem"
+lacks "ok," "$OUT" "ts unresolved named handler: never reads as ok"
 detect det-ts-in-if "ts tests inside an if block" "2 test cases have the same body"
 detect det-ts-in-try "ts tests inside a try block" "2 test cases have the same body"
 detect det-ts-in-helper "ts tests registered by a helper function" "2 test cases have the same body"
@@ -409,6 +413,157 @@ sed 's|^  it.skip|  // check-duplicate-tests-disable\n  // eslint-disable-next-l
 mv "$P/b.tmp" "$P/a.test.ts"
 OUT=$(SKIP_DUPLICATE_TESTS=1 DUPLICATE_TESTS_SKIP=1 CHECK_DUPLICATE_TESTS=0 bash "$CHECK" "$P" 2>&1)
 check 1 "$?" "inline comment and environment variables do not switch the check off"
+
+# ---------------------------------------------------------------------------------------------------------------
+# Round 2. Each major fix has a positive case (must fail) and a clean control (must pass, both cases read).
+newp() { # newp — empty project with typescript installed; sets P.
+  P=$(mktemp -d "$T/p.XXXXXX")
+  mkdir -p "$P/node_modules"
+  ln -s "$TSDIR" "$P/node_modules/typescript"
+}
+ts_case() { # ts_case <file> <extra top-level text> <expected number> — one case; the body differs only in the number.
+  mkdir -p "${1%/*}"
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\n%sit('x', () => {\n  const r = f(1);\n  expect(r.a).toBe(%s);\n  expect(r.b).toBe(3);\n});\n" "$2" "$3" > "$1"
+}
+py_case() { # py_case <file> <extra top-level text> <expected number>
+  mkdir -p "${1%/*}"
+  printf "from f import f\n%s\n\ndef test_x():\n    r = f(1)\n    assert r.a == %s\n    assert r.b == 3\n" "$2" "$3" > "$1"
+}
+verdict() { # verdict <want-exit> <description> — runs the check on $P
+  OUT=$(bash "$CHECK" "$P" 2>&1)
+  EC=$?
+  check "$1" "$EC" "$2: exit"
+}
+
+# Major 1: build-output and tool folder names are skipped at the project root only.
+for d in env out build dist coverage; do
+  newp
+  ts_case "$P/src/$d/a.test.ts" "" 2
+  ts_case "$P/src/$d/b.test.ts" "" 2
+  verdict 1 "ts duplicates under src/$d"
+  has "2 test cases have the same body (src/$d/a.test.ts:3, src/$d/b.test.ts:3)" "$OUT" "ts duplicates under src/$d: flagged"
+  ts_case "$P/src/$d/b.test.ts" "" 9
+  verdict 0 "ts clean control under src/$d"
+  has "ok, 2 test cases compared" "$OUT" "ts clean control under src/$d: both read"
+  newp
+  py_case "$P/src/$d/test_a.py" "" 2
+  py_case "$P/src/$d/test_b.py" "" 2
+  verdict 1 "py duplicates under src/$d"
+  has "2 test cases have the same body" "$OUT" "py duplicates under src/$d: flagged"
+  py_case "$P/src/$d/test_b.py" "" 9
+  verdict 0 "py clean control under src/$d"
+  has "ok, 2 test cases compared" "$OUT" "py clean control under src/$d: both read"
+done
+newp
+ts_case "$P/env/a.test.ts" "" 2
+ts_case "$P/env/b.test.ts" "" 2
+ts_case "$P/coverage/a.test.ts" "" 2
+ts_case "$P/coverage/b.test.ts" "" 2
+verdict 0 "env and coverage at the project root are still skipped"
+lacks "FAIL" "$OUT" "env and coverage at the project root: nothing read"
+newp
+ts_case "$P/src/vendor/node_modules/pkg/a.test.ts" "" 2
+ts_case "$P/src/vendor/node_modules/pkg/b.test.ts" "" 2
+verdict 0 "node_modules is skipped at any depth"
+lacks "FAIL" "$OUT" "node_modules at depth: nothing read"
+
+# Major 2: a top-level statement the body does not name is not context.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" $'import \'z\';\nconst k = 1;\n' 2
+verdict 1 "ts unrelated import and const in the second file"
+has "2 test cases have the same body (a.test.ts:3, b.test.ts:5)" "$OUT" "ts unrelated statements: flagged"
+ts_case "$P/b.test.ts" $'const k = 1;\nfunction helper() { return k; }\n' 2
+verdict 1 "ts unrelated const and function in the second file"
+ts_case "$P/a.test.ts" $'const f2 = 1;\n' 2
+ts_case "$P/b.test.ts" $'const f2 = 2;\n' 2
+verdict 1 "ts different values of an unreferenced const"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst k = 1;\nit('x', () => {\n  const r = f(k);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$P/a.test.ts"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst k = 2;\nit('x', () => {\n  const r = f(k);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$P/b.test.ts"
+verdict 0 "ts clean control: the const the body names differs"
+has "ok, 2 test cases compared" "$OUT" "ts clean control, named const differs: both read"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst k = 1;\nconst m = k + 1;\nit('x', () => {\n  const r = f(m);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$P/a.test.ts"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst k = 5;\nconst m = k + 1;\nit('x', () => {\n  const r = f(m);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$P/b.test.ts"
+verdict 0 "ts clean control: a const the named const is built from differs"
+newp
+py_case "$P/test_a.py" "" 2
+py_case "$P/test_b.py" $'import os\nK = 1\n' 2
+verdict 1 "py unrelated import and constant in the second file"
+has "2 test cases have the same body (test_a.py:4, test_b.py:6)" "$OUT" "py unrelated statements: flagged"
+printf "from f import f\nK = 1\n\n\ndef test_x():\n    r = f(K)\n    assert r.a == 2\n    assert r.b == 3\n" > "$P/test_a.py"
+printf "from f import f\nK = 2\n\n\ndef test_x():\n    r = f(K)\n    assert r.a == 2\n    assert r.b == 3\n" > "$P/test_b.py"
+verdict 0 "py clean control: the constant the body names differs"
+has "ok, 2 test cases compared" "$OUT" "py clean control, named constant differs: both read"
+
+# Major 3: parameterised cases are compared with their table in the key.
+newp
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nit.each([[1, 2], [3, 4]])('a %%i', (a, b) => {\n  const r = f(a);\n  expect(r.a).toBe(b);\n  expect(r.b).toBe(3);\n});\nit.each([[1, 2], [3, 4]])('b %%i', (a, b) => {\n  const r = f(a);\n  expect(r.a).toBe(b);\n  expect(r.b).toBe(3);\n});\n" > "$P/a.test.ts"
+verdict 1 "ts two it.each blocks with the same table and body"
+has "2 test cases have the same body (a.test.ts:3, a.test.ts:8)" "$OUT" "ts same table and body: flagged"
+sed "s/\[3, 4\]\])('b /[3, 5]])('b /" "$P/a.test.ts" > "$P/c.tmp" && mv "$P/c.tmp" "$P/a.test.ts"
+verdict 0 "ts clean control: second table differs"
+has "ok, 2 test cases compared" "$OUT" "ts clean control, table differs: both read"
+sed 's/it.each/it.for/' "$P/a.test.ts" > "$P/c.tmp" && mv "$P/c.tmp" "$P/a.test.ts"
+verdict 0 "ts it.for with different tables"
+sed 's/\[3, 5\]\])/[3, 4]])/' "$P/a.test.ts" > "$P/c.tmp" && mv "$P/c.tmp" "$P/a.test.ts"
+verdict 1 "ts two it.for blocks with the same table and body"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nit.each([[1, 2], [3, 4], [1, 2]])('a %%i', (a, b) => {\n  expect(f(a).a).toBe(b);\n});\n" > "$P/a.test.ts"
+rm "$P/b.test.ts" 2> /dev/null
+verdict 1 "ts one table repeating a row"
+has "a.test.ts:3: the parameter table repeats a row" "$OUT" "ts repeated row: names the case"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nit.each\`\n  a | b\n  \${1} | \${2}\n\`('t', ({ a, b }) => {\n  expect(f(a).a).toBe(b);\n});\nit.each\`\n  a | b\n  \${1} | \${2}\n\`('t', ({ a, b }) => {\n  expect(f(a).a).toBe(b);\n});\n" > "$P/a.test.ts"
+verdict 1 "ts two tagged-template tables, same table and body"
+newp
+printf "import pytest\nfrom f import f\n\n\n@pytest.mark.parametrize(\"x\", [1, 2])\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n\n\n@pytest.mark.parametrize(\"x\", [1, 2])\ndef test_b(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n" > "$P/test_a.py"
+verdict 1 "py two parametrize tests with the same table and body"
+has "2 test cases have the same body (test_a.py:6, test_a.py:13)" "$OUT" "py same table and body: flagged"
+sed '12s/\[1, 2\]/[1, 3]/' "$P/test_a.py" > "$P/c.tmp" && mv "$P/c.tmp" "$P/test_a.py"
+verdict 0 "py clean control: second table differs"
+has "ok, 2 test cases compared" "$OUT" "py clean control, table differs: both read"
+printf "import pytest\nfrom f import f\n\n\n@pytest.mark.parametrize(\"x\", [1, 2, 1])\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n" > "$P/test_a.py"
+verdict 1 "py one table repeating a row"
+has "test_a.py:6: the parameter table repeats a row" "$OUT" "py repeated row: names the case"
+
+# Minor 4: nothing compared is never a pass.
+newp
+printf '{"scripts":{"test":"vitest run"}}\n' > "$P/package.json"
+verdict 2 "package.json test script, no test files"
+has "declares tests (package.json)" "$OUT" "test script, no files: names what declares tests"
+has "searched" "$OUT" "test script, no files: names what was searched"
+newp
+printf '[pytest]\ntestpaths = tests\n' > "$P/pytest.ini"
+verdict 2 "pytest.ini, no test files"
+newp
+printf 'export default {};\n' > "$P/vitest.config.ts"
+verdict 2 "vitest config, no test files"
+newp
+printf '[tool.pytest.ini_options]\naddopts = "-q"\n' > "$P/pyproject.toml"
+verdict 2 "pyproject pytest section, no test files"
+newp
+printf '{"scripts":{"build":"tsc"}}\n' > "$P/package.json"
+verdict 0 "package.json without a test script, no test files"
+has "nothing to check" "$OUT" "no declared tests: distinct line"
+
+# Minor 5: more test file forms and call aliases.
+for name in x.cy.ts x.cy.tsx x.test-d.ts __tests__/x.cjs __tests__/x.cts __tests__/x.mts; do
+  newp
+  ts_case "$P/$name" "" 2
+  ts_case "$P/${name/x./y.}" "" 2
+  verdict 1 "duplicates in $name form"
+  has "2 test cases have the same body" "$OUT" "duplicates in $name form: flagged"
+done
+for alias in xit xtest fit; do
+  newp
+  printf "import { f } from './f';\nit('x', () => {\n  const r = f(1);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n%s('y', () => {\n  const r = f(1);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" "$alias" > "$P/a.test.ts"
+  verdict 1 "$alias is a test case"
+  has "2 test cases have the same body" "$OUT" "$alias: flagged"
+done
+for alias in xdescribe fdescribe; do
+  newp
+  printf "import { f } from './f';\nit('x', () => {\n  const r = f(1);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n%s('s', () => {\n  it('y', () => {\n    const r = f(1);\n    expect(r.a).toBe(2);\n    expect(r.b).toBe(3);\n  });\n});\n" "$alias" > "$P/a.test.ts"
+  verdict 1 "$alias is a suite"
+  has "2 test cases have the same body" "$OUT" "$alias: flagged"
+done
 
 # Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
 cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out

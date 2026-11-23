@@ -4,21 +4,24 @@
 # parser (typescript from the project's own node_modules for TS/JS, python ast and tokenize for Python), and compares
 # case bodies as token sequences: comments, whitespace and the test title never count.
 # Rule 1 (fails): two cases with the same body token sequence AND the same context, in one file or two. Fix: delete one.
-#   The context is everything around the case that can change what the body does: for the file, its imports and every
-#   top-level statement that is not a test; for each enclosing describe, class or loop, every statement that is not a
-#   test (constants, fixtures, decorators, class attributes, setup and teardown hooks, test.use, mocks and patches, loop
-#   headers and data); the case's own decorators and parameters; for pytest, every conftest.py up to the project root.
-#   Relative import paths count as project paths, so './a' in two folders is two modules. Titles never count.
+#   The context is what can change what the body does: the imports, constants, helpers and fixtures the body names (and,
+#   transitively, what those name), at the top level and in each enclosing describe or class; every setup and teardown
+#   hook, mock, patch, autouse fixture, loop header and loop data around the case; the case's own decorators, parameters
+#   and parameter table; for pytest, every conftest.py up to the project root. A top-level statement the body does not
+#   name (an unrelated import or constant) is not context. Relative import paths count as project paths, so './a' in
+#   two folders is two modules. Titles never count.
 # Rule 2 (fails at SHAPE_GROUP_MIN or more, NOTE below that): cases of one file whose bodies match once every string,
 #   number and boolean is replaced by a placeholder, with the same context. Fix: one parameterised test (it.each,
 #   test.each, pytest.mark.parametrize). Bodies under MIN_BODY_TOKENS tokens are skipped here, never for rule 1.
-# A case already parameterised (it.each, test.each, parametrize) is never compared: its table differs per row.
+# A parameterised case (it.each, it.for, parametrize) is compared with its table as part of the key: two cases with the
+#   same table and body fail. A table that repeats one row fails too.
 # A case that passes a named handler the same file does not define (it('a', handler)) is counted and gets a NOTE.
 # Known limits, accepted: a no-op statement or a reordered body defeats rule 1, and the same shape split across files
 #   defeats rule 2. The check finds copy-paste, not every semantic duplicate.
 # Helpers print one record per case: kind, file, line, token count, exact key, shape key (tab-separated).
-# Exit 0 clean (or no test files), 1 findings, 2 cannot run (missing node, python3 or typescript, unparsable file,
-#   a file name with a tab or newline, test files that hold no test case).
+# Exit 0 clean (or an empty project that declares no tests), 1 findings, 2 cannot run (missing node, python3 or
+#   typescript, unparsable file, a file name with a tab or newline, test files that hold no test case, a declared test
+#   script or config with no test file found, test cases that were read but none compared).
 # There is no inline ignore and no environment switch; the only way to stop the check is to not run it.
 set -uo pipefail
 export LC_ALL=C
@@ -28,8 +31,10 @@ export LC_ALL=C
 MIN_BODY_TOKENS=30
 # Rule 2 fails when a file holds at least this many same-shape cases; two cases only print a NOTE.
 SHAPE_GROUP_MIN=3
-# Folders never read (any depth), plus any folder holding a pyvenv.cfg.
-SKIP_DIRS='node_modules .next .nuxt dist build out coverage .venv venv env __pycache__ .git .turbo .claude .tox .mypy_cache .pytest_cache .ruff_cache site-packages'
+# Folders never read at any depth, plus any folder holding a pyvenv.cfg.
+SKIP_ANY='node_modules .git .venv venv __pycache__ site-packages .mypy_cache .pytest_cache .ruff_cache'
+# Build output and tool folders skipped only at the project root: src/env or src/out can hold real tests.
+SKIP_ROOT='.next .nuxt dist build out coverage env .turbo .claude .tox'
 
 die() {
   printf 'check-duplicate-tests: %s\n' "$1" >&2
@@ -53,9 +58,13 @@ wd=$(mktemp -d "${TMPDIR:-/tmp}/duplicate-tests.XXXXXX") || die "cannot create a
 
 prune_args=()
 first=1
-for d in $SKIP_DIRS; do
+for d in $SKIP_ANY; do
   if [ "$first" -eq 1 ]; then first=0; else prune_args+=(-o); fi
   prune_args+=(-name "$d")
+done
+root_glob=$(printf '%s' "$root" | sed 's/[][*?\\]/\\&/g')
+for d in $SKIP_ROOT; do
+  prune_args+=(-o -path "$root_glob/$d")
 done
 
 find "$root" -name pyvenv.cfg -type f > "$wd/venvs" 2> /dev/null || die "cannot walk $root"
@@ -67,7 +76,8 @@ find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( \
   -o -name '*.spec.ts' -o -name '*.spec.tsx' -o -name '*.spec.js' -o -name '*.spec.jsx' -o -name '*.spec.mjs' -o -name '*.spec.cjs' -o -name '*.spec.mts' -o -name '*.spec.cts' \
   -o -name '*-test.ts' -o -name '*-test.tsx' -o -name '*-test.js' -o -name '*-test.jsx' -o -name '*-test.mjs' -o -name '*-test.cjs' -o -name '*-test.mts' -o -name '*-test.cts' \
   -o -name '*-spec.ts' -o -name '*-spec.tsx' -o -name '*-spec.js' -o -name '*-spec.jsx' -o -name '*-spec.mjs' -o -name '*-spec.cjs' -o -name '*-spec.mts' -o -name '*-spec.cts' \
-  -o -path '*/__tests__/*.ts' -o -path '*/__tests__/*.tsx' -o -path '*/__tests__/*.js' -o -path '*/__tests__/*.jsx' -o -path '*/__tests__/*.mjs' -o -path '*/__tests__/*.mts' \
+  -o -name '*.cy.ts' -o -name '*.cy.tsx' -o -name '*.test-d.ts' \
+  -o -path '*/__tests__/*.ts' -o -path '*/__tests__/*.tsx' -o -path '*/__tests__/*.js' -o -path '*/__tests__/*.jsx' -o -path '*/__tests__/*.mjs' -o -path '*/__tests__/*.cjs' -o -path '*/__tests__/*.mts' -o -path '*/__tests__/*.cts' \
   \) -print0 2> /dev/null | sort -z > "$wd/ts.raw" || die "cannot walk $root"
 find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( -name 'test*.py' -o -name '*_test.py' \) -print0 2> /dev/null | sort -z > "$wd/py.raw" || die "cannot walk $root"
 
@@ -113,6 +123,20 @@ strip_venvs() {
     printf '%s\0' "${f#"$root"/}" >> "$2"
   done < "$1"
 }
+# declared_tests: prints what declares tests (a package.json test script, a vitest or jest config, a pytest config), or nothing.
+declared_tests() {
+  local f found=
+  while IFS= read -r f; do
+    case "${f##*/}" in
+      package.json) grep -Eq '"test(:[^"]*)?"[[:space:]]*:' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
+      pyproject.toml) grep -Eq '^\[tool\.pytest' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
+      setup.cfg | tox.ini) grep -Eq '^\[(tool:)?pytest\]' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
+      *) found="$found ${f#"$root"/}" ;;
+    esac
+  done < <(find "$root" -maxdepth 2 \( -name node_modules -o -name .git \) -prune -o -type f \( -name package.json -o -name 'vitest.config.*' -o -name 'jest.config.*' -o -name pytest.ini -o -name pyproject.toml -o -name setup.cfg -o -name tox.ini \) -print 2> /dev/null | sort)
+  printf '%s' "${found# }"
+}
+
 : > "$wd/notes"
 : > "$wd/real"
 # Paths of the regular test files first, so a symlink to one of them is skipped, not compared with itself.
@@ -127,7 +151,12 @@ strip_venvs "$wd/py.raw" "$wd/py.list"
 
 : > "$wd/records"
 if [ ! -s "$wd/ts.list" ] && [ ! -s "$wd/py.list" ]; then
-  printf 'check-duplicate-tests: no test files found, nothing to compare\n'
+  cat "$wd/notes"
+  declared=$(declared_tests)
+  if [ -n "$declared" ]; then
+    die "no test files found, but the project declares tests ($declared): searched $root for *.test.*, *.spec.*, *-test.*, *-spec.*, *.cy.ts(x), *.test-d.ts, __tests__/*, test*.py and *_test.py, skipping $SKIP_ANY and, at the project root, $SKIP_ROOT; move the tests under a searched name or fix the layout"
+  fi
+  printf 'check-duplicate-tests: nothing to check, no test files and no declared test script or config\n'
   exit 0
 fi
 
@@ -147,13 +176,18 @@ if [ "$ncases" -eq 0 ]; then
   die "test files exist but hold no test case the check recognises: the check would pass without reading anything"
 fi
 
-# Records are: kind (C compared, P parameterised, U unresolved handler, T no body), file, line, tokens, exact key, shape key.
+# Records are: kind (C compared, R repeated table row, U unresolved handler, T no body), file, line, tokens, exact key, shape key.
 # Findings go to stdout, FAIL lines first.
 awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
   function loc(i) { return F[i] ":" L[i] }
   {
     if ($1 == "U") {
       printf "NOTE %s:%s: the case passes a named handler that is not defined in this file; counted, not compared.\n", $2, $3
+      next
+    }
+    if ($1 == "R") {
+      printf "FAIL %s:%s: the parameter table repeats a row, so one case runs twice. Fix: delete the repeated row.\n", $2, $3
+      rows++
       next
     }
     if ($1 != "C") next
@@ -165,7 +199,7 @@ awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
     EL[$5, EC[$5]] = n
   }
   END {
-    fails = 0
+    fails = rows + 0
     for (k = 1; k <= ne; k++) {
       e = Eorder[k]
       if (EC[e] < 2) continue
@@ -192,7 +226,7 @@ awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
       list = ""
       for (j = 1; j <= c; j++) list = list (j > 1 ? ", " : "") loc(SL[key, j])
       if (c >= group) {
-        printf "FAIL %s: %d test cases in one file differ only in literal values (%s). Fix: merge them into one parameterised test (it.each / test.each, pytest.mark.parametrize).\n", loc(SL[key, 1]), c, list
+        printf "FAIL %s: %d test cases in one file differ only in literal values. Fix: merge them into one parameterised test (it.each / test.each, pytest.mark.parametrize) with one row per case. Cases: %s.\n", loc(SL[key, 1]), c, list
         fails++
       } else {
         printf "NOTE %s: %d test cases differ only in literal values (%s). Consider one parameterised test when a third case arrives.\n", loc(SL[key, 1]), c, list
@@ -206,6 +240,9 @@ rc=$?
 case "$rc" in 0 | 1) ;; *) die "internal failure while comparing test cases" ;; esac
 ncompared=$(cat "$wd/count")
 cat "$wd/notes" "$wd/out" | sort -s -k1,1
+if [ "$ncompared" -eq 0 ]; then
+  die "$ncases test cases were read but none could be compared (named handlers the file does not define): inline the test bodies so the check can read them"
+fi
 if [ "$rc" -eq 0 ]; then
   printf 'check-duplicate-tests: ok, %s test cases compared, %s read\n' "$ncompared" "$ncases"
 fi
