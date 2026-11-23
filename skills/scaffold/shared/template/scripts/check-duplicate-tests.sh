@@ -45,7 +45,7 @@ die() {
 HERE=$(cd "$(dirname "$0")" 2> /dev/null && pwd) || die "cannot find the script folder"
 TARGET=${1:-$HERE/..}
 [ -d "$TARGET" ] || die "not a folder: $TARGET"
-root=$(cd "$TARGET" 2> /dev/null && pwd) || die "cannot enter $TARGET"
+root=$(cd "$TARGET" 2> /dev/null && pwd -P) || die "cannot enter $TARGET"
 
 for tool in awk find mktemp rm sort; do
   command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
@@ -91,10 +91,10 @@ resolve_link() {
 }
 
 # filter_list <raw> <out>: drops files under a virtual environment and, in a git work tree, files git does not list
-# (ignored build output). A name with a tab or newline would break the tab-separated records: that stops the run.
+# (ignored build output), in one pass over both lists with no process per file. Adds the count git dropped to ndropped.
+# A name with a tab or newline would break the tab-separated records: that stops the run.
 filter_list() {
-  local f dir skip v
-  : > "$2"
+  local f dir skip v before after
   while IFS= read -r -d '' f; do
     case "$f" in
       *$'\t'* | *$'\n'*) die "a test file name holds a tab or newline: rename it ($(printf '%s' "$f" | tr '\t\n' '??'))" ;;
@@ -104,10 +104,19 @@ filter_list() {
       dir=${v%/*}
       case "$f" in "$dir"/*) skip=1 ;; esac
     done < "$wd/venvs"
-    [ "$skip" -eq 0 ] || continue
-    if [ "$in_git" -eq 1 ] && ! grep -Fxq -- "${f#"$root"/}" "$wd/gitlist"; then continue; fi
-    printf '%s\0' "$f" >> "$2"
-  done < "$1"
+    [ "$skip" -eq 1 ] || printf '%s\n' "$f"
+  done < "$1" > "$wd/cand"
+  if [ "$in_git" -eq 1 ]; then
+    before=$(awk 'END { print NR }' "$wd/cand")
+    TC_ROOT_PREFIX="$root/" awk 'BEGIN { pre = ENVIRON["TC_ROOT_PREFIX"]; n = length(pre) }
+      NR == FNR { g[$0] = 1; next }
+      substr($0, 1, n) == pre && (substr($0, n + 1) in g) { print }' "$wd/gitlist" "$wd/cand" > "$wd/cand.git" || die "cannot compare the file list with git's"
+    after=$(awk 'END { print NR }' "$wd/cand.git")
+    ndropped=$((ndropped + before - after))
+    tr '\n' '\0' < "$wd/cand.git" > "$2"
+  else
+    tr '\n' '\0' < "$wd/cand" > "$2"
+  fi
 }
 
 # drop_links <filtered> <out>: drops unusable symlinks and links to a file already listed, writes root-relative NUL-separated names.
@@ -147,6 +156,7 @@ declared_tests() {
 # Inside a git work tree the file list is what git tracks plus what it does not ignore, so build output drops out.
 : > "$wd/notes"
 in_git=0
+ndropped=0
 if command -v git > /dev/null 2>&1 && [ "$(git -C "$root" rev-parse --is-inside-work-tree 2> /dev/null)" = true ]; then
   in_git=1
   git -C "$root" ls-files -z -co --exclude-standard 2> /dev/null | tr '\0' '\n' > "$wd/gitlist" || die "cannot list the files of the git work tree $root"
@@ -169,6 +179,9 @@ drop_links "$wd/py.kept" "$wd/py.list"
 : > "$wd/records"
 if [ ! -s "$wd/ts.list" ] && [ ! -s "$wd/py.list" ]; then
   cat "$wd/notes"
+  if [ "$ndropped" -gt 0 ]; then
+    die "$ndropped test files were found but every one is ignored by git (a .gitignore, .git/info/exclude or global core.excludesFile rule, such as *.test.ts, is the cause): the check would pass without reading anything; remove that ignore rule for the test files"
+  fi
   declared=$(declared_tests)
   if [ -n "$declared" ]; then
     die "no test files found, but the project declares tests ($declared): searched $root for *.test.*, *.spec.*, *-test.*, *-spec.*, *.cy.ts(x), *.test-d.ts, __tests__/*, test*.py and *_test.py, skipping $SKIP_ANY (and, in a git work tree, files git ignores); move the tests under a searched name or fix the layout"

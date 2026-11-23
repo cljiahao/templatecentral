@@ -464,6 +464,7 @@ ts_case "$P/env/a.test.ts" "" 2
 ts_case "$P/env/b.test.ts" "" 2
 ts_case "$P/coverage/a.test.ts" "" 2
 ts_case "$P/coverage/b.test.ts" "" 2
+ts_case "$P/src/c.test.ts" "" 7
 verdict 0 "env and coverage that git ignores are not read"
 lacks "FAIL" "$OUT" "env and coverage that git ignores: nothing read"
 newp
@@ -777,8 +778,56 @@ py_case "$P/test_a.py" '_c = "a"' 2
 py_case "$P/test_b.py" '_c = "b"' 2
 verdict 1 "py clean control: unreferenced plain constants stay filtered"
 
-# Round 4, minor 8: the Python version message says what to do.
-has "needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" "$(cat "$SCRIPTS/duplicate_tests_py.py")" "py version message"
+# Round 5, item 2: a table is row-checked only when it is a const that the file never changes.
+tsdecl() { # tsdecl <declaration and changes> — one it.each over T
+  printf "import { expect, it } from 'vitest';\nimport { f } from './f';\n%s\nit.each(T)('a %%i', (a, b) => {\n  expect(f(a).a).toBe(b);\n  expect(f(a).b).toBe(3);\n});\n" "$1" > "$P/a.test.ts"
+}
+newp
+tsdecl "let T = [[1, 1], [1, 1]]; T = [[1, 1], [2, 2]];"
+verdict 0 "ts let table reassigned before use"
+tsdecl "const T = [[1, 1], [1, 1]]; T.push([2, 2]);"
+verdict 0 "ts const table changed by push"
+tsdecl "const T = [[1, 1], [1, 1]]; T[1] = [2, 2];"
+verdict 0 "ts const table changed by index assignment"
+tsdecl "let T = [[1, 1], [1, 1]];"
+verdict 0 "ts let table never changed is still not row-checked"
+tsdecl "const T = [[1, 1], [1, 1]]; const n = T.length;"
+verdict 1 "ts clean control: const table only read still repeats a row"
+has "the parameter table repeats a row" "$OUT" "ts const table only read: flagged"
+
+# Round 5, item 3: a project path that is a symlink is followed.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+ln -s "$P" "$T/linked-project"
+OUT=$(bash "$CHECK" "$T/linked-project" 2>&1)
+EC=$?
+check 1 "$EC" "symlinked project path: duplicates found"
+has "have the same body" "$OUT" "symlinked project path: reads the tests"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "symlinked project path: real path gives the same answer"
+
+# Round 5, item 4: test files that exist but are all ignored by git stop the run.
+newp
+ts_case "$P/a.test.ts" "" 2
+ts_case "$P/b.test.ts" "" 2
+printf '*.test.ts\n' > "$P/.git/info/exclude"
+verdict 2 "every test file ignored by git"
+has "2 test files were found but every one is ignored by git" "$OUT" "every test file ignored: names the cause and the count"
+rm -f "$P/.git/info/exclude"
+verdict 1 "clean control: nothing ignored, duplicates found"
+ts_case "$P/c.test.ts" "" 5
+printf 'a.test.ts\nb.test.ts\n' > "$P/.git/info/exclude"
+verdict 0 "clean control: some test files ignored, one still read"
+
+# Round 5, item 5: the Python version message, through an interpreter that reports an old version.
+newp
+py_case "$P/test_a.py" "" 2
+mkdir -p "$P/.venv/bin"
+printf '#!/bin/sh\nexec python3 -I -c '"'"'import runpy, sys; sys.version_info = (3, 7, 0, "final", 0); sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name="__main__")'"'"' "$@"\n' > "$P/.venv/bin/python3"
+chmod +x "$P/.venv/bin/python3"
+verdict 2 "old python interpreter"
+has "is too old: this check needs python 3.8 or newer; use the project's .venv/bin/python3 or install a newer Python" "$OUT" "old python interpreter: message says what to do"
 
 # Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
 cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out
@@ -788,6 +837,16 @@ cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out
 under() { # under <seconds> <"user sys">
   printf '%s\n' "$2" | awk -v max="$1" '{ print ($1 + $2 < max) ? "yes" : "no" }'
 }
+# Round 5, item 1: the git file list is intersected in one pass, with no process per test file. 1500 one-case files;
+# one grep per file costs about 7 s of CPU time here, one pass about 2.6 s.
+newp
+mkdir -p "$P/src"
+awk 'BEGIN { for (i = 1; i <= 1500; i++) { out = sprintf("%s/src/t%d.test.ts", ARGV[1], i); printf "import { expect, it } from \"vitest\";\nit(\"c\", () => {\n  expect(f%d(1)).toBe(%d);\n});\n", i, i > out; close(out) } }' "$P"
+CPU=$(cpu "$P")
+has "ok, 1500 test cases compared" "$(cat "$T/time.out")" "1500 files: all compared"
+check yes "$(under 5 "$CPU")" "1500 test files in a git work tree take under 5 seconds of CPU time (user+sys: $CPU)"
+echo "1500 files, git list, CPU time (user sys): $CPU"
+
 P=$(mktemp -d "$T/p.XXXXXX")
 mkdir -p "$P/node_modules" "$P/pytests"
 ln -s "$TSDIR" "$P/node_modules/typescript"

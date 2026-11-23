@@ -338,7 +338,34 @@ const analyse = (file, text, ts) => {
   };
   const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
 
-  // The array literal an identifier names in the nearest enclosing scope, or null unless exactly one same-file array literal.
+  // True when the file changes the array a name holds: an assignment, an index or property write, ++/--, delete, or a mutating method call.
+  const MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin']);
+  const isWrite = (n) => {
+    const par = n.parent;
+    if (!par) return false;
+    if (ts.isBinaryExpression(par) && par.left === n) return par.operatorToken.kind >= K.FirstAssignment && par.operatorToken.kind <= K.LastAssignment;
+    if ((ts.isPrefixUnaryExpression(par) || ts.isPostfixUnaryExpression(par)) && (par.operator === K.PlusPlusToken || par.operator === K.MinusMinusToken)) return true;
+    return ts.isDeleteExpression(par) && par.expression === n;
+  };
+  const mutated = (name, decl) => {
+    let hit = false;
+    const walk = (n) => {
+      if (hit) return;
+      if (ts.isIdentifier(n) && n.text === name && n !== decl.name) {
+        const par = n.parent;
+        if (isWrite(n)) hit = true;
+        else if (par && (ts.isElementAccessExpression(par) || ts.isPropertyAccessExpression(par)) && par.expression === n) {
+          if (isWrite(par)) hit = true;
+          else if (ts.isPropertyAccessExpression(par) && MUTATORS.has(par.name.text) && par.parent && ts.isCallExpression(par.parent) && par.parent.expression === par) hit = true;
+        }
+      }
+      ts.forEachChild(n, walk);
+    };
+    walk(sf);
+    return hit;
+  };
+
+  // The array literal an identifier names in the nearest enclosing scope, or null unless exactly one same-file array literal in a const never changed.
   const resolveTable = (id, from) => {
     for (let p = from.parent; p; p = p.parent) {
       if ((isFunctionLike(p) || ts.isFunctionDeclaration(p)) && p.parameters.some((param) => boundIn(param.name).has(id.text))) return null;
@@ -348,6 +375,7 @@ const analyse = (file, text, ts) => {
       if (hits.length > 1 || !ts.isVariableStatement(hits[0])) return null;
       const decls = hits[0].declarationList.declarations.filter((d) => boundIn(d.name).has(id.text));
       if (decls.length !== 1 || !ts.isIdentifier(decls[0].name) || !decls[0].initializer) return null;
+      if (!(hits[0].declarationList.flags & ts.NodeFlags.Const) || mutated(id.text, decls[0])) return null;
       const init = unwrap(decls[0].initializer);
       return ts.isArrayLiteralExpression(init) ? init : null;
     }
