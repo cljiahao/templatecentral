@@ -10,13 +10,13 @@ Write the few tests that protect behaviour you added or changed, run the suite, 
 
 ## Steps
 
-1. For code added or changed this session: list its distinct behaviours, check which existing tests already cover them, extend those, write new tests only for the gap. The calling skill (`add`) supplies the stack's test conventions
+1. For code added or changed this session: list its distinct behaviours, check which existing tests already cover them, extend those, write new tests only for the gap. If not called by `add`, load the stack's test conventions via `templatecentral:add (test)` first
 2. Run the suite: `pnpm test` (Next.js / Vite-React / NestJS) or `python -m pytest test/ -q` (FastAPI)
 3. Report (see Reporting)
 
 ## Dedupe pass
 
-When the suite is slow or large, or when asked: measure with `bash scripts/test-budget.sh -v` (ADR-0001), merge sibling cases into `it.each` / `pytest.mark.parametrize`, and list the tests you propose to delete. Wait for the user's confirmation before deleting any test. Never lower a gate, exclude files or add ignore pragmas to compensate.
+When the suite is slow or large, or when asked: measure with `bash scripts/test-budget.sh -v` (ADR-0001), merge sibling cases into `it.each` / `pytest.mark.parametrize`, and list the tests you propose to delete. Record coverage before (`pnpm test:ci` / `pytest --cov=src`) and re-run after; restore any test whose covered lines or changed-line coverage dropped. Never delete a test of a real code path (branching, validation, error handling, data transformation); a no-value test restates a constant, type or re-export, tests only the framework, or asserts its own mock. Wait for the user's confirmation before deleting any test. Never lower a gate, exclude files or add ignore pragmas to compensate.
 
 ## Reporting
 
@@ -30,4 +30,4 @@ Extended: <file> (<what>)
 Suite: <passed> passed, <failed> failed
 ```
 
-On failure add, per failure: `file:line — test name`, expected vs received, error message. Report failing tests; the caller decides what to fix.
+On failure add, per failure: `file:line — test name`, expected vs received, error message. Report only; do not edit files; the caller decides what to fix.

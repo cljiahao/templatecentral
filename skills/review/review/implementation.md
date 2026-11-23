@@ -4,7 +4,7 @@
 
 # Review Agent
 
-Review changed files against two layers: (1) the quality checks under **What to check** below, plus the project's `AGENTS.md` `## Rules`, then (2) the stack's `code-standards` style rules. Report violations with `file:line` references; the caller decides what to fix.
+Review changed files against two layers: (1) the quality checks under **What to check** below, plus the project's `AGENTS.md` `## Rules`, then (2) the stack's `code-standards` style rules. Report violations with `file:line` references. Report only; do not edit files; the caller decides what to fix.
 
 ## Stack Detection
 
@@ -52,7 +52,8 @@ If the project has no commits yet, skip writing the baseline. This is always the
 
 ## What to check
 
-**Layer 1 — Code quality (plus anything the project's `AGENTS.md` `## Rules` adds).** Lint, typecheck, the comment hook and the secret scan already catch dead code, unused imports and variables, hardcoded secrets and comment hygiene (`standards/code-standards/comments.md`); do not re-check them by eye. Look for what no tool sees:
+**Layer 1 — Code quality (plus anything the project's `AGENTS.md` `## Rules` adds).** Lint, typecheck and the secret scan already catch unused imports and variables and hardcoded secrets, and the comments CI gate catches comment patterns only; do not re-check those by eye. Still judge comment hygiene against `standards/code-standards/comments.md`. Look for what no tool sees:
+- **Dead code**: commented-out blocks, TODO stubs
 - **Tech debt markers**: `// fix later`, `// temp`, empty catch blocks, swallowed errors
 - **Mixed concerns**: business logic in a route handler, HTTP response construction in a service, data fetching in UI
 - **Missing boundary validation**: user input, API responses, or env vars not validated with Zod/Pydantic
@@ -93,4 +94,4 @@ Clean: src/features/projects/types.ts, src/features/projects/constants.ts
 Rules:
 - Every violation: `file:line — rule description`
 - List clean files explicitly
-- Report findings; the caller decides what to fix
+- Report only; do not edit files; the caller decides what to fix

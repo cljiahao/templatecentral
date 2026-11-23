@@ -16,7 +16,7 @@ Use the build utility's Stack Detection table (`<skill-dir>/../build/implementat
 2. Apply patch and minor bumps only, keeping each specifier's style (`^` stays `^`, exact stays exact). Major bumps go to the report.
 3. Install: `pnpm install`; FastAPI: `uv pip compile requirements.in --universal --generate-hashes -o requirements.txt`, then `pip install --require-hashes -r requirements.txt`.
 4. Load the build utility (`cat "<skill-dir>/../build/SKILL.md"`) and build. On failure, restore the originals, re-apply all but one package and rebuild, rotating the excluded package until the build passes; keep every update except the breaking one.
-5. Audit: `pnpm audit --audit-level=high`, or `pip-audit --requirement requirements.txt` when installed (the scaffold does not install it; do not install it, note "pip-audit not installed — security advisory check skipped"). A non-zero exit from found advisories is expected. Advisories are report-only; never auto-rollback for them.
+5. Audit: `pnpm audit --audit-level=high`, or `pip-audit --requirement requirements.txt` when installed (the scaffold does not install it; do not install it, note "pip-audit not installed — security advisory check skipped"). A non-zero exit from found advisories is expected. Advisories are report-only; never auto-rollback for them. If the audit fails for a non-advisory reason (for example no network), report it as skipped, not as passed.
 6. List every entry in `.claude/dep-audit-allow.txt` and propose removing it once a fixed release exists or its documented reason no longer holds.
 
 ## Reporting

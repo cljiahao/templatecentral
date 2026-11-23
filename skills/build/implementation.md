@@ -52,7 +52,7 @@ Warnings (non-blocking):
 Rules:
 - Every error: `file:line — message` (exact compiler output, not paraphrased)
 - Warnings separate from errors
-- Report findings; the caller decides what to fix
+- Report only; do not edit files; the caller decides what to fix
 
 ## No Stack Detected
 

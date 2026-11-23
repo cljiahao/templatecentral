@@ -6,7 +6,7 @@
 
 Enabled when the project's `AGENTS.md` has a `## Task Management` section and the task touches 3+ files or involves architectural decisions, or when the user asks for it. Skip it for scaffolding and single-file changes. If `superpowers` is installed, use its brainstorm → plan → execute workflow instead.
 
-1. **Plan first.** List the files to create or change, the approach, the risks and open questions. Start coding once the user confirms the plan; "go ahead" counts.
+1. **Plan first.** List the files to create or change, the approach, the risks and open questions. Ask about open questions before coding; do not assume. Start coding once the user confirms the plan; "go ahead" counts.
 2. **Stop on surprises.** An import error, type mismatch or test failure is reported before you continue.
 3. **Validate at the end.** Build, lint and test as the stack needs.
 4. **Record only what a future agent needs.** Append significant decisions, gotchas and plan deviations to `## Project-Specific Notes` in `AGENTS.md`, never implementation details.
