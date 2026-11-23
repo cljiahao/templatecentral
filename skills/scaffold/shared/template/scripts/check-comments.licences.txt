@@ -1,6 +1,10 @@
-Standard licence texts the comment gate lets a file-top comment quote without counting its lines. Lines before the first @@ marker are ignored.
+Standard licence texts the comment gate lets a file-top comment quote without counting its lines. Lines before the first @@ marker are ignored, except the two id lists below.
 Matching is on words only: case, punctuation, list numbers, comment markers and line wrapping are ignored. A copyright or SPDX line is exempt on its own and is not listed here.
 A comment is exempt only when all its remaining words appear as one unbroken run of one text below, so one added sentence makes the whole comment count again.
+
+The closed SPDX lists for the licence-ids: and exception-ids: lines: ids only, no texts. An SPDX line is exempt only when its expression is built from these ids. An exception id is valid only after WITH.
+licence-ids: 0BSD AFL-3.0 AGPL-3.0 AGPL-3.0-only AGPL-3.0-or-later Apache-1.1 Apache-2.0 Artistic-2.0 BlueOak-1.0.0 BSD-1-Clause BSD-2-Clause BSD-3-Clause BSD-3-Clause-Clear BSD-4-Clause BSL-1.0 CC-BY-4.0 CC-BY-SA-4.0 CC0-1.0 CDDL-1.0 CDDL-1.1 EPL-1.0 EPL-2.0 EUPL-1.1 EUPL-1.2 GPL-1.0 GPL-2.0 GPL-2.0-only GPL-2.0-or-later GPL-3.0 GPL-3.0-only GPL-3.0-or-later ISC LGPL-2.0 LGPL-2.0-only LGPL-2.0-or-later LGPL-2.1 LGPL-2.1-only LGPL-2.1-or-later LGPL-3.0 LGPL-3.0-only LGPL-3.0-or-later MIT MIT-0 MPL-1.1 MPL-2.0 MS-PL NCSA OFL-1.1 PostgreSQL Python-2.0 Unicode-3.0 Unlicense UPL-1.0 WTFPL Zlib
+exception-ids: Classpath-exception-2.0 GCC-exception-3.1 LLVM-exception
 
 @@ MIT
 MIT License

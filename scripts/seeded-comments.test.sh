@@ -320,9 +320,9 @@ inline_fails a.py length '# Copyright 2024\n# Permission is needed from the basi
 inline_fails a.ts length '// MIT License\n// Our own notes on the MIT License follow.\n// Second note.\n// Third note.\nexport const a = 1;\n'
 inline_clean a.ts '// MIT License\nexport const a = 1;\n'
 # at most three copyright lines and 40 licence lines
-inline_fails a.py length '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\n# Copyright 5\n# Copyright 6\nA = 1\n'
-inline_fails a.py length '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\nA = 1\n'
-inline_clean a.py '# Copyright 1\n# Copyright 2\n# Copyright 3\nA = 1\n'
+inline_fails a.py length '# Copyright 2001\n# Copyright 2002\n# Copyright 2003\n# Copyright 2004\n# Copyright 2005\n# Copyright 2006\nA = 1\n'
+inline_fails a.py length '# Copyright 2001\n# Copyright 2002\n# Copyright 2003\n# Copyright 2004\nA = 1\n'
+inline_clean a.py '# Copyright 2001\n# Copyright 2002\n# Copyright 2003\nA = 1\n'
 inline_fails a.py length "$(wrap_style hash 25 "$BSD3_TEXT")${NL}A = 1\n"
 inline_clean a.py "$(wrap_style hash 100 "$BSD3_TEXT")${NL}A = 1\n"
 
@@ -795,7 +795,7 @@ inline_clean a.py '# Copyright © 2024 Example Corp\nA = 1\n'
 # round 6: real copyright lines with a sentence end or "and contributors" are accepted
 C1='Copyright (c) 2019-2024 Example Corp. and contributors'
 C2='Copyright 2020 Foo Inc. and contributors'
-C3='Copyright (c) Meta Platforms, Inc. and affiliates.'
+C3='Copyright (c) 2023 Meta Platforms, Inc. and affiliates.'
 inline_clean a.ts "// $C1\n// $C2\n// $C3\nexport const a = 1;\n"
 inline_clean a.py "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n# $C1\n# $C2\n# $C3\nA = 1\n"
 inline_clean a.ts "/*\n * $C1\n * $C2\n * $C3\n */\nexport const a = 1;\n"
@@ -814,7 +814,7 @@ inline_fails a.ts length "// $C1\n// $C2\n// $C3\n// Copyright 2024 Fourth Corp\
 inline_fails a.ts length '// SPDX-License-Identifier: MIT\n// SPDX-License-Identifier: Apache-2.0\n// note one about it\n// note two about it\nexport const a = 1;\n'
 inline_clean a.ts '// SPDX-License-Identifier: MIT\n// note one about it\n// note two about it\nexport const a = 1;\n'
 
-# round 6: a Copyright holder is at most eight words
+# round 6: a Copyright holder is at most eight tokens
 LONGC='Copyright 2024 Acme and this file explains how the parser works now'
 inline_fails a.ts length "// $LONGC\n// $LONGC\n// $LONGC\n// note one about it\n// note two about it\nexport const a = 1;\n"
 inline_fails a.py length "# $LONGC\n# $LONGC\n# $LONGC\n# note one about it\n# note two about it\nA = 1\n"
@@ -825,6 +825,62 @@ inline_fails a.ts length '// SPDX-License-Identifier: MIT AND parser AND walks A
 inline_fails a.py length '# SPDX-License-Identifier: MIT AND parser AND walks AND trees\n# note one about it\n# note two about it\n# note three about it\nA = 1\n'
 inline_clean a.ts '// SPDX-License-Identifier: (MIT OR Apache-2.0+) AND BSD-3-Clause\n// note one about it\n// note two about it\n// note three about it\nexport const a = 1;\n'
 inline_clean a.py '# SPDX-License-Identifier: MIT AND BSD-3-Clause\n# note one about it\n# note two about it\n# note three about it\nA = 1\n'
+
+# round 7: a Copyright line has a required year and a plain holder; an SPDX line is a small grammar over closed id lists.
+# hdr_clean and hdr_fails judge the same header line in a .ts and a .py file, so both readers must agree.
+hdr_clean() {
+  inline_clean a.ts "// $1\n// note one about it\n// note two about it\n// note three about it\nexport const a = 1;\n"
+  inline_clean a.py "# $1\n# note one about it\n# note two about it\n# note three about it\nA = 1\n"
+}
+hdr_fails() {
+  inline_fails a.ts length "// $1\n// note one about it\n// note two about it\n// note three about it\nexport const a = 1;\n"
+  inline_fails a.py length "# $1\n# note one about it\n# note two about it\n# note three about it\nA = 1\n"
+}
+for h in 'Copyright (c) 2019-2024 Example Corp. and contributors' 'Copyright 2024 The Example Authors. All rights reserved.' '(c) 2024 Acme' '© 2024 Acme' \
+  'Copyright © 2024 Acme' 'Copyright 2019, 2021-2024 Acme Corp' 'Copyright 2024 Zoë Müller' 'Copyright 2024 株式会社' 'Copyright 2024' 'Copyright 2024 Acme <dev@acme.example>' \
+  'Copyright 2024 Acme https://acme.example/about' 'Copyright (c) 2023 Meta Platforms, Inc. and affiliates.' "Copyright 2024 O'Brien & Sons"; do
+  hdr_clean "$h"
+done
+for h in 'Copyright: retries three times then gives up quietly' 'Copyright (c) Meta Platforms, Inc. and affiliates.' 'Copyright 2024 (aside here in brackets)' 'Copyright (c) 2024 Acme (a note)' \
+  'Copyright 2024 Acme: a note' 'Copyright 2024 Acme; a note' 'Copyright 2024 Acme [a note]' 'Copyright 2024 one two three four five six seven eight nine' \
+  'Copyright 2024 Acme <a@b.example> <c@d.example>' 'Copyright 2024 Acme https://a.example https://b.example' 'Copyright 2024 Acme "quoted"' 'Copyright retries 2024 three times' \
+  'Copyright 24 Acme' 'Copyright 2024Acme' '(c) Acme Corp' '© Acme Corp' 'Copyright ２０２４ this retries because upstream flakes' 'Copyright 2024 ２０２４' 'Copyrıght 2024 Acme'; do
+  hdr_fails "$h"
+done
+for h in 'SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0' 'SPDX-License-Identifier: GPL-3.0-or-later' 'SPDX-License-Identifier: LGPL-2.1-only' 'SPDX-License-Identifier: Unlicense' \
+  'SPDX-License-Identifier: 0BSD' 'SPDX-License-Identifier: MIT OR Apache-2.0' 'SPDX-License-Identifier: (MIT OR Apache-2.0) AND BSD-3-Clause' 'SPDX-License-Identifier: GPL-2.0+' \
+  'SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-3.1' 'SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception' 'SPDX-License-Identifier: CC0-1.0' 'SPDX-License-Identifier: MPL-2.0 OR EPL-2.0'; do
+  hdr_clean "$h"
+done
+for h in 'SPDX-License-Identifier: MIT OR AND' 'SPDX-License-Identifier: MIT WITH MIT WITH MIT' 'SPDX-License-Identifier: MIT AND' 'SPDX-License-Identifier: AND MIT' 'SPDX-License-Identifier: (MIT OR Apache-2.0' \
+  'SPDX-License-Identifier: MIT OR Apache-2.0)' 'SPDX-License-Identifier: MIT OR MIT' 'SPDX-License-Identifier: Classpath-exception-2.0' 'SPDX-License-Identifier: MIT WITH Classpath-exception-2.0 WITH LLVM-exception' \
+  'SPDX-License-Identifier: GPL-2.0-only WITH MIT' 'SPDX-License-Identifier: mit' 'SPDX-License-Identifier: MIT, Apache-2.0' 'SPDX-License-Identifier: MIT Apache-2.0' 'SPDX-License-Identifier: ' 'SPDX-License-Identifier: ()' \
+  'SPDX-License-Identifier: MIT WITH' 'SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0 WITH Classpath-exception-2.0'; do
+  hdr_fails "$h"
+done
+
+# round 7: the licence data file must load, with texts and both id lists, or the gate cannot run
+mkdir -p "$T/dat"
+for variant in missing empty noids noexc; do
+  d=$T/dat/$variant
+  mkdir -p "$d/gate" "$d/proj"
+  cp "$SHARED/template/scripts/"check-comments.* "$d/gate/"
+  data=$d/gate/check-comments.licences.txt
+  case "$variant" in
+    missing) rm -f "$data"; want="cannot read the bundled licence texts" ;;
+    empty) : > "$data"; want="hold no licence." ;;
+    noids) grep -v '^licence-ids:' "$SHARED/template/scripts/check-comments.licences.txt" > "$data"; want="no licence ids or no exception ids" ;;
+    noexc) grep -v '^exception-ids:' "$SHARED/template/scripts/check-comments.licences.txt" > "$data"; want="no licence ids or no exception ids" ;;
+  esac
+  for pair in "a.ts:export const a = 1;" "a.py:A = 1"; do
+    printf '%s\n' "${pair#*:}" > "$d/proj/${pair%%:*}"
+    OUT=$("${CLEAN_ENV[@]}" bash "$d/gate/check-comments.sh" --root "$d/proj" --ts-from "$T/tsroot" --full --all . 2>&1)
+    EC=$?
+    check 2 "$EC" "data file $variant, ${pair%%:*}: cannot run, exit 2 ($OUT)"
+    has "$want" "$OUT" "data file $variant, ${pair%%:*}: names the cause"
+    rm -f "$d/proj/${pair%%:*}"
+  done
+done
 
 # round 5: the exempt licence block is the one at the very top, and nothing later is
 frag=''

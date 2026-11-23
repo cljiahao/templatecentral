@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import tokenize
+import unicodedata
 
 CODES = r"[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*"
 NAMES = r"[\w-]+(?:\s*,\s*[\w-]+)*"
@@ -40,14 +41,18 @@ SUPPRESSORS = [
     (re.compile(r"^NOSONAR\b"), "# NOSONAR -- reason"),
     (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
 ]
-COPYRIGHT = re.compile(r"^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)", re.I)
-RESERVED = re.compile(r"\s*all rights reserved\.?\s*$", re.I)
-ALL_RIGHTS = re.compile(r"^all rights reserved\.?$", re.I)
-SPDX_ID = r"[A-Za-z0-9][A-Za-z0-9.+-]*"
-SPDX_ATOM = r"\(*" + SPDX_ID + r"\)*"
-SPDX = re.compile(r"^SPDX-License-Identifier:\s*" + SPDX_ATOM + r"(?:\s+(?:AND|OR|WITH)\s+" + SPDX_ATOM + r")*$")
+YEAR = r"[0-9]{4}(?:[ \t]*[-\u2013][ \t]*[0-9]{4})?"
+YEARS = YEAR + r"(?:[ \t]*,[ \t]*" + YEAR + r")*"
+COPYRIGHT = re.compile(r"(?:copyright(?:[ \t]*(?:\(c\)|\u00a9))?|\(c\)|\u00a9)[ \t]*" + YEARS + r",?(?:[ \t]+(.*))?", re.I | re.A)
+RESERVED = re.compile(r"[ \t]*all rights reserved\.?[ \t]*$", re.I | re.A)
+ALL_RIGHTS = re.compile(r"all rights reserved\.?", re.I | re.A)
+HOLDER_PUNCT = ".,&'-"
+HOLDER_LINK = re.compile(r"<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|https?://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
+SPDX_PREFIX = "SPDX-License-Identifier:"
+SPDX_BODY = re.compile(r"(?: *(?:\(|\)|[A-Za-z0-9.+-]+))* *")
+SPDX_TOKEN = re.compile(r"\(|\)|[A-Za-z0-9.+-]+")
 MAX_COPYRIGHT_CHARS = 100
-MAX_HOLDER_WORDS = 8
+MAX_HOLDER_TOKENS = 8
 MAX_COPYRIGHT_LINES = 3
 MAX_SPDX_LINES = 1
 MAX_LICENCE_LINES = 40
@@ -75,6 +80,7 @@ SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, 
 VERSION = sys.version.split()[0]
 LICENCES = []
 LICENCE_IDS = set()
+EXCEPTION_IDS = set()
 
 
 def die(msg):
@@ -520,10 +526,13 @@ def load_licences():
     texts = []
     for line in raw.split("\n"):
         if line.startswith("@@ "):
-            LICENCE_IDS.add(line[3:].strip())
             texts.append([])
         elif texts:
             texts[-1].append(norm_words(line))
+        elif line.startswith("licence-ids:"):
+            LICENCE_IDS.update(line.split(":", 1)[1].split())
+        elif line.startswith("exception-ids:"):
+            EXCEPTION_IDS.update(line.split(":", 1)[1].split())
     out = []
     for lines in texts:
         lines = [w for w in lines if w]
@@ -533,31 +542,88 @@ def load_licences():
                 out.append(" " + " ".join(w for ln in lines[1:] for w in ln) + " ")
     if not out:
         die("the bundled licence texts %s hold no licence. Fix: restore the file next to this script." % LICENCE_FILE)
+    if not LICENCE_IDS or not EXCEPTION_IDS:
+        die("the bundled licence texts %s hold no licence ids or no exception ids. Fix: restore the file next to this script." % LICENCE_FILE)
     return out
 
 
+def spdx_parse(tokens):
+    """True when the tokens are expr := term ((AND|OR) term)*, term := id [WITH exception] or a bracketed expr, every id is listed once, and nothing is left over."""
+    pos = [0]
+    seen = set()
+
+    def peek():
+        return tokens[pos[0]] if pos[0] < len(tokens) else None
+
+    def term():
+        tok = peek()
+        if tok is None:
+            return False
+        pos[0] += 1
+        if tok == "(":
+            if not expr() or peek() != ")":
+                return False
+            pos[0] += 1
+            return True
+        base = tok[:-1] if tok.endswith("+") else tok
+        if base not in LICENCE_IDS or base in seen:
+            return False
+        seen.add(base)
+        if peek() == "WITH":
+            pos[0] += 1
+            exc = peek()
+            if exc not in EXCEPTION_IDS or exc in seen:
+                return False
+            seen.add(exc)
+            pos[0] += 1
+        return True
+
+    def expr():
+        if not term():
+            return False
+        while peek() in ("AND", "OR"):
+            pos[0] += 1
+            if not term():
+                return False
+        return True
+
+    return expr() and pos[0] == len(tokens)
+
+
 def spdx_ok(text):
-    """True when the line is SPDX-License-Identifier: and an expression of bundled licence ids, AND, OR, WITH, parentheses and +."""
-    if SPDX.match(text) is None:
+    """True for SPDX-License-Identifier: and one expression over the closed id lists in the licence data file."""
+    if not text.startswith(SPDX_PREFIX):
         return False
-    tokens = re.findall(r"\(|\)|[^\s()]+", text.split(":", 1)[1])
-    return all(t in ("(", ")", "AND", "OR", "WITH") or t.rstrip("+") in LICENCE_IDS for t in tokens)
+    body = text[len(SPDX_PREFIX):]
+    return SPDX_BODY.fullmatch(body) is not None and spdx_parse(SPDX_TOKEN.findall(body))
+
+
+def holder_ok(rest):
+    """True for a holder of at most MAX_HOLDER_TOKENS tokens: letters of any script, digits and . , & ' - only, plus one email or URL token."""
+    tokens = [t for t in re.split(r"[ \t]+", rest.strip(" \t")) if t]
+    if len(tokens) > MAX_HOLDER_TOKENS or sum(1 for t in tokens if HOLDER_LINK.fullmatch(t)) > 1:
+        return False
+    for tok in tokens:
+        if HOLDER_LINK.fullmatch(tok):
+            continue
+        for ch in tok:
+            if ch not in HOLDER_PUNCT and not ("0" <= ch <= "9") and unicodedata.category(ch)[0] not in "LM":
+                return False
+    return True
 
 
 def is_copyright(text):
-    """Returns "spdx" for an SPDX line, "copy" for a short Copyright or All rights reserved line with a year and a short holder, else None."""
+    """Returns "spdx" for an SPDX line, "copy" for a short Copyright line with a year and a plain holder or an All rights reserved line, else None."""
     if len(text) > MAX_COPYRIGHT_CHARS:
         return None
     if spdx_ok(text):
         return "spdx"
-    if ALL_RIGHTS.match(text):
+    if ALL_RIGHTS.fullmatch(text):
         return "copy"
-    m = COPYRIGHT.match(text)
+    m = COPYRIGHT.fullmatch(text)
     if m is None:
         return None
-    rest = RESERVED.sub("", text[m.end():]).strip()
-    rest = rest[:-1] if rest.endswith(".") else rest
-    return "copy" if len(rest.split()) <= MAX_HOLDER_WORDS else None
+    return "copy" if holder_ok(RESERVED.sub("", m.group(1) or "")) else None
 
 
 def licence_items(prose, used):

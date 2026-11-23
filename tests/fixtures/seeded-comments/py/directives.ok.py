@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright (c) Example. All rights reserved.
+# Copyright (c) 2024 Example. All rights reserved.
 # SPDX-License-Identifier: MIT
 import os  # noqa: F401 -- kept for the plugin
 

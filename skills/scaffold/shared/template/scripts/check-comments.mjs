@@ -74,19 +74,26 @@ const SUPPRESSORS = [
   [/^gitleaks:allow/, '// gitleaks:allow -- reason'],
   [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
 ];
-const COPYRIGHT = /^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)/i;
-const RESERVED = /\s*all rights reserved\.?\s*$/i;
+const YEAR = '[0-9]{4}(?:[ \\t]*[-\u2013][ \\t]*[0-9]{4})?';
+const YEARS = `${YEAR}(?:[ \\t]*,[ \\t]*${YEAR})*`;
+const COPYRIGHT = new RegExp(`^(?:copyright(?:[ \\t]*(?:\\(c\\)|\u00a9))?|\\(c\\)|\u00a9)[ \\t]*${YEARS},?(?:[ \\t]+(.*))?$`, 'i');
+const RESERVED = /[ \t]*all rights reserved\.?[ \t]*$/i;
 const ALL_RIGHTS = /^all rights reserved\.?$/i;
-const SPDX_ATOM = '\\(*[A-Za-z0-9][A-Za-z0-9.+-]*\\)*';
-const SPDX = new RegExp(`^SPDX-License-Identifier:\\s*${SPDX_ATOM}(?:\\s+(?:AND|OR|WITH)\\s+${SPDX_ATOM})*$`);
+const HOLDER_PUNCT = ".,&'-";
+const HOLDER_LINK = /^(?:<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+>|https?:\/\/[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+)$/;
+const HOLDER_CHAR = /^[\p{L}\p{M}]$/u;
+const SPDX_PREFIX = 'SPDX-License-Identifier:';
+const SPDX_BODY = /^(?: *(?:\(|\)|[A-Za-z0-9.+-]+))* *$/;
+const SPDX_TOKEN = /\(|\)|[A-Za-z0-9.+-]+/g;
 const MAX_COPYRIGHT_CHARS = 100;
-const MAX_HOLDER_WORDS = 8;
+const MAX_HOLDER_TOKENS = 8;
 const MAX_TITLE_WORDS = 4;
 const MAX_TAG_WORDS = 8;
 const NAMED_TAGS = new Set('param arg argument property prop typedef template typeparam callback'.split(' '));
 const MAX_COPYRIGHT_LINES = 3;
 const MAX_SPDX_LINES = 1;
 const LICENCE_IDS = new Set();
+const EXCEPTION_IDS = new Set();
 const MAX_LICENCE_LINES = 40;
 const MIN_LICENCE_WORDS = 4;
 const LICENCE_FILE = 'check-comments.licences.txt';
@@ -244,11 +251,13 @@ function loadLicences() {
   }
   const texts = [];
   for (const line of raw.split('\n')) {
-    if (line.startsWith('@@ ')) {
-      LICENCE_IDS.add(line.slice(3).trim());
-      texts.push([]);
-    }
+    if (line.startsWith('@@ ')) texts.push([]);
     else if (texts.length > 0) texts[texts.length - 1].push(normWords(line));
+    else if (line.startsWith('licence-ids:')) {
+      for (const id of line.slice(line.indexOf(':') + 1).split(/\s+/)) if (id !== '') LICENCE_IDS.add(id);
+    } else if (line.startsWith('exception-ids:')) {
+      for (const id of line.slice(line.indexOf(':') + 1).split(/\s+/)) if (id !== '') EXCEPTION_IDS.add(id);
+    }
   }
   const out = [];
   for (const all of texts) {
@@ -258,14 +267,63 @@ function loadLicences() {
     if (lines[0].length <= MAX_TITLE_WORDS && lines.length > 1) out.push(` ${lines.slice(1).flat().join(' ')} `);
   }
   if (out.length === 0) die(`the bundled licence texts ${LICENCE_FILE} hold no licence. Fix: restore the file next to this script.`);
+  if (LICENCE_IDS.size === 0 || EXCEPTION_IDS.size === 0) die(`the bundled licence texts ${LICENCE_FILE} hold no licence ids or no exception ids. Fix: restore the file next to this script.`);
   return out;
 }
 const LICENCES = loadLicences();
 
+function spdxParse(tokens) {
+  let pos = 0;
+  const seen = new Set();
+  const peek = () => (pos < tokens.length ? tokens[pos] : null);
+  const term = () => {
+    const tok = peek();
+    if (tok === null) return false;
+    pos += 1;
+    if (tok === '(') {
+      if (!expr() || peek() !== ')') return false;
+      pos += 1;
+      return true;
+    }
+    const base = tok.endsWith('+') ? tok.slice(0, -1) : tok;
+    if (!LICENCE_IDS.has(base) || seen.has(base)) return false;
+    seen.add(base);
+    if (peek() === 'WITH') {
+      pos += 1;
+      const exc = peek();
+      if (exc === null || !EXCEPTION_IDS.has(exc) || seen.has(exc)) return false;
+      seen.add(exc);
+      pos += 1;
+    }
+    return true;
+  };
+  const expr = () => {
+    if (!term()) return false;
+    while (peek() === 'AND' || peek() === 'OR') {
+      pos += 1;
+      if (!term()) return false;
+    }
+    return true;
+  };
+  return expr() && pos === tokens.length;
+}
+
 function spdxOk(t) {
-  if (!SPDX.test(t)) return false;
-  const tokens = t.slice(t.indexOf(':') + 1).match(/\(|\)|[^\s()]+/g) || [];
-  return tokens.every((x) => ['(', ')', 'AND', 'OR', 'WITH'].includes(x) || LICENCE_IDS.has(x.replace(/\++$/, '')));
+  if (!t.startsWith(SPDX_PREFIX)) return false;
+  const body = t.slice(SPDX_PREFIX.length);
+  return SPDX_BODY.test(body) && spdxParse(body.match(SPDX_TOKEN) || []);
+}
+
+function holderOk(rest) {
+  const tokens = rest.replace(/^[ \t]+|[ \t]+$/g, '').split(/[ \t]+/).filter((x) => x !== '');
+  if (tokens.length > MAX_HOLDER_TOKENS || tokens.filter((x) => HOLDER_LINK.test(x)).length > 1) return false;
+  for (const tok of tokens) {
+    if (HOLDER_LINK.test(tok)) continue;
+    for (const ch of tok) {
+      if (!HOLDER_PUNCT.includes(ch) && !(ch >= '0' && ch <= '9') && !HOLDER_CHAR.test(ch)) return false;
+    }
+  }
+  return true;
 }
 
 function isCopyright(t) {
@@ -274,9 +332,7 @@ function isCopyright(t) {
   if (ALL_RIGHTS.test(t)) return 'copy';
   const m = COPYRIGHT.exec(t);
   if (m === null) return null;
-  let rest = t.slice(m[0].length).replace(RESERVED, '').trim();
-  if (rest.endsWith('.')) rest = rest.slice(0, -1);
-  return rest.split(/\s+/).filter((w) => w !== '').length <= MAX_HOLDER_WORDS ? 'copy' : null;
+  return holderOk((m[1] || '').replace(RESERVED, '')) ? 'copy' : null;
 }
 
 function licenceLines(lines, used) {

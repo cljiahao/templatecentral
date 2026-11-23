@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Copyright (c) Example. All rights reserved.
+ * Copyright (c) 2024 Example. All rights reserved.
  * SPDX-License-Identifier: MIT
  */
 /* eslint-disable no-console -- the banner logs on boot */
