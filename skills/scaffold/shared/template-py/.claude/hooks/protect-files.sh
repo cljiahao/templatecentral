@@ -57,8 +57,6 @@ case "$rel" in
   .claude/agents/*|*/.claude/agents/*) reason="agent definition — editing it can alter subagent tool access/behavior" ;;
   .mcp.json|*/.mcp.json) reason="MCP server config — editing it can register a malicious/exfiltrating server" ;;
   .claude/harness.json|*/.claude/harness.json|.claude/verify-harness.sh|*/.claude/verify-harness.sh|.claude/regen-harness.sh|*/.claude/regen-harness.sh|.claude/ci-gates.sh|*/.claude/ci-gates.sh|.claude/gates.txt|*/.claude/gates.txt) reason="harness integrity or CI gate script — an edit can defeat drift detection" ;;
-  scripts/check-docs.sh|*/scripts/check-docs.sh|scripts/test-budget.sh|*/scripts/test-budget.sh|scripts/gate-ratchet.sh|*/scripts/gate-ratchet.sh) reason="seeded gate script — an edit can defeat the docs, test-budget or gate-ratchet gate" ;;
-  scripts/check-supply-chain.sh|*/scripts/check-supply-chain.sh|scripts/check-workflows.sh|*/scripts/check-workflows.sh|scripts/check-env-example.sh|*/scripts/check-env-example.sh|scripts/check-dockerfile.sh|*/scripts/check-dockerfile.sh|scripts/check-secret-scanner.sh|*/scripts/check-secret-scanner.sh|scripts/check-workarounds.sh|*/scripts/check-workarounds.sh|scripts/scan-secrets.sh|*/scripts/scan-secrets.sh) reason="seeded gate script — an edit can defeat the supply-chain, workflow, env-example, Dockerfile, workaround or secret-scan gate" ;;
   vitest.config.*|*/vitest.config.*|vite.config.*|*/vite.config.*|eslint.config.*|*/eslint.config.*|pyproject.toml|*/pyproject.toml|.jscpd.json|*/.jscpd.json|vitest.workspace.*|*/vitest.workspace.*|sonar-project.properties|*/sonar-project.properties) reason="coverage, lint, Sonar or duplication config — a lower threshold or a wider exclude hides untested or unchecked code; the ratchet gate reports it" ;;
   tsconfig.json|*/tsconfig.json|tsconfig.*.json|*/tsconfig.*.json|pyrightconfig.json|*/pyrightconfig.json) reason="type-check config — loosening strictness hides type errors; the ratchet gate reports it" ;;
   pnpm-workspace.yaml|*/pnpm-workspace.yaml|.npmrc|*/.npmrc|.github/dependabot.yml|*/.github/dependabot.yml|.hadolint.yaml|*/.hadolint.yaml|.hadolint.yml|*/.hadolint.yml) reason="supply-chain or lint config — an edit can shorten the release-age wait, allow install scripts, change the registry or silence a Dockerfile rule" ;;
@@ -71,6 +69,20 @@ case "$rel" in
   .lefthook/*|*/.lefthook/*) reason="git-hook script — editing it can weaken commit-time guards" ;;
   .github/workflows/*|.github/actions/*|.azuredevops/*|azure-pipelines/*|*/azure-pipelines/*) reason="CI/CD pipeline definition — changes skip or weaken the merge gates" ;;
 esac
+# Gate scripts and runners are whatever gate-ratchet.sh --list-guarded derives from the tracked tree; nothing is listed here.
+if [[ -z "$reason" ]]; then
+  case "$rel" in
+    scripts/* | */scripts/* | .claude/* | */.claude/*)
+      if git rev-parse --verify -q HEAD >/dev/null 2>&1 && [ -z "$(git rev-parse --show-prefix 2>/dev/null)" ]; then
+        if guarded=$(bash scripts/gate-ratchet.sh --list-guarded HEAD 2>/dev/null) && [ -n "$guarded" ]; then
+          if printf '%s\n' "$guarded" | awk -F'\t' -v p="$rel" '$2 == p { hit = 1 } END { exit !hit }'; then reason="gate script or runner the ratchet guards — an edit can defeat a merge gate"; fi
+        else
+          reason="the guarded set cannot be derived (scripts/gate-ratchet.sh failed or is missing) — approve each edit here"
+        fi
+      fi
+      ;;
+  esac
+fi
 if [[ -z "$reason" && ( "$base" == azure-pipelines*.yml || "$base" == azure-pipelines*.yaml \
    || "$base" == ".gitlab-ci.yml" || "$base" == "Jenkinsfile" ) ]]; then
   reason="CI/CD pipeline definition — changes skip or weaken the merge gates"

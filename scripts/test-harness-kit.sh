@@ -256,7 +256,7 @@ for side in ts py; do
   awk '{ sub(/^protected=.main\|uat\|develop.$/, "protected='"'"'main|uat'"'"'"); print }' "$T/nv.$side.sh" > "$T/nv.mut"; mv "$T/nv.mut" "$T/nv.$side.sh"
   check no "$(ok_if drift_ok "$T/nv.ts.sh" "$T/nv.py.sh")" "block-no-verify.sh drift check fails when only the $side twin changes"
   cp "$KIT/protect-files.ts.sh" "$T/pf.ts.sh"; cp "$KIT/protect-files.py.sh" "$T/pf.py.sh"
-  awk '/scripts\/gate-ratchet\.sh/ { sub(/\|scripts\/gate-ratchet\.sh\|\*\/scripts\/gate-ratchet\.sh/, "") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
+  awk '/gate script or runner the ratchet guards/ { sub(/runner the ratchet guards/, "runner") } { print }' "$T/pf.$side.sh" > "$T/pf.mut"; mv "$T/pf.mut" "$T/pf.$side.sh"
   check no "$(ok_if drift_ok "$T/pf.ts.sh" "$T/pf.py.sh")" "protect-files.sh drift check fails when only the $side twin changes"
 done
 

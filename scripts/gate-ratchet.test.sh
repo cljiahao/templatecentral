@@ -939,5 +939,159 @@ OUT=$(cd "$R" && bash scripts/gate-ratchet.sh main 2>&1)
 check 2 "$?" "ratchet fails when the base has no ratchet script ($OUT)"
 has "would judge itself" "$OUT" "ratchet names the missing base script"
 
+# Round 4: wl_norm skips the word after --reporter and friends only when it is a plain value.
+seed ts
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter --changed"' "reporter swallows --changed" "known-safe words" "test:ci"
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --outputFile --bail=1"' "outputFile swallows --bail=1" "known-safe words" "test:ci"
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --coverage.reporter --dir test/x"' "coverage.reporter swallows --dir" "known-safe words" "test:ci"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter json"' "reporter with a value"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --outputFile out.xml"' "outputFile with a value"
+
+# Round 4: every key under test: is a fact unless it is on the neutral list.
+for kv in 'changed: true,' "dir: 'test/nothing'," "testNamePattern: 'zzz'," "root: './test/x'," 'bail: 1,' "projects: ['a']," 'allowOnly: true,' "exclude: ['**/*.spec.ts']," ; do
+  key=${kv%%:*}
+  case "$key" in
+    exclude) continue ;;
+  esac
+  weakens vitest.config.ts "globals: false," "globals: false,
+    $kv" "vitest test.$key added" "new setting test.$key"
+done
+passes vitest.config.ts "globals: false," "globals: false,
+    clearMocks: true," "vitest neutral test key"
+passes vitest.config.ts "environment: 'node'," "environment: 'jsdom'," "vitest environment"
+
+# Round 4: pytest collection hooks in conftest files.
+seed py
+mkdir -p "$R/test" "$R/src"
+printf 'import pytest\n\n\n@pytest.fixture\ndef one():\n    return 1\n\n\ndef pytest_collection_modifyitems(config, items):\n    pass\n' > "$R/test/conftest.py"
+git_ add -A
+git_ commit -q -m "conftest at base"
+git_ checkout -q -B work main
+python3 - "$R/test/conftest.py" <<'PY2'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("    pass\n", "    items.clear()\n", 1))
+PY2
+git_ commit -q -am "edit hook body"
+expect 1 "existing conftest hook body edited" "test/conftest.py" "collection hook"
+git_ checkout -q -B work main
+printf '\n\n@pytest.fixture\ndef two():\n    return 2\n' >> "$R/test/conftest.py"
+git_ commit -q -am "add fixture"
+expect 0 "existing conftest gains a fixture"
+git_ checkout -q -B work main
+printf 'collect_ignore_glob = ["*"]\n' >> "$R/test/conftest.py"
+git_ commit -q -am "ignore all"
+expect 1 "existing conftest gains collect_ignore_glob" "test/conftest.py" "collection hook"
+add_file conftest.py 'def pytest_collection_modifyitems(config, items):
+    items[:] = []'
+expect 1 "new root conftest with a hook" "conftest.py" "collection hook"
+add_file test/unit/conftest.py 'collect_ignore_glob = ["*.py"]'
+expect 1 "new nested conftest with collect_ignore_glob" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'collect_ignore = ["a.py"]'
+expect 1 "new nested conftest with collect_ignore" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'def pytest_configure(config):
+    config.option.keyword = "zzz"'
+expect 1 "new conftest with pytest_configure" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'pytest_plugins = ["x"]'
+expect 1 "new conftest with pytest_plugins" "test/unit/conftest.py" "collection hook"
+add_file test/unit/conftest.py 'import pytest
+
+
+@pytest.fixture
+def three():
+    return 3
+
+
+def helper():
+    return 4'
+expect 0 "new fixture-only conftest"
+
+# Round 4: a shadow config file at any depth.
+seed py
+add_file src/pytest.ini '[pytest]
+addopts = --no-cov'
+expect 1 "new src/pytest.ini beside pyproject settings" "src/pytest.ini" "may read it instead"
+add_file tox.ini '[pytest]
+addopts = -k none'
+expect 1 "new tox.ini beside pyproject settings" "tox.ini" "may read it instead"
+add_file pkg/.coveragerc '[report]
+fail_under = 0'
+expect 1 "new nested .coveragerc beside pyproject settings" "pkg/.coveragerc" "may read it instead"
+seed ts
+add_file src/pytest.ini '[pytest]
+addopts = --no-cov'
+expect 0 "pytest.ini with no pyproject settings at base"
+
+# Round 4: install-time package.json scripts are guarded.
+seed ts
+weakens package.json '"prepare": "lefthook install || true"' '"prepare": "echo skip"' "prepare changed" "prepare"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "postinstall": "echo skip",' "postinstall added" "postinstall"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "install": "echo skip",' "install added" "install"
+
+# Round 4: --config on a new script passes, on an existing one fails.
+seed ts
+passes package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:integration": "vitest --run --config vitest.config.integration.mts",' "new script with --config"
+weakens package.json '"test:e2e": "vitest --run --config vitest.config.e2e.mts"' '"test:e2e": "vitest --run --config vitest.config.other.mts"' "--config changed on an existing script" "script-flag"
+weakens package.json '"test:watch": "vitest"' '"test:watch": "vitest --config vitest.config.other.mts"' "--config added to an existing script" "script-flag"
+weakens package.json '"test:ci": "vitest --run --coverage",' '"test:ci": "vitest --run --coverage",
+    "test:cheat": "vitest --run --no-coverage",' "--no-coverage on a new script" "script-flag"
+
+# Round 4: a new pyproject.toml needs [tool.ruff] only when the base has one.
+seed py
+add_file sub/pyproject.toml '[project]
+name = "sub"'
+expect 0 "new sub/pyproject.toml without [tool.ruff]"
+edit pyproject.toml "[tool.ruff]" "[tool.rufff]"
+edit_more pyproject.toml "[tool.ruff.lint]" "[tool.rufff.lint]"
+expect 2 "existing pyproject.toml loses [tool.ruff]" "no [tool.ruff] section"
+
+# Round 4: an empty coverage value is neutral in every awk, a filled one is a finding.
+seed py
+passes pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['']" "coverage setting with only quotes"
+weakens pyproject.toml "fail_under = 80" "fail_under = 80
+plugins = ['x']" "coverage setting with a value" "new setting"
+
+# Round 4: --list-guarded rejects a bad ref and ci-gates fails when the list is empty.
+seed ts
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded no-such-ref 2>&1)
+check 2 "$?" "list-guarded with a bad ref exits 2 ($OUT)"
+has "is not a commit" "$OUT" "list-guarded bad ref names the cause"
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
+check 0 "$?" "list-guarded with a good ref exits 0"
+git_ checkout -q -B work main
+printf '#!/usr/bin/env bash\nexit 0\n' > "$R/scripts/gate-ratchet.sh"
+git_ commit -q -am "ratchet that lists nothing"
+git_ checkout -q -B main work
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/scripts/check-docs.sh"
+git_ commit -q -am "change"
+ci_gate ""
+check 1 "$EC" "ci ratchet fails when the guarded list is empty ($OUT)"
+has "failed or listed nothing" "$OUT" "ci ratchet names the empty list"
+
+# Round 4: the waiver and the ratchet read one derived set.
+seed ts
+printf '#!/usr/bin/env bash\necho gate\n' > "$R/scripts/check-extra.sh"
+printf '# runs scripts/check-extra.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "gate script named by gates.txt"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/check-extra.sh"
+git_ commit -q -am "sabotage"
+ci_gate "allow-gate-change"
+check 1 "$EC" "waiver does not cover a derived gate script ($OUT)"
+has "scripts/check-extra.sh" "$OUT" "waiver refusal names the derived script"
+seed ts
+git_ checkout -q -B work main
+printf 'GHSA-dddd-eeee-ffff 2099-01-01 new\n' >> "$R/.claude/dep-audit-allow.txt"
+git_ commit -q -am "allow-list line"
+ci_gate "allow-gate-change"
+check 0 "$EC" "waiver still covers a label-waivable file ($OUT)"
+
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

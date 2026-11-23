@@ -473,12 +473,18 @@ prot_msg() { # prot_msg <stack> <path> <expected text> <label>
   hook "$HK/template-$1/.claude/hooks/protect-files.sh" "$j"
   has "$3" "$OUT" "[$1] $4 message"
 }
+mkdir -p "$hookrepo/scripts" "$hookrepo/.claude"
+cp "$HK/template/scripts/gate-ratchet.sh" "$hookrepo/scripts/gate-ratchet.sh"
+printf '#!/usr/bin/env bash\n' > "$hookrepo/scripts/check-workarounds.sh"
+printf 'workarounds|-|scripts/check-workarounds.sh\n' > "$hookrepo/.claude/gates.txt"
+git -C "$hookrepo" add scripts .claude
+git -C "$hookrepo" -c user.email=t@t.t -c user.name=t -c commit.gpgsign=false commit -q -m gates
 for st in ts py; do
   prot_msg $st AGENTS.md 'Human approval needed' 'instruction file'
   prot_msg $st vitest.config.ts 'a lower threshold or a wider exclude hides untested' 'coverage config'
   prot_msg $st sonar-project.properties 'a lower threshold or a wider exclude hides untested' 'sonar config'
   prot_msg $st vitest.workspace.ts 'a lower threshold or a wider exclude hides untested' 'vitest workspace'
-  prot_msg $st scripts/check-workarounds.sh 'workaround or secret-scan gate' 'workaround gate script'
+  prot_msg $st scripts/check-workarounds.sh 'gate script or runner the ratchet guards' 'workaround gate script'
   prot_msg $st "$ENVF" 'Add placeholders to .env.example' 'env file write'
   prot_msg $st secrets/x.txt 'secrets directory' 'secrets directory write'
   j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$hookrepo/src/ok.ts")
@@ -560,6 +566,41 @@ for st in ts py; do
     if [ -n "$OUT" ]; then ok; else bad "[$st] protect-files does not cover guarded file $f"; fi
   done
   if [ "$seen" -ge 12 ]; then ok; else bad "[$st] guarded-set test saw only $seen gate-read files"; fi
+done
+
+# one derived set: a gate script registered only through gates.txt is guarded by the ratchet, the hook and the waiver alike.
+for st in ts py; do
+  R="$T/guard-$st"
+  printf '#!/usr/bin/env bash\necho gate\n' > "$R/scripts/check-extra.sh"
+  printf '# runs scripts/check-extra.sh\n' >> "$R/.claude/gates.txt"
+  g add -A
+  g commit -q -m "extra gate"
+  LISTED=$(cd "$R" && clean bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
+  has "scripts/check-extra.sh" "$LISTED" "[$st] ratchet lists the new gate script"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/scripts/check-extra.sh")
+  OUT=$(cd "$R" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  has "gate script or runner the ratchet guards" "$OUT" "[$st] protect-files guards the new gate script"
+  j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/scripts/not-a-gate.sh")
+  OUT=$(cd "$R" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+  check "" "$OUT" "[$st] protect-files lets an unrelated script through"
+  base=$(g rev-parse HEAD)
+  printf 'exit 0\n' >> "$R/scripts/check-extra.sh"
+  g commit -q -am sabotage
+  g update-ref refs/remotes/origin/main "$base"
+  OUT=$(cd "$R" && clean env LABELS="allow-gate-change" bash .claude/ci-gates.sh ratchet main 2>&1)
+  check 1 "$?" "[$st] the waiver does not cover the new gate script ($OUT)"
+  has "scripts/check-extra.sh" "$OUT" "[$st] the waiver refusal names the new gate script"
+done
+
+# no second list: the three consumers name no gate script of their own.
+RAT="$HK/template/scripts/gate-ratchet.sh"
+KOF=$(awk '/^kind_of\(\)/,/^}/' "$RAT")
+for n in check-docs check-supply-chain check-workflows check-env-example check-dockerfile check-workarounds; do
+  case "$KOF" in *"$n"*) bad "kind_of lists $n by hand" ;; *) ok ;; esac
+done
+if grep -q 'enforcers=' "$HK/template/.claude/ci-gates.sh"; then bad "ci-gates.sh keeps an enforcers list"; else ok; fi
+for st in ts py; do
+  if grep -Eq 'scripts/(check-[a-z-]+|test-budget)[.|]' "$HK/template-$st/.claude/hooks/protect-files.sh"; then bad "[$st] protect-files keeps a list of gate scripts"; else ok; fi
 done
 
 echo "seeded-gates: $PASS passed, $FAIL failed"

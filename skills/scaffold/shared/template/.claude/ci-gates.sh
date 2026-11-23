@@ -147,12 +147,13 @@ case "$gate" in
     fi
     findings=$(GATE_RATCHET_REEXEC=1 bash "$runner" "$base" 2>&1)
     rc=$?
-    enforced=$(bash "$runner" --list-guarded "$mbase" 2>/dev/null | awk -F'\t' '$1 ~ /^(guard|budget|ci|gates|hosts)$/ { print $2 }')
+    guarded_list=$(bash "$runner" --list-guarded "$mbase"); list_rc=$?
     rm -f "$runner_tmp"
+    [ "$list_rc" -eq 0 ] && [ -n "$guarded_list" ] || fail "gate-ratchet.sh --list-guarded $mbase failed or listed nothing (output above), so the files that enforce the gates are unknown; fix the checker."
+    enforced=$(printf '%s\n' "$guarded_list" | awk -F'\t' '$1 ~ /^(guard|budget|ci|gates|hosts)$/ { print $2 }')
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
-      enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-workarounds|scan-secrets|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
-      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk -v re="$enforcers" '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re || (p in E)) hit = 1 } END { exit !hit }'; then
+      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p in E) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
       if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then

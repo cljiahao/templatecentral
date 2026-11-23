@@ -49,9 +49,10 @@ if [ -z "$list_mode" ]; then
   fi
 else
   git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
+  git rev-parse --verify -q "$list_ref^{commit}" >/dev/null 2>&1 || die "--list-guarded: $list_ref is not a commit"
 fi
 
-# Files compared by parsed values, by the kind of parser they need; guard files are compared by content only.
+# Files compared by parsed values, by the kind of parser they need; the guard kind is never listed here, it comes from guard_scan.
 kind_of() {
   case "$1" in
     .jscpd.json | */.jscpd.json) echo jscpd ;;
@@ -73,7 +74,7 @@ kind_of() {
     .npmrc | */.npmrc) echo npmrc ;;
     .hadolint.yaml | */.hadolint.yaml | .hadolint.yml | */.hadolint.yml) echo hadolint ;;
     .github/workflows/ci.yml | */.github/workflows/ci.yml | azure-pipelines.yml | */azure-pipelines.yml | azure-pipelines/templatecentral-gates.yml | */azure-pipelines/templatecentral-gates.yml) echo ci ;;
-    scripts/gate-ratchet.sh | */scripts/gate-ratchet.sh | scripts/check-supply-chain.sh | */scripts/check-supply-chain.sh | scripts/check-workflows.sh | */scripts/check-workflows.sh | scripts/check-env-example.sh | */scripts/check-env-example.sh | scripts/check-dockerfile.sh | */scripts/check-dockerfile.sh | scripts/check-secret-scanner.sh | */scripts/check-secret-scanner.sh | scripts/check-workarounds.sh | */scripts/check-workarounds.sh | scripts/scan-secrets.sh | */scripts/scan-secrets.sh | .claude/ci-gates.sh | */.claude/ci-gates.sh | .claude/verify-harness.sh | */.claude/verify-harness.sh | .claude/hooks/protect-files.sh | */.claude/hooks/protect-files.sh | lefthook.yml | */lefthook.yml) echo guard ;;
+    conftest.py | */conftest.py) echo conftest ;;
     *) echo "" ;;
   esac
 }
@@ -118,21 +119,33 @@ kind_full() {
 
 # Prints "kind<TAB>path" for every tracked path at <ref> the ratchet compares.
 list_kinds() {
-  local ref=$1 k p
+  local ref=$1 k p all
+  all=$(git ls-tree -r --name-only "$ref" 2>/dev/null) || return 1
+  [ -n "$all" ] || return 1
   guard_load "$ref"
-  git ls-tree -r --name-only "$ref" | while IFS= read -r p; do
+  while IFS= read -r p; do
     k=$(kind_full "$p")
     if [ -n "$k" ]; then printf '%s\t%s\n' "$k" "$p"; fi
-  done
+  done <<< "$all"
 }
 
 if [ -n "$list_mode" ]; then
-  list_kinds "$list_ref"
+  list_kinds "$list_ref" || die "--list-guarded: cannot list the tracked files of $list_ref"
   exit 0
 fi
 
 # True when the merge base tracked this exact path.
 base_has() { printf '%s\n' "$base_paths" | grep -Fxq -- "$1"; }
+
+# True when any pyproject.toml the merge base tracked, at any depth, sets pytest or coverage options.
+py_settings() {
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if git show "$mb:$f" 2>/dev/null | grep -Eq '^[[:space:]]*[[]tool[.](pytest|coverage)'; then return 0; fi
+  done <<< "$(printf '%s\n' "$base_paths" | grep -E '(^|/)pyproject[.]toml$')"
+  return 1
+}
 
 # A new config file with one of these names competes with a ratcheted config that the merge base already had; prints why and returns 0.
 shadow_reason() {
@@ -142,12 +155,11 @@ shadow_reason() {
   case "$1" in */*) dir=${1%/*}/ ;; esac
   case "$name" in
     ruff.toml | .ruff.toml) if base_has "${dir}pyproject.toml"; then echo "ruff reads it instead of pyproject.toml"; return 0; fi ;;
-    .coveragerc) if base_has "${dir}pyproject.toml"; then echo "coverage reads it instead of pyproject.toml"; return 0; fi ;;
+    .coveragerc | pytest.ini | tox.ini | setup.cfg) if py_settings; then echo "pytest and coverage may read it instead of the pyproject.toml settings"; return 0; fi ;;
     .gitleaksignore) if base_has "${dir}.gitleaks.toml"; then echo "gitleaks reads it besides .gitleaks.toml"; return 0; fi ;;
     .eslintignore) if printf '%s\n' "$base_paths" | grep -Eq "^${dir}eslint[.]config[.][^/]*$"; then echo "it adds ignores besides eslint.config"; return 0; fi ;;
     jscpd.json | .jscpdrc | .jscpdrc.json | .jscpd.yml | .jscpd.yaml | .jscpd.js) if base_has "${dir}.jscpd.json"; then echo "jscpd may read it instead of .jscpd.json"; return 0; fi ;;
     sonar-project.properties | .sonarcloud.properties) if printf '%s\n' "$base_paths" | grep -Eq '(^|/)sonar-project[.]properties$'; then echo "sonar may read it besides the tracked sonar-project.properties"; return 0; fi ;;
-    pytest.ini | tox.ini | setup.cfg) if base_has "${dir}pyproject.toml"; then echo "pytest and coverage read it before pyproject.toml"; return 0; fi ;;
     vitest.workspace.*)
       for f in vite.config. vitest.config. vitest.workspace.; do
         if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}" 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }'; then
@@ -157,10 +169,11 @@ shadow_reason() {
       done
       ;;
     eslint.config.* | vitest.config.* | vite.config.* | jest.config.*)
+      case "${name#*.config.}" in js | mjs | cjs | ts | mts | cts | json) ;; *) return 1 ;; esac
       fam=${name%%.config.*}
       case "$fam" in vite | vitest) fams="vite vitest" ;; *) fams=$fam ;; esac
       for f in $fams; do
-        if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}.config." 'index($0, pre) == 1 && index(substr($0, length(pre) + 1), "/") == 0 { hit = 1 } END { exit !hit }'; then
+        if printf '%s\n' "$base_paths" | awk -v pre="${dir}${f}.config." 'index($0, pre) == 1 && substr($0, length(pre) + 1) ~ /^([cm]?[jt]s|json)$/ { hit = 1 } END { exit !hit }'; then
           echo "a $f.config.* file already exists, and only one is read"
           return 0
         fi
@@ -546,7 +559,32 @@ function cov_walk(p, pre,   n, k, kn, v, e, id) {
   }
 }
 
+# Keys of the test object at index p (just after its brace): the neutral list and the keys read elsewhere are skipped, every other key is a cfg fact, so a new or changed one is a finding.
+function test_walk(p,   n, k, kn, v, e, id) {
+  n = length(T); id = ++WALKN
+  while (p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (p > n || substr(T, p, 1) == "}") return
+    if (match(substr(T, p), /^(["'][^"']*["']|[A-Za-z0-9_$]+)[ \t\n]*:[ \t\n]*/)) {
+      k = substr(T, p, RLENGTH); p += RLENGTH
+      kn = k; sub(/[ \t\n]*:[ \t\n]*$/, "", kn); gsub(/["']/, "", kn)
+      if ((id SUBSEP kn) in SEENT) fail("test key " kn " is given twice, so the file cannot be read reliably")
+      SEENT[id SUBSEP kn] = 1
+      v = vtext(p); e = VEND
+      if (kn !~ /^(globals|environment|env|pool|poolOptions|maxWorkers|minWorkers|setupFiles|globalSetup|reporters|outputFile|testTimeout|hookTimeout|teardownTimeout|css|alias|clearMocks|mockReset|restoreMocks|unstubEnvs|unstubGlobals|silent|coverage|include|exclude|passWithNoTests)$/) emit("cfg", "test." kn, v)
+      p = e
+    } else {
+      v = vtext(p); emit("cfg", "test.?", v); p = VEND
+    }
+  }
+}
+
 function do_vitest(   from, m, name, v, p) {
+  from = 1
+  while (find("(^|[^A-Za-z0-9_$.])[\"']?test[\"']?[ \t\n]*:[ \t\n]*[{]", from)) {
+    p = MS + ML - 1
+    test_walk(p + 1); from = p + 1
+  }
   from = 1
   while (find("(^|[^A-Za-z0-9_$.])[\"']?coverage[\"']?[ \t\n]*:[ \t\n]*", from)) {
     p = MS + ML
@@ -650,7 +688,7 @@ function mask_cov(v) {
 }
 # True for a masked pytest value that holds nothing once --cov-fail-under is gone.
 function cov_only(v) {
-  gsub(/[][" ,\t\n]/, "", v); gsub(/\x27/, "", v)
+  gsub(/[]["' ,\t\n]/, "", v)
   return v == ""
 }
 # Tables whose every key must be known: all of .gitleaks.toml, and the ruff, coverage, pytest, pyright and mypy tables of pyproject.toml.
@@ -697,7 +735,7 @@ function flag_end_ok(c) { return (c == "" || c == " " || c == "\t" || c == "\n" 
 
 function do_pyproject(   from, r, seen) {
   toml_lines()
-  if (!(("tool.ruff" in SECTS) || ("tool.ruff.lint" in SECTS))) fail("no [tool.ruff] section")
+  if (B == 1 && !(("tool.ruff" in SECTS) || ("tool.ruff.lint" in SECTS))) fail("no [tool.ruff] section")
   from = 1; seen = 0
   while (find("--cov-fail-under", from)) {
     from = MS + ML
@@ -774,8 +812,10 @@ function script_flags(name, s,   nw, W, i, w, opt, hasv) {
 function gate_script(name,   n, parts, i, t) {
   n = split(tolower(name), parts, /[:._\/-]+/)
   for (i = 1; i <= n; i++) {
-    t = parts[i]; sub(/^(pre|post)/, "", t)
-    if (t ~ /^(test|tests|coverage|cov|lint|eslint|ruff|typecheck|tsc|types|build|check|verify|ci|format|fmt|audit|e2e|mutation|mutate|dup|cpd|jscpd|secrets|scan|sonar|validate|gate|gates|pyright|mypy|vitest|pytest|knip)$/) return 1
+    t = parts[i]
+    if (t ~ /^(prepare|prepublish|prepack|postinstall|preinstall)$/) return 1
+    sub(/^(pre|post)/, "", t)
+    if (t ~ /^(install|test|tests|coverage|cov|lint|eslint|ruff|typecheck|tsc|types|build|check|verify|ci|format|fmt|audit|e2e|mutation|mutate|dup|cpd|jscpd|secrets|scan|sonar|validate|gate|gates|pyright|mypy|vitest|pytest|knip)$/) return 1
   }
   return 0
 }
@@ -786,7 +826,7 @@ function wl_norm(s,   nw, W, i, w, out, skip) {
   for (i = 1; i <= nw; i++) {
     w = W[i]; gsub(/^[\\"'(]+/, "", w); gsub(/[\\"');]+$/, "", w)
     if (w == "") continue
-    if (skip) { skip = 0; continue }
+    if (skip) { skip = 0; if (w !~ /^-/ && W[i] !~ /^[;&|<>]/) continue }
     if (w ~ /^(--reporter|--coverage[.]reporter|--outputFile)$/) { skip = 1; continue }
     if (w ~ /^--(reporter|coverage[.]reporter|coverage[.]reportsDirectory|outputFile)=/ || w == "--silent" || w == "--color" || w == "--no-color") continue
     out = out (out == "" ? "" : " ") w
@@ -813,6 +853,7 @@ function scripts_walk(p,   n, j, ch, name, c, s) {
     while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
     s = substr(T, p + 1, j - p - 1); p = j + 1
     script_flags(name, s)
+    emit("scr", name, "")
     if (gate_script(name)) emit("wl", name, wl_norm(s))
   }
   fail("unterminated scripts object")
@@ -921,6 +962,36 @@ function do_gitleaks(   n) {
   if (n == 0 && !find("useDefault", 1)) fail("no section or useDefault found")
 }
 
+# Python lines that name a collection or run hook, a plugin list or a collect_ignore list, with the lines that belong to them; each block is one set fact, so a new or edited block is a finding and fixtures and helpers are not read.
+function conftest_hit(line,   rest, tk) {
+  if (line ~ /^[ \t]*#/) return 0
+  rest = line
+  while (match(rest, /(^|[^A-Za-z0-9_.])(collect_ignore_glob|collect_ignore|pytest_[A-Za-z0-9_]*)([^A-Za-z0-9_]|$)/)) {
+    tk = substr(rest, RSTART, RLENGTH); gsub(/^[^A-Za-z]|[^A-Za-z0-9_]$/, "", tk)
+    if (tk !~ /^pytest_(asyncio|cov|mock|timeout|xdist|randomly|django|env|socket|httpx|anyio|benchmark)$/) return 1
+    rest = substr(rest, RSTART + RLENGTH - 1)
+  }
+  return 0
+}
+function indent_of(line) { match(line, /^[ \t]*/); return RLENGTH }
+function do_conftest(   n, L, i, j, blk, base, depth, l, c, k) {
+  n = split(T, L, "\n")
+  for (i = 1; i <= n; i++) {
+    if (!conftest_hit(L[i])) continue
+    base = indent_of(L[i]); blk = L[i]; depth = 0
+    for (k = 1; k <= length(L[i]); k++) { c = substr(L[i], k, 1); if (c ~ /[([{]/) depth++; else if (c ~ /[)\]}]/) depth-- }
+    for (j = i + 1; j <= n; j++) {
+      l = L[j]
+      if (l !~ /^[ \t]*$/ && depth <= 0 && indent_of(l) <= base) break
+      blk = blk "\n" l
+      for (k = 1; k <= length(l); k++) { c = substr(l, k, 1); if (c ~ /[([{]/) depth++; else if (c ~ /[)\]}]/) depth-- }
+    }
+    sub(/(\n[ \t]*)+$/, "", blk)
+    emit("set", "conftest-hook", blk)
+    i = j - 1
+  }
+}
+
 function do_budget() {
   if (!find("TEST_BUDGET_MAX_RATIO-[0-9]+([.][0-9]+)?[}]", 1)) fail("no TEST_BUDGET_MAX_RATIO default found")
   emit("max", "test-budget-ratio", num_in(substr(T, MS + 21, ML - 21)))
@@ -1023,6 +1094,7 @@ END {
   else if (K == "pkgjson") do_pkgjson()
   else if (K == "tsconfig") { T = clean(T, "js"); do_tsconfig() }
   else if (K == "pyright") { T = clean(T, "js"); do_pyright() }
+  else if (K == "conftest") do_conftest()
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
@@ -1038,6 +1110,10 @@ AWK
 cat > "$wd/compare.awk" <<'AWK'
 BEGIN { FS = "\t"; sevname[0] = "off"; sevname[1] = "warn"; sevname[2] = "error" }
 function label(kind, v) { return (kind == "sev") ? sevname[v] : v }
+function script_at_base(v,   s) {
+  for (s in bscr) if (index(v, s ": ") == 1) return 1
+  return 0
+}
 function nm(key,   i) { i = index(key, "#"); return i ? substr(key, 1, i - 1) : key }
 function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 0 > b + 0) }
 {
@@ -1047,6 +1123,7 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
     else if ($1 == "req") breq[k SUBSEP $3] = 1
     else if ($1 == "cfg") bcfg[$2] = $3
     else if ($1 == "wl") bwl[$2] = $3
+    else if ($1 == "scr") bscr[$2] = 1
     else if ($1 == "flag") { if (!($2 in bflag) || $3 + 0 < bflag[$2] + 0) bflag[$2] = $3 }
     else {
       if (!(k in bagg)) { bagg[k] = $3; order[++no] = k }
@@ -1060,6 +1137,7 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
     else if ($1 == "req") hreq[k SUBSEP $3] = 1
     else if ($1 == "cfg") hcfg[$2] = $3
     else if ($1 == "wl") hwl[$2] = $3
+    else if ($1 == "scr") { }
     else if ($1 == "flag") { if (!($2 in hflag) || $3 + 0 < hflag[$2] + 0) hflag[$2] = $3 }
     else if (!(k in hagg)) { hagg[k] = $3; horder[++nh] = k }
     else if (($1 == "max" && $3 + 0 > hagg[k] + 0) || ($1 != "max" && $3 + 0 < hagg[k] + 0)) hagg[k] = $3
@@ -1083,7 +1161,8 @@ END {
     else if (p[1] == "sev" && (n in bsevmax) && hagg[k] + 0 < bsevmax[n] + 0) { printf "WEAKENED %s: lint rule %s is %s in a new block, below %s at the merge base\n", F, p[2], label("sev", hagg[k]), label("sev", bsevmax[n]); bad = 1 }
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
-  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); if (p[2] == "script-flag" && p[3] ~ /: (--config|-c|--workspace|--root)([ =]|$)/ && !script_at_base(p[3])) continue; if (p[2] == "conftest-hook") printf "WEAKENED %s: new or edited collection hook, plugin list or collect_ignore block, which can hide tests: '%s'\n", F, substr(p[3], 1, 120); else printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  for (k in hwl) if (!(k in bwl) && k ~ /^(prepare|prepublish|prepack|install|preinstall|postinstall)$/) { printf "WEAKENED %s: new install-time script %s (it runs on every install and can skip the gates; a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k; bad = 1 }
   for (k in bwl) {
     if (!(k in hwl)) { printf "WEAKENED %s: script %s was '%s', now removed (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k]; bad = 1 }
     else if (hwl[k] != bwl[k]) { printf "WEAKENED %s: script %s was '%s', now '%s' (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k], hwl[k]; bad = 1 }
@@ -1126,6 +1205,7 @@ while IFS= read -r path; do
   if git show "$mb:$path" > "$wd/base" 2>/dev/null; then have_base=1; fi
   if git show "HEAD:$path" > "$wd/head" 2>/dev/null; then have_head=1; fi
   if [ "$have_head" -eq 0 ]; then
+    if [ "$kind" = conftest ]; then continue; fi
     moved=$(printf '%s\n' "$renames" | awk -F'\t' -v p="$path" '$2 == p { print $3; exit }')
     if [ -n "$moved" ]; then
       printf 'WEAKENED %s: file was present at the merge base, now removed (renamed to %s; tools read the original name, so a rename counts as a removal)\n' "$path" "$moved"
@@ -1138,14 +1218,14 @@ while IFS= read -r path; do
   file_bad=0
   newfile=""
   if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
-    if ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
+    if ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
       unreadable=1
       continue
     fi
     if [ "$have_base" -eq 0 ]; then
-      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; *) continue ;; esac
-    elif ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
+      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; conftest) : > "$wd/base.f" ;; *) continue ;; esac
+    elif ! msg=$(awk -v K="$kind" -v B="$have_base" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi
