@@ -43,13 +43,13 @@ SUPPRESSORS = [
 COPYRIGHT = re.compile(r"^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)", re.I)
 RESERVED = re.compile(r"\s*all rights reserved\.?\s*$", re.I)
 ALL_RIGHTS = re.compile(r"^all rights reserved\.?$", re.I)
-SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
 SPDX_ID = r"[A-Za-z0-9][A-Za-z0-9.+-]*"
 SPDX_ATOM = r"\(*" + SPDX_ID + r"\)*"
 SPDX = re.compile(r"^SPDX-License-Identifier:\s*" + SPDX_ATOM + r"(?:\s+(?:AND|OR|WITH)\s+" + SPDX_ATOM + r")*$")
 MAX_COPYRIGHT_CHARS = 100
-MAX_HOLDER_WORDS = 10
-MAX_COPYRIGHT_LINES = 5
+MAX_HOLDER_WORDS = 8
+MAX_COPYRIGHT_LINES = 3
+MAX_SPDX_LINES = 1
 MAX_LICENCE_LINES = 40
 MIN_LICENCE_WORDS = 4
 MAX_TITLE_WORDS = 4
@@ -74,6 +74,7 @@ SECTION = re.compile(r"^(Args|Arguments|Parameters|Other Parameters|Keyword Args
 SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER, tokenize.COMMENT)
 VERSION = sys.version.split()[0]
 LICENCES = []
+LICENCE_IDS = set()
 
 
 def die(msg):
@@ -441,7 +442,7 @@ def check_file(rel, spec, opt, report):
 
     own = [it for it in items if not it["trailing"]]
     k = 0
-    used = {"copyright": 0, "licence": 0, "open": True}
+    used = {"copyright": 0, "spdx": 0, "licence": 0, "open": True}
     top_total = 0
     top_chains = 0
     top_line = None
@@ -519,6 +520,7 @@ def load_licences():
     texts = []
     for line in raw.split("\n"):
         if line.startswith("@@ "):
+            LICENCE_IDS.add(line[3:].strip())
             texts.append([])
         elif texts:
             texts[-1].append(norm_words(line))
@@ -534,18 +536,28 @@ def load_licences():
     return out
 
 
-def is_copyright(text):
-    """True for a Copyright, SPDX or All rights reserved line that is only that: short, no sentence after the year and holder."""
-    if len(text) > MAX_COPYRIGHT_CHARS:
+def spdx_ok(text):
+    """True when the line is SPDX-License-Identifier: and an expression of bundled licence ids, AND, OR, WITH, parentheses and +."""
+    if SPDX.match(text) is None:
         return False
-    if SPDX.match(text) or ALL_RIGHTS.match(text):
-        return True
+    tokens = re.findall(r"\(|\)|[^\s()]+", text.split(":", 1)[1])
+    return all(t in ("(", ")", "AND", "OR", "WITH") or t.rstrip("+") in LICENCE_IDS for t in tokens)
+
+
+def is_copyright(text):
+    """Returns "spdx" for an SPDX line, "copy" for a short Copyright or All rights reserved line with a year and a short holder, else None."""
+    if len(text) > MAX_COPYRIGHT_CHARS:
+        return None
+    if spdx_ok(text):
+        return "spdx"
+    if ALL_RIGHTS.match(text):
+        return "copy"
     m = COPYRIGHT.match(text)
     if m is None:
-        return False
+        return None
     rest = RESERVED.sub("", text[m.end():]).strip()
     rest = rest[:-1] if rest.endswith(".") else rest
-    return len(rest.split()) <= MAX_HOLDER_WORDS and SENTENCE_END.search(rest) is None
+    return "copy" if len(rest.split()) <= MAX_HOLDER_WORDS else None
 
 
 def licence_items(prose, used):
@@ -553,12 +565,15 @@ def licence_items(prose, used):
     out = [it for it in prose if not it["text"]]
     if not used["open"]:
         return out
-    copy = [it for it in prose if it["text"] and is_copyright(it["text"])]
-    rest = [it for it in prose if it["text"] and it not in copy]
-    within = used["copyright"] + len(copy) <= MAX_COPYRIGHT_LINES
+    kinds = [(it, is_copyright(it["text"]) if it["text"] else None) for it in prose]
+    copy = [it for it, k in kinds if k == "copy"]
+    spdx = [it for it, k in kinds if k == "spdx"]
+    rest = [it for it, k in kinds if it["text"] and k is None]
+    within = used["copyright"] + len(copy) <= MAX_COPYRIGHT_LINES and used["spdx"] + len(spdx) <= MAX_SPDX_LINES
     if within:
-        out += copy
+        out += copy + spdx
         used["copyright"] += len(copy)
+        used["spdx"] += len(spdx)
     used["open"] = within and not rest
     words = [norm_words(it["text"]) for it in rest]
     matchable = [it for it, w in zip(rest, words) if w]

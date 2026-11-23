@@ -319,9 +319,10 @@ inline_fails a.ts length '// Copyright 2024\n// Permission is needed from the ba
 inline_fails a.py length '# Copyright 2024\n# Permission is needed from the basis owner.\n# See https://x.y for the Warranty terms.\n# Our liability is limited here.\n# Redistribution is not allowed.\nA = 1\n'
 inline_fails a.ts length '// MIT License\n// Our own notes on the MIT License follow.\n// Second note.\n// Third note.\nexport const a = 1;\n'
 inline_clean a.ts '// MIT License\nexport const a = 1;\n'
-# at most five copyright lines and 40 licence lines
+# at most three copyright lines and 40 licence lines
 inline_fails a.py length '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\n# Copyright 5\n# Copyright 6\nA = 1\n'
-inline_clean a.py '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\n# Copyright 5\nA = 1\n'
+inline_fails a.py length '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\nA = 1\n'
+inline_clean a.py '# Copyright 1\n# Copyright 2\n# Copyright 3\nA = 1\n'
 inline_fails a.py length "$(wrap_style hash 25 "$BSD3_TEXT")${NL}A = 1\n"
 inline_clean a.py "$(wrap_style hash 100 "$BSD3_TEXT")${NL}A = 1\n"
 
@@ -753,8 +754,8 @@ has "symlinked source files were not followed" "$OUT" "real file plus a symlink:
 has "link.ts" "$OUT" "real file plus a symlink: the note names the link"
 
 # round 5: lines with no letter or digit, and non-Latin prose, are not licence text
-MITH=$(wrap_style slash 200 "$MIT_TEXT")$NL
-MITP=$(wrap_style hash 200 "$MIT_TEXT")$NL
+MITH=$(wrap_style slash 100 "$MIT_TEXT")$NL
+MITP=$(wrap_style hash 100 "$MIT_TEXT")$NL
 six_marks=''
 six_marks_py=''
 six_cjk=''
@@ -770,8 +771,8 @@ inline_fails a.py length "$MITP${six_marks_py}A = 1\n"
 inline_fails a.ts length "$MITH${six_cjk}export const a = 1;\n"
 inline_fails a.ts length "$MITH${six_tilde}export const a = 1;\n"
 MIT_MIXED=${MIT_TEXT/granted,/granted, 附加说明 附加说明 附加说明 附加说明}
-inline_fails a.ts length "$(wrap_style slash 200 "$MIT_MIXED")${NL}export const a = 1;\n"
-inline_fails a.py length "$(wrap_style hash 200 "$MIT_MIXED")${NL}A = 1\n"
+inline_fails a.ts length "$(wrap_style slash 100 "$MIT_MIXED")${NL}export const a = 1;\n"
+inline_fails a.py length "$(wrap_style hash 100 "$MIT_MIXED")${NL}A = 1\n"
 inline_clean a.ts "$MITH// ----\nexport const a = 1;\n"
 inline_clean a.ts "${MITH}export const a = 1;\n"
 
@@ -790,6 +791,40 @@ inline_fails a.ts length "${long_spdx}export const a = 1;\n"
 inline_clean a.ts '// Copyright (c) 2015-2024 Acme, Inc. All rights reserved.\n// Copyright 2020 The Authors\n// SPDX-License-Identifier: Apache-2.0 OR MIT\nexport const a = 1;\n'
 inline_clean a.ts '// SPDX-License-Identifier: (MIT AND BSD-3-Clause)\nexport const a = 1;\n'
 inline_clean a.py '# Copyright © 2024 Example Corp\nA = 1\n'
+
+# round 6: real copyright lines with a sentence end or "and contributors" are accepted
+C1='Copyright (c) 2019-2024 Example Corp. and contributors'
+C2='Copyright 2020 Foo Inc. and contributors'
+C3='Copyright (c) Meta Platforms, Inc. and affiliates.'
+inline_clean a.ts "// $C1\n// $C2\n// $C3\nexport const a = 1;\n"
+inline_clean a.py "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n# $C1\n# $C2\n# $C3\nA = 1\n"
+inline_clean a.ts "/*\n * $C1\n * $C2\n * $C3\n */\nexport const a = 1;\n"
+for lic in MIT_TEXT APACHE_TEXT; do
+  body=${!lic}
+  slash_b=$(wrap_style slash 100 "$body")$NL
+  hash_b=$(wrap_style hash 100 "$body")$NL
+  star_b=$(printf '%s' "$slash_b" | sed 's#^// # * #')$NL
+  inline_clean a.ts "// $C1\n// $C2\n// $C3\n$slash_b""export const a = 1;\n"
+  inline_clean a.py "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n# $C1\n# $C2\n# $C3\n$hash_b""A = 1\n"
+  inline_clean a.ts "/*\n * $C1\n * $C2\n * $C3\n *\n$star_b */\nexport const a = 1;\n"
+  inline_fails a.ts length "// $C1\n// $C2\n// $C3\n$slash_b// Our own note on the licence above.\nexport const a = 1;\n"
+done
+# at most three Copyright lines and one SPDX line in the file
+inline_fails a.ts length "// $C1\n// $C2\n// $C3\n// Copyright 2024 Fourth Corp\n// note one about it\nexport const a = 1;\n"
+inline_fails a.ts length '// SPDX-License-Identifier: MIT\n// SPDX-License-Identifier: Apache-2.0\n// note one about it\n// note two about it\nexport const a = 1;\n'
+inline_clean a.ts '// SPDX-License-Identifier: MIT\n// note one about it\n// note two about it\nexport const a = 1;\n'
+
+# round 6: a Copyright holder is at most eight words
+LONGC='Copyright 2024 Acme and this file explains how the parser works now'
+inline_fails a.ts length "// $LONGC\n// $LONGC\n// $LONGC\n// note one about it\n// note two about it\nexport const a = 1;\n"
+inline_fails a.py length "# $LONGC\n# $LONGC\n# $LONGC\n# note one about it\n# note two about it\nA = 1\n"
+inline_clean a.ts "// $C3\n// $C3\n// $C3\n// note one about it\n// note two about it\nexport const a = 1;\n"
+
+# round 6: an SPDX expression is built from bundled licence ids only
+inline_fails a.ts length '// SPDX-License-Identifier: MIT AND parser AND walks AND trees\n// note one about it\n// note two about it\n// note three about it\nexport const a = 1;\n'
+inline_fails a.py length '# SPDX-License-Identifier: MIT AND parser AND walks AND trees\n# note one about it\n# note two about it\n# note three about it\nA = 1\n'
+inline_clean a.ts '// SPDX-License-Identifier: (MIT OR Apache-2.0+) AND BSD-3-Clause\n// note one about it\n// note two about it\n// note three about it\nexport const a = 1;\n'
+inline_clean a.py '# SPDX-License-Identifier: MIT AND BSD-3-Clause\n# note one about it\n# note two about it\n# note three about it\nA = 1\n'
 
 # round 5: the exempt licence block is the one at the very top, and nothing later is
 frag=''
