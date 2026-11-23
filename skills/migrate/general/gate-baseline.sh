@@ -4,12 +4,12 @@
 #   record <gate> <adapter> [--rc N]   stdin = the gate's output. Writes the gate's findings into the file. A gate that already has entries must match them exactly (use prune to shrink).
 #   check  <gate> <adapter> [--rc N] [--strict-stale]   stdin = the gate's output. Exit 1 on a finding that is not in the file, on output it cannot parse, or on a tool that failed without findings. Prints REMOVABLE for entries that match nothing now.
 #   prune  <gate> <adapter> [--rc N]   stdin = the gate's output. Removes entries that match nothing and lowers counts; never adds.
-#   validate                           Exit 1 when the file is missing, unsorted, duplicated or unparsable.
+#   validate                           Format only: exit 1 when the file is missing, unsorted, duplicated, has a carriage return or is unparsable. It does not compare with an earlier version; growth does that.
 #   growth <base-ref> [<head-ref>]     Exit 1 when the file at head (default HEAD) has an entry or count that the file at <base-ref> lacks; prints WEAKENED/UNREADABLE lines in the format gate-ratchet.sh uses.
 #   run <record|dry|check|prune>       Runs the project's lint, type check and seeded check scripts itself and applies the command to each (gates: lint types workflows dockerfile).
 # Adapters (what each gate prints today): colon = "path:line[:col]: message" (eslint -f unix, ruff --output-format concise, check-workflows.sh, check-dockerfile.sh);
 #   tsc = "path(line,col): error TSnnnn: message" (tsc --pretty false); pyright = "  path:line:col - error: message (rule)".
-# --rc N is the tool's exit code. With rc 0 the gate passed on its own, so check records no finding; the default rc is 1.
+# --rc N is the tool's exit code (default 1). Output is parsed whatever the code: a finding not in the file or a line it cannot read fails even at rc 0. Colour codes and carriage returns are stripped first.
 # File format: line 1 is "# templatecentral gate baseline v1"; then one line per entry: gate TAB file TAB count TAB fingerprint, sorted bytewise by gate, file, fingerprint.
 # The fingerprint is the message with spaces collapsed, never the line number, so moved code matches and a second copy (count + 1) is new. A renamed file is new.
 # Exit 0 ok, 1 a finding or growth, 2 a usage error or an unusable file. Nothing is read from .env files; no network. Needs bash 3.2+, POSIX awk, sort; git for growth.
@@ -61,11 +61,11 @@ norm() {
       if (have) { printf "%s\t%s\t%s\n", collapse(relpath(pf)), collapse(pm), po }
       have = 0
     }
-    BEGIN { nr = split(ENVIRON["GB_ROOTS"], R, "\n") }
+    BEGIN { nr = split(ENVIRON["GB_ROOTS"], R, "\n"); esc = sprintf("%c", 27) }
     {
-      line = $0; sub(/\r$/, "", line)
+      line = $0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); sub(/\r$/, "", line)
       if (line ~ /^[[:space:]]*$/) next
-      if (line ~ /^[0-9]+ (problems?|errors?)/ || line ~ /^Found [0-9]+ errors?/ || line ~ /^\[\*\] / || line ~ /^All checks passed/) { flush(); next }
+      if (line ~ /^[0-9]+ (problems?|errors?)/ || line ~ /^Found [0-9]+ errors?/ || line ~ /^\[\*\] / || line ~ /^All checks passed/ || line ~ /^check-[a-z]+: (ok|no Dockerfile found)/ || line ~ /^WARNING check-[a-z]+: /) { flush(); next }
       if (ad == "tsc") {
         if (line !~ /^[[:space:]]/ && match(line, /\([0-9]+,[0-9]+\): /)) { flush(); pf = substr(line, 1, RSTART - 1); pm = substr(line, RSTART + RLENGTH); po = line; have = 1; next }
         if (line ~ /^[[:space:]]/ && have) { pm = pm " " line; po = po " " collapse(line); next }
@@ -92,7 +92,8 @@ validate_file() {
   if [ ! -f "$f" ]; then echo "gate-baseline: $label is missing" >&2; return 1; fi
   if [ "$(head -n 1 "$f")" != "$HEADER" ]; then echo "gate-baseline: $label does not start with the line: $HEADER" >&2; return 1; fi
   if [ -n "$(tail -c 1 "$f")" ]; then echo "gate-baseline: $label does not end in a newline" >&2; bad=1; fi
-  out=$(tail -n +2 "$f" | awk -F'\t' '
+  out=$(tail -n +2 "$f" | awk -F'\t' -v cr="$(printf '\r')" '
+    index($0, cr) { printf "line %d: carriage return\n", NR + 1; next }
     NF != 4 { printf "line %d: expected 4 tab-separated fields\n", NR + 1; next }
     $1 !~ /^[a-z0-9-]+$/ { printf "line %d: bad gate name\n", NR + 1 }
     $2 == "" || $4 == "" { printf "line %d: empty file or fingerprint\n", NR + 1 }
@@ -141,10 +142,9 @@ take_gate_args() {
     shift
   done
 }
-# load_findings: stdin through the adapter into $W/norm.tsv and $W/cur.tsv; exit 0 when rc is 0 (the gate passed, so no finding).
+# load_findings: stdin through the adapter into $W/norm.tsv and $W/cur.tsv, whatever the tool's exit code.
 load_findings() {
   norm "$ADAPTER" >"$W/norm.tsv"
-  if [ "$RC" -eq 0 ]; then : >"$W/norm.tsv"; fi
   counts "$W/norm.tsv" >"$W/cur.tsv"
   NUNP=$(awk -F'\t' '$1 == "!" { n++ } END { print n + 0 }' "$W/norm.tsv")
 }
@@ -239,12 +239,13 @@ cmd_growth() {
   command -v git >/dev/null 2>&1 || die "git not found"
   git -C "$ROOT" rev-parse --verify -q "$base^{commit}" >/dev/null || die "$base is not a commit"
   git -C "$ROOT" rev-parse --verify -q "$head^{commit}" >/dev/null || die "$head is not a commit"
-  if ! git -C "$ROOT" show "$head:$BREL" >"$W/head.txt" 2>/dev/null; then echo "gate-baseline: $BREL does not exist at $head; nothing grew (the gates fail closed without it)"; exit 0; fi
+  case "$BREL" in /*) die "growth needs a baseline path relative to the project directory, not $BREL" ;; esac
+  if ! git -C "$ROOT" show "$head:./$BREL" >"$W/head.txt" 2>/dev/null; then echo "gate-baseline: $BREL does not exist at $head; nothing grew (the gates fail closed without it)"; exit 0; fi
   if ! validate_file "$W/head.txt" "$BREL at $head" 2>"$W/err"; then
     printf 'UNREADABLE %s: %s\n' "$BREL" "$(tr '\n' ' ' <"$W/err")"
     exit 2
   fi
-  if git -C "$ROOT" show "$base:$BREL" >"$W/base.txt" 2>/dev/null; then
+  if git -C "$ROOT" show "$base:./$BREL" >"$W/base.txt" 2>/dev/null; then
     if ! validate_file "$W/base.txt" "$BREL at $base" 2>"$W/err"; then printf 'UNREADABLE %s: %s\n' "$BREL" "$(tr '\n' ' ' <"$W/err")"; exit 2; fi
     INTRO=0
   else
@@ -261,10 +262,11 @@ cmd_growth() {
 # --- run: the project's own gates ---
 GATES="lint types workflows dockerfile"
 SKIP=
+SKIPKIND=
 RCV=0
 gate_node_ok() {
-  command -v pnpm >/dev/null 2>&1 || { SKIP="pnpm not found"; return 1; }
-  [ -d "$ROOT/node_modules" ] || { SKIP="dependencies not installed (no node_modules)"; return 1; }
+  command -v pnpm >/dev/null 2>&1 || { SKIP="pnpm not found"; SKIPKIND=cannot; return 1; }
+  [ -d "$ROOT/node_modules" ] || { SKIP="dependencies not installed (no node_modules)"; SKIPKIND=cannot; return 1; }
   return 0
 }
 py_bin() {
@@ -272,8 +274,9 @@ py_bin() {
 }
 # gate_run <gate>: runs the gate's tool in the project, output in $W/out.txt, exit code in RCV, adapter in ADAPTER. Returns 1 with SKIP set when the gate does not apply.
 gate_run() {
-  local g=$1 bin
+  local g=$1 bin f found
   SKIP=
+  SKIPKIND=na
   case "$g" in
     lint)
       if ls "$ROOT"/eslint.config.* >/dev/null 2>&1; then
@@ -291,6 +294,15 @@ gate_run() {
       else SKIP="no tsconfig.json and no configured pyright"; return 1; fi ;;
     workflows|dockerfile)
       [ -f "$ROOT/scripts/check-$g.sh" ] || { SKIP="scripts/check-$g.sh is missing"; return 1; }
+      found=0
+      if [ "$g" = workflows ]; then
+        for f in "$ROOT"/.github/workflows/*.yml "$ROOT"/.github/workflows/*.yaml "$ROOT"/.github/actions/*/action.yml "$ROOT"/.github/actions/*/action.yaml "$ROOT"/azure-pipelines.yml "$ROOT"/azure-pipelines/*.yml; do
+          if [ -f "$f" ]; then found=1; break; fi
+        done
+        [ "$found" -eq 1 ] || { SKIP="no workflow or pipeline file"; return 1; }
+      elif [ -z "$(find "$ROOT" \( -name node_modules -o -name .git -o -name .venv \) -prune -o -type f \( -name Dockerfile -o -name 'Dockerfile.*' \) -print -quit)" ]; then
+        SKIP="no Dockerfile"; return 1
+      fi
       ADAPTER="colon"; (cd "$ROOT" && bash "scripts/check-$g.sh") >"$W/out.txt" 2>&1; RCV=$? ;;
   esac
   return 0
@@ -304,10 +316,11 @@ cmd_run() {
   case "$mode" in record|dry|check|prune) ;; *) die "unknown run mode '$mode'" ;; esac
   if [ "$mode" = check ] || [ "$mode" = prune ]; then validate_file "$BPATH" "$BREL" || exit 2; fi
   for g in $GATES; do
-    if [ "$mode" = check ] && ! gate_has_entries "$g"; then echo "gate-baseline: $g has no baseline entries; the raw gate keeps blocking every finding"; continue; fi
+    if [ "$mode" = prune ] && ! gate_has_entries "$g"; then echo "gate-baseline: $g has no baseline entries; nothing to prune"; continue; fi
     if ! gate_run "$g"; then
-      if [ "$mode" = check ] && gate_has_entries "$g"; then echo "gate-baseline: $g has baseline entries but cannot run here ($SKIP)" >&2; worst=1
-      else echo "gate-baseline: $g skipped ($SKIP); nothing recorded, so it keeps blocking everything"; fi
+      if { [ "$mode" = check ] || [ "$mode" = prune ]; } && { [ "$SKIPKIND" = cannot ] || gate_has_entries "$g"; }; then
+        echo "gate-baseline: $g cannot run here ($SKIP)" >&2; worst=1
+      else echo "gate-baseline: $g does not apply or was not run ($SKIP)"; fi
       continue
     fi
     if [ "$mode" = dry ]; then

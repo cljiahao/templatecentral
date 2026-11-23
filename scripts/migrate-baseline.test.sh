@@ -21,6 +21,7 @@ gb() { local d=$1; shift; bash "$G" -C "$d" "$@" 2>&1; }
 newproj() { mkdir -p "$T/$1"; echo "$T/$1"; }
 BL=.claude/gate-baseline.txt
 tab=$(printf '\t')
+HEADER_LINE='# templatecentral gate baseline v1'
 
 OLD='src/a.ts:3:1: Unexpected any [Error/no-any]
 src/a.ts:9:5: Unused variable x [Error/no-unused]
@@ -220,6 +221,98 @@ contains "--prune lowers the baseline" "1 entr(ies) removed" "$out"
 check "the file shrank with --prune" 4 "$(tail -n +2 "$A/$BL" | wc -l | tr -d ' ')"
 printf '%s\nsrc/n.ts:1:1: New [Error/n]\n' "$FIXED" >"$T/lint.txt"
 out=$(refresh --apply --baseline --prune --allow-dirty); check "--prune never adds a new finding" 0 "$(grep -c 'New \[Error' "$A/$BL")"
+
+
+# run check: a gate with no baseline entries still blocks new findings
+R2=$(newproj emptybl)
+mkdir -p "$R2/node_modules" "$R2/.claude"
+printf '{}\n' >"$R2/package.json"; printf 'export default []\n' >"$R2/eslint.config.mjs"; printf '{}\n' >"$R2/tsconfig.json"
+printf '%s\n' "$HEADER_LINE" >"$R2/$BL"
+: >"$T/empty.txt"
+runh2() { STUB_LINT="$T/lint2.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R2" run "$@" 2>&1; }
+: >"$T/lint2.txt"
+out=$(runh2 check); check "empty baseline, clean gate passes" 0 $?
+printf 'a.ts:1:1: NEW [Error/new]\n' >"$T/lint2.txt"
+out=$(runh2 check); check "empty baseline, new lint finding fails" 1 $?
+contains "empty baseline names the finding" "NEW lint: a.ts" "$out"
+printf '%s\ntypes\tsrc/x.ts\t1\tType problem\n' "$HEADER_LINE" >"$R2/$BL"
+: >"$T/lint2.txt"
+out=$(runh2 check); check "entries only for another gate, clean lint passes" 0 $?
+printf 'a.ts:1:1: NEW [Error/new]\n' >"$T/lint2.txt"
+out=$(runh2 check); check "entries only for another gate, new lint finding fails" 1 $?
+printf 'Error: crashed\n' >"$T/lint2.txt"
+out=$(runh2 check); check "a crashed tool on a gate with no entries fails" 1 $?
+rm -rf "${R2:?}/node_modules"
+out=$(runh2 check); check "a configured gate whose tool cannot run fails even with no entries" 1 $?
+contains "cannot-run reason is shown" "cannot run here" "$out"
+rm -f "${R2:?}/eslint.config.mjs" "${R2:?}/tsconfig.json"
+printf '%s\n' "$HEADER_LINE" >"$R2/$BL"
+out=$(runh2 check); check "a gate that does not apply (no config) is skipped" 0 $?
+contains "skip is explained" "does not apply" "$out"
+
+# workflows: no workflow file means the gate does not apply; a file means it runs
+R3=$(newproj wfproj)
+mkdir -p "$R3/scripts" "$R3/.claude"
+printf '#!/usr/bin/env bash\necho "check-workflows: no workflow or pipeline file found" >&2\nexit 1\n' >"$R3/scripts/check-workflows.sh"
+printf '%s\n' "$HEADER_LINE" >"$R3/$BL"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R3" run check 2>&1); check "no workflow files: gate does not apply" 0 $?
+mkdir -p "$R3/.github/workflows"; : >"$R3/.github/workflows/ci.yml"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R3" run check 2>&1); check "a workflow file makes the gate run, and its failure counts" 1 $?
+
+# run prune: a gate with entries whose tool cannot run fails
+R4=$(newproj prunefail)
+mkdir -p "$R4/.claude"; printf '{}\n' >"$R4/package.json"; printf 'export default []\n' >"$R4/eslint.config.mjs"
+printf '%s\nlint\ta.ts\t1\tOld [Error/old]\n' "$HEADER_LINE" >"$R4/$BL"
+out=$(PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R4" run prune 2>&1); check "run prune fails when the tool cannot run" 1 $?
+mkdir -p "$R4/node_modules"; printf 'a.ts:1:1: Old [Error/old]\n' >"$T/lint4.txt"
+out=$(STUB_LINT="$T/lint4.txt" STUB_TSC="$T/empty.txt" PATH="$T/stubbin:/usr/bin:/bin" bash "$G" -C "$R4" run prune 2>&1); check "control: run prune with a working tool passes" 0 $?
+
+# rc 0 does not hide output
+out=$(printf '%s\nsrc/new.ts:1:1: Sneaky [Error/s]\n' "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0 with a new finding fails" 1 $?
+out=$(printf '%s\n' "$OLD" | gb "$P" check lint colon --rc 0); check "control: rc 0 with only old findings passes" 0 $?
+out=$(printf '%s\nwhat is this\n' "$OLD" | gb "$P" check lint colon --rc 0); check "rc 0 with an unreadable line fails" 1 $?
+out=$(printf 'check-workflows: ok (2 files)\n' | gb "$P" check lint colon --rc 0); check "rc 0 success banner passes" 0 $?
+
+# tool output quirks
+Q=$(newproj quirks)
+printf 'src/a.ts:3:1: Unexpected any [Error/no-any]\r\nsrc/b.ts:1:1: Two  spaced\tby tab and back\\slash\r\n' | gb "$Q" record lint colon >/dev/null
+check "CRLF record exits 0" 0 $?
+absent "no carriage return in the file" "$(printf '\r')" "$(cat "$Q/$BL")"
+printf 'src/a.ts:9:1: Unexpected any [Error/no-any]\r\nsrc/b.ts:7:1: Two spaced by tab and back\\slash\r\n' | gb "$Q" check lint colon >/dev/null; check "CRLF and whitespace differences still match" 0 $?
+printf 'src/b.ts:7:1: Two spaced by tab and back/slash\n' | gb "$Q" check lint colon >/dev/null; check "a different backslash is a different finding" 1 $?
+printf 'src/a.ts:3:1: Unexpected any [Error/no-any]\n' | gb "$Q" check lint colon >/dev/null; check "control: LF output of the old finding passes" 0 $?
+ESC=$(printf '\033')
+printf '%s[31msrc/a.ts:3:1:%s[0m Unexpected any [Error/no-any]\n%s[1msrc/b.ts:1:1: Two spaced by tab and back\\slash%s[0m\n' "$ESC" "$ESC" "$ESC" "$ESC" | gb "$Q" check lint colon >/dev/null; check "colour codes are stripped" 0 $?
+printf -- '-dash.ts:1:1: Dash [Error/d]\nsrc/é ü.ts:2:2: Accent [Error/a]\n' | gb "$Q" record types colon >/dev/null; check "leading dash and non-ASCII names record" 0 $?
+printf -- '-dash.ts:5:1: Dash [Error/d]\nsrc/é ü.ts:9:2: Accent [Error/a]\n' | gb "$Q" check types colon >/dev/null; check "leading dash and non-ASCII names match" 0 $?
+printf -- '-dash.ts:5:1: Dash [Error/d]\nsrc/é ü.ts:9:2: Accent [Error/a]\nsrc/ü.ts:1:1: Accent [Error/a]\n' | gb "$Q" check types colon >/dev/null; check "a non-ASCII new file fails" 1 $?
+
+# validate: a carriage return in an entry; format only
+CR=$(newproj crfile)
+mkdir -p "$CR/.claude"
+printf '%s\nlint\ta.ts\t1\tOld\r\n' "$HEADER_LINE" >"$CR/$BL"
+out=$(gb "$CR" validate); check "an entry with a carriage return fails validate" 1 $?
+printf '%s\nlint\ta.ts\t1\tOld\n' "$HEADER_LINE" >"$CR/$BL"
+out=$(gb "$CR" validate); check "control: the same entry without it passes" 0 $?
+
+# growth: not a repository, unreadable file, subdirectory, absolute -f
+NG=$(newproj nogit)
+out=$(gb "$NG" growth HEAD); check "growth outside a repository exits 2" 2 $?
+UN=$(newproj unreadable)
+printf '%s\n' "$OLD" | gb "$UN" record lint colon >/dev/null
+chmod 000 "$UN/$BL"
+out=$(printf '%s\n' "$OLD" | gb "$UN" check lint colon); check "an unreadable baseline file exits 2" 2 $?
+chmod 644 "$UN/$BL"
+out=$(printf '%s\n' "$OLD" | gb "$UN" check lint colon); check "control: readable again passes" 0 $?
+SUB=$(newproj subrepo)
+(cd "$SUB" && git init -q -b main && mkdir app && echo x >app/f) >/dev/null 2>&1
+(cd "$SUB" && git add -A && gitc commit -qm base)
+printf '%s\n' "$OLD" | gb "$SUB/app" record lint colon >/dev/null
+(cd "$SUB" && git add -A && gitc commit -qm add)
+out=$(gb "$SUB/app" growth HEAD~1); check "growth from a subdirectory sees the file" 1 $?
+contains "subdirectory growth names the file" "WEAKENED .claude/gate-baseline.txt" "$out"
+out=$(gb "$SUB/app" growth HEAD); check "control: subdirectory, same commit, no growth" 0 $?
+out=$(bash "$G" -C "$SUB/app" -f "$SUB/app/$BL" growth HEAD~1 2>&1); check "growth with an absolute -f exits 2" 2 $?
 
 if [ "$fail" -eq 0 ]; then echo "all migrate-baseline checks passed"; fi
 exit "$fail"

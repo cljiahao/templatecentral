@@ -259,7 +259,7 @@ done <"$RES"
 if [ "$APPLY" -eq 0 ]; then
   [ "$TREE" = clean ] || echo "note: the tree is $TREE; --apply refuses it unless --allow-dirty is given."
   if [ "$GB" -eq 1 ]; then
-    echo "gate baseline (dry run): the project's own lint and type tools run now; nothing is written"
+    echo "gate baseline (dry run): the project's own lint and type tools run now; only the baseline file is not written (the tools may write their own caches)"
     bash "$GEN/gate-baseline.sh" -C "$P" run dry || echo "gate baseline: the dry run could not finish"
   fi
   if [ "$N_MOD" -gt 0 ]; then
