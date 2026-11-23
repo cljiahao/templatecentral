@@ -139,14 +139,20 @@ case "$gate" in
     runner=scripts/gate-ratchet.sh
     mbase=$(git merge-base "$base" HEAD) || fail "no merge base with $base — check out with full history (fetch-depth 0)"
     runner_tmp=$(mktemp "${RUNNER_TEMP:-${AGENT_TEMPDIRECTORY:-${TMPDIR:-/tmp}}}/gate-ratchet.XXXXXX") || fail "cannot create a temporary file"
-    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then runner=$runner_tmp; else [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"; fi
+    if git show "$mbase:scripts/gate-ratchet.sh" > "$runner_tmp" 2>/dev/null; then
+      runner=$runner_tmp
+    else
+      if git cat-file -e "$mbase:.claude/gates.txt" 2>/dev/null; then rm -f "$runner_tmp"; fail "the merge base has .claude/gates.txt but no scripts/gate-ratchet.sh, so the checker in this change would judge itself; restore scripts/gate-ratchet.sh at the base"; fi
+      [ -f "$runner" ] || fail "scripts/gate-ratchet.sh is missing"
+    fi
     findings=$(GATE_RATCHET_REEXEC=1 bash "$runner" "$base" 2>&1)
     rc=$?
+    enforced=$(bash "$runner" --list-guarded "$mbase" 2>/dev/null | awk -F'\t' '$1 ~ /^(guard|budget|ci|gates|hosts)$/ { print $2 }')
     rm -f "$runner_tmp"
     printf '%s\n' "$findings"
     if [ "$rc" -ne 0 ]; then
       enforcers='(^|/)([.]github/workflows/ci[.]yml|azure-pipelines[.]yml|azure-pipelines/templatecentral-gates[.]yml|lefthook[.]yml|[.]claude/(ci-gates|verify-harness)[.]sh|[.]claude/gates[.]txt|[.]claude/hooks/protect-files[.]sh|scripts/(gate-ratchet|test-budget|check-supply-chain|check-workflows|check-env-example|check-dockerfile|check-workarounds|scan-secrets|check-secret-scanner)[.]sh|[.]claude/registry-hosts[.]txt)$'
-      if printf '%s\n' "$findings" | awk -v re="$enforcers" '/^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re) hit = 1 } END { exit !hit }'; then
+      if { printf '%s\n' "$enforced" | sed 's/^/E /'; printf '%s\n' "$findings"; } | awk -v re="$enforcers" '/^E / { E[substr($0, 3)] = 1; next } /^(WEAKENED|UNREADABLE) / { p = $2; sub(/:$/, "", p); if (p ~ re || (p in E)) hit = 1 } END { exit !hit }'; then
         fail "the allow-gate-change label cannot waive a change to the files that enforce the gates (listed above); it needs the owner review that branch protection requires."
       fi
       if [ "$rc" -ne 1 ] || printf '%s\n' "$findings" | grep -q '^UNREADABLE '; then

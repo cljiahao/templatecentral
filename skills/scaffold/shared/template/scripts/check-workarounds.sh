@@ -2,6 +2,8 @@
 # Workaround detector: check-workarounds.sh [base-ref]. Looks only at what this change adds or removes, never at code that was already there.
 # 1. Added lines that silence a tool (lint, type, coverage, sonar markers, skipped tests, "as any"). Each changed file is read whole and lexed, so strings never count as comments or code and comments never count as code.
 # 2. Test files this change deletes, renames to a name no runner picks up, or empties, while the source they cover is still in the tree.
+# The root eslint.config is judged by the ratchet, so only its eslint-disable markers are skipped here.
+# Empty error handlers are left to the seeded lint: ruff S110 and SIM105 for Python, ESLint no-empty (eslint:recommended) for NestJS and Vite; Next.js relies on eslint-config-next, which could not be read offline.
 # No waiver file and no allow comment exist: fix the cause, or change the rule in config in its own reviewed change.
 # It stays bash, git and awk like every other gate script: a tokeniser from the project's own toolchain would need node_modules or python3 on every machine that runs the gate.
 set -uo pipefail
@@ -156,7 +158,7 @@ function lex_py(s,   i, n, c, c3, o, cm, j, ch, found) {
 function check_js(   kk, cs, cd) {
   kk = tolower(K); gsub(/[ \t]+/, " ", kk)
   if (kk ~ /nosonar/) { rep("NOSONAR"); return }
-  if (index(kk, "eslint-disable")) { rep("eslint-disable"); return }
+  if (index(kk, "eslint-disable")) { if (file !~ /^eslint[.]config[.][A-Za-z]+$/) rep("eslint-disable"); return }
   if (index(kk, "@ts-ignore")) { rep("@ts-ignore"); return }
   if (index(kk, "@ts-expect-error")) { rep("@ts-expect-error"); return }
   if (index(kk, "@ts-nocheck")) { rep("@ts-nocheck"); return }
@@ -172,7 +174,7 @@ function check_js(   kk, cs, cd) {
   if (cd ~ /(^|[^A-Za-z0-9_$.])(it|test|describe|suite|bench)(\.[A-Za-z_$][A-Za-z0-9_$]*)*\.(skip|only|skipIf|runIf|fails)([^A-Za-z0-9_$]|$)/) { rep(".skip( / .skipIf( / .only( / .runIf( / .fails("); return }
   if (cd ~ /(^|[^A-Za-z0-9_$.])(it|test|describe|suite|bench)(\.[A-Za-z_$][A-Za-z0-9_$]*)*[ ]?\[/) { rep(".skip( / .skipIf( / .only( / .runIf( / .fails( (computed access on a test function)"); return }
   if (cs ~ /(^|[;{}]|=>) ?(xit|xdescribe|xtest)[ ]?\(/ || (TF && cs ~ /(^|[;{}]|=>) ?(fit|fdescribe)[ ]?\(/)) { rep("xit( / xdescribe( / xtest( / fit( / fdescribe("); return }
-  if (cs ~ /[^A-Za-z0-9_$]as any([^A-Za-z0-9_]|$)/) { rep("as any"); return }
+  if (cs ~ /[^A-Za-z0-9_$]as any([^A-Za-z0-9_]|$)/ || (cs ~ /^ ?any([^A-Za-z0-9_$]|$)/ && LASTC ~ /(^|[^A-Za-z0-9_$])as[ \t]*$/)) { rep("as any"); return }
   if (cs ~ /(^|[^A-Za-z0-9_$>)\]])<any>[A-Za-z0-9_$"']/) { rep("<any> cast"); return }
 }
 
@@ -230,10 +232,6 @@ status=0
 : > "$wd/markers.txt"
 while IFS=$'\t' read -r f r || [ -n "$f" ]; do
   [ -n "$f" ] || continue
-  case "$f" in
-    .claude/*) continue ;;
-    eslint.config.*) case "$f" in */*) ;; *) continue ;; esac ;;
-  esac
   git show "HEAD:$f" > "$wd/cur" 2> /dev/null || { echo "check-workarounds: cannot read $f at HEAD" >&2; exit 1; }
   py=0
   case "$f" in *.py | *.pyi) py=1 ;; esac

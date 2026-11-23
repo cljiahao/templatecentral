@@ -2,13 +2,13 @@
 # Source: commit 0c436ab, skills/scaffold, via scripts/extract-fences.py.
 # Exception to the source commit: the seeded AGENTS.md, rules, tail, hooks and session-context.sh were trimmed to cap the per-session load (scripts/measure-seeded-load.sh).
 # Format: <sha256>  <path>
-2eabf03041dd3a6eb557c6cab29dc393dcec93cc2e330afbbba4ae0c1ff556aa  .claude/ci-gates.sh
+9f74f6b18c2decc3caa2a93630e85ec3db0a3488c6baf1ebcae752d070b14b76  .claude/ci-gates.sh
 493e60c9326a091f17b62a1ddc088696825546f77f8214915360dd3616e3f392  .claude/comment-hygiene-patterns.txt
 ffd9e407ce34017ca93e75601289e53b0878d268853abcfa4601a16789e1de5a  .claude/gates.txt
 d3e0a70653413a8e3a27300998f35f9eeb11cc5c986f51b10975683b8feb2cc0  .claude/hooks/block-no-verify.sh
 23c76185d22e65b7667096ed17d2982d96d7b9a36fec8408a2896547c8ca5465  .claude/hooks/post-edit-comment-check.sh
 8de078a5759a301c6a8929305356bdc592213269f87898a4892206ab4ec6721f  .claude/hooks/post-edit-typecheck.sh
-f0c04f66d2f528854b59d0396ba3f56ddf9ec7eb782c85ec4a663ed5dbf0c46c  .claude/hooks/protect-files.sh
+c815f691cd41006c0865f0828ad4b94e9a71a24f55ee804fa8fb428592457421  .claude/hooks/protect-files.sh
 4e517dcc5ce3a9cc41828cded849f4734a5b9c8bdf89d7d0d2122476e9054171  .claude/hooks/session-context.sh
 9310e36318fc6bfb3953a6366193a913329f759ac0ae15af5ce67f57079f0681  .claude/hooks/skill-usage-log.sh
 d997f39290833016bb42d7b079e961e78cc1469bfd185f1d7e768f373e71aa1b  .claude/hooks/stop-checks.sh
@@ -56,9 +56,9 @@ aaea542dcd638a628af0dbadf04d299101629c453cf324746d7c9ab4908eb648  index.html
 2392640032143c71f40e5a62c7a6dd0c9e111eafdae1339e3e8fe1e980b8054e  scripts/check-env-example.sh
 e87336ac3c1719b2906e771d5e1f45cf49f3d7c40dd985fa6093d1f7afd7e3d2  scripts/check-secret-scanner.sh
 2c33663b4054b73d26a4c65d17dbc39d26c0d905177918d930493a01cd6a5a27  scripts/check-supply-chain.sh
-3c2996ba307456c46482581cb22df4cbfc6fff4443df2e59a28d52868ca77a4b  scripts/check-workarounds.sh
+d6de42b7b107ef5dba50819f28ec98172e6352b1c2d0c9efa4c30ddb71b7a2de  scripts/check-workarounds.sh
 6c0824c642d17d8e864133fcacb1a9e8979e5c4f739c71307d886b4a79834a06  scripts/check-workflows.sh
-7eeab7dcb50c02ba111b6d07a9090b04419936e6db915fa06cf7776dce53b292  scripts/gate-ratchet.sh
+c87f3024d01c3422bec1df03b9d297ba923e64250176984dd7f26075e29dda00  scripts/gate-ratchet.sh
 4063966fec5a5021ed09906289f89c2e5935dd4dc680ae6625affb3aecfd2dee  scripts/scan-secrets.sh
 a7867419d93209a05e60bdd53aef39e95368a506bea94204925c1dd4d8150d32  scripts/test-budget.sh
 d39772d4a50380753708f4f7e84d36fa783d6918bf30f95f323c374f82768448  sonar-project.properties

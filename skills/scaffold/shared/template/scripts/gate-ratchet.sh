@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Gate-config ratchet: gate-ratchet.sh <base-ref>. Fails when HEAD weakens a gate versus the merge base. Offline; runs the merge-base copy of itself and reads tracked files through git only.
+# Gate-config ratchet: gate-ratchet.sh <base-ref|auto>. Fails when HEAD weakens a gate versus the merge base. Offline; runs the merge-base copy of itself and reads tracked files through git only.
+# gate-ratchet.sh --list-guarded [ref] prints "kind<TAB>path" for every tracked file the ratchet compares; ci-gates.sh and the tests read that one list.
+# Guarded set, derived from the tracked tree, never listed by hand: each file under .claude/hooks/, .claude/settings.json, every scripts/ or .claude/ path named in a script, hook, lefthook.yml or CI file, and every protect-files.sh pattern except instruction, invariant, agent, MCP, image and merge-snapshot entries. Parsed configs keep their parsed comparison; the rest are compared by content.
+# Test scripts: every package.json script whose name has a test, coverage, lint, typecheck, build, check, verify, ci, format or audit word keeps its word list. Any change is a finding except these known-safe words: --reporter, --coverage.reporter, --outputFile (with or without a value), --coverage.reportsDirectory=, --silent, --color, --no-color. A script that is gone is a finding; a new script is covered by the flag checks and the CI and lefthook comparison.
+# pytest: any change to a [tool.pytest.ini_options] key or a new key is a finding, except raising --cov-fail-under and the markers, pythonpath and asyncio_default_fixture_loop_scope keys.
+# Type checkers: tsconfig and pyright strictness may tighten, never loosen; a new tsconfig or pyright config may not switch strictness off.
+# Allow-lists: dep-audit-allow.txt may only lose lines; comment-hygiene-patterns.txt may only gain lines at the end.
 set -uo pipefail
 
 die() {
@@ -7,24 +13,42 @@ die() {
   exit 2
 }
 
-base_ref=${1:-}
-if [ "$base_ref" = auto ]; then
-  base_ref=""
-  for cand in '@{upstream}' origin/HEAD origin/main origin/master; do
-    if git rev-parse --verify -q "$cand^{commit}" >/dev/null 2>&1; then base_ref=$cand; break; fi
-  done
-  if [ -z "$base_ref" ]; then echo "gate-ratchet: no base branch found (no upstream, origin/main or origin/master), so nothing to compare; CI runs this gate on the pull request"; exit 0; fi
-fi
-[ -n "$base_ref" ] || die "usage: gate-ratchet.sh <base-ref|auto> (for example origin/main; auto picks the upstream or origin/main)"
-git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
-mb=$(git merge-base "$base_ref" HEAD 2>/dev/null) || die "no merge base between $base_ref and HEAD (check out with full history)"
+list_mode=""
+if [ "${1:-}" = --list-guarded ]; then list_mode=1; list_ref=${2:-HEAD}; fi
 wd=$(mktemp -d "${TMPDIR:-/tmp}/gate-ratchet.XXXXXX") || die "cannot create a temporary folder"
 trap 'rm -rf "$wd"' EXIT
 
-# A PR must not rewrite the checker that judges it: run the merge-base copy when the base has one.
-if [ -z "${GATE_RATCHET_REEXEC:-}" ] && git show "$mb:scripts/gate-ratchet.sh" > "$wd/base-ratchet.sh" 2>/dev/null; then
-  GATE_RATCHET_REEXEC=1 bash "$wd/base-ratchet.sh" "$base_ref"
-  exit $?
+if [ -z "$list_mode" ]; then
+  base_ref=${1:-}
+  if [ "$base_ref" = auto ]; then
+    base_ref=""
+    for cand in '@{upstream}' origin/HEAD origin/main origin/master; do
+      if git rev-parse --verify -q "$cand^{commit}" >/dev/null 2>&1; then base_ref=$cand; break; fi
+    done
+    if [ -z "$base_ref" ]; then
+      if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${TF_BUILD:-}" ] || { [ -n "${CI:-}" ] && [ "${CI:-}" != false ]; }; then
+        die "no base branch found (no upstream, origin/main or origin/master), so the ratchet cannot run in CI; fetch the base branch with full history"
+      fi
+      echo "gate-ratchet: DID NOT RUN: no upstream, origin/main or origin/master to compare against, so no gate was checked. Fetch a base branch or pass a ref; CI runs this gate on the pull request."
+      exit 0
+    fi
+  fi
+  [ -n "$base_ref" ] || die "usage: gate-ratchet.sh <base-ref|auto> (for example origin/main; auto picks the upstream or origin/main)"
+  git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
+  mb=$(git merge-base "$base_ref" HEAD 2>/dev/null) || die "no merge base between $base_ref and HEAD (check out with full history)"
+
+  # A PR must not rewrite the checker that judges it: run the merge-base copy when the base has one.
+  if [ -z "${GATE_RATCHET_REEXEC:-}" ]; then
+    if git show "$mb:scripts/gate-ratchet.sh" > "$wd/base-ratchet.sh" 2>/dev/null; then
+      GATE_RATCHET_REEXEC=1 bash "$wd/base-ratchet.sh" "$base_ref"
+      exit $?
+    fi
+    if git cat-file -e "$mb:.claude/gates.txt" 2>/dev/null; then
+      die "the merge base has .claude/gates.txt but no scripts/gate-ratchet.sh, so the checker in this change would judge itself; restore scripts/gate-ratchet.sh at the base"
+    fi
+  fi
+else
+  git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
 fi
 
 # Files compared by parsed values, by the kind of parser they need; guard files are compared by content only.
@@ -40,6 +64,10 @@ kind_of() {
     scripts/test-budget.sh | */scripts/test-budget.sh) echo budget ;;
     .claude/gates.txt | */.claude/gates.txt) echo gates ;;
     .claude/registry-hosts.txt | */.claude/registry-hosts.txt) echo hosts ;;
+    .claude/dep-audit-allow.txt | */.claude/dep-audit-allow.txt) echo allow ;;
+    .claude/comment-hygiene-patterns.txt | */.claude/comment-hygiene-patterns.txt) echo patterns ;;
+    tsconfig.json | tsconfig.*.json | */tsconfig.json | */tsconfig.*.json) echo tsconfig ;;
+    pyrightconfig.json | */pyrightconfig.json) echo pyright ;;
     pnpm-workspace.yaml | */pnpm-workspace.yaml) echo pnpmws ;;
     .github/dependabot.yml | */.github/dependabot.yml) echo dependabot ;;
     .npmrc | */.npmrc) echo npmrc ;;
@@ -49,6 +77,59 @@ kind_of() {
     *) echo "" ;;
   esac
 }
+
+NL=$'\n'
+guard_nl=$NL
+
+# Tracked paths at <ref> that gate scripts, hooks, lefthook and CI files name, plus the protect-files.sh patterns that guard gates; one path per line.
+guard_scan() {
+  local ref=$1 tracked f pf line labels reason
+  tracked=$(git ls-tree -r --name-only "$ref" 2>/dev/null) || return 1
+  printf '%s\n' "$tracked" | grep -E '(^|/)[.]claude/hooks/|(^|/)[.]claude/settings[.]json$'
+  printf '%s\n' "$tracked" | grep -E '(^|/)(scripts|[.]claude|[.]lefthook|[.]github/workflows|azure-pipelines)(/|$)|(^|/)(lefthook[.]yml|azure-pipelines[^/]*[.]ya?ml)$' | while IFS= read -r f; do
+    git show "$ref:$f" 2>/dev/null | grep -aoE '(scripts|[.]claude)/[A-Za-z0-9_@./-]*[A-Za-z0-9_@-]'
+  done | sort -u > "$wd/mentions.lst"
+  printf '%s\n' "$tracked" | awk 'NR == FNR { m[$0] = 1; next } { p = $0; while (1) { if (p in m) { print $0; break }; i = index(p, "/"); if (!i) break; p = substr(p, i + 1) } }' "$wd/mentions.lst" -
+  pf=$(printf '%s\n' "$tracked" | grep -E '(^|/)[.]claude/hooks/protect-files[.]sh$' | head -n 1)
+  [ -n "$pf" ] || return 0
+  git show "$ref:$pf" 2>/dev/null | grep -E '^  [^ #].*\) reason=' | while IFS= read -r line; do
+    reason=${line#*reason=}
+    case "$reason" in *"instruction file"* | *"binding invariants"* | *"agent definition"* | *"MCP server"* | *"container image"* | *"merge base snapshot"*) continue ;; esac
+    labels=${line%%\) reason=*}
+    printf '%s\n' "$labels" | tr '|' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+  done | grep -v '^$' | sort -u > "$wd/pats.lst"
+  printf '%s\n' "$tracked" | awk 'NR == FNR { g = $0; gsub(/[.]/, "[.]", g); gsub(/[*]/, ".*", g); re[++n] = "^" g "$"; next } { for (i = 1; i <= n; i++) if ($0 ~ re[i]) { print; break } }' "$wd/pats.lst" -
+}
+
+# Loads the derived guard set of <ref> into guard_nl, newline-wrapped for exact matching.
+guard_load() {
+  guard_nl=$NL$(guard_scan "$1" | sort -u)$NL
+}
+
+# Parsed kind first, then membership in the derived guard set.
+kind_full() {
+  local k
+  k=$(kind_of "$1")
+  if [ -z "$k" ]; then
+    case "$guard_nl" in *"$NL$1$NL"*) k=guard ;; esac
+  fi
+  printf '%s' "$k"
+}
+
+# Prints "kind<TAB>path" for every tracked path at <ref> the ratchet compares.
+list_kinds() {
+  local ref=$1 k p
+  guard_load "$ref"
+  git ls-tree -r --name-only "$ref" | while IFS= read -r p; do
+    k=$(kind_full "$p")
+    if [ -n "$k" ]; then printf '%s\t%s\n' "$k" "$p"; fi
+  done
+}
+
+if [ -n "$list_mode" ]; then
+  list_kinds "$list_ref"
+  exit 0
+fi
 
 # True when the merge base tracked this exact path.
 base_has() { printf '%s\n' "$base_paths" | grep -Fxq -- "$1"; }
@@ -109,6 +190,19 @@ content_ok() {
       mask_ci < "$wd/base" > "$wd/base.m"
       mask_ci < "$wd/head" > "$wd/head.m"
       cmp -s "$wd/base.m" "$wd/head.m"
+      ;;
+    allow)
+      local l
+      while IFS= read -r l || [ -n "$l" ]; do
+        case "$l" in '' | '#'*) continue ;; esac
+        grep -Fxq -- "$l" "$wd/base" || return 1
+      done < "$wd/head"
+      return 0
+      ;;
+    patterns)
+      local n
+      n=$(awk 'END { print NR }' "$wd/base")
+      head -n "$n" "$wd/head" | cmp -s - "$wd/base"
       ;;
     gates)
       local l
@@ -536,15 +630,33 @@ function toml_lines(   i, line, raw, rest, p, sect, csect, pos, kind, s2, k2, n,
     } else if (MODE == "pyproject" && s2 ~ /^tool[.]ruff$/ && k2 == "extend") {
       emit("set", "ruff-extend", v); known = 1
     }
-    if (!known && cfg_scope(s2) && !cfg_neutral(s2, k2)) emit("cfg", csect "|" raw, vtxt)
-    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage)$/))) emit("cfg", csect "|" raw, vtxt)
+    if (!known && cfg_scope(s2) && !cfg_neutral(s2, k2)) {
+      if (s2 ~ /^tool[.]pytest/) vtxt = mask_cov(vtxt)
+      if (!cov_only(vtxt)) emit("cfg", csect "|" raw, vtxt)
+    }
+    else if (!known && ((s2 == "" && k2 == "tool") || (s2 == "tool" && k2 ~ /^(ruff|coverage|pytest|pyright|mypy)$/))) emit("cfg", csect "|" raw, vtxt)
     if (k2 == "useDefault" && rest ~ /true/) emit("req", "extend", "useDefault")
   }
 }
-# Tables whose every key must be known: all of .gitleaks.toml, and the ruff and coverage tables of pyproject.toml.
+# addopts text with the --cov-fail-under number masked; the min fact already stops a lower number.
+function mask_cov(v) {
+  gsub(/["'][ \t]*--cov-fail-under(=|[ \t]+)[0-9]+([.][0-9]+)?[ \t]*["']/, "", v)
+  gsub(/["']--cov-fail-under["'][ \t\n]*,[ \t\n]*["'][0-9]+([.][0-9]+)?["']/, "", v)
+  gsub(/[ \t]+--cov-fail-under(=|[ \t]+)[0-9]+([.][0-9]+)?/, "", v)
+  gsub(/--cov-fail-under(=|[ \t]+)[0-9]+([.][0-9]+)?[ \t]*/, "", v)
+  gsub(/[ \t\n]+/, " ", v); gsub(/ ?, ?/, ",", v); gsub(/,+/, ",", v)
+  gsub(/\[ /, "[", v); gsub(/ \]/, "]", v); gsub(/\[,/, "[", v); gsub(/,\]/, "]", v)
+  return v
+}
+# True for a masked pytest value that holds nothing once --cov-fail-under is gone.
+function cov_only(v) {
+  gsub(/[][" ,\t\n]/, "", v); gsub(/\x27/, "", v)
+  return v == ""
+}
+# Tables whose every key must be known: all of .gitleaks.toml, and the ruff, coverage, pytest, pyright and mypy tables of pyproject.toml.
 function cfg_scope(s) {
   if (MODE == "gitleaks") return 1
-  return (s ~ /^tool[.](ruff|coverage)([.]|$)/)
+  return (s ~ /^tool[.](ruff|coverage|pytest|pyright|mypy)([.]|$)/)
 }
 # Keys that change nothing about what a gate catches.
 function cfg_neutral(s, k) {
@@ -552,6 +664,7 @@ function cfg_neutral(s, k) {
   if (s ~ /^tool[.]ruff[.]format/ || s ~ /^tool[.]ruff[.]lint[.]isort/) return 1
   if (s == "tool.ruff" && k ~ /^(line-length|indent-width|target-version|src|output-format|cache-dir)$/) return 1
   if (s == "tool.coverage.report" && k ~ /^(show_missing|skip_covered|precision)$/) return 1
+  if (s ~ /^tool[.]pytest/ && k ~ /^(markers|pythonpath|asyncio_default_fixture_loop_scope)$/) return 1
   return 0
 }
 function toml_kind(s, k) {
@@ -657,6 +770,30 @@ function script_flags(name, s,   nw, W, i, w, opt, hasv) {
   }
 }
 
+# Scripts the gates run: a test, coverage, lint, type-check, build, check, verify, ci, format or audit word in the name, with a pre or post prefix ignored.
+function gate_script(name,   n, parts, i, t) {
+  n = split(tolower(name), parts, /[:._\/-]+/)
+  for (i = 1; i <= n; i++) {
+    t = parts[i]; sub(/^(pre|post)/, "", t)
+    if (t ~ /^(test|tests|coverage|cov|lint|eslint|ruff|typecheck|tsc|types|build|check|verify|ci|format|fmt|audit|e2e|mutation|mutate|dup|cpd|jscpd|secrets|scan|sonar|validate|gate|gates|pyright|mypy|vitest|pytest|knip)$/) return 1
+  }
+  return 0
+}
+
+# A script's words with the known-safe ones dropped; any other difference from the merge base is a finding.
+function wl_norm(s,   nw, W, i, w, out, skip) {
+  nw = split(s, W, /[ \t]+/); out = ""; skip = 0
+  for (i = 1; i <= nw; i++) {
+    w = W[i]; gsub(/^[\\"'(]+/, "", w); gsub(/[\\"');]+$/, "", w)
+    if (w == "") continue
+    if (skip) { skip = 0; continue }
+    if (w ~ /^(--reporter|--coverage[.]reporter|--outputFile)$/) { skip = 1; continue }
+    if (w ~ /^--(reporter|coverage[.]reporter|coverage[.]reportsDirectory|outputFile)=/ || w == "--silent" || w == "--color" || w == "--no-color") continue
+    out = out (out == "" ? "" : " ") w
+  }
+  return out
+}
+
 function scripts_walk(p,   n, j, ch, name, c, s) {
   n = length(T)
   if (substr(T, p, 1) != "{") fail("scripts is not an object literal")
@@ -676,6 +813,7 @@ function scripts_walk(p,   n, j, ch, name, c, s) {
     while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
     s = substr(T, p + 1, j - p - 1); p = j + 1
     script_flags(name, s)
+    if (gate_script(name)) emit("wl", name, wl_norm(s))
   }
   fail("unterminated scripts object")
 }
@@ -694,6 +832,87 @@ function do_pkgjson(   p, n, j, ch, key, v) {
     if (key == "scripts") scripts_walk(p)
     v = vtext(p); p = VEND
   }
+}
+
+function jstr_end(p,   j, ch, n) {
+  n = length(T); j = p + 1
+  while (j <= n) { ch = substr(T, j, 1); if (ch == "\\") { j += 2; continue }; if (ch == "\"") break; j++ }
+  return j
+}
+
+function ts_strict(k) {
+  return k ~ /^(strict|noImplicitAny|strictNullChecks|strictFunctionTypes|strictBindCallApply|strictPropertyInitialization|noImplicitThis|alwaysStrict|useUnknownInCatchVariables|noUncheckedIndexedAccess|exactOptionalPropertyTypes|noImplicitReturns|noFallthroughCasesInSwitch|noUnusedLocals|noUnusedParameters|noImplicitOverride|checkJs)$/
+}
+
+function ts_options(p,   n, j, key, v) {
+  n = length(T)
+  if (substr(T, p, 1) != "{") fail("compilerOptions is not an object literal")
+  p++
+  while (p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) == "}") return
+    if (substr(T, p, 1) != "\"") fail("a compilerOptions entry has no quoted name")
+    j = jstr_end(p); key = substr(T, p + 1, j - p - 1); p = j + 1
+    if (key ~ /\\/) fail("compiler option name with an escape sequence: " key)
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    v = vtext(p); p = VEND
+    if (ts_strict(key)) {
+      if (v == "true") emit("flag", key, 1)
+      else if (v == "false") emit("flag", key, 0)
+      else fail("compiler option " key " is not true or false: " v)
+    }
+  }
+  fail("unterminated compilerOptions")
+}
+
+function do_tsconfig(   p, n, j, key, v) {
+  n = length(T); p = index(T, "{") + 1
+  if (p <= 1) fail("tsconfig is not a JSON object")
+  while (p > 1 && p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) != "\"") break
+    j = jstr_end(p); key = substr(T, p + 1, j - p - 1); p = j + 1
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    if (key == "compilerOptions") ts_options(p)
+    else if (key == "extends") emit("cfg", "extends", vtext(p))
+    else if (key == "exclude") strict_array(p, "set", "exclude")
+    else if (key == "include" || key == "files") strict_array(p, "req", key)
+    v = vtext(p); p = VEND
+  }
+}
+
+function sev_of(v) {
+  gsub(/^"|"$/, "", v)
+  if (v == "none" || v == "false") return 0
+  if (v == "information" || v == "warning") return 1
+  if (v == "error" || v == "true") return 2
+  return -1
+}
+
+function do_pyright(   p, n, j, key, v, m, sv, mode) {
+  n = length(T); p = index(T, "{") + 1; mode = 2
+  if (p <= 1) fail("pyrightconfig is not a JSON object")
+  while (p > 1 && p <= n) {
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n,]/) p++
+    if (substr(T, p, 1) != "\"") break
+    j = jstr_end(p); key = substr(T, p + 1, j - p - 1); p = j + 1
+    while (p <= n && substr(T, p, 1) ~ /[ \t\n:]/) p++
+    v = vtext(p)
+    if (key == "typeCheckingMode") {
+      m = v; gsub(/^"|"$/, "", m)
+      if (m == "off") mode = 0; else if (m == "basic") mode = 1; else if (m == "standard") mode = 2; else if (m == "strict") mode = 3
+      else fail("typeCheckingMode is not a plain mode name: " v)
+    } else if (key ~ /^report[A-Za-z]+$/) {
+      sv = sev_of(v)
+      if (sv < 0) fail(key " is not a plain severity: " v)
+      emit("sev", key, sv)
+    } else if (key == "ignore" || key == "exclude") strict_array(p, "set", key)
+    else if (key == "include" || key == "strict") strict_array(p, "req", "pyright-" key)
+    else if (key !~ /^(venvPath|venv|pythonVersion|pythonPlatform|extraPaths|stubPath|typeshedPath|verboseOutput)$/) emit("cfg", key, v)
+    p = VEND
+  }
+  emit("min", "pyright-mode", mode)
+  emit("flag", "typeCheckingMode", (mode >= 2) ? 1 : 0)
 }
 
 function do_gitleaks(   n) {
@@ -802,6 +1021,8 @@ END {
   else if (K == "gitleaks") { T = clean(T, "toml"); do_gitleaks() }
   else if (K == "sonar") do_sonar()
   else if (K == "pkgjson") do_pkgjson()
+  else if (K == "tsconfig") { T = clean(T, "js"); do_tsconfig() }
+  else if (K == "pyright") { T = clean(T, "js"); do_pyright() }
   else if (K == "budget") do_budget()
   else if (K == "gates") do_gates()
   else if (K == "hosts") do_hosts()
@@ -825,6 +1046,8 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
     if ($1 == "set") bset[k SUBSEP $3] = 1
     else if ($1 == "req") breq[k SUBSEP $3] = 1
     else if ($1 == "cfg") bcfg[$2] = $3
+    else if ($1 == "wl") bwl[$2] = $3
+    else if ($1 == "flag") { if (!($2 in bflag) || $3 + 0 < bflag[$2] + 0) bflag[$2] = $3 }
     else {
       if (!(k in bagg)) { bagg[k] = $3; order[++no] = k }
       else if (($1 == "max" && $3 + 0 > bagg[k] + 0) || ($1 != "max" && $3 + 0 < bagg[k] + 0)) bagg[k] = $3
@@ -836,6 +1059,8 @@ function stronger(kind, a, b) { return (kind == "max") ? (a + 0 < b + 0) : (a + 
     if ($1 == "set") { if (!((k SUBSEP $3) in hset) && !((k SUBSEP $3) in bset)) hnew[++nn] = k SUBSEP $3; hset[k SUBSEP $3] = 1 }
     else if ($1 == "req") hreq[k SUBSEP $3] = 1
     else if ($1 == "cfg") hcfg[$2] = $3
+    else if ($1 == "wl") hwl[$2] = $3
+    else if ($1 == "flag") { if (!($2 in hflag) || $3 + 0 < hflag[$2] + 0) hflag[$2] = $3 }
     else if (!(k in hagg)) { hagg[k] = $3; horder[++nh] = k }
     else if (($1 == "max" && $3 + 0 > hagg[k] + 0) || ($1 != "max" && $3 + 0 < hagg[k] + 0)) hagg[k] = $3
   }
@@ -858,13 +1083,23 @@ END {
     else if (p[1] == "sev" && (n in bsevmax) && hagg[k] + 0 < bsevmax[n] + 0) { printf "WEAKENED %s: lint rule %s is %s in a new block, below %s at the merge base\n", F, p[2], label("sev", hagg[k]), label("sev", bsevmax[n]); bad = 1 }
     else if (p[1] == "max" && p[2] ~ /[.]limit/ && (n in blim) && hagg[k] + 0 > blim[n] + 0) { printf "WEAKENED %s: limit %s is %s in a new block, above %s at the merge base\n", F, p[2], hagg[k], blim[n]; bad = 1 }
   }
-  for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (i = 1; i <= nn; i++) { split(hnew[i], p, SUBSEP); printf "WEAKENED %s: new ignore or exclude in %s was absent, now '%s'\n", F, p[2], p[3]; bad = 1 }
+  for (k in bwl) {
+    if (!(k in hwl)) { printf "WEAKENED %s: script %s was '%s', now removed (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k]; bad = 1 }
+    else if (hwl[k] != bwl[k]) { printf "WEAKENED %s: script %s was '%s', now '%s' (a gate script may only change by the known-safe words in the gate-ratchet.sh header)\n", F, k, bwl[k], hwl[k]; bad = 1 }
+  }
+  for (k in bflag) {
+    if (bflag[k] + 0 != 1) continue
+    if (!(k in hflag)) { printf "WEAKENED %s: strictness option %s was on, now removed\n", F, k; bad = 1 }
+    else if (hflag[k] + 0 == 0) { printf "WEAKENED %s: strictness option %s was on, now off\n", F, k; bad = 1 }
+  }
+  for (k in hflag) if (hflag[k] + 0 == 0 && !(k in bflag)) { printf "WEAKENED %s: strictness option %s is off in a setting the merge base did not have\n", F, k; bad = 1 }
   for (k in bcfg) {
     if (!(k in hcfg)) { printf "WEAKENED %s: setting %s was '%s', now removed (a setting the checker does not know must stay as it was)\n", F, k, bcfg[k]; bad = 1 }
     else if (hcfg[k] != bcfg[k]) { printf "WEAKENED %s: setting %s was '%s', now '%s' (a setting the checker does not know must stay as it was)\n", F, k, bcfg[k], hcfg[k]; bad = 1 }
   }
-  for (k in hcfg) if (!(k in bcfg)) { printf "WEAKENED %s: new setting %s = '%s' (a setting the checker does not know must stay as it was)\n", F, k, hcfg[k]; bad = 1 }
-  for (k in breq) if (!(k in hreq)) { split(k, p, SUBSEP); printf "WEAKENED %s: required %s '%s' was present, now removed\n", F, p[2], p[3]; bad = 1 }
+  if (!NEWFILE) for (k in hcfg) if (!(k in bcfg)) { printf "WEAKENED %s: new setting %s = '%s' (a setting the checker does not know must stay as it was)\n", F, k, hcfg[k]; bad = 1 }
+  for (k in breq) if (!(k in hreq) && !NEWFILE) { split(k, p, SUBSEP); printf "WEAKENED %s: required %s '%s' was present, now removed\n", F, p[2], p[3]; bad = 1 }
   exit bad
 }
 AWK
@@ -876,13 +1111,14 @@ if ! printf '%s\n' "$base_paths" | grep -Eq '(^|/)[.]claude/gates[.]txt$'; then
   echo "gate-ratchet: first adoption: the merge base has no .claude/gates.txt, nothing to compare"
   exit 0
 fi
+guard_load "$mb"
 renames=$(git diff -M --name-status --diff-filter=R "$mb" HEAD 2>/dev/null)
 
 weakened=0
 unreadable=0
 checked=0
 while IFS= read -r path; do
-  kind=$(kind_of "$path")
+  kind=$(kind_full "$path")
   [ -n "$kind" ] || continue
   checked=$((checked + 1))
   : > "$wd/base"; : > "$wd/head"; : > "$wd/base.f"; : > "$wd/head.f"
@@ -900,24 +1136,33 @@ while IFS= read -r path; do
     continue
   fi
   file_bad=0
-  if [ "$kind" != guard ]; then
+  newfile=""
+  if [ "$kind" != guard ] && [ "$kind" != allow ] && [ "$kind" != patterns ]; then
     if ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/head" 2>&1 > "$wd/head.f"); then
       printf 'UNREADABLE %s: %s (fail closed)\n' "$path" "$msg"
       unreadable=1
       continue
     fi
-    if [ "$have_base" -eq 0 ]; then continue; fi
-    if ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
+    if [ "$have_base" -eq 0 ]; then
+      case "$kind" in tsconfig | pyright) newfile=1; : > "$wd/base.f" ;; *) continue ;; esac
+    elif ! msg=$(awk -v K="$kind" -f "$wd/facts.awk" "$wd/base" 2>&1 > "$wd/base.f"); then
       printf 'NOTE %s: unreadable at the merge base (%s); compared with an empty baseline\n' "$path" "$msg"
       : > "$wd/base.f"
     fi
-    if ! awk -v F="$path" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
+    if ! awk -v F="$path" -v NEWFILE="$newfile" -f "$wd/compare.awk" "$wd/base.f" "$wd/head.f"; then
       file_bad=1
     fi
   fi
-  if [ "$have_base" -eq 0 ]; then continue; fi
+  if [ "$have_base" -eq 0 ]; then
+    if [ "$file_bad" -eq 1 ]; then weakened=1; fi
+    continue
+  fi
   if [ "$file_bad" -eq 0 ] && ! content_ok "$kind"; then
-    printf 'WEAKENED %s: gate script, runner or manifest changed (content differs from the merge base)\n' "$path"
+    case "$kind" in
+      allow) printf 'WEAKENED %s: the advisory allow-list gained a line the merge base did not have\n' "$path" ;;
+      patterns) printf 'WEAKENED %s: comment-hygiene patterns were removed, edited or reordered (lines may only be added at the end)\n' "$path" ;;
+      *) printf 'WEAKENED %s: gate script, runner or manifest changed (content differs from the merge base)\n' "$path" ;;
+    esac
     file_bad=1
   fi
   if [ "$file_bad" -eq 1 ]; then weakened=1; fi

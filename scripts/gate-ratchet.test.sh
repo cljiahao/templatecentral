@@ -30,6 +30,10 @@ seed() {
   cp "$SH/template/scripts/test-budget.sh" "$R/scripts/test-budget.sh"
   cp "$SH/template/.gitleaks.toml" "$R/.gitleaks.toml"
   cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+  cp "$SH/template/scripts/check-docs.sh" "$R/scripts/check-docs.sh"
+  cp "$SH/template/.claude/comment-hygiene-patterns.txt" "$R/.claude/comment-hygiene-patterns.txt"
+  printf '# advisory allow-list\nGHSA-aaaa-bbbb-cccc 2099-01-01 reason\n' > "$R/.claude/dep-audit-allow.txt"
+  printf '{}\n' > "$R/.claude/settings.json"
   cp "$SH/template/.claude/ci-gates.sh" "$SH/template/.claude/verify-harness.sh" "$R/.claude/"
   cp "$SH/template-$1/lefthook.yml" "$R/lefthook.yml"
   if [[ "$1" == ts ]]; then
@@ -37,6 +41,7 @@ seed() {
     cp "$SH/template-ts/.jscpd.json" "$R/.jscpd.json"
     cp "$SH/template-ts/sonar-project.properties" "$R/sonar-project.properties"
     cp "$SH/../nestjs/template/package.json" "$R/package.json"
+    cp "$SH/../nestjs/template/tsconfig.json" "$R/tsconfig.json"
     cp "$SH/../nestjs/template/pnpm-workspace.yaml" "$R/pnpm-workspace.yaml"
     cp "$SH/template/.claude/registry-hosts.txt" "$R/.claude/registry-hosts.txt"
     mkdir -p "$R/.github"
@@ -58,6 +63,7 @@ open(p, "w").write(s)
 PY
   else
     cp "$SH/../fastapi/template/pyproject.toml" "$R/pyproject.toml"
+    cp "$SH/../fastapi/template/pyrightconfig.json" "$R/pyrightconfig.json"
     cp "$SH/template-py/.jscpd.json" "$R/.jscpd.json"
     cp "$SH/template-py/sonar-project.properties" "$R/sonar-project.properties"
     cp "$SH/template-ci/github-py/.github/workflows/ci.yml" "$R/.github/workflows/ci.yml"
@@ -442,6 +448,7 @@ R="$T/next"
 rm -rf "$R"
 mkdir -p "$R/.claude" "$R/scripts"
 cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
 cp "$SH/../nextjs/template/eslint.config.mjs" "$R/"
 git -C "$R" init -q -b main
 git_ add -A
@@ -458,6 +465,7 @@ for UI in next:nextjs/template/vitest.config.ts vite:vite-react/template/vite.co
   rm -rf "$R"
   mkdir -p "$R/.claude" "$R/scripts"
   cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+  cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
   cp "$SH/../${UI#*:}" "$R/$CFG"
   git -C "$R" init -q -b main
   git_ add -A
@@ -755,9 +763,9 @@ source = [\"x\"]
 passes pyproject.toml "[tool.coverage.report]" "[tool.ruff.format]
 quote-style = \"single\"
 [tool.coverage.report]" "ruff format quote-style"
-passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
 addopts = \"-q\"
-[tool.coverage.report]" "pytest options edit"
+[tool.coverage.report]" "pytest options edit" "addopts"
 git_ checkout -q -B work main
 sed -i.bak 's/tool[.]ruff/tool.rff/g' "$R/pyproject.toml" && rm -f "$R/pyproject.toml.bak"
 git_ commit -q -am rename
@@ -810,9 +818,9 @@ addopts = [\"--cov-fail-under\", \"0\"]
 passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
 addopts = \"--cov-fail-under=90\"
 [tool.coverage.report]" "addopts --cov-fail-under raised"
-passes pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
+weakens pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
 addopts = \"--no-cov-on-fail\"
-[tool.coverage.report]" "addopts --no-cov-on-fail is not --no-cov"
+[tool.coverage.report]" "addopts --no-cov-on-fail is no longer a known-safe edit" "addopts"
 edit pyproject.toml "[tool.coverage.report]" "[tool.pytest.ini_options]
 addopts = \"--cov-fail-under=abc\"
 [tool.coverage.report]"
@@ -823,6 +831,113 @@ for f in pytest.ini tox.ini setup.cfg; do
   add_file "$f" "[pytest]"
   expect 1 "$f shadows pyproject" "$f" "competes"
 done
+
+
+# Round 3: test-script words are an allow-list.
+seed ts
+for fl in '--dir test/x' '--exclude **/*' '--changed' '-t nothing' '--bail=1' '--shard=1/2' '--testNamePattern=none'; do
+  weakens package.json '"test:ci": "vitest --run --coverage"' "\"test:ci\": \"vitest --run --coverage $fl\"" "test:ci word $fl" "known-safe words" "test:ci"
+done
+weakens package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run"' "test:ci loses --coverage" "known-safe words" "test:ci"
+weakens package.json '"test:cov": "vitest --run --coverage"' '"test:cov": "vitest --run --coverage --changed"' "test:cov word added" "test:cov"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --reporter=verbose"' "test:ci --reporter=verbose is known-safe"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --silent"' "test:ci --silent is known-safe"
+passes package.json '"test:ci": "vitest --run --coverage"' '"test:ci": "vitest --run --coverage --coverage.reporter=text"' "test:ci --coverage.reporter is known-safe"
+
+# Round 3: pytest keys.
+seed py
+for fl in '--cov=src/narrow' '-m unit' '--ignore=test' '--deselect=test/a' '-k nothing' '-o addopts=' '--lf' '--co'; do
+  weakens pyproject.toml '"--import-mode=importlib",' "\"--import-mode=importlib\", \"$fl\"," "addopts adds $fl" "addopts"
+done
+for key in 'testpaths = ["test/x"]' 'python_files = ["nomatch_*.py"]' 'python_classes = ["Nothing"]' 'python_functions = ["nothing_*"]' 'norecursedirs = ["test"]' 'filterwarnings = ["ignore"]'; do
+  weakens pyproject.toml 'asyncio_mode = "auto"' "$key
+asyncio_mode = \"auto\"" "pytest key $key" "new setting" "${key%% =*}"
+done
+passes pyproject.toml '"--import-mode=importlib",' '"--import-mode=importlib", "--cov-fail-under=90",' "pytest --cov-fail-under raised from nothing"
+passes pyproject.toml '"--import-mode=importlib",' '"--import-mode=importlib", "--cov-fail-under", "90",' "pytest --cov-fail-under split form raised"
+passes pyproject.toml '  "integration: needs a running service",' '  "integration: needs a running service",
+  "slow: takes a while",' "pytest new marker"
+
+# Round 3: gate-bearing files that were never compared.
+seed ts
+weakens scripts/check-docs.sh "" "exit 0
+" "gate script gets an early exit" "scripts/check-docs.sh" "content differs"
+weakens .claude/settings.json "{}" '{"hooks": {}}' "settings.json edited" ".claude/settings.json" "content differs"
+weakens .claude/hooks/protect-files.sh "#!/usr/bin/env bash" "#!/usr/bin/env bash
+exit 0" "hook edited" ".claude/hooks/protect-files.sh" "content differs"
+edit .claude/dep-audit-allow.txt "reason
+" "reason
+GHSA-dddd-eeee-ffff 2099-01-01 new
+"
+expect 1 "allow-list gains a line" ".claude/dep-audit-allow.txt" "advisory allow-list gained a line"
+passes .claude/dep-audit-allow.txt "GHSA-aaaa-bbbb-cccc 2099-01-01 reason
+" "" "allow-list loses a line"
+passes .claude/dep-audit-allow.txt "# advisory allow-list" "# advisory allow-list, reviewed" "allow-list comment edit"
+git_ checkout -q -B work main
+: > "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "empty patterns"
+expect 1 "patterns emptied" ".claude/comment-hygiene-patterns.txt" "patterns were removed"
+git_ checkout -q -B work main
+printf '^[Nn]ote[[:space:]]\n' >> "$R/.claude/comment-hygiene-patterns.txt"
+git_ commit -q -am "append pattern"
+expect 0 "patterns appended"
+weakens tsconfig.json '"strict": true' '"strict": false' "tsconfig strict off" "tsconfig.json" "strictness option strict was on, now off"
+weakens tsconfig.json '"strict": true' '"strict": true, "noImplicitAny": false' "tsconfig noImplicitAny off" "noImplicitAny"
+passes tsconfig.json '"strictPropertyInitialization": false' '"strictPropertyInitialization": true' "tsconfig tightened"
+add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": false}}'
+expect 1 "new tsconfig with strict off" "tsconfig.spec.json" "strictness option strict is off"
+add_file tsconfig.spec.json '{"extends": "./tsconfig.json", "compilerOptions": {"strict": true}}'
+expect 0 "new tsconfig with strict on"
+seed py
+weakens pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "off", "venvPath": "."' "pyright mode off" "pyrightconfig.json" "typeCheckingMode"
+passes pyrightconfig.json '"venvPath": "."' '"typeCheckingMode": "strict", "venvPath": "."' "pyright mode strict"
+weakens pyrightconfig.json '"venvPath": "."' '"reportMissingImports": "none", "venvPath": "."' "pyright rule none" "reportMissingImports"
+
+# Round 3: the guarded set is derived from the tree.
+seed ts
+printf '#!/usr/bin/env bash\necho gate\n' > "$R/scripts/check-extra.sh"
+printf '# runs scripts/check-extra.sh\n' >> "$R/.claude/gates.txt"
+git_ add -A
+git_ commit -q -m "gate script named by gates.txt"
+git_ checkout -q -B work main
+printf 'exit 0\n' >> "$R/scripts/check-extra.sh"
+git_ commit -q -am "sabotage"
+expect 1 "a script named by the manifest is guarded" "scripts/check-extra.sh" "content differs"
+LISTED=$(cd "$R" && bash scripts/gate-ratchet.sh --list-guarded HEAD)
+for g in scripts/check-extra.sh scripts/check-docs.sh .claude/settings.json .claude/hooks/protect-files.sh .claude/dep-audit-allow.txt .claude/comment-hygiene-patterns.txt tsconfig.json; do
+  has "$g" "$LISTED" "list-guarded names $g"
+done
+
+# Round 3: auto base with nothing to compare against.
+seed ts
+git_ checkout -q -B work main
+OUT=$(cd "$R" && env -u CI -u GITHUB_ACTIONS -u TF_BUILD bash scripts/gate-ratchet.sh auto 2>&1)
+EC=$?
+check 0 "$EC" "auto base without upstream exits 0 outside CI ($OUT)"
+has "DID NOT RUN" "$OUT" "auto base without upstream says it did not run"
+OUT=$(cd "$R" && env -u TF_BUILD -u GITHUB_ACTIONS CI=true bash scripts/gate-ratchet.sh auto 2>&1)
+EC=$?
+check 2 "$EC" "auto base without upstream fails closed in CI ($OUT)"
+has "no base branch found" "$OUT" "auto base in CI names the cause"
+OUT=$(cd "$R" && env -u CI -u TF_BUILD GITHUB_ACTIONS=true bash scripts/gate-ratchet.sh auto 2>&1)
+check 2 "$?" "auto base without upstream fails closed under GITHUB_ACTIONS ($OUT)"
+
+# Round 3: the merge base must carry the ratchet script.
+seed ts
+git_ rm -q scripts/gate-ratchet.sh
+git_ commit -q -m "base without ratchet script"
+git_ update-ref refs/remotes/origin/main main
+git_ checkout -q -B work main
+cp "$RATCHET" "$R/scripts/gate-ratchet.sh"
+git_ add -A
+git_ commit -q -m "head brings its own judge"
+OUT=$(cd "$R" && LABELS="" bash .claude/ci-gates.sh ratchet main 2>&1)
+EC=$?
+check 1 "$EC" "ci ratchet fails when the base has no ratchet script ($OUT)"
+has "would judge itself" "$OUT" "ci ratchet names the missing base script"
+OUT=$(cd "$R" && bash scripts/gate-ratchet.sh main 2>&1)
+check 2 "$?" "ratchet fails when the base has no ratchet script ($OUT)"
+has "would judge itself" "$OUT" "ratchet names the missing base script"
 
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

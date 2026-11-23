@@ -486,5 +486,81 @@ for st in ts py; do
   check 0 "$RC" "[$st] an ordinary source file passes protect-files"
 done
 
+# ---- round 3: casts split over a line break, the harness folders and ESLint config are scanned, the guarded set is complete.
+newrepo split-cast
+printf 'const v = JSON.parse(s) as\n  any;\n' > "$R/src/a.ts"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "as and any on two lines is flagged"
+has "as any" "$OUT" "split cast message names the marker"
+has "src/a.ts" "$OUT" "split cast message names the file"
+newrepo split-lookalike
+printf 'const v = JSON.parse(s) as\n  anything;\nconst w = x as\n  unknown;\n' > "$R/src/a.ts"
+g add -A
+g commit -q -m work
+runwa
+check 0 "$RC" "as on one line and a longer word on the next is not flagged ($OUT)"
+
+newrepo harness-ignore
+mkdir -p "$R/.claude/hooks"
+printf '// @ts-ignore\nmodule.exports = {};\n' > "$R/.claude/hooks/h.cjs"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "@ts-ignore under .claude is flagged"
+has ".claude/hooks/h.cjs:1: @ts-ignore" "$OUT" "harness folder marker names file, line and marker"
+newrepo eslint-nocheck
+printf '// @ts-nocheck\nexport default [];\n' > "$R/eslint.config.js"
+g add -A
+g commit -q -m work
+runwa
+check 1 "$RC" "@ts-nocheck in the root ESLint config is flagged"
+has "eslint.config.js:1: @ts-nocheck" "$OUT" "ESLint config marker names file, line and marker"
+newrepo harness-clean
+mkdir -p "$R/.claude/hooks"
+printf 'module.exports = {};\n' > "$R/.claude/hooks/h.cjs"
+printf 'export default [];\n' > "$R/eslint.config.js"
+g add -A
+g commit -q -m work
+runwa
+check 0 "$RC" "clean harness and ESLint files pass ($OUT)"
+
+# every file a gate reads must be in the guarded set, and protect-files must cover it.
+for st in ts py; do
+  newrepo "guard-$st"
+  cp -R "$HK/template/." "$R/"
+  cp -R "$HK/template-$st/." "$R/"
+  if [ "$st" = ts ]; then
+    cp -R "$HK/template-ci/github-ts/." "$R/"
+    cp -R "$HK/template-ci/azure/." "$R/"
+    cp -R "$HK/template-ci/azure-ts/." "$R/"
+    cp "$HK/../nestjs/template/tsconfig.json" "$R/tsconfig.json"
+  else
+    cp -R "$HK/template-ci/github-py/." "$R/"
+    cp -R "$HK/template-ci/azure/." "$R/"
+    cp -R "$HK/template-ci/azure-py/." "$R/"
+    cp "$HK/../fastapi/template/pyrightconfig.json" "$R/pyrightconfig.json"
+  fi
+  printf '# advisory allow-list\n' > "$R/.claude/dep-audit-allow.txt"
+  printf '{}\n' > "$R/.claude/settings.json"
+  g add -A
+  g commit -q -m seeded
+  LISTED=$(cd "$R" && clean bash scripts/gate-ratchet.sh --list-guarded HEAD 2>&1)
+  check 0 "$?" "[$st] --list-guarded exits 0"
+  LISTED_PATHS=$(printf '%s\n' "$LISTED" | awk -F'\t' '{print $2}')
+  NAMED=$(cd "$R" && { grep -ho 'scripts/[A-Za-z0-9_-]*[.]sh' .claude/gates.txt lefthook.yml; find .claude/hooks -type f; printf '%s\n' .claude/settings.json .claude/dep-audit-allow.txt .claude/comment-hygiene-patterns.txt .claude/registry-hosts.txt .claude/gates.txt .claude/ci-gates.sh .claude/verify-harness.sh scripts/gate-ratchet.sh tsconfig.json pyrightconfig.json; } | sort -u)
+  seen=0
+  for f in $NAMED; do
+    [ -f "$R/$f" ] || continue
+    seen=$((seen + 1))
+    if printf '%s\n' "$LISTED_PATHS" | grep -qx -- "$f"; then ok; else bad "[$st] gate-read file $f is missing from the guarded set"; fi
+    j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))' "$R/$f")
+    OUT=$(cd "$R" && printf '%s' "$j" | clean env CLAUDE_PROJECT_DIR="$R" bash "$HK/template-$st/.claude/hooks/protect-files.sh" 2>&1)
+    if [ -n "$OUT" ]; then ok; else bad "[$st] protect-files does not cover guarded file $f"; fi
+  done
+  if [ "$seen" -ge 12 ]; then ok; else bad "[$st] guarded-set test saw only $seen gate-read files"; fi
+done
+
 echo "seeded-gates: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
