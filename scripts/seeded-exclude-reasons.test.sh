@@ -4,7 +4,7 @@
 # copy of each fixture, so the fixtures stay untouched; their hashes are compared before and after the run.
 # The JS and TS scanner needs a typescript install to read configs. This script uses TC_TEST_TYPESCRIPT_DIR, then ./node_modules, then
 # the version pinned in skills/scaffold/shared/versions.txt installed once into a cache folder under $TMPDIR. It never scans a home folder.
-# Usage: bash scripts/seeded-exclude-reasons.test.sh        Needs bash 3.2+, find, awk, node, python3; npm and network only for the first cache install.
+# Usage: bash scripts/seeded-exclude-reasons.test.sh        Needs bash 3.2+, find, awk, node, Python (3.11 or newer) or the tomli package; npm and network only for the first cache install.
 set -uo pipefail
 export LC_ALL=C
 
@@ -61,12 +61,45 @@ tree_hash() {
   done | shasum | cut -d' ' -f1)
 }
 
+# The gate picks its Python the same way (rules.sh resolve_python): .venv/bin/python3, the highest python3.N, then python3; the first that
+# can read TOML. Without one, every case that needs a TOML or INI reader is skipped and one failure says so, instead of one per case.
+# shellcheck source=/dev/null
+. "$root/skills/scaffold/shared/template/scripts/check-exclude-rules.sh"
+if PYBIN=$(resolve_python "$root"); then
+  echo "# python: $PYBIN ($("$PYBIN" -I -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'))"
+else
+  PYBIN=
+  nok "no Python 3.11 or newer, or tomli package, was found, so every pyproject.toml, setup.cfg, tox.ini and .coveragerc case is skipped (tried: $RULES_PY_TRIED)"
+fi
+# needs_py DIR: true when the staged project holds a TOML or INI file the gate must read with Python.
+needs_py() {
+  [ -z "$PYBIN" ] || return 1
+  [ -n "$(find "$1" \( -name node_modules \) -prune -o \( -name '*.toml' -o -name '*.cfg' -o -name '*.ini' -o -name '.coveragerc*' \) -print 2> /dev/null | head -n 1)" ]
+}
+
+# Fixture trees git cannot hold: a folder named build or coverage is ignored by .gitignore, and an empty folder is not stored. They are
+# built here, so a fresh clone runs the same cases.
+runtime_tree() { # runtime_tree NAME DIR
+  local sub
+  case "$1" in
+    r2-pkg-build | r2-pkg-coverage)
+      sub=${1#r2-pkg-}
+      mkdir -p "$2/packages/$sub/src"
+      printf '{\n  "name": "demo",\n  "version": "0.0.0",\n  "private": true\n}\n' > "$2/packages/$sub/package.json"
+      printf "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n  test: {\n    coverage: {\n      exclude: ['src/**'],\n    },\n  },\n});\n" > "$2/packages/$sub/vitest.config.ts"
+      printf 'export const a = 1;\n' > "$2/packages/$sub/src/index.ts"
+      ;;
+    r2-symlink-dir) mkdir -p "$2/src/real" ;;
+  esac
+}
+
 # Copy fixture NAME to a fresh folder and link typescript into it (unless the second argument is "no-ts").
 stage() {
   local d=$WORK/$1
   rm -rf "$d"
   mkdir -p "$d"
   cp -R "$FIX/$1/." "$d/"
+  runtime_tree "$1" "$d"
   if [ "${2:-}" != no-ts ]; then
     mkdir -p "$d/node_modules"
     ln -s "$TS" "$d/node_modules/typescript"
@@ -84,6 +117,7 @@ run_gate() {
 expect_ok() {
   local d
   d=$(stage "$1")
+  if needs_py "$d"; then return 0; fi
   run_gate "$d"
   if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "$1 passes"; else nok "$1 should pass (exit $RC)" "$OUT"; fi
 }
@@ -91,6 +125,7 @@ expect_ok() {
 expect_fail() {
   local d
   d=$(stage "$1")
+  if needs_py "$d"; then return 0; fi
   run_gate "$d"
   if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$2"; then ok "$1 fails with: $2"; else nok "$1 should fail with '$2' (exit $RC)" "$OUT"; fi
 }
@@ -289,25 +324,55 @@ ln -s real-config.ts "$d/vitest.config.ts"
 run_gate "$d"
 if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -q 'vitest.config.ts is a symlink'; then ok "a symlinked config fails"; else nok "a symlinked config should fail (exit $RC)" "$OUT"; fi
 
-# Framework defaults are narrow: a config glob at any depth and a one-level test folder need a reason; root configs and test folders do not.
+# Framework defaults are compared after normalisation: a config glob at any depth needs a reason; root configs and test folders (test/*, tests/*) do not.
 expect_fail defaults-config-bad "vitest.config.ts:7 coverage-exclude entry '\*\*/\*\.config\.\*' has no reason"
 expect_ok defaults-config-reason
 expect_ok defaults-root-config
-expect_fail defaults-test-star "vitest.config.ts:7 coverage-exclude entry 'test/\*' has no reason"
+expect_ok defaults-test-star
 expect_fail defaults-py-bad "pyproject.toml:3 coverage-exclude entry '\*/test_\*\.py' has no reason"
 expect_ok defaults-py-ok
 
-# Python without tomllib: a failure that names the Python version needed, never a silent skip.
+# Python without tomllib or tomli: a failure that names the version needed, never a silent skip. The path holds links to every tool of
+# the real path except Python, plus one python3 that cannot import tomllib or tomli.
 shim=$WORK/shim
 mkdir -p "$shim"
 realpy=$(command -v python3)
-printf '#!/bin/sh\nshift\nexec "%s" -I -c %s "$@"\n' "$realpy" "'import sys; sys.modules[\"tomllib\"] = None; sys.argv = sys.argv[1:]; exec(compile(open(sys.argv[0]).read(), sys.argv[0], \"exec\"))'" > "$shim/python3"
-chmod +x "$shim/python3"
-d=$(stage fastapi-omit-ok)
-OUT=$(PATH="$shim:$PATH" bash "$root/$GATE" "$d" 2>&1)
-RC=$?
-n=$(printf '%s\n' "$OUT" | grep -c 'needs 3\.11 or newer (tomllib)')
-if [ "$n" -eq 1 ] && [ "$RC" -eq 1 ]; then ok "a Python without tomllib fails and names Python 3.11"; else nok "expected one tomllib failure (exit 1), found $n (exit $RC)" "$OUT"; fi
+if [ -n "$realpy" ]; then
+  oldifs=$IFS
+  IFS=:
+  for pdir in $PATH; do
+    [ -d "$pdir" ] || continue
+    for tool in "$pdir"/*; do
+      tname=${tool##*/}
+      case "$tname" in python* | pip* | idle* | pydoc*) continue ;; esac
+      if [ -x "$tool" ] && [ ! -e "$shim/$tname" ]; then ln -s "$tool" "$shim/$tname"; fi
+    done
+  done
+  IFS=$oldifs
+  cat > "$shim/blocked.py" <<'PYEND'
+import runpy
+import sys
+
+sys.modules["tomllib"] = None
+sys.modules["tomli"] = None
+args = sys.argv[1:]
+if args and args[0] == "-c":
+    sys.argv = ["-c"] + args[2:]
+    exec(compile(args[1], "<string>", "exec"), {"__name__": "__main__"})
+else:
+    sys.argv = args
+    runpy.run_path(args[0], run_name="__main__")
+PYEND
+  printf $'#!/bin/sh\nif [ "$1" = -I ]; then shift; fi\nexec "%s" -I "%s" "$@"\n' "$realpy" "$shim/blocked.py" > "$shim/python3"
+  chmod +x "$shim/python3"
+  d=$(stage fastapi-omit-ok)
+  OUT=$(PATH="$shim" bash "$root/$GATE" "$d" 2>&1)
+  RC=$?
+  n=$(printf '%s\n' "$OUT" | grep -c 'needs 3\.11 or newer (tomllib), or the tomli package')
+  if [ "$n" -eq 1 ] && [ "$RC" -eq 1 ]; then ok "a Python without tomllib or tomli fails, names the version needed and what was tried"; else nok "expected one tomllib failure (exit 1), found $n (exit $RC)" "$OUT"; fi
+else
+  nok "no python3 on the path, so the no-tomllib case cannot run"
+fi
 
 # The four real stack templates, as they are today. Three fail because their excludes carry no "reason:" line; the wiring round adds the
 # reasons and turns each expected failure below into expect_template_ok.
@@ -329,9 +394,10 @@ expect_template_fail() {
     if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$pat"; then ok "template $stack fails as expected: $pat"; else nok "template $stack should fail with '$pat' (exit $RC)" "$OUT"; fi
   done
 }
-expect_template_fail nextjs "vitest\.config\.ts:24 coverage-include list 'src/\*\*/\*\.ts, src/\*\*/\*\.tsx' is an allow-list: it excludes every file it does not list, and it has no reason"
-expect_template_fail nestjs "vitest\.config\.ts:15 coverage-include list 'src/\*\*/\*\.ts' is an allow-list: it excludes every file it does not list, and it has no reason"
-expect_template_fail vite-react "vite\.config\.ts:43 coverage-include list 'src/\*\*/\*\.\{ts,tsx\}' is an allow-list: it excludes every file it does not list, and it has no reason" "vite\.config\.ts:45 coverage-exclude entry 'src/test/\*\*' has no reason"
+expect_template_fail nextjs "vitest\.config\.ts:24 coverage-include list 'src/\*\*/\*\.ts, src/\*\*/\*\.tsx' is an allow-list that leaves out source files, so it excludes every file it does not list, and it has no reason"
+expect_template_fail nestjs "vitest\.config\.ts:15 coverage-include list 'src/\*\*/\*\.ts' is an allow-list that leaves out source files, so it excludes every file it does not list, and it has no reason"
+# vite-react: its include covers every source file, so it narrows nothing and is no finding; only the test folder exclude remains.
+expect_template_fail vite-react "vite\.config\.ts:45 coverage-exclude entry 'src/test/\*\*' has no reason"
 d=$(tpl_stage fastapi)
 run_gate "$d"
 if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "template fastapi passes"; else nok "template fastapi should pass (exit $RC)" "$OUT"; fi
@@ -364,11 +430,11 @@ RL=check-exclude-rules.sh
 
 # 1 A broad exclude fails whatever its reason; a sub-folder of a source root passes with a reason.
 for n in root type brace; do
-  expect_fail "r2-broad-$n" "vitest.config.ts:8 coverage-exclude entry '[^']+' excludes a whole source root or every file of a source type, so it hides hand-written code and no reason can cover it"
-  revert_proof "r2-broad-$n" "excludes a whole source root" "$G" $'hides_source "$entry"' 'false'
+  expect_fail "r2-broad-$n" "vitest.config.ts:8 coverage-exclude entry '[^']+' hides hand-written code \(it matches every source file of the project, of one package or of one top-level source folder, or every source file of one type there\), and no reason can cover it"
+  revert_proof "r2-broad-$n" "hides hand-written code" "$G" $'hides_source "$entry" "$cdir"' 'false'
 done
 expect_ok r2-broad-ok
-expect_fail r2-sonar-scoped "sonar-project.properties:3 sonar-python-coverage-exclude entry 'app/\*\*' excludes a whole source root"
+expect_fail r2-sonar-scoped "sonar-project.properties:3 sonar-python-coverage-exclude entry 'app/\*\*' hides hand-written code"
 
 # 2 Defaults are narrow: root-anchored build output needs no reason, an unanchored build folder does.
 expect_ok r2-anchored-defaults
@@ -380,38 +446,38 @@ if grep -q "^dflt 'src/components/ui/\*\*'" "$GATE"; then nok "src/components/ui
 
 # 3 A folder named build or coverage below the root is read.
 for n in build coverage; do
-  expect_fail "r2-pkg-$n" "packages/$n/vitest.config.ts:6 coverage-exclude entry 'src/\*\*' excludes a whole source root"
-  revert_proof "r2-pkg-$n" "packages/$n/vitest.config.ts" "$RL" $'args+=(-o -path "$d/$b")' $'args+=(-o -name "$b")'
+  expect_fail "r2-pkg-$n" "packages/$n/vitest.config.ts:6 coverage-exclude entry 'src/\*\*' hides hand-written code"
+  revert_proof "r2-pkg-$n" "packages/$n/vitest.config.ts" "$RL" $'$0 ~ /(^|\\/)(node_modules|\\.git)\\// { next }' $'$0 ~ /(^|\\/)(node_modules|\\.git|build|coverage)\\// { next }'
 done
-revert_proof r2-pkg-build "packages/build/vitest.config.ts" "$RL" $'args+=(-o -path "$root/$b")' $'args+=(-o -name "$b")'
 
 # 4 A directory symlink inside the tree fails and is named.
-expect_fail r2-symlink-dir "src/alias is a symlink to a folder"
-revert_proof r2-symlink-dir "src/alias is a symlink" "$G" $'; do bad "$f is a symlink to a folder' $'; do : "$f is a symlink to a folder'
+expect_fail r2-symlink-dir "src/alias is a symlink that is not a link to a regular file"
+revert_proof r2-symlink-dir "src/alias is a symlink" "$G" $'if [ -L "$f" ] && [ ! -f "$f" ]; then bad_links' $'if false; then bad_links'
 
 # 5 Config variants are read by pattern; a file that sets an exclude the gate cannot parse fails closed.
 expect_fail r2-vitest-unit "vitest.unit.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
 expect_ok r2-vitest-unit-ok
 expect_fail r2-vitest-ws "vitest.workspace.config.ts:7 coverage-exclude entry 'src/gen/\*\*' has no reason"
-revert_proof r2-vitest-unit "vitest.unit.config.ts:7 coverage-exclude" "$G" "-name 'vitest*.config.*'" "-name 'vitest.config.*'"
+revert_proof r2-vitest-unit "vitest.unit.config.ts:7 coverage-exclude" "$G" 'vitest*.config.* | vitest.workspace.*' 'vitest.config.* | vitest.workspace.*'
 expect_fail r2-codecov-bad "codecov.yml:1 sets an exclude in a file type the gate cannot read for reasons"
 expect_ok r2-codecov-ok
-revert_proof r2-codecov-bad "codecov.yml:1 sets an exclude" "$G" '-o -name codecov.yml' '-o -name zzz.yml'
+revert_proof r2-codecov-bad "codecov.yml:1 sets an exclude" "$G" 'codecov.yml' 'zzz.yml'
 expect_fail r2-karma-bad "karma.conf.js:2 sets an exclude in a file type the gate cannot read for reasons"
 revert_proof r2-karma-bad "karma.conf.js:2 sets an exclude" "$RL" 'unparsed_exclude_line() {' 'unparsed_exclude_line() {
   return 0'
 
-# 6 Command-line excludes are a finding; a pointer at an unread config is a finding; a pointer at a read config passes.
+# 6 Command-line excludes are a finding; a pointer at a config is read like any config, and a pointer at a missing file is a finding.
 for k in nyc c8 jest omit makefile; do
   case "$k" in makefile) f='Makefile:2' ;; *) f='package.json:3' ;; esac
   expect_fail "r2-flag-$k" "$f passes an exclude or include on the command line, where it cannot carry a reason\. Fix: move it into the coverage, mutation or Sonar config file"
 done
-revert_proof r2-flag-nyc "passes an exclude or include on the command line" "$G" $'$(cmd_flag_lines "${cmd_files[@]}")' $'$(true)'
+revert_proof r2-flag-nyc "passes an exclude or include on the command line" "$G" $'cmd_out=$(cmd_scan "${cmd_files[@]}")' $'cmd_out=$(true)'
 expect_ok pkg-flag-clean
-expect_fail r2-pointer-unread "package.json:3 points a coverage tool at conf/cov.cfg, a config file the gate did not read"
-expect_fail r2-pointer-jest "package.json:3 points a coverage tool at conf/jest.custom.js, a config file the gate did not read"
+expect_fail r2-pointer-unread "conf/cov.cfg:2 coverage-exclude entry 'app/migrations/\*' has no reason"
+expect_fail r2-pointer-jest "package.json:3 points jest at conf/jest.custom.js, which does not exist"
 expect_ok r2-pointer-read
-revert_proof r2-pointer-unread "points a coverage tool at conf/cov.cfg" "$G" $'$(cmd_pointer_lines "${cmd_files[@]}")' $'$(true)'
+revert_proof r2-pointer-unread "conf/cov.cfg:2 coverage-exclude" "$G" $'cmd_out=$(cmd_scan "${cmd_files[@]}")' $'cmd_out=$(true)'
+revert_proof r2-pointer-jest "points jest at conf/jest.custom.js" "$G" $'cmd_out=$(cmd_scan "${cmd_files[@]}")' $'cmd_out=$(true)'
 
 # 7 Sonar properties do not fail open.
 expect_fail r2-sonar-bom "sonar-project.properties:1 sonar-exclude entry 'src/gen/\*\*' has no reason"
@@ -430,8 +496,8 @@ expect_ok r2-marker-ok
 expect_fail r2-marker-file "src/whole.ts:1 'istanbul ignore file' marks a whole file as not covered, which hides hand-written code and no reason can cover it"
 expect_fail r2-marker-py-bad "app/main.py:2 '# pragma: no cover' has no reason"
 expect_ok r2-marker-py-ok
-revert_proof r2-marker-bad "'istanbul ignore next' has no reason" "$G" $'marks=$(find' $'marks=$(: find'
-revert_proof r2-marker-file "marks a whole file as not covered" "$G" $'marks=$(find' $'marks=$(: find'
+revert_proof r2-marker-bad "'istanbul ignore next' has no reason" "$G" $'if [ "${#mark_files[@]}" -gt 0 ]; then' $'if false; then'
+revert_proof r2-marker-file "marks a whole file as not covered" "$G" $'if [ "${#mark_files[@]}" -gt 0 ]; then' $'if false; then'
 
 # 10 Reason shape: digits, one repeated letter, the entry's own path words and filler phrases are not reasons.
 for n in digits repeat path later; do
@@ -468,6 +534,223 @@ revert_proof r2-dup-key "appears twice in one object" check-exclude-reasons.mjs 
 # 14 An invalid package.json reports the real JSON error.
 expect_fail r2-badjson "package.json:1 package.json is not valid JSON, so it cannot be read: .*(line 4|position)"
 revert_proof r2-badjson "is not valid JSON" check-exclude-reasons.mjs "pkg = JSON.parse(fs.readFileSync(abs, 'utf8'));" "pkg = {};"
+
+# ---- Round 3 -----------------------------------------------------------------------------------------------------------------------
+# These projects are built here at run time (a folder named .tox, env or lib may be ignored by git, and a git work tree is needed for
+# some cases). Each failing case has a clean control, and a mutant copy of the gate with the fix undone must stop reporting it.
+mk() { # mk DIR FILE CONTENT
+  mkdir -p "$(dirname "$1/$2")"
+  printf '%s' "$3" > "$1/$2"
+}
+r3dir() { # r3dir NAME: a fresh project with a package, two source files of two types, and typescript linked in
+  local d=$WORK/r3-$1
+  rm -rf "$d"
+  mkdir -p "$d/node_modules"
+  ln -s "$TS" "$d/node_modules/typescript"
+  mk "$d" package.json $'{\n  "name": "demo",\n  "version": "0.0.0"\n}\n'
+  mk "$d" src/a.ts $'export const a = 1;\n'
+  mk "$d" src/b.js $'export const b = 1;\n'
+  mk "$d" vitest.config.ts $'import { defineConfig } from \'vitest/config\';\n\nexport default defineConfig({\n  test: {\n    coverage: {\n      reporter: [\'text\'],\n    },\n  },\n});\n'
+  printf '%s' "$d"
+}
+vcfg() { # vcfg DIR 'ENTRY' [PATH]: a vitest config with one commented exclude
+  mk "$1" "${3:-vitest.config.ts}" "import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    coverage: {
+      exclude: [
+        // reason: generated code that nobody writes by hand
+        '$2',
+      ],
+    },
+  },
+});
+"
+}
+r3_ok() { # r3_ok LABEL DIR
+  run_gate "$2"
+  if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK\.'; then ok "$1 passes"; else nok "$1 should pass (exit $RC)" "$OUT"; fi
+}
+r3_fail() { # r3_fail LABEL DIR PATTERN
+  run_gate "$2"
+  if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -Eq -- "$3"; then ok "$1 fails with: $3"; else nok "$1 should fail with '$3' (exit $RC)" "$OUT"; fi
+}
+mutant_dir() { # mutant_dir DIR FILE OLD NEW: run a mutant gate on DIR; MRC 99 when the mutation did not apply
+  local dir=$1 file=$2 old=$3 new=$4
+  rm -rf "$WORK/mut3"
+  mkdir -p "$WORK/mut3"
+  cp "$root/$SCRIPTS"/check-exclude-reasons.* "$root/$SCRIPTS"/check-exclude-rules.sh "$WORK/mut3/"
+  if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mut3/$file"; then
+    MOUT="the mutation '$old' did not apply to $file"
+    MRC=99
+    return
+  fi
+  MOUT=$(bash "$WORK/mut3/check-exclude-reasons.sh" "$dir" 2>&1)
+  MRC=$?
+}
+r3_lost() { # r3_lost LABEL DIR PATTERN FILE OLD NEW: with the fix undone, the finding PATTERN is gone
+  mutant_dir "$2" "$4" "$5" "$6"
+  if [ "$MRC" -ne 99 ] && ! printf '%s' "$MOUT" | grep -Eq -- "$3"; then ok "revert proof: $1 loses its finding with the fix undone ($4)"; else nok "revert proof: $1 still reports it with the fix undone ($4, exit $MRC)" "$MOUT"; fi
+}
+r3_flip() { # r3_flip LABEL DIR FILE OLD NEW: a clean control turns into a failure with the fix undone
+  mutant_dir "$2" "$3" "$4" "$5"
+  if [ "$MRC" -ne 99 ] && [ "$MRC" -ne 0 ]; then ok "revert proof: $1 fails with the fix undone ($3)"; else nok "revert proof: $1 still passes with the fix undone ($3, exit $MRC)" "$MOUT"; fi
+}
+
+# 2 Broad is decided from the files on disk. Every form below hides all of a project, a package or a source folder.
+broad_case() { # broad_case LAYOUT PATTERN: a project of LAYOUT where PATTERN covers all of one package, source folder or type
+  local lay=$1 pat=$2 d
+  d=$(r3dir "broad-$lay")
+  case "$lay" in
+    src) ;;
+    pkg)
+      rm -rf "$d/src"
+      mk "$d" packages/p/package.json $'{\n  "name": "p"\n}\n'
+      mk "$d" packages/p/src/x.ts $'export const x = 1;\n'
+      mk "$d" apps/web/package.json $'{\n  "name": "web"\n}\n'
+      mk "$d" apps/web/src/y.ts $'export const y = 1;\n'
+      ;;
+    frontend)
+      rm -rf "$d/src"
+      mk "$d" frontend/src/z.ts $'export const z = 1;\n'
+      mk "$d" frontend/src/w.ts $'export const w = 1;\n'
+      ;;
+    py)
+      rm -rf "$d/src"
+      mk "$d" my_pkg/__init__.py $'x = 1\n'
+      mk "$d" my_pkg/m.py $'y = 1\n'
+      ;;
+  esac
+  vcfg "$d" "$pat"
+  r3_fail "broad pattern '$pat'" "$d" "vitest\.config\.ts:8 coverage-exclude entry '.*' (hides hand-written code|uses a pattern)"
+}
+for pat in 'src/**/*.[jt]s' 'src/**/?*' 'src/./**' 'src//**' '**/*.(t|j)s' '**/*.?s'; do broad_case src "$pat"; done
+broad_case pkg 'packages/*/src/**'
+broad_case pkg 'apps/web/src/**'
+broad_case frontend 'frontend/src/**'
+broad_case py 'my_pkg/**'
+d=$(r3dir broad-src)
+mk "$d" src/gen/g.ts $'export const g = 1;\n'
+vcfg "$d" 'src/gen/**'
+r3_ok "narrow exclude src/gen/**" "$d"
+vcfg "$d" 'src/**'
+r3_lost "broad src/**" "$d" "hides hand-written code" "$G" $'hides_source "$entry" "$cdir"' 'false'
+r3_lost "broad src/**" "$d" "hides hand-written code" "$RL" $'rules_eval excl "$p" "$dir"' 'return 1'
+
+# 1 One file list: inside a git work tree it is what git lists; outside one, everything except dependencies, .git and virtualenvs.
+d=$(r3dir venv)
+mk "$d" env/pyvenv.cfg $'home = /usr/bin\n'
+mk "$d" env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
+r3_ok "a virtual environment folder (pyvenv.cfg) is not scanned" "$d"
+rm -f "$d/env/pyvenv.cfg"
+r3_fail "the same folder without pyvenv.cfg is scanned" "$d" "env/lib/site\.py:2 '# pragma: no cover' has no reason"
+mk "$d" env/pyvenv.cfg $'home = /usr/bin\n'
+r3_flip "a virtual environment folder" "$d" "$RL" 'pyvenv.cfg' 'zzz.cfg'
+d=$(r3dir gitlist)
+mk "$d" .gitignore $'.tox/\n'
+mk "$d" .tox/lib.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
+r3_fail "outside a git work tree an ignored folder is scanned" "$d" "\.tox/lib\.py:2 '# pragma: no cover' has no reason"
+run_gate "$d"
+case "$OUT" in *NOTE*) ok "outside a git work tree the gate prints one NOTE" ;; *) nok "no NOTE outside a git work tree" "$OUT" ;; esac
+if (cd "$d" && git init -q . 2> /dev/null); then
+  r3_ok "inside a git work tree an ignored folder is not scanned" "$d"
+  r3_flip "git file list" "$d" "$RL" $'command -v git' 'false &&'
+else
+  nok "git init failed in the test folder"
+fi
+
+# 3 Command lines: only a coverage, mutation or Sonar tool is read, and only its own segment.
+d=$(r3dir cmd)
+mk "$d" package.json $'{\n  "name": "demo",\n  "scripts": {\n    "ci": "pnpm test:coverage && pnpm lint --config eslint.config.js",\n    "lint:jest": "eslint --config .eslintrc.jest.js tests",\n    "sync": "rsync -a coverage/ --exclude x out/",\n    "test:e2e": "jest --config ./test/jest-e2e.json"\n  }\n}\n'
+mk "$d" test/jest-e2e.json $'{\n  "rootDir": ".",\n  "testRegex": ".e2e-spec.ts$"\n}\n'
+r3_ok "command lines of other tools and a config pointer that exists" "$d"
+mk "$d" package.json $'{\n  "name": "demo",\n  "scripts": {\n    "a": "echo x && nyc --exclude src/gen/** vitest run"\n  }\n}\n'
+r3_fail "a tool segment after && is read" "$d" "package\.json:4 passes an exclude or include on the command line"
+r3_lost "segment split" "$d" "passes an exclude or include on the command line" "$RL" $'gsub(/&&/, "\\001", line)' $'gsub(/&&/, " ", line)'
+mk "$d" package.json $'{\n  "name": "demo",\n  "scripts": {\n    "a": "pnpm exec c8 --exclude x vitest run"\n  }\n}\n'
+r3_fail "a wrapped tool is read" "$d" "package\.json:4 passes an exclude or include on the command line"
+mk "$d" package.json $'{\n  "name": "demo"\n}\n'
+mk "$d" .github/workflows/ci.yml $'jobs:\n  t:\n    steps:\n      - run: npx nyc --exclude src/gen/** vitest run\n'
+r3_fail "a workflow file of GitHub is scanned" "$d" "ci\.yml:4 passes an exclude or include on the command line"
+rm -rf "$d/.github"
+mk "$d" ci/.gitlab-ci.yml $'test:\n  script:\n    - c8 --exclude src/gen/** vitest run\n'
+r3_fail "a GitLab CI file is scanned" "$d" "\.gitlab-ci\.yml:3 passes an exclude or include on the command line"
+rm -rf "$d/ci"
+mk "$d" Taskfile.yml $'tasks:\n  t:\n    cmds:\n      - nyc --exclude src/gen/** vitest run\n'
+r3_fail "a Taskfile is scanned" "$d" "Taskfile\.yml:4 passes an exclude or include on the command line"
+rm -f "$d/Taskfile.yml"
+mk "$d" justfile $'test:\n    nyc --exclude src/gen/** vitest run\n'
+r3_fail "a justfile is scanned" "$d" "justfile:2 passes an exclude or include on the command line"
+rm -f "$d/justfile"
+mk "$d" Dockerfile.ci $'FROM node\nRUN nyc --exclude src/gen/** vitest run\n'
+r3_fail "a Dockerfile is scanned" "$d" "Dockerfile\.ci:2 passes an exclude or include on the command line"
+rm -f "$d/Dockerfile.ci"
+mk "$d" scripts/t.sh $'#!/bin/sh\nc8 --exclude src/gen/** vitest run\n'
+r3_fail "a shell script is scanned" "$d" "scripts/t\.sh:2 passes an exclude or include on the command line"
+mk "$d" scripts/t.sh $'#!/bin/sh\nvitest run --exclude e2e\n'
+r3_flip "command word restriction" "$d" "$RL" $'(cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
+
+# 4 A marker counts only as the first token of a comment, and a start without a stop marks the file.
+d=$(r3dir mark)
+mk "$d" src/a.ts $'const s = "istanbul ignore next";\n// This sentence names the istanbul ignore next marker in prose.\nconst t = `/* istanbul ignore next */`;\nexport const a = s + t;\n'
+r3_ok "markers inside strings and prose are not markers" "$d"
+r3_flip "marker is the first token of a comment" "$d" check-exclude-reasons.awk $'match(low, /^(istanbul|c8|v8)[ \\t]+ignore' $'match(low, /(istanbul|c8|v8)[ \\t]+ignore'
+mk "$d" src/a.ts $'/* istanbul ignore next */\nexport const a = 1;\n'
+r3_fail "a block-comment marker without a reason" "$d" "src/a\.ts:1 'istanbul ignore next' has no reason"
+mk "$d" src/a.ts $'/* v8 ignore start */\nexport const a = 1;\n'
+r3_fail "v8 ignore start with no stop is a whole-file marker" "$d" "src/a\.ts:1 .*marks a whole file"
+mk "$d" src/a.ts $'// reason: generated by the build tool, not hand written\n/* v8 ignore start */\nexport const a = 1;\n/* v8 ignore stop */\n'
+r3_ok "a matched start and stop with a reason" "$d"
+mk "$d" src/a.ts $'/* v8 ignore start */\nexport const a = 1;\n'
+mk "$d" src/c.py $'"""Docstring that says pragma: no cover in prose."""\nx = 1\n'
+r3_lost "unmatched start" "$d" "marks a whole file" check-exclude-reasons.awk $'"file"' $'"x"'
+
+# 5 Defaults are compared after normalisation.
+dn=0
+for e in '**/test/**' '**/tests/**' '**/__tests__/**' 'tests/*' 'src/**/*.d.ts' '*.config.ts' 'vitest.config.ts' 'dist' 'dist/' '/dist/'; do
+  dn=$((dn + 1))
+  d=$(r3dir dflt$dn)
+  mk "$d" vitest.config.ts "import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    coverage: {
+      exclude: ['$e'],
+    },
+  },
+});
+"
+  r3_ok "default entry '$e' needs no reason" "$d"
+  r3_flip "default entry '$e'" "$d" "$G" "dflt '$e'" "dflt 'zzzunused'"
+done
+d=$(r3dir pydefault)
+mk "$d" pyproject.toml $'[tool.coverage.report]\nexclude_lines = [\n    "pragma: no cover",\n    "raise NotImplementedError",\n    "if TYPE_CHECKING:",\n]\n\n[tool.coverage.run]\nomit = ["conftest.py", "**/conftest.py"]\n'
+r3_ok "stock coverage.py lines and conftest.py need no reason" "$d"
+mk "$d" pyproject.toml $'[tool.coverage.run]\nomit = ["*/__init__.py"]\n'
+r3_fail "*/__init__.py still needs a reason" "$d" "pyproject\.toml:2 coverage-exclude entry '\*/__init__\.py' has no reason"
+
+# 6 An include that covers a whole source root needs no reason; a narrow one fails.
+d=$(r3dir incl)
+mk "$d" vitest.config.ts $'import { defineConfig } from \'vitest/config\';\n\nexport default defineConfig({\n  test: {\n    coverage: {\n      include: [\'src/**/*.ts\', \'src/**/*.js\'],\n    },\n  },\n});\n'
+r3_ok "an include that covers every source file" "$d"
+r3_flip "include_covers" "$d" "$G" $'include_covers "$entry" "$cdir"' 'false'
+mk "$d" vitest.config.ts $'import { defineConfig } from \'vitest/config\';\n\nexport default defineConfig({\n  test: {\n    coverage: {\n      include: [\'src/**/*.ts\'],\n    },\n  },\n});\n'
+r3_fail "an include that leaves out src/b.js" "$d" "vitest\.config\.ts:6 coverage-include list 'src/\*\*/\*\.ts' is an allow-list"
+
+# 7 sonar.test.inclusions is not an allow-list of covered code.
+d=$(r3dir sonar)
+mk "$d" sonar-project.properties $'sonar.test.inclusions=**/*.test.ts\nsonar.javascript.test.inclusions=**/*.spec.ts\n'
+r3_ok "sonar.test.inclusions and sonar.javascript.test.inclusions" "$d"
+r3_flip "sonar test inclusions" "$d" check-exclude-reasons.awk $'if (key ~ /(^|\\.)sonar\\.([A-Za-z0-9_-]+\\.)*test\\.inclusions$/) return' ''
+
+# 8 Every symlink that is not a link to a regular file is reported, a dangling directory link included.
+d=$(r3dir links)
+ln -s a.ts "$d/src/alias.ts"
+r3_ok "a link to a regular file" "$d"
+ln -s no-such-folder "$d/src/gone"
+r3_fail "a dangling link" "$d" "src/gone is a symlink that is not a link to a regular file"
+r3_lost "dangling link" "$d" "src/gone is a symlink" "$G" $'if [ -L "$f" ] && [ ! -f "$f" ]; then bad_links' $'if false; then bad_links'
 
 # Read-only: the gate never changes a project, and the fixtures are as they were.
 d=$(stage jest-none)

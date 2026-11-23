@@ -1,6 +1,6 @@
 [tool.coverage.report]
 exclude_lines = [
-    "if TYPE_CHECKING:",
+    "if DEBUG:",
     "pragma: no cover",
 ]
 fail_under = 80

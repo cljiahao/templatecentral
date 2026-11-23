@@ -17,7 +17,9 @@
 # The line text after file:line is the finding; the runner prefixes its own wording, and "older template pattern" does not mean a defect here.
 # Self-contained: the scanners sit in exclusion-audit/ next to this file and nothing from the adopted project is run or needed, except
 # the project's own typescript, loaded by node to parse a JS or TS config as text (the config is never executed).
-# The runner prunes folders named dist, build, coverage and .next below the root, so a config inside one is not offered to this audit.
+# Files come from one list shared by config discovery and the marker scan (rules_files in exclusion-audit/rules.sh): inside a git work tree
+# the files git tracks or sees untracked and does not ignore, outside one every file except node_modules, .git and virtualenv folders.
+# No folder is skipped by its name, so packages/build/vitest.config.ts is audited. The runner still hands the first call its own list.
 # Never reads .env files or secrets, never writes inside the project.
 # Bound: all JS, TS and JSON configs are read by one node run (typescript loads once), at most 400 files; a config past that is
 # listed as not read. TOML, INI and properties files take one small python or awk run each. The runner skips files over 1 MB. At
@@ -43,7 +45,7 @@ export fix="give each exclude a one-line comment above it that starts with reaso
 # Print the audit lines of one scanner's output (tab separated records) for FILE, grouped by state:
 # no reason (and anything that cannot be read), hides source, has reason, framework default.
 audit_records() {
-  local tab tag file line kind entry status marker lines_none='' lines_hides='' lines_reason='' lines_default='' text norm root
+  local tab tag file line kind entry status marker lines_none='' lines_hides='' lines_reason='' lines_default='' text norm root cdir
   tab=$(printf '\t')
   while IFS="$tab" read -r tag file line kind entry status; do
     case "$tag" in
@@ -57,8 +59,8 @@ audit_records() {
         text="$file:$line $kind '$entry': "
         if [ "$status" = default ]; then
           lines_default="$lines_default$text$marker$NL"
-        elif [ "$kind" != sonar-issue-ignore ] && hides_source "$entry"; then
-          lines_hides="$lines_hides${text}hides hand-written source (it excludes a whole source root or every file of a source type, and no reason can cover that), $marker$NL"
+        elif [ "$kind" != sonar-issue-ignore ] && cdir=$(dirname "${file#"$P"/}") && hides_source "$entry" "$cdir"; then
+          lines_hides="$lines_hides${text}hides hand-written source (${RULES_WHY:-it matches every source file of the project, of one package or of one top-level source folder, or every source file of one type there}, and no reason can cover that), $marker$NL"
         else
           if [ "$kind" != sonar-issue-ignore ] && root=$(under_source_root "$entry"); then
             lines_hides="$lines_hides${text}covers hand-written code (it sits under the source root $root/, so check that nothing in it is hand-written)$NL"
@@ -71,6 +73,8 @@ audit_records() {
         fi
         ;;
       I)
+        cdir=$(dirname "${file#"$P"/}")
+        if include_covers "$entry" "$cdir"; then continue; fi
         if [ "$status" = reason ]; then marker="has reason"; else marker="no reason"; fi
         lines_hides="$lines_hides$file:$line $kind list '$entry' is an allow-list: it excludes every file it does not list, $marker$NL"
         ;;
@@ -93,17 +97,14 @@ audit_records() {
   printf '%s%s%s%s' "$lines_none" "$lines_hides" "$lines_reason" "$lines_default"
 }
 
-# Print the first source file below DIR, or nothing. Looks 4 levels down; stops at the first hit.
+# Print the first non-test source file below the project-relative folder DIR ("." for the root) that matches one of the extensions, or nothing.
 first_source() {
-  local dir=$1
+  local dir=$1 ext
   shift
-  local expr=() name first=1
-  for name in "$@"; do
-    if [ "$first" -eq 1 ]; then expr=(-name "$name"); first=0; else expr=("${expr[@]}" -o -name "$name"); fi
-  done
-  find "$dir" -maxdepth 4 \( -name node_modules -o -name .venv -o -name venv -o -name .next -o -name dist -o -name build \
-    -o -name coverage -o -name .git -o -name __pycache__ \) -prune -o \
-    -type f \( "${expr[@]}" \) ! -name '*.d.ts' ! -name '*.config.*' ! -name 'test_*' ! -name '*.test.*' ! -name '*.spec.*' -print -quit
+  for ext in "$@"; do
+    printf '%s\n' "$RULES_SRC" | awk -v d="$dir" -v e="$ext" '
+      (d == "." || index($0, d "/") == 1) && $0 ~ ("\\." e "$") { print; exit }'
+  done | head -n 1
 }
 
 # True when DIR holds a coverage config of any supported form. Reads only the config files that sit directly in DIR.
@@ -117,74 +118,81 @@ has_coverage_config() {
   return 1
 }
 
-# Print the lines for inline coverage markers in every source file of the project. Runs once per audit: the first check call
-# finds the marker file empty, fills it and does the scan; later calls (separate subshells) see it filled and print nothing.
-marks_records() {
-  local words tools prune=() a
-  [ -n "$AUDIT_MARKS" ] || return 0
-  [ -f "$AUDIT_MARKS" ] || return 0
-  [ ! -s "$AUDIT_MARKS" ] || return 0
-  printf '%s' marked > "$AUDIT_MARKS"
-  tools=$(cat "$DEFECTS/exclusion-audit/defaults.txt") || return 0
-  words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || return 0
-  while IFS= read -r a; do
-    prune+=("$a")
-  done <<EOF
-$(build_prune "$P")
-EOF
-  find "$P" "${prune[@]}" -type f -size -"$((${MAXBYTES:-1048576} + 1))"c \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.mts' -o -name '*.cts' -o -name '*.vue' -o -name '*.svelte' -o -name '*.py' \) \
-    -exec env "TC_EXCLUDE_DEFAULTS=$tools" "TC_REASON_PLACEHOLDERS=$words" awk -v mode=marks -f "$DEFECTS/exclusion-audit/scan.awk" {} + 2> /dev/null | audit_records
+# Print the audit lines for a command-line exclude (F records) in the output of cmd_scan; collect the config pointers (P records).
+cmd_lines() {
+  local tab ctag cfile cline ctool cpath
+  tab=$(printf '\t')
+  while IFS="$tab" read -r ctag cfile cline ctool cpath; do
+    case "$ctag" in
+      F) echo "$cfile:$cline passes an exclude or include on the command line, where it cannot carry a reason: move it into the config file with a reason" ;;
+      P) POINTERS="$POINTERS$cfile$tab$cline$tab$ctool$tab$cpath$NL" ;;
+    esac
+  done
 }
 
-# Print the lines for a command-line exclude, or a --config that points at a file the audit does not read, in FILE.
-flag_lines() {
-  local f=$1 hit rest ln text pth
-  while IFS= read -r hit; do
-    [ -n "$hit" ] || continue
-    rest=${hit#"$f":}
-    ln=${rest%%:*}
-    echo "$f:$ln passes an exclude or include on the command line, where it cannot carry a reason: move it into the config file with a reason"
-  done <<EOF
-$(cmd_flag_lines "$f")
-EOF
-  while IFS= read -r hit; do
-    [ -n "$hit" ] || continue
-    rest=${hit#"$f":}
-    ln=${rest%%:*}
-    text=${rest#*:}
-    while IFS= read -r pth; do
-      [ -n "$pth" ] || continue
-      case "${pth##*/}" in
-        vitest*.config.* | vite.config.* | jest*.config.* | stryker*.conf* | .stryker*.conf* | .nycrc* | .c8rc* | pyproject.toml | .coveragerc | setup.cfg | tox.ini | sonar-project*.properties) ;;
-        *) echo "$f:$ln points a coverage tool at $pth, a config file the audit does not read, so its excludes are unaudited" ;;
-      esac
-    done <<EOT
-$(cmd_pointer_paths "$text")
-EOT
-  done <<EOF
-$(cmd_pointer_lines "$f")
-EOF
+# Sort one file into the scanner list for its type; false when the gate and the audit cannot read this type. The lists are kept in
+# the strings A_JS, A_PY, A_PROP and A_OTHER (newline separated, absolute paths); a file already listed is not added twice.
+add_config() {
+  local abs=$1 base=${1##*/}
+  case "$NL$A_SEEN" in *"$NL$abs$NL"*) return 0 ;; esac
+  case "$base" in
+    *.properties) A_PROP="$A_PROP$abs$NL" ;;
+    pyproject.toml | .coveragerc | setup.cfg | tox.ini | *.toml | *.ini | *.cfg) A_PY="$A_PY$abs$NL" ;;
+    karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml) A_OTHER="$A_OTHER$abs$NL" ;;
+    *.js | *.cjs | *.mjs | *.ts | *.mts | *.cts | *.json | .nycrc* | .c8rc*) A_JS="$A_JS$abs$NL" ;;
+    *) return 1 ;;
+  esac
+  A_SEEN="$A_SEEN$abs$NL"
+  return 0
 }
 
-check() {
-  local f=$1 dir base here tools words src out tab hit
+# Print the lines for the Sonar, TOML, INI, properties and other non-JS config FILE.
+audit_file() {
+  local f=$1 dir base here tools words src out tab hit rel
   tab=$(printf '\t')
   dir=$(dirname "$f")
   base=$(basename "$f")
   here=$DEFECTS/exclusion-audit
-  [ -d "$here" ] || return 1
-  [ -r "$here/defaults.txt" ] || return 1
-  [ -r "$here/rules.sh" ] || return 1
   tools=$(cat "$here/defaults.txt") || return 1
   words=$(cat "$here/placeholders.txt") || return 1
-  marks_records
+  rel=${dir#"$P"}
+  rel=${rel#/}
+  [ -n "$rel" ] || rel=.
   case "$base" in
-    sonar-project*.properties)
+    *.properties)
       if is_binary "$f"; then
         echo "$f:1 cannot be read: the file holds a NUL byte, so it is not a text file and its excludes were not audited"
       else
         out=$(TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words awk -v file="$f" -f "$here/scan.awk" "$f" 2>&1) || out="X$tab$f${tab}1${tab}the properties scanner failed${tab}${tab}"
         printf '%s\n' "$out" | audit_records
+      fi
+      ;;
+    pyproject.toml | .coveragerc | setup.cfg | tox.ini | *.toml | *.ini | *.cfg)
+      case "$NL$A_POINTED" in *"$NL$f$NL"*) hit=pointed ;; *) hit= ;; esac
+      if [ "$base" = .coveragerc ] || [ -n "$hit" ] || grep -qE 'coverage|mutmut' "$f" 2> /dev/null; then
+        if [ -n "$A_PYBIN" ]; then
+          out=$(TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words "$A_PYBIN" -I "$here/scan.py" "$f" 2>&1) || out="X$tab$f${tab}1${tab}the TOML and INI scanner failed (it needs Python (3.11 or newer) or the tomli package; interpreters tried: $RULES_PY_TRIED)${tab}${tab}"
+          printf '%s\n' "$out" | audit_records
+        else
+          echo "$f:1 cannot be read: python3 is not installed, so this TOML or INI config was not audited"
+        fi
+      fi
+      if [ "$base" = pyproject.toml ] && ! has_coverage_config "$dir"; then
+        src=$(first_source "$rel" py)
+        if [ -n "$src" ]; then echo "$f:1 no coverage config: the folder has Python source (for example ${src#"$rel"/}) and no coverage config"; fi
+      fi
+      ;;
+    karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml)
+      hit=$(unparsed_exclude_line "$f")
+      if [ -n "$hit" ]; then echo "$f:${hit%%:*} cannot be read: this file type sets an exclude that the audit does not parse, so its excludes are unaudited"; fi
+      ;;
+    package.json)
+      if grep -q 'minimumReleaseAgeExclude' "$f" 2> /dev/null; then
+        awk -v file="$f" -v mode=json -f "$here/scan-pnpm.awk" "$f" | pnpm_records
+      fi
+      if [ ! -f "$dir/pnpm-workspace.yaml" ] && ! grep -q '"workspaces"' "$f" 2> /dev/null && ! has_coverage_config "$dir"; then
+        src=$(first_source "$rel" ts tsx js jsx mjs)
+        if [ -n "$src" ]; then echo "$f:1 no coverage config: the folder has source files (for example ${src#"$rel"/}) and no coverage config"; fi
       fi
       ;;
     pnpm-workspace.yaml | .npmrc)
@@ -195,94 +203,156 @@ check() {
       esac
       awk -v file="$f" -v mode="$src" -f "$here/scan-pnpm.awk" "$f" | pnpm_records
       ;;
-    pyproject.toml | .coveragerc | setup.cfg | tox.ini)
-      if [ "$base" = .coveragerc ] || grep -qE 'coverage|mutmut' "$f" 2> /dev/null; then
-        if command -v python3 > /dev/null 2>&1; then
-          out=$(TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words python3 -I "$here/scan.py" "$f" 2>&1) || out="X$tab$f${tab}1${tab}the TOML and INI scanner failed${tab}${tab}"
-          printf '%s\n' "$out" | audit_records
-        else
-          echo "$f:1 cannot be read: python3 is not installed, so this TOML or INI config was not audited"
-        fi
-      fi
-      if [ "$base" = pyproject.toml ] && ! has_coverage_config "$dir"; then
-        src=$(first_source "$dir" '*.py')
-        if [ -n "$src" ]; then echo "$f:1 no coverage config: the folder has Python source (for example ${src#"$dir"/}) and no coverage config"; fi
-      fi
-      ;;
-    package.json)
-      if grep -q 'minimumReleaseAgeExclude' "$f" 2> /dev/null; then
-        awk -v file="$f" -v mode=json -f "$here/scan-pnpm.awk" "$f" | pnpm_records
-      fi
-      if grep -qE '"(jest|nyc|c8|stryker|jscpd)"' "$f" 2> /dev/null; then
-        js_records "$f"
-      fi
-      flag_lines "$f"
-      if [ ! -f "$dir/pnpm-workspace.yaml" ] && ! grep -q '"workspaces"' "$f" 2> /dev/null && ! has_coverage_config "$dir"; then
-        src=$(first_source "$dir" '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs')
-        if [ -n "$src" ]; then echo "$f:1 no coverage config: the folder has source files (for example ${src#"$dir"/}) and no coverage config"; fi
-      fi
-      ;;
-    .nycrc* | .c8rc* | .jscpd.json) js_records "$f" ;;
-    karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml)
-      hit=$(unparsed_exclude_line "$f")
-      if [ -n "$hit" ]; then echo "$f:${hit%%:*} cannot be read: this file type sets an exclude that the audit does not parse, so its excludes are unaudited"; fi
-      ;;
-    Makefile | Jenkinsfile) flag_lines "$f" ;;
-    *.yml | *.yaml)
-      case "$f" in
-        */.github/workflows/* | */lefthook*.y*ml | */.lefthook*.y*ml | */.gitlab-ci.yml | */azure-pipelines*.y*ml | */bitbucket-pipelines.yml) flag_lines "$f" ;;
-      esac
-      ;;
-    *)
-      if grep -qE 'coverage|mutate|Coverage|ignorePatterns|excludedMutations' "$f" 2> /dev/null; then js_records "$f"; fi
-      ;;
   esac
   return 0
 }
 
-# Print audit lines for the JS, TS or JSON config FILE. The first call scans every candidate config once and keeps the records.
-js_records() {
-  local f=$1 cache=$AUDIT_CACHE cands c n=0 listed='' all words
+# Print the audit lines for every JS, TS and JSON config in A_JS. One node run reads them all (typescript loads once), at most
+# MAX_JS_CONFIGS files; a config past that is listed as not read.
+js_audit() {
+  local cache=$AUDIT_CACHE cands=() c n=0 listed='' words first=
+  [ -n "$A_JS" ] || return 0
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    if [ -z "$first" ]; then first=$c; fi
+    case "$NL$A_POINTED" in
+      *"$NL$c$NL"*) ;;
+      *)
+        case "$c" in
+          */package.json) grep -qE '"(jest|nyc|c8|stryker|jscpd)"' "$c" 2> /dev/null || continue ;;
+          */.nycrc* | */.c8rc* | */.jscpd.json) ;;
+          *) grep -qE 'coverage|mutate|Coverage|ignorePatterns|excludedMutations' "$c" 2> /dev/null || continue ;;
+        esac
+        ;;
+    esac
+    n=$((n + 1))
+    if [ "$n" -le "$MAX_JS_CONFIGS" ]; then
+      cands+=("$c")
+      listed="$listed$c$NL"
+    else
+      echo "$c:1 not read: the audit reads at most $MAX_JS_CONFIGS JS and TS configs per run"
+    fi
+  done <<< "$A_JS"
+  [ "${#cands[@]}" -gt 0 ] || return 0
   if ! command -v node > /dev/null 2>&1; then
-    echo "$f:1 cannot be read: node is not installed, so this JS or TS config was not audited"
+    echo "${cands[0]}:1 cannot be read: node is not installed, so this JS or TS config was not audited"
     return 0
   fi
   if [ -z "$cache" ] || [ ! -f "$cache" ]; then
-    echo "$f:1 cannot be read: no temporary file could be made, so this JS or TS config was not audited"
+    echo "${cands[0]}:1 cannot be read: no temporary file could be made, so this JS or TS config was not audited"
     return 0
   fi
-  if [ ! -s "$cache" ]; then
-    words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || words=
-    cands=()
-    all=$(find_files "$P" 'vitest*.config.*' 'vitest.workspace.*' 'vite.config.*' 'jest*.config.*' 'stryker*.conf*' '.stryker*.conf*' '.nycrc*' '.c8rc*' '.jscpd.json' package.json | LC_ALL=C sort)
-    while IFS= read -r c; do
-      [ -n "$c" ] || continue
-      case "$c" in
-        */package.json) grep -qE '"(jest|nyc|c8|stryker|jscpd)"' "$c" 2> /dev/null || continue ;;
-        */.nycrc* | */.c8rc* | */.jscpd.json) ;;
-        *) grep -qE 'coverage|mutate|Coverage|ignorePatterns|excludedMutations' "$c" 2> /dev/null || continue ;;
-      esac
-      n=$((n + 1))
-      if [ "$n" -le "$MAX_JS_CONFIGS" ]; then
-        cands+=("$c")
-        listed="$listed$c$NL"
-      fi
-    done <<< "$all"
-    {
-      printf 'H\tscanned\n'
-      while IFS= read -r c; do
-        if [ -n "$c" ]; then printf 'S\t%s\n' "$c"; fi
-      done <<< "$listed"
-      if [ "${#cands[@]}" -gt 0 ]; then
-        TC_EXCLUDE_DEFAULTS=$(cat "$DEFECTS/exclusion-audit/defaults.txt") TC_REASON_PLACEHOLDERS=$words node "$DEFECTS/exclusion-audit/scan.mjs" --root "$P" "${cands[@]}" 2>&1 || printf 'X\t%s\t1\tthe JS config scanner failed\n' "${cands[0]}"
-      fi
-    } > "$cache"
+  words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || words=
+  TC_EXCLUDE_DEFAULTS=$(cat "$DEFECTS/exclusion-audit/defaults.txt") TC_REASON_PLACEHOLDERS=$words node "$DEFECTS/exclusion-audit/scan.mjs" --root "$P" "${cands[@]}" > "$cache" 2>&1 || printf 'X\t%s\t1\tthe JS config scanner failed\n' "${cands[0]}" >> "$cache"
+  audit_records < "$cache"
+}
+
+# The whole audit, run once: it reads the one shared file list (rules_files), so no folder is skipped by its name and config discovery,
+# the command-line scan and the marker scan see the same files.
+audit_all() {
+  local FILES rel f abs base big tools words tab a_cmd a_mark pfile pline ptool ppath target pdir out cmd_out
+  tab=$(printf '\t')
+  FILES=$(rules_files "$P")
+  rules_init "$FILES"
+  big=$(find "$P" \( -name node_modules -o -name .git \) -prune -o -type f -size +"${MAXBYTES:-1048576}"c -print 2> /dev/null)
+  A_JS='' A_PY='' A_PROP='' A_OTHER='' A_SEEN='' A_POINTED=''
+  POINTERS=
+  a_cmd=() a_mark=()
+  local a_pnpm=()
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    abs=$P/$rel
+    base=${rel##*/}
+    if [ -L "$abs" ]; then
+      if [ ! -f "$abs" ]; then echo "$abs:1 is a symlink that is not a link to a regular file, so nothing behind it was audited"; fi
+      continue
+    fi
+    [ -f "$abs" ] || continue
+    case "$NL$big$NL" in *"$NL$abs$NL"*) continue ;; esac
+    case "$rel" in
+      *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.mts | *.cts | *.vue | *.svelte | *.py) a_mark+=("$abs") ;;
+    esac
+    case "$base" in
+      vitest*.config.* | vitest.workspace.* | vite.config.* | jest*.config.* | stryker*.conf* | .stryker*.conf* | .nycrc* | .c8rc* | .jscpd.json | sonar-project*.properties | pyproject.toml | .coveragerc | setup.cfg | tox.ini | karma*.conf* | nyc.config.* | codecov.yml | .codecov.yml | package.json) add_config "$abs" || true ;;
+      pnpm-workspace.yaml | .npmrc) a_pnpm+=("$abs") ;;
+    esac
+    case "$rel" in
+      package.json | */package.json | *.sh | *.bash | Makefile | */Makefile | Makefile.* | */Makefile.* | *.mk | Taskfile* | */Taskfile* | justfile | */justfile | Justfile | */Justfile | Dockerfile* | */Dockerfile* | *.dockerfile | \
+        .github/workflows/*.yml | .github/workflows/*.yaml | */.github/workflows/*.yml | */.github/workflows/*.yaml | .github/actions/*/*.yml | .github/actions/*/*.yaml | \
+        lefthook*.yml | */lefthook*.yml | lefthook*.yaml | */lefthook*.yaml | .lefthook*.yml | .gitlab-ci.yml | */.gitlab-ci.yml | .gitlab/*.yml | azure-pipelines*.yml | */azure-pipelines*.yml | bitbucket-pipelines.yml | Jenkinsfile | */Jenkinsfile | \
+        .circleci/*.yml | .travis.yml | appveyor.yml | .drone.yml | cloudbuild.y*ml | .buildkite/*.yml | .woodpecker/*.yml | .woodpecker.yml)
+        a_cmd+=("$abs")
+        ;;
+    esac
+  done <<EOF
+$FILES
+EOF
+  A_PYBIN=$(resolve_python "$P") || A_PYBIN=
+  if [ -z "$A_PYBIN" ] && command -v python3 > /dev/null 2>&1; then A_PYBIN=python3; fi
+  if [ "${#a_cmd[@]}" -gt 0 ]; then
+    cmd_out=$(cmd_scan "${a_cmd[@]}")
+    cmd_lines <<EOF
+$cmd_out
+EOF
   fi
-  if ! awk -F'\t' -v f="$f" '$1 == "S" && $2 == f { found = 1 } END { exit !found }' "$cache"; then
-    echo "$f:1 not read: the audit reads at most $MAX_JS_CONFIGS JS and TS configs per run"
-    return 0
+  # Config pointers: the pointed file is audited too; it is a finding only when it is missing or of a type the audit cannot read.
+  while IFS="$tab" read -r pfile pline ptool ppath; do
+    [ -n "$pfile" ] || continue
+    case "$ppath" in
+      *'$'* | *'`'* | /* | ../* | */../* | ..)
+        echo "$pfile:$pline points $ptool at '$ppath', a path the audit cannot resolve inside the project, so its excludes are unaudited"
+        continue
+        ;;
+    esac
+    ppath=${ppath#./}
+    target=
+    if [ -f "$P/$ppath" ]; then
+      target=$P/$ppath
+    else
+      pdir=${pfile%/*}
+      if [ -f "$pdir/$ppath" ]; then target=$pdir/$ppath; fi
+    fi
+    if [ -z "$target" ]; then
+      echo "$pfile:$pline points $ptool at $ppath, which does not exist, so its excludes are unaudited"
+    elif [ -L "$target" ]; then
+      echo "$pfile:$pline points $ptool at $target, a symlink the audit does not follow, so its excludes are unaudited"
+    elif add_config "$target"; then
+      A_POINTED="$A_POINTED$target$NL"
+    else
+      echo "$pfile:$pline points $ptool at $target, a file type the audit cannot read, so its excludes are unaudited"
+    fi
+  done <<EOF
+$POINTERS
+EOF
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    audit_file "$f"
+  done <<EOF
+$A_PY$A_PROP$A_OTHER$(printf '%s\n' "${a_pnpm[@]+"${a_pnpm[@]}"}")
+EOF
+  while IFS= read -r f; do
+    case "${f##*/}" in package.json) audit_file "$f" ;; esac
+  done <<< "$A_JS"
+  js_audit
+  if [ "${#a_mark[@]}" -gt 0 ]; then
+    tools=$(cat "$DEFECTS/exclusion-audit/defaults.txt") || return 0
+    words=$(cat "$DEFECTS/exclusion-audit/placeholders.txt") || return 0
+    printf '%s\0' "${a_mark[@]}" | TC_EXCLUDE_DEFAULTS=$tools TC_REASON_PLACEHOLDERS=$words xargs -0 awk -v mode=marks -f "$DEFECTS/exclusion-audit/scan.awk" 2> /dev/null | audit_records
   fi
-  awk -F'\t' -v f="$f" '$1 != "S" && $1 != "H" && $2 == f' "$cache" | audit_records
+}
+
+# The runner calls check once per candidate file it found. The first call runs the whole audit; later calls have nothing left to do.
+check() {
+  local here=$DEFECTS/exclusion-audit
+  [ -d "$here" ] || return 1
+  [ -r "$here/defaults.txt" ] || return 1
+  [ -r "$here/rules.sh" ] || return 1
+  [ -n "$AUDIT_MARKS" ] || return 0
+  [ -f "$AUDIT_MARKS" ] || return 0
+  [ ! -s "$AUDIT_MARKS" ] || return 0
+  printf '%s' ran > "$AUDIT_MARKS"
+  audit_all
+  return 0
 }
 
 # Print audit lines for minimumReleaseAgeExclude records (P file line entry status).

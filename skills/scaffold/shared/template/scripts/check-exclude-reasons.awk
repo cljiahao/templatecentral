@@ -87,6 +87,7 @@ function finish(   kind, scope, i, c, depth, tok, start, ent, nent, own, st, ln,
     printf "E\t%s\t%d\tsonar-issue-ignore\t%s\t%s\n", file, keyline, key "=" trim(val), (anyvalid(trim(val)) ? "reason" : "none")
     return
   }
+  if (key ~ /(^|\.)sonar\.([A-Za-z0-9_-]+\.)*test\.inclusions$/) return
   if (key ~ /(^|\.)sonar\.([A-Za-z0-9_-]+\.)*inclusions$/) kind = "include"
   else if (key ~ /(^|\.)sonar\.([A-Za-z0-9_-]+\.)*exclusions$/) {
     scope = substr(key, index(key, "sonar.") + 6)
@@ -128,7 +129,9 @@ function finish(   kind, scope, i, c, depth, tok, start, ent, nent, own, st, ln,
     printf "E\t%s\t%d\t%s\t%s\t%s\n", file, entl[i], kind, ent[i], st
   }
 }
-# Inline coverage markers in source files: a marker needs a "reason:" on the same line or the line above. A whole-file marker never passes.
+# Inline coverage markers in source files: a marker counts only as the first token of a comment (a marker inside a string, or later in
+# a comment sentence, is not one). It needs a "reason:" on the same line or the line above. A whole-file marker never passes, and neither
+# does a v8 or c8 "ignore start" with no "ignore stop" after it in the file (it covers the rest of the file).
 function reasontext(t,   i) {
   i = index(tolower(t), "reason:")
   if (i == 0) return ""
@@ -136,15 +139,18 @@ function reasontext(t,   i) {
   sub(/[ \t]*\*\/.*$/, "", t)
   return trim(t)
 }
-function markline(raw, nr,   low, js, kind, prevt, st, at) {
-  low = tolower(raw)
+function cm(body, nr, raw,   low, kind, st, prevt, at) {
+  low = tolower(body)
+  sub(/^[ \t*]+/, "", low)
   kind = ""
-  js = (FILENAME ~ /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|vue|svelte)$/)
-  if (js) {
-    if (match(low, /(\/\*|\/\/).*(istanbul|c8|v8)[ \t]+ignore[ \t]+(file|next|if|else|start)/) || match(low, /(\/\*|\/\/).*node:coverage[ \t]+(ignore|disable)/)) kind = substr(low, RSTART, RLENGTH)
-  } else if (match(low, /#[ \t]*pragma[: \t]*no[ \t]*(cover|branch)/)) kind = substr(low, RSTART, RLENGTH)
+  if (isjs) {
+    if (match(low, /^(istanbul|c8|v8)[ \t]+ignore[ \t]+(file|next|if|else|start|stop)/) || match(low, /^node:coverage[ \t]+(ignore|disable)/)) kind = substr(low, RSTART, RLENGTH)
+  } else if (match(low, /^pragma[: \t]*no[ \t]*(cover|branch)/)) kind = "# " substr(low, RSTART, RLENGTH)
   if (kind == "") return
-  if (match(kind, /(istanbul|c8|v8|node:coverage)[ \t]+(ignore|disable).*/)) kind = substr(kind, RSTART)
+  if (kind ~ /ignore[ \t]+stop$/) {
+    if (nstack > 0) nstack--
+    return
+  }
   setsegs("")
   at = raw
   sub(/\r$/, "", at)
@@ -154,13 +160,80 @@ function markline(raw, nr,   low, js, kind, prevt, st, at) {
     sub(/^[ \t]*(\/\/+|#+|\/\*+|\*+)[ \t]*/, "", prevt)
     if (valid(reasontext(prevt))) st = "reason"
   }
-  if (kind ~ /ignore[ \t]+file/) st = "file"
-  f = FILENAME
-  sub(/^\.\//, "", f)
+  if (kind ~ /ignore[ \t]+file$/) st = "file"
   at = trim(at)
   if (length(at) > 100) at = substr(at, 1, 100)
-  printf "M\t%s\t%d\t%s\t%s\t%s\n", f, nr, trim(kind), at, st
+  nrec++
+  rline[nrec] = nr; rkind[nrec] = kind; rtext[nrec] = at; rst[nrec] = st
+  if (kind ~ /ignore[ \t]+start$/) stack[++nstack] = nrec
 }
+function flush(   k, f) {
+  if (fname == "") return
+  for (k = 1; k <= nstack; k++) rst[stack[k]] = "file"
+  f = fname
+  sub(/^\.\//, "", f)
+  for (k = 1; k <= nrec; k++) printf "M\t%s\t%d\t%s\t%s\t%s\n", f, rline[k], rkind[k], rtext[k], rst[k]
+  nrec = 0; nstack = 0
+}
+# Walk one line outside strings: call cm() with the text after each comment opener.
+function lex(raw, nr,   i, n, c, d, two, rest, j, q, blank) {
+  n = length(raw); i = 1
+  while (i <= n) {
+    if (inblock) {
+      j = index(substr(raw, i), "*/")
+      rest = (j > 0 ? substr(raw, i, j - 1) : substr(raw, i))
+      if (pendfirst && rest !~ /^[ \t*]*$/) { cm(rest, nr, raw); pendfirst = 0 }
+      if (j == 0) return
+      inblock = 0; pendfirst = 0
+      i += j + 1
+      continue
+    }
+    if (tq != "") {
+      j = index(substr(raw, i), tq)
+      if (j == 0) return
+      i += j + 2; tq = ""
+      continue
+    }
+    if (bt) {
+      c = substr(raw, i, 1)
+      if (c == "\\") { i += 2; continue }
+      if (c == "`") bt = 0
+      i++
+      continue
+    }
+    c = substr(raw, i, 1); two = substr(raw, i, 2)
+    if (isjs) {
+      if (two == "//") { cm(substr(raw, i + 2), nr, raw); return }
+      if (two == "/*") {
+        j = index(substr(raw, i + 2), "*/")
+        rest = (j > 0 ? substr(raw, i + 2, j - 1) : substr(raw, i + 2))
+        blank = (rest ~ /^[ \t*]*$/)
+        if (!blank) cm(rest, nr, raw)
+        if (j > 0) { i += j + 3; continue }
+        inblock = 1; pendfirst = blank
+        return
+      }
+      if (c == "`") { bt = 1; i++; continue }
+    } else {
+      if (c == "#") { cm(substr(raw, i + 1), nr, raw); return }
+      q = substr(raw, i, 3)
+      if (q == "\042\042\042" || q == "\047\047\047") { tq = q; i += 3; continue }
+    }
+    if (c == "\042" || c == "\047") {
+      i++
+      while (i <= n) {
+        d = substr(raw, i, 1)
+        if (d == "\\") { i += 2; continue }
+        if (d == c) break
+        i++
+      }
+      i++
+      continue
+    }
+    i++
+  }
+}
+function markline(raw, nr) { lex(raw, nr) }
 BEGIN {
   marks = (mode == "marks")
   n = split(ENVIRON["TC_EXCLUDE_DEFAULTS"], d, "\n")
@@ -169,7 +242,12 @@ BEGIN {
   nph = split(ENVIRON["TC_REASON_PLACEHOLDERS"], ph, "\n")
 }
 marks {
-  if (FNR == 1) prev = ""
+  if (FNR == 1) {
+    flush()
+    prev = ""; inblock = 0; pendfirst = 0; tq = ""; bt = 0
+    fname = FILENAME
+    isjs = (FILENAME ~ /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|vue|svelte)$/)
+  }
   markline($0, FNR)
   prev = $0
   next
@@ -207,4 +285,4 @@ marks {
   incont = 0
   finish()
 }
-END { if (!marks && incont) finish() }
+END { if (marks) flush(); else if (incont) finish() }

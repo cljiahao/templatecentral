@@ -23,5 +23,43 @@ src/**/*.spec.tsx
 test/**
 tests/**
 *.config.{js,ts,mjs,cjs}
+**/test/**
+**/tests/**
+**/__tests__/**
+__tests__/**
+test/*
+tests/*
+src/**/*.d.ts
+*.config.ts
+*.config.js
+*.config.mjs
+*.config.cjs
+vitest.config.ts
+vite.config.ts
+jest.config.js
+jest.config.ts
+node_modules
+node_modules/
+dist
+dist/
+/dist/
+build
+build/
+/build/
+coverage
+coverage/
+/coverage/
+.next
+.next/
+/.next/
+.venv/**
+venv/**
+conftest.py
+**/conftest.py
+raise NotImplementedError
+if TYPE_CHECKING:
+if __name__ == .__main__.:
+@abstractmethod
+\.\.\.
 pragma: no cover
 # pragma: no cover

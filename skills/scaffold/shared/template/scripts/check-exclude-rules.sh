@@ -1,14 +1,32 @@
 # shellcheck shell=bash
-# Rules shared by check-exclude-reasons.sh (the seeded gate) and the migrate exclusion audit, which keeps a byte copy in
+# Rules shared by check-exclude-reasons.sh (the seeded gate), the gate's tests and the migrate exclusion audit, which keeps a byte copy in
 # exclusion-audit/rules.sh. Sourced, never run; it defines functions only and has no side effects.
-#   hides_source ENTRY   true when ENTRY excludes everything, a whole source root, or every file of a source type. No reason can buy
-#                        that, so the gate fails it whatever the comment above it says.
-#   under_source_root E  prints the source root when ENTRY sits inside one without covering all of it, and returns 0; else returns 1.
-#   is_binary FILE       true when FILE holds a NUL byte, so no text scanner can read it.
-# Forms handled: {a,b} groups (nested too), a leading ! ./ / or **/, glob and regex spellings (.* for *, a trailing $).
-# Source roots are the folder names below; a source type is the extension list in src_type_glob.
+#   rules_files ROOT        print every project file, relative to ROOT, one per line. Inside a git work tree it is `git ls-files -co
+#                           --exclude-standard` (tracked and untracked, ignored files left out); elsewhere it is every file except
+#                           node_modules, .git and any folder that holds a pyvenv.cfg, and a caller that finds rules_in_git ROOT false prints RULES_NOTE.
+#                           Config discovery and the marker scan both read this one list: no folder is skipped by its name alone.
+#   rules_init LIST         read the project facts from the file list LIST: the non-test source files and the package folders.
+#   hides_source ENTRY DIR  true when the exclude ENTRY, written in a config in folder DIR, leaves out every non-test source file of the
+#                           project, of one package (a folder with its own package.json or pyproject.toml), or of one top-level folder that holds
+#                           half or more of the sources, or every source file of one extension (3 files or more) in any of those. A form the
+#                           gate cannot evaluate counts too (RULES_WHY says which). No reason can buy that.
+#   include_covers ENTRIES DIR  true when the include list ENTRIES matches every non-test source file below DIR (it narrows nothing).
+#   under_source_root E     prints the source root when ENTRY sits inside one without covering all of it (the audit only reports it).
+#   is_binary FILE          true when FILE holds a NUL byte, so no text scanner can read it.
+#   cmd_scan FILE...        print F<TAB>file<TAB>line for an exclude flag and P<TAB>file<TAB>line<TAB>tool<TAB>path for a config pointer, on a
+#                           command line whose command word is a coverage, mutation or Sonar tool.
+#   resolve_python DIR      print the interpreter to run the TOML and INI scanner (DIR/.venv/bin/python3, then the highest python3.N on the
+#                           path, then python3) that can read TOML: the first with tomllib or tomli. RULES_PY_TRIED lists what was tried.
+# Pattern forms handled: {a,b} groups (nested too), a leading ! ./ / or ^, a trailing $ or /, ./ and // inside, ** * ? [set], (a|b), and
+# the regex spellings .* and \. . A form with !( @( +( ?( or *( cannot be evaluated and counts as broad.
 
 SOURCE_ROOTS=' src app lib libs pages components server api backend frontend source packages apps services cmd internal pkg modules '
+RULES_SRC=
+RULES_PKGS=
+RULES_NOTE='not inside a git work tree, so files a .gitignore would hide were not filtered; every file except node_modules, .git and virtualenv folders is read'
+RULES_WHY=
+RULES_PY_TRIED=
+export RULES_NOTE RULES_WHY RULES_PY_TRIED
 
 # Print each {a,b} alternative of $1 on its own line; the innermost group is expanded first.
 expand_braces() {
@@ -41,24 +59,32 @@ expand_braces() {
   done
 }
 
-# Reduce one entry (no braces) to a plain glob: no !, ./, leading /, ^, trailing $ or /, regex spellings, no leading **/ or */.
-norm_glob() {
+# Reduce one entry (no braces) to a plain pattern: no !, ./, ^, leading or trailing / or $, no // or /./, regex spellings turned into globs.
+norm_pat() {
   local p=$1
   p=${p#\!}
-  p=${p#./}
   p=${p#^}
-  p=${p#/}
   p=${p%\$}
   p=${p//\\./.}
   p=${p//.\*/*}
-  p=${p%/}
   while :; do
     case "$p" in
-      '**/'*) p=${p#\*\*/} ;;
-      '*/'*) p=${p#\*/} ;;
+      *'//'*) p=${p//\/\//\/} ;;
+      *'/./'*) p=${p//\/.\//\/} ;;
       *) break ;;
     esac
   done
+  while :; do
+    case "$p" in
+      ./*) p=${p#./} ;;
+      /*) p=${p#/} ;;
+      *) break ;;
+    esac
+  done
+  case "$p" in
+    . | ./) p= ;;
+  esac
+  p=${p%/}
   printf '%s' "$p"
 }
 
@@ -69,65 +95,256 @@ src_type_glob() {
   return 1
 }
 
-# Print "root<TAB>rest" for a normalized glob whose first segment is a source root, else nothing.
-split_root() {
-  local p=$1 root rest
-  root=${p%%/*}
-  case "$SOURCE_ROOTS" in
-    *" $root "*) ;;
-    *) return 1 ;;
-  esac
-  case "$p" in
-    */*) rest=${p#*/} ;;
-    *) rest= ;;
-  esac
-  while :; do
-    case "$rest" in
-      '**/'*) rest=${rest#\*\*/} ;;
-      '*/'*) rest=${rest#\*/} ;;
-      *) break ;;
+# Succeed when ROOT is inside a git work tree. The caller runs this itself because rules_files runs in a command substitution.
+rules_in_git() {
+  command -v git > /dev/null 2>&1 && git -C "$1" rev-parse --is-inside-work-tree > /dev/null 2>&1
+}
+
+# Print the project files, relative to ROOT, one per line.
+rules_files() {
+  local root=$1 raw f venvs='' line
+  if rules_in_git "$root"; then
+    raw=$(git -C "$root" -c core.quotepath=off ls-files -co --exclude-standard 2> /dev/null) || raw=
+    local keep=
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if [ -f "$root/$f" ] || [ -L "$root/$f" ]; then keep="$keep$f
+"; fi
+    done <<EOF
+$raw
+EOF
+    raw=$keep
+  else
+    raw=$(cd "$root" && find . \( -name node_modules -o -name .git \) -prune -o \( -type f -o -type l \) -print 2> /dev/null | sed 's|^\./||')
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      pyvenv.cfg) ;;
+      */pyvenv.cfg) venvs="$venvs${line%/pyvenv.cfg}
+" ;;
     esac
-  done
-  printf '%s\t%s' "$root" "$rest"
+  done <<EOF
+$raw
+EOF
+  VENVS=$venvs printf '%s\n' "$raw" | VENVS=$venvs awk '
+    BEGIN { n = split(ENVIRON["VENVS"], v, "\n") }
+    $0 == "" { next }
+    $0 ~ /(^|\/)(node_modules|\.git)\// { next }
+    { for (i = 1; i <= n; i++) if (v[i] != "" && index($0, v[i] "/") == 1) next; print }'
+}
+
+# Read the project facts from the file list $1 (newline separated, relative paths): RULES_SRC holds the non-test source files and
+# RULES_PKGS the folders with their own package.json or pyproject.toml, other than the root.
+rules_init() {
+  RULES_SRC=$(printf '%s\n' "$1" | awk '
+    function issrc(p,   b) {
+      b = p
+      sub(/^.*\//, "", b)
+      if (b !~ /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|vue|svelte)$/) return 0
+      if (b ~ /\.d\.[cm]?ts$/) return 0
+      if (b ~ /\.config\.[a-z]+$/) return 0
+      if (b ~ /\.(test|spec)\.[a-z]+$/) return 0
+      if (b ~ /^test_.*\.py$/ || b ~ /_test\.py$/ || b == "conftest.py") return 0
+      if (p ~ /(^|\/)(test|tests|__tests__)\//) return 0
+      return 1
+    }
+    issrc($0) { print }')
+  RULES_PKGS=$(printf '%s\n' "$1" | awk '
+    { b = $0; sub(/^.*\//, "", b) }
+    b == "package.json" || b == "pyproject.toml" {
+      d = $0
+      if (index(d, "/") == 0) next
+      sub(/\/[^\/]*$/, "", d)
+      print d
+    }' | LC_ALL=C sort -u)
+}
+
+# Evaluate patterns against RULES_SRC. MODE excl: exit 0 when one pattern of RULES_PAT (newline separated) covers a whole scope.
+# MODE incl: exit 0 when the union of the patterns covers every source file below DIR. Exit 1 otherwise, 3 when a form cannot be evaluated,
+# 4 when there are no source files to judge by.
+rules_eval() {
+  RULES_PAT=$2 RULES_PKGLIST=$RULES_PKGS printf '%s\n' "$RULES_SRC" | RULES_PAT=$2 RULES_PKGLIST=$RULES_PKGS awk -v mode="$1" -v cdir="$3" '
+    function g2re(g,   i, c, n, r, d, j, depth) {
+      r = ""; n = length(g); i = 1; depth = 0
+      while (i <= n) {
+        c = substr(g, i, 1)
+        if (substr(g, i, 3) == "**/") { r = r "(.*/)?"; i += 3; continue }
+        if (substr(g, i, 2) == "**") { r = r ".*"; i += 2; continue }
+        if (c == "*") { r = r "[^/]*"; i++; continue }
+        if (c == "?") { r = r "[^/]"; i++; continue }
+        if (c == "[") {
+          j = index(substr(g, i + 1), "]")
+          if (j == 0) { r = r "\\["; i++; continue }
+          d = substr(g, i + 1, j - 1)
+          if (substr(d, 1, 1) == "!") d = "^" substr(d, 2)
+          r = r "[" d "]"; i += j + 1; continue
+        }
+        if (c == "(") depth++
+        if (c == ")") { depth--; if (depth < 0) return "" }
+        if (c == "(" || c == ")" || c == "|") { r = r c; i++; continue }
+        if (c == "\\") { r = r "\\" substr(g, i + 1, 1); i += 2; continue }
+        if (c == "." || c == "+" || c == "^" || c == "$" || c == "{" || c == "}") { r = r "\\" c; i++; continue }
+        r = r c; i++
+      }
+      if (depth != 0) return ""
+      return "^(" r ")(/.*)?$"
+    }
+    BEGIN {
+      np = split(ENVIRON["RULES_PAT"], pat, "\n")
+      npk = split(ENVIRON["RULES_PKGLIST"], pk, "\n")
+      for (k = 1; k <= np; k++) {
+        if (pat[k] ~ /[!@+?*]\(/) { bad = 1 }
+        re[k] = g2re(pat[k])
+        if (re[k] == "") bad = 1
+      }
+      if (cdir != "") {
+        for (k = 1; k <= npk; k++) {
+          if (index(pk[k], cdir "/") == 1) pk[k] = substr(pk[k], length(cdir) + 2)
+          else pk[k] = ""
+        }
+      }
+    }
+    $0 == "" { next }
+    {
+      p = $0
+      if (cdir != "") {
+        if (index(p, cdir "/") != 1) next
+        p = substr(p, length(cdir) + 2)
+      }
+      nf++
+      f[nf] = p
+    }
+    END {
+      if (bad) exit 3
+      if (nf == 0) exit 4
+      for (i = 1; i <= nf; i++) {
+        p = f[i]
+        e = p
+        if (e ~ /\.[A-Za-z]+$/) { sub(/^.*\./, "", e) } else e = ""
+        top = ""
+        if (index(p, "/") > 0) { top = p; sub(/\/.*$/, "", top) }
+        best = ""
+        for (k = 1; k <= npk; k++) if (pk[k] != "" && index(p, pk[k] "/") == 1 && length(pk[k]) > length(best)) best = pk[k]
+        tot["P"]++; tot["P|" e]++
+        if (top != "") { tot["T:" top]++; tot["T:" top "|" e]++ }
+        if (best != "") { tot["K:" best]++; tot["K:" best "|" e]++ }
+        topn[top] = 1
+        ptop[i] = top; pbest[i] = best; pe[i] = e
+      }
+      if (mode == "incl") {
+        for (i = 1; i <= nf; i++) {
+          ok = 0
+          for (k = 1; k <= np; k++) if (f[i] ~ re[k]) { ok = 1; break }
+          if (!ok) exit 1
+        }
+        exit 0
+      }
+      for (k = 1; k <= np; k++) {
+        split("", hit)
+        for (i = 1; i <= nf; i++) {
+          if (f[i] !~ re[k]) continue
+          e = pe[i]
+          hit["P"]++; hit["P|" e]++
+          if (ptop[i] != "") { hit["T:" ptop[i]]++; hit["T:" ptop[i] "|" e]++ }
+          if (pbest[i] != "") { hit["K:" pbest[i]]++; hit["K:" pbest[i] "|" e]++ }
+        }
+        for (s in hit) {
+          if (hit[s] != tot[s]) continue
+          if (index(s, "|") > 0) { if (tot[s] >= 3) exit 0; continue }
+          if (substr(s, 1, 2) == "T:") { if (tot[s] * 2 >= tot["P"]) exit 0; continue }
+          exit 0
+        }
+      }
+      exit 1
+    }'
 }
 
 hide_one() {
-  local p=$1 sr rest
+  local p=$1 dir=$2 q rc
+  RULES_WHY=
   case "$p" in
     '') return 1 ;;
     '*' | '**' | '**/*') return 0 ;;
   esac
-  if src_type_glob "$p"; then return 0; fi
-  sr=$(split_root "$p") || return 1
-  rest=${sr#*$'\t'}
-  case "$rest" in
-    '' | '*' | '**' | '**/*') return 0 ;;
+  case "$p" in
+    *'!('* | *'@('* | *'+('* | *'?('* | *'*('*)
+      RULES_WHY="uses the pattern form '$p', which the gate cannot evaluate against the project files"
+      return 0
+      ;;
   esac
-  if src_type_glob "$rest"; then return 0; fi
+  q=$p
+  while :; do
+    case "$q" in
+      '**/'*) q=${q#\*\*/} ;;
+      *) break ;;
+    esac
+  done
+  if src_type_glob "$q"; then return 0; fi
+  if [ -z "$RULES_SRC" ]; then return 1; fi
+  rules_eval excl "$p" "$dir"
+  rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    3)
+      RULES_WHY="uses a pattern the gate cannot evaluate against the project files ('$p')"
+      return 0
+      ;;
+  esac
   return 1
 }
 
 hides_source() {
-  local alt p
+  local alt p dir=${2:-}
+  [ "$dir" != . ] || dir=
+  RULES_WHY=
   while IFS= read -r alt; do
-    p=$(norm_glob "$alt")
-    if hide_one "$p"; then return 0; fi
+    p=$(norm_pat "$alt")
+    if hide_one "$p" "$dir"; then return 0; fi
   done <<EOF
 $(expand_braces "$1")
 EOF
   return 1
 }
 
+include_covers() {
+  local list='' alt p dir=${2:-} item
+  [ "$dir" != . ] || dir=
+  [ -n "$RULES_SRC" ] || return 1
+  while IFS= read -r item; do
+    [ -n "$item" ] || continue
+    while IFS= read -r alt; do
+      p=$(norm_pat "$alt")
+      case "$p" in
+        *'!('* | *'@('* | *'+('* | *'?('* | *'*('*) return 1 ;;
+      esac
+      list="$list$p
+"
+    done <<EOF
+$(expand_braces "$item")
+EOF
+  done <<EOF
+$(printf '%s\n' "$1" | awk '{ d = 0; o = ""; for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (c == "{" || c == "(") d++; if (c == "}" || c == ")") d--; if (c == "," && d <= 0) { print o; o = "" } else o = o c } print o }' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+EOF
+  rules_eval incl "${list%?}" "$dir"
+}
+
 under_source_root() {
-  local alt p sr
+  local alt p root
   while IFS= read -r alt; do
-    p=$(norm_glob "$alt")
+    p=$(norm_pat "$alt")
+    p=${p#\*\*/}
     if [ "$p" = "src/components/ui/**" ]; then continue; fi
-    if hide_one "$p"; then continue; fi
-    if sr=$(split_root "$p"); then
-      printf '%s' "${sr%%$'\t'*}"
-      return 0
-    fi
+    root=${p%%/*}
+    case "$p" in
+      */*) ;;
+      *) continue ;;
+    esac
+    case "$SOURCE_ROOTS" in
+      *" $root "*)
+        printf '%s' "$root"
+        return 0
+        ;;
+    esac
   done <<EOF
 $(expand_braces "$1")
 EOF
@@ -142,51 +359,110 @@ is_binary() {
   [ "$kept" -ne "$total" ]
 }
 
-# Print, one per line, the find arguments that skip dependencies, VCS data and caches by name, and build output (dist, build, coverage,
-# .next) only at ROOT and beside a package.json or pyproject.toml. A folder named build or coverage elsewhere is scanned.
-# The caller reads the lines into an array: PRUNE=(); while read -r a; do PRUNE+=("$a"); done; then find ROOT "${PRUNE[@]}" ...
-build_prune() {
-  local root=$1 pf d b
-  local never=(\( -name node_modules -o -name .git -o -name .venv -o -name venv -o -name __pycache__ \) -prune -o)
-  local args=(-name node_modules -o -name .git -o -name .venv -o -name venv -o -name __pycache__)
-  for b in dist build coverage .next; do
-    args+=(-o -path "$root/$b")
-  done
-  while IFS= read -r pf; do
-    [ -n "$pf" ] || continue
-    d=$(dirname "$pf")
-    for b in dist build coverage .next; do
-      args+=(-o -path "$d/$b")
-    done
-  done <<EOT
-$(find "$root" "${never[@]}" -type f \( -name package.json -o -name pyproject.toml \) -print)
-EOT
-  printf '%s\n' \( "${args[@]}" \) -prune -o
-}
-
-# Print file:line:text for every line of the given files that passes an exclude or include to a coverage, Sonar or mutation tool on the
-# command line (package.json scripts, CI files, lefthook, Makefile).
-cmd_flag_lines() {
-  grep -nHE -e '-D[ ]?sonar\.[A-Za-z.]*(exclusions|inclusions)' -e '-D[ ]?sonar\.issue\.ignore' -e '--coverage\.(exclude|include)' \
-    -e '--(coveragePathIgnorePatterns|collectCoverageFrom|omit|cov-omit|paths-to-exclude|do-not-mutate|mutate)([ =]|$)' \
-    -e '(nyc|c8|jest|coverage|stryker|mutmut|vitest)[^|;&]*[ ]--(exclude|include)([ =]|$)' "$@" 2> /dev/null
-}
-
-# Print file:line:text for every line that points a tool at a config file with --config, --cov-config or --rcfile.
-cmd_pointer_lines() {
-  grep -nHE -e '--(cov-config|rcfile|config)[= ]' "$@" 2> /dev/null
-}
-
-# Print the config path of each --config, --cov-config or --rcfile in the line TEXT when the line names a coverage tool; else nothing.
-cmd_pointer_paths() {
-  case "$1" in
-    *nyc* | *c8* | *jest* | *vitest* | *coverage* | *pytest* | *stryker* | *mutmut* | *--cov*) ;;
-    *) return 0 ;;
-  esac
-  printf '%s\n' "$1" | grep -oE -e '--(cov-config|rcfile|config)[= ]+[^ "]+' | sed -E 's/^--[a-z-]+[= ]+//' | tr -d "'\""
+# Print file<TAB>line for each command line that passes an exclude to a coverage, mutation or Sonar tool, and each config pointer.
+cmd_scan() {
+  [ "$#" -gt 0 ] || return 0
+  awk '
+    function clean(t) {
+      gsub(/^[\042\047\[(@]+/, "", t)
+      gsub(/[\042\047\]),]+$/, "", t)
+      return t
+    }
+    function isenv(t) { return (t ~ /^[A-Za-z_][A-Za-z0-9_]*=/) }
+    function iswrap(t) {
+      if (t ~ /^python[0-9.]*$/) return 1
+      return (t == "npx" || t == "pnpm" || t == "yarn" || t == "npm" || t == "bunx" || t == "bun" || t == "exec" || t == "run" || t == "dlx" || t == "x" || t == "node" || t == "env" || t == "cross-env" || t == "time" || t == "sudo" || t == "uv" || t == "poetry" || t == "pipx" || t == "-m" || t == "RUN" || t == "CMD" || t == "ENTRYPOINT" || t == "run:" || t == "script:" || t == "command:" || t == "entrypoint:" || t == "-" || t == "sh" || t == "bash" || t == "-c" || t == "$")
+    }
+    function tool(t) {
+      sub(/^.*\//, "", t)
+      sub(/\.cmd$/, "", t)
+      if (t == "nyc" || t == "c8" || t == "jest" || t == "vitest" || t == "stryker" || t == "mutmut" || t == "coverage" || t == "pytest" || t == "py.test" || t == "sonar-scanner" || t == "sonar-scanner-cli") return t
+      return ""
+    }
+    function seg(s, ln,   n, t, k, w, cmd, i, v, hasflag) {
+      n = split(s, t, /[ \t]+/)
+      cmd = ""
+      for (k = 1; k <= n; k++) {
+        w = clean(t[k])
+        if (w == "" || w == "@") continue
+        sub(/^@/, "", w)
+        if (isenv(w) || iswrap(w) || substr(w, 1, 1) == "-") continue
+        cmd = tool(w)
+        break
+      }
+      if (cmd == "") return
+      hasflag = 0
+      if (s ~ /-D[ ]?sonar\.[A-Za-z.]*(exclusions|inclusions)/ || s ~ /sonar\.issue\.ignore/ || s ~ /--coverage\.(exclude|include)/) hasflag = 1
+      if (s ~ /--(coveragePathIgnorePatterns|collectCoverageFrom|omit|cov-omit|paths-to-exclude|do-not-mutate|mutate)([ =]|$)/) hasflag = 1
+      if ((cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && s ~ /--(exclude|include)([ =]|$)/) hasflag = 1
+      if (hasflag) printf "F\t%s\t%d\n", FILENAME, ln
+      for (k = 1; k <= n; k++) {
+        w = clean(t[k]); v = ""
+        if (w ~ /^--(config|cov-config|rcfile|nycrc-path)=/) { v = w; sub(/^[^=]*=/, "", v) }
+        else if (w ~ /^-Dproject\.settings=/) { v = w; sub(/^[^=]*=/, "", v) }
+        else if (w == "--config" || w == "--cov-config" || w == "--rcfile" || w == "--nycrc-path" || w == "-Dproject.settings" || ((w == "-c") && (cmd == "jest" || cmd == "vitest" || cmd == "pytest"))) { if (k < n) v = clean(t[k + 1]) }
+        if (v != "") printf "P\t%s\t%d\t%s\t%s\n", FILENAME, ln, cmd, v
+      }
+    }
+    function lineseg(line, ln,   n, parts, i) {
+      gsub(/&&/, "\001", line)
+      gsub(/\|/, "\001", line)
+      gsub(/;/, "\001", line)
+      n = split(line, parts, "\001")
+      for (i = 1; i <= n; i++) seg(parts[i], ln)
+    }
+    FNR == 1 { pkg = (FILENAME ~ /package\.json$/) }
+    {
+      line = $0
+      if (pkg) {
+        while (match(line, /"[^"]*"[ \t]*:[ \t]*"([^"\\]|\\.)*"/)) {
+          v = substr(line, RSTART, RLENGTH)
+          line = substr(line, RSTART + RLENGTH)
+          sub(/^"[^"]*"[ \t]*:[ \t]*"/, "", v)
+          sub(/"$/, "", v)
+          lineseg(v, FNR)
+        }
+        next
+      }
+      lineseg(line, FNR)
+    }' "$@" 2> /dev/null
 }
 
 # Print "line:text" for the first line of FILE (a karma, nyc.config or codecov file, which no scanner reads) that sets an exclude, ignore or omit key.
 unparsed_exclude_line() {
   grep -nE -e "(^|[^A-Za-z_])(exclude|excludes|ignore|omit|exclusions|coveragePathIgnorePatterns|coverageExclude|ignorePatterns)[A-Za-z]*['\"]?[[:space:]]*[:=]" "$1" 2> /dev/null | head -n 1
+}
+
+# Print the interpreter for the TOML and INI scanner: the first of DIR/.venv/bin/python3, the highest python3.N on the path and python3
+# that can import tomllib or tomli. Prints nothing when none can; RULES_PY_TRIED then lists what was tried and why each failed.
+resolve_python() {
+  local dir=${1:-.} cand cands='' n tried='' out
+  if [ -x "$dir/.venv/bin/python3" ]; then cands="$dir/.venv/bin/python3
+"; fi
+  for n in $(compgen -c python3. 2> /dev/null | grep -E '^python3\.[0-9]+$' | sort -t. -k2 -n -r | uniq); do
+    cands="$cands$n
+"
+  done
+  if command -v python3 > /dev/null 2>&1; then cands="${cands}python3
+"; fi
+  RULES_PY_TRIED=
+  while IFS= read -r cand; do
+    [ -n "$cand" ] || continue
+    out=$("$cand" -I -c 'import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli
+print(".".join(map(str, sys.version_info[:3])))' 2>&1) && {
+      RULES_PY_TRIED="$tried$cand ($out) can read TOML"
+      printf '%s' "$cand"
+      return 0
+    }
+    out=$("$cand" -I -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2> /dev/null) || out=unusable
+    tried="$tried$cand ($out, no tomllib or tomli); "
+  done <<EOF
+$cands
+EOF
+  RULES_PY_TRIED=${tried:-none found: no .venv/bin/python3, no python3.N and no python3 on the path}
+  return 1
 }

@@ -131,7 +131,7 @@ for key in omit exclude-also exclude-lines; do
   want "fastapi-$key-ok" "reasoned entry is has reason" "^pyproject.toml:[0-9]+ coverage-exclude '[^']+': has reason$"
   unwanted "fastapi-$key-ok" "clean control carries no no-reason line" "no reason$"
   for v in none blank below short nocolon twoabove; do
-    want "fastapi-$key-$v" "entry is no reason" "^pyproject.toml:[0-9]+ coverage-exclude '(app/migrations/\*|if TYPE_CHECKING:)': no reason$"
+    want "fastapi-$key-$v" "entry is no reason" "^pyproject.toml:[0-9]+ coverage-exclude '(app/migrations/\*|if DEBUG:)': no reason$"
   done
 done
 want fastapi-single-above-key "single entry takes its reason above the key" "^pyproject.toml:3 coverage-exclude 'app/migrations/\*': has reason$"
@@ -282,7 +282,7 @@ audit_mutant() { # audit_mutant NAME FILE OLD NEW PATTERN (FILE is relative to s
 
 # 1 and 9 A broad exclude hides source whatever its reason; braces are expanded; any other exclude under a source root is on its own line.
 for n in root type brace; do
-  want "r2-broad-$n" "broad exclude with a reason is marked as hiding source" "^vitest.config.ts:8 coverage-exclude '[^']+': hides hand-written source \(it excludes a whole source root or every file of a source type, and no reason can cover that\), has reason$"
+  want "r2-broad-$n" "broad exclude with a reason is marked as hiding source" "^vitest.config.ts:8 coverage-exclude '[^']+': hides hand-written source \(it matches every source file of the project, of one package or of one top-level source folder, or every source file of one type there, and no reason can cover that\), has reason$"
 done
 audit_mutant r2-broad-brace defects/exclusion-audit/rules.sh $'$(expand_braces "$1")' "\$(printf '%s\\n' \"\$1\")" "hides hand-written source"
 want r2-broad-ok "a sub-folder of a source root is has reason" "^vitest.config.ts:8 coverage-exclude 'src/gen/\*\*': has reason$"
@@ -314,8 +314,8 @@ done
 want r2-flag-makefile "command-line exclude in a Makefile is a finding" "^Makefile:2 passes an exclude or include on the command line"
 unwanted pkg-flag-clean "a clean package.json has no command-line finding" "passes an exclude"
 audit_mutant r2-flag-nyc defects/exclusion-audit.sh 'passes an exclude or include on the command line' 'zz' "passes an exclude or include on the command line"
-want r2-pointer-unread "--cov-config at an unread file is a finding" "^package.json:3 points a coverage tool at conf/cov.cfg, a config file the audit does not read"
-want r2-pointer-jest "--config at an unread file is a finding" "^package.json:3 points a coverage tool at conf/jest.custom.js, a config file the audit does not read"
+want r2-pointer-unread "--cov-config at a file is read, and its exclude with no reason is a finding" "^conf/cov.cfg:[0-9]+ coverage-exclude 'app/migrations/\*': no reason$"
+want r2-pointer-jest "--config at a missing file is a finding" "^package.json:3 points jest at conf/jest.custom.js, which does not exist"
 unwanted r2-pointer-read "--rcfile at a read file is not a finding" "points a coverage tool"
 want r2-sonar-bom "Sonar file with a byte order mark is read" "^sonar-project.properties:1 sonar-exclude 'src/gen/\*\*': no reason$"
 unwanted r2-sonar-bom-ok "Sonar file with a byte order mark and a reason is clean" "no reason$"
@@ -339,6 +339,115 @@ want r2-cov-source "coverage source is an allow-list" "^pyproject.toml:2 coverag
 want r2-cov-source-ok "coverage source with a reason is has reason" "coverage-include list 'app/core' is an allow-list: .*has reason$"
 want r2-mutmut-paths "mutmut paths_to_mutate is an allow-list" "^pyproject.toml:2 mutation-include list 'app/core/' is an allow-list"
 want r2-dup-key "a key set twice in one object is reported" "^\.c8rc\.json:3 cannot be read: the key 'exclude' appears twice in one object"
+
+# ---- Round 3 -----------------------------------------------------------------------------------------------------------------------
+# Projects built at run time, one audit run over all of them. Each one has a twin that differs only in the thing under test.
+R3=$WORK/r3a
+mk() { # mk FILE CONTENT (relative to $R3)
+  mkdir -p "$(dirname "$R3/$1")"
+  printf '%s' "$2" > "$R3/$1"
+}
+mkdir -p "$R3/node_modules"
+ln -s "$TS" "$R3/node_modules/typescript"
+vc() { # vc DIR ENTRY: a vitest config with one commented exclude, in a project with src/a.ts and src/b.js
+  mk "$1/package.json" $'{\n  "name": "demo"\n}\n'
+  mk "$1/src/a.ts" $'export const a = 1;\n'
+  mk "$1/src/b.js" $'export const b = 1;\n'
+  mk "$1/vitest.config.ts" "export default {
+  test: {
+    coverage: {
+      exclude: [
+        // reason: generated code that nobody writes by hand
+        '$2',
+      ],
+    },
+  },
+};
+"
+}
+vc broad1 'src/**/*.[jt]s'
+vc broad2 'src//**'
+vc broad3 '**/*.?s'
+vc narrow 'src/gen/**'
+mk narrow/src/gen/g.ts $'export const g = 1;\n'
+mk broad4/package.json $'{\n  "name": "demo"\n}\n'
+mk broad4/my_pkg/__init__.py $'x = 1\n'
+mk broad4/my_pkg/m.py $'y = 1\n'
+mk broad4/pyproject.toml $'[tool.coverage.run]\nomit = [\n    # reason: generated code that nobody writes by hand\n    "my_pkg/**",\n]\n'
+mk venv1/env/pyvenv.cfg $'home = /usr/bin\n'
+mk venv1/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
+mk venv2/env/lib/site.py $'def f(x):\n    if x:  # pragma: no cover\n        return 1\n'
+mk cmd1/package.json $'{\n  "name": "demo",\n  "scripts": {\n    "ci": "pnpm test:coverage && pnpm lint --config eslint.config.js",\n    "lint:jest": "eslint --config .eslintrc.jest.js tests",\n    "sync": "rsync -a coverage/ --exclude x out/",\n    "unit": "vitest run --exclude e2e",\n    "test:e2e": "jest --config ./test/jest-e2e.json"\n  }\n}\n'
+mk cmd1/test/jest-e2e.json $'{\n  "rootDir": "."\n}\n'
+mk cmd2/package.json $'{\n  "name": "demo",\n  "scripts": {\n    "a": "echo x && nyc --exclude src/gen/** vitest run"\n  }\n}\n'
+mk cmd3/.github/workflows/ci.yml $'jobs:\n  t:\n    steps:\n      - run: npx nyc --exclude src/gen/** vitest run\n'
+mk cmd3/package.json $'{\n  "name": "demo"\n}\n'
+mk mark1/src/a.ts $'const s = "istanbul ignore next";\n// This sentence names the istanbul ignore next marker in prose.\nexport const a = s;\n'
+mk mark2/src/a.ts $'/* istanbul ignore next */\nexport const a = 1;\n'
+mk mark3/src/a.ts $'/* v8 ignore start */\nexport const a = 1;\n'
+mk sonar1/sonar-project.properties $'sonar.test.inclusions=**/*.test.ts\nsonar.javascript.test.inclusions=**/*.spec.ts\n'
+mk dflt1/vitest.config.ts $'export default {\n  test: {\n    coverage: {\n      exclude: [\'**/tests/**\', \'src/**/*.d.ts\', \'dist/\'],\n    },\n  },\n};\n'
+mk dflt1/package.json $'{\n  "name": "demo"\n}\n'
+mk py1/pyproject.toml $'[tool.coverage.report]\nexclude_lines = [\n    "pragma: no cover",\n    "if TYPE_CHECKING:",\n]\n\n[tool.coverage.run]\nomit = ["conftest.py"]\n'
+mk py2/pyproject.toml $'[tool.coverage.run]\nomit = ["*/__init__.py"]\n'
+mk incl1/package.json $'{\n  "name": "demo"\n}\n'
+mk incl1/src/a.ts $'export const a = 1;\n'
+mk incl1/vitest.config.ts $'export default {\n  test: {\n    coverage: {\n      include: [\'src/**/*.ts\'],\n    },\n  },\n};\n'
+mk links1/package.json $'{\n  "name": "demo"\n}\n'
+mk links1/src/a.ts $'export const a = 1;\n'
+ln -s a.ts "$R3/links1/src/alias.ts"
+mkdir -p "$R3/links2/src"
+mk links2/package.json $'{\n  "name": "demo"\n}\n'
+ln -s no-such-folder "$R3/links2/src/gone"
+SAVED_AUD=$ALLAUD
+R3ALL=$(bash "$root/$REPORT" "$R3" 2>&1)
+ALLAUD=$(printf '%s\n' "$R3ALL" | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//')
+H='hides hand-written source'
+for n in broad1 broad2 broad3 broad4; do want "$n" "a broad exclude hides source" "coverage-(exclude|exclude) '[^']+': $H"; done
+unwanted narrow "a narrow exclude hides nothing" "$H"
+want venv2 "a folder without pyvenv.cfg is audited" "^env/lib/site\.py:2 inline coverage marker '# pragma: no cover': no reason$"
+unwanted venv1 "a virtual environment folder is not audited" "pragma"
+unwanted cmd1 "other tools' command lines are not findings" "passes an exclude"
+want cmd2 "a tool segment after && is a finding" "passes an exclude"
+want cmd3 "a CI workflow is scanned" "ci\.yml:4 passes an exclude"
+unwanted mark1 "markers in strings and prose are not markers" "inline coverage marker"
+want mark2 "a block-comment marker without a reason" "src/a\.ts:1 inline coverage marker 'istanbul ignore next': no reason$"
+want mark3 "v8 ignore start with no stop is whole-file" "src/a\.ts:1 inline coverage marker .*start.*hides hand-written source"
+unwanted sonar1 "sonar test inclusions are not an allow-list" "allow-list"
+unwanted dflt1 "normalised defaults are framework defaults only" "no reason"
+unwanted py1 "stock python lines and conftest.py are defaults" "no reason"
+want py2 "*/__init__.py still needs a reason" "coverage-exclude '\*/__init__\.py': no reason$"
+unwanted incl1 "an include that covers every source file is no allow-list finding" "allow-list"
+want links2 "a dangling directory link is reported" "^src/gone:1 is a symlink that is not a link to a regular file"
+unwanted links1 "a link to a regular file is fine" "symlink"
+# Revert proofs: a mutant copy of the migrate folder run over the same projects. PREFIX/PAT is a line the real audit gives and the mutant must lose;
+# with "gain" the mutant must give a line the real audit does not.
+audit_mutant3() { # audit_mutant3 lose|gain PREFIX PAT FILE OLD NEW
+  local mode=$1 pre=$2 pat=$3 file=$4 old=$5 new=$6 mout
+  rm -rf "$WORK/mutaudit3"
+  mkdir -p "$WORK/mutaudit3"
+  cp -R "$root/skills/migrate/general" "$WORK/mutaudit3/general"
+  if ! OLD=$old NEW=$new perl -0pi -e '$c += s/\Q$ENV{OLD}\E/$ENV{NEW}/g; END { $? = $c ? 0 : 3 }' "$WORK/mutaudit3/general/$file"; then
+    nok "revert proof: the mutation '$old' did not apply to $file"
+    return
+  fi
+  mout=$(bash "$WORK/mutaudit3/general/defect-report.sh" "$R3" 2>&1 | grep '  exclusion-audit  check  ' | sed 's/  exclusion-audit  check  .*//' | awk -v p="$pre/" 'index($0, p) == 1 { print substr($0, length(p) + 1) }')
+  if printf '%s\n' "$mout" | grep -Eq -- "$pat"; then
+    if [ "$mode" = gain ]; then ok "revert proof: $pre gains /$pat/ with the fix undone ($file)"; else nok "revert proof: $pre still reports /$pat/ with the fix undone ($file)" "$mout"; fi
+  else
+    if [ "$mode" = lose ]; then ok "revert proof: $pre stops reporting /$pat/ with the fix undone ($file)"; else nok "revert proof: $pre does not gain /$pat/ with the fix undone ($file)" "$mout"; fi
+  fi
+}
+AR=defects/exclusion-audit/rules.sh
+audit_mutant3 gain venv1 "pragma" "$AR" 'pyvenv.cfg' 'zzz.cfg'
+audit_mutant3 gain cmd1 "passes an exclude" "$AR" $'(cmd == "nyc" || cmd == "c8" || cmd == "coverage" || cmd == "mutmut") && ' ''
+audit_mutant3 lose cmd2 "passes an exclude" "$AR" $'gsub(/&&/, "\\001", line)' $'gsub(/&&/, " ", line)'
+audit_mutant3 gain mark1 "inline coverage marker" defects/exclusion-audit/scan.awk $'match(low, /^(istanbul|c8|v8)[ \\t]+ignore' $'match(low, /(istanbul|c8|v8)[ \\t]+ignore'
+audit_mutant3 gain sonar1 "allow-list" defects/exclusion-audit/scan.awk $'if (key ~ /(^|\\.)sonar\\.([A-Za-z0-9_-]+\\.)*test\\.inclusions$/) return' ''
+audit_mutant3 lose broad1 "$H" "$AR" $'rules_eval excl "$p" "$dir"' 'return 1'
+audit_mutant3 gain dflt1 "no reason" defects/exclusion-audit/defaults.txt '**/tests/**' 'zzzunused'
+audit_mutant3 lose links2 "^src/gone:1 is a symlink" defects/exclusion-audit.sh 'is a symlink that is not a link to a regular file, so nothing behind it was audited' 'zz'
+ALLAUD=$SAVED_AUD
 
 # 15 The audit says its exit code stays 0 by design.
 if [ "$(printf '%s\n' "$ALL" | grep -c 'the audit exit code stays 0 by design, so the findings are in these lines')" -gt 0 ]; then ok "the audit output says the findings are in the lines, not the exit code"; else nok "the audit output does not say the exit code stays 0 by design"; fi

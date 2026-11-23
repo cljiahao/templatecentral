@@ -104,6 +104,10 @@ for def in "$DEFECTS"/*.sh; do
     check "" "$lit" "$id: no current template contains the older literal"
     printf 'const DUMMY_HASH = argon2.hash(randomUUID());\n' > "$clean/auth.service.ts"
   fi
+  if [[ "$id" == exclusion-audit ]]; then
+    # The template is a gate script, not a config, so the control is a project with the same config file and no exclude (the audit prints a line for every exclude, even one with a reason).
+    printf 'sonar.projectKey=demo\n' > "$clean/sonar-project.properties"
+  fi
   run "$clean"
   check 0 "$EC" "$id: current template is clean (exit)"
   lacks "  $id  " "$OUT" "$id: current template is not flagged"

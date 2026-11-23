@@ -439,12 +439,12 @@ def scan_ini(file, text, sections):
 
 
 def ini_sections(base):
-    prefix = "" if base == ".coveragerc" else "coverage:"
+    prefix = "coverage:" if base in ("setup.cfg", "tox.ini") else ""
     wanted = {}
     for section in ("run", "report"):
         for key, kind in COVERAGE_KEYS:
             wanted[(prefix + section, key)] = kind
-    if base != ".coveragerc":
+    if base in ("setup.cfg", "tox.ini"):
         for key, kind in MUTMUT_KEYS:
             wanted[("mutmut", key)] = kind
     return wanted
