@@ -164,6 +164,21 @@ def bound_names(stmt):
     return names
 
 
+def plain_targets(stmt):
+    targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+    return not any(isinstance(sub, (ast.Attribute, ast.Subscript)) for t in targets for sub in ast.walk(t))
+
+
+def deco_text(src, deco):
+    if isinstance(deco, ast.Call):
+        target = deco.func
+        name = target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else ""
+        if name == "parametrize":
+            parts = [src.text_of(deco.func)] + [src.text_of(a) for a in deco.args]
+            return " ".join(parts + [src.text_of(k) for k in deco.keywords if k.arg != "ids"])
+    return src.text_of(deco)
+
+
 IMPLICIT = ("setup", "set_up", "teardown", "tear_down")
 
 
@@ -212,7 +227,7 @@ def main():
     if len(sys.argv) != 3:
         die("usage: duplicate_tests_py.py <project-root> <file-list>")
     if sys.version_info < (3, 8):
-        die("Python %s is too old: the check needs Python 3.8 or newer" % VERSION)
+        die("Python %s is too old: install the Python version this project pins" % VERSION)
     root, list_file = sys.argv[1], sys.argv[2]
     with open(list_file, "rb") as handle:
         rels = [r for r in handle.read().decode("utf-8", "surrogateescape").split("\0") if r]
@@ -262,7 +277,7 @@ def main():
                 elif isinstance(child, ast.ClassDef):
                     always = False
                 elif isinstance(child, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
-                    always = "pytestmark" in names
+                    always = "pytestmark" in names or not plain_targets(child)
                 else:
                     always = True
                 used = set()
@@ -347,7 +362,7 @@ def main():
                         break
                     seen_rows.add(row)
             toks = src.body_tokens(func)
-            decorators = "\n".join(src.text_of(d) for d in func.decorator_list)
+            decorators = "\n".join(deco_text(src, d) for d in func.decorator_list)
             ctx = "%s\n\x03\n%s\n%s\n%s" % (conf, ctx_inner, decorators, arg_names(func))
             exact = "\x02".join(t.string for t in toks)
             shape = "\x02".join("\x01L" if is_literal(t.type, t.string) else t.string for t in toks)

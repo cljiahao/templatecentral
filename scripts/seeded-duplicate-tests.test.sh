@@ -342,7 +342,8 @@ printf '#!/bin/sh\ntouch "%s/used-venv-python"\nexec python3 "$@"\n' "$T" > "$P/
 chmod +x "$P/.venv/bin/python3"
 OUT=$(bash "$CHECK" "$P" 2>&1)
 check 0 "$?" "project .venv python: exit"
-check yes "$([ -f "$T/used-venv-python" ] && echo yes || echo no)" "project .venv/bin/python3 is preferred"
+if [ -f "$T/used-venv-python" ]; then used=yes; else used=no; fi
+check yes "$used" "project .venv/bin/python3 is preferred"
 has "under Python 3" "$(bash "$CHECK" "$(project py-clean; printf 'def test_x(:\n' > "$P/test_broken.py"; echo "$P")" 2>&1)" "py parse error names the interpreter version"
 
 # Odd file names, symlinks, unreadable files, NUL bytes.
@@ -564,6 +565,117 @@ for alias in xdescribe fdescribe; do
   verdict 1 "$alias is a suite"
   has "2 test cases have the same body" "$OUT" "$alias: flagged"
 done
+
+# ---------------------------------------------------------------------------------------------------------------
+# Round 3. Statements that run around a case are context; package build output is skipped; more forms.
+for pair in "process.env.MODE = 'a';|process.env.MODE = 'b';" "global.fetch = a;|global.fetch = b;"; do
+  one=${pair%%|*}
+  two=${pair##*|}
+  newp
+  printf "import { describe, expect, it } from 'vitest';\nimport { run } from './run';\ndescribe('A', () => {\n  %s\n  it('x', () => {\n    const r = run();\n    expect(r.ok).toBe(true);\n    expect(r.n).toBe(3);\n  });\n});\ndescribe('B', () => {\n  %s\n  it('x', () => {\n    const r = run();\n    expect(r.ok).toBe(true);\n    expect(r.n).toBe(3);\n  });\n});\n" "$one" "$two" > "$P/x.test.ts"
+  verdict 0 "ts describe-level statement differs ($one)"
+  has "ok, 2 test cases compared" "$OUT" "ts describe-level statement differs ($one): both read"
+  printf "import { describe, expect, it } from 'vitest';\nimport { run } from './run';\ndescribe('A', () => {\n  %s\n  it('x', () => {\n    const r = run();\n    expect(r.ok).toBe(true);\n    expect(r.n).toBe(3);\n  });\n});\ndescribe('B', () => {\n  %s\n  it('x', () => {\n    const r = run();\n    expect(r.ok).toBe(true);\n    expect(r.n).toBe(3);\n  });\n});\n" "$one" "$one" > "$P/x.test.ts"
+  verdict 1 "ts describe-level statement the same ($one)"
+done
+newp
+ts_case "$P/a.test.ts" "process.env.MODE = 'a';"$'\n' 2
+ts_case "$P/b.test.ts" "process.env.MODE = 'b';"$'\n' 2
+verdict 0 "ts file-level assignment differs"
+ts_case "$P/b.test.ts" "process.env.MODE = 'a';"$'\n' 2
+verdict 1 "ts file-level assignment the same"
+
+py_cls() { # py_cls <file> <value-a> <value-b>
+  printf 'import os\nfrom f import f\n\n\nclass TestA:\n    os.environ["MODE"] = "%s"\n\n    def test_x(self):\n        r = f(1)\n        assert r.a == 2\n        assert r.b == 3\n\n\nclass TestB:\n    os.environ["MODE"] = "%s"\n\n    def test_x(self):\n        r = f(1)\n        assert r.a == 2\n        assert r.b == 3\n' "$2" "$3" > "$1"
+}
+newp
+py_cls "$P/test_a.py" a b
+verdict 0 "py class-level assignment differs"
+has "ok, 2 test cases compared" "$OUT" "py class-level assignment differs: both read"
+py_cls "$P/test_a.py" a a
+verdict 1 "py class-level assignment the same"
+newp
+py_case "$P/test_a.py" 'import os
+os.environ["MODE"] = "a"' 2
+py_case "$P/test_b.py" 'import os
+os.environ["MODE"] = "b"' 2
+verdict 0 "py module-level assignment differs"
+has "ok, 2 test cases compared" "$OUT" "py module-level assignment differs: both read"
+py_case "$P/test_b.py" 'import os
+os.environ["MODE"] = "a"' 2
+verdict 1 "py module-level assignment the same"
+
+ts_bare() { # ts_bare <file> — like ts_case but imports a package, so the same body in two folders has the same context.
+  mkdir -p "${1%/*}"
+  printf "import { expect, it } from 'vitest';\nimport { f } from 'lib';\nit('x', () => {\n  const r = f(1);\n  expect(r.a).toBe(2);\n  expect(r.b).toBe(3);\n});\n" > "$1"
+}
+# Build output beside a package.json or pyproject.toml is skipped at any depth; source folders of the same names are read.
+newp
+mkdir -p "$P/packages/x"
+printf '{}\n' > "$P/packages/x/package.json"
+ts_bare "$P/packages/x/dist/a.test.ts"
+ts_bare "$P/packages/x/dist/b.test.ts"
+ts_bare "$P/packages/x/src/c.test.ts"
+verdict 0 "ts compiled copies under a package dist"
+has "ok, 1 test cases compared" "$OUT" "ts compiled copies under a package dist: only the source is read"
+ts_case "$P/packages/x/src/env/a.test.ts" "" 2
+ts_case "$P/packages/x/src/env/b.test.ts" "" 2
+verdict 1 "ts source folders env and out inside a package are read"
+newp
+ts_bare "$P/packages/y/dist/a.test.ts"
+ts_bare "$P/packages/y/dist/b.test.ts"
+verdict 1 "ts dist with no package.json beside it is read"
+newp
+mkdir -p "$P/pkg"
+printf '[project]\nname = "p"\n' > "$P/pkg/pyproject.toml"
+py_case "$P/pkg/build/test_a.py" "" 2
+py_case "$P/pkg/test_c.py" "" 2
+verdict 0 "py compiled copy under a package build"
+has "ok, 1 test cases compared" "$OUT" "py compiled copy under a package build: only the source is read"
+py_case "$P/pkg/src/out/test_a.py" "" 2
+py_case "$P/pkg/src/env/test_b.py" "" 2
+verdict 1 "py source folders out and env inside a package are read"
+
+# A project with only body-less cases says so.
+newp
+printf "import { it } from 'vitest';\nit.todo('later');\nit.todo('sooner');\n" > "$P/a.test.ts"
+verdict 2 "only it.todo cases"
+has "none has a body" "$OUT" "only it.todo cases: the message says so"
+lacks "does not define" "$OUT" "only it.todo cases: not blamed on handlers"
+
+# More file forms.
+for f in a.cy.js a.cy.jsx a.cy.mjs a.test-d.tsx; do
+  newp
+  ts_case "$P/${f%%.*}.x/$f" "" 2
+  ts_case "$P/${f%%.*}.x/b.${f#*.}" "" 2
+  verdict 1 "ts duplicates in $f"
+done
+
+# A table named by a constant in the same file is checked for repeated rows; ids= is not part of the key.
+newp
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst rows = [[1, 2], [1, 2]];\nit.each(rows)('a %%i', (a, b) => {\n  const r = f(a);\n  expect(r.a).toBe(b);\n  expect(r.b).toBe(3);\n});\n" > "$P/a.test.ts"
+verdict 1 "ts constant table repeats a row"
+has "the parameter table repeats a row" "$OUT" "ts constant table repeats a row: message"
+printf "import { expect, it } from 'vitest';\nimport { f } from './f';\nconst rows = [[1, 2], [3, 4]];\nit.each(rows)('a %%i', (a, b) => {\n  const r = f(a);\n  expect(r.a).toBe(b);\n  expect(r.b).toBe(3);\n});\n" > "$P/a.test.ts"
+verdict 0 "ts constant table with distinct rows"
+pids() { # pids <ids-a> <table-b>
+  printf 'import pytest\nfrom f import f\n\n\n@pytest.mark.parametrize("x", [1, 2], ids=["%s", "p"])\ndef test_a(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n\n\n@pytest.mark.parametrize("x", %s)\ndef test_b(x):\n    r = f(x)\n    assert r.a == 2\n    assert r.b == 3\n' "$1" "$2" > "$P/test_a.py"
+}
+newp
+pids q "[1, 2]"
+verdict 1 "py same tables and bodies, ids differ in one"
+pids q "[1, 3]"
+verdict 0 "py different tables, ids differ"
+
+# declared_tests looks at any depth.
+newp
+mkdir -p "$P/pkg/sub/deep"
+printf '{"scripts":{"test":"vitest"}}\n' > "$P/pkg/sub/deep/package.json"
+verdict 2 "test script three folders deep and no test files"
+has "declares tests (pkg/sub/deep/package.json)" "$OUT" "deep test script: named"
+printf '{"scripts":{"build":"tsc"}}\n' > "$P/pkg/sub/deep/package.json"
+verdict 0 "deep package.json without a test script"
+has "nothing to check" "$OUT" "deep package.json without a test script: nothing to check"
 
 # Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
 cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out

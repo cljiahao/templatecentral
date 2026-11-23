@@ -35,6 +35,8 @@ SHAPE_GROUP_MIN=3
 SKIP_ANY='node_modules .git .venv venv __pycache__ site-packages .mypy_cache .pytest_cache .ruff_cache'
 # Build output and tool folders skipped only at the project root: src/env or src/out can hold real tests.
 SKIP_ROOT='.next .nuxt dist build out coverage env .turbo .claude .tox'
+# Build output skipped at any depth when it sits beside a package.json or pyproject.toml, because compiled tests repeat their source.
+SKIP_PACKAGE='dist build out coverage .next .turbo'
 
 die() {
   printf 'check-duplicate-tests: %s\n' "$1" >&2
@@ -67,7 +69,7 @@ for d in $SKIP_ROOT; do
   prune_args+=(-o -path "$root_glob/$d")
 done
 
-find "$root" -name pyvenv.cfg -type f > "$wd/venvs" 2> /dev/null || die "cannot walk $root"
+find "$root" \( -name node_modules -o -name .git \) -prune -o -name pyvenv.cfg -type f -print > "$wd/venvs" 2> /dev/null || die "cannot walk $root"
 root_real=$(cd "$root" && pwd -P) || die "cannot resolve $root"
 
 # Test files (regular files and symlinks), NUL-separated: two lists, one per language.
@@ -76,7 +78,7 @@ find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( \
   -o -name '*.spec.ts' -o -name '*.spec.tsx' -o -name '*.spec.js' -o -name '*.spec.jsx' -o -name '*.spec.mjs' -o -name '*.spec.cjs' -o -name '*.spec.mts' -o -name '*.spec.cts' \
   -o -name '*-test.ts' -o -name '*-test.tsx' -o -name '*-test.js' -o -name '*-test.jsx' -o -name '*-test.mjs' -o -name '*-test.cjs' -o -name '*-test.mts' -o -name '*-test.cts' \
   -o -name '*-spec.ts' -o -name '*-spec.tsx' -o -name '*-spec.js' -o -name '*-spec.jsx' -o -name '*-spec.mjs' -o -name '*-spec.cjs' -o -name '*-spec.mts' -o -name '*-spec.cts' \
-  -o -name '*.cy.ts' -o -name '*.cy.tsx' -o -name '*.test-d.ts' \
+  -o -name '*.cy.ts' -o -name '*.cy.tsx' -o -name '*.cy.js' -o -name '*.cy.jsx' -o -name '*.cy.mjs' -o -name '*.test-d.ts' -o -name '*.test-d.tsx' \
   -o -path '*/__tests__/*.ts' -o -path '*/__tests__/*.tsx' -o -path '*/__tests__/*.js' -o -path '*/__tests__/*.jsx' -o -path '*/__tests__/*.mjs' -o -path '*/__tests__/*.cjs' -o -path '*/__tests__/*.mts' -o -path '*/__tests__/*.cts' \
   \) -print0 2> /dev/null | sort -z > "$wd/ts.raw" || die "cannot walk $root"
 find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( -name 'test*.py' -o -name '*_test.py' \) -print0 2> /dev/null | sort -z > "$wd/py.raw" || die "cannot walk $root"
@@ -94,6 +96,22 @@ resolve_link() {
   printf '%s/%s\n' "$(cd "${p%/*}" 2> /dev/null && pwd -P)" "${p##*/}"
 }
 
+# in_package_output <root-relative path>: succeeds when a folder on the path is build output beside a package.json or pyproject.toml.
+in_package_output() {
+  local rest=${1%/*} dir='' part
+  [ "$rest" != "$1" ] || return 1
+  while [ -n "$rest" ]; do
+    case "$rest" in */*) part=${rest%%/*} rest=${rest#*/} ;; *) part=$rest rest= ;; esac
+    case " $SKIP_PACKAGE " in
+      *" $part "*)
+        if [ -f "$root/$dir/package.json" ] || [ -f "$root/$dir/pyproject.toml" ]; then return 0; fi
+        ;;
+    esac
+    dir=${dir:+$dir/}$part
+  done
+  return 1
+}
+
 # strip_venvs <raw> <out>: drops files under a virtual environment and unusable symlinks, writes root-relative
 # NUL-separated names. A name with a tab or newline would break the tab-separated records: that stops the run.
 strip_venvs() {
@@ -109,6 +127,7 @@ strip_venvs() {
       case "$f" in "$dir"/*) skip=1 ;; esac
     done < "$wd/venvs"
     [ "$skip" -eq 0 ] || continue
+    if in_package_output "${f#"$root"/}"; then continue; fi
     if [ -L "$f" ]; then
       target=$(resolve_link "$f")
       case "$target" in
@@ -133,7 +152,7 @@ declared_tests() {
       setup.cfg | tox.ini) grep -Eq '^\[(tool:)?pytest\]' "$f" 2> /dev/null && found="$found ${f#"$root"/}" ;;
       *) found="$found ${f#"$root"/}" ;;
     esac
-  done < <(find "$root" -maxdepth 2 \( -name node_modules -o -name .git \) -prune -o -type f \( -name package.json -o -name 'vitest.config.*' -o -name 'jest.config.*' -o -name pytest.ini -o -name pyproject.toml -o -name setup.cfg -o -name tox.ini \) -print 2> /dev/null | sort)
+  done < <(find "$root" \( "${prune_args[@]}" \) -prune -o -type f \( -name package.json -o -name 'vitest.config.*' -o -name 'jest.config.*' -o -name pytest.ini -o -name pyproject.toml -o -name setup.cfg -o -name tox.ini \) -print 2> /dev/null | sort)
   printf '%s' "${found# }"
 }
 
@@ -181,7 +200,12 @@ fi
 awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
   function loc(i) { return F[i] ":" L[i] }
   {
+    if ($1 == "T") {
+      bodyless++
+      next
+    }
     if ($1 == "U") {
+      unresolved++
       printf "NOTE %s:%s: the case passes a named handler that is not defined in this file; counted, not compared.\n", $2, $3
       next
     }
@@ -232,16 +256,19 @@ awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
         printf "NOTE %s: %d test cases differ only in literal values (%s). Consider one parameterised test when a third case arrives.\n", loc(SL[key, 1]), c, list
       }
     }
-    print compared + 0 > "/dev/stderr"
+    print compared + 0, unresolved + 0, bodyless + 0 > "/dev/stderr"
     exit fails > 0 ? 1 : 0
   }
 ' "$wd/records" > "$wd/out" 2> "$wd/count"
 rc=$?
 case "$rc" in 0 | 1) ;; *) die "internal failure while comparing test cases" ;; esac
-ncompared=$(cat "$wd/count")
+read -r ncompared nunresolved nbodyless < "$wd/count"
 cat "$wd/notes" "$wd/out" | sort -s -k1,1
 if [ "$ncompared" -eq 0 ]; then
-  die "$ncases test cases were read but none could be compared (named handlers the file does not define): inline the test bodies so the check can read them"
+  if [ "$nunresolved" -gt 0 ]; then
+    die "$ncases test cases were read but none could be compared ($nunresolved name a handler the file does not define, $nbodyless have no body, such as todo): inline the test bodies so the check can read them"
+  fi
+  die "$ncases test cases were read but none has a body to compare (todo or pending cases): write the test bodies, or the check has nothing to read"
 fi
 if [ "$rc" -eq 0 ]; then
   printf 'check-duplicate-tests: ok, %s test cases compared, %s read\n' "$ncompared" "$ncases"

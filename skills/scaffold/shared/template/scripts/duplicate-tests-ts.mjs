@@ -123,6 +123,14 @@ const analyse = (file, text, ts) => {
     ts.forEachChild(node, collectFunctions);
   };
   collectFunctions(sf);
+  const tableConsts = new Map();
+  const collectTables = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && ts.isArrayLiteralExpression(node.initializer)) {
+      if (!tableConsts.has(node.name.text)) tableConsts.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collectTables);
+  };
+  collectTables(sf);
 
   // { base, mods } for `it`, `it.only`, `it.skipIf(x)`, `it.each(t)`, `v.it`, an aliased name, or null.
   const describeCallee = (expr) => {
@@ -278,7 +286,6 @@ const analyse = (file, text, ts) => {
     }
     return names;
   };
-  const mockLike = /^(vi|jest|expect\.extend|test\.use|it\.use)\b|\bmock\b|\bdoMock\b|\bspyOn\b/;
   // Statements of a file or block that are not cases, with the names they bind and the names they use.
   const scopeMemo = new Map();
   const scopeItems = (node) => {
@@ -291,11 +298,7 @@ const analyse = (file, text, ts) => {
       let always = false;
       if (ts.isImportDeclaration(st)) always = false;
       else if (names.size > 0) always = false;
-      else if (ts.isExpressionStatement(st)) {
-        const e = st.expression;
-        const callee = ts.isCallExpression(e) ? describeCallee(e.expression) : null;
-        always = Boolean((callee && HOOKS.includes(callee.base)) || mockLike.test(textOf(st)));
-      } else always = true;
+      else always = true;
       items.push({ st, names, idents, always, text: null });
     }
     scopeMemo.set(node, items);
@@ -303,7 +306,7 @@ const analyse = (file, text, ts) => {
   };
   const isHolder = (node) => ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node);
 
-  // Context of one case: ancestor parts, statements it names, and every hook and mock.
+  // Context of one case: ancestor parts, statements it names, and every other statement that runs.
   const caseContext = (chain, refs) => {
     const scopes = chain.filter(isHolder).map((n) => scopeItems(n));
     for (const items of scopes) {
@@ -319,7 +322,6 @@ const analyse = (file, text, ts) => {
           if (it.on) continue;
           let hit = false;
           for (const n of it.names) if (refs.has(n)) hit = true;
-          if (!hit && ts.isExpressionStatement(it.st)) for (const id of it.idents) if (refs.has(id)) hit = true;
           if (!hit) continue;
           it.on = true;
           grew = true;
@@ -361,7 +363,8 @@ const analyse = (file, text, ts) => {
     }
     const ctx = caseContext(chain, refs);
     const params = c.fn.parameters.map(textOf);
-    const first = c.table && c.table[0];
+    let first = c.table && c.table[0];
+    if (first && ts.isIdentifier(first) && tableConsts.has(first.text)) first = tableConsts.get(first.text);
     if (first && ts.isArrayLiteralExpression(first)) {
       const seenRows = new Set();
       for (const el of first.elements) {
