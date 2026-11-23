@@ -7,12 +7,12 @@
 # A code reference such as call foo() first is not an aside. JSDoc blocks do not count @tag lines, Python docstrings do not count blank lines or section entries such as Args.
 # A tool directive is exempt only when it matches that directive's own grammar from its start, and a directive that suppresses a check must carry a reason:
 # eslint-disable*, istanbul/c8/v8 ignore, NOSONAR, gitleaks:allow, pragma: no cover and noqa take " -- reason" (noqa also needs a rule code); @ts-ignore, @ts-expect-error and @ts-nocheck take the reason as text after them;
-# biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at least three words that is not only TODO, at most MAX_REASON_CHARS characters, and is checked for asides.
-# Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. JSDoc @tag lines are capped at MAX_TAG_LINES per block.
-# Comments before the first line of code total at most MAX_COMMENT_LINES lines. A header that starts with a copyright or SPDX marker is exempt only for its leading licence lines, at most 15 of them.
-# Shebangs and a licence header at the top of the file are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
+# biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at least three different words, each with a letter and two or more characters, that is not only TODO, at most MAX_REASON_CHARS characters, and is checked for asides.
+# Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. Known JSDoc @tag lines (@param, @returns and the like) are capped at MAX_TAG_LINES over a whole comment chain, and the text of @remarks, @example, @see and other prose tags counts as prose.
+# Comments before the first line of code total at most MAX_COMMENT_LINES lines. Copyright and SPDX lines (at most 5) and a comment that quotes one text in check-comments.licences.txt unbroken (at most 40 lines) are exempt; any other line counts.
+# Shebangs are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
 # Base ref: the argument, else BASE_REF, else the merge base with the default branch; in CI (CI, GITHUB_ACTIONS or TF_BUILD) the default branch is never guessed,
-# so CI needs the argument or the pipeline target variable. In CI a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
+# so CI needs the argument or the pipeline target variable; the pipeline passes the base argument on every trigger, since a push run has no target variable and exits 2. In CI a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
 # In CI on a push to the target branch HEAD is the base, so there is nothing to compare: the gate says so, exits 0 and judges pull requests only.
 # When a change touches no judged file the gate prints "nothing checked" and the reason instead of ok and exits 0. --all with no source file under its paths, or a missing path, exits 2.
 # Exit 0 clean, 1 findings, 2 cannot run (missing runtime or package, no base, unreadable file), always with one line naming the cause.
@@ -76,6 +76,13 @@ specs=$wd/specs
 : > "$specs"
 decision=
 src_seen=0
+: > "$wd/skipped"
+: > "$wd/links"
+
+# Joins the lines of a file with commas, at most 20 of them.
+list_lines() {
+  awk 'NR <= 20 { printf "%s%s", (NR > 1 ? ", " : ""), $0 } END { if (NR > 20) printf ", and %d more", NR - 20 }' "$1"
+}
 
 has_source_ext() {
   local e
@@ -89,7 +96,10 @@ has_source_ext() {
 add_spec() {
   has_source_ext "$1" || return 0
   src_seen=1
-  is_skipped "$1" && return 0
+  if is_skipped "$1"; then
+    printf '%s\n' "$1" >> "$wd/skipped"
+    return 0
+  fi
   case "$1" in *$'\t'* | *$'\n'*) die "path holds a tab or newline, rename it: $1" ;; esac
   printf '%s\t%s\n' "$1" "$2" >> "$specs"
 }
@@ -107,6 +117,9 @@ if [ "$all" = 1 ]; then
   while IFS= read -r -d '' f; do
     add_spec "${f#./}" all
   done < <(find "$@" -type f -print0 2> /dev/null)
+  while IFS= read -r -d '' f; do
+    if has_source_ext "$f"; then printf '%s\n' "${f#./}" >> "$wd/links"; fi
+  done < <(find "$@" -type l -print0 2> /dev/null)
 else
   command -v git > /dev/null 2>&1 || die "missing tool: git"
   git rev-parse --git-dir > /dev/null 2>&1 || die "not a git work tree, so there is no base to diff against. Fix: run inside the repository, or use --all"
@@ -232,8 +245,14 @@ fi
 nfiles=$(wc -l < "$specs" | tr -d ' ')
 [ -z "$decision" ] || printf 'check-comments: diff base: %s\n' "$decision"
 if [ "$nfiles" = 0 ]; then
-  [ "$all" = 0 ] || [ "$src_seen" = 1 ] || die "no source file under the given paths: $*. Fix: name a folder or file with one of these extensions: $SOURCE_EXT."
-  if [ "$all" = 1 ]; then why="every source file under the given paths is a skipped generated or vendored path"
+  if [ "$all" = 1 ] && [ "$src_seen" = 0 ]; then
+    if [ -s "$wd/links" ]; then
+      die "no regular source file under the given paths: $*. The only source files are symlinks ($(list_lines "$wd/links")), which the gate does not follow out of the project. Fix: name the real file."
+    fi
+    die "no source file under the given paths: $*. Fix: name a folder or file with one of these extensions: $SOURCE_EXT."
+  fi
+  if [ "$all" = 1 ]; then why="every source file under the given paths is a skipped generated or vendored path ($(list_lines "$wd/skipped"))"
+  elif [ -s "$wd/skipped" ]; then why="every changed source file is on a skipped generated or vendored path ($(list_lines "$wd/skipped"))"
   elif [ "$mb" = "$head_sha" ]; then why="HEAD is the base ($ref) and the work tree has no changed source file"
   else why="no source file was added, changed or renamed since the base ($ref)"
   fi

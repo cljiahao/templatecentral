@@ -1,6 +1,7 @@
 """Python reader for check-comments.sh: path and ranges on stdin, one finding per line, exit 0 clean, 1 findings, 2 cannot run."""
 import ast
 import io
+import os
 import re
 import sys
 import tokenize
@@ -39,9 +40,11 @@ SUPPRESSORS = [
     (re.compile(r"^NOSONAR\b"), "# NOSONAR -- reason"),
     (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
 ]
-LICENCE = re.compile(r"^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b", re.I)
-LICENCE_LINE = re.compile(r"copyright|spdx-|licen[sc]e|all rights reserved|warrant|redistribut|permission|liabilit|merchantab|obtain a copy|distributed under|without limitation|applicable law|agreed to in writing|\"as is\"|basis|limitations|governing|https?://", re.I)
-MAX_LICENCE_LINES = 15
+COPYRIGHT = re.compile(r"^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)|^spdx-license-identifier:\s*\S|^all rights reserved\.?$", re.I)
+MAX_COPYRIGHT_LINES = 5
+MAX_LICENCE_LINES = 40
+MIN_LICENCE_WORDS = 4
+LICENCE_FILE = "check-comments.licences.txt"
 FILLER = {"todo", "fixme", "xxx", "tbd"}
 MIN_REASON_WORDS = 3
 ASIDE = re.compile(r"(^|\s)\([^()]*\S[^()]*\)")
@@ -59,6 +62,7 @@ MAX_CONTINUATION = 2
 SECTION = re.compile(r"^(Args|Arguments|Parameters|Other Parameters|Keyword Args|Returns?|Yields?|Raises?|Attributes|Examples?|Notes?|See Also|References|Warns|Warnings|Todo):\s*$")
 SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER, tokenize.COMMENT)
 VERSION = sys.version.split()[0]
+LICENCES = []
 
 
 def die(msg):
@@ -94,7 +98,8 @@ def changed_set(spec):
 
 def weak_reason(reason):
     words = [w for w in re.findall(r"[\w'-]+", reason) if w.lower() not in FILLER]
-    return len(words) < MIN_REASON_WORDS
+    words = [w for w in words if len(w) >= 2 and re.search(r"[^\W\d_]", w)]
+    return len(words) < MIN_REASON_WORDS or len({w.lower() for w in words}) < 2
 
 
 def suppressor_form(text):
@@ -149,9 +154,19 @@ def annotation_names(node):
     return names
 
 
+def scope_nodes(node):
+    """Yields the nodes of one scope, without descending into a nested function, class or lambda."""
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        n = stack.pop()
+        yield n
+        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            stack.extend(ast.iter_child_nodes(n))
+
+
 def documented_names(node):
-    """Collects the names a docstring may list as entries: parameters, attributes, raised exceptions and return types."""
-    names = {"params": set(), "attrs": set(), "raises": set(), "rets": set()}
+    """Collects what a docstring may list: a function signature, a class body and its self attributes, module-level assignments, raised names and return types."""
+    names = {"params": set(), "attrs": set(), "raises": set(), "rets": set(), "value": False}
 
     def add_args(fn):
         a = fn.args
@@ -161,28 +176,54 @@ def documented_names(node):
             if arg is not None:
                 names["params"].add(arg.arg)
 
-    def add_targets(stmt):
-        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target] if isinstance(stmt, ast.AnnAssign) else []
-        for t in targets:
-            if isinstance(t, ast.Name):
-                names["attrs"].add(t.id)
-            elif isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
-                names["attrs"].add(t.attr)
+    def add_target(t, plain):
+        if isinstance(t, ast.Name) and plain:
+            names["attrs"].add(t.id)
+        elif isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self" and not plain:
+            names["attrs"].add(t.attr)
+        elif isinstance(t, (ast.Tuple, ast.List)):
+            for e in t.elts:
+                add_target(e, plain)
+
+    def add_assign(stmt, plain):
+        if isinstance(stmt, ast.Assign):
+            for t in stmt.targets:
+                add_target(t, plain)
+        elif isinstance(stmt, (ast.AnnAssign, ast.AugAssign)):
+            add_target(stmt.target, plain)
+
+    def add_scope(scope, self_attrs):
+        for n in scope_nodes(scope):
+            if isinstance(n, ast.Raise) and n.exc is not None:
+                exc = n.exc.func if isinstance(n.exc, ast.Call) else n.exc
+                if isinstance(exc, ast.Name):
+                    names["raises"].add(exc.id)
+                elif isinstance(exc, ast.Attribute):
+                    names["raises"].add(exc.attr)
+            elif isinstance(n, ast.Return) and n.value is not None and not (isinstance(n.value, ast.Constant) and n.value.value is None):
+                names["value"] = True
+            elif isinstance(n, (ast.Yield, ast.YieldFrom)):
+                names["value"] = True
+            elif self_attrs:
+                add_assign(n, False)
 
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         add_args(node)
         names["rets"] = annotation_names(node.returns)
-    for n in ast.walk(node):
-        if isinstance(n, (ast.Assign, ast.AnnAssign)):
-            add_targets(n)
-        elif isinstance(n, ast.FunctionDef) and isinstance(node, ast.ClassDef) and n.name == "__init__":
-            add_args(n)
-        elif isinstance(n, ast.Raise) and n.exc is not None:
-            exc = n.exc.func if isinstance(n.exc, ast.Call) else n.exc
-            if isinstance(exc, ast.Name):
-                names["raises"].add(exc.id)
-            elif isinstance(exc, ast.Attribute):
-                names["raises"].add(exc.attr)
+        add_scope(node, False)
+    elif isinstance(node, ast.ClassDef):
+        for stmt in node.body:
+            add_assign(stmt, True)
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if stmt.name == "__init__":
+                    add_args(stmt)
+                add_scope(stmt, True)
+        names["value"] = False
+    else:
+        for stmt in node.body:
+            add_assign(stmt, True)
+        add_scope(node, False)
+        names["value"] = False
     return names
 
 
@@ -231,7 +272,7 @@ def is_entry(t, section, known, seen):
         kind, arg = f.group(1), (f.group(2) or "").strip()
         name = arg.split()[-1] if arg else ""
         if kind in FIELD_RETURN:
-            pool, name = known["rets"] | {""}, ""
+            pool, name = ({""} if known["rets"] or known["value"] else set()), ""
         elif kind in FIELD_PARAM:
             pool = known["params"]
         elif kind in FIELD_ATTR:
@@ -253,7 +294,7 @@ def is_entry(t, section, known, seen):
     if key in seen:
         return False
     if section == "rets":
-        ok = name in known["rets"] if known["rets"] else not any(k[0] == "rets" for k in seen)
+        ok = name in known["rets"] if known["rets"] else known["value"] and not any(k[0] == "rets" for k in seen)
     else:
         ok = name in known[section]
     if ok:
@@ -354,7 +395,7 @@ def check_file(rel, spec, opt, report):
 
     own = [it for it in items if not it["trailing"]]
     k = 0
-    seen_top = False
+    used = {"copyright": 0, "licence": 0}
     top_total = 0
     top_chains = 0
     top_line = None
@@ -374,12 +415,9 @@ def check_file(rel, spec, opt, report):
             continue
         exempt = []
         if prose and prose[0]["top"]:
-            first_top = not seen_top
-            seen_top = True
-            if first_top and LICENCE.search(prose[0]["text"]):
-                exempt = licence_items(prose)
-                if all(it in exempt or not it["text"] for it in counted):
-                    continue
+            exempt = licence_items(prose, used)
+            if all(it in exempt or not it["text"] for it in counted):
+                continue
             top_chains += 1
             top_total += len([it for it in counted if it["text"] and it not in exempt])
             if top_line is None:
@@ -420,18 +458,45 @@ def check_file(rel, spec, opt, report):
     report_top(rel, opt, report, top_chains, top_total, top_line, top_changed)
 
 
-def licence_items(prose):
-    """Returns the leading licence lines of a header, at most MAX_LICENCE_LINES of them; the first other line ends the exemption."""
-    out = []
-    n = 0
-    for it in prose:
-        if not it["text"]:
-            out.append(it)
-            continue
-        if n >= MAX_LICENCE_LINES or not LICENCE_LINE.search(it["text"]):
-            break
-        out.append(it)
-        n += 1
+def norm_words(text):
+    """Lowercase words of a comment line: punctuation, comment markers and list numbers are dropped."""
+    return re.findall(r"[a-z0-9]+", re.sub(r"(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)", " ", text.lower()))
+
+
+def load_licences():
+    """Reads the bundled licence texts as space-padded word strings, one per licence."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), LICENCE_FILE)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = fh.read()
+    except OSError as exc:
+        die("cannot read the bundled licence texts %s: %s. Fix: restore the file next to this script." % (LICENCE_FILE, exc))
+    texts = []
+    for line in raw.split("\n"):
+        if line.startswith("@@ "):
+            texts.append([])
+        elif texts:
+            texts[-1].extend(norm_words(line))
+    out = [" " + " ".join(t) + " " for t in texts if t]
+    if not out:
+        die("the bundled licence texts %s hold no licence. Fix: restore the file next to this script." % LICENCE_FILE)
+    return out
+
+
+def licence_items(prose, used):
+    """Returns the header lines left uncounted: copyright and SPDX lines, and the lines of a comment that quotes one bundled licence text unbroken."""
+    copy = [it for it in prose if it["text"] and COPYRIGHT.search(it["text"])]
+    rest = [it for it in prose if it["text"] and it not in copy]
+    out = [it for it in prose if not it["text"]]
+    if used["copyright"] + len(copy) <= MAX_COPYRIGHT_LINES:
+        out += copy
+        used["copyright"] += len(copy)
+    if rest and used["licence"] + len(rest) <= MAX_LICENCE_LINES:
+        found = [w for it in rest for w in norm_words(it["text"])]
+        words = " " + " ".join(found) + " "
+        if len(found) >= MIN_LICENCE_WORDS and any(words in lic for lic in LICENCES):
+            out += rest
+            used["licence"] += len(rest)
     return out
 
 
@@ -456,6 +521,7 @@ def main():
     if sys.version_info < (3, 8):
         die("Python %s is too old to read comments (needs 3.8 or newer). Fix: install a newer Python, or create the project .venv with one." % VERSION)
     opt = parse_args(sys.argv[1:])
+    LICENCES.extend(load_licences())
     findings = []
 
     def report(f, l, rule, msg):

@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /*
  * Copyright (c) Example. All rights reserved.
- * Licensed under the MIT License.
- * Third licence line.
- * Fourth licence line.
+ * SPDX-License-Identifier: MIT
  */
 /* eslint-disable no-console -- the banner logs on boot */
 // @ts-expect-error legacy shape of the fixture

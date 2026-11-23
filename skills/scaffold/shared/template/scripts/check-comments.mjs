@@ -2,6 +2,7 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
 const opt = { max: 0, maxLine: 0, maxReason: 0, maxTags: 0, adr: false, root: process.cwd(), tsFrom: '' };
@@ -73,11 +74,22 @@ const SUPPRESSORS = [
   [/^gitleaks:allow/, '// gitleaks:allow -- reason'],
   [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
 ];
-const LICENCE = /^(?:\(c\)\s*|©\s*)?(?:Copyright|SPDX-License-Identifier)\b/i;
-const LICENCE_LINE = /copyright|spdx-|licen[sc]e|all rights reserved|warrant|redistribut|permission|liabilit|merchantab|obtain a copy|distributed under|without limitation|applicable law|agreed to in writing|"as is"|basis|limitations|governing|https?:\/\//i;
-const MAX_LICENCE_LINES = 15;
+const COPYRIGHT = /^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)|^spdx-license-identifier:\s*\S|^all rights reserved\.?$/i;
+const MAX_COPYRIGHT_LINES = 5;
+const MAX_LICENCE_LINES = 40;
+const MIN_LICENCE_WORDS = 4;
+const LICENCE_FILE = 'check-comments.licences.txt';
+const DATA_TAGS = new Set(
+  (
+    'param arg argument returns return type typedef template typeparam property prop callback yields yield throws exception extends implements augments ' +
+    'public private protected internal readonly override virtual abstract sealed packagedocumentation since version defaultvalue default access async ' +
+    'constant const enum event fires function this namespace module memberof name kind alias class constructor global inheritdoc ignore hidden beta alpha ' +
+    'experimental category group'
+  ).split(' '),
+);
 const FILLER = new Set(['todo', 'fixme', 'xxx', 'tbd']);
 const MIN_REASON_WORDS = 3;
+const TAG_NAME = /^@([A-Za-z]+)/;
 const ASIDE = /(^|\s)\([^()]*\S[^()]*\)/g;
 const JSDOC_FIRST = ts.SyntaxKind.FirstJSDocNode;
 const JSDOC_LAST = ts.SyntaxKind.LastJSDocNode;
@@ -147,6 +159,11 @@ function lowerBound(toks, pos) {
   return lo;
 }
 
+function isDataTag(t) {
+  const m = TAG_NAME.exec(t);
+  return m !== null && DATA_TAGS.has(m[1].toLowerCase());
+}
+
 function commentLines(text, c, sf) {
   const raw = text.slice(c.pos, c.end).replace(/\r/g, '');
   const startLine = sf.getLineAndCharacterOfPosition(c.pos).line + 1;
@@ -158,13 +175,14 @@ function commentLines(text, c, sf) {
     if (i === 0) t = t.replace(/^\/\*+/, '');
     if (i === parts.length - 1) t = t.replace(/\*+\/$/, '');
     t = t.replace(/^\s*\*+ ?/, '').trim();
-    return { line: startLine + i, text: t, counts: t !== '' && !(jsdoc && t.startsWith('@')), tag: jsdoc && t.startsWith('@') };
+    const tag = jsdoc && isDataTag(t);
+    return { line: startLine + i, text: t, counts: t !== '' && !tag, tag };
   });
 }
 
 function weakReason(reason) {
-  const words = (reason.match(/[\w'-]+/g) || []).filter((w) => !FILLER.has(w.toLowerCase()));
-  return words.length < MIN_REASON_WORDS;
+  const words = (reason.match(/[\p{L}\p{N}_'-]+/gu) || []).filter((w) => !FILLER.has(w.toLowerCase()) && w.length >= 2 && /\p{L}/u.test(w));
+  return words.length < MIN_REASON_WORDS || new Set(words.map((w) => w.toLowerCase())).size < 2;
 }
 
 function suppressorForm(flat) {
@@ -187,17 +205,44 @@ function directiveOf(lines) {
   return { is: false, reason: '', bad: '' };
 }
 
-function licenceLines(lines) {
-  const out = new Set();
-  let n = 0;
-  for (const l of lines) {
-    if (l.text === '') {
-      out.add(l);
-      continue;
+function normWords(text) {
+  return text.toLowerCase().replace(/(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)/g, ' ').match(/[a-z0-9]+/g) || [];
+}
+
+function loadLicences() {
+  const file = path.join(path.dirname(fileURLToPath(import.meta.url)), LICENCE_FILE);
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    die(`cannot read the bundled licence texts ${LICENCE_FILE}: ${e.code || e.message}. Fix: restore the file next to this script.`);
+  }
+  const texts = [];
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('@@ ')) texts.push([]);
+    else if (texts.length > 0) texts[texts.length - 1].push(...normWords(line));
+  }
+  const out = texts.filter((t) => t.length > 0).map((t) => ` ${t.join(' ')} `);
+  if (out.length === 0) die(`the bundled licence texts ${LICENCE_FILE} hold no licence. Fix: restore the file next to this script.`);
+  return out;
+}
+const LICENCES = loadLicences();
+
+function licenceLines(lines, used) {
+  const out = new Set(lines.filter((l) => l.text === ''));
+  const copy = lines.filter((l) => l.text !== '' && COPYRIGHT.test(l.text));
+  const rest = lines.filter((l) => l.text !== '' && !COPYRIGHT.test(l.text));
+  if (used.copyright + copy.length <= MAX_COPYRIGHT_LINES) {
+    for (const l of copy) out.add(l);
+    used.copyright += copy.length;
+  }
+  if (rest.length > 0 && used.licence + rest.length <= MAX_LICENCE_LINES) {
+    const found = rest.flatMap((l) => normWords(l.text));
+    const words = ` ${found.join(' ')} `;
+    if (found.length >= MIN_LICENCE_WORDS && LICENCES.some((lic) => lic.includes(words))) {
+      for (const l of rest) out.add(l);
+      used.licence += rest.length;
     }
-    if (n >= MAX_LICENCE_LINES || !LICENCE_LINE.test(l.text)) break;
-    out.add(l);
-    n++;
   }
   return out;
 }
@@ -315,7 +360,7 @@ function checkFile(rel, rangesSpec, report) {
 
   const own = items.filter((it) => !it.codeBefore && !it.codeAfter && !it.jsx);
   let k = 0;
-  let seenTop = false;
+  const used = { copyright: 0, licence: 0 };
   let topTotal = 0;
   let topChains = 0;
   let topLine = null;
@@ -326,13 +371,11 @@ function checkFile(rel, rangesSpec, report) {
     const chain = own.slice(k, j + 1);
     k = j + 1;
     const prose = chain.filter((it) => !it.directive);
+    const tagCount = chain.reduce((n, it) => n + (it.c.block && text.startsWith('/**', it.c.pos) ? it.lines.filter((l) => l.tag).length : 0), 0);
+    if (tagCount > opt.maxTags && chain.some((it) => touches(it.startLine, it.endLine))) {
+      report(rel, chain[0].startLine, 'comments/length', `comment block has ${tagCount} JSDoc tag lines, limit ${opt.maxTags}. Fix: drop tags that restate the signature, or cut it to ${opt.maxTags} or fewer.`);
+    }
     for (const it of chain) {
-      if (it.c.block && it.lines.length > 0 && text.startsWith('/**', it.c.pos)) {
-        const tags = it.lines.filter((l) => l.tag).length;
-        if (tags > opt.maxTags && touches(it.startLine, it.endLine)) {
-          report(rel, it.startLine, 'comments/length', `JSDoc block has ${tags} tag lines, limit ${opt.maxTags}. Fix: drop tags that restate the signature, or cut it to ${opt.maxTags} or fewer.`);
-        }
-      }
       for (const l of it.lines) {
         if (l.text.length > opt.maxLine && touches(l.line, l.line)) {
           report(rel, l.line, 'comments/length', `comment line is ${l.text.length} characters, limit ${opt.maxLine}. Fix: cut it or split it into shorter sentences.`);
@@ -343,12 +386,8 @@ function checkFile(rel, rangesSpec, report) {
     if (counted.length === 0) continue;
     let exempt = new Set();
     if (prose.length > 0 && prose[0].top) {
-      const firstTop = !seenTop;
-      seenTop = true;
-      if (firstTop && LICENCE.test(prose[0].whole.trim())) {
-        exempt = licenceLines(prose.flatMap((it) => it.lines));
-        if (counted.flatMap((it) => it.lines).every((l) => exempt.has(l) || !l.counts)) continue;
-      }
+      exempt = licenceLines(prose.flatMap((it) => it.lines), used);
+      if (counted.flatMap((it) => it.lines).every((l) => exempt.has(l) || !l.counts)) continue;
       topChains++;
       topTotal += counted.flatMap((it) => it.lines).filter((l) => l.counts && !exempt.has(l)).length;
       if (topLine === null) topLine = counted[0].startLine;

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright (c) Example. All rights reserved.
-# Licensed under the MIT License.
-# Third licence line.
-# Fourth licence line.
+# SPDX-License-Identifier: MIT
 import os  # noqa: F401 -- kept for the plugin
 
 x: int = "a"  # type: ignore[assignment]  # legacy shape of the data

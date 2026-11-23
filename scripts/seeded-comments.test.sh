@@ -159,9 +159,9 @@ inline_rule a.py directive 1 'x = 1  # noqa: this is an essay\n'
 inline_rule a.ts length 1 '// note one @ts-ignore\n// note two @ts-ignore\n// note three @ts-ignore\n// note four @ts-ignore\n// note five @ts-ignore\nexport const a = 1;\n'
 inline_rule a.ts length 1 '// @ts-expect-error because of reason one\n// @ts-expect-error because of reason two\n// @ts-expect-error because of reason three\n// @ts-expect-error because of reason four\n// @ts-expect-error because of reason five\nexport const a: number = "x";\n'
 inline_rule a.py length 1 '# noqa: E501 -- because of reason one\n# noqa: E501 -- because of reason two\n# noqa: E501 -- because of reason three\n# noqa: E501 -- because of reason four\n# noqa: E501 -- because of reason five\nA = 1\n'
-rlong=$(printf 'abcd %.0s' $(seq 1 16))
+rlong=$(printf 'ab%02d ' $(seq 1 16))
 rlong=${rlong% }
-rok=$(printf 'abcd %.0s' $(seq 1 12))
+rok=$(printf 'ab%02d ' $(seq 1 12))
 rok=${rok% }
 inline_rule a.ts length 1 "// @ts-ignore $rlong\nexport const a = 1;\n"
 inline_rule a.py length 2 "A = 1\n# noqa: E501 -- $rlong\nB = 2\n"
@@ -256,11 +256,9 @@ inline_rule a.ts length 1 "/**\n * Summary.\n$tags11 */\nexport function f(p1: n
 # comments before the first token total at most one chain, except a licence header
 inline_rule a.ts length 1 '// one\n\n// two\n\n// three\n\n// four\nexport const a = 1;\n'
 inline_rule a.py length 1 '# one\n\n# two\n\n# three\n\n# four\nA = 1\n'
-inline_clean a.ts '// Copyright (c) Example.\n// Licensed under the MIT License.\n// Third licence line.\n// Fourth licence line.\n\n// Note one.\n// Note two.\nexport const a = 1;\n'
-inline_clean a.py '# SPDX-License-Identifier: MIT\n# Second licence line.\n# Third licence line.\n# Fourth licence line.\n\n# Note one.\nA = 1\n'
 inline_rule a.ts length 1 '// Licensed under the MIT License.\n// two\n// three\n// four\nexport const a = 1;\n'
 
-# round 3: the licence exemption covers licence lines only, at most 15 of them
+# the licence exemption covers copyright and SPDX lines and unbroken quotes of known licence texts only
 prose80=''
 for n in $(seq 1 80); do prose80="$prose80# note $n about the thing\n"; done
 prose80ts=${prose80//#/\/\/}
@@ -268,12 +266,104 @@ inline_rule a.py length 1 "# Copyright 2020\n${prose80}A = 1\n"
 inline_rule a.ts length 1 "// Copyright 2020\n${prose80ts}export const a = 1;\n"
 inline_rule a.py length 1 '# Copyright 2020\n# note one about it\n# note two about it\n# note three about it\n# note four about it\nA = 1\n'
 inline_clean a.py '# Copyright 2020\n# note one about it\n# note two about it\nA = 1\n'
-lic18='# Copyright 2020\n'
-for n in $(seq 1 17); do lic18="$lic18# Licensed under the License, part $n\n"; done
-lic19="$lic18# Licensed under the License, part 19\n"
-inline_clean a.py "${lic18}A = 1\n"
-inline_rule a.py length 1 "${lic19}A = 1\n"
 inline_clean a.ts '/*\n * Copyright 2020 Example Corp.\n *\n * Licensed under the Apache License, Version 2.0 (the "License");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *     http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an "AS IS" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\nexport const a = 1;\n'
+
+# wrap_style <slash|star|hash> <width> <text> — prints the text as a comment block wrapped at the width.
+wrap_style() {
+  local style=$1 width=$2 text=$3 line out=''
+  [[ "$style" != star ]] || out="/*"$'\n'
+  while IFS= read -r line; do
+    case "$style" in
+      slash) out="$out// $line"$'\n' ;;
+      hash) out="$out# $line"$'\n' ;;
+      star) out="$out * $line"$'\n' ;;
+    esac
+  done < <(printf '%s\n' "$text" | fold -s -w "$width")
+  [[ "$style" != star ]] || out="$out */"$'\n'
+  printf '%s' "$out"
+}
+# inline_fails <file> <rule> <content> — exits 1 and names the rule, other findings allowed.
+inline_fails() {
+  inline "$1" "$3"
+  check 1 "$EC" "$1 [$2]: exits 1 ($OUT)"
+  has "comments/$2:" "$OUT" "$1 [$2]: names the rule"
+}
+NL=$'\n'
+MIT_TEXT='MIT License Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.'
+APACHE_TEXT='Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.'
+BSD3_TEXT='Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.'
+for spec in "MIT_TEXT:MIT" "APACHE_TEXT:Apache" "BSD3_TEXT:BSD3"; do
+  case "${spec%%:*}" in
+    MIT_TEXT) body=$MIT_TEXT ;;
+    APACHE_TEXT) body=$APACHE_TEXT ;;
+    *) body=$BSD3_TEXT ;;
+  esac
+  for form in "slash:60:a.ts" "star:80:a.ts" "hash:100:a.py" "hash:48:a.py" "star:50:a.ts"; do
+    style=${form%%:*}
+    rest=${form#*:}
+    width=${rest%%:*}
+    file=${rest#*:}
+    tail_code='export const a = 1;'
+    [[ "$file" != a.py ]] || tail_code='A = 1'
+    head=$(wrap_style "$style" 200 "Copyright (c) 2024 Example Corp.")$NL
+    block=$(wrap_style "$style" "$width" "$body")$NL
+    block_more=$(wrap_style "$style" "$width" "$body This file also parses the config.")$NL
+    inline_clean "$file" "$head$block$tail_code\n"
+    inline_fails "$file" length "$head$block_more$tail_code\n"
+  done
+done
+inline_clean a.ts "$(wrap_style slash 200 'SPDX-License-Identifier: MIT')${NL}export const a = 1;\n"
+inline_clean a.py "$(wrap_style hash 200 'Copyright 2024 Example Corp. All rights reserved.')${NL}A = 1\n"
+# keyword-stuffed prose is not a licence
+inline_fails a.ts length '// Copyright 2024\n// Permission is needed from the basis owner.\n// See https://x.y for the Warranty terms.\n// Our liability is limited here.\n// Redistribution is not allowed.\nexport const a = 1;\n'
+inline_fails a.py length '# Copyright 2024\n# Permission is needed from the basis owner.\n# See https://x.y for the Warranty terms.\n# Our liability is limited here.\n# Redistribution is not allowed.\nA = 1\n'
+inline_fails a.ts length '// MIT License\n// Our own notes on the MIT License follow.\n// Second note.\n// Third note.\nexport const a = 1;\n'
+inline_clean a.ts '// MIT License\nexport const a = 1;\n'
+# at most five copyright lines and 40 licence lines
+inline_fails a.py length '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\n# Copyright 5\n# Copyright 6\nA = 1\n'
+inline_clean a.py '# Copyright 1\n# Copyright 2\n# Copyright 3\n# Copyright 4\n# Copyright 5\nA = 1\n'
+inline_fails a.py length "$(wrap_style hash 25 "$BSD3_TEXT")${NL}A = 1\n"
+inline_clean a.py "$(wrap_style hash 100 "$BSD3_TEXT")${NL}A = 1\n"
+
+# round 4: JSDoc tag lines are counted over the whole chain, and only known tags are uncounted
+six=''
+for _ in 1 2 3 4 5 6; do six="$six/**\n$tags10 */\n"; done
+inline_rule a.ts length 1 "${six}export function f(p1: number) {\n  return p1;\n}\n"
+tags5=''
+for n in 1 2 3 4 5; do tags5="$tags5 * @param p$n value\n"; done
+inline_clean a.ts "/**\n$tags5 */\n/**\n$tags5 */\nexport function f(p1: number) {\n  return p1;\n}\n"
+rem10=''
+for n in 1 2 3 4 5 6 7 8 9 10; do rem10="$rem10 * @remarks arbitrary prose $n\n"; done
+inline_rule a.ts length 1 "/**\n$rem10 */\nexport function f() {\n  return 1;\n}\n"
+inline_clean a.ts "/**\n * @remarks one line\n * @example two\n */\nexport function f() {\n  return 1;\n}\n"
+inline_rule a.ts length 1 "/**\n * @bogus one\n * @bogus two\n * @bogus three\n * @bogus four\n */\nexport function f() {\n  return 1;\n}\n"
+
+# round 4: reason words need a letter and two characters, and cannot all be the same
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- _ _ _\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- 1 2 3\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- x x x\n'
+inline_rule a.py directive 1 'x = 1  # noqa: E501 -- foo foo FOO\n'
+inline_clean a.py 'x = 1  # noqa: E501 -- keep this one here\n'
+inline_rule a.ts directive 1 '// eslint-disable-next-line no-console -- _ _ _\nexport const a = 1;\n'
+inline_rule a.ts directive 1 '// @ts-ignore 1 2 3\nexport const a: number = "x";\n'
+inline_rule a.ts directive 1 '// @ts-ignore foo foo foo\nexport const a: number = "x";\n'
+inline_clean a.ts '// @ts-ignore keep this one here\nexport const a: number = "x";\n'
+
+# round 4: docstring entries are judged against the right scope
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Attributes:\n        v1: x\n        v2: y\n        v3: z\n    """\n    v1 = 1\n    v2 = 2\n    v3 = 3\n    return a\n'
+inline_clean a.py 'class C:\n    """Summary.\n\n    Attributes:\n        v1: x\n        v2: y\n        v3: z\n    """\n\n    def __init__(self):\n        self.v1 = 1\n        self.v2 = 2\n        self.v3 = 3\n'
+inline_rule a.py length 2 'class C:\n    """Summary.\n\n    Attributes:\n        v1: x\n        v2: y\n        v3: z\n    """\n\n    def run(self):\n        v1 = 1\n        v2 = 2\n        v3 = 3\n        return v1 + v2 + v3\n'
+inline_rule a.py length 1 '"""Mod.\n\nAttributes:\n    v1: x\n    v2: y\n    v3: z\n"""\n\n\ndef g():\n    v1 = 1\n    v2 = 2\n    v3 = 3\n    return v1 + v2 + v3\n'
+inline_clean a.py '"""Mod.\n\nAttributes:\n    v1: x\n    v2: y\n    v3: z\n"""\n\nv1 = 1\nv2 = 2\nv3 = 3\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    Returns:\n        count: the number\n    """\n    print(a)\n'
+inline_clean a.py 'def f(a):\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    Returns:\n        count: the number\n    """\n    return a\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    :returns: the number\n    """\n    print(a)\n'
+inline_clean a.py 'def f(a):\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    :returns: the number\n    """\n    return a\n'
+inline_clean a.py 'def f(a) -> int:\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    Returns:\n        int: the number\n    """\n    raise NotImplementedError\n'
+inline_clean a.py 'def f(a):\n    """Summary.\n\n    Details line one.\n    Details line two.\n\n    Yields:\n        count: the number\n    """\n    yield a\n'
+
+# the header documents the CI wiring
+has "pipeline passes the base argument on every trigger" "$(cat "$GATE")" "header: CI needs the base argument on every trigger"
 
 # module-level elements, arguments, union members and else branches are legal targets, function bodies are not
 inline_clean a.ts 'export const v = [\n  // element\n  1,\n];\n'
@@ -619,6 +709,34 @@ commit_all "$d" "delete and binary"
 gate_diff "$d" main
 check 0 "$EC" "deleted and binary files: clean ($OUT)"
 has "nothing checked: no source file was added, changed or renamed" "$OUT" "deleted and binary files: says nothing was checked"
+
+# round 4: only skipped source files changed, so the message names them
+d=$T/skiponly
+repo "$d"
+mkdir -p "$d/dist"
+printf 'export const a = 1;\n' > "$d/dist/old.js"
+(cd "$d" && "${GIT[@]}" init -q . && "${GIT[@]}" checkout -q -b main)
+commit_all "$d" base
+(cd "$d" && "${GIT[@]}" checkout -q -b topic)
+printf 'export const a = 1; // bad\n' > "$d/dist/new.js"
+printf 'A = 1  # bad\n' > "$d/dist/new.py"
+commit_all "$d" "skipped only"
+gate_diff "$d" main
+check 0 "$EC" "skipped-only change: exits 0 ($OUT)"
+has "every changed source file is on a skipped generated or vendored path" "$OUT" "skipped-only change: says why nothing was checked"
+has "dist/new.js" "$OUT" "skipped-only change: lists a skipped file"
+has "dist/new.py" "$OUT" "skipped-only change: lists the other skipped file"
+lacks "no source file was added" "$OUT" "skipped-only change: not the misleading no-source message"
+
+# a folder holding only a symlink to a source file is named, not followed
+d=$T/linkonly
+mkdir -p "$d" "$T/linktarget"
+printf 'export const a = 1;\n' > "$T/linktarget/a.ts"
+ln -s "$T/linktarget/a.ts" "$d/link.ts"
+gate_all "$d"
+check 2 "$EC" "symlink only: exits 2 ($OUT)"
+has "only source files are symlinks" "$OUT" "symlink only: names the symlink case"
+has "link.ts" "$OUT" "symlink only: names the link"
 lacks "check-comments: ok" "$OUT" "deleted and binary files: no green ok line"
 
 # a path with a space is read whole
@@ -696,12 +814,12 @@ chmod +x "$d/.venv/bin/python3"
 printf 'A = 1  # bad\n' > "$d/a.py"
 gate_all "$d"
 check 1 "$EC" "venv: the gate still judges ($OUT)"
-check yes "$([[ -f "$d/venv-used" ]] && echo yes || echo no)" "venv: the project interpreter ran"
+check yes "$(if [[ -f "$d/venv-used" ]]; then echo yes; else echo no; fi)" "venv: the project interpreter ran"
 d=$T/novenv
 mkdir -p "$d"
 printf 'A = 1  # bad\n' > "$d/a.py"
 gate_all "$d"
-check no "$([[ -f "$d/venv-used" ]] && echo yes || echo no)" "no venv: the system interpreter runs"
+check no "$(if [[ -f "$d/venv-used" ]]; then echo yes; else echo no; fi)" "no venv: the system interpreter runs"
 
 # real scaffolds parse: every stack reads through both tokenizers with no parse failure or crash
 scaffold() { # scaffold <stack> <dir>
