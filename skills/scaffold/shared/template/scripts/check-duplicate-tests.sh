@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 # Duplicate-test check: check-duplicate-tests.sh [project-dir]. Offline and read-only; nothing installed, no network.
-# Reads every test file of the project (Vitest/Jest-style TS/JS and pytest), finds the test cases with a real parser
-# (the project's own typescript for TS/JS, python3 ast and tokenize for pytest), and compares case bodies as token
-# sequences: comments, whitespace and the test title never count.
-# Rule 1 (fails): two cases with the same body token sequence, in one file or two. Fix: delete one.
+# Reads every test file of the project (Vitest/Jest-style TS/JS, pytest and unittest), finds the test cases with a real
+# parser (typescript from the project's own node_modules for TS/JS, python ast and tokenize for Python), and compares
+# case bodies as token sequences: comments, whitespace and the test title never count.
+# Rule 1 (fails): two cases with the same body token sequence AND the same context, in one file or two. Fix: delete one.
+#   The context is everything around the case that can change what the body does: for the file, its imports and every
+#   top-level statement that is not a test; for each enclosing describe, class or loop, every statement that is not a
+#   test (constants, fixtures, decorators, class attributes, setup and teardown hooks, test.use, mocks and patches, loop
+#   headers and data); the case's own decorators and parameters; for pytest, every conftest.py up to the project root.
+#   Relative import paths count as project paths, so './a' in two folders is two modules. Titles never count.
 # Rule 2 (fails at SHAPE_GROUP_MIN or more, NOTE below that): cases of one file whose bodies match once every string,
-#   number and boolean is replaced by a placeholder. Fix: one parameterised test (it.each, test.each,
-#   pytest.mark.parametrize). Bodies under MIN_BODY_TOKENS tokens are skipped here, never for rule 1.
+#   number and boolean is replaced by a placeholder, with the same context. Fix: one parameterised test (it.each,
+#   test.each, pytest.mark.parametrize). Bodies under MIN_BODY_TOKENS tokens are skipped here, never for rule 1.
 # A case already parameterised (it.each, test.each, parametrize) is never compared: its table differs per row.
-# Two cases only match when their setup matches too: enclosing beforeEach/afterEach/vi.*/jest.* statements and the
-# callback parameters for TS/JS; decorators, fixture arguments, class setup methods and conftest.py files for pytest.
-# Helpers print one record per case: file, line, token count, exact key, shape key (tab-separated).
-# Exit 0 clean (or no test files), 1 findings, 2 cannot run (missing node, python3 or typescript, unparsable file).
+# A case that passes a named handler the same file does not define (it('a', handler)) is counted and gets a NOTE.
+# Known limits, accepted: a no-op statement or a reordered body defeats rule 1, and the same shape split across files
+#   defeats rule 2. The check finds copy-paste, not every semantic duplicate.
+# Helpers print one record per case: kind, file, line, token count, exact key, shape key (tab-separated).
+# Exit 0 clean (or no test files), 1 findings, 2 cannot run (missing node, python3 or typescript, unparsable file,
+#   a file name with a tab or newline, test files that hold no test case).
 # There is no inline ignore and no environment switch; the only way to stop the check is to not run it.
 set -uo pipefail
 export LC_ALL=C
@@ -52,29 +59,69 @@ for d in $SKIP_DIRS; do
 done
 
 find "$root" -name pyvenv.cfg -type f > "$wd/venvs" 2> /dev/null || die "cannot walk $root"
+root_real=$(cd "$root" && pwd -P) || die "cannot resolve $root"
 
-# Test files, NUL-separated and relative to the project: two lists, one per language.
-find "$root" \( "${prune_args[@]}" \) -prune -o -type f \( \
+# Test files (regular files and symlinks), NUL-separated: two lists, one per language.
+find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( \
   -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.js' -o -name '*.test.jsx' -o -name '*.test.mjs' -o -name '*.test.cjs' -o -name '*.test.mts' -o -name '*.test.cts' \
   -o -name '*.spec.ts' -o -name '*.spec.tsx' -o -name '*.spec.js' -o -name '*.spec.jsx' -o -name '*.spec.mjs' -o -name '*.spec.cjs' -o -name '*.spec.mts' -o -name '*.spec.cts' \
-  -o -path '*/__tests__/*.ts' -o -path '*/__tests__/*.tsx' -o -path '*/__tests__/*.js' -o -path '*/__tests__/*.jsx' \
-  \) -print0 > "$wd/ts.raw" 2> /dev/null || die "cannot walk $root"
-find "$root" \( "${prune_args[@]}" \) -prune -o -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print0 > "$wd/py.raw" 2> /dev/null || die "cannot walk $root"
+  -o -name '*-test.ts' -o -name '*-test.tsx' -o -name '*-test.js' -o -name '*-test.jsx' -o -name '*-test.mjs' -o -name '*-test.cjs' -o -name '*-test.mts' -o -name '*-test.cts' \
+  -o -name '*-spec.ts' -o -name '*-spec.tsx' -o -name '*-spec.js' -o -name '*-spec.jsx' -o -name '*-spec.mjs' -o -name '*-spec.cjs' -o -name '*-spec.mts' -o -name '*-spec.cts' \
+  -o -path '*/__tests__/*.ts' -o -path '*/__tests__/*.tsx' -o -path '*/__tests__/*.js' -o -path '*/__tests__/*.jsx' -o -path '*/__tests__/*.mjs' -o -path '*/__tests__/*.mts' \
+  \) -print0 2> /dev/null | sort -z > "$wd/ts.raw" || die "cannot walk $root"
+find "$root" \( "${prune_args[@]}" \) -prune -o \( -type f -o -type l \) \( -name 'test*.py' -o -name '*_test.py' \) -print0 2> /dev/null | sort -z > "$wd/py.raw" || die "cannot walk $root"
 
-# strip_venvs <raw> <out>: drops files under a virtual environment, writes root-relative NUL-separated names.
+# resolve_link <path>: prints the final target of a symlink chain, or nothing when it dangles.
+resolve_link() {
+  local p=$1 t n=0
+  while [ -L "$p" ]; do
+    n=$((n + 1))
+    [ "$n" -le 20 ] || return 0
+    t=$(readlink "$p") || return 0
+    case "$t" in /*) p=$t ;; *) p=${p%/*}/$t ;; esac
+  done
+  [ -f "$p" ] || return 0
+  printf '%s/%s\n' "$(cd "${p%/*}" 2> /dev/null && pwd -P)" "${p##*/}"
+}
+
+# strip_venvs <raw> <out>: drops files under a virtual environment and unusable symlinks, writes root-relative
+# NUL-separated names. A name with a tab or newline would break the tab-separated records: that stops the run.
 strip_venvs() {
-  local f dir skip v
+  local f dir skip v target
   : > "$2"
   while IFS= read -r -d '' f; do
+    case "$f" in
+      *$'\t'* | *$'\n'*) die "a test file name holds a tab or newline: rename it ($(printf '%s' "$f" | tr '\t\n' '??'))" ;;
+    esac
     skip=0
     while IFS= read -r v; do
       dir=${v%/*}
       case "$f" in "$dir"/*) skip=1 ;; esac
     done < "$wd/venvs"
     [ "$skip" -eq 0 ] || continue
+    if [ -L "$f" ]; then
+      target=$(resolve_link "$f")
+      case "$target" in
+        "$root_real"/*) ;;
+        *)
+          printf 'NOTE %s: symlink to a file outside the project or to nothing; not read.\n' "${f#"$root"/}" >> "$wd/notes"
+          continue
+          ;;
+      esac
+      if [ -s "$wd/real" ] && grep -Fxq -- "$target" "$wd/real"; then continue; fi
+    fi
     printf '%s\0' "${f#"$root"/}" >> "$2"
   done < "$1"
 }
+: > "$wd/notes"
+: > "$wd/real"
+# Paths of the regular test files first, so a symlink to one of them is skipped, not compared with itself.
+for raw in "$wd/ts.raw" "$wd/py.raw"; do
+  while IFS= read -r -d '' f; do
+    [ ! -L "$f" ] || continue
+    printf '%s/%s\n' "$(cd "${f%/*}" 2> /dev/null && pwd -P)" "${f##*/}" >> "$wd/real"
+  done < "$raw"
+done
 strip_venvs "$wd/ts.raw" "$wd/ts.list"
 strip_venvs "$wd/py.raw" "$wd/py.list"
 
@@ -89,25 +136,33 @@ if [ -s "$wd/ts.list" ]; then
   node "$HERE/duplicate-tests-ts.mjs" "$root" "$wd/ts.list" >> "$wd/records" || die "the TypeScript scan failed (see above); fix that first"
 fi
 if [ -s "$wd/py.list" ]; then
-  command -v python3 > /dev/null 2>&1 || die "python3 is missing but the project has pytest files: install Python 3 and run again"
-  python3 "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
+  py=python3
+  [ ! -x "$root/.venv/bin/python3" ] || py="$root/.venv/bin/python3"
+  command -v "$py" > /dev/null 2>&1 || die "python3 is missing but the project has Python test files: install Python 3 and run again"
+  "$py" "$HERE/duplicate_tests_py.py" "$root" "$wd/py.list" >> "$wd/records" || die "the Python scan failed (see above); fix that first"
 fi
 
 ncases=$(awk 'END { print NR }' "$wd/records")
 if [ "$ncases" -eq 0 ]; then
-  printf 'check-duplicate-tests: no test cases found in the test files, nothing to compare\n'
-  exit 0
+  die "test files exist but hold no test case the check recognises: the check would pass without reading anything"
 fi
 
-# Records are: file, line, tokens, exact key, shape key. Findings go to stdout, FAIL lines first.
+# Records are: kind (C compared, P parameterised, U unresolved handler, T no body), file, line, tokens, exact key, shape key.
+# Findings go to stdout, FAIL lines first.
 awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
   function loc(i) { return F[i] ":" L[i] }
   {
+    if ($1 == "U") {
+      printf "NOTE %s:%s: the case passes a named handler that is not defined in this file; counted, not compared.\n", $2, $3
+      next
+    }
+    if ($1 != "C") next
+    compared++
     n++
-    F[n] = $1; L[n] = $2; T[n] = $3 + 0; E[n] = $4; S[n] = $5
-    EC[$4]++
-    if (EC[$4] == 1) Eorder[++ne] = $4
-    EL[$4, EC[$4]] = n
+    F[n] = $2; L[n] = $3; T[n] = $4 + 0; E[n] = $5; S[n] = $6
+    EC[$5]++
+    if (EC[$5] == 1) Eorder[++ne] = $5
+    EL[$5, EC[$5]] = n
   }
   END {
     fails = 0
@@ -143,13 +198,15 @@ awk -F '\t' -v min="$MIN_BODY_TOKENS" -v group="$SHAPE_GROUP_MIN" '
         printf "NOTE %s: %d test cases differ only in literal values (%s). Consider one parameterised test when a third case arrives.\n", loc(SL[key, 1]), c, list
       }
     }
+    print compared + 0 > "/dev/stderr"
     exit fails > 0 ? 1 : 0
   }
-' "$wd/records" > "$wd/out"
+' "$wd/records" > "$wd/out" 2> "$wd/count"
 rc=$?
 case "$rc" in 0 | 1) ;; *) die "internal failure while comparing test cases" ;; esac
-sort -s -k1,1 "$wd/out"
+ncompared=$(cat "$wd/count")
+cat "$wd/notes" "$wd/out" | sort -s -k1,1
 if [ "$rc" -eq 0 ]; then
-  printf 'check-duplicate-tests: ok, %s test cases compared\n' "$ncases"
+  printf 'check-duplicate-tests: ok, %s test cases compared, %s read\n' "$ncompared" "$ncases"
 fi
 exit "$rc"

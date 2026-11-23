@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/seeded-duplicate-tests.test.sh — tests for the seeded scripts/check-duplicate-tests.sh.
-# The TS/JS side needs a typescript package: TEST_TYPESCRIPT_DIR, else a global npm install, else an npm install
-# into a temporary folder (the only network use; the seeded check itself never touches the network).
+# The TS/JS side needs typescript. TC_TEST_TYPESCRIPT_DIR names a typescript folder; otherwise the exact version pinned
+# in skills/scaffold/shared/versions.txt is installed once into $TMPDIR/tc-test-typescript-<version> and reused. A
+# global typescript is never used, so the result does not depend on the machine. The install is the only network use.
 # Usage: bash scripts/seeded-duplicate-tests.test.sh
 set -uo pipefail
 
@@ -9,6 +10,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS="$REPO_ROOT/skills/scaffold/shared/template/scripts"
 CHECK="$SCRIPTS/check-duplicate-tests.sh"
 FIX="$REPO_ROOT/tests/fixtures/seeded-duplicate-tests"
+VERSIONS="$REPO_ROOT/skills/scaffold/shared/versions.txt"
 
 PASS=0
 FAIL=0
@@ -26,27 +28,26 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/dupt.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
 find_typescript() {
-  local d
-  if [ -n "${TEST_TYPESCRIPT_DIR:-}" ] && [ -f "$TEST_TYPESCRIPT_DIR/package.json" ]; then
-    printf '%s\n' "$TEST_TYPESCRIPT_DIR"
+  local want cache
+  if [ -n "${TC_TEST_TYPESCRIPT_DIR:-}" ]; then
+    [ -f "$TC_TEST_TYPESCRIPT_DIR/package.json" ] || return 1
+    printf '%s\n' "$TC_TEST_TYPESCRIPT_DIR"
     return 0
   fi
-  if command -v npm > /dev/null 2>&1; then
-    d=$(npm root -g 2> /dev/null)/typescript
-    if [ -f "$d/package.json" ]; then
-      printf '%s\n' "$d"
-      return 0
-    fi
-    mkdir -p "$T/tsinstall"
-    if (cd "$T/tsinstall" && npm install --no-audit --no-fund --silent typescript > /dev/null 2>&1) && [ -f "$T/tsinstall/node_modules/typescript/package.json" ]; then
-      printf '%s\n' "$T/tsinstall/node_modules/typescript"
-      return 0
-    fi
+  want=$(awk '$1 == "npm" && $2 == "typescript" { v = $3; sub(/^[^0-9]*/, "", v); print v; exit }' "$VERSIONS")
+  [ -n "$want" ] || return 1
+  cache="${TMPDIR:-/tmp}/tc-test-typescript-$want"
+  if ! grep -q "\"version\": \"$want\"" "$cache/node_modules/typescript/package.json" 2> /dev/null; then
+    command -v npm > /dev/null 2>&1 || return 1
+    mkdir -p "$cache"
+    printf '{"name":"tc-test-typescript","private":true}\n' > "$cache/package.json"
+    (cd "$cache" && npm install --no-audit --no-fund --silent --cache "$cache/npmcache" "typescript@$want" > /dev/null 2>&1) || return 1
+    grep -q "\"version\": \"$want\"" "$cache/node_modules/typescript/package.json" 2> /dev/null || return 1
   fi
-  return 1
+  printf '%s\n' "$cache/node_modules/typescript"
 }
 TSDIR=$(find_typescript) || {
-  echo "FAIL: no typescript package found: set TEST_TYPESCRIPT_DIR to a typescript folder, or allow npm install"
+  echo "FAIL: no typescript package: set TC_TEST_TYPESCRIPT_DIR to a typescript folder, or allow the pinned npm install"
   exit 1
 }
 
@@ -100,7 +101,7 @@ has "a.test.ts:7" "$OUT" "ts nested describe: innermost case"
 # Already parameterised, different setup, text in strings and comments, trivial bodies.
 run ts-parameterised
 check 0 "$EC" "ts it.each and test.each never flagged: exit"
-has "no test cases found" "$OUT" "ts it.each and test.each are not compared"
+has "ok, 0 test cases compared" "$OUT" "ts it.each and test.each are not compared"
 run ts-different-setup
 check 0 "$EC" "ts same body under different beforeEach: exit"
 lacks "FAIL" "$OUT" "ts same body under different beforeEach: no failure"
@@ -137,7 +138,7 @@ check 0 "$EC" "py same shape in 3 files: exit"
 lacks "NOTE" "$OUT" "py same shape in 3 files: no note"
 run py-parameterised
 check 0 "$EC" "py parametrize never flagged: exit"
-has "no test cases found" "$OUT" "py parametrize cases are not compared"
+has "ok, 0 test cases compared" "$OUT" "py parametrize cases are not compared"
 run py-different-setup
 check 0 "$EC" "py same body with other fixtures: exit"
 lacks "FAIL" "$OUT" "py same body with other fixtures: no failure"
@@ -182,7 +183,7 @@ lacks ".harness-base" "$OUT" "skipped folders: harness copies not read"
 # Fail closed: missing runtime, missing typescript, unparsable file, bad input.
 BIN="$T/nobin"
 mkdir -p "$BIN"
-for tool in awk find mktemp rm sort dirname bash cat sed; do
+for tool in awk find mktemp rm sort dirname bash cat sed readlink grep tr; do
   ln -s "$(command -v "$tool")" "$BIN/$tool"
 done
 project ts-clean
@@ -218,7 +219,205 @@ mv "$P/b.tmp" "$P/a.test.ts"
 OUT=$(SKIP_DUPLICATE_TESTS=1 DUPLICATE_TESTS_SKIP=1 CHECK_DUPLICATE_TESTS=0 bash "$CHECK" "$P" 2>&1)
 check 1 "$?" "inline comment and environment variables do not switch the check off"
 
-# Timing: 2000 test cases, CPU time (user + system), not wall time.
+
+# ---------------------------------------------------------------------------------------------------------------
+# Round 1. Every context element has a clean twin: same body, different context. If the element were dropped from the
+# key, the pair would be flagged and the twin test would fail. ctx-*-same is the positive control: all equal, flagged.
+twin() { # twin <fixture> <description>
+  run "$1"
+  check 0 "$EC" "$2: exit"
+  lacks "FAIL" "$OUT" "$2: no failure"
+  lacks "NOTE" "$OUT" "$2: no note"
+  has "ok, 2 test cases compared" "$OUT" "$2: both cases read"
+}
+twin ctx-ts-import "ts context: file import differs ('./a' vs './b')"
+twin ctx-ts-result-modules "ts context: same const result = f() from different modules"
+twin ctx-ts-describe-const "ts context: describe-level const svc = makeA() vs makeB()"
+twin ctx-ts-snapshot "ts context: same-named component snapshot tests from different modules"
+twin ctx-ts-loop "ts context: loop header differs"
+twin ctx-ts-loop-data "ts context: loop data differs"
+twin ctx-ts-mock "ts context: top-level vi.mock path differs"
+twin ctx-ts-testuse "ts context: test.use option differs"
+twin ctx-ts-toplevel "ts context: top-level statement differs"
+twin ctx-ts-hook "ts context: afterEach hook differs"
+twin ctx-ts-params "ts context: callback parameter differs"
+run ctx-ts-same
+check 1 "$EC" "ts positive control, everything equal: exit"
+has "2 test cases have the same body (x.test.ts:4, y.test.ts:4)" "$OUT" "ts positive control: flagged"
+twin ctx-py-fixture "py context: file-local fixture of the same name returns different objects"
+twin ctx-py-class-attr "py context: class attribute svc = A() vs B()"
+twin ctx-py-class-decorator "py context: class decorator @patch('a.x') vs @patch('b.x')"
+twin ctx-py-import "py context: same result = f() from different modules"
+twin ctx-py-loop "py context: loop header differs"
+twin ctx-py-loop-data "py context: loop data differs"
+twin ctx-py-conftest "py context: conftest.py differs"
+twin ctx-py-setup-method "py context: unittest setUp differs"
+twin ctx-py-decorator "py context: own decorator differs"
+twin ctx-py-toplevel "py context: top-level statement differs"
+run ctx-py-same
+check 1 "$EC" "py positive control, everything equal: exit"
+has "2 test cases have the same body (test_x.py:10, test_y.py:10)" "$OUT" "py positive control: flagged"
+# Relative imports in two folders are two modules; the same import in one folder is one module.
+P=$(mktemp -d "$T/p.XXXXXX")
+mkdir -p "$P/a" "$P/b" "$P/node_modules"
+ln -s "$TSDIR" "$P/node_modules/typescript"
+printf "import { it } from 'vitest';\nimport { f } from './f';\nit('x', () => {\n  const r = f();\n  r.go(1);\n  r.go(2);\n});\n" > "$P/a/x.test.ts"
+cp "$P/a/x.test.ts" "$P/b/x.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "ts same relative import in two folders is two modules: exit"
+printf "from f import f\n\n\ndef test_x():\n    r = f()\n    r.go(1)\n    r.go(2)\n" > "$P/a/test_x.py"
+printf "from .f import f\n\n\ndef test_x():\n    r = f()\n    r.go(1)\n    r.go(2)\n" > "$P/b/test_x.py"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "py absolute vs relative import is not the same module: exit"
+cp "$P/a/test_x.py" "$P/b/test_x.py"
+printf "from .f import f\n\n\ndef test_x():\n    r = f()\n    r.go(1)\n    r.go(2)\n" > "$P/a/test_x.py"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "py relative import in two folders is two modules: exit"
+
+# Detection: things that used to slip through.
+detect() { # detect <fixture> <description> <needle>
+  run "$1"
+  check 1 "$EC" "$2: exit"
+  has "$3" "$OUT" "$2: flagged"
+}
+detect det-ts-alias "ts import alias (it as t)" "2 test cases have the same body (a.test.ts:3, a.test.ts:7)"
+detect det-ts-jest-globals "ts @jest/globals import" "2 test cases have the same body"
+detect det-ts-namespace "ts namespace import (v.it, v.test)" "2 test cases have the same body"
+detect det-ts-handler "ts it('a', handler) with same-file handlers" "2 test cases have the same body"
+run det-ts-handler-unresolved
+check 0 "$EC" "ts unresolved named handler: exit"
+has "NOTE a.test.ts:3: the case passes a named handler that is not defined in this file; counted, not compared." "$OUT" "ts unresolved named handler: NOTE"
+has "ok, 0 test cases compared, 2 read" "$OUT" "ts unresolved named handler: counted, not compared"
+detect det-ts-in-if "ts tests inside an if block" "2 test cases have the same body"
+detect det-ts-in-try "ts tests inside a try block" "2 test cases have the same body"
+detect det-ts-in-helper "ts tests registered by a helper function" "2 test cases have the same body"
+detect det-py-testcase "py unittest.TestCase subclass not named Test*" "2 test cases have the same body"
+detect det-py-camel "py camelCase testFoo" "2 test cases have the same body"
+detect det-py-names "py test file named testing_a.py" "2 test cases have the same body"
+detect det-py-in-if "py tests inside an if block" "2 test cases have the same body"
+detect det-py-in-try "py tests inside a try block" "2 test cases have the same body"
+run det-ts-names
+check 1 "$EC" "ts file names (e2e-spec, -spec, -test, mts, cts, js, jsx, mjs): exit"
+has "8 test cases have the same body" "$OUT" "ts file names: all eight files read"
+run zero-cases-ts
+check 2 "$EC" "ts test file with zero cases: exit"
+has "hold no test case" "$OUT" "ts zero cases: names the problem"
+run zero-cases-py
+check 2 "$EC" "py test file with zero cases: exit"
+
+# Typescript resolution is bounded and checked.
+P=$(mktemp -d "$T/p.XXXXXX")
+mkdir -p "$P/parent/node_modules" "$P/parent/proj"
+ln -s "$TSDIR" "$P/parent/node_modules/typescript"
+cp "$FIX/ts-clean/a.test.ts" "$P/parent/proj/"
+OUT=$(NODE_PATH="$P/parent/node_modules" bash "$CHECK" "$P/parent/proj" 2>&1)
+check 2 "$?" "typescript only in a parent folder and NODE_PATH is not used: exit"
+has "typescript not found under" "$OUT" "typescript only in a parent folder: names the fix"
+project ts-clean
+rm "$P/node_modules/typescript"
+mkdir -p "$P/node_modules/typescript"
+printf '{"name":"typescript","version":"7.0.0"}\n' > "$P/node_modules/typescript/package.json"
+printf 'module.exports = {};\n' > "$P/node_modules/typescript/index.js"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "unsupported typescript 7: exit"
+has "typescript 7.0.0" "$OUT" "unsupported typescript: names the version found"
+has "5.x to 6.x" "$OUT" "unsupported typescript: names the supported range"
+lacks "    at " "$OUT" "unsupported typescript: no stack trace"
+lacks "TypeError" "$OUT" "unsupported typescript: no TypeError"
+project ts-clean
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "pinned typescript works from a project node_modules"
+# The same run with the CI markers set.
+OUT=$(CI=true GITHUB_ACTIONS=true bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "check ignores CI markers: exit"
+
+# Python interpreter: the project's .venv/bin/python3 first, and the version named in parse errors.
+project py-clean
+mkdir -p "$P/.venv/bin"
+printf '#!/bin/sh\ntouch "%s/used-venv-python"\nexec python3 "$@"\n' "$T" > "$P/.venv/bin/python3"
+chmod +x "$P/.venv/bin/python3"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "project .venv python: exit"
+check yes "$([ -f "$T/used-venv-python" ] && echo yes || echo no)" "project .venv/bin/python3 is preferred"
+has "under Python 3" "$(bash "$CHECK" "$(project py-clean; printf 'def test_x(:\n' > "$P/test_broken.py"; echo "$P")" 2>&1)" "py parse error names the interpreter version"
+
+# Odd file names, symlinks, unreadable files, NUL bytes.
+project ts-clean
+printf "it('x', () => { expect(1).toBe(1); });\n" > "$P/a$(printf '\t')b.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "tab in a test file name: exit"
+has "tab or newline" "$OUT" "tab in a test file name: names the problem"
+project ts-clean
+printf "it('x', () => { expect(1).toBe(1); });\n" > "$P/a
+b.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "newline in a test file name: exit"
+project ts-clean
+ln -s a.test.ts "$P/link.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "symlink to a test file already read is not compared with itself: exit"
+has "ok, 3 test cases compared" "$OUT" "symlink to a test file: read once"
+project ts-clean
+mkdir -p "$P/src"
+cp "$FIX/ts-exact-dup/a.test.ts" "$P/src/shared.ts"
+ln -s src/shared.ts "$P/alias.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "symlinked test file with an in-project target is followed: exit"
+has "alias.test.ts" "$OUT" "symlinked test file: reported under the link name"
+project ts-clean
+mkdir -p "$T/outside"
+cp "$FIX/ts-exact-dup/a.test.ts" "$T/outside/o.ts"
+ln -sf "$T/outside/o.ts" "$P/out.test.ts"
+ln -s missing.ts "$P/dangling.test.ts"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 0 "$?" "symlinks to outside the project or to nothing: exit"
+has "NOTE out.test.ts: symlink to a file outside the project or to nothing; not read." "$OUT" "symlink outside the project: NOTE"
+has "NOTE dangling.test.ts: symlink" "$OUT" "dangling symlink: NOTE"
+if [ "$(id -u)" -ne 0 ]; then
+  project ts-clean
+  chmod 000 "$P/a.test.ts"
+  OUT=$(bash "$CHECK" "$P" 2>&1)
+  check 2 "$?" "unreadable TS test file: exit"
+  has "cannot read a.test.ts" "$OUT" "unreadable TS test file: names the file"
+  project py-clean
+  chmod 000 "$P/test_a.py"
+  OUT=$(bash "$CHECK" "$P" 2>&1)
+  check 2 "$?" "unreadable py test file: exit"
+  has "cannot read test_a.py" "$OUT" "unreadable py test file: names the file"
+fi
+project py-clean
+printf 'def test_nul():\n    a = 1\0\n' > "$P/test_nul.py"
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 2 "$?" "NUL byte in a py file: exit"
+has "test_nul.py: contains a NUL byte" "$OUT" "NUL byte: names the file"
+lacks "Traceback" "$OUT" "NUL byte: no traceback"
+
+# Line splitting: only \n ends a line. Vertical tab, form feed and U+2028 inside strings must not shift columns.
+P=$(mktemp -d "$T/p.XXXXXX")
+python3 - "$P" <<'EOF'
+import sys
+body = "def test_%s():\n    s = 'é\x0b\x0c é'\n    r = compute(s, 'ü')\n    assert r.total == 'é'\n    assert r.items == [' ']\n    assert r.ok\n"
+open(sys.argv[1] + "/test_a.py", "w", encoding="utf-8").write("from lib import compute\n\n\n" + body % "one" + "\n\n" + body % "two")
+EOF
+OUT=$(bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "py odd line separators and non-ASCII text: exit"
+has "2 test cases have the same body" "$OUT" "py odd line separators: duplicates still found"
+
+# No switch from inside the project: ignore comments and environment variables change nothing.
+project ts-exact-dup
+sed 's|^  it.skip|  // check-duplicate-tests-disable\n  // eslint-disable-next-line\n  it.skip|' "$P/a.test.ts" > "$P/b.tmp"
+mv "$P/b.tmp" "$P/a.test.ts"
+OUT=$(SKIP_DUPLICATE_TESTS=1 DUPLICATE_TESTS_SKIP=1 CHECK_DUPLICATE_TESTS=0 bash "$CHECK" "$P" 2>&1)
+check 1 "$?" "inline comment and environment variables do not switch the check off"
+
+# Timing: CPU time (user + system), not wall time. 2000 cases over 40 files, then 5000 cases in one file per language.
+cpu() { # cpu <dir> — prints "user sys", output of the check in $T/time.out
+  local TIMEFORMAT='%U %S'
+  { time bash "$CHECK" "$1" > "$T/time.out" 2>&1; } 2>&1
+}
+under() { # under <seconds> <"user sys">
+  printf '%s\n' "$2" | awk -v max="$1" '{ print ($1 + $2 < max) ? "yes" : "no" }'
+}
 P=$(mktemp -d "$T/p.XXXXXX")
 mkdir -p "$P/node_modules" "$P/pytests"
 ln -s "$TSDIR" "$P/node_modules/typescript"
@@ -241,17 +440,38 @@ awk 'BEGIN {
     close(out)
   }
 }' "$P"
-count=$(grep -c 'it("case' "$P"/f*.test.ts | awk -F: '{ s += $2 } END { print s }')
-pycount=$(grep -c '^def test_' "$P"/pytests/*.py | awk -F: '{ s += $2 } END { print s }')
-check 1000 "$count" "timing fixture: TS cases"
-check 1000 "$pycount" "timing fixture: py cases"
-TIMEFORMAT='%U %S'
-CPU=$({ time bash "$CHECK" "$P" > "$T/time.out" 2>&1; } 2>&1)
+check 1000 "$(grep -c 'it("case' "$P"/f*.test.ts | awk -F: '{ s += $2 } END { print s }')" "timing fixture: TS cases"
+check 1000 "$(grep -c '^def test_' "$P"/pytests/*.py | awk -F: '{ s += $2 } END { print s }')" "timing fixture: py cases"
+CPU=$(cpu "$P")
 check 0 "$(grep -c FAIL "$T/time.out")" "timing fixture: clean"
 has "ok, 2000 test cases compared" "$(cat "$T/time.out")" "timing fixture: 2000 cases compared"
-ok=$(printf '%s\n' "$CPU" | awk '{ print ($1 + $2 < 5) ? "yes" : "no" }')
-check yes "$ok" "2000 cases take under 5 seconds of CPU time (user+sys: $CPU)"
-echo "2000-case CPU time (user sys): $CPU"
+check yes "$(under 5 "$CPU")" "2000 cases in 40 files take under 5 seconds of CPU time (user+sys: $CPU)"
+echo "2000 cases, 40 files, CPU time (user sys): $CPU"
+P=$(mktemp -d "$T/p.XXXXXX")
+mkdir -p "$P/node_modules"
+ln -s "$TSDIR" "$P/node_modules/typescript"
+awk 'BEGIN {
+  out = ARGV[1] "/big.test.ts"
+  print "import { describe, expect, it } from \"vitest\";" > out
+  print "describe(\"big\", () => {" > out
+  for (i = 1; i <= 5000; i++) printf "  it(\"case %d\", () => {\n    const r = compute_%d(%d);\n    expect(r.total).toBe(%d);\n    expect(r.items.length).toBe(%d);\n  });\n", i, i, i, i + 1, i * 3 > out
+  print "});" > out
+  close(out)
+  out = ARGV[1] "/test_big.py"
+  for (i = 1; i <= 5000; i++) printf "def test_case_%d():\n    r = compute_%d(%d)\n    assert r.total == %d\n    assert len(r.items) == %d\n\n\n", i, i, i, i + 1, i * 3 > out
+  close(out)
+}' "$P"
+mv "$P/test_big.py" "$T/test_big.py"
+CPU=$(cpu "$P")
+has "ok, 5000 test cases compared" "$(cat "$T/time.out")" "5000 TS cases in one file: all compared"
+check yes "$(under 10 "$CPU")" "5000 TS cases in one file take under 10 seconds of CPU time (user+sys: $CPU)"
+echo "5000 TS cases, one file, CPU time (user sys): $CPU"
+rm "$P/big.test.ts"
+mv "$T/test_big.py" "$P/test_big.py"
+CPU=$(cpu "$P")
+has "ok, 5000 test cases compared" "$(cat "$T/time.out")" "5000 py cases in one file: all compared"
+check yes "$(under 10 "$CPU")" "5000 py cases in one file take under 10 seconds of CPU time (user+sys: $CPU)"
+echo "5000 py cases, one file, CPU time (user sys): $CPU"
 
 echo "seeded-duplicate-tests: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
