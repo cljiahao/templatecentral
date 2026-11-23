@@ -13,6 +13,5 @@ def greet(name):
 
     Holds (an aside) and more
     lines than the comment limit allows.
-    Fourth docstring line.
     """
     return "# " + name

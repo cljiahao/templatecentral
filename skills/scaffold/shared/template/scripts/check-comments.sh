@@ -1,25 +1,33 @@
 #!/usr/bin/env bash
 # Comment gate for project source: check-comments.sh [--root DIR] [--ts-from DIR] [--full] [base-ref | --all path...]
-# Judges only lines added or changed since the base ref (--all treats every line of the listed paths as new). Offline.
-# Rules: no trailing comment, no comment inside a function body, at most MAX_COMMENT_LINES per block,
-# no parenthetical aside, no comment wholly in brackets. Tool directives, shebangs and licence headers are never judged.
-# Tokenizers: the project's own typescript package for ts/tsx/js/jsx, python3 tokenize and ast for py.
+# Judges only lines added or changed since the base ref (--all treats every line of the listed paths as new); a reindented line counts as changed. Offline.
+# Judged extensions: ts tsx js jsx mjs cjs mts cts py. Paths are relative to the project root, which may sit in a git subfolder; files outside it are never judged.
+# Rules: a comment sits on its own line at the top of the file or directly above a statement, declaration, member or object property, and never inside a function body.
+# A block is at most MAX_COMMENT_LINES lines, a line at most MAX_LINE_CHARS characters, with no parenthetical aside and no comment wholly in brackets.
+# A code reference such as call foo() first is not an aside. JSDoc blocks do not count @tag lines, Python docstrings do not count blank lines or section entries such as Args.
+# A tool directive is exempt only when it matches that directive's own grammar from its start; its reason is one line of at most MAX_REASON_CHARS characters and is still checked for asides.
+# Shebangs and a licence header at the top of the file are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
 # Base ref: the argument, else BASE_REF, else the merge base with the default branch. In CI (CI, GITHUB_ACTIONS or TF_BUILD)
 # a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
+# In CI on a push to the target branch HEAD is the base, so there is nothing to compare: the gate says so, exits 0 and judges pull requests only.
 # Exit 0 clean, 1 findings, 2 cannot run (missing runtime or package, no base, unreadable file), always with one line naming the cause.
 set -uo pipefail
 
 MAX_COMMENT_LINES=3
+MAX_LINE_CHARS=120
+MAX_REASON_CHARS=100
 MAX_REPORT_LINES=30
 SOURCE_EXT='ts tsx js jsx mjs cjs mts cts py'
 
-# Generated and vendored paths nobody edits by hand; one place to extend.
+# Generated and vendored paths nobody edits by hand, relative to the project root; one place to extend.
 is_skipped() {
   case "/$1" in
-    */node_modules/* | */dist/* | */build/* | */coverage/* | */.next/* | */.turbo/* | */storybook-static/*) return 0 ;;
-    */.venv/* | */venv/* | */__pycache__/* | */.git/* | */.claude/*) return 0 ;;
-    */migrations/* | */alembic/versions/* | */src/components/ui/*) return 0 ;;
-    */next-env.d.ts | *.min.js | *.lock | */package-lock.json | */pnpm-lock.yaml) return 0 ;;
+    */node_modules/* | */__pycache__/* | */.git/*) return 0 ;;
+  esac
+  case "$1" in
+    dist/* | build/* | coverage/* | .next/* | .turbo/* | storybook-static/* | .venv/* | venv/* | .claude/*) return 0 ;;
+    migrations/* | alembic/versions/* | src/components/ui/*) return 0 ;;
+    next-env.d.ts | *.min.js | *.lock | package-lock.json | pnpm-lock.yaml) return 0 ;;
   esac
   return 1
 }
@@ -29,7 +37,11 @@ die() {
   exit 2
 }
 
-here=$(cd "$(dirname "$0")" && pwd) || die "cannot locate the script folder"
+abs_dir() {
+  if [ -d "$1" ]; then (cd "$1" && pwd); else return 1; fi
+}
+
+here=$(abs_dir "$(dirname "$0")") || die "cannot locate the script folder"
 root=$here/..
 ts_from=
 full=0
@@ -47,7 +59,7 @@ while [ $# -gt 0 ]; do
 done
 cd "$root" || die "cannot enter the project folder ($root)"
 root=$PWD
-[ -z "$ts_from" ] || ts_from=$(cd "$ts_from" 2> /dev/null && pwd) || die "--ts-from folder does not exist"
+if [ -n "$ts_from" ]; then ts_from=$(abs_dir "$ts_from") || die "--ts-from folder does not exist"; fi
 
 for tool in awk sort mktemp rm find; do
   command -v "$tool" > /dev/null 2>&1 || die "missing tool: $tool"
@@ -87,6 +99,7 @@ if [ "$all" = 1 ]; then
 else
   command -v git > /dev/null 2>&1 || die "missing tool: git"
   git rev-parse --git-dir > /dev/null 2>&1 || die "not a git work tree, so there is no base to diff against. Fix: run inside the repository, or use --all"
+  [ $# -le 1 ] || die "unexpected extra argument after the base ref: $2"
   arg_base=${1:-}
   env_base=${BASE_REF:-}
   target=
@@ -128,12 +141,14 @@ else
   fi
   git rev-parse --verify -q "$ref^{commit}" > /dev/null 2>&1 || die "base ref not found: $ref. Fix: fetch it (CI needs fetch-depth: 0)."
   mb=$(git merge-base "$ref" HEAD 2> /dev/null) || die "no merge base between $ref and HEAD. Fix: fetch full history (CI needs fetch-depth: 0)."
-  git -c core.quotePath=false diff --no-color --no-ext-diff -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
-  awk -F'\t' '
+  head_sha=$(git rev-parse HEAD 2> /dev/null) || die "cannot read HEAD"
+  git -c core.quotePath=false diff --relative --src-prefix=a/ --dst-prefix=b/ --no-color --no-ext-diff -U0 -M --diff-filter=AMR "$mb" -- . > "$wd/diff" 2> "$wd/diff.err" || die "git diff failed: $(head -n 1 "$wd/diff.err")"
+  awk '
     /^diff --git / { hdr = 1; f = ""; next }
     hdr && /^\+\+\+ / {
       f = substr($0, 5)
-      if (f ~ /^"/) { print "QUOTED" > "/dev/stderr"; bad = 1; next }
+      sub(/\t.*$/, "", f)
+      if (f ~ /^"/) { r[f] = "!quoted"; f = ""; next }
       sub(/^b\//, "", f)
       next
     }
@@ -145,14 +160,21 @@ else
       n = (a[2] == "") ? 1 : a[2]
       if (n > 0 && f != "") r[f] = (r[f] == "" ? "" : r[f] ",") a[1] "-" (a[1] + n - 1)
     }
-    END { for (k in r) printf "%s\t%s\n", k, r[k]; exit bad }
-  ' "$wd/diff" > "$wd/ranges" 2> "$wd/awk.err" || die "a changed path needs quoting, rename it ($(head -n 1 "$wd/awk.err"))"
+    END { for (k in r) printf "%s\t%s\n", k, r[k] }
+  ' "$wd/diff" > "$wd/ranges" || die "cannot read the git diff"
   while IFS="$(printf '\t')" read -r f r; do
+    [ "$r" != '!quoted' ] || die "a changed path needs quoting, rename it: $f"
     add_spec "$f" "$r"
   done < "$wd/ranges"
   while IFS= read -r -d '' f; do
     add_spec "$f" all
   done < <(git ls-files -o --exclude-standard -z)
+  if [ "$in_ci" = 1 ] && [ "$mb" = "$head_sha" ] && [ ! -s "$specs" ]; then
+    printf 'check-comments: diff base: %s\n' "$decision"
+    printf 'check-comments: nothing to compare: HEAD is the base (%s), as on a push to the target branch. The gate judges pull requests, so no comment was checked.\n' "$ref"
+    printf 'check-comments: nothing checked\n'
+    exit 0
+  fi
 fi
 
 : > "$wd/spec.ts"
@@ -170,23 +192,27 @@ if [ -d docs/adr ] || [ -d docs/decisions ]; then adr=--adr; fi
 
 if [ -s "$wd/spec.ts" ]; then
   command -v node > /dev/null 2>&1 || die "node is missing, so TypeScript and JavaScript comments cannot be read. Fix: install Node.js and re-run."
-  set -- --max "$MAX_COMMENT_LINES" --root "$root"
+  set -- --max "$MAX_COMMENT_LINES" --max-line "$MAX_LINE_CHARS" --max-reason "$MAX_REASON_CHARS" --root "$root"
   [ -z "$adr" ] || set -- "$@" "$adr"
   [ -z "$ts_from" ] || set -- "$@" --ts-from "$ts_from"
   node "$here/check-comments.mjs" "$@" < "$wd/spec.ts" > "$wd/out.ts" 2> "$wd/err.ts"
   rc=$?
-  [ "$rc" -le 1 ] || die "$(head -n 1 "$wd/err.ts")"
-  if [ "$rc" = 1 ] && [ ! -s "$wd/out.ts" ]; then die "the TypeScript reader failed: $(head -n 1 "$wd/err.ts")"; fi
+  msg=$(tail -n 1 "$wd/err.ts")
+  [ "$rc" -le 1 ] || die "${msg#check-comments: }"
+  if [ "$rc" = 1 ] && [ ! -s "$wd/out.ts" ]; then die "the TypeScript reader failed: ${msg#check-comments: }"; fi
   cat "$wd/out.ts" >> "$wd/out"
 fi
 if [ -s "$wd/spec.py" ]; then
-  command -v python3 > /dev/null 2>&1 || die "python3 is missing, so Python comments cannot be read. Fix: install Python 3 and re-run."
-  set -- --max "$MAX_COMMENT_LINES"
+  py=python3
+  if [ -x "$root/.venv/bin/python3" ]; then py=$root/.venv/bin/python3; fi
+  command -v "$py" > /dev/null 2>&1 || die "python3 is missing, so Python comments cannot be read. Fix: install Python 3 and re-run."
+  set -- --max "$MAX_COMMENT_LINES" --max-line "$MAX_LINE_CHARS" --max-reason "$MAX_REASON_CHARS"
   [ -z "$adr" ] || set -- "$@" "$adr"
-  python3 -I "$here/check-comments.py" "$@" < "$wd/spec.py" > "$wd/out.py" 2> "$wd/err.py"
+  "$py" -I "$here/check-comments.py" "$@" < "$wd/spec.py" > "$wd/out.py" 2> "$wd/err.py"
   rc=$?
-  [ "$rc" -le 1 ] || die "$(head -n 1 "$wd/err.py")"
-  if [ "$rc" = 1 ] && [ ! -s "$wd/out.py" ]; then die "the Python reader failed: $(head -n 1 "$wd/err.py")"; fi
+  msg=$(tail -n 1 "$wd/err.py")
+  [ "$rc" -le 1 ] || die "${msg#check-comments: }"
+  if [ "$rc" = 1 ] && [ ! -s "$wd/out.py" ]; then die "the Python reader failed: ${msg#check-comments: }"; fi
   cat "$wd/out.py" >> "$wd/out"
 fi
 
