@@ -8,8 +8,9 @@
 # A tool directive is exempt only when it matches that directive's own grammar from its start, and a directive that suppresses a check must carry a reason:
 # eslint-disable*, istanbul/c8/v8 ignore, NOSONAR, gitleaks:allow, pragma: no cover and noqa take " -- reason" (noqa also needs a rule code); @ts-ignore, @ts-expect-error and @ts-nocheck take the reason as text after them;
 # biome-ignore takes ": reason"; type: ignore[code] and pyright: ignore[rule] take "  # reason". A reason is one line of at least three different words, each with a letter and two or more characters, that is not only TODO, at most MAX_REASON_CHARS characters, and is checked for asides.
-# Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. Known JSDoc @tag lines (@param, @returns and the like) are capped at MAX_TAG_LINES over a whole comment chain, and the text of @remarks, @example, @see and other prose tags counts as prose.
-# Comments before the first line of code total at most MAX_COMMENT_LINES lines. Copyright and SPDX lines (at most 5) and a comment that quotes one text in check-comments.licences.txt unbroken (at most 40 lines) are exempt; any other line counts.
+# Formatting directives (prettier-ignore, fmt, isort, __PURE__, webpack magic comments) need no reason. Known JSDoc @tag lines (@param, @returns and the like) are capped at MAX_TAG_LINES over all the comments above one declaration, and a tag line with more than 8 words after its name, type and parameter name, like the text of @remarks, @example and @see, counts as prose.
+# Comments before the first line of code total at most MAX_COMMENT_LINES lines. Only the top-of-file block is exempt: Copyright and SPDX lines (at most 5, one year and holder or one licence expression, 100 characters, no sentence) and a comment that quotes one text in check-comments.licences.txt from its start (at most 40 lines, exempt from the line cap); a line with no letter or digit counts.
+# Symlinked source files are never followed; --all lists them in a note.
 # Shebangs are never judged. Tokenizers: the project's own node_modules/typescript for TypeScript and JavaScript, python3 tokenize and ast for Python.
 # Base ref: the argument, else BASE_REF, else the merge base with the default branch; in CI (CI, GITHUB_ACTIONS or TF_BUILD) the default branch is never guessed,
 # so CI needs the argument or the pipeline target variable; the pipeline passes the base argument on every trigger, since a push run has no target variable and exits 2. In CI a BASE_REF from the environment is accepted only when it names the pipeline's own target branch variable; the report says which.
@@ -247,9 +248,9 @@ nfiles=$(wc -l < "$specs" | tr -d ' ')
 if [ "$nfiles" = 0 ]; then
   if [ "$all" = 1 ] && [ "$src_seen" = 0 ]; then
     if [ -s "$wd/links" ]; then
-      die "no regular source file under the given paths: $*. The only source files are symlinks ($(list_lines "$wd/links")), which the gate does not follow out of the project. Fix: name the real file."
+      die "no regular source file under the given paths ($*). The only source files are symlinks ($(list_lines "$wd/links")), which the gate does not follow out of the project. Fix: name the real file."
     fi
-    die "no source file under the given paths: $*. Fix: name a folder or file with one of these extensions: $SOURCE_EXT."
+    die "no source file under the given paths ($*). Fix: name a folder or file with one of these extensions: $SOURCE_EXT."
   fi
   if [ "$all" = 1 ]; then why="every source file under the given paths is a skipped generated or vendored path ($(list_lines "$wd/skipped"))"
   elif [ -s "$wd/skipped" ]; then why="every changed source file is on a skipped generated or vendored path ($(list_lines "$wd/skipped"))"
@@ -258,6 +259,9 @@ if [ "$nfiles" = 0 ]; then
   fi
   printf 'check-comments: nothing checked: %s. This is not a pass.\n' "$why"
   exit 0
+fi
+if [ -s "$wd/links" ]; then
+  printf 'check-comments: note: symlinked source files were not followed and not judged: %s\n' "$(list_lines "$wd/links")"
 fi
 total=$(wc -l < "$wd/out" | tr -d ' ')
 if [ "$total" -gt 0 ]; then

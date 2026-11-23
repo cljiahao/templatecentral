@@ -40,10 +40,19 @@ SUPPRESSORS = [
     (re.compile(r"^NOSONAR\b"), "# NOSONAR -- reason"),
     (re.compile(r"^gitleaks:allow"), "# gitleaks:allow -- reason"),
 ]
-COPYRIGHT = re.compile(r"^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)|^spdx-license-identifier:\s*\S|^all rights reserved\.?$", re.I)
+COPYRIGHT = re.compile(r"^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)", re.I)
+RESERVED = re.compile(r"\s*all rights reserved\.?\s*$", re.I)
+ALL_RIGHTS = re.compile(r"^all rights reserved\.?$", re.I)
+SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+SPDX_ID = r"[A-Za-z0-9][A-Za-z0-9.+-]*"
+SPDX_ATOM = r"\(*" + SPDX_ID + r"\)*"
+SPDX = re.compile(r"^SPDX-License-Identifier:\s*" + SPDX_ATOM + r"(?:\s+(?:AND|OR|WITH)\s+" + SPDX_ATOM + r")*$")
+MAX_COPYRIGHT_CHARS = 100
+MAX_HOLDER_WORDS = 10
 MAX_COPYRIGHT_LINES = 5
 MAX_LICENCE_LINES = 40
 MIN_LICENCE_WORDS = 4
+MAX_TITLE_WORDS = 4
 LICENCE_FILE = "check-comments.licences.txt"
 FILLER = {"todo", "fixme", "xxx", "tbd"}
 MIN_REASON_WORDS = 3
@@ -59,6 +68,8 @@ SECTION_KIND = {
     "attributes": "attrs", "raises": "raises", "return": "rets", "returns": "rets", "yield": "rets", "yields": "rets",
 }
 MAX_CONTINUATION = 2
+MAX_ENTRY_WORDS = 12
+PROPERTY_DECORATORS = {"property", "cached_property", "setter", "getter", "deleter"}
 SECTION = re.compile(r"^(Args|Arguments|Parameters|Other Parameters|Keyword Args|Returns?|Yields?|Raises?|Attributes|Examples?|Notes?|See Also|References|Warns|Warnings|Todo):\s*$")
 SKIP_TOKENS = (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER, tokenize.COMMENT)
 VERSION = sys.version.split()[0]
@@ -164,9 +175,29 @@ def scope_nodes(node):
             stack.extend(ast.iter_child_nodes(n))
 
 
+def is_stub(fn):
+    """True for an abstract or placeholder body: only a docstring, `...`, pass, or raise NotImplementedError."""
+    for stmt in fn.body[1:] if fn.body and isinstance(fn.body[0], ast.Expr) and isinstance(fn.body[0].value, ast.Constant) and isinstance(fn.body[0].value.value, str) else fn.body:
+        if isinstance(stmt, ast.Pass):
+            continue
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis:
+            continue
+        exc = stmt.exc.func if isinstance(stmt, ast.Raise) and isinstance(stmt.exc, ast.Call) else getattr(stmt, "exc", None)
+        if isinstance(stmt, ast.Raise) and isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
+            continue
+        return False
+    return True
+
+
+def decorator_name(d):
+    d = d.func if isinstance(d, ast.Call) else d
+    return d.id if isinstance(d, ast.Name) else d.attr if isinstance(d, ast.Attribute) else ""
+
+
 def documented_names(node):
     """Collects what a docstring may list: a function signature, a class body and its self attributes, module-level assignments, raised names and return types."""
     names = {"params": set(), "attrs": set(), "raises": set(), "rets": set(), "value": False}
+    fields = set()
 
     def add_args(fn):
         a = fn.args
@@ -211,13 +242,23 @@ def documented_names(node):
         add_args(node)
         names["rets"] = annotation_names(node.returns)
         add_scope(node, False)
+        if is_stub(node):
+            names["value"] = True
     elif isinstance(node, ast.ClassDef):
+        has_init = False
         for stmt in node.body:
             add_assign(stmt, True)
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                fields.add(stmt.target.id)
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if stmt.name == "__init__":
+                    has_init = True
                     add_args(stmt)
+                if any(decorator_name(d) in PROPERTY_DECORATORS for d in stmt.decorator_list):
+                    names["attrs"].add(stmt.name)
                 add_scope(stmt, True)
+        if not has_init:
+            names["params"].update(fields)
         names["value"] = False
     else:
         for stmt in node.body:
@@ -287,6 +328,11 @@ def is_entry(t, section, known, seen):
         seen.add(key)
         return True
     m = ENTRY.match(t)
+    if m is None and section in ("rets", "raises") and len(t.split()) <= MAX_ENTRY_WORDS and (section, "") not in seen:
+        has_source = (known["rets"] or known["value"]) if section == "rets" else known["raises"]
+        if has_source:
+            seen.add((section, ""))
+            return True
     if m is None or section in (None, "other"):
         return False
     name = m.group(1).split(".")[-1]
@@ -395,7 +441,7 @@ def check_file(rel, spec, opt, report):
 
     own = [it for it in items if not it["trailing"]]
     k = 0
-    used = {"copyright": 0, "licence": 0}
+    used = {"copyright": 0, "licence": 0, "open": True}
     top_total = 0
     top_chains = 0
     top_line = None
@@ -406,16 +452,15 @@ def check_file(rel, spec, opt, report):
             j += 1
         chain = own[k:j + 1]
         k = j + 1
-        for it in chain:
-            if len(it["text"]) > opt["max_line"] and touches(it["line"], it["line"]):
-                report(rel, it["line"], "comments/length", "comment line is %d characters, limit %d. Fix: cut it or split it into shorter sentences." % (len(it["text"]), opt["max_line"]))
         prose = [it for it in chain if not it["directive"]]
         counted = [it for it in chain if not it["directive"] or it["reason"]]
+        exempt = licence_items(prose, used) if prose and prose[0]["top"] else []
+        for it in chain:
+            if len(it["text"]) > opt["max_line"] and it not in exempt and touches(it["line"], it["line"]):
+                report(rel, it["line"], "comments/length", "comment line is %d characters, limit %d. Fix: cut it or split it into shorter sentences." % (len(it["text"]), opt["max_line"]))
         if not counted:
             continue
-        exempt = []
         if prose and prose[0]["top"]:
-            exempt = licence_items(prose, used)
             if all(it in exempt or not it["text"] for it in counted):
                 continue
             top_chains += 1
@@ -460,7 +505,7 @@ def check_file(rel, spec, opt, report):
 
 def norm_words(text):
     """Lowercase words of a comment line: punctuation, comment markers and list numbers are dropped."""
-    return re.findall(r"[a-z0-9]+", re.sub(r"(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)", " ", text.lower()))
+    return re.findall(r"[^\W_]+", re.sub(r"(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)", " ", text.lower()))
 
 
 def load_licences():
@@ -476,27 +521,53 @@ def load_licences():
         if line.startswith("@@ "):
             texts.append([])
         elif texts:
-            texts[-1].extend(norm_words(line))
-    out = [" " + " ".join(t) + " " for t in texts if t]
+            texts[-1].append(norm_words(line))
+    out = []
+    for lines in texts:
+        lines = [w for w in lines if w]
+        if lines:
+            out.append(" " + " ".join(w for ln in lines for w in ln) + " ")
+            if len(lines[0]) <= MAX_TITLE_WORDS and len(lines) > 1:
+                out.append(" " + " ".join(w for ln in lines[1:] for w in ln) + " ")
     if not out:
         die("the bundled licence texts %s hold no licence. Fix: restore the file next to this script." % LICENCE_FILE)
     return out
 
 
+def is_copyright(text):
+    """True for a Copyright, SPDX or All rights reserved line that is only that: short, no sentence after the year and holder."""
+    if len(text) > MAX_COPYRIGHT_CHARS:
+        return False
+    if SPDX.match(text) or ALL_RIGHTS.match(text):
+        return True
+    m = COPYRIGHT.match(text)
+    if m is None:
+        return False
+    rest = RESERVED.sub("", text[m.end():]).strip()
+    rest = rest[:-1] if rest.endswith(".") else rest
+    return len(rest.split()) <= MAX_HOLDER_WORDS and SENTENCE_END.search(rest) is None
+
+
 def licence_items(prose, used):
-    """Returns the header lines left uncounted: copyright and SPDX lines, and the lines of a comment that quotes one bundled licence text unbroken."""
-    copy = [it for it in prose if it["text"] and COPYRIGHT.search(it["text"])]
-    rest = [it for it in prose if it["text"] and it not in copy]
+    """Returns the header lines left uncounted: copyright and SPDX lines, and the lines of a comment that quotes one bundled licence text from its start. Only the comments at the very top qualify, so nothing later is exempt."""
     out = [it for it in prose if not it["text"]]
-    if used["copyright"] + len(copy) <= MAX_COPYRIGHT_LINES:
+    if not used["open"]:
+        return out
+    copy = [it for it in prose if it["text"] and is_copyright(it["text"])]
+    rest = [it for it in prose if it["text"] and it not in copy]
+    within = used["copyright"] + len(copy) <= MAX_COPYRIGHT_LINES
+    if within:
         out += copy
         used["copyright"] += len(copy)
-    if rest and used["licence"] + len(rest) <= MAX_LICENCE_LINES:
-        found = [w for it in rest for w in norm_words(it["text"])]
-        words = " " + " ".join(found) + " "
-        if len(found) >= MIN_LICENCE_WORDS and any(words in lic for lic in LICENCES):
-            out += rest
-            used["licence"] += len(rest)
+    used["open"] = within and not rest
+    words = [norm_words(it["text"]) for it in rest]
+    matchable = [it for it, w in zip(rest, words) if w]
+    found = [w for ws in words for w in ws]
+    if matchable and used["licence"] + len(matchable) <= MAX_LICENCE_LINES and len(found) >= MIN_LICENCE_WORDS:
+        prefix = " " + " ".join(found) + " "
+        if any(lic.startswith(prefix) for lic in LICENCES):
+            out += matchable
+            used["licence"] += len(matchable)
     return out
 
 

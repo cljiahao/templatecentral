@@ -739,6 +739,103 @@ has "only source files are symlinks" "$OUT" "symlink only: names the symlink cas
 has "link.ts" "$OUT" "symlink only: names the link"
 lacks "check-comments: ok" "$OUT" "deleted and binary files: no green ok line"
 
+# round 5: the symlink note on the ok path, and no doubled period in the message
+has "given paths (.)" "$OUT" "symlink only: the path list closes cleanly"
+lacks "paths: .." "$OUT" "symlink only: no doubled period"
+d=$T/linkmixed
+mkdir -p "$d"
+printf 'export const a = 1;\n' > "$d/real.ts"
+ln -s "$T/linktarget/a.ts" "$d/link.ts"
+gate_all "$d"
+check 0 "$EC" "real file plus a symlink: exits 0 ($OUT)"
+has "check-comments: ok (1 file(s) checked)" "$OUT" "real file plus a symlink: ok line"
+has "symlinked source files were not followed" "$OUT" "real file plus a symlink: the skipped link is noted"
+has "link.ts" "$OUT" "real file plus a symlink: the note names the link"
+
+# round 5: lines with no letter or digit, and non-Latin prose, are not licence text
+MITH=$(wrap_style slash 200 "$MIT_TEXT")$NL
+MITP=$(wrap_style hash 200 "$MIT_TEXT")$NL
+six_marks=''
+six_marks_py=''
+six_cjk=''
+six_tilde=''
+for _ in 1 2 3 4 5 6; do
+  six_marks="$six_marks// ¡¡¡¡ ???? !!!!\n"
+  six_marks_py="$six_marks_py# ¡¡¡¡ ???? !!!!\n"
+  six_cjk="$six_cjk// 这是一个很长的解释说明\n"
+  six_tilde="$six_tilde// ñ ñ ñ ñ\n"
+done
+inline_fails a.ts length "$MITH${six_marks}export const a = 1;\n"
+inline_fails a.py length "$MITP${six_marks_py}A = 1\n"
+inline_fails a.ts length "$MITH${six_cjk}export const a = 1;\n"
+inline_fails a.ts length "$MITH${six_tilde}export const a = 1;\n"
+MIT_MIXED=${MIT_TEXT/granted,/granted, 附加说明 附加说明 附加说明 附加说明}
+inline_fails a.ts length "$(wrap_style slash 200 "$MIT_MIXED")${NL}export const a = 1;\n"
+inline_fails a.py length "$(wrap_style hash 200 "$MIT_MIXED")${NL}A = 1\n"
+inline_clean a.ts "$MITH// ----\nexport const a = 1;\n"
+inline_clean a.ts "${MITH}export const a = 1;\n"
+
+# round 5: Copyright and SPDX lines are anchored whole lines
+long_copy=''
+long_copy_py=''
+long_spdx=''
+for _ in 1 2 3 4; do
+  long_copy="$long_copy// Copyright 2024 Acme. This file contains a long explanation of how the parser works.\n"
+  long_copy_py="$long_copy_py# Copyright 2024 Acme. This file contains a long explanation of how the parser works.\n"
+  long_spdx="$long_spdx// SPDX-License-Identifier: MIT this file explains how the parser works\n"
+done
+inline_fails a.ts length "${long_copy}export const a = 1;\n"
+inline_fails a.py length "${long_copy_py}A = 1\n"
+inline_fails a.ts length "${long_spdx}export const a = 1;\n"
+inline_clean a.ts '// Copyright (c) 2015-2024 Acme, Inc. All rights reserved.\n// Copyright 2020 The Authors\n// SPDX-License-Identifier: Apache-2.0 OR MIT\nexport const a = 1;\n'
+inline_clean a.ts '// SPDX-License-Identifier: (MIT AND BSD-3-Clause)\nexport const a = 1;\n'
+inline_clean a.py '# Copyright © 2024 Example Corp\nA = 1\n'
+
+# round 5: the exempt licence block is the one at the very top, and nothing later is
+frag=''
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do frag="$frag// free of charge, to any person\n\n"; done
+inline_fails a.ts length "${frag}export const a = 1;\n"
+inline_fails a.ts length "// Notes on this file.\n\n${MITH}export const a = 1;\n"
+inline_clean a.ts "// Copyright 2024 Example Corp\n\n${MITH}export const a = 1;\n"
+inline_fails a.ts length "// Copyright 2024 Example Corp\n\n${MITH}\n${MITH}export const a = 1;\n"
+MIT_MID='The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY'
+inline_fails a.ts length "$(wrap_style slash 40 "$MIT_MID")${NL}export const a = 1;\n"
+inline_fails a.py length "$(wrap_style hash 40 "$MIT_MID")${NL}A = 1\n"
+
+# round 5: matched licence lines are exempt from the line cap, other long lines are not
+inline_clean a.ts "$(wrap_style slash 400 "$MIT_TEXT")${NL}export const a = 1;\n"
+inline_clean a.py "$(wrap_style hash 400 "$BSD3_TEXT")${NL}A = 1\n"
+inline_fails a.ts length "// $(printf 'word %.0s' $(seq 1 40))\nexport const a = 1;\n"
+
+# round 5: deprecated, author, license and link are data tags, and a long tag text is prose
+inline_clean a.ts '/**\n * @deprecated use g\n * @author Ann Lee\n * @license MIT\n * @link g\n */\nexport function f() {\n  return 1;\n}\n'
+inline_clean a.ts '/**\n * @param p1 the first value\n * @param p2 the second value\n * @param p3 the third value\n * @param p4 the fourth value\n */\nexport function f(p1: number, p2: number, p3: number, p4: number) {\n  return p1 + p2 + p3 + p4;\n}\n'
+longtag=''
+for n in 1 2 3 4; do longtag="$longtag * @param p$n the value that this parameter carries into the function body here\n"; done
+inline_fails a.ts length "/**\n$longtag */\nexport function f(p1: number) {\n  return p1;\n}\n"
+
+# round 5: the tag cap counts every comment above one declaration, a blank line included
+tags6=''
+for n in 1 2 3 4 5 6; do tags6="$tags6 * @param p$n value\n"; done
+inline_fails a.ts length "/**\n$tags6 */\n\n/**\n$tags6 */\nexport function f(p1: number) {\n  return p1;\n}\n"
+inline_fails a.ts length "/**\n$tags6 */\n// eslint-disable-next-line no-console -- logs once at boot\n/**\n$tags6 */\nexport function f(p1: number) {\n  return p1;\n}\n"
+inline_clean a.ts "/**\n$tags5 */\n/**\n$tags5 */\nexport function f(p1: number) {\n  return p1;\n}\n\n/**\n$tags5 */\nexport function g(p1: number) {\n  return p1;\n}\n"
+
+# round 5: unnamed Returns, Yields and Raises entries, stub bodies, dataclass fields and properties
+inline_clean a.py 'def f(xs):\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Args:\n        xs: the numbers\n\n    Yields:\n        Each number.\n    """\n    for x in xs:\n        yield x\n'
+inline_clean a.py 'def f(a):\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Returns:\n        The sum of everything.\n    """\n    return a + 1\n'
+inline_clean a.py 'def f(a):\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Raises:\n        If the value is empty.\n    """\n    raise ValueError(a)\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Returns:\n        Nothing useful here.\n    """\n    print(a)\n'
+inline_rule a.py length 2 'def f(a):\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Raises:\n        If the value is empty.\n    """\n    print(a)\n'
+inline_clean a.py 'class B:\n    def run(self, a):\n        """Summary.\n\n        Detail one.\n        Detail two.\n\n        Returns:\n            count: the number\n        """\n        raise NotImplementedError\n'
+inline_clean a.py 'class B:\n    def run(self, a):\n        """Summary.\n\n        Detail one.\n        Detail two.\n\n        Returns:\n            count: the number\n        """\n        ...\n'
+inline_clean a.py 'class B:\n    def run(self, a):\n        """Summary.\n\n        Detail one.\n        Detail two.\n\n        Returns:\n            count: the number\n        """\n        raise NotImplementedError("subclass it")\n'
+inline_clean a.py 'from dataclasses import dataclass\n\n\n@dataclass\nclass P:\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Args:\n        x: the x\n        y: the y\n    """\n\n    x: int\n    y: int\n'
+inline_clean a.py 'from dataclasses import dataclass\n\n\n@dataclass\nclass P:\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Attributes:\n        x: the x\n        y: the y\n    """\n\n    x: int\n    y: int\n'
+inline_clean a.py 'class P:\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Attributes:\n        size: the size\n    """\n\n    @property\n    def size(self):\n        return 1\n'
+inline_rule a.py length 2 'class P:\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Attributes:\n        bogus: not here\n    """\n\n    @property\n    def size(self):\n        return 1\n'
+inline_rule a.py length 6 'from dataclasses import dataclass\n\n\n@dataclass\nclass P:\n    """Summary.\n\n    Detail one.\n    Detail two.\n\n    Args:\n        z: not a field\n    """\n\n    x: int\n'
+
 # a path with a space is read whole
 d=$T/space
 repo "$d"

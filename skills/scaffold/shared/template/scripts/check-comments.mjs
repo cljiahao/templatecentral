@@ -74,7 +74,17 @@ const SUPPRESSORS = [
   [/^gitleaks:allow/, '// gitleaks:allow -- reason'],
   [/^pragma:\s*no\s+(?:cover|branch)\b/, '// pragma: no cover -- reason'],
 ];
-const COPYRIGHT = /^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)|^spdx-license-identifier:\s*\S|^all rights reserved\.?$/i;
+const COPYRIGHT = /^(?:\(c\)\s*|©\s*)?copyright\s*(?:\(c\)|©|:|\d)/i;
+const RESERVED = /\s*all rights reserved\.?\s*$/i;
+const ALL_RIGHTS = /^all rights reserved\.?$/i;
+const SENTENCE_END = /[.!?](?:\s|$)/;
+const SPDX_ATOM = '\\(*[A-Za-z0-9][A-Za-z0-9.+-]*\\)*';
+const SPDX = new RegExp(`^SPDX-License-Identifier:\\s*${SPDX_ATOM}(?:\\s+(?:AND|OR|WITH)\\s+${SPDX_ATOM})*$`);
+const MAX_COPYRIGHT_CHARS = 100;
+const MAX_HOLDER_WORDS = 10;
+const MAX_TITLE_WORDS = 4;
+const MAX_TAG_WORDS = 8;
+const NAMED_TAGS = new Set('param arg argument property prop typedef template typeparam callback'.split(' '));
 const MAX_COPYRIGHT_LINES = 5;
 const MAX_LICENCE_LINES = 40;
 const MIN_LICENCE_WORDS = 4;
@@ -84,7 +94,7 @@ const DATA_TAGS = new Set(
     'param arg argument returns return type typedef template typeparam property prop callback yields yield throws exception extends implements augments ' +
     'public private protected internal readonly override virtual abstract sealed packagedocumentation since version defaultvalue default access async ' +
     'constant const enum event fires function this namespace module memberof name kind alias class constructor global inheritdoc ignore hidden beta alpha ' +
-    'experimental category group'
+    'experimental category group deprecated author license link'
   ).split(' '),
 );
 const FILLER = new Set(['todo', 'fixme', 'xxx', 'tbd']);
@@ -159,9 +169,23 @@ function lowerBound(toks, pos) {
   return lo;
 }
 
+function afterType(rest) {
+  const r = rest.trimStart();
+  if (!r.startsWith('{')) return r;
+  let depth = 0;
+  for (let i = 0; i < r.length; i++) {
+    if (r[i] === '{') depth++;
+    else if (r[i] === '}' && --depth === 0) return r.slice(i + 1);
+  }
+  return '';
+}
+
 function isDataTag(t) {
   const m = TAG_NAME.exec(t);
-  return m !== null && DATA_TAGS.has(m[1].toLowerCase());
+  if (m === null || !DATA_TAGS.has(m[1].toLowerCase())) return false;
+  const words = afterType(t.slice(m[0].length)).split(/\s+/).filter((w) => w !== '');
+  if (NAMED_TAGS.has(m[1].toLowerCase())) words.shift();
+  return words.length <= MAX_TAG_WORDS;
 }
 
 function commentLines(text, c, sf) {
@@ -206,7 +230,7 @@ function directiveOf(lines) {
 }
 
 function normWords(text) {
-  return text.toLowerCase().replace(/(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)/g, ' ').match(/[a-z0-9]+/g) || [];
+  return text.toLowerCase().replace(/(?:^|\s)(?:\d+[.)]|[-*•])(?=\s|$)/g, ' ').match(/[\p{L}\p{N}]+/gu) || [];
 }
 
 function loadLicences() {
@@ -220,28 +244,48 @@ function loadLicences() {
   const texts = [];
   for (const line of raw.split('\n')) {
     if (line.startsWith('@@ ')) texts.push([]);
-    else if (texts.length > 0) texts[texts.length - 1].push(...normWords(line));
+    else if (texts.length > 0) texts[texts.length - 1].push(normWords(line));
   }
-  const out = texts.filter((t) => t.length > 0).map((t) => ` ${t.join(' ')} `);
+  const out = [];
+  for (const all of texts) {
+    const lines = all.filter((w) => w.length > 0);
+    if (lines.length === 0) continue;
+    out.push(` ${lines.flat().join(' ')} `);
+    if (lines[0].length <= MAX_TITLE_WORDS && lines.length > 1) out.push(` ${lines.slice(1).flat().join(' ')} `);
+  }
   if (out.length === 0) die(`the bundled licence texts ${LICENCE_FILE} hold no licence. Fix: restore the file next to this script.`);
   return out;
 }
 const LICENCES = loadLicences();
 
+function isCopyright(t) {
+  if (t.length > MAX_COPYRIGHT_CHARS) return false;
+  if (SPDX.test(t) || ALL_RIGHTS.test(t)) return true;
+  const m = COPYRIGHT.exec(t);
+  if (m === null) return false;
+  let rest = t.slice(m[0].length).replace(RESERVED, '').trim();
+  if (rest.endsWith('.')) rest = rest.slice(0, -1);
+  return rest.split(/\s+/).filter((w) => w !== '').length <= MAX_HOLDER_WORDS && !SENTENCE_END.test(rest);
+}
+
 function licenceLines(lines, used) {
   const out = new Set(lines.filter((l) => l.text === ''));
-  const copy = lines.filter((l) => l.text !== '' && COPYRIGHT.test(l.text));
-  const rest = lines.filter((l) => l.text !== '' && !COPYRIGHT.test(l.text));
-  if (used.copyright + copy.length <= MAX_COPYRIGHT_LINES) {
+  if (!used.open) return out;
+  const copy = lines.filter((l) => l.text !== '' && isCopyright(l.text));
+  const rest = lines.filter((l) => l.text !== '' && !copy.includes(l));
+  const within = used.copyright + copy.length <= MAX_COPYRIGHT_LINES;
+  if (within) {
     for (const l of copy) out.add(l);
     used.copyright += copy.length;
   }
-  if (rest.length > 0 && used.licence + rest.length <= MAX_LICENCE_LINES) {
-    const found = rest.flatMap((l) => normWords(l.text));
-    const words = ` ${found.join(' ')} `;
-    if (found.length >= MIN_LICENCE_WORDS && LICENCES.some((lic) => lic.includes(words))) {
-      for (const l of rest) out.add(l);
-      used.licence += rest.length;
+  used.open = within && rest.length === 0;
+  const matchable = rest.filter((l) => normWords(l.text).length > 0);
+  const found = matchable.flatMap((l) => normWords(l.text));
+  if (matchable.length > 0 && used.licence + matchable.length <= MAX_LICENCE_LINES && found.length >= MIN_LICENCE_WORDS) {
+    const prefix = ` ${found.join(' ')} `;
+    if (LICENCES.some((lic) => lic.startsWith(prefix))) {
+      for (const l of matchable) out.add(l);
+      used.licence += matchable.length;
     }
   }
   return out;
@@ -359,8 +403,21 @@ function checkFile(rel, rangesSpec, report) {
   }
 
   const own = items.filter((it) => !it.codeBefore && !it.codeAfter && !it.jsx);
+  const tagGroups = new Map();
+  for (const it of own) {
+    const n = it.c.block && text.startsWith('/**', it.c.pos) ? it.lines.filter((l) => l.tag).length : 0;
+    const g = tagGroups.get(it.next) || { n: 0, first: it, touched: false };
+    g.n += n;
+    g.touched = g.touched || touches(it.startLine, it.endLine);
+    tagGroups.set(it.next, g);
+  }
+  for (const g of tagGroups.values()) {
+    if (g.n > opt.maxTags && g.touched) {
+      report(rel, g.first.startLine, 'comments/length', `comments above one declaration have ${g.n} JSDoc tag lines, limit ${opt.maxTags}. Fix: drop tags that restate the signature, or cut it to ${opt.maxTags} or fewer.`);
+    }
+  }
   let k = 0;
-  const used = { copyright: 0, licence: 0 };
+  const used = { copyright: 0, licence: 0, open: true };
   let topTotal = 0;
   let topChains = 0;
   let topLine = null;
@@ -371,22 +428,17 @@ function checkFile(rel, rangesSpec, report) {
     const chain = own.slice(k, j + 1);
     k = j + 1;
     const prose = chain.filter((it) => !it.directive);
-    const tagCount = chain.reduce((n, it) => n + (it.c.block && text.startsWith('/**', it.c.pos) ? it.lines.filter((l) => l.tag).length : 0), 0);
-    if (tagCount > opt.maxTags && chain.some((it) => touches(it.startLine, it.endLine))) {
-      report(rel, chain[0].startLine, 'comments/length', `comment block has ${tagCount} JSDoc tag lines, limit ${opt.maxTags}. Fix: drop tags that restate the signature, or cut it to ${opt.maxTags} or fewer.`);
-    }
+    const exempt = prose.length > 0 && prose[0].top ? licenceLines(prose.flatMap((it) => it.lines), used) : new Set();
     for (const it of chain) {
       for (const l of it.lines) {
-        if (l.text.length > opt.maxLine && touches(l.line, l.line)) {
+        if (l.text.length > opt.maxLine && !exempt.has(l) && touches(l.line, l.line)) {
           report(rel, l.line, 'comments/length', `comment line is ${l.text.length} characters, limit ${opt.maxLine}. Fix: cut it or split it into shorter sentences.`);
         }
       }
     }
     const counted = chain.filter((it) => !it.directive || it.reason !== '');
     if (counted.length === 0) continue;
-    let exempt = new Set();
     if (prose.length > 0 && prose[0].top) {
-      exempt = licenceLines(prose.flatMap((it) => it.lines), used);
       if (counted.flatMap((it) => it.lines).every((l) => exempt.has(l) || !l.counts)) continue;
       topChains++;
       topTotal += counted.flatMap((it) => it.lines).filter((l) => l.counts && !exempt.has(l)).length;
