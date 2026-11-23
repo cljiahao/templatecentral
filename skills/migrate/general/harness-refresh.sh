@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Harness refresh: bring the seeded harness files of a project up to the current templateCentral templates without losing local edits.
-# Usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <nestjs|nextjs|vite-react|fastapi>]
+# Usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--baseline [--prune]] [--allow-dirty] [--stack <nestjs|nextjs|vite-react|fastapi>]
 # Default is a dry run: one line per file, nothing written. Classes:
 #   SAME     identical to the current template
 #   REPLACE  not identical, and identical to a file a released version shipped (replaced on --apply)
@@ -15,6 +15,9 @@
 # --apply refuses a dirty git tree (or no git) unless --allow-dirty, so the change is one reviewable diff. It also refreshes the
 # records of the files it wrote, runs harness-live.sh, and with --baseline runs quality-baseline.sh before and after and compares.
 # --baseline runs the project's lint, typecheck and tests and installs pinned scratch tools (network): use it only after the user's yes.
+# A bare --baseline (no directory after it; --gate-baseline is the same flag) records the project's existing lint, type and check-script findings in
+# .claude/gate-baseline.txt with gate-baseline.sh, so the gates that call it fail only on new ones; --prune then drops entries that no longer match.
+# A dry run with it prints what would be recorded and writes nothing. It runs the project's own lint and type tools; see harness-refresh.md.
 # Exit 0 when nothing needs the user, 1 when a file is MODIFIED or a check failed, 2 on a usage error or refusal. No secret or .env file is read.
 # Needs bash 3.2+, cmp, awk; git for the dirty-tree check; python3 or node to update .claude/harness.json.
 set -u
@@ -32,19 +35,28 @@ APPLY=0
 DIRTY_OK=0
 STACK=
 BASEDIR=
+GB=0
+PRUNE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1 ;;
     --allow-dirty) DIRTY_OK=1 ;;
     --stack) shift; [ $# -gt 0 ] || die "--stack needs a value"; STACK=$1 ;;
-    --baseline) shift; [ $# -gt 0 ] || die "--baseline needs a directory"; BASEDIR=$1 ;;
+    --gate-baseline) GB=1 ;;
+    --prune) PRUNE=1 ;;
+    --baseline)
+      case "${2:-}" in
+        ''|-*) GB=1 ;;
+        *) shift; BASEDIR=$1 ;;
+      esac ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$PROJ" ] || die "one project directory only"; PROJ=$1 ;;
   esac
   shift
 done
-if [ -z "$PROJ" ] || [ ! -d "$PROJ" ]; then die "usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <stack>]"; fi
+if [ -z "$PROJ" ] || [ ! -d "$PROJ" ]; then die "usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--baseline [--prune]] [--allow-dirty] [--stack <stack>]"; fi
 [ -z "$BASEDIR" ] || [ "$APPLY" -eq 1 ] || die "--baseline needs --apply"
+[ "$PRUNE" -eq 0 ] || [ "$GB" -eq 1 ] || die "--prune needs --baseline (the bare form)"
 case "$STACK" in ''|nestjs|nextjs|vite-react|fastapi) ;; *) die "unknown stack '$STACK'" ;; esac
 
 src=${BASH_SOURCE[0]:-$0}
@@ -246,6 +258,10 @@ done <"$RES"
 
 if [ "$APPLY" -eq 0 ]; then
   [ "$TREE" = clean ] || echo "note: the tree is $TREE; --apply refuses it unless --allow-dirty is given."
+  if [ "$GB" -eq 1 ]; then
+    echo "gate baseline (dry run): the project's own lint and type tools run now; nothing is written"
+    bash "$GEN/gate-baseline.sh" -C "$P" run dry || echo "gate baseline: the dry run could not finish"
+  fi
   if [ "$N_MOD" -gt 0 ]; then
     echo "NEEDS YOU: --apply writes each MODIFIED file's new version beside it as <path>$NEWSUF; merge by hand."
     exit 1
@@ -270,6 +286,12 @@ if [ "$N_REP$N_ADD" != 00 ]; then
         unsafe_path "$BASE/$path" && die "refusing: the base copy of $path ($BASE/$path) is a symlink, sits under one, or resolves outside the project" ;;
     esac
   done <"$RES"
+fi
+if [ "$GB" -eq 1 ]; then
+  unsafe_path .claude/gate-baseline.txt && die "refusing: .claude/gate-baseline.txt resolves outside the project or is a symlink"
+  unsafe_path scripts/gate-baseline.sh && die "refusing: scripts/gate-baseline.sh resolves outside the project or is a symlink"
+  [ -f "$GEN/gate-baseline.sh" ] || die "gate-baseline.sh not found next to this script"
+  if [ "$PRUNE" -eq 1 ] && [ ! -f "$P/.claude/gate-baseline.txt" ]; then die "--prune needs an existing .claude/gate-baseline.txt"; fi
 fi
 if [ -n "$BASEDIR" ]; then
   [ -d "$BASEDIR" ] || die "--baseline directory $BASEDIR does not exist"
@@ -407,6 +429,20 @@ echo "live check:"
 bash "$GEN/harness-live.sh" "$P"
 LIVE=$?
 
+GBRC=0
+if [ "$GB" -eq 1 ]; then
+  # The helper that the gates call is copied into the project; an existing different copy is kept and gets a sidecar.
+  if [ ! -e "$P/scripts/gate-baseline.sh" ]; then
+    if write_file "$GEN/gate-baseline.sh" "$P/scripts/gate-baseline.sh" 755; then echo "wrote    scripts/gate-baseline.sh"; else echo "FAILED   scripts/gate-baseline.sh"; FAILED=1; NWLIST="$NWLIST scripts/gate-baseline.sh"; fi
+  elif ! cmp -s -- "$GEN/gate-baseline.sh" "$P/scripts/gate-baseline.sh"; then
+    write_sidecar scripts/gate-baseline.sh "$GEN/gate-baseline.sh"; GBRC=1
+  fi
+  if [ "$PRUNE" -eq 1 ]; then GBMODE=prune; else GBMODE=record; fi
+  echo "gate baseline ($GBMODE): the project's own lint and type tools run now"
+  bash "$GEN/gate-baseline.sh" -C "$P" run "$GBMODE" || GBRC=1
+  echo "Put .claude/gate-baseline.txt under review: it may only shrink after this change (wire it into the gate ratchet; see harness-refresh.md)."
+fi
+
 CMP=0
 if [ -n "$BASEDIR" ]; then
   bash "$QB" "$P" --full --label after >"$BD/after.md" || die "baseline after failed"
@@ -435,5 +471,5 @@ if [ "$FAILED" -ne 0 ]; then
   echo "PARTIAL: the tree is partly applied. written:${WLIST:- none}. not written:${NWLIST:- none}."
 fi
 if [ "$N_MOD" -gt 0 ] && [ "$FAILED" -eq 0 ]; then echo "Exit 1: $N_MOD file(s) wait for a merge; the refresh itself did not fail."; fi
-if [ "$N_MOD" -gt 0 ] || [ "$FAILED" -ne 0 ] || [ "$LIVE" -ne 0 ] || [ "$CMP" -ne 0 ]; then exit 1; fi
+if [ "$N_MOD" -gt 0 ] || [ "$FAILED" -ne 0 ] || [ "$LIVE" -ne 0 ] || [ "$CMP" -ne 0 ] || [ "$GBRC" -ne 0 ]; then exit 1; fi
 exit 0
