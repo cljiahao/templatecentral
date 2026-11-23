@@ -3,7 +3,7 @@
 # Usage: harness-refresh.sh <project-dir> [--apply [--baseline <scratch-dir>]] [--allow-dirty] [--stack <nestjs|nextjs|vite-react|fastapi>]
 # Default is a dry run: one line per file, nothing written. Classes:
 #   SAME     identical to the current template
-#   REPLACE  not identical, and proven unmodified since it was seeded (replaced on --apply)
+#   REPLACE  not identical, and identical to a file a released version shipped (replaced on --apply)
 #   MODIFIED a local edit, or no proof either way; --apply writes <path>.templatecentral-new beside it and never touches it
 #   ADD      missing (added on --apply)
 #   GONE     recorded as seeded in .claude/harness.json but no longer in the templates (report only, never deleted)
@@ -188,7 +188,7 @@ while IFS="$TAB" read -r tree rel mode ph; do
     else add REPLACE "$dest" "$srcf" "$mode" "content identical; mode set to $mode"; fi
     continue
   fi
-  if pv=$(pristine_version "$dest" "$(sha "$P/$dest")"); then add REPLACE "$dest" "$srcf" "$mode" "unmodified since seeded: identical to the file released in $pv"; continue; fi
+  if pv=$(pristine_version "$dest" "$(sha "$P/$dest")"); then add REPLACE "$dest" "$srcf" "$mode" "identical to the file released in $pv"; continue; fi
   if [ ! -s "$PRISTINE" ]; then add MODIFIED "$dest" "$srcf" "$mode" "pristine-hashes.txt is missing; cannot prove it unmodified"; continue; fi
   add MODIFIED "$dest" "$srcf" "$mode" "not identical to any released template; treated as edited"
 done <<TC_PLAN

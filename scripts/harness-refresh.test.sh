@@ -100,10 +100,10 @@ printf '# local note\n' >>"$T/rec/docs/adr/0001-test-each-behaviour-once.md"
 commit "$T/rec" aged
 out=$(run "$T/rec"); rc=$?
 check "recorded files: a local edit exits 1" 1 $rc
-contains "test-budget.sh aged is REPLACE" "REPLACE   scripts/test-budget.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
-contains "harness.md aged is REPLACE" "REPLACE   docs/harness.md  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
-contains "dependabot.yml aged is REPLACE" "REPLACE   .github/dependabot.yml  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
-contains "test-consolidate skill aged is REPLACE" "REPLACE   .claude/skills/test-consolidate/SKILL.md  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "test-budget.sh aged is REPLACE" "REPLACE   scripts/test-budget.sh  (identical to the file released in 7.0.0)" "$out"
+contains "harness.md aged is REPLACE" "REPLACE   docs/harness.md  (identical to the file released in 7.0.0)" "$out"
+contains "dependabot.yml aged is REPLACE" "REPLACE   .github/dependabot.yml  (identical to the file released in 7.0.0)" "$out"
+contains "test-consolidate skill aged is REPLACE" "REPLACE   .claude/skills/test-consolidate/SKILL.md  (identical to the file released in 7.0.0)" "$out"
 contains "edited ADR is MODIFIED" "MODIFIED  docs/adr/0001-test-each-behaviour-once.md  (not identical to any released template; treated as edited)" "$out"
 
 # every class at once, on one project
@@ -131,7 +131,7 @@ check "dry run with a modified file exits 1" 1 $rc
 check "dry run changes nothing (tree hash)" "$before" "$(treehash "$T/p")"
 check "dry run adds no file" 0 "$(find "$T/p" -name '*.templatecentral-new' | wc -l | tr -d ' ')"
 contains "SAME class" "SAME      .claude/hooks/session-context.sh" "$out"
-contains "REPLACE class (aged, proven)" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "REPLACE class (aged, proven)" "REPLACE   .claude/hooks/stop-checks.sh  (identical to the file released in 7.0.0)" "$out"
 contains "REPLACE class (aged lefthook)" "REPLACE   lefthook.yml" "$out"
 contains "REPLACE class (mode only)" "REPLACE   .claude/hooks/block-no-verify.sh  (content identical; mode set to 755)" "$out"
 contains "MODIFIED class (edited)" "MODIFIED  .claude/hooks/protect-files.sh  (not identical to any released template; treated as edited)" "$out"
@@ -205,7 +205,7 @@ age "$T/nb" .claude/hooks/stop-checks.sh
 rm -rf "$T/nb/.claude/.harness-base"
 commit "$T/nb" nobase
 out=$(run "$T/nb")
-contains "no base copy: the pristine proof does not need it" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "no base copy: the pristine proof does not need it" "REPLACE   .claude/hooks/stop-checks.sh  (identical to the file released in 7.0.0)" "$out"
 seed "$T/nr" nestjs
 printf '# older\n' >>"$T/nr/.claude/hooks/stop-checks.sh"
 rm "$T/nr/.claude/harness.json"
@@ -366,7 +366,7 @@ age "$T/bm" .claude/hooks/stop-checks.sh
 printf '# base drift\n' >>"$T/bm/.claude/.harness-base/.claude/hooks/stop-checks.sh"
 commit "$T/bm" basedrift
 out=$(run "$T/bm")
-contains "base drift alone: still REPLACE" "REPLACE   .claude/hooks/stop-checks.sh  (unmodified since seeded: identical to the file released in 7.0.0)" "$out"
+contains "base drift alone: still REPLACE" "REPLACE   .claude/hooks/stop-checks.sh  (identical to the file released in 7.0.0)" "$out"
 # whitespace-only and CRLF edits are edits
 seed "$T/ws" nestjs
 age "$T/ws" .claude/hooks/stop-checks.sh
@@ -535,6 +535,10 @@ check "generator: placeholder file is left out" 0 "$(cut -f3 "$GL" | grep -c 'ti
 out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" --check 2>&1); check "generator: --check passes on a fresh list" 0 $?
 sed 's|\t\.github/workflows/ci.yml$|\tgithub-ts/.github/workflows/ci.yml|' "$GL" >"$GL.bad" && mv "$GL.bad" "$GL"
 out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" --check 2>&1); check "generator: --check fails on a list with a tree-prefixed path" 1 $?
+bash "$G/skills/migrate/general/gen-pristine-hashes.sh" >/dev/null 2>&1
+printf 'deadbeef\t7.0.0\tdocs/in-no-manifest.md\n' >>"$GL"
+out=$(bash "$G/skills/migrate/general/gen-pristine-hashes.sh" --check 2>&1); check "generator: --check fails on a path no tagged manifest can produce" 1 $?
+contains "generator: the failure names the path" "docs/in-no-manifest.md" "$out"
 bash "$G/skills/migrate/general/gen-pristine-hashes.sh" >/dev/null 2>&1
 # the real list: every CI path it holds is a path tc-copy.sh writes
 mkdir -p "$T/cpaths/g" "$T/cpaths/a"

@@ -30,6 +30,12 @@ truth() {
   if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi
 }
 
+# cpu_cs: user plus system CPU time of every child this shell has waited for so far, in hundredths of a second.
+# Time bounds below use CPU time, not wall time: a busy machine stretches wall time but not the work a run does.
+cpu_cs() {
+  times | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub("s", "", a[2]); t += a[1] * 60 + a[2] } printf "%d", t * 100 }'
+}
+
 # run <dir> [args]: sets OUT and EC from running the report with the CI markers cleared.
 run() {
   local d=$1
@@ -149,7 +155,7 @@ cp "$FIXTURES/mongoose-client-promise-retry/old/src/integrations/database/mongoo
 b/"
 run "$T/nl"
 check 0 "$EC" "a newline in the path as the only candidate is counted, not scanned (exit 0)"
-has "candidate file(s) were not scanned" "$OUT" "newline path: the run says it did not scan the file"
+has "1 candidate file(s) were not scanned" "$OUT" "newline path: one file is counted once, not once per line"
 # Control: a big file that does not hold the check's text is not the match, so the run goes on.
 mkdir -p "$T/bigplain/src"
 head -c 1100000 /dev/zero | tr '\0' ' ' > "$T/bigplain/src/vendor.ts"
@@ -351,11 +357,11 @@ mkdir -p "$T/perf/src"
   while [[ $i -lt 6000 ]]; do printf 'const value%d = { a: 1, b: "text %d", c: [1, 2, 3] }; // note\n' "$i" "$i"; i=$((i + 1)); done
   printf 'export async function connectDB() { cached.conn = await cached.promise; }\n'
 } > "$T/perf/src/mongoose-client.ts"
-start=$SECONDS
+start=$(cpu_cs)
 run "$T/perf"
-took=$((SECONDS - start))
+took=$(($(cpu_cs) - start))
 flagged "a 300 KB client is still flagged"
-check 1 "$(truth test "$took" -le 5)" "a 300 KB client finishes within 5 seconds (took ${took}s)"
+check 1 "$(truth test "$took" -le 500)" "a 300 KB client takes at most 5 s of CPU (took ${took} cs)"
 
 # Comments and strings for the hook and the Argon2 checks.
 mkdir -p "$T/r1/.claude/hooks" "$T/r2/.claude/hooks" "$T/r3/.claude/hooks" "$T/r4/.claude/hooks" "$T/a1" "$T/a2" "$T/a3"
@@ -406,11 +412,11 @@ done
 mkdir -p "$T/many/src"
 i=0
 while [[ $i -lt 4000 ]]; do printf 'export const v%d = %d;\n' "$i" "$i" > "$T/many/src/f$i.ts"; i=$((i + 1)); done
-start=$SECONDS
+start=$(cpu_cs)
 run "$T/many"
-took=$((SECONDS - start))
+took=$(($(cpu_cs) - start))
 check 0 "$EC" "4000 small files: exit 0"
-check 1 "$(truth test "$took" -le 30)" "4000 small .ts files finish within 30 seconds (took ${took}s)"
+check 1 "$(truth test "$took" -le 1500)" "4000 small .ts files take at most 15 s of CPU (took ${took} cs)"
 
 # A single-line minified file is skipped, and the run says so.
 mkdir -p "$T/mini/src"
@@ -420,12 +426,39 @@ mkdir -p "$T/mini/src"
   while [[ $i -lt 20000 ]]; do printf 'var a%d={b:"x%d",c:[1,2,3]};' "$i" "$i"; i=$((i + 1)); done
   printf 'async function connectDB(){cached.conn=await cached.promise}\n'
 } > "$T/mini/src/mongoose-client.ts"
-start=$SECONDS
+start=$(cpu_cs)
 run "$T/mini"
-took=$((SECONDS - start))
+took=$(($(cpu_cs) - start))
+check 2 "$EC" "a capped file as the only candidate exits 2, like a file over 1 MB"
 has "mongoose-client.ts" "$OUT" "minified file: named in the skip notice"
-has "skipped" "$OUT" "minified file: the run says it skipped the file"
-check 1 "$(truth test "$took" -le 10)" "a 600 KB single-line file finishes within 10 seconds (took ${took}s)"
+has "every candidate file was skipped" "$OUT" "minified file: the run says nothing was scanned"
+check 1 "$(truth test "$took" -le 1000)" "a 600 KB single-line file takes at most 10 s of CPU (took ${took} cs)"
+
+# A capped hook is never read as clean: it is counted in the summary and on stderr, beside a scanned file.
+mkdir -p "$T/cap/.claude/hooks"
+{
+  printf 'var pad = "'
+  head -c 120000 /dev/zero | tr '\0' 'a'
+  printf '"; var o = input.tool_output;\n'
+} > "$T/cap/.claude/hooks/big-hook.js"
+printf 'var o = input.tool_output;\n' > "$T/cap/.claude/hooks/small-hook.js"
+run "$T/cap"
+check 1 "$EC" "a capped hook beside a scanned one: the scanned one still sets the exit status"
+has "1 candidate file(s) were not scanned" "$OUT" "a capped hook is counted on stderr"
+has "1 file(s) not scanned. This is a list" "$OUT" "a capped hook is counted in the summary line"
+lacks "big-hook.js:1  redaction" "$OUT" "a capped hook is not reported as a match"
+
+# 400 candidate files that name mongoose.connect( with a unique index declared: the index answer is computed once per run.
+mkdir -p "$T/uq/src"
+i=0
+while [[ $i -lt 400 ]]; do printf 'export const c%d = mongoose.connect(URL);\n' "$i" > "$T/uq/src/client$i.ts"; i=$((i + 1)); done
+printf 'const s = new Schema({ email: { type: String, unique: true } });\n' > "$T/uq/src/model.ts"
+start=$(cpu_cs)
+run "$T/uq"
+took=$(($(cpu_cs) - start))
+check 0 "$EC" "400 candidates with a unique index: exit 0"
+has "mongoose-init-nextjs  check" "$OUT" "400 candidates with a unique index: still flagged"
+check 1 "$(truth test "$took" -le 1500)" "400 candidates with a unique index take at most 15 s of CPU (took ${took} cs)"
 
 LIT="\$argon2id\$v=19\$m=65536,t=3,p=1\$c29tZXNhbHRzb21lc2E\$Rdo0OMHkQXBTOTBqNCn0mPvBGiLxvGBIbxKZ0nJ0Aqo"
 printf '// const DUMMY = argon2.hash(randomUUID());\nconst DUMMY_HASH = "%s";\n' "$LIT" > "$T/a1/auth.service.ts"

@@ -6,7 +6,7 @@
 # can be replaced and every other file is kept. Source: template.manifest and the files it names, read from every git tag vN.N.N.
 # A tag without a template.manifest (before 7.0.0) adds nothing: projects seeded by it get a .templatecentral-new file for every changed file.
 # Files that carry a __TC_ placeholder are left out; harness-refresh.sh never replaces them.
-# Run it after tagging a release and commit the result. --check exits 1 when the committed list is out of date.
+# Run it after each release tag exists (the tag carries the files to hash) and commit the result. --check exits 1 when the committed list is out of date.
 # Needs bash 3.2+, git, awk, sort, and shasum or sha256sum.
 set -u
 
@@ -31,7 +31,7 @@ SHARED=skills/scaffold/shared
 TREES="template template-ts template-py template-settings-ts template-settings-py template-late template-ci/github-ts template-ci/github-py template-ci/azure template-ci/azure-ts template-ci/azure-py"
 
 TMP=$(mktemp "${TMPDIR:-/tmp}/pristine.XXXXXX") || die "cannot create a temp file"
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP" "$TMP.out" "$TMP.dests"' EXIT
 
 for tag in $(git -C "$REPO" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | LC_ALL=C sort); do
   ver=${tag#v}
@@ -49,14 +49,23 @@ for tag in $(git -C "$REPO" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | LC_ALL=C sort);
   done >>"$TMP"
 done
 
+# Every path a covered tag's manifest can produce, for --check.
+awk -F "$TAB" '{ print $3 }' "$TMP" | LC_ALL=C sort -u >"$TMP.dests"
+
 # One line per hash and path, keeping the earliest version that shipped it.
 awk -F "$TAB" '!seen[$1 FS $3]++' "$TMP" | LC_ALL=C sort -t "$TAB" -k3,3 -k1,1 >"$TMP.out"
-trap 'rm -f "$TMP" "$TMP.out"' EXIT
 bad=$(awk -F "$TAB" '$3 ~ /^(template(-[a-z]+)?|template-ci\/.*|github-(ts|py)|azure(-ts|-py)?)\// { print $3 }' "$TMP.out" | head -n 3)
 if [ -n "$bad" ]; then die "a listed path still carries its tree name: $bad"; fi
 if [ ! -s "$TMP.out" ]; then die "no tagged release with a template.manifest found; fetch the tags first"; fi
 
 if [ "$CHECK" -eq 1 ]; then
+  if [ -f "$OUT" ]; then
+    stray=$(awk -F "$TAB" 'NR == FNR { d[$1] = 1; next } !($3 in d) { print $3 }' "$TMP.dests" "$OUT" | head -n 3)
+    if [ -n "$stray" ]; then
+      echo "pristine-hashes.txt lists a path no tagged manifest can produce: $stray" >&2
+      exit 1
+    fi
+  fi
   if cmp -s "$TMP.out" "$OUT"; then echo "pristine-hashes.txt is current"; exit 0; fi
   echo "pristine-hashes.txt is out of date; run gen-pristine-hashes.sh and commit the result" >&2
   exit 1
