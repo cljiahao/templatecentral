@@ -18,6 +18,7 @@ COLS = 7
 NO_PIN = ("sonar-rules",)
 REGEN = "python3 -I scripts/regen-sonar-parity-presets.py --help"
 SOURCE_EXTS = {"nextjs": ("ts", "tsx"), "vite-react": ("ts", "tsx"), "nestjs": ("ts",)}
+TOOLING_ANYWHERE = ("node_modules", ".next", ".turbo", ".git", ".venv", "venv", "__pycache__")
 TOOLING_DIRS = ("node_modules", "dist", "build", "out", "coverage", ".next", ".claude", ".turbo", ".git", ".venv", "venv",
                 "__pycache__")
 # Config references the seeded files use today: (import source, dotted tail) -> (snapshot or None, rule prefixes it may touch).
@@ -308,11 +309,13 @@ def is_test_glob(pat, py=False):
 
 
 def tooling_path(pat):
+    """Build or tooling paths a global ignore may hide. Folders that can also be source folders (dist, build, out, coverage,
+    .claude) count only when anchored at the project root: '**/out/**' also hides src/out/. Config files count at the root only."""
     if pat.startswith("!") or ".." in pat.split("/"):
         return False
     q = re.sub(r"^(\*\*/)+", "", pat)
-    # Config files count only at the project root: '**/*.config.ts' also fits src/config/app.config.ts.
-    return (q.split("/")[0] in TOOLING_DIRS or q == "next-env.d.ts"
+    anywhere = pat != q and q.split("/")[0] in TOOLING_ANYWHERE
+    return (anywhere or (pat == q and (pat.split("/")[0] in TOOLING_DIRS or pat == "next-env.d.ts"))
             or re.fullmatch(r"[\w.*-]*\.config(\.[\w-]+)?\.(m?[jt]s|cjs|cts)", pat) is not None)
 
 
@@ -422,7 +425,10 @@ class Eval:
             elif key == "rules":
                 rules = self.rules_obj(val)
             elif key == "languageOptions":
-                ta = self.parser_type_aware(val)
+                try:
+                    ta = self.parser_type_aware(val)
+                except Unresolved as exc:
+                    raise Unresolved("%s, in %s" % (exc, self.describe(node)))
         if ignores is not None and files is None and rules == {} and all(k in ("ignores", "name") for k, _ in node[1]):
             for pat in ignores:
                 if not tooling_path(pat):
@@ -436,30 +442,38 @@ class Eval:
                 self.blocks(val, out, sub_files, sub_ignores)
         out.append(Block(rules, sub_files, sub_ignores, ta))
 
+    @staticmethod
+    def describe(node):
+        for key, val in node[1]:
+            if key == "name" and val[0] == "str":
+                return "the block named %r" % val[1]
+        return "the block with keys %s" % ", ".join(k for k, _ in node[1] if k != "spread")
+
     def parser_type_aware(self, node):
-        """True when languageOptions.parserOptions turns type information on, False when it sets and disables it, else None."""
+        """True when languageOptions.parserOptions turns type information on, False when it sets and disables it, else None.
+        Duplicate keys follow JavaScript: the last one wins (a later parserOptions replaces the earlier object whole)."""
         node = self.deref(node)
         if node[0] != "object":
             raise Unresolved("languageOptions is not an object literal")
-        on = off = False
+        opts = None
         for key, val in node[1]:
             if key == "spread":
                 raise Unresolved("a spread in languageOptions is not read")
-            if key != "parserOptions":
-                continue
-            opts = self.deref(val)
-            if opts[0] != "object":
-                raise Unresolved("parserOptions is not an object literal")
-            for k, v in opts[1]:
-                if k == "spread":
-                    raise Unresolved("a spread in parserOptions is not read")
-                if k not in ("projectService", "project"):
-                    continue
-                if self.truthy(v, k):
-                    on = True
-                else:
-                    off = True
-        return True if on else (False if off else None)
+            if key == "parserOptions":
+                opts = self.deref(val)
+                if opts[0] != "object":
+                    raise Unresolved("parserOptions is not an object literal")
+        if opts is None:
+            return None
+        got = {}
+        for k, v in opts[1]:
+            if k == "spread":
+                raise Unresolved("a spread in parserOptions is not read")
+            if k in ("projectService", "project"):
+                got[k] = self.truthy(v, k)
+        if not got:
+            return None
+        return any(got.values())
 
     def truthy(self, node, what):
         node = self.deref(node)
@@ -573,71 +587,331 @@ def eslint_stack(name, path, rel, presets):
 
 # ---------------------------------------------------------------- ruff
 
-def toml_table(text, name):
-    m = re.search(r"^\[%s\][ \t]*(?:#[^\n]*)?\n(.*?)(?=^\[|\Z)" % re.escape(name), text, re.S | re.M)
-    return m.group(1) if m else None
+class Bad:
+    """A TOML value the scanner found but does not decode (multi-line string, unknown escape). Raises where it is read."""
+
+    def __init__(self, why):
+        self.why = why
 
 
-def toml_list(text, key):
-    m = re.search(r"^%s\s*=\s*\[(.*?)\]" % re.escape(key), text, re.S | re.M)
-    if not m:
-        return []
-    return re.findall(r'"([^"]*)"', re.sub(r"#[^\n]*", "", m.group(1)))
+class Inline(dict):
+    """An inline table value: { key = value }."""
 
 
-def toml_true(text, key):
-    return re.search(r"^%s\s*=\s*true\b" % re.escape(key), text, re.M) is not None
+ESCAPES = {"b": "\b", "t": "\t", "n": "\n", "f": "\f", "r": "\r", '"': '"', "\\": "\\"}
+BARE = re.compile(r"[A-Za-z0-9_-]+")
+NUMBER = re.compile(r"[+-]?(?:0x[0-9a-fA-F_]+|inf|nan|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)")
 
 
-def per_file_ignores(body):
-    pairs = []
-    pat = re.compile(r"""^[ \t]*(?:"([^"]+)"|'([^']+)')[ \t]*=[ \t]*\[(.*?)\]""", re.S | re.M)
-    rest = body
-    for m in pat.finditer(body):
-        pairs.append((m.group(1) or m.group(2), re.findall(r'"([^"]*)"', re.sub(r"#[^\n]*", "", m.group(3)))))
-        rest = rest.replace(m.group(0), "", 1)
-    if re.sub(r"#[^\n]*", "", rest).strip():
-        raise Unresolved("a per-file-ignores entry is not in the form \"pattern\" = [\"CODE\"]")
-    return pairs
+class TomlScan:
+    """Strict reader for the TOML subset pyproject.toml uses. Accepts tables, [[array tables]], dotted headers and keys, bare,
+    basic and literal keys, basic and literal strings (escapes b t n f r \\" \\\\ uXXXX UXXXXXXXX), integers, floats, booleans,
+    arrays over several lines, inline tables, comments. Raises Unresolved on a duplicate key, a table defined twice (also by a
+    dotted key), a bad key, an unknown value (dates, bare words) and a malformed line. Multi-line strings and unknown escapes
+    become Bad values: they fail only where the ruff reader needs the value."""
+
+    def __init__(self, text):
+        self.s = text
+        self.i = 0
+
+    def fail(self, msg):
+        raise Unresolved("pyproject.toml line %d: %s" % (self.s.count("\n", 0, self.i) + 1, msg))
+
+    def peek(self, n=1):
+        return self.s[self.i:self.i + n]
+
+    def blank(self):
+        while self.peek() in (" ", "\t"):
+            self.i += 1
+
+    def comment(self):
+        if self.peek() == "#":
+            while self.i < len(self.s) and self.s[self.i] != "\n":
+                self.i += 1
+
+    def eol(self):
+        self.blank()
+        self.comment()
+        if self.i < len(self.s):
+            if self.s[self.i] == "\r":
+                self.i += 1
+            if self.peek() != "\n":
+                self.fail("unexpected text after a value")
+            self.i += 1
+
+    def skip_all(self):
+        """Whitespace, newlines and comments between array elements (comments are read here, never inside a string)."""
+        while self.i < len(self.s):
+            c = self.s[self.i]
+            if c in " \t\r\n":
+                self.i += 1
+            elif c == "#":
+                self.comment()
+            else:
+                return
+
+    def string(self):
+        q = self.s[self.i]
+        if self.peek(3) == q * 3:
+            self.i += 3
+            while self.i < len(self.s):
+                if q == '"' and self.s[self.i] == "\\":
+                    self.i += 2
+                elif self.peek(3) == q * 3:
+                    self.i += 3
+                    while self.peek() == q:
+                        self.i += 1
+                    return Bad("multi-line strings are not read")
+                else:
+                    self.i += 1
+            self.fail("unterminated multi-line string")
+        self.i += 1
+        out, bad = [], None
+        while True:
+            if self.i >= len(self.s) or self.s[self.i] == "\n":
+                self.fail("unterminated string")
+            c = self.s[self.i]
+            if c == q:
+                self.i += 1
+                return Bad(bad) if bad else "".join(out)
+            if q == '"' and c == "\\":
+                e = self.s[self.i + 1:self.i + 2]
+                if e in ESCAPES:
+                    out.append(ESCAPES[e])
+                    self.i += 2
+                elif e in ("u", "U"):
+                    n = 4 if e == "u" else 8
+                    hexa = self.s[self.i + 2:self.i + 2 + n]
+                    if len(hexa) != n or not re.fullmatch(r"[0-9a-fA-F]+", hexa):
+                        self.fail("bad unicode escape")
+                    try:
+                        out.append(chr(int(hexa, 16)))
+                    except (ValueError, OverflowError):
+                        self.fail("bad unicode escape")
+                    self.i += 2 + n
+                else:
+                    bad = bad or "escape \\%s is not decoded" % e
+                    self.i += 2
+            else:
+                out.append(c)
+                self.i += 1
+
+    def key_path(self):
+        parts = []
+        while True:
+            self.blank()
+            c = self.peek()
+            if c in ('"', "'"):
+                k = self.string()
+                if isinstance(k, Bad):
+                    self.fail("a quoted key with %s" % k.why)
+            else:
+                m = BARE.match(self.s, self.i)
+                if not m:
+                    self.fail("expected a key")
+                k = m.group()
+                self.i = m.end()
+            parts.append(k)
+            self.blank()
+            if self.peek() != ".":
+                return parts
+            self.i += 1
+
+    def value(self):
+        self.blank()
+        c = self.peek()
+        if c in ('"', "'"):
+            return self.string()
+        if c == "[":
+            self.i += 1
+            out = []
+            while True:
+                self.skip_all()
+                if self.peek() == "]":
+                    self.i += 1
+                    return out
+                out.append(self.value())
+                self.skip_all()
+                if self.peek() == ",":
+                    self.i += 1
+                elif self.peek() != "]":
+                    self.fail("expected , or ] in an array")
+        if c == "{":
+            self.i += 1
+            tbl = Inline()
+            self.blank()
+            if self.peek() == "}":
+                self.i += 1
+                return tbl
+            while True:
+                path = self.key_path()
+                self.blank()
+                if self.peek() != "=":
+                    self.fail("expected = in an inline table")
+                self.i += 1
+                put(tbl, path, self.value(), self)
+                self.blank()
+                if self.peek() == ",":
+                    self.i += 1
+                elif self.peek() == "}":
+                    self.i += 1
+                    return tbl
+                else:
+                    self.fail("expected , or } in an inline table")
+        for word, val in (("true", True), ("false", False)):
+            if self.peek(len(word)) == word and not re.match(r"[\w.-]", self.s[self.i + len(word):self.i + len(word) + 1] or " "):
+                self.i += len(word)
+                return val
+        m = NUMBER.match(self.s, self.i)
+        if m and not re.match(r"[\w.:-]", self.s[m.end():m.end() + 1] or " "):
+            self.i = m.end()
+            return m.group()
+        self.fail("unsupported value (dates, bare words and the like are not read)")
+        return None
+
+
+def put(tbl, path, val, sc, dotted=None):
+    for k in path[:-1]:
+        nxt = tbl.get(k)
+        if nxt is None:
+            nxt = tbl[k] = {}
+            if dotted is not None:
+                dotted.add(id(nxt))
+        elif isinstance(nxt, list) and nxt and isinstance(nxt[-1], dict):
+            nxt = nxt[-1]
+        elif not isinstance(nxt, dict) or isinstance(nxt, Inline):
+            sc.fail("key %s is not a table" % k)
+        tbl = nxt
+    if path[-1] in tbl:
+        sc.fail("duplicate key %s" % ".".join(path))
+    tbl[path[-1]] = val
+    return tbl
+
+
+def toml_parse(text):
+    sc = TomlScan(text)
+    root = {}
+    cur = root
+    explicit, dotted = set(), set()
+    while sc.i < len(sc.s):
+        sc.blank()
+        c = sc.peek()
+        if c in ("\n", "\r", "#", ""):
+            sc.eol()
+            continue
+        if c == "[":
+            array = sc.peek(2) == "[["
+            sc.i += 2 if array else 1
+            path = sc.key_path()
+            sc.blank()
+            if sc.peek(2 if array else 1) != ("]]" if array else "]"):
+                sc.fail("unterminated table header")
+            sc.i += 2 if array else 1
+            sc.eol()
+            tbl = root
+            for k in path[:-1]:
+                nxt = tbl.setdefault(k, {})
+                if isinstance(nxt, list) and nxt and isinstance(nxt[-1], dict):
+                    nxt = nxt[-1]
+                if not isinstance(nxt, dict) or isinstance(nxt, Inline):
+                    sc.fail("table %s clashes with a value" % ".".join(path))
+                tbl = nxt
+            last = path[-1]
+            if array:
+                lst = tbl.setdefault(last, [])
+                if not isinstance(lst, list):
+                    sc.fail("table %s clashes with a value" % ".".join(path))
+                cur = {}
+                lst.append(cur)
+            else:
+                existing = tbl.get(last)
+                if existing is not None and (id(existing) in dotted or id(existing) in explicit
+                                             or not isinstance(existing, dict) or isinstance(existing, Inline)):
+                    sc.fail("table [%s] is defined twice (a dotted key, an inline table or a repeated header)" % ".".join(path))
+                cur = tbl[last] = existing if existing is not None else {}
+                explicit.add(id(cur))
+            continue
+        path = sc.key_path()
+        sc.blank()
+        if sc.peek() != "=":
+            sc.fail("expected = after a key")
+        sc.i += 1
+        put(cur, path, sc.value(), sc, dotted)
+        sc.eol()
+    return root
+
+
+RUFF_LEGACY = ("select", "ignore", "extend-select", "extend-ignore", "per-file-ignores", "extend-per-file-ignores")
+
+
+def ruff_walk(node, path):
+    """Raise on a value under [tool.ruff] the scanner could not decode."""
+    if isinstance(node, Bad):
+        raise Unresolved("%s: %s" % (path, node.why))
+    if isinstance(node, dict):
+        for k, v in node.items():
+            ruff_walk(v, path + "." + k)
+    elif isinstance(node, list):
+        for v in node:
+            ruff_walk(v, path)
+
+
+def str_items(val, what):
+    if not isinstance(val, list) or not all(isinstance(x, str) for x in val):
+        raise Unresolved("%s is not a list of strings" % what)
+    return val
+
+
+def flag(lint, top, key):
+    """lint.<key> overrides the deprecated top-level <key>; the value must be a boolean literal."""
+    for body in (lint, top):
+        if key in body:
+            if not isinstance(body[key], bool):
+                raise Unresolved("%s is not a boolean literal" % key)
+            return body[key]
+    return False
 
 
 def ruff_state(path):
     with open(path, encoding="utf-8") as fh:
-        text = fh.read()
+        doc = toml_parse(fh.read())
     for fn in ("ruff.toml", ".ruff.toml"):
         if os.path.exists(os.path.join(os.path.dirname(path), fn)):
             raise Unresolved("%s beside pyproject.toml takes precedence and is not read" % fn)
-    lint = toml_table(text, "tool.ruff.lint")
-    if lint is None:
+    tool = doc.get("tool")
+    top = tool.get("ruff") if isinstance(tool, dict) else None
+    if top is not None and not isinstance(top, dict):
+        raise Unresolved("[tool.ruff] is not a table")
+    lint = (top or {}).get("lint")
+    if not isinstance(lint, dict):
         raise Unresolved("no [tool.ruff.lint] table")
-    top = toml_table(text, "tool.ruff") or ""
-    if re.search(r"^extend\s*=", top, re.M):
+    if any(isinstance(t, Inline) for t in (tool, top, lint)):
+        raise Unresolved("an inline table where [tool.ruff] or [tool.ruff.lint] is expected is not read")
+    ruff_walk(top, "tool.ruff")
+    if "extend" in top:
         raise Unresolved("extend in [tool.ruff] pulls in a config that is not read")
-    for where, body in (("[tool.ruff]", top), ("[tool.ruff.lint]", lint)):
-        m = re.search(r"^[ \t]*([A-Za-z0-9_-]+)\.[^=\n#]*=", body, re.M)
-        if m:
-            raise Unresolved("dotted key %s... in %s is not read; use a table" % (m.group(1), where))
-    for key in ("select", "ignore", "extend-select", "extend-ignore", "per-file-ignores", "extend-per-file-ignores"):
-        if re.search(r"^%s\s*=" % key, top, re.M):
+    for key in RUFF_LEGACY:
+        if key in top:
             raise Unresolved("legacy top-level %s in [tool.ruff]; use [tool.ruff.lint]" % key)
     for key in ("per-file-ignores", "extend-per-file-ignores"):
-        if re.search(r"^%s\s*=" % key, lint, re.M):
+        if isinstance(lint.get(key), Inline):
             raise Unresolved("inline %s is not read; use a [tool.ruff.lint.%s] table" % (key, key))
     for body in (top, lint):
         for key in ("exclude", "extend-exclude"):
-            if re.search(r"^%s\s*=" % key, body, re.M):
+            if key in body:
                 raise Unresolved("%s is not read" % key)
     st = types.SimpleNamespace()
-    st.select = toml_list(lint, "select") + toml_list(lint, "extend-select")
-    st.ignore = toml_list(lint, "ignore") + toml_list(lint, "extend-ignore")
-    st.preview = toml_true(lint, "preview") or toml_true(top, "preview")
-    st.explicit_preview = toml_true(lint, "explicit-preview-rules") or toml_true(top, "explicit-preview-rules")
+    st.select = str_items(lint.get("select", []), "select") + str_items(lint.get("extend-select", []), "extend-select")
+    st.ignore = str_items(lint.get("ignore", []), "ignore") + str_items(lint.get("extend-ignore", []), "extend-ignore")
+    st.preview = flag(lint, top, "preview")
+    st.explicit_preview = flag(lint, top, "explicit-preview-rules")
     st.pfi = []
-    for name in ("tool.ruff.lint.per-file-ignores", "tool.ruff.lint.extend-per-file-ignores",
-                 "tool.ruff.per-file-ignores", "tool.ruff.extend-per-file-ignores"):
-        body = toml_table(text, name)
-        if body is not None:
-            st.pfi.extend(per_file_ignores(body))
+    for key in ("per-file-ignores", "extend-per-file-ignores"):
+        tbl = lint.get(key, {})
+        if not isinstance(tbl, dict):
+            raise Unresolved("%s is not a table" % key)
+        for pat, codes in tbl.items():
+            st.pfi.append((pat, str_items(codes, "per-file-ignores entry %r" % pat)))
     if not st.select:
         raise Unresolved("no select list (ruff defaults are not assumed)")
     return st
@@ -650,16 +924,18 @@ def split_code(code):
 
 def selector_matches(sel, code, linters):
     """ruff selector semantics: the longest linter prefix picks the linter; a selector without digits takes the whole linter
-    ('S' is flake8-bandit only, never 'SIM'), digits match by prefix inside that linter. 'PL' is the group of PLC/PLE/PLR/PLW."""
+    ('S' is flake8-bandit only, never 'SIM'), digits match by prefix inside that linter. 'PL' is the one documented group (PLC/PLE/PLR/PLW); any other
+    prefix that is not itself a linter ('PG', 'R') is rejected."""
     if sel == "ALL":
         return True
     parts = split_code(sel)
-    if parts is None or not (parts[0] in linters or (not parts[1] and any(l.startswith(parts[0]) for l in linters))):
+    group = parts is not None and parts == ("PL", "") and any(l.startswith("PL") for l in linters)
+    if parts is None or not (parts[0] in linters or group):
         raise Unresolved("ruff selector %r is not a code or linter prefix in the ruff-rules snapshot" % sel)
     have = split_code(code)
     if parts[0] in linters:
         return have[0] == parts[0] and have[1].startswith(parts[1])
-    return have[0].startswith(parts[0])
+    return have[0].startswith("PL")
 
 
 def ruff_linters(rules):
@@ -791,6 +1067,7 @@ def main():
             stacks[st] = eslint_stack(st, os.path.join(scaffold, st, "template", "eslint.config.mjs"), rel, presets)
         except (Unresolved, OSError) as exc:
             stack_fail[st] = str(exc)
+            errors.append("cannot resolve %s eslint config statically: %s" % (st, exc))
     ruff_rules = load_snapshot(presets, "ruff-rules").rows
     linters = ruff_linters(ruff_rules)
     try:
@@ -838,7 +1115,6 @@ def main():
             need = [st for st in ("nextjs", "vite-react", "nestjs") if not rtc or st in stack_fail or stacks[st].type_aware]
             for st in need:
                 if st in stack_fail:
-                    errors.append("%s: cannot resolve %s eslint config statically: %s" % (row["where"], st, stack_fail[st]))
                     continue
                 try:
                     lvl = stacks[st].level(local)

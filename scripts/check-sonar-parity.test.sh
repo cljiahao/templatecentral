@@ -329,7 +329,7 @@ check 1 "$EC" "a per-file-ignores entry outside test paths that disables a mappe
 has "per-file-ignores 'app/**/*.py' disables ruff C901 outside test paths" "$OUT" "per-file-ignores message"
 
 fresh_root ruff_pfi_test
-edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\"test/**/*.py\" = [\"C901\"]\n', 1)"
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\"test/unit/**/*.py\" = [\"C901\"]\n', 1)"
 run "$T/control.tsv"
 check 0 "$EC" "a per-file-ignores entry for test paths only is fine"
 
@@ -355,7 +355,7 @@ check 1 "$EC" "a code absent from the ruff snapshot fails"
 has "ruff code ZZ999 is not in the ruff-rules snapshot" "$OUT" "unknown ruff code message"
 
 fresh_root ruff_inline_pfi
-edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nper-file-ignores = {\"app/*.py\" = [\"C901\"]}\n', 1)"
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nper-file-ignores = {\"app/*.py\" = [\"C901\"]}\n', 1).replace('[tool.ruff.lint.per-file-ignores]', '[tool.ruff.lint.other]')"
 run "$T/control.tsv"
 check 1 "$EC" "inline per-file-ignores fails closed"
 has "inline per-file-ignores is not read" "$OUT" "inline form message"
@@ -446,18 +446,191 @@ check 1 "$EC" "a per-file-ignores entry for S outside tests fails"
 has "per-file-ignores 'app/**' disables ruff S105 outside test paths" "$OUT" "S ignore blames the bandit row"
 lacks "disables ruff SIM102" "$OUT" "S ignore does not blame SIM rows"
 
+# --- round 3: pyproject.toml is read by one strict scanner
+fresh_root lit_ignore
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nignore = [\'SIM\']\n', 1)"
+{ control; row py python:CTRLP3 "code smell" covered SIM102 ""; } > "$T/sim.tsv"
+run "$T/sim.tsv"
+check 1 "$EC" "a literal-string ignore entry is read"
+has "ruff SIM102 is not enabled" "$OUT" "literal ignore names the code"
+
+fresh_root lit_select
+edit "$PYP" "s.replace('\"SIM\", ', '\'SIM\', ')"
+run "$T/sim.tsv"
+check 0 "$EC" "a literal-string select entry is read"
+
+fresh_root lit_pfi
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\'app/**\' = [\'S\']\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a literal-string per-file-ignores key and value are read"
+has "per-file-ignores 'app/**' disables ruff S105 outside test paths" "$OUT" "literal pfi message"
+
+fresh_root lit_pfi_test
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\'test/**\' = [\'S\']\n', 1)"
+run "$T/control.tsv"
+check 0 "$EC" "a literal-string per-file-ignores entry for tests passes"
+
+fresh_root cmt_bracket
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nignore = [\"E\", # see [x]\n  \"F841\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a bracket inside a comment does not truncate the list"
+has "ruff F841 is not enabled" "$OUT" "entry after a commented bracket is read"
+
+fresh_root cmt_bracket_ok
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nignore = [\"E\", # see [x]\n  \"E501\"]\n', 1)"
+run "$T/control.tsv"
+check 0 "$EC" "the same list without F841 passes"
+
+fresh_root cmt_bracket_pfi
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\"app/**/*.py\" = [\"E\", # see [x]\n  \"C901\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a bracket inside a comment does not truncate a per-file-ignores list"
+has "per-file-ignores 'app/**/*.py' disables ruff C901 outside test paths" "$OUT" "pfi entry after a commented bracket is read"
+
+fresh_root hash_in_string
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nignore = [\"F8#41\", \"F841\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a hash inside a string is not a comment"
+
+fresh_root prev_override
+{ control; row py python:CTRLP3 "code smell" partial S405 "preview-only"; } > "$T/preview.tsv"
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\npreview = true\n', 1).replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\npreview = false\n', 1)"
+run "$T/preview.tsv"
+check 1 "$EC" "lint.preview = false overrides top-level preview = true"
+has "ruff S405 is not enabled in fastapi (preview-only rule and preview is not enabled)" "$OUT" "override message"
+
+fresh_root prev_top_only
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\npreview = true\n', 1)"
+run "$T/preview.tsv"
+check 0 "$EC" "top-level preview = true alone enables preview"
+
+fresh_root prev_lint_over_top
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\npreview = false\n', 1).replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\npreview = true\n', 1)"
+run "$T/preview.tsv"
+check 0 "$EC" "lint.preview = true overrides top-level preview = false"
+
+fresh_root prev_nonbool
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\npreview = \"yes\"\n', 1)"
+run "$T/preview.tsv"
+check 1 "$EC" "a non-boolean preview fails closed"
+has "preview is not a boolean literal" "$OUT" "preview literal message"
+
+fresh_root toml_dupkey
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nline-length = 99\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a duplicate key fails closed"
+has "duplicate key line-length" "$OUT" "duplicate key message"
+
+fresh_root toml_multiline
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nextend = \"\"\"x\"\"\"\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a multi-line string under [tool.ruff] fails closed"
+has "multi-line strings are not read" "$OUT" "multi-line message"
+
+fresh_root toml_escape
+edit "$PYP" "s.replace('target-version = \"py314\"', 'target-version = \"py3\\\\q\"', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "an undecoded escape under [tool.ruff] fails closed"
+has "is not decoded" "$OUT" "escape message"
+
+fresh_root toml_inline_lint
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nlint = { select = [\"F\"] }\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "an inline lint table followed by a lint header fails closed"
+has "table [tool.ruff.lint] is defined twice" "$OUT" "inline lint message"
+
+fresh_root toml_dotted_ok
+edit "$PYP" "s + '\n[tool.ruff.lint.isort]\nsplit.deep = [\"a\"]\nknown-first-party = [\"app\"]\n'"
+run "$T/control.tsv"
+check 0 "$EC" "dotted keys and arrays in an unrelated table parse"
+
+# --- round 3: only root-anchored tooling folders count as tooling
+fresh_root tool_dist_any
+inject nextjs "  { ignores: ['**/dist/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of dist at any depth fails closed"
+has "global ignores entry '**/dist/**' is not a build or tooling path" "$OUT" "any-depth dist message"
+
+fresh_root tool_build_any
+inject nextjs "  { ignores: ['**/build/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of build at any depth fails closed"
+
+fresh_root tool_out_any
+inject nextjs "  { ignores: ['**/out/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of out at any depth fails closed"
+
+fresh_root tool_src_out
+inject nextjs "  { ignores: ['src/out/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of out under src fails closed"
+
+fresh_root tool_dist_root
+inject nextjs "  { ignores: ['dist/**'] },"
+run "$T/control.tsv"
+check 0 "$EC" "a global ignore of root dist passes"
+
+fresh_root tool_node_modules_any
+inject nextjs "  { ignores: ['**/node_modules/**'] },"
+run "$T/control.tsv"
+check 0 "$EC" "a global ignore of node_modules at any depth passes"
+
+# --- round 3: ruff selectors accept exact linters and the PL group only
+fresh_root sel_pg
+edit "$PYP" "s.replace('\"ERA\", ', '\"ERA\", \"PG\", ')"
+run "$T/control.tsv"
+check 1 "$EC" "PG is a prefix of PGH but not a selector"
+has "ruff selector 'PG' is not a code or linter prefix" "$OUT" "PG message"
+
+fresh_root sel_r
+edit "$PYP" "s.replace('\"ERA\", ', '\"ERA\", \"R\", ')"
+run "$T/control.tsv"
+check 1 "$EC" "R is a prefix of RET and RUF but not a selector"
+has "ruff selector 'R' is not a code or linter prefix" "$OUT" "R message"
+
+# --- round 3: duplicate keys follow last-wins
+fresh_root ta_dup_service
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', 'projectService: true,\n        projectService: false,')"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "a later projectService: false wins"
+
+fresh_root ta_dup_service_ok
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', 'projectService: false,\n        projectService: true,')"
+run "$T/control.tsv"
+has "type-aware stacks: nestjs" "$OUT" "a later projectService: true wins"
+
+fresh_root ta_dup_opts
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('        tsconfigRootDir: import.meta.dirname,\n      },\n', '        tsconfigRootDir: import.meta.dirname,\n      },\n      parserOptions: { tsconfigRootDir: \'x\' },\n', 1)"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "a later parserOptions replaces the earlier object"
+
+fresh_root ta_dup_opts_ok
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('      sourceType: \'module\',\n', '      sourceType: \'module\',\n      parserOptions: { tsconfigRootDir: \'x\' },\n', 1)"
+run "$T/control.tsv"
+has "type-aware stacks: nestjs" "$OUT" "an earlier parserOptions is replaced by the later one"
+
+# --- round 3: a spread in languageOptions is one problem naming the block
+fresh_root ta_lo_spread
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('      sourceType: \'module\',\n', '      ...lo,\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a spread inside languageOptions fails closed"
+has "a spread in languageOptions is not read, in the block with keys languageOptions" "$OUT" "languageOptions spread names the block"
+N=$(printf '%s\n' "$OUT" | grep -c "cannot resolve nestjs eslint config")
+check 1 "$N" "the unresolved stack is reported once, not per row"
+
 # --- ruff forms ruff reads that this check does not: each must raise
 fresh_root ruff_dotted_top
 edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nlint.ignore = [\"F841\"]\n', 1)"
 run "$T/control.tsv"
 check 1 "$EC" "a dotted lint.* key under [tool.ruff] fails closed"
-has "dotted key lint... in [tool.ruff] is not read" "$OUT" "dotted top key message"
+has "table [tool.ruff.lint] is defined twice" "$OUT" "dotted top key message"
 
 fresh_root ruff_dotted_lint
 edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nper-file-ignores.\"app/*.py\" = [\"C901\"]\n', 1)"
 run "$T/control.tsv"
 check 1 "$EC" "a dotted key under [tool.ruff.lint] fails closed"
-has "dotted key per-file-ignores... in [tool.ruff.lint] is not read" "$OUT" "dotted lint key message"
+has "table [tool.ruff.lint.per-file-ignores] is defined twice" "$OUT" "dotted lint key message"
 
 fresh_root ruff_extend
 edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nextend = \"../base.toml\"\n', 1)"
