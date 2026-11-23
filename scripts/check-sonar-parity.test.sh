@@ -20,6 +20,10 @@ has() { # has <needle> <haystack> <description>
   if [[ "$2" == *"$1"* ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] not in [$2]"; fi
 }
 
+lacks() { # lacks <needle> <haystack> <description>
+  if [[ "$2" != *"$1"* ]]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: $3 — [$1] unexpectedly in [$2]"; fi
+}
+
 T=$(mktemp -d "${TMPDIR:-/tmp}/sp.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT
 
@@ -355,6 +359,216 @@ edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nper-file-ignores
 run "$T/control.tsv"
 check 1 "$EC" "inline per-file-ignores fails closed"
 has "inline per-file-ignores is not read" "$OUT" "inline form message"
+
+# --- object-literal order: a 'rules' key replaces the rules of an earlier block-level spread, a later spread replaces it back
+fresh_root obj_rules_replace
+edit "$NEXT" "s.replace('      ...sonarjs.configs.recommended.rules,\n', '', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a rules key without the preset's rules spread drops the preset rules"
+has "sonarjs/no-identical-functions is not set in nextjs" "$OUT" "preset-only rule is gone after the rules key replaced it"
+
+fresh_root obj_rules_spread_after
+inject nextjs "  { rules: { 'no-warning-comments': 'off' }, ...sonarjs.configs.recommended },"
+run "$T/control.tsv"
+check 0 "$EC" "a later spread replaces an earlier rules key, so the block no longer turns the rule off"
+
+# --- type information: parserOptions is read as an object and must cover all source files
+fresh_root ta_false
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', 'projectService: false,')"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "projectService false is not type-aware"
+
+fresh_root ta_test_only
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('    languageOptions: {', \"    files: ['**/*.test.ts'],\n    languageOptions: {\", 1)"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "projectService in a test-only block is not type-aware"
+
+fresh_root ta_settings_project
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', 'projectService: false,')"
+inject nestjs "  { settings: { project: 'x' } },"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "a project key under settings is not type-aware"
+
+fresh_root ta_project_empty
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', \"project: '',\")"
+run "$T/control.tsv"
+has "type-aware stacks: none" "$OUT" "an empty project string is not type-aware"
+
+fresh_root ta_project_set
+inject vite-react "  { languageOptions: { parserOptions: { project: ['./tsconfig.json'] } } },"
+run "$T/control.tsv"
+has "type-aware stacks: vite-react, nestjs" "$OUT" "a project array over all files is type-aware"
+
+fresh_root ta_spread
+edit "$SC/nestjs/template/eslint.config.mjs" "s.replace('projectService: true,', '...opts,')"
+run "$T/control.tsv"
+check 1 "$EC" "a spread inside parserOptions fails closed"
+has "a spread in parserOptions is not read" "$OUT" "parserOptions spread message"
+
+# --- ruff selectors: the longest linter prefix picks the linter, so 'S' is bandit only and never SIM
+fresh_root ruff_sel_sim
+edit "$PYP" "s.replace('\"SIM\", ', '')"
+{ control; row py python:CTRLP3 "code smell" covered SIM102 ""; } > "$T/sim.tsv"
+run "$T/sim.tsv"
+check 1 "$EC" "dropping SIM from select fails although S is still selected"
+has "ruff SIM102 is not enabled in fastapi (not selected)" "$OUT" "S does not select SIM"
+
+fresh_root ruff_sel_era
+edit "$PYP" "s.replace('\"ERA\", ', '\"E\", ')"
+{ control; row py python:CTRLP4 "code smell" covered ERA001 ""; } > "$T/era.tsv"
+run "$T/era.tsv"
+check 1 "$EC" "E in select does not enable ERA001"
+has "ruff ERA001 is not enabled in fastapi (not selected)" "$OUT" "E does not select ERA"
+
+fresh_root ruff_sel_arg
+edit "$PYP" "s.replace('\"ARG\"', '\"A\"')"
+{ control; row py python:CTRLP5 "code smell" covered ARG001 ""; } > "$T/arg.tsv"
+run "$T/arg.tsv"
+check 1 "$EC" "A in select does not enable ARG001"
+has "ruff ARG001 is not enabled in fastapi (not selected)" "$OUT" "A does not select ARG"
+
+fresh_root ruff_sel_group
+edit "$PYP" "s.replace('\"PLR0913\"', '\"PL\"')"
+run "$T/control.tsv"
+check 0 "$EC" "PL selects the whole Pylint group"
+
+fresh_root ruff_sel_unknown
+edit "$PYP" "s.replace('\"ERA\", ', '\"ERA\", \"ZZ\", ')"
+run "$T/control.tsv"
+check 1 "$EC" "a selector that names no linter fails closed"
+has "ruff selector 'ZZ' is not a code or linter prefix" "$OUT" "unknown selector message"
+
+fresh_root ruff_pfi_bandit
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\"app/**\" = [\"S\"]\n', 1)"
+{ control; row py python:CTRLP3 "code smell" covered SIM102 ""; } > "$T/sim.tsv"
+run "$T/sim.tsv"
+check 1 "$EC" "a per-file-ignores entry for S outside tests fails"
+has "per-file-ignores 'app/**' disables ruff S105 outside test paths" "$OUT" "S ignore blames the bandit row"
+lacks "disables ruff SIM102" "$OUT" "S ignore does not blame SIM rows"
+
+# --- ruff forms ruff reads that this check does not: each must raise
+fresh_root ruff_dotted_top
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nlint.ignore = [\"F841\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a dotted lint.* key under [tool.ruff] fails closed"
+has "dotted key lint... in [tool.ruff] is not read" "$OUT" "dotted top key message"
+
+fresh_root ruff_dotted_lint
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nper-file-ignores.\"app/*.py\" = [\"C901\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a dotted key under [tool.ruff.lint] fails closed"
+has "dotted key per-file-ignores... in [tool.ruff.lint] is not read" "$OUT" "dotted lint key message"
+
+fresh_root ruff_extend
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nextend = \"../base.toml\"\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "ruff extend fails closed"
+has "extend in [tool.ruff] pulls in a config that is not read" "$OUT" "extend message"
+
+fresh_root ruff_toml_beside
+: > "$R/$SC/fastapi/template/ruff.toml"
+run "$T/control.tsv"
+check 1 "$EC" "a ruff.toml beside pyproject.toml fails closed"
+has "ruff.toml beside pyproject.toml takes precedence" "$OUT" "ruff.toml message"
+
+fresh_root dot_ruff_toml_beside
+: > "$R/$SC/fastapi/template/.ruff.toml"
+run "$T/control.tsv"
+check 1 "$EC" "a .ruff.toml beside pyproject.toml fails closed"
+has ".ruff.toml beside pyproject.toml takes precedence" "$OUT" ".ruff.toml message"
+
+fresh_root ruff_explicit_preview
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\npreview = true\nexplicit-preview-rules = true\n', 1)"
+{ control; row py python:CTRLP3 "code smell" partial S405 "preview-only"; } > "$T/preview.tsv"
+run "$T/preview.tsv"
+check 1 "$EC" "explicit-preview-rules: a bare S does not enable preview rule S405"
+has "explicit-preview-rules needs its exact code in select" "$OUT" "explicit preview message"
+edit "$PYP" "s.replace('\"S\", ', '\"S\", \"S405\", ', 1)"
+run "$T/preview.tsv"
+check 0 "$EC" "explicit-preview-rules: the exact code enables it"
+
+# --- legacy and unread ruff settings raise
+fresh_root ruff_legacy_select
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nselect = [\"E\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a legacy top-level select fails closed"
+has "legacy top-level select in [tool.ruff]" "$OUT" "legacy select message"
+
+fresh_root ruff_legacy_ignore
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nignore = [\"F841\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a legacy top-level ignore fails closed"
+has "legacy top-level ignore in [tool.ruff]" "$OUT" "legacy ignore message"
+
+fresh_root ruff_exclude
+edit "$PYP" "s.replace('line-length = 88\n', 'line-length = 88\nexclude = [\"app\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "ruff exclude fails closed"
+has "exclude is not read" "$OUT" "exclude message"
+
+fresh_root ruff_extend_exclude
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nextend-exclude = [\"app\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "ruff extend-exclude under lint fails closed"
+has "extend-exclude is not read" "$OUT" "extend-exclude message"
+
+fresh_root ruff_inline_extend_pfi
+edit "$PYP" "s.replace('[tool.ruff.lint]\n', '[tool.ruff.lint]\nextend-per-file-ignores = {\"app/*.py\" = [\"C901\"]}\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "inline extend-per-file-ignores fails closed"
+has "inline extend-per-file-ignores is not read" "$OUT" "inline extend form message"
+
+# --- config references that are not read rule by rule
+fresh_root touches_prefix
+{ control; row ts typescript:CTRLV "code smell" covered react-hooks/rules-of-hooks ""; } > "$T/touch.tsv"
+run "$T/touch.tsv"
+check 1 "$EC" "a mapped rule under a prefix a config reference touches fails closed"
+has "is under react-hooks/, set by a config reference that is not read rule by rule" "$OUT" "touches message"
+
+# --- paths with '..' segments are never test or tooling paths
+fresh_root dotdot_ignores
+inject nextjs "  { ignores: ['dist/../src/**'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore that climbs out of a tooling folder fails closed"
+has "global ignores entry 'dist/../src/**' is not a build or tooling path" "$OUT" "dotdot ignore message"
+
+fresh_root dotdot_files
+inject nextjs "  { files: ['test/../src/**/*.ts'], rules: { 'no-warning-comments': 'off' } },"
+run "$T/control.tsv"
+check 1 "$EC" "a files glob that climbs out of a test folder is not a test block"
+has "cannot prove it covers all source files or only tests" "$OUT" "dotdot files message"
+
+fresh_root dotdot_pfi
+edit "$PYP" "s.replace('[tool.ruff.lint.per-file-ignores]\n', '[tool.ruff.lint.per-file-ignores]\n\"test/../src/**/*.py\" = [\"C901\"]\n', 1)"
+run "$T/control.tsv"
+check 1 "$EC" "a per-file-ignores key that climbs out of a test folder is not a test path"
+has "per-file-ignores 'test/../src/**/*.py' disables ruff C901 outside test paths" "$OUT" "dotdot pfi message"
+
+# --- config-file ignores count as tooling only at the project root
+fresh_root config_any_depth
+inject nextjs "  { ignores: ['**/*.config.ts'] },"
+run "$T/control.tsv"
+check 1 "$EC" "a global ignore of config files at any depth fails closed"
+has "global ignores entry '**/*.config.ts' is not a build or tooling path" "$OUT" "any-depth config ignore message"
+
+fresh_root config_root
+inject nextjs "  { ignores: ['*.config.ts'] },"
+run "$T/control.tsv"
+check 0 "$EC" "a global ignore of root config files is fine"
+
+# --- a later block over all source files hides an earlier partial block
+fresh_root partial_then_all
+inject nextjs "  { files: ['src/**/*.ts'], rules: { 'no-warning-comments': 'off' } },
+  { rules: { 'no-warning-comments': 'error' } },"
+run "$T/control.tsv"
+check 0 "$EC" "a partial off block followed by an all-files block that enables the rule passes"
+
+fresh_root all_then_partial
+inject nextjs "  { rules: { 'no-warning-comments': 'error' } },
+  { files: ['src/**/*.ts'], rules: { 'no-warning-comments': 'off' } },"
+run "$T/control.tsv"
+check 1 "$EC" "an all-files block followed by a partial off block still fails closed"
+has "cannot prove it covers all source files or only tests" "$OUT" "partial later block is unresolved"
 
 # --- preset pins: a snapshot must match the pin in versions.txt
 fresh_root pin_mismatch

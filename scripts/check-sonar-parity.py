@@ -9,6 +9,7 @@ reference that is not a known preset, and a rule that needs type information in 
 import os
 import re
 import sys
+import types
 
 LANGS = ("ts", "py")
 STATUSES = ("covered", "partial", "not-covered")
@@ -296,6 +297,8 @@ def expand_braces(pat):
 
 def is_test_glob(pat, py=False):
     segs = pat.split("/")
+    if ".." in segs:
+        return False
     if any(s in ("test", "tests", "__tests__") for s in segs[:-1]):
         return True
     last = segs[-1]
@@ -305,11 +308,12 @@ def is_test_glob(pat, py=False):
 
 
 def tooling_path(pat):
-    q = re.sub(r"^(\*\*/)+", "", pat)
-    if q.startswith("!"):
+    if pat.startswith("!") or ".." in pat.split("/"):
         return False
+    q = re.sub(r"^(\*\*/)+", "", pat)
+    # Config files count only at the project root: '**/*.config.ts' also fits src/config/app.config.ts.
     return (q.split("/")[0] in TOOLING_DIRS or q == "next-env.d.ts"
-            or re.fullmatch(r"[\w.*-]*\.config(\.[\w-]+)?\.(m?[jt]s|cjs|cts)", q) is not None)
+            or re.fullmatch(r"[\w.*-]*\.config(\.[\w-]+)?\.(m?[jt]s|cjs|cts)", pat) is not None)
 
 
 def all_form_exts(pats):
@@ -335,10 +339,11 @@ def dotted(node):
 
 
 class Block:
-    def __init__(self, rules, files, ignores):
+    def __init__(self, rules, files, ignores, ta=None):
         self.rules = rules
         self.files = files
         self.ignores = ignores
+        self.ta = ta  # True/False when the block sets parserOptions.projectService or project, else None
 
 
 class Eval:
@@ -405,16 +410,19 @@ class Eval:
 
     def object_block(self, node, out, inherited_files, inherited_ignores):
         rules = {}
-        files, ignores = None, None
+        files, ignores, ta = None, None, None
+        # Object-literal order: a spread or a 'rules' key replaces everything gathered so far, as in JavaScript.
         for key, val in node[1]:
             if key == "spread":
-                rules.update(self.known(val, "a block-level spread"))
+                rules = self.known(val, "a block-level spread")
             elif key == "files":
                 files = self.str_list(val, "files")
             elif key == "ignores":
                 ignores = self.str_list(val, "ignores")
             elif key == "rules":
-                rules.update(self.rules_obj(val))
+                rules = self.rules_obj(val)
+            elif key == "languageOptions":
+                ta = self.parser_type_aware(val)
         if ignores is not None and files is None and rules == {} and all(k in ("ignores", "name") for k, _ in node[1]):
             for pat in ignores:
                 if not tooling_path(pat):
@@ -426,7 +434,44 @@ class Eval:
         for key, val in node[1]:
             if key == "extends":
                 self.blocks(val, out, sub_files, sub_ignores)
-        out.append(Block(rules, sub_files, sub_ignores))
+        out.append(Block(rules, sub_files, sub_ignores, ta))
+
+    def parser_type_aware(self, node):
+        """True when languageOptions.parserOptions turns type information on, False when it sets and disables it, else None."""
+        node = self.deref(node)
+        if node[0] != "object":
+            raise Unresolved("languageOptions is not an object literal")
+        on = off = False
+        for key, val in node[1]:
+            if key == "spread":
+                raise Unresolved("a spread in languageOptions is not read")
+            if key != "parserOptions":
+                continue
+            opts = self.deref(val)
+            if opts[0] != "object":
+                raise Unresolved("parserOptions is not an object literal")
+            for k, v in opts[1]:
+                if k == "spread":
+                    raise Unresolved("a spread in parserOptions is not read")
+                if k not in ("projectService", "project"):
+                    continue
+                if self.truthy(v, k):
+                    on = True
+                else:
+                    off = True
+        return True if on else (False if off else None)
+
+    def truthy(self, node, what):
+        node = self.deref(node)
+        if node == ("ref", "true") or node[0] == "object":
+            return True
+        if node in (("ref", "false"), ("ref", "null"), ("ref", "undefined")):
+            return False
+        if what == "project" and node[0] == "str":
+            return node[1] != ""
+        if what == "project" and node[0] == "array" and all(self.deref(e)[0] == "str" for e in node[1]):
+            return any(self.deref(e)[1] != "" for e in node[1])
+        raise Unresolved("parserOptions.%s is not a literal" % what)
 
     def str_list(self, node, what):
         node = self.deref(node)
@@ -465,21 +510,12 @@ class Eval:
         raise Unresolved("rule level is not a literal")
 
 
-def is_type_aware(toks):
-    for i, tok in enumerate(toks):
-        if tok == ("id", "projectService"):
-            return True
-        if tok == ("id", "project") and i + 1 < len(toks) and toks[i + 1] == ("p", ":"):
-            return True
-    return False
-
-
 class Stack:
-    def __init__(self, name, blocks, touches, type_aware):
+    def __init__(self, name, blocks, touches):
         self.name = name
         self.blocks = blocks
         self.touches = touches
-        self.type_aware = type_aware
+        self.type_aware = False
         self.exts = SOURCE_EXTS[name]
         self.notes = []
 
@@ -497,19 +533,29 @@ class Stack:
             return "all"
         raise Unresolved("a block with files %s sets %s; cannot prove it covers all source files or only tests" % (block.files, rule))
 
+    def last(self, pick, what, on_test=None):
+        """Value from the last block that sets it and covers all source files. Walks back to front, so a block that covers
+        everything hides earlier partial ones; a later block whose scope cannot be proven raises."""
+        for block in reversed(self.blocks):
+            got = pick(block)
+            if got is None:
+                continue
+            if self.scope(block, what) == "test":
+                if on_test:
+                    on_test(got)
+                continue
+            return got
+        return None
+
     def level(self, rule):
         for prefix in self.touches:
             if rule.startswith(prefix):
                 raise Unresolved("%s is under %s, set by a config reference that is not read rule by rule" % (rule, prefix))
-        level = None
-        for block in self.blocks:
-            if rule not in block.rules:
-                continue
-            if self.scope(block, rule) == "test":
-                self.notes.append("%s: %s set to %s for test files only (not counted)" % (self.name, rule, block.rules[rule]))
-                continue
-            level = block.rules[rule]
-        return level
+        return self.last(lambda b: b.rules.get(rule), rule,
+                         lambda lvl: self.notes.append("%s: %s set to %s for test files only (not counted)" % (self.name, rule, lvl)))
+
+    def resolve_type_aware(self):
+        return bool(self.last(lambda b: b.ta, "parserOptions.projectService"))
 
 
 def eslint_stack(name, path, rel, presets):
@@ -520,7 +566,9 @@ def eslint_stack(name, path, rel, presets):
     ev = Eval(parser, presets)
     out = []
     ev.blocks(parser.default, out)
-    return Stack(name, out, ev.touches, is_type_aware(toks))
+    stack = Stack(name, out, ev.touches)
+    stack.type_aware = stack.resolve_type_aware()
+    return stack
 
 
 # ---------------------------------------------------------------- ruff
@@ -553,17 +601,22 @@ def per_file_ignores(body):
     return pairs
 
 
-class Ruff:
-    pass
-
-
 def ruff_state(path):
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
+    for fn in ("ruff.toml", ".ruff.toml"):
+        if os.path.exists(os.path.join(os.path.dirname(path), fn)):
+            raise Unresolved("%s beside pyproject.toml takes precedence and is not read" % fn)
     lint = toml_table(text, "tool.ruff.lint")
     if lint is None:
         raise Unresolved("no [tool.ruff.lint] table")
     top = toml_table(text, "tool.ruff") or ""
+    if re.search(r"^extend\s*=", top, re.M):
+        raise Unresolved("extend in [tool.ruff] pulls in a config that is not read")
+    for where, body in (("[tool.ruff]", top), ("[tool.ruff.lint]", lint)):
+        m = re.search(r"^[ \t]*([A-Za-z0-9_-]+)\.[^=\n#]*=", body, re.M)
+        if m:
+            raise Unresolved("dotted key %s... in %s is not read; use a table" % (m.group(1), where))
     for key in ("select", "ignore", "extend-select", "extend-ignore", "per-file-ignores", "extend-per-file-ignores"):
         if re.search(r"^%s\s*=" % key, top, re.M):
             raise Unresolved("legacy top-level %s in [tool.ruff]; use [tool.ruff.lint]" % key)
@@ -574,10 +627,11 @@ def ruff_state(path):
         for key in ("exclude", "extend-exclude"):
             if re.search(r"^%s\s*=" % key, body, re.M):
                 raise Unresolved("%s is not read" % key)
-    st = Ruff()
+    st = types.SimpleNamespace()
     st.select = toml_list(lint, "select") + toml_list(lint, "extend-select")
     st.ignore = toml_list(lint, "ignore") + toml_list(lint, "extend-ignore")
     st.preview = toml_true(lint, "preview") or toml_true(top, "preview")
+    st.explicit_preview = toml_true(lint, "explicit-preview-rules") or toml_true(top, "explicit-preview-rules")
     st.pfi = []
     for name in ("tool.ruff.lint.per-file-ignores", "tool.ruff.lint.extend-per-file-ignores",
                  "tool.ruff.per-file-ignores", "tool.ruff.extend-per-file-ignores"):
@@ -589,29 +643,56 @@ def ruff_state(path):
     return st
 
 
-def specificity(code, selectors):
+def split_code(code):
+    m = re.fullmatch(r"([A-Z]+)([0-9]*)", code)
+    return m.groups() if m else None
+
+
+def selector_matches(sel, code, linters):
+    """ruff selector semantics: the longest linter prefix picks the linter; a selector without digits takes the whole linter
+    ('S' is flake8-bandit only, never 'SIM'), digits match by prefix inside that linter. 'PL' is the group of PLC/PLE/PLR/PLW."""
+    if sel == "ALL":
+        return True
+    parts = split_code(sel)
+    if parts is None or not (parts[0] in linters or (not parts[1] and any(l.startswith(parts[0]) for l in linters))):
+        raise Unresolved("ruff selector %r is not a code or linter prefix in the ruff-rules snapshot" % sel)
+    have = split_code(code)
+    if parts[0] in linters:
+        return have[0] == parts[0] and have[1].startswith(parts[1])
+    return have[0].startswith(parts[0])
+
+
+def ruff_linters(rules):
+    return set(split_code(c)[0] for c in rules if split_code(c))
+
+
+def check_selectors(st, linters):
+    for sel in st.select + st.ignore + [c for _, codes in st.pfi for c in codes]:
+        selector_matches(sel, "E401", linters)
+
+
+def specificity(code, selectors, linters):
     best = None
     for s in selectors:
-        if s == "ALL":
-            n = 0
-        elif code.startswith(s):
-            n = len(s)
-        else:
+        if not selector_matches(s, code, linters):
             continue
+        n = 0 if s == "ALL" else len(s)
         best = n if best is None else max(best, n)
     return best
 
 
-def ruff_problem(code, st, preview_only):
+def ruff_problem(code, st, preview_only, linters):
     """None when ruff runs the code, else a short reason. The more specific selector wins; a tie goes to ignore."""
-    sel = specificity(code, st.select)
-    ign = specificity(code, st.ignore)
+    sel = specificity(code, st.select, linters)
+    ign = specificity(code, st.ignore, linters)
     if sel is None:
         return "not selected"
     if ign is not None and ign >= sel:
         return "ignored by a selector at least as specific as the select entry"
     if preview_only and not st.preview:
         return "preview-only rule and preview is not enabled"
+    if preview_only and st.explicit_preview and code not in st.select:
+        return "preview-only rule and explicit-preview-rules needs its exact code in select"
     return None
 
 
@@ -710,14 +791,16 @@ def main():
             stacks[st] = eslint_stack(st, os.path.join(scaffold, st, "template", "eslint.config.mjs"), rel, presets)
         except (Unresolved, OSError) as exc:
             stack_fail[st] = str(exc)
+    ruff_rules = load_snapshot(presets, "ruff-rules").rows
+    linters = ruff_linters(ruff_rules)
     try:
         py_state, py_fail = ruff_state(os.path.join(scaffold, "fastapi", "template", "pyproject.toml")), None
+        check_selectors(py_state, linters)
     except (Unresolved, OSError) as exc:
         py_state, py_fail = None, str(exc)
 
     sonarjs = load_snapshot(presets, "sonarjs-recommended").rows
     tse_rules = load_snapshot(presets, "typescript-eslint-rules").rows
-    ruff_rules = load_snapshot(presets, "ruff-rules").rows
     sonar = {}
     with open(os.path.join(presets, "sonar-rules.tsv"), encoding="utf-8") as fh:
         for line in fh:
@@ -773,11 +856,11 @@ def main():
                 if info is None:
                     errors.append("%s: ruff code %s is not in the ruff-rules snapshot" % (row["where"], code))
                     continue
-                why = ruff_problem(code, py_state, info[1] == "1")
+                why = ruff_problem(code, py_state, info[1] == "1", linters)
                 if why:
                     errors.append("%s: ruff %s is not enabled in fastapi (%s)" % (row["where"], code, why))
                 for pat, codes in py_state.pfi:
-                    if any(code.startswith(c) or c == "ALL" for c in codes) and not is_test_glob(pat, py=True):
+                    if any(selector_matches(c, code, linters) for c in codes) and not is_test_glob(pat, py=True):
                         errors.append("%s: per-file-ignores %r disables ruff %s outside test paths" % (row["where"], pat, code))
 
     for lang in LANGS:
