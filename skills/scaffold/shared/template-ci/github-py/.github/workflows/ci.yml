@@ -59,7 +59,9 @@ jobs:
       - name: Changed-line coverage (>= 80%)
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt
+        run: |
+          set -euo pipefail
+          pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt
       - name: Changed source has covered lines (fails closed on an empty report)
         env:
           BASE_REF: ${{ github.base_ref }}

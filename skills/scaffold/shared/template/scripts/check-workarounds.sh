@@ -28,7 +28,7 @@ fi
 wd=$(mktemp -d "${TMPDIR:-/tmp}/workarounds.XXXXXX") || { echo "check-workarounds: cannot create a temporary directory" >&2; exit 1; }
 trap 'rm -rf "$wd"' EXIT
 
-git diff -U0 --no-color -M "$from" HEAD -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' > "$wd/added.diff" || { echo "check-workarounds: git diff failed" >&2; exit 1; }
+git diff -U0 --no-color -M "$from" HEAD -- '*.py' '*.pyi' '*.ts' '*.tsx' '*.mts' '*.cts' '*.js' '*.jsx' '*.mjs' '*.cjs' > "$wd/added.diff" || { echo "check-workarounds: git diff failed" >&2; exit 1; }
 
 cat > "$wd/scan.awk" <<'AWK'
 function report(m) {
@@ -42,7 +42,7 @@ function report(m) {
   file = substr($0, 7)
   scan = 1
   if (file ~ /^\.claude\// || file ~ /(^|\/)eslint[.]config[.]/) scan = 0
-  py = (file ~ /[.]py$/)
+  py = (file ~ /[.]pyi?$/)
   next
 }
 /^@@/ {
@@ -54,27 +54,31 @@ function report(m) {
 }
 /^\+/ {
   if (scan) {
-    t = substr($0, 2)
-    lt = tolower(t)
-    if (lt ~ /(#|\/\/|\/\*|^[ \t]*\*).*nosonar/) report("NOSONAR")
+    n = tolower(substr($0, 2))
+    gsub(/[ \t]+/, " ", n)
+    if (n ~ /(#|\/\/|\/\*|^ ?\*).*nosonar/) report("NOSONAR")
     else if (py) {
-      if (t ~ /#[ ]*noqa/) report("# noqa")
-      else if (t ~ /#[ ]*type:[ ]*ignore/) report("# type: ignore")
-      else if (t ~ /pyright:[ ]*ignore/) report("# pyright: ignore")
-      else if (index(t, "pragma: no cover")) report("# pragma: no cover")
-      else if (index(t, "@pytest.mark.skip")) report("@pytest.mark.skip")
+      if (n ~ /#[ ]?noqa/) report("# noqa")
+      else if (n ~ /#[ ]?type:[ ]?ignore/) report("# type: ignore")
+      else if (n ~ /pyright:[ ]?ignore/) report("# pyright: ignore")
+      else if (n ~ /#[ ]?pylint:[ ]?disable/) report("# pylint: disable")
+      else if (n ~ /#[ ]?nosec/) report("# nosec")
+      else if (n ~ /pragma:[ ]?no cover/) report("# pragma: no cover")
+      else if (n ~ /@pytest[.]mark[.](skip|skipif|xfail)([^a-z0-9_]|$)/) report("@pytest.mark.skip / skipif / xfail")
+      else if (n ~ /pytest[.](skip|xfail)\(/) report("pytest.skip( / pytest.xfail(")
     } else {
-      if (index(t, "eslint-disable")) report("eslint-disable")
-      else if (index(t, "@ts-ignore")) report("@ts-ignore")
-      else if (index(t, "@ts-expect-error")) report("@ts-expect-error")
-      else if (index(t, "@ts-nocheck")) report("@ts-nocheck")
-      else if (index(lt, "istanbul ignore")) report("istanbul ignore")
-      else if (index(lt, "v8 ignore")) report("v8 ignore")
-      else if (index(lt, "c8 ignore")) report("c8 ignore")
-      else if (index(t, ".skip(")) report(".skip(")
-      else if (index(t, ".only(")) report(".only(")
-      else if (t ~ /(^|[^A-Za-z0-9_])(xit|xdescribe|xtest)\(/) report("xit( / xdescribe( / xtest(")
-      else if (t ~ /[ ]as any([^A-Za-z0-9_]|$)/) report("as any")
+      if (index(n, "eslint-disable")) report("eslint-disable")
+      else if (index(n, "@ts-ignore")) report("@ts-ignore")
+      else if (index(n, "@ts-expect-error")) report("@ts-expect-error")
+      else if (index(n, "@ts-nocheck")) report("@ts-nocheck")
+      else if (index(n, "istanbul ignore")) report("istanbul ignore")
+      else if (index(n, "v8 ignore")) report("v8 ignore")
+      else if (index(n, "c8 ignore")) report("c8 ignore")
+      else if (n ~ /[.](skip|skipif|only)[.(]/) report(".skip( / .skipIf( / .only(")
+      else if (n ~ /[.]todo\(/) report(".todo(")
+      else if (n ~ /(^|[^a-z0-9_.$])(xit|xdescribe|xtest|fit|fdescribe)\(/) report("xit( / xdescribe( / xtest( / fit( / fdescribe(")
+      else if (n ~ /[^a-z0-9_$]as any([^a-z0-9_]|$)/) report("as any")
+      else if (n ~ /(^|[^a-z0-9_$>)\]])<any>[a-z0-9_$"']/) report("<any> cast")
     }
   }
   line++

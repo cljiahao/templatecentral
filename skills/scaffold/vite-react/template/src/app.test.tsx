@@ -80,13 +80,19 @@ describe('widgets', () => {
         </MediaCard>
         <SiteFooter />
         <LinkList links={[{ label: 'Ext', href: 'https://x.test', target: '_blank' }]} />
-        <CustomDialog open title="Title" description="Why">
-          Inside
-        </CustomDialog>
         <FieldHarness />
       </>
     );
     expect(screen.getByRole('link', { name: 'Ext' })).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-describedby', 'name-description');
+  });
+
+  it('shows an open dialog with its title and description', () => {
+    render(
+      <CustomDialog open title="Title" description="Why">
+        Inside
+      </CustomDialog>
+    );
+    expect(screen.getByRole('dialog', { name: 'Title' })).toHaveTextContent('Inside');
   });
 });

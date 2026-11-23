@@ -26,6 +26,20 @@ gate() {
   if [ "$rc" -eq 0 ]; then ok; else bad "$ST/$HOST $label exited $rc"; printf '%s\n' "$out" | tail -8 | sed 's/^/    /'; fi
 }
 
+# ruff_gate: ruff format --check and ruff check on the seeded FastAPI src and test; with no ruff or uvx the case is skipped locally and fails closed in CI.
+ruff_gate() {
+  local -a r
+  if command -v ruff > /dev/null 2>&1; then r=(ruff)
+  elif command -v uvx > /dev/null 2>&1; then r=(uvx --from 'ruff>=0.17.4' ruff)
+  else
+    if [ -n "${CI:-}${GITHUB_ACTIONS:-}${TF_BUILD:-}" ]; then bad "$ST/$HOST ruff is not available in CI, so the seeded tests were not format-checked"
+    else echo "SKIPPED: ruff and uvx are not installed, so the seeded FastAPI src and test were NOT format-checked."; fi
+    return 0
+  fi
+  gate ruff-format "${r[@]}" format --check src/ test/
+  gate ruff-check "${r[@]}" check src/ test/
+}
+
 for ST in nestjs nextjs vite-react fastapi; do
   for HOST in github azure; do
     P="$T/$ST-$HOST"
@@ -43,11 +57,7 @@ for ST in nestjs nextjs vite-react fastapi; do
 
     gate harness bash .claude/verify-harness.sh
     gate docs bash scripts/check-docs.sh
-    if [ "$ST" = nextjs ]; then
-      : # shadcn primitives are generated at scaffold time and count as source; without them the ratio is skewed, and they cannot be generated offline.
-    else
-      gate testbudget bash scripts/test-budget.sh
-    fi
+    gate testbudget bash scripts/test-budget.sh
     gate nosonar bash .claude/ci-gates.sh nosonar
     gate workarounds bash scripts/check-workarounds.sh main
     gate ratchet bash scripts/gate-ratchet.sh auto
@@ -55,6 +65,25 @@ for ST in nestjs nextjs vite-react fastapi; do
     gate workflows bash scripts/check-workflows.sh
     gate supplychain bash scripts/check-supply-chain.sh
     gate dockerfile bash scripts/check-dockerfile.sh
+    case $ST in
+      fastapi)
+        gate ignores bash -c 'git check-ignore -q coverage.xml && git check-ignore -q .coverage'
+        gate coverage-floor grep -q 'fail_under = 80' pyproject.toml
+        ruff_gate
+        ;;
+      nestjs)
+        gate ignores bash -c 'git check-ignore -q coverage/x && git check-ignore -q blob/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.mts
+        ;;
+      nextjs)
+        gate ignores bash -c 'git check-ignore -q coverage/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vitest.config.ts
+        ;;
+      vite-react)
+        gate ignores bash -c 'git check-ignore -q coverage/x'
+        gate coverage-floor grep -Eq 'thresholds: [{] lines: 80' vite.config.ts
+        ;;
+    esac
   done
 done
 

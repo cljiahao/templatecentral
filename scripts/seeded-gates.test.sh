@@ -59,7 +59,7 @@ N=0
 check_marker src/a.py 'x = 1  # noqa: E501' '# noqa'
 check_marker src/a.py 'x = 1  # type: ignore[assignment]' '# type: ignore'
 check_marker src/a.py 'if x:  # pragma: no cover' '# pragma: no cover'
-check_marker src/a.py '@pytest.mark.skip(reason="later")' '@pytest.mark.skip'
+check_marker src/a.py '@pytest.mark.skip(reason="later")' '@pytest.mark.skip / skipif / xfail'
 check_marker src/a.py "x = 1  # $M_NOSONAR" 'NOSONAR'
 check_marker src/a.ts '// eslint-disable-next-line no-console' 'eslint-disable'
 check_marker src/a.ts '/* eslint-disable */' 'eslint-disable'
@@ -68,10 +68,36 @@ check_marker src/a.ts '// @ts-expect-error legacy' '@ts-expect-error'
 check_marker src/a.ts '/* istanbul ignore next */' 'istanbul ignore'
 check_marker src/a.ts '/* v8 ignore next */' 'v8 ignore'
 check_marker src/a.ts "// $M_NOSONAR" 'NOSONAR'
-check_marker test/a.test.ts 'it.skip("later", () => {});' '.skip('
-check_marker test/a.test.ts 'it.only("only", () => {});' '.only('
-check_marker test/a.test.ts 'xit("later", () => {});' 'xit( / xdescribe( / xtest('
+check_marker test/a.test.ts 'it.skip("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'it.only("only", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'xit("later", () => {});' 'xit( / xdescribe( / xtest( / fit( / fdescribe('
 check_marker src/a.ts 'const v = JSON.parse(s) as any;' 'as any'
+check_marker src/a.py 'x = 1  # NOQA' '# noqa'
+check_marker src/a.py 'x = 1  # Noqa: E501' '# noqa'
+check_marker src/a.py 'x = 1  #noqa' '# noqa'
+check_marker src/a.py 'if x:  # pragma:no cover' '# pragma: no cover'
+check_marker src/a.py 'if x:  # pragma:  no cover' '# pragma: no cover'
+check_marker src/a.py 'if x:  # PRAGMA: NO COVER' '# pragma: no cover'
+check_marker src/a.py 'import os  # pylint: disable=unused-import' '# pylint: disable'
+check_marker src/a.py 'x = 1  # nosec' '# nosec'
+check_marker src/a.py 'pytest.skip("later")' 'pytest.skip( / pytest.xfail('
+check_marker src/a.py '@pytest.mark.xfail(reason="later")' '@pytest.mark.skip / skipif / xfail'
+check_marker src/a.py '@pytest.mark.skipif(True, reason="later")' '@pytest.mark.skip / skipif / xfail'
+check_marker src/a.pyi 'x: int  # type: ignore' '# type: ignore'
+check_marker src/a.pyi 'x: int  # pyright: ignore' '# pyright: ignore'
+check_marker src/a.ts 'const v = JSON.parse(s) as  any;' 'as any'
+check_marker src/a.ts 'const v = <any>JSON.parse(s);' '<any> cast'
+check_marker test/a.test.ts 'it.skipIf(cond)("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'it.skip.each([1])("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'test.skip.each([1])("later", () => {});' '.skip( / .skipIf( / .only('
+check_marker test/a.test.ts 'it.todo("later");' '.todo('
+check_marker test/a.test.ts 'fit("focused", () => {});' 'xit( / xdescribe( / xtest( / fit( / fdescribe('
+check_marker test/a.test.ts 'fdescribe("focused", () => {});' 'xit( / xdescribe( / xtest( / fit( / fdescribe('
+check_marker src/a.ts '/* istanbul  ignore next */' 'istanbul ignore'
+check_marker src/a.ts '/* v8  ignore next */' 'v8 ignore'
+check_marker src/a.ts '/* ISTANBUL IGNORE NEXT */' 'istanbul ignore'
+check_marker src/a.mts '// @ts-ignore' '@ts-ignore'
+check_marker src/a.cts '// @ts-ignore' '@ts-ignore'
 
 # ---- clean control: ordinary changes, and the old suppression text, pass.
 newrepo clean
@@ -81,6 +107,17 @@ g commit -q -m work
 runwa
 check 0 "$RC" "clean change passes"
 has "no suppression markers added" "$OUT" "clean change prints one success line"
+
+# Similar-looking text that is not a marker passes.
+newrepo lookalikes
+printf 'const hint = "skip the intro";\nconst gain = benefit(3);\nconst a = x as anything;\nconst b = model.fit(data);\nconst c: Promise<any> = load();\nconst d = Array<any>();\n' > "$R/src/look.ts"
+printf 'note = "skip the noqa talk"\nskipped = 1\nunskip_all = 2\n' > "$R/src/look.py"
+printf 'from typing import Any\nvalue: Any = 1\n' > "$R/src/look.pyi"
+g add -A
+g commit -q -m work
+runwa
+check 0 "$RC" "lookalike text (skip in a string, benefit(, as anything, model.fit(, Promise<any>) is not flagged"
+has "no suppression markers added" "$OUT" "lookalike control prints the success line"
 
 # A marker already on main is not this change's problem.
 newrepo preexisting
@@ -246,6 +283,18 @@ for st in ts py; do
   bash_msg $st 'git checkout -b feat && git commit -m x' "alone first, then run 'git commit' as a separate command" 'checkout -b chained with commit'
   bash_msg $st 'git push --force origin main' 'Open a PR instead' 'force push to main'
   bash_msg $st "cat $ENVF" 'use .env.example for placeholders' 'shell read of the env file'
+  mkdir -p "$hookrepo/sub"
+  bash_msg $st "cat .e\"\"nv" 'use .env.example for placeholders' 'quote-split env name (.e""nv)'
+  bash_msg $st "cat .e'n'v" 'use .env.example for placeholders' "quote-split env name (.e'n'v)"
+  bash_msg $st "cat sub/../$ENVF" 'use .env.example for placeholders' 'dot-dot path that resolves to the env file'
+  bash_msg $st "git show HEAD:$ENVF" 'use .env.example for placeholders' 'git show of the env file'
+  bash_msg $st "git cat-file -p HEAD:$ENVF" 'use .env.example for placeholders' 'git cat-file of the env file'
+  bash_msg $st "git -C . show HEAD:$ENVF" 'use .env.example for placeholders' 'git show with a global option'
+  for ok in "cat $ENVF.example" 'cat .envrc' "git show HEAD:$ENVF.example" 'git show HEAD:src/app.ts'; do
+    j=$(python3 -c 'import json, sys; print(json.dumps({"tool_input": {"command": sys.argv[1]}}))' "$ok")
+    hook "$HK/template-$st/.claude/hooks/block-no-verify.sh" "$j"
+    check 0 "$RC" "[$st] '$ok' stays allowed"
+  done
   bash_msg $st 'rm -rf src' 'Confirm with a human first' 'recursive rm of src'
   j=$(python3 -c 'import json; print(json.dumps({"tool_input": {"command": "cat .env.example"}}))')
   hook "$HK/template-$st/.claude/hooks/block-no-verify.sh" "$j"

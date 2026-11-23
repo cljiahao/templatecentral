@@ -264,6 +264,9 @@ def condition_errors(rel, doc, tmpl):
             for key in STEP_NEUTRALISERS:
                 if key in step and not (key in allowed and step[key] == allowed[key]):
                     errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
+            run = step.get("run")
+            if tmpl.startswith("github") and isinstance(run, str) and re.search(r"(?<!\|)\|(?!\|)", run) and "pipefail" not in run and step.get("shell") != "bash":
+                errors.append(f"{rel}: job {job} step {ident} pipes without pipefail, so a failing gate on the left of the pipe exits 0 (GitHub's default shell is bash -e); start the run with set -euo pipefail")
             for key in ("timeout-minutes", "timeoutInMinutes"):
                 if key in step and not (isinstance(step[key], int) and not isinstance(step[key], bool) and step[key] > 0):
                     errors.append(f"{rel}: job {job} step {ident} has {key}: {step[key]}")
@@ -433,8 +436,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('diff-cover at 80',
                           'coverage',
                           'run',
-                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
-                          '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt'),
+                          'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage/cobertura-coverage.xml '
+                          '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'),
                          ('diffcover empty-report check', 'coverage', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
                          ('comment check', 'comment-hygiene', 'run', 'bash .claude/ci-gates.sh comments "$BASE_REF"'),
@@ -471,8 +474,8 @@ MANIFEST = {'github-ts': {'file': 'github-ts/.github/workflows/ci.yml',
                          ('diff-cover at 80',
                           'quality',
                           'run',
-                          'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" '
-                          '--fail-under=80 | tee diff-cover.txt'),
+                          'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml --compare-branch="origin/${BASE_REF:-main}" '
+                          '--fail-under=80 | tee diff-cover.txt\n'),
                          ('diffcover empty-report check', 'quality', 'run', 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'),
                          ('secret scan', 'quality', 'run', 'bash .claude/ci-gates.sh secrets "$BASE_REF"'),
                          ('changelog check', 'changelog', 'run', 'bash .claude/ci-gates.sh changelog "$BASE_REF"'),
@@ -676,9 +679,9 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                               '--outputFile.json=report/collected.json'},
                                       {'run': COUNT_CHECK},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                       'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" '
+                                       'run': 'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" '
                                               'coverage/cobertura-coverage.xml '
-                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt'},
+                                              '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                        'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'}],
                          'changelog': [{'uses': 'actions/checkout', 'with': {'fetch-depth': 0, 'persist-credentials': False}},
@@ -804,8 +807,8 @@ PINNED = {'github-ts': {'jobs': {'plan': {'runs-on': 'ubuntu-latest',
                                      {'run': 'npx --yes jscpd@${JSCPD_VERSION}'},
                                      {'run': 'python -m pytest test/ --cov=src --cov-report=xml -q'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
-                                      'run': 'pipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
-                                             '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt'},
+                                      'run': 'set -euo pipefail\npipx run "diff-cover==${DIFF_COVER_VERSION}" coverage.xml '
+                                             '--compare-branch="origin/${BASE_REF:-main}" --fail-under=80 | tee diff-cover.txt\n'},
                                       {'env': {'BASE_REF': '${{ github.base_ref }}'},
                                        'run': 'bash .claude/ci-gates.sh diffcover "$BASE_REF"'},
                                      {'env': {'BASE_REF': '${{ github.base_ref }}'},
@@ -1045,6 +1048,8 @@ PY
   fi
 }
 mutate "|| true after diff-cover (github-ts)" github-ts/.github/workflows/ci.yml '--fail-under=80' '--fail-under=80 || true' static
+mutate "diff-cover pipe loses pipefail (github-ts)" github-ts/.github/workflows/ci.yml '          set -euo pipefail\n          pipx run' '          pipx run' static "pipes without pipefail"
+mutate "diff-cover pipe loses pipefail (github-py)" github-py/.github/workflows/ci.yml '          set -euo pipefail\n          pipx run' '          pipx run' static "pipes without pipefail"
 mutate "continueOnError on the merge step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Merge shard reports' '        displayName: Merge shard reports\n        continueOnError: true' static
 mutate "condition: always() on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage' '        condition: always()\n        displayName: Changed-line coverage' static
 mutate "if: always() on the diff-cover step (github-py)" github-py/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)' '      - if: always()\n        name: Changed-line coverage (>= 80%)' static
@@ -1157,7 +1162,7 @@ mutate "nosonar step removed (azure gates, used by azure-ts and azure-py)" azure
 
 # 6b. pinned step options, defaults, step order, shard matrix, gate-include parameters
 mutate "working-directory on the diff-cover step (github-ts)" github-ts/.github/workflows/ci.yml '      - name: Changed-line coverage (>= 80%)\n        env:' '      - name: Changed-line coverage (>= 80%)\n        working-directory: docs\n        env:' static "differ from the pinned ordered list"
-mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: pipx run" "          BASE_REF: HEAD\n        run: pipx run" "static" "differ from the pinned ordered list"
+mutate "BASE_REF env changed on the diff-cover step (github-ts)" "github-ts/.github/workflows/ci.yml" "          BASE_REF: \${{ github.base_ref }}\n        run: |\n          set -euo pipefail\n          pipx run" "          BASE_REF: HEAD\n        run: |\n          set -euo pipefail\n          pipx run" "static" "differ from the pinned ordered list"
 mutate "env added on the tests step (github-py)" github-py/.github/workflows/ci.yml '      - name: Tests (serial; pytest-cov writes coverage.xml)\n' '      - name: Tests (serial; pytest-cov writes coverage.xml)\n        env: { PYTEST_ADDOPTS: --co }\n' static "differ from the pinned ordered list"
 mutate "workingDirectory on the diff-cover step (azure-ts)" azure-ts/azure-pipelines.yml '        displayName: Changed-line coverage (>= 80%)' '        workingDirectory: docs\n        displayName: Changed-line coverage (>= 80%)' static "differ from the pinned ordered list"
 mutate "count comparison neutered (github-ts)" github-ts/.github/workflows/ci.yml "process.exit(ok ? 0 : 1);" "process.exit(0);" static "required gate 'test count equality'"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — block hook-bypass and destructive git/shell commands. Exit 2 = block.
 # Best-effort tripwire, not a security boundary; the lefthook + CI layers are the backstop.
+# A text guard cannot see variable indirection or command substitution (cat "$f", cat $(echo .env)); those stay open.
 # Fallback only: hooks may be spawned from the session's original root, not a worktree.
 orig_dir=$PWD
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || { echo "BLOCKED: block-no-verify.sh cannot cd to the project root — refusing the command." >&2; exit 2; }
@@ -47,6 +48,7 @@ secret_guard() {
   local delim tokens tok d f p b cdt tok_d hits
   local -a sdirs
   flat="${cmd//\\/}"
+  flat="${flat//[\"\']/}"
   delim="[:space:]\"'\`;|&<>()="
   tokens=$(printf '%s' "$flat" | grep -oiE "[^$delim]*(\\.env|\\.pem|\\.key|\\.p12|\\.pfx|credentials\\.json|\\.netrc|secrets|[*?[])[^$delim]*" || true)
   [ -n "$tokens" ] || return 0
@@ -73,6 +75,7 @@ secret_guard() {
       done <<< "$hits"
     done
     if [[ "$tok" != *[*?[]* ]] && is_secret "$tok" && writes_to_secret "$tok"; then secret_block "$tok"; fi
+    if [[ "$tok" == *:* ]] && is_secret "${tok#*:}" && [[ "$flat" =~ (^|[[:space:]\;\&\|\(])git[[:space:]]+([^;&|]*[[:space:]])?(show|cat-file|archive|blame|grep|log|diff)[[:space:]] ]]; then secret_block "${tok#*:}"; fi
   done <<< "$tokens"
 }
 secret_guard

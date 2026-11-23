@@ -443,6 +443,21 @@ weakens eslint.config.mjs "  ...typescript,
 " "" "nextjs: typescript preset spread removed" "typescript"
 weakens eslint.config.mjs "  ...coreWebVitals,
 " "" "nextjs: coreWebVitals preset spread removed" "coreWebVitals"
+for UI in next:nextjs/template/vitest.config.ts vite:vite-react/template/vite.config.ts; do
+  R="$T/ui-${UI%%:*}"
+  CFG=$(basename "${UI#*:}")
+  rm -rf "$R"
+  mkdir -p "$R/.claude" "$R/scripts"
+  cp "$SH/template/.claude/gates.txt" "$R/.claude/gates.txt"
+  cp "$SH/../${UI#*:}" "$R/$CFG"
+  git -C "$R" init -q -b main
+  git_ add -A
+  git_ commit -q -m base
+  ratchet
+  check 0 "$EC" "${UI%%:*}: seeded coverage exclude with src/components/ui/** passes ($OUT)"
+  weakens "$CFG" "'src/components/ui/**']" "'src/components/ui/**', 'src/lib/**']" "${UI%%:*}: src/lib/** added to the coverage exclude" "src/lib/**" "new ignore or exclude"
+  passes "$CFG" "'src/components/ui/**']" "]" "${UI%%:*}: dropping the ui exclude is a tightening"
+done
 R=$R_TS
 
 R="$T/adopt"
