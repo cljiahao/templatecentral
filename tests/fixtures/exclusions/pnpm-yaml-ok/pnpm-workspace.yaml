@@ -1,0 +1,3 @@
+# reason: security fix needed before the release age passes
+minimumReleaseAgeExclude:
+  - next

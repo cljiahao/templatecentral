@@ -1,0 +1,7 @@
+[tool.coverage.report]
+exclude_also = [
+    # reason: generated
+    "if TYPE_CHECKING:",
+    "pragma: no cover",
+]
+fail_under = 80
