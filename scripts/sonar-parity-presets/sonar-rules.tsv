@@ -1,0 +1,105 @@
+# source: public rule metadata, SonarJS and sonar-python repositories (master); not tied to a version pin
+# columns: lang<TAB>key<TAB>type<TAB>in Sonar way 0|1<TAB>title
+ts	S1066	code smell	0	Mergeable "if" statements should be combined
+ts	S1077	code smell	1	Image, area, button with image, object and svg elements should have an alternative text
+ts	S108	code smell	1	Nested blocks of code should not be left empty
+ts	S1082	bug	1	Mouse events should have corresponding keyboard events
+ts	S1128	code smell	1	Unnecessary imports should be removed
+ts	S1134	code smell	1	Track uses of "FIXME" tags
+ts	S1135	code smell	1	Track uses of "TODO" tags
+ts	S1186	code smell	1	Functions should not be empty
+ts	S1192	code smell	0	String literals should not be duplicated
+ts	S1244	bug	1	Floating point numbers should not be tested for equality
+ts	S125	code smell	0	Sections of code should not be commented out
+ts	S1301	code smell	1	"if" statements should be preferred over "switch" when simpler
+ts	S1313	code smell	1	IP addresses should not be hardcoded
+ts	S1481	code smell	1	Unused local variables and functions should be removed
+ts	S1523	vulnerability	1	Dynamic code execution should not use user-controlled data
+ts	S1764	bug	1	Identical expressions should not be used on both sides of a binary operator
+ts	S1854	code smell	1	Unused assignments should be removed
+ts	S1862	bug	1	"if/else if" chains and "switch" cases should not have the same condition
+ts	S1871	code smell	1	Two branches in a conditional structure should not have exactly the same implementation
+ts	S2068	vulnerability	1	Credentials should not be hard-coded
+ts	S2077	vulnerability	1	SQL queries should not be dynamically formatted
+ts	S2092	vulnerability	1	Cookies should have the "secure" flag
+ts	S2201	bug	1	Return values from functions without side effects should not be ignored
+ts	S2234	code smell	1	Parameters should be passed in the correct order
+ts	S2245	vulnerability	1	Pseudorandom number generators (PRNGs) should not be used in security contexts
+ts	S2589	code smell	1	Boolean expressions should not be gratuitous
+ts	S2755	vulnerability	1	XML parsers should not be vulnerable to XXE attacks
+ts	S2871	bug	1	"Array.prototype.sort()" and "Array.prototype.toSorted()" should use a compare function
+ts	S2966	code smell	0	Non-null assertions should not be used
+ts	S3330	vulnerability	1	Cookies should have the "HttpOnly" flag
+ts	S3358	code smell	1	Ternary operators should not be nested
+ts	S3626	code smell	1	Jump statements should not be redundant
+ts	S3776	code smell	1	Cognitive Complexity of functions should not be too high
+ts	S3801	code smell	0	Functions should use "return" consistently
+ts	S3923	bug	1	All branches in a conditional structure should not have exactly the same implementation
+ts	S4030	code smell	1	Collection contents should be used
+ts	S4036	vulnerability	1	OS commands should not rely on PATH resolution
+ts	S4123	code smell	1	"await" should only be used with promises
+ts	S4144	code smell	1	Functions should not have identical implementations
+ts	S4158	bug	1	Empty collections should not be accessed or iterated
+ts	S4165	code smell	1	Assignments should not be redundant
+ts	S4204	code smell	0	The "any" type should not be used
+ts	S4325	code smell	0	Redundant casts and non-null assertions should be avoided
+ts	S4502	vulnerability	1	CSRF protections should not be disabled
+ts	S4507	vulnerability	1	Debugging features should not be enabled in production
+ts	S4790	vulnerability	1	Weak hashing algorithms should not be used
+ts	S4822	bug	1	Promise rejections should not be caught by "try" blocks
+ts	S4830	vulnerability	1	Server certificates should be verified during SSL/TLS connections
+ts	S5122	vulnerability	1	Cross-Origin Resource Sharing (CORS) policy should be restricted to trusted origins
+ts	S5332	vulnerability	1	Clear-text protocols should not be used
+ts	S5527	vulnerability	1	Server hostnames should be verified during SSL/TLS connections
+ts	S5547	vulnerability	1	Cipher algorithms should be robust
+ts	S5659	vulnerability	1	JWT should be signed and verified with strong cipher algorithms
+ts	S5852	vulnerability	1	Regular expressions should not cause catastrophic backtracking
+ts	S6418	vulnerability	1	Secrets should not be hard-coded
+ts	S6477	code smell	1	JSX list components should have a key property
+ts	S6544	bug	1	Promises should not be misused
+ts	S6551	code smell	1	Objects and classes converted or coerced to strings should define a "toString()" method
+ts	S6606	code smell	1	Nullish coalescing should be preferred
+ts	S6844	code smell	1	Anchor tags should not be used as buttons
+ts	S6853	code smell	1	Label elements should have a text label and an associated control
+ts	S6959	bug	1	"Array.reduce()" calls should include an initial value
+ts	S905	bug	1	Non-empty statements should change control flow or have at least one side-effect
+ts	S9383	bug	1	Promises should not be left unhandled
+py	S100	code smell	1	Method names should comply with a naming convention
+py	S101	code smell	1	Class names should comply with a naming convention
+py	S1066	code smell	1	Mergeable "if" statements should be combined
+py	S107	code smell	1	Functions, methods and lambdas should not have too many parameters
+py	S1128	code smell	0	Unnecessary imports should be removed
+py	S1134	code smell	1	Track uses of "FIXME" tags
+py	S1135	code smell	1	Track uses of "TODO" tags
+py	S117	code smell	1	Local variable and function parameter names should comply with a naming convention
+py	S1172	code smell	1	Unused function parameters should be removed
+py	S1186	code smell	1	Functions and methods should not be empty
+py	S1192	code smell	1	String literals should not be duplicated
+py	S1226	bug	1	Function parameters initial values should not be ignored
+py	S1244	bug	1	Floating point numbers should not be tested for equality
+py	S125	code smell	1	Sections of code should not be commented out
+py	S1313	code smell	1	IP addresses should not be hardcoded
+py	S134	code smell	0	Control flow statements "if", "for", "while", "try" and "with" should not be nested too deeply
+py	S1481	code smell	1	Unused local variables should be removed
+py	S1523	vulnerability	0	Dynamic code execution should not use user-controlled data
+py	S1763	bug	1	All code should be reachable
+py	S1854	code smell	1	Unused assignments should be removed
+py	S1871	code smell	1	Two branches in a conditional structure should not have exactly the same implementation
+py	S2068	vulnerability	1	Credentials should not be hard-coded
+py	S2077	vulnerability	1	SQL queries should not be dynamically formatted
+py	S2245	vulnerability	1	Pseudorandom number generators (PRNGs) should not be used in security contexts
+py	S2755	vulnerability	1	XML parsers should not be vulnerable to XXE attacks
+py	S3358	code smell	1	Conditional expressions should not be nested
+py	S3776	code smell	1	Cognitive Complexity of functions should not be too high
+py	S3827	bug	1	Variables, classes and functions should be defined before being used
+py	S3923	bug	1	All branches in a conditional structure should not have exactly the same implementation
+py	S4423	vulnerability	1	Weak SSL/TLS protocols should not be used
+py	S4721	vulnerability	0	OS commands should not be executed using a shell interpreter
+py	S4790	vulnerability	1	Weak hashing algorithms should not be used
+py	S4830	vulnerability	1	Server certificates should be verified during SSL/TLS connections
+py	S5332	vulnerability	1	Clear-text protocols should not be used
+py	S5445	vulnerability	1	Insecure temporary file creation methods should not be used
+py	S5547	vulnerability	1	Cipher algorithms should be robust
+py	S5754	code smell	1	"SystemExit" should be re-raised
+py	S5806	code smell	1	Builtins should not be shadowed by local variables
+py	S5852	vulnerability	1	Regular expressions should not cause catastrophic backtracking

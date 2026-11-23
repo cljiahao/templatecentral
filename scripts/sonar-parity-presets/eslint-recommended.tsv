@@ -1,4 +1,6 @@
-# source: @eslint/js@10.0.1 configs.recommended (src/configs/eslint-recommended.js)
+# pin: npm @eslint/js ^10.0.1
+# version: @eslint/js 10.0.1
+# source: @eslint/js src/configs/eslint-recommended.js
 # columns: rule<TAB>level
 constructor-super	error
 for-direction	error
