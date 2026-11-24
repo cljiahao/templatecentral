@@ -1502,5 +1502,26 @@ ratchet
 check 2 "$EC" "missing base tree: exits 2 ($OUT)"
 if [[ "$OUT" == *"first adoption"* ]]; then check no yes "missing base tree: never reported as first adoption"; else check ok ok "missing base tree: never reported as first adoption"; fi
 
+# A competing config added in a 3,000-file repo: both sort before bulk/, so an early-exit reader of the listing would miss them.
+seed ts
+bulk_main 3000
+git_ checkout -q -B work main
+printf 'a.txt\n' > "$R/.gitleaksignore"
+git_ add -A
+git_ commit -q -m "add .gitleaksignore beside .gitleaks.toml"
+expect 1 "3,000 files: .gitleaksignore beside a tracked .gitleaks.toml" ".gitleaksignore" "competes"
+
+# A gitlink (a submodule) in the tree is no blob: it is left out of the path lists, so the run passes as it did before. The path carries a config name, so the per-file loop would reach it and `git show` would fail on it.
+seed ts
+git_ checkout -q main
+git_ update-index --add --cacheinfo "160000,$NEWSHA,vendor/eslint.config.js"
+git_ commit -q -m "add a submodule entry"
+git_ checkout -q -B work main
+printf 'x\n' >> "$R/README.md"
+git_ add -A
+git_ commit -q -m "touch"
+expect 0 "a gitlink in the tree: passes"
+weakens eslint.config.mjs "['error', 15]" "['error', 25]" "a gitlink in the tree: a weakened gate is still caught" "was 15" "now 25"
+
 echo "gate-ratchet.test: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

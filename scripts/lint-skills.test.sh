@@ -1371,6 +1371,74 @@ passes pipefail_reader_pipe_inside_comment "$H_PF" pf_comment
 passes pipefail_reader_yaml_clean_block "$H_PF" pf_yaml_clean
 passes pipefail_reader_yaml_non_script_key "$H_PF" pf_yaml_other_key
 
+pf_crash() { pf_script 'set -uo pipefail' "echo $(printf '%.0s\044(' {1..800})"; }
+pf_xargs() { pf_script 'set -uo pipefail' 'printf x | xargs grep -q x'; }
+pf_xargs_clean() { pf_script 'set -uo pipefail' 'printf x | xargs echo'; }
+pf_timeout() { pf_script 'set -uo pipefail' 'printf x | timeout 5 grep -q x'; }
+pf_timeout_clean() { pf_script 'set -uo pipefail' 'printf x | timeout 5 cat'; }
+pf_stdbuf() { pf_script 'set -uo pipefail' 'printf x | stdbuf -oL grep -q x'; }
+pf_sudo() { pf_script 'set -uo pipefail' 'printf x | sudo -n grep -q x'; }
+pf_group() { pf_script 'set -uo pipefail' 'printf x | { read -r v; }'; }
+pf_group_clean() { pf_script 'set -uo pipefail' 'printf x | { cat; }'; }
+pf_group_later() { pf_script 'set -uo pipefail' 'printf x | { cat > /dev/null; grep -q x; }'; }
+pf_group_closed() { printf '#!/usr/bin/env bash\nset -uo pipefail\nprintf x | { cat; }\ngrep -q x file\n' > "$S/$PF_FIXTURE"; }
+pf_subshell() { pf_script 'set -uo pipefail' 'printf x | (grep -q x)'; }
+pf_subshell_clean() { pf_script 'set -uo pipefail' 'printf x | (cat)'; }
+pf_loop_break() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do break; done'; }
+pf_loop_exit() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do exit 1; done'; }
+pf_loop_return() { pf_script 'set -uo pipefail' 'f() { printf x | while read -r l; do return 1; done; }'; }
+pf_loop_clean() { pf_script 'set -uo pipefail' "printf x | while read -r l; do echo \"\$l\"; done"; }
+pf_loop_inner_break() { pf_script 'set -uo pipefail' 'printf x | while read -r l; do for i in 1; do break; done; done'; }
+pf_loop_not_piped() { pf_script 'set -uo pipefail' 'while read -r l; do break; done < file'; }
+pf_abbrev() { pf_script 'set -uo pipefail' 'printf x | grep --max=1 x'; }
+pf_abbrev_quiet() { pf_script 'set -uo pipefail' 'printf x | grep --qu x'; }
+pf_abbrev_clean() { pf_script 'set -uo pipefail' 'printf x | grep --colour x'; }
+pf_pipe_amp() { pf_script 'set -uo pipefail' 'printf x |& grep -q x'; }
+pf_pipe_amp_clean() { pf_script 'set -uo pipefail' 'printf x |& cat'; }
+pf_qF() { pf_script 'set -uo pipefail' 'printf x | grep -qF x'; }
+pf_qF_clean() { pf_script 'set -uo pipefail' 'printf x | grep -F x'; }
+pf_if_not() { pf_script 'set -uo pipefail' 'if ! printf x | grep -q x; then :; fi'; }
+pf_if_not_clean() { pf_script 'set -uo pipefail' "if ! grep -q x <<< \"\$v\"; then :; fi"; }
+pf_awk_string() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { print }'"; }
+pf_awk_regex() { pf_script 'set -uo pipefail' "printf x | awk '/exit/ { print }'"; }
+pf_awk_real_exit() { pf_script 'set -uo pipefail' "printf x | awk '\$1 == \"exit\" { exit }'"; }
+pf_arith_shift() { printf '#!/usr/bin/env bash\nset -uo pipefail\n(( x = 1 << 2 ))\nprintf x | grep -q x\n' > "$S/$PF_FIXTURE"; }
+pf_arith_clean() { printf '#!/usr/bin/env bash\nset -uo pipefail\n(( x = 1 << 2 ))\ngrep -q x file\n' > "$S/$PF_FIXTURE"; }
+fails pipefail_reader_scanner_crash_fails_lint "$H_PF" pf_crash "the scanner stopped early"
+fails pipefail_reader_behind_xargs "$H_PF" pf_xargs "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_behind_timeout "$H_PF" pf_timeout "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_behind_stdbuf "$H_PF" pf_stdbuf "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_behind_sudo "$H_PF" pf_sudo "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_in_brace_group "$H_PF" pf_group "zz-pipefail-fixture.sh:3: pipe into read"
+fails pipefail_reader_later_in_brace_group "$H_PF" pf_group_later "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_in_subshell_group "$H_PF" pf_subshell "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_piped_loop_break "$H_PF" pf_loop_break "zz-pipefail-fixture.sh:3: piped loop body can break"
+fails pipefail_reader_piped_loop_exit "$H_PF" pf_loop_exit "zz-pipefail-fixture.sh:3: piped loop body can exit"
+fails pipefail_reader_piped_loop_return "$H_PF" pf_loop_return "zz-pipefail-fixture.sh:3: piped loop body can return"
+fails pipefail_reader_abbreviated_max_count "$H_PF" pf_abbrev "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_abbreviated_quiet "$H_PF" pf_abbrev_quiet "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_pipe_ampersand "$H_PF" pf_pipe_amp "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_cluster_qF "$H_PF" pf_qF "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_if_not_pipe "$H_PF" pf_if_not "zz-pipefail-fixture.sh:3: pipe into grep"
+fails pipefail_reader_awk_real_exit_after_string "$H_PF" pf_awk_real_exit "zz-pipefail-fixture.sh:3: pipe into awk"
+fails pipefail_reader_after_arithmetic_shift "$H_PF" pf_arith_shift "zz-pipefail-fixture.sh:4: pipe into grep"
+passes pipefail_reader_scanner_completes "$H_PF" pf_here_string
+passes pipefail_reader_xargs_clean "$H_PF" pf_xargs_clean
+passes pipefail_reader_timeout_clean "$H_PF" pf_timeout_clean
+passes pipefail_reader_brace_group_clean "$H_PF" pf_group_clean
+passes pipefail_reader_group_closed_does_not_leak "$H_PF" pf_group_closed
+passes pipefail_reader_subshell_clean "$H_PF" pf_subshell_clean
+passes pipefail_reader_piped_loop_clean "$H_PF" pf_loop_clean
+passes pipefail_reader_piped_loop_inner_break "$H_PF" pf_loop_inner_break
+passes pipefail_reader_loop_reading_a_file "$H_PF" pf_loop_not_piped
+passes pipefail_reader_abbreviation_clean "$H_PF" pf_abbrev_clean
+passes pipefail_reader_pipe_ampersand_clean "$H_PF" pf_pipe_amp_clean
+passes pipefail_reader_cluster_F_clean "$H_PF" pf_qF_clean
+passes pipefail_reader_if_not_here_string "$H_PF" pf_if_not_clean
+passes pipefail_reader_awk_exit_in_string "$H_PF" pf_awk_string
+passes pipefail_reader_awk_exit_in_regex "$H_PF" pf_awk_regex
+passes pipefail_reader_arithmetic_shift_is_not_a_heredoc "$H_PF" pf_arith_clean
+
 collect
 echo "lint-skills.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

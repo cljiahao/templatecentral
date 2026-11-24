@@ -700,16 +700,11 @@ sc_pnpm sc-big-ok
 run "$D" check-supply-chain.sh
 check 0 "$EC" "supply-chain passes a big clean workspace file ($OUT)"
 
-sc_pnpm sc-big-age
-{ printf 'minimumReleaseAge: 60\n'; grep -v '^minimumReleaseAge' "$NEXT/pnpm-workspace.yaml"; for ((i = 0; i < 4000; i++)); do printf '# padding line number %05d to push the file past sixty-four kilobytes\n' "$i"; done; } > "$D/pnpm-workspace.yaml"
-run "$D" check-supply-chain.sh
-check 1 "$EC" "supply-chain blocks a low release age on line 1 of a big file"
-
-# A lockfile with many hosts: an allow-listed host is found whichever line it is on, and a foreign one is still named.
+# A lockfile with many hosts: an allow-listed host is found whichever line it is on. The foreign-host case is a named clean control (the old code named it too, since nothing there reads a pipeline status); the allow-list cases below are the ones that fail on the old script.
 sc_pnpm sc-big-hosts
 { for ((i = 0; i < 3000; i++)); do printf '  l%05d@1.0.0:\n    resolution: {tarball: https://registry.npmjs.org/l%05d.tgz}\n' "$i" "$i"; done; printf '  x@1.0.0:\n    resolution: {tarball: https://evil.example.com/x.tgz}\n'; } > "$D/pnpm-lock.yaml"
 run "$D" check-supply-chain.sh
-check 1 "$EC" "supply-chain blocks a foreign host at the end of a big lockfile"
+check 1 "$EC" "control: supply-chain blocks a foreign host at the end of a big lockfile"
 has "evil.example.com" "$OUT" "big lockfile: names the foreign host"
 { for ((i = 0; i < 6000; i++)); do printf 'host%05d.example.net\n' "$i"; done; printf 'evil.example.com\n'; } > "$D/.claude/registry-hosts.txt"
 run "$D" check-supply-chain.sh

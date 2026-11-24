@@ -1294,8 +1294,11 @@ if [ -n "$list_mode" ]; then
   exit 0
 fi
 
-git ls-tree -r --name-only "$mb" > "$wd/base.paths" || die "cannot list the tracked files of the merge base $mb"
-git ls-tree -r --name-only HEAD > "$wd/head.paths" || die "cannot list the tracked files of HEAD"
+# A gitlink (mode 160000, a submodule) is listed here but is no blob: `git show` cannot read it, so leave it out as guard_scan does.
+git ls-tree -r "$mb" > "$wd/base.tree" || die "cannot list the tracked files of the merge base $mb"
+git ls-tree -r HEAD > "$wd/head.tree" || die "cannot list the tracked files of HEAD"
+awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/base.tree" > "$wd/base.paths" || die "cannot read the tracked files of the merge base $mb"
+awk -F'\t' '$1 !~ /^160000 / { print substr($0, index($0, "\t") + 1) }' "$wd/head.tree" > "$wd/head.paths" || die "cannot read the tracked files of HEAD"
 sort -u "$wd/base.paths" "$wd/head.paths" > "$wd/paths.lst" || die "cannot merge the tracked file lists"
 [ -s "$wd/paths.lst" ] || die "cannot list tracked files"
 if ! gs_test grep -Eq '(^|/)[.]claude/gates[.]txt$' "$wd/base.paths"; then

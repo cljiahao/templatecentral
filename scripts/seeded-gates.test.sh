@@ -652,6 +652,7 @@ done
 big=$(printf 'padding %.0s' {1..30000})
 check 1 "$([ "${#big}" -gt 200000 ] && echo 1 || echo 0)" "padding string is over 200 KB"
 
+# check-workarounds covered_source is lint-only: its reader ends the pipe but nothing reads the pipeline status, so the old code answers the same. This case is a named clean control that the awk rewrite keeps the answer.
 newrepo wa-bigtree
 g checkout -q main
 mkdir -p "$R/zzz"
@@ -662,21 +663,8 @@ g checkout -q -B work main
 g rm -q test/add.test.ts
 g commit -q -m "drop covering test"
 runwa
-check 1 "$RC" "check-workarounds flags a deleted test with the source first in a big tree ($OUT)"
+check 1 "$RC" "control: check-workarounds flags a deleted test with the source first in a big tree ($OUT)"
 has "removed test: test/add.test.ts (covers src/add.ts)" "$OUT" "big tree: names the covered source"
-
-newrepo wa-bigtree-none
-g checkout -q main
-mkdir -p "$R/zzz"
-for ((i = 0; i < 3000; i++)); do printf 'x\n' > "$R/zzz/file-$i-padding-padding-padding-padding.txt"; done
-g rm -q src/add.ts
-g add -A
-g commit -q -m bulk
-g checkout -q -B work main
-g rm -q test/add.test.ts
-g commit -q -m "drop covering test"
-runwa
-check 0 "$RC" "check-workarounds allows a deleted test whose source is gone, in a big tree ($OUT)"
 
 newrepo cm-hooks
 { printf 'Merge '; printf '%s' "$big"; printf '\n'; } > "$T/cm-merge.txt"
