@@ -7,7 +7,7 @@
 #   --write  write the changed files.
 #   --fences also cover tests/golden/fences/*.tsv. Without it the snapshots are never read or written.
 #            A snapshot change is a deliberate decision (see check-fences-frozen.sh); check-fences.py
-#            refuses once moved.d holds a row, and that refusal is passed on (exit 2).
+#            refuses once moved.d or deleted.d holds a row, and that refusal is passed on (exit 2).
 # It always acts on its own repo root (the folder above scripts/), never on the caller's folder. With --write every
 # result is computed first and nothing under tests/golden/ changes unless every step succeeded.
 # A failed replace stops the run at once, names the files already replaced, and removes the staging files left.
