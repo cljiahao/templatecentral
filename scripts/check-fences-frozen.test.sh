@@ -52,5 +52,28 @@ git checkout -q -b removed main-with-snapshot
 git rm -q "$G/add.tsv"; commit_all rm
 check 1 "$(run main-with-snapshot)" "deleted_snapshot_file_fails"
 
+# deleted.d: an added, changed or removed file needs the label; markdown alone does not
+D="$G/deleted.d"
+git checkout -q -b del-base main-with-snapshot
+mkdir -p "$D" && : > "$D/.gitkeep"; printf 'old\n' > "$D/old.tsv"; commit_all deleted-d-base
+git checkout -q -b del-add del-base
+printf 'row\n' > "$D/s.tsv"; commit_all add-row
+check 1 "$(run del-base)" "deleted_d_added_file_fails"
+case "$(cat "$T/out")" in *"tests/golden/fences/deleted.d/s.tsv"*"fence-snapshot-change"*) PASS=$((PASS + 1)) ;; *) FAIL=$((FAIL + 1)); echo "FAIL: deleted_d add names the file and the label [$(cat "$T/out")]" ;; esac
+check 0 "$(FENCE_SNAPSHOT_CHANGE_OK=1 run del-base)" "deleted_d_added_file_with_label_passes"
+git checkout -q -b del-edit del-base
+printf 'new\n' > "$D/old.tsv"; commit_all edit-row
+check 1 "$(run del-base)" "deleted_d_changed_file_fails"
+git checkout -q -b del-rm del-base
+git rm -q "$D/old.tsv"; commit_all rm-row
+check 1 "$(run del-base)" "deleted_d_removed_file_fails"
+check 0 "$(FENCE_SNAPSHOT_CHANGE_OK=1 run del-base)" "deleted_d_removed_file_with_label_passes"
+git checkout -q -b del-keep del-base
+git rm -q "$D/.gitkeep"; commit_all rm-keep
+check 1 "$(run del-base)" "deleted_d_gitkeep_removed_fails"
+git checkout -q -b del-md del-base
+mkdir -p skills/add && printf '# x\n' > skills/add/a.md; commit_all markdown
+check 0 "$(run del-base)" "markdown_only_diff_passes"
+
 echo "check-fences-frozen.test: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
