@@ -56,7 +56,7 @@ Check `AGENTS.md` line 1 for a templateCentral version marker:
 
 ## Phase 1 — Detect Stack (agent, autonomous)
 
-Detect the stack with the "Stack Detection" table in `<skill-dir>/../../AGENTS.md`.
+Detect the stack as `detect_stack` in `<skill-dir>/general/harness-refresh.sh` does; it is the one source and refuses when several stacks match.
 
 If multiple signals found (likely a monorepo root) → ask the user: "Which project
 should be adopted first — frontend or backend? Please provide the subdirectory path."
