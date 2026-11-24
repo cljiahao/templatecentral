@@ -16,7 +16,7 @@ Copied verbatim from `<skill-dir>/redaction/hook-node/template/.claude/hooks/red
 ### Part B — `user-prompt-guard` companion warning
 
 **For TS stacks** — in `.claude/hooks/user-prompt-guard.cjs`, insert immediately before the final
-`process.exit(0);` (leave the injection and credential hard-block paths above it untouched):
+`process.exit(0);` (leave the credential hard-block paths above it untouched):
 
 ```javascript
 // Warns, never blocks; `systemMessage` only: stdout or additionalContext could feed real values to the model.

@@ -80,7 +80,7 @@ flowchart LR
 
 | # | Checkpoint | What it does |
 |:-:|:---|:---|
-| 1 | **Prompt** (`UserPromptSubmit`) | Blocks prompt-injection phrases and pasted credentials before the model sees them |
+| 1 | **Prompt** (`UserPromptSubmit`) | Blocks pasted credentials before the model sees them |
 | 2 | **Before each tool** (`PreToolUse`) | Secrets hard-blocked · CI and governance edits ask a human · git hook bypasses blocked |
 | 3 | **After each edit** (`PostToolUse`) | Type-check and comment-hygiene feedback straight back to the agent |
 | 4 | **Before the agent stops** (`Stop`, `SubagentStop`) | Typecheck and the change's tests must pass before a turn ends (pre-push and CI stay authoritative); types must pass before a subagent returns |
